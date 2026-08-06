@@ -573,28 +573,29 @@ class DocumentStreamDeidentifier:
             global_start = base + local_start
             global_end = base + local_end
 
-            # Drop spans owned by the previous window's region. The overlap only
-            # provides context; anything ending at or before this window's own
-            # start was already emitted upstream.
-            if global_end <= window.overlap_start:
-                continue
-
             key = (global_start, global_end, str(entity.entity_type or entity.label))
             if key in entities:
                 continue
 
-            # An overlap window may reveal that a provisional span emitted by
-            # the prior window was only part of an identifier. Prefer the span
-            # that crosses the safe boundary and remove overlapping fragments.
-            if global_start < window.overlap_start < global_end:
-                overlapping_keys = [
-                    existing_key
-                    for existing_key in entities
-                    if existing_key[0] < global_end and global_start < existing_key[1]
-                ]
-                for existing_key in overlapping_keys:
-                    entities.pop(existing_key, None)
-                    spans.pop(existing_key, None)
+            # The overlap is context, not proof that a span was already emitted.
+            # A detector may need right-hand context and discover an entity only
+            # when the next window replays the previous window's trailing
+            # sentences. Keep that span unless an equivalent or longer span was
+            # already emitted. This also replaces provisional partial spans when
+            # the overlap reveals a complete entity.
+            overlapping_keys = [
+                existing_key
+                for existing_key in entities
+                if existing_key[0] < global_end and global_start < existing_key[1]
+            ]
+            if any(
+                existing_key[0] <= global_start and global_end <= existing_key[1]
+                for existing_key in overlapping_keys
+            ):
+                continue
+            for existing_key in overlapping_keys:
+                entities.pop(existing_key, None)
+                spans.pop(existing_key, None)
 
             entities[key] = _shift_entity_global(entity, base)
             local_span = span_by_local.get((local_start, local_end))

@@ -64,6 +64,29 @@ def _regex_detector(text: str, **kwargs) -> PredictionResult:
     )
 
 
+def _right_context_detector(text: str, **kwargs) -> PredictionResult:
+    """Detect a synthetic name only when following context is available."""
+
+    entities: list[EntityPrediction] = []
+    if "FOLLOWING-CONTEXT" in text:
+        start = text.index("Casey Example")
+        entities.append(
+            EntityPrediction(
+                text="Casey Example",
+                label="NAME",
+                confidence=0.99,
+                start=start,
+                end=start + len("Casey Example"),
+            )
+        )
+    return PredictionResult(
+        text=text,
+        entities=entities,
+        model_name="right-context-stub",
+        timestamp=datetime.now().isoformat(),
+    )
+
+
 def _pipeline() -> Pipeline:
     return Pipeline(model_detector=_regex_detector, use_safety_sweep=True)
 
@@ -300,6 +323,30 @@ def test_identifier_spanning_sentence_window_boundary_replaces_partial_spans():
     ]
     assert len(boundary_entities) == 1
     assert _entity_signature(result.pii_entities) == single_signature
+    assert result.redacted_text == single.redacted_text
+
+
+def test_overlap_context_can_emit_an_entity_missing_from_the_prior_window():
+    text = "Patient Casey Example. FOLLOWING-CONTEXT is present."
+    single = Pipeline(
+        model_detector=_right_context_detector,
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+
+    result = deidentify_document_stream(
+        text,
+        window_chars=24,
+        overlap_chars=64,
+        pipeline=Pipeline(
+            model_detector=_right_context_detector,
+            use_safety_sweep=False,
+        ),
+        method="mask",
+    )
+
+    assert _entity_signature(result.pii_entities) == _entity_signature(
+        single.deidentification_result.pii_entities
+    )
     assert result.redacted_text == single.redacted_text
 
 
