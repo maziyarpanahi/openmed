@@ -25,6 +25,8 @@ def _always_valid(_text: str) -> bool:
 
 
 EXPECTED_VALIDATOR_KEYS = (
+    ("be", "rrn"),
+    ("ch", "ahv"),
     ("sw", "mpesa_tx_code"),
     ("tz", "nida_nin"),
     ("ug", "nin"),
@@ -79,6 +81,8 @@ EXPECTED_VALIDATOR_KEYS = (
 
 
 ROUND_TRIP_CASES = (
+    ("be", "rrn", "fr_BE"),
+    ("ch", "ahv", "de_CH"),
     ("tz", "nida_nin", "sw"),
     ("ug", "nin", "en_UG"),
     ("rw", "rwanda_id", "rw_RW"),

@@ -164,6 +164,30 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "copy through OPENMED_CMEEE_PATH."
         ),
     ),
+    "chip_cdn": DatasetLicense(
+        dataset="chip_cdn",
+        license_id="CBLUE-access-controlled",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        redistribution="user-supplied",
+        notes=(
+            "CHIP-CDN is the CBLUE clinical diagnosis normalization task and "
+            "its standard-term side derives from a separately licensed "
+            "national clinical ICD-10 edition. Supply an authorized local copy "
+            "through OPENMED_CHIP_CDN_PATH; OpenMed never downloads, caches, "
+            "or redistributes either the mentions or the standard terms."
+        ),
+    ),
+    "imcs_v2_ner": DatasetLicense(
+        dataset="imcs_v2_ner",
+        license_id="CBLUE-access-controlled",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        redistribution="user-supplied",
+        notes=(
+            "IMCS-V2-NER is the CBLUE medical-dialogue entity task. Supply an "
+            "authorized local copy through OPENMED_IMCS_V2_NER_PATH; OpenMed "
+            "never downloads, caches, or redistributes dialogue turns."
+        ),
+    ),
     "medmentions": DatasetLicense(
         dataset="medmentions",
         license_id="CC0-1.0",
