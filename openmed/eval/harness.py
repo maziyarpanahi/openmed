@@ -77,6 +77,9 @@ DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
 DEFAULT_SECTION_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "section_multilingual.jsonl"
 )
+DEFAULT_SECTION_MESSY_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "section_messy.jsonl"
+)
 DEFAULT_PIPELINE_EVAL_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "pipeline_e2e_synthetic.jsonl"
 )
@@ -1397,6 +1400,123 @@ def run_section_multilingual_eval(
             "synthetic": bool(meta.get("synthetic")),
         },
     )
+
+
+def load_section_messy_fixtures(
+    path: str | Path = DEFAULT_SECTION_MESSY_FIXTURE,
+) -> tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]:
+    """Load synthetic messy-note section fixtures without retaining raw text."""
+
+    fixture_path = Path(path)
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not rows or rows[0].get("kind") != "meta":
+        raise ValueError("messy section fixture must start with a meta row")
+    if rows[0].get("synthetic") is not True:
+        raise ValueError("messy section fixture must declare synthetic=true")
+    fixtures = tuple(row for row in rows[1:] if row.get("kind") != "meta")
+    case_ids = [str(row.get("case_id", "")) for row in fixtures]
+    if any(not case_id for case_id in case_ids) or len(case_ids) != len(set(case_ids)):
+        raise ValueError("messy section fixtures require unique case_id values")
+    for row in fixtures:
+        if row.get("synthetic") is not True:
+            raise ValueError("messy section rows must declare synthetic=true")
+        text = str(row.get("text") or "").casefold()
+        if any(marker in text for marker in ("medsecid", "i2b2")):
+            raise ValueError("messy section fixture contains a restricted marker")
+    return rows[0], fixtures
+
+
+def run_section_messy_eval(
+    path: str | Path = DEFAULT_SECTION_MESSY_FIXTURE,
+    *,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Report learned section accuracy against the rules-only baseline."""
+
+    from openmed.clinical.sections import detect_sections
+    from openmed.eval.section_recall import compute_section_detection_metrics
+
+    meta, fixtures = load_section_messy_fixtures(path)
+    baseline_boundary_f1: list[float] = []
+    learned_boundary_f1: list[float] = []
+    baseline_label_accuracy: list[float] = []
+    learned_label_accuracy: list[float] = []
+
+    for row in fixtures:
+        text = str(row.get("text") or "")
+        gold_sections = _section_fixture_gold_sections(row)
+        baseline = detect_sections(text)
+        learned = detect_sections(text, use_learned=True)
+        baseline_metrics = compute_section_detection_metrics(
+            text,
+            gold_sections,
+            baseline,
+        )
+        learned_metrics = compute_section_detection_metrics(
+            text,
+            gold_sections,
+            learned,
+        )
+        baseline_boundary_f1.append(_section_boundary_f1(gold_sections, baseline))
+        learned_boundary_f1.append(_section_boundary_f1(gold_sections, learned))
+        baseline_label_accuracy.append(baseline_metrics.label_recall)
+        learned_label_accuracy.append(learned_metrics.label_recall)
+
+    baseline_boundary = _mean(baseline_boundary_f1)
+    learned_boundary = _mean(learned_boundary_f1)
+    baseline_labels = _mean(baseline_label_accuracy)
+    learned_labels = _mean(learned_label_accuracy)
+    gate_passed = (
+        learned_boundary >= 0.80
+        and learned_labels >= 0.85
+        and learned_boundary > baseline_boundary
+        and learned_labels > baseline_labels
+    )
+    return BenchmarkReport(
+        suite="section_messy",
+        model_name="learned-section-head",
+        device="local",
+        fixture_count=len(fixtures),
+        metrics={
+            "baseline_boundary_f1": baseline_boundary,
+            "baseline_label_accuracy": baseline_labels,
+            "boundary_f1": learned_boundary,
+            "label_accuracy": learned_labels,
+            "boundary_f1_threshold": 0.80,
+            "label_accuracy_threshold": 0.85,
+            "section_gate_passed": gate_passed,
+        },
+        generated_at=generated_at,
+        metadata={
+            "fixture_ids": [str(row["case_id"]) for row in fixtures],
+            "synthetic": bool(meta.get("synthetic")),
+            "leakage_check_passed": True,
+        },
+    )
+
+
+def _section_boundary_f1(
+    gold_sections: Iterable[Mapping[str, Any]],
+    predicted_sections: Iterable[Mapping[str, Any]],
+) -> float:
+    gold = {(int(section["start"]), int(section["end"])) for section in gold_sections}
+    predicted = {
+        (int(section["start"]), int(section["end"])) for section in predicted_sections
+    }
+    true_positive = len(gold & predicted)
+    precision = _section_rate(true_positive, len(predicted))
+    recall = _section_rate(true_positive, len(gold))
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def _section_rate(numerator: int, denominator: int) -> float:
+    return 1.0 if denominator == 0 else numerator / denominator
 
 
 def _context_fixture_span(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -4053,6 +4173,8 @@ __all__ = [
     "BenchmarkFixture",
     "DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE",
     "DEFAULT_PIPELINE_EVAL_FIXTURE",
+    "DEFAULT_SECTION_MESSY_FIXTURE",
+    "DEFAULT_SECTION_MULTILINGUAL_FIXTURE",
     "PIPELINE_EVAL_SCHEMA_VERSION",
     "BoundaryLeakageFinding",
     "BoundaryLeakageResult",
@@ -4076,6 +4198,8 @@ __all__ = [
     "load_context_multilingual_fixtures",
     "load_fixtures",
     "load_pipeline_eval_fixtures",
+    "load_section_messy_fixtures",
+    "run_section_messy_eval",
     "default_model_runner",
     "run_federated_leakage_eval",
     "run_context_multilingual_eval",
