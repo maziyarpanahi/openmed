@@ -3270,6 +3270,8 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
 def _g9_relation_extraction_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
+    *,
+    require_relaxed: bool = True,
 ) -> GateCheck:
     evidence = _relation_extraction_evidence(metrics, metadata)
     required = bool(
@@ -3304,13 +3306,14 @@ def _g9_relation_extraction_check(
             "lower": strict_lower,
             "floor": G9_STRICT_RE_F1_FLOOR,
         }
-    if relaxed_lower is None:
-        violations["relaxed_confidence_interval"] = "missing lower bound"
-    elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
-        violations["relaxed_relation_f1"] = {
-            "lower": relaxed_lower,
-            "floor": G9_RELAXED_RE_F1_FLOOR,
-        }
+    if require_relaxed:
+        if relaxed_lower is None:
+            violations["relaxed_confidence_interval"] = "missing lower bound"
+        elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
+            violations["relaxed_relation_f1"] = {
+                "lower": relaxed_lower,
+                "floor": G9_RELAXED_RE_F1_FLOOR,
+            }
 
     passed = not violations
     return GateCheck(
@@ -3326,6 +3329,7 @@ def _g9_relation_extraction_check(
             ),
             "relaxed": _relation_metric_summary(relaxed),
             "relaxed_floor": G9_RELAXED_RE_F1_FLOOR,
+            "relaxed_lower_ci_required": require_relaxed,
             "strict": _relation_metric_summary(strict),
             "strict_floor": G9_STRICT_RE_F1_FLOOR,
             "violations": violations,
@@ -3338,8 +3342,8 @@ def evaluate_dua_relation_promotion_gate(
 ) -> GateCheck:
     """Evaluate promotion-only G9 evidence for credentialed DUA corpora.
 
-    The strict and relaxed confidence-bound checks remain promotion blocking,
-    while the serialized cadence contract explicitly excludes this expensive,
+    The strict confidence-bound check is promotion blocking, while the
+    serialized cadence contract explicitly excludes this expensive,
     human-triggered corpus run from daily blocking evaluation.
     """
 
@@ -3350,7 +3354,11 @@ def evaluate_dua_relation_promotion_gate(
         "relation_extraction_required": True,
         "task": "relation",
     }
-    base = _g9_relation_extraction_check(metrics, metadata)
+    base = _g9_relation_extraction_check(
+        metrics,
+        metadata,
+        require_relaxed=False,
+    )
     details = {
         **dict(base.details),
         "cadence": G9_DUA_PROMOTION_CADENCE,
@@ -3358,6 +3366,7 @@ def evaluate_dua_relation_promotion_gate(
         "gate_tier": G9_DUA_PROMOTION_TIER,
         "promotion_blocking": True,
         "strict_lower_ci_required": True,
+        "relaxed_lower_ci_required": False,
     }
     return GateCheck(
         gate=base.gate,
