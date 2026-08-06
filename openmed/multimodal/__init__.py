@@ -79,6 +79,17 @@ from .image import (
     verify_image_metadata,
     verify_image_redaction,
 )
+from .layout import (
+    FakeLayoutEngine,
+    FakeLayoutInput,
+    LayoutBlock,
+    LayoutColumn,
+    LayoutDocument,
+    LayoutMapEntry,
+    LayoutSpan,
+    LayoutWordSpan,
+    parse_layout,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -203,6 +214,15 @@ __all__ = [
     "register_ocr_engine",
     "available_ocr_engines",
     "run_doctr_ocr",
+    "FakeLayoutEngine",
+    "FakeLayoutInput",
+    "LayoutBlock",
+    "LayoutColumn",
+    "LayoutDocument",
+    "LayoutMapEntry",
+    "LayoutSpan",
+    "LayoutWordSpan",
+    "parse_layout",
     "DEFAULT_SMS_MODEL",
     "SHORT_TEXT",
     "SHORT_TEXT_PRESET",

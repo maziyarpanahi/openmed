@@ -206,6 +206,8 @@ def test_low_confidence_notes_abstain_at_the_documented_threshold() -> None:
     assert GENERIC_DOCUMENT_TYPE == UNKNOWN_DOCUMENT_TYPE
     assert classification == {
         "type": UNKNOWN_DOCUMENT_TYPE,
+        "loinc_code": None,
+        "loinc_axes": None,
         "confidence": 0.0,
     }
 

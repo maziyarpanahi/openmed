@@ -96,6 +96,27 @@ def test_reexported_function_keeps_static_signature_without_importing():
     )
 
 
+def test_transitive_class_reexport_keeps_members_without_importing():
+    sources = {
+        PurePosixPath("fixturepkg/__init__.py"): (
+            "from .facade import Client\n__all__ = ['Client']\n"
+        ),
+        PurePosixPath("fixturepkg/facade.py"): (
+            "from .api import Client\n__all__ = ['Client']\n"
+        ),
+        PurePosixPath("fixturepkg/api.py"): (
+            "class Client:\n"
+            "    def request(self, value: str) -> str:\n"
+            "        return value\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.Client"].kind == "class"
+    assert surface["fixturepkg.Client.request"].signature == "(value: str) -> str"
+
+
 def test_package_local_reexport_without_all_remains_public():
     sources = {
         PurePosixPath("fixturepkg/api.py"): "VALUE = {'en'}\n",

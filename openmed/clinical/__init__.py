@@ -181,6 +181,11 @@ from .experiencer import (
     refine_experiencer,
     resolve_experiencer,
 )
+from .family_history import (
+    FAMILY_HISTORY_ADVISORY,
+    FamilyHistoryRecord,
+    extract_family_history,
+)
 from .genomics import (
     COORDINATE_TYPES,
     GENOMICS_ADVISORY,
@@ -869,4 +874,7 @@ __all__ = [
     "RefinedExperiencerAssertion",
     "resolve_experiencer",
     "refine_experiencer",
+    "FAMILY_HISTORY_ADVISORY",
+    "FamilyHistoryRecord",
+    "extract_family_history",
 ]
