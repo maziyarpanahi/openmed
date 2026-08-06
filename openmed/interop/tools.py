@@ -40,6 +40,12 @@ except ImportError:  # pragma: no cover - retained for Pydantic v1 service users
 
 
 DEFAULT_PII_MODEL: Final = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+# Languages accepted by the PII endpoints. This MUST include built-in
+# ``SUPPORTED_LANGUAGES``, the explicitly configured optional Indic NER routes,
+# and the ``USER_SUPPLIED_MODEL_LANGUAGES`` routes that ship no bundled weights,
+# so the REST/MCP layer does not reject a route accepted by the core.
+# The parity is guarded by
+# ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
 PIILanguage = Literal[
     "am",
     "as",
@@ -55,10 +61,12 @@ PIILanguage = Literal[
     "kn",
     "ml",
     "mr",
+    "ne",
     "or",
     "pa",
     "ta",
     "te",
+    "ur",
     "pt",
     "ar",
     "he",
@@ -79,6 +87,7 @@ PIILanguage = Literal[
     "uk",
     "cs",
     "el",
+    "vi",
 ]
 
 

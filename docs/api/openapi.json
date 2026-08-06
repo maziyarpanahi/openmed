@@ -244,10 +244,12 @@
               "kn",
               "ml",
               "mr",
+              "ne",
               "or",
               "pa",
               "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -267,7 +269,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -517,10 +520,12 @@
               "kn",
               "ml",
               "mr",
+              "ne",
               "or",
               "pa",
               "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -540,7 +545,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -661,10 +667,12 @@
               "kn",
               "ml",
               "mr",
+              "ne",
               "or",
               "pa",
               "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -684,7 +692,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -778,10 +787,12 @@
               "kn",
               "ml",
               "mr",
+              "ne",
               "or",
               "pa",
               "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -801,7 +812,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -915,10 +927,12 @@
               "kn",
               "ml",
               "mr",
+              "ne",
               "or",
               "pa",
               "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -938,7 +952,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -1060,10 +1075,12 @@
               "kn",
               "ml",
               "mr",
+              "ne",
               "or",
               "pa",
               "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -1083,7 +1100,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"

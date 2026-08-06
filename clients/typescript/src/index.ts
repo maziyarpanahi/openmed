@@ -24,10 +24,12 @@ export type PIILanguage =
   | "kn"
   | "ml"
   | "mr"
+  | "ne"
   | "or"
   | "pa"
   | "ta"
   | "te"
+  | "ur"
   | "pt"
   | "ar"
   | "he"
@@ -47,7 +49,8 @@ export type PIILanguage =
   | "zh"
   | "uk"
   | "cs"
-  | "el";
+  | "el"
+  | "vi";
 
 export type DeidentificationMethod =
   | "mask"

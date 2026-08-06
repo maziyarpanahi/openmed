@@ -36,6 +36,8 @@ class VocabLinker:
     key: str = ""
     #: Canonical label the span must carry, e.g. ``MEDICATION`` (None = any).
     required_label: str | None = None
+    #: Additional canonical labels accepted by the linker.
+    compatible_labels: frozenset[str] = frozenset()
 
     def __init__(self, vocab: VocabularyIndex) -> None:
         self._vocab = vocab
@@ -55,12 +57,11 @@ class VocabLinker:
         If ``canonical_label`` is given and does not normalize to
         :attr:`required_label`, an empty list is returned.
         """
-        if (
-            canonical_label is not None
-            and self.required_label is not None
-            and normalize_label(canonical_label) != self.required_label
-        ):
-            return []
+        if canonical_label is not None and self.required_label is not None:
+            normalized_label = normalize_label(canonical_label)
+            accepted_labels = self.compatible_labels | {self.required_label}
+            if normalized_label not in accepted_labels:
+                return []
 
         query = normalize_alias(text)
         if not query:
