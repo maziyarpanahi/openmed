@@ -1,5 +1,6 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.onnx.AcceleratorConfig
 import java.io.File
 
 /**
@@ -16,6 +17,7 @@ data class OpenMedBackend(
     val tokenizerConfig: File? = File(modelDirectory, "tokenizer_config.json"),
     val id2LabelFile: File = File(modelDirectory, "id2label.json"),
     val id2Label: Map<Int, String> = emptyMap(),
+    val acceleratorConfig: AcceleratorConfig = AcceleratorConfig(),
 ) {
     init {
         require(modelDirectory.path.isNotBlank()) {

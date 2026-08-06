@@ -133,6 +133,7 @@ nav:
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
       - Android ONNX Export: export-onnx-android.md
+      - Android QNN and NNAPI: runtimes/android-accelerators.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - On-device Segmenters: on-device-segmenters.md
