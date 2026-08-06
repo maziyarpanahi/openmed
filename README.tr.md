@@ -24,7 +24,7 @@ OpenMed’in temel yerel çalışma zamanı, gerekli model yapıtları hazır ol
 </p>
 
 <p>
-  <b>Yerel öncelikli çalışma</b> &nbsp;·&nbsp; <b>Model destekli 33 PII dili</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Yerel öncelikli çalışma</b> &nbsp;·&nbsp; <b>Model destekli 34 PII dili</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Apple Silicon olmayan ana makinelerde MLX model adları otomatik olarak ilgili P
 
 ---
 
-## Çok dilli PII (34 desteklenen yol; 33 model destekli)
+## Çok dilli PII (35 desteklenen yol; 34 model destekli)
 
 `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` ve `tr` dillerinde çıkarım ve kimliksizleştirme: toplam **kayıtlı PII model kataloğu**.
 

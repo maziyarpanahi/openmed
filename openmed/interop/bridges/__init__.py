@@ -13,6 +13,13 @@ from .arx import (
     ArxProtocolError,
     ArxResult,
 )
+from .icd10cn import (
+    ICD10CNBridge,
+    ICD10CNMapping,
+    load_icd10cn_crosswalk,
+    map_icd10_to_icd10cn,
+    map_icd10cn_code,
+)
 
 __all__ = [
     "ARX_PROTOCOL_SCHEMA_VERSION",
@@ -22,4 +29,9 @@ __all__ = [
     "ArxNotAvailableError",
     "ArxProtocolError",
     "ArxResult",
+    "ICD10CNBridge",
+    "ICD10CNMapping",
+    "load_icd10cn_crosswalk",
+    "map_icd10_to_icd10cn",
+    "map_icd10cn_code",
 ]
