@@ -11,15 +11,21 @@ from functools import lru_cache
 from importlib import resources
 from typing import TypedDict
 
+from openmed.clinical.data.doctype_loinc_ontology import (
+    get_document_type_mapping,
+)
+
 DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE = "data/doctype_signatures.json"
 UNKNOWN_DOCUMENT_TYPE = "unknown"
 _TOKEN_RE = re.compile(r"\w+(?:['\N{RIGHT SINGLE QUOTATION MARK}-]\w+)*", re.UNICODE)
 
 
 class DocumentClassification(TypedDict):
-    """Public document-type prediction with an abstention-safe confidence."""
+    """Public document prediction with an abstention-safe LOINC mapping."""
 
     type: str
+    loinc_code: str | None
+    loinc_axes: dict[str, str] | None
     confidence: float
 
 
@@ -47,17 +53,22 @@ def classify_document(text: str) -> DocumentClassification:
     """Classify a clinical note from deterministic first-window signatures.
 
     The bundled signatures cover discharge summaries, progress notes,
-    radiology reports, pathology reports, operative notes, and consult notes.
-    Classification is local and deterministic. When no signature wins clearly,
-    the function returns ``unknown`` rather than guessing.
+    radiology reports, pathology reports, operative notes, history and physical
+    notes, and consult notes. Classification is local and deterministic. When
+    no signature wins clearly, the function returns ``unknown`` rather than
+    guessing. A winning supported type is resolved to the small local LOINC
+    document-ontology subset; the axis breakdown records the documented
+    type-of-service, subject-matter-domain, role, and setting policy.
 
     Args:
         text: Clinical note text. Only the first configured token window is
             inspected.
 
     Returns:
-        A mapping with ``type`` and a rule-strength ``confidence`` from zero to
-        one. Ambiguous and unrecognized notes use the ``unknown`` type.
+        A mapping with ``type``, ``loinc_code``, ``loinc_axes``, and a
+        rule-strength ``confidence`` from zero to one. Ambiguous, unrecognized,
+        unmapped, and low-confidence predictions retain the type but use
+        ``None`` for the LOINC code and axis breakdown.
     """
 
     if not isinstance(text, str):
@@ -88,10 +99,7 @@ def classify_document(text: str) -> DocumentClassification:
         if best_confidence - runner_up_confidence <= table.ambiguity_margin:
             return _unknown_classification(table)
 
-    return {
-        "type": best_type,
-        "confidence": round(best_confidence, 6),
-    }
+    return _classification(best_type, best_confidence)
 
 
 def _normalized_token_window(text: str, *, max_tokens: int) -> str:
@@ -107,7 +115,32 @@ def _contains_phrase(window: str, phrase: str) -> bool:
 def _unknown_classification(table: _SignatureTable) -> DocumentClassification:
     return {
         "type": UNKNOWN_DOCUMENT_TYPE,
+        "loinc_code": None,
+        "loinc_axes": None,
         "confidence": round(table.unknown_confidence, 6),
+    }
+
+
+def _classification(document_type: str, confidence: float) -> DocumentClassification:
+    """Attach a verified LOINC mapping while preserving the classifier label."""
+
+    rounded_confidence = round(confidence, 6)
+    mapping = get_document_type_mapping(
+        document_type,
+        confidence=rounded_confidence,
+    )
+    if mapping is None:
+        return {
+            "type": document_type,
+            "loinc_code": None,
+            "loinc_axes": None,
+            "confidence": rounded_confidence,
+        }
+    return {
+        "type": document_type,
+        "loinc_code": mapping["code"],
+        "loinc_axes": mapping["axes"],
+        "confidence": rounded_confidence,
     }
 
 
