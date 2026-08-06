@@ -1,44 +1,49 @@
 import SwiftUI
 
-/// A deterministic simulator-only reel for recording the native workflow.
-///
-/// The reel never initializes an MLX runtime and labels every generated result
-/// as synthetic. Real Maple inference remains a physical-device workflow.
+/// A deterministic simulator-only tour built from the shipping scan-demo
+/// chrome and components. It never initializes MLX and labels all generated
+/// content as synthetic; physical-device runs use the same streaming bubble.
 struct MapleSimulatorDemoReelView: View {
     @State private var phase = 0
     @State private var playbackID = 0
     @State private var isPlaying = false
     @State private var downloadProgress = 0.0
+    @State private var chatResponse = ""
+    @State private var isChatStreaming = false
 
     var body: some View {
-        ZStack {
-            Color.omPaper.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                brandBar
-
-                ZStack {
-                    if isPlaying {
-                        phaseContent
-                            .id(phase)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                    removal: .opacity.combined(with: .move(edge: .leading))
+        ScanScreenChrome(
+            currentStage: currentStage,
+            furthestReached: currentStage,
+            onJump: { _ in },
+            content: {
+                VStack(alignment: .leading, spacing: OM.Space.s4) {
+                    demoDisclosure
+                    Group {
+                        if isPlaying {
+                            phaseContent
+                                .id(phase)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity.combined(
+                                            with: .move(edge: .trailing)
+                                        ),
+                                        removal: .opacity.combined(
+                                            with: .move(edge: .leading)
+                                        )
+                                    )
                                 )
-                            )
-                    } else {
-                        readyCard
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        } else {
+                            readyContent
+                                .transition(.opacity)
+                        }
                     }
+                    .animation(.easeInOut(duration: 0.38), value: phase)
+                    .animation(.easeInOut(duration: 0.25), value: isPlaying)
                 }
-                .animation(.easeInOut(duration: 0.42), value: phase)
-                .animation(.easeInOut(duration: 0.3), value: isPlaying)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                timelineBar
-            }
-        }
+            },
+            actionBar: { actionBar }
+        )
         .preferredColorScheme(.light)
         .task(id: playbackID) {
             guard isPlaying else { return }
@@ -46,398 +51,495 @@ struct MapleSimulatorDemoReelView: View {
         }
     }
 
-    private var brandBar: some View {
-        HStack {
-            OMBrandLockup(compact: true)
-            Spacer()
-            VStack(alignment: .trailing, spacing: 3) {
-                Text("SIMULATOR PREVIEW")
-                    .font(.om.mono(9, weight: .semibold))
-                    .kerning(1.1)
-                    .foregroundStyle(Color.omSignal)
-                Text("SYNTHETIC RESULTS")
-                    .font(.om.mono(8, weight: .medium))
-                    .kerning(0.8)
-                    .foregroundStyle(Color.omFgSubtle)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 13)
-        .background(Color.omPaper2)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.omBorder).frame(height: 1)
+    private var currentStage: ScanStage {
+        guard isPlaying else { return .input }
+        switch phase {
+        case 0: return .input
+        case 1: return .deidentify
+        case 2: return .clinical
+        default: return .insights
         }
     }
 
-    private var readyCard: some View {
-        VStack(alignment: .leading, spacing: 22) {
+    private var demoDisclosure: some View {
+        HStack(spacing: OM.Space.s2) {
+            Image(systemName: "iphone.gen3")
+                .foregroundStyle(Color.omSignal)
+            Text("SIMULATOR PREVIEW")
+                .font(.om.mono(9, weight: .semibold))
+                .kerning(0.9)
+                .foregroundStyle(Color.omInk)
             Spacer()
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("15-SECOND PRODUCT TOUR").omEyebrow()
-                Text("Meet Maple\non iPhone.")
-                    .font(.om.display(45, weight: .medium))
-                    .foregroundStyle(Color.omInk)
-                    .lineSpacing(-5)
-                Text("Download, redact PII, extract clinical structure, then chat over the masked note.")
-                    .font(.om.body(16))
-                    .foregroundStyle(Color.omFgMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button(action: beginPlayback) {
-                HStack {
-                    Image(systemName: "play.fill")
-                    Text("Play demo")
-                    Spacer()
-                    Text("15 SEC")
-                        .font(.om.mono(10, weight: .semibold))
-                        .kerning(1)
-                }
-                .font(.om.body(16, weight: .semibold))
-                .foregroundStyle(Color.omPaper)
-                .padding(.horizontal, 18)
-                .frame(height: 54)
-                .background(Color.omInk, in: RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("maple-demo-play")
-
-            Label("UI preview only · real inference requires a recent physical iPhone", systemImage: "iphone.gen3")
-                .font(.om.body(12))
-                .foregroundStyle(Color.omFgSubtle)
-
-            Spacer()
+            OMBadge("Synthetic results", tone: .signal)
         }
-        .padding(.horizontal, 22)
+        .padding(.horizontal, OM.Space.s3)
+        .padding(.vertical, 9)
+        .background(
+            Color.omSignalSoft,
+            in: RoundedRectangle(cornerRadius: OM.Radius.md, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: OM.Radius.md, style: .continuous)
+                .strokeBorder(Color.omSignal.opacity(0.22), lineWidth: OM.Stroke.hairline)
+        }
+    }
+
+    private var readyContent: some View {
+        VStack(alignment: .leading, spacing: OM.Space.s5) {
+            ScanStageHeader(
+                eyebrow: "15-SECOND IPHONE TOUR",
+                spans: [.plain("Scan privately with "), .accent("Maple"), .plain(".")],
+                subhead: "A realistic pass through download, PII redaction, prompted extraction, relations, and streaming chat.",
+                scale: .lg
+            )
+
+            OMCard(elevation: .raised) {
+                VStack(alignment: .leading, spacing: OM.Space.s4) {
+                    HStack(spacing: OM.Space.s3) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.omTealAccent)
+                                .frame(width: 44, height: 44)
+                            Image(systemName: "leaf.fill")
+                                .foregroundStyle(Color.omPaper)
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("MAPLE PREVIEW · 2-BIT").omEyebrow()
+                            Text("One local clinical workspace")
+                                .font(.om.heading(18, weight: .semibold))
+                                .foregroundStyle(Color.omInk)
+                        }
+                    }
+
+                    OMRule()
+
+                    HStack(spacing: 0) {
+                        tourStep("arrow.down", "Download")
+                        tourArrow
+                        tourStep("eye.slash", "De-ID")
+                        tourArrow
+                        tourStep("text.quote", "Extract")
+                        tourArrow
+                        tourStep("text.bubble", "Chat")
+                    }
+
+                    Label(
+                        "Real Maple inference requires a recent physical iPhone.",
+                        systemImage: "checkmark.shield.fill"
+                    )
+                    .font(.om.body(12))
+                    .foregroundStyle(Color.omFgMuted)
+                }
+            }
+        }
+    }
+
+    private func tourStep(_ icon: String, _ title: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.omTealAccent)
+                .frame(width: 32, height: 32)
+                .background(Color.omTealSoft, in: Circle())
+            Text(title)
+                .font(.om.mono(8, weight: .semibold))
+                .foregroundStyle(Color.omFgMuted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var tourArrow: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(Color.omBorderStrong)
     }
 
     @ViewBuilder
     private var phaseContent: some View {
         switch phase {
-        case 0:
-            downloadPhase
-        case 1:
-            piiPhase
-        case 2:
-            entityPhase
-        default:
-            chatPhase
+        case 0: downloadPhase
+        case 1: piiPhase
+        case 2: extractionPhase
+        default: chatPhase
         }
     }
 
     private var downloadPhase: some View {
-        reelPage(
-            step: "01 · DOWNLOAD",
-            title: "Maple, ready\nfor local work.",
-            subtitle: "A sparse clinical model cached once for private, offline inference."
-        ) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 13)
-                            .fill(Color.omTealSoft)
-                        Image(systemName: "leaf.fill")
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundStyle(Color.omTealAccent)
-                    }
-                    .frame(width: 58, height: 58)
+        VStack(alignment: .leading, spacing: OM.Space.s4) {
+            ScanStageHeader(
+                eyebrow: ScanStage.input.eyebrow,
+                spans: [.plain("Bring your clinical "), .accent("text"), .plain(".")],
+                subhead: "Cache Maple once for private, offline inference.",
+                scale: .md
+            )
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("DEEPGROVE · 2-BIT")
-                            .font(.om.mono(9, weight: .semibold))
-                            .kerning(1)
-                            .foregroundStyle(Color.omTealAccent)
-                        Text("Maple Preview")
-                            .font(.om.heading(20))
+            OMDownloadRow(
+                modelID: .maplePreview,
+                entry: demoDownloadEntry,
+                onStart: {},
+                onCancel: {}
+            )
+
+            OMCard(padding: OM.Space.s4) {
+                HStack(spacing: OM.Space.s3) {
+                    Image(systemName: "doc.viewfinder.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.omTealAccent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("SYNTHETIC DISCHARGE NOTE").omEyebrow()
+                        Text("1 page · ready for on-device OCR")
+                            .font(.om.body(13, weight: .medium))
                             .foregroundStyle(Color.omInk)
-                        Text("20B-A1B sparse · MLX")
-                            .font(.om.body(12))
-                            .foregroundStyle(Color.omFgMuted)
                     }
                     Spacer()
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.omTealAccent)
                 }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.omStone200)
-                        Capsule()
-                            .fill(Color.omTealAccent)
-                            .frame(width: geometry.size.width * downloadProgress)
-                    }
-                }
-                .frame(height: 8)
-
-                HStack {
-                    Text("DOWNLOADING MODEL")
-                        .font(.om.mono(10, weight: .semibold))
-                        .kerning(0.8)
-                        .foregroundStyle(Color.omFgMuted)
-                    Spacer()
-                    Text("≈ 5.0 GB")
-                        .font(.om.mono(12, weight: .semibold))
-                        .foregroundStyle(Color.omInk)
-                }
-            }
-            .padding(18)
-            .background(Color.omPaper2, in: RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.omBorder, lineWidth: 1)
             }
         }
+    }
+
+    private var demoDownloadEntry: ModelDownloadManager.Entry {
+        let total = ScanModelID.maplePreview.conservativeTotalBytes
+        let bytes = Int64(Double(total) * downloadProgress)
+        return ModelDownloadManager.Entry(
+            id: .maplePreview,
+            state: .downloading(
+                bytesDownloaded: bytes,
+                bytesExpected: total,
+                bytesPerSecond: 48 * 1_024 * 1_024
+            ),
+            bytesOnDisk: bytes,
+            bytesEstimatedTotal: total
+        )
     }
 
     private var piiPhase: some View {
-        reelPage(
-            step: "02 · PII REDACTION",
-            title: "Private by\ndefault.",
-            subtitle: "Maple proposes spans. OpenMedKit validates offsets and applies deterministic masking."
-        ) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("MASKED NOTE").omEyebrow()
-                    Spacer()
-                    Label("4 spans", systemImage: "checkmark.shield.fill")
-                        .font(.om.body(11, weight: .semibold))
-                        .foregroundStyle(Color.omTealAccent)
-                }
+        VStack(alignment: .leading, spacing: OM.Space.s4) {
+            ScanStageHeader(
+                eyebrow: ScanStage.deidentify.eyebrow,
+                spans: [.plain("Redact, then "), .accent("verify"), .plain(".")],
+                subhead: "Maple proposes exact spans; OpenMedKit applies the mask.",
+                scale: .md
+            )
 
-                Text("[PATIENT] called on [DATE]. Reach them at [PHONE]. Follow-up at [LOCATION].")
-                    .font(.om.body(17, weight: .medium))
-                    .foregroundStyle(Color.omInk)
-                    .lineSpacing(6)
-
-                HStack(spacing: 7) {
-                    demoChip("NAME")
-                    demoChip("DATE")
-                    demoChip("PHONE")
-                    demoChip("LOCATION")
-                }
-
-                Divider()
-
-                Label("Raw identifiers never enter chat context", systemImage: "lock.fill")
-                    .font(.om.body(12))
-                    .foregroundStyle(Color.omFgMuted)
-            }
-            .padding(18)
-            .background(Color.omHighlight.opacity(0.27), in: RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.omBorder, lineWidth: 1)
-            }
-        }
-    }
-
-    private var entityPhase: some View {
-        reelPage(
-            step: "03 · ENTITIES + RELATIONS",
-            title: "From note\nto structure.",
-            subtitle: "Validated entities stay anchored to the de-identified source."
-        ) {
-            VStack(alignment: .leading, spacing: 13) {
-                entityRow(icon: "lungs.fill", label: "CONDITION", value: "Asthma", tone: .omSignal)
-                entityRow(icon: "pills.fill", label: "MEDICATION", value: "Albuterol", tone: .omTealAccent)
-                entityRow(icon: "number", label: "DOSAGE", value: "2 puffs", tone: .omInk2)
-
-                HStack(spacing: 8) {
-                    relationNode("Albuterol")
-                    Image(systemName: "arrow.right")
-                        .foregroundStyle(Color.omSignal)
-                    Text("TREATS")
-                        .font(.om.mono(9, weight: .semibold))
-                        .kerning(0.8)
-                        .foregroundStyle(Color.omSignal)
-                    Image(systemName: "arrow.right")
-                        .foregroundStyle(Color.omSignal)
-                    relationNode("Asthma")
-                }
-                .padding(.top, 4)
-            }
-            .padding(18)
-            .background(Color.omPaper2, in: RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.omBorder, lineWidth: 1)
-            }
-        }
-    }
-
-    private var chatPhase: some View {
-        reelPage(
-            step: "04 · GROUNDED CHAT",
-            title: "Ask the\nmasked note.",
-            subtitle: "Only de-identified evidence reaches Maple. Private reasoning stays hidden."
-        ) {
-            VStack(spacing: 12) {
-                HStack {
-                    Spacer(minLength: 42)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("YOU")
-                            .font(.om.mono(9, weight: .semibold))
-                            .foregroundStyle(Color.omPaper.opacity(0.72))
-                        Text("What needs follow-up?")
-                            .font(.om.body(15, weight: .medium))
-                            .foregroundStyle(Color.omPaper)
+            OMCard(elevation: .raised) {
+                VStack(alignment: .leading, spacing: OM.Space.s3) {
+                    HStack {
+                        Text("DEEPGROVE MAPLE · 2-BIT").omEyebrow()
+                        Spacer()
+                        OMBadge("3 PII spans", tone: .accent)
                     }
-                    .padding(14)
-                    .background(Color.omInk, in: RoundedRectangle(cornerRadius: 15))
-                }
 
-                HStack {
+                    OMEntityHighlight(
+                        text: Self.sourceNote,
+                        entities: piiEntities,
+                        bodyFont: .om.body(15),
+                        showsLabels: true
+                    )
+
+                    OMRule()
+
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("MAPLE")
-                                .font(.om.mono(9, weight: .semibold))
-                                .foregroundStyle(Color.omTealAccent)
-                            Spacer()
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(Color.omTealAccent)
-                        }
-                        Text("Pulmonology follow-up in 2 weeks. Verify inhaler use and symptom trend against the source note.")
-                            .font(.om.body(15))
+                        Text("MASKED NOTE").omEyebrow()
+                        Text(Self.maskedNote)
+                            .font(.om.body(14, weight: .medium))
                             .foregroundStyle(Color.omInk)
                             .lineSpacing(3)
                     }
-                    .padding(14)
-                    .background(Color.omTealSoft, in: RoundedRectangle(cornerRadius: 15))
-                    Spacer(minLength: 24)
-                }
 
-                HStack(spacing: 6) {
-                    Label("Masked context", systemImage: "eye.slash.fill")
-                    Spacer()
-                    Label("On device", systemImage: "iphone.gen3")
-                }
-                .font(.om.body(11, weight: .semibold))
-                .foregroundStyle(Color.omFgMuted)
-            }
-        }
-    }
-
-    private func reelPage<Content: View>(
-        step: String,
-        title: String,
-        subtitle: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(step).omEyebrow()
-                Text(title)
-                    .font(.om.display(39, weight: .medium))
-                    .foregroundStyle(Color.omInk)
-                    .lineSpacing(-5)
-                Text(subtitle)
-                    .font(.om.body(14))
+                    Label(
+                        "Raw identifiers are removed before extraction or chat.",
+                        systemImage: "lock.fill"
+                    )
+                    .font(.om.body(11))
                     .foregroundStyle(Color.omFgMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 20)
-        .padding(.bottom, 10)
-    }
-
-    private var timelineBar: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 5) {
-                ForEach(0..<4, id: \.self) { index in
-                    Capsule()
-                        .fill(index <= phase && isPlaying ? Color.omTealAccent : Color.omStone200)
-                        .frame(height: 4)
                 }
             }
-            HStack {
-                Text(isPlaying ? "MAPLE · OPENMEDKIT" : "PHYSICAL DEVICE FOR REAL MLX")
-                Spacer()
-                Text(isPlaying ? "\(phase + 1) / 4" : "UI PREVIEW")
-            }
-            .font(.om.mono(9, weight: .semibold))
-            .kerning(0.8)
-            .foregroundStyle(Color.omFgSubtle)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 12)
-        .background(Color.omPaper2)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.omBorder).frame(height: 1)
         }
     }
 
-    private func demoChip(_ text: String) -> some View {
-        Text(text)
-            .font(.om.mono(9, weight: .semibold))
-            .kerning(0.7)
-            .foregroundStyle(Color.omInk2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(Color.omPaper2, in: Capsule())
-            .overlay { Capsule().stroke(Color.omBorder, lineWidth: 1) }
+    private var extractionPhase: some View {
+        VStack(alignment: .leading, spacing: OM.Space.s4) {
+            ScanStageHeader(
+                eyebrow: ScanStage.clinical.eyebrow,
+                spans: [.plain("Prompt what to "), .accent("extract"), .plain(".")],
+                subhead: "Allowed labels go into Maple's local prompt; output must match the source.",
+                scale: .md
+            )
+
+            OMCard(elevation: .raised, padding: OM.Space.s4) {
+                VStack(alignment: .leading, spacing: OM.Space.s3) {
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "text.quote")
+                            Text("PROMPTED EXTRACTION")
+                        }
+                        .font(.om.eyebrow())
+                        .textCase(.uppercase)
+                        .kerning(1.4)
+                        .foregroundStyle(Color.omTealAccent)
+                        Spacer()
+                        OMBadge("Validated JSON", tone: .positive)
+                    }
+
+                    Text("“Extract only condition, medication, dosage, and follow-up. Preserve exact source spans and return supported relations.”")
+                        .font(.om.mono(11))
+                        .foregroundStyle(Color.omInk)
+                        .lineSpacing(4)
+                        .padding(OM.Space.s3)
+                        .background(
+                            Color.omPaper2,
+                            in: RoundedRectangle(
+                                cornerRadius: OM.Radius.md,
+                                style: .continuous
+                            )
+                        )
+
+                    HStack(spacing: 6) {
+                        OMChip("condition", tone: .signal)
+                        OMChip("medication", tone: .accent)
+                        OMChip("dosage", tone: .ink)
+                    }
+
+                    OMRule()
+                    extractionRow("CONDITION", "chronic migraine", .omSignal)
+                    extractionRow("MEDICATION", "sumatriptan", .omTealAccent)
+                    extractionRow("FOLLOW-UP", "within 48 hours", .omInk2)
+
+                    HStack(spacing: 6) {
+                        relationPill("chronic migraine")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color.omSignal)
+                        Text("TREATED WITH")
+                            .font(.om.mono(8, weight: .semibold))
+                            .foregroundStyle(Color.omSignal)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color.omSignal)
+                        relationPill("sumatriptan")
+                    }
+                }
+            }
+        }
     }
 
-    private func entityRow(icon: String, label: String, value: String, tone: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(tone)
-                .frame(width: 30, height: 30)
-                .background(tone.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.om.mono(8, weight: .semibold))
-                    .kerning(0.8)
-                    .foregroundStyle(Color.omFgSubtle)
-                Text(value)
-                    .font(.om.body(15, weight: .semibold))
-                    .foregroundStyle(Color.omInk)
-            }
+    private func extractionRow(_ label: String, _ value: String, _ tone: Color) -> some View {
+        HStack(spacing: OM.Space.s3) {
+            Circle()
+                .fill(tone)
+                .frame(width: 7, height: 7)
+            Text(label)
+                .font(.om.mono(8, weight: .semibold))
+                .kerning(0.7)
+                .foregroundStyle(Color.omFgSubtle)
+                .frame(width: 78, alignment: .leading)
+            Text(value)
+                .font(.om.body(13, weight: .semibold))
+                .foregroundStyle(Color.omInk)
             Spacer()
             Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 11))
                 .foregroundStyle(Color.omTealAccent)
         }
     }
 
-    private func relationNode(_ text: String) -> some View {
+    private func relationPill(_ text: String) -> some View {
         Text(text)
-            .font(.om.body(11, weight: .semibold))
+            .font(.om.body(9, weight: .semibold))
             .foregroundStyle(Color.omInk)
-            .padding(.horizontal, 8)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 7)
             .padding(.vertical, 6)
-            .background(Color.omStone100, in: Capsule())
+            .background(Color.omTealSoft, in: Capsule())
+    }
+
+    private var chatPhase: some View {
+        VStack(alignment: .leading, spacing: OM.Space.s4) {
+            ScanStageHeader(
+                eyebrow: ScanStage.insights.eyebrow,
+                spans: [.plain("Ask the "), .accent("masked note"), .plain(".")],
+                subhead: "Private reasoning stays hidden; the final answer streams as it is generated.",
+                scale: .md
+            )
+
+            OMCard(elevation: .raised) {
+                VStack(alignment: .leading, spacing: OM.Space.s3) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("ASK MAPLE").omEyebrow()
+                            Text("Document-grounded chat")
+                                .font(.om.heading(18, weight: .semibold))
+                                .foregroundStyle(Color.omInk)
+                        }
+                        Spacer()
+                        OMBadge("On device", tone: .positive, systemImage: "lock.fill")
+                    }
+
+                    MapleChatBubble(
+                        turn: ScanFlowViewModel.MapleChatTurn(
+                            role: .user,
+                            content: "What follow-up is documented?"
+                        )
+                    )
+                    MapleChatBubble(
+                        turn: ScanFlowViewModel.MapleChatTurn(
+                            role: .assistant,
+                            content: chatResponse,
+                            isStreaming: isChatStreaming
+                        )
+                    )
+
+                    HStack(spacing: OM.Space.s2) {
+                        Image(systemName: "eye.slash.fill")
+                            .foregroundStyle(Color.omTealAccent)
+                        Text("Hidden reasoning is never rendered")
+                            .font(.om.body(11, weight: .medium))
+                            .foregroundStyle(Color.omFgMuted)
+                        Spacer()
+                        Text("MLX STREAM")
+                            .font(.om.mono(8, weight: .semibold))
+                            .kerning(0.7)
+                            .foregroundStyle(Color.omTealAccent)
+                    }
+                }
+            }
+
+            Text("Simulator text is scripted. On a physical iPhone, these same bubbles receive real Maple generation chunks.")
+                .font(.om.body(11))
+                .foregroundStyle(Color.omFgSubtle)
+                .padding(.horizontal, OM.Space.s2)
+        }
+    }
+
+    @ViewBuilder
+    private var actionBar: some View {
+        if isPlaying {
+            VStack(spacing: 8) {
+                HStack {
+                    Text(actionTitle)
+                        .font(.om.body(13, weight: .semibold))
+                        .foregroundStyle(Color.omInk)
+                    Spacer()
+                    Text("\(phase + 1) / 4")
+                        .font(.om.mono(10, weight: .semibold))
+                        .foregroundStyle(Color.omFgMuted)
+                }
+                HStack(spacing: 5) {
+                    ForEach(0..<4, id: \.self) { index in
+                        Capsule()
+                            .fill(index <= phase ? Color.omTealAccent : Color.omStone200)
+                            .frame(height: 4)
+                    }
+                }
+            }
+        } else {
+            Button(action: beginPlayback) {
+                HStack {
+                    Image(systemName: "play.fill")
+                    Text("Play realistic demo")
+                    Spacer()
+                    Text("15 SEC")
+                        .font(.om.mono(10, weight: .semibold))
+                        .kerning(0.8)
+                }
+            }
+            .buttonStyle(.omPrimary(.md))
+            .accessibilityIdentifier("maple-demo-play")
+        }
+    }
+
+    private var actionTitle: String {
+        switch phase {
+        case 0: return "Caching Maple locally"
+        case 1: return "PII spans validated"
+        case 2: return "Prompt response validated"
+        default: return isChatStreaming ? "Final answer streaming" : "Grounded answer complete"
+        }
+    }
+
+    private var piiEntities: [DetectedEntity] {
+        [
+            demoEntity(label: "patient name", text: "Jordan Whitfield"),
+            demoEntity(label: "visit date", text: "June 1, 2026"),
+            demoEntity(label: "phone", text: "(720) 555-0148"),
+        ]
+    }
+
+    private func demoEntity(label: String, text: String) -> DetectedEntity {
+        let range = Self.sourceNote.range(of: text)!
+        let start = Self.sourceNote.distance(from: Self.sourceNote.startIndex, to: range.lowerBound)
+        let end = Self.sourceNote.distance(from: Self.sourceNote.startIndex, to: range.upperBound)
+        return DetectedEntity(
+            label: label,
+            text: text,
+            confidence: nil,
+            start: start,
+            end: end
+        )
     }
 
     private func beginPlayback() {
         phase = 0
         downloadProgress = 0
+        chatResponse = ""
+        isChatStreaming = false
         isPlaying = true
         playbackID += 1
     }
 
     @MainActor
     private func runPlayback() async {
-        try? await Task.sleep(nanoseconds: 160_000_000)
-        withAnimation(.linear(duration: 2.8)) {
+        try? await Task.sleep(for: .milliseconds(150))
+        withAnimation(.linear(duration: 2.7)) {
             downloadProgress = 1
         }
 
-        try? await Task.sleep(nanoseconds: 3_300_000_000)
+        try? await Task.sleep(for: .milliseconds(3_200))
         guard !Task.isCancelled else { return }
         withAnimation { phase = 1 }
 
-        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        try? await Task.sleep(for: .milliseconds(3_150))
         guard !Task.isCancelled else { return }
         withAnimation { phase = 2 }
 
-        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        try? await Task.sleep(for: .milliseconds(3_150))
         guard !Task.isCancelled else { return }
+        chatResponse = ""
+        isChatStreaming = true
         withAnimation { phase = 3 }
 
-        try? await Task.sleep(nanoseconds: 4_700_000_000)
+        try? await Task.sleep(for: .milliseconds(650))
+        let chunks = [
+            "PCP ",
+            "follow-up ",
+            "within ",
+            "48 hours, ",
+            "with ",
+            "neurology ",
+            "follow-up ",
+            "within ",
+            "2 weeks. ",
+            "Verify ",
+            "against the source note.",
+        ]
+        for chunk in chunks {
+            guard !Task.isCancelled else { return }
+            chatResponse.append(chunk)
+            try? await Task.sleep(for: .milliseconds(220))
+        }
+        isChatStreaming = false
+
+        try? await Task.sleep(for: .seconds(3))
         guard !Task.isCancelled else { return }
         withAnimation { isPlaying = false }
     }
+
+    private static let sourceNote =
+        "Jordan Whitfield was seen on June 1, 2026. Call (720) 555-0148. Chronic migraine treated with sumatriptan 50 mg; PCP follow-up within 48 hours."
+
+    private static let maskedNote =
+        "[PATIENT_NAME] was seen on [VISIT_DATE]. Call [PHONE]. Chronic migraine treated with sumatriptan 50 mg; PCP follow-up within 48 hours."
 }

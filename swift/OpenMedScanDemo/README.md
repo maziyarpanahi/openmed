@@ -6,7 +6,7 @@ An iOS SwiftUI demo that shows the full native Apple flow:
 - Vision OCR for text extraction
 - `OpenMedKit` + DeepGrove Maple Preview 2-bit running locally with MLX
 - Maple PII removal, entity extraction, and relation extraction
-- grounded clinical-note reasoning and chat over the de-identified text
+- grounded clinical-note reasoning and final-answer streaming over the de-identified text
 - colorful inline masked labels plus the raw OCR transcript
 
 ## Quick Start
@@ -18,14 +18,15 @@ An iOS SwiftUI demo that shows the full native Apple flow:
 5. Choose **Maple Preview**, download the model, then use the main action button to move through OCR, review, de-identification, clinical extraction, Maple Insights, and the summary.
 6. Maple is downloaded from `deepgrove/maple-preview-2bit-mlx` at the revision pinned by `OpenMedMaple.pinnedRevision`. The demo fetches the three exact-head weight shards and deliberately excludes the optional approximate FlashHead weights.
 7. The model is cached locally after a successful download. Later runs reuse the cached copy and only fetch files again if an interrupted download left the cache incomplete.
-8. In **Maple Insights**, generate a grounded brief or ask document questions. Maple receives only the masked note, and its responses are labeled for clinician review rather than diagnosis or treatment.
+8. In **Maple Insights**, generate a grounded brief or ask document questions. The assistant bubble waits while Maple reasons privately, then streams the real final-answer chunks from MLX. Maple receives only the masked note, and its responses are labeled for clinician review rather than diagnosis or treatment.
 9. To test disconnected mode, run the demo once while online so Maple is cached, then disable network access and run the same sample or scan flow again.
 
 ## Simulator Recording Reel
 
 Add `--maple-simulator-demo` to the scheme's launch arguments to show a
-deterministic 15-second recording reel on iOS Simulator. The reel covers model
-download, PII masking, entity and relation extraction, and grounded chat. It is
+deterministic 15-second recording reel on iOS Simulator. The reel uses the same
+scan chrome and chat bubble as the app, and covers model download, PII masking,
+prompted entity and relation extraction, and streaming grounded chat. It is
 persistently labeled **Simulator Preview · Synthetic Results**, never
 initializes MLX, and must not be presented as inference evidence. Use a physical
 iPhone or iPad for a recording of the real Maple weights and outputs.
@@ -36,7 +37,8 @@ iPhone or iPad for a recording of the real Maple weights and outputs.
 - no remote inference
 - native scan and OCR APIs from Apple
 - one local Maple runtime for PII removal, entities, and directed relations
-- evidence-grounded reasoning and multi-turn chat over masked text
+- evidence-grounded reasoning and streamed multi-turn chat over masked text
+- prompt-driven entity/relation extraction whose JSON stays hidden until validated
 - prompt-injection boundaries that treat scanned document text as untrusted data
 - validated Unicode-scalar spans and relations whose endpoints were actually extracted
 - a masked document view that replaces detected spans with colorful labels

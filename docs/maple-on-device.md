@@ -100,8 +100,10 @@ now offers Maple Preview in the existing document-scanning flow:
 1. VisionKit scans the page and Vision performs OCR.
 2. Maple performs PII removal and the UI presents masked spans for review.
 3. The same local runtime extracts clinical entities and directed relations.
-4. Maple Insights creates a document-grounded brief and supports chat over the
-   masked note with a clinician-review boundary.
+4. Maple Insights creates a document-grounded brief and streams chat answers
+   over the masked note after suppressing Maple's private reasoning segment.
+   Prompt-driven entity and relation JSON remains buffered until its spans,
+   label vocabulary, and relation endpoints validate.
 
 The OpenMedKit package contains the native `OpenMedMaple` runtime and Maple MLX
 architecture implementation. The demo downloads the three exact-head shards at

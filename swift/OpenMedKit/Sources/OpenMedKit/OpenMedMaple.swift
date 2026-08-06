@@ -110,6 +110,96 @@ public struct OpenMedMapleResponse: Sendable {
     }
 }
 
+/// Incrementally removes Maple's private reasoning envelope from generated
+/// text. The stream remains closed until the model emits `</think>` and also
+/// suppresses any later `<think>...</think>` segment.
+///
+/// This type is internal so the public API exposes only already-filtered text.
+struct OpenMedMapleFinalAnswerFilter {
+    private enum Mode {
+        case privateReasoning
+        case finalAnswer
+    }
+
+    private static let openingMarker = "<think>"
+    private static let closingMarker = "</think>"
+
+    private var mode: Mode = .privateReasoning
+    private var pending = ""
+    private var hasEmittedText = false
+
+    /// Consumes an arbitrary generator chunk and returns only newly available
+    /// final-answer text. Marker fragments are retained across chunk boundaries.
+    mutating func consume(_ chunk: String) -> String? {
+        guard !chunk.isEmpty else { return nil }
+        pending.append(chunk)
+        var visible = ""
+
+        while !pending.isEmpty {
+            switch mode {
+            case .privateReasoning:
+                guard let marker = pending.range(of: Self.closingMarker) else {
+                    pending = Self.markerPrefixSuffix(
+                        in: pending,
+                        marker: Self.closingMarker
+                    )
+                    return normalizedVisibleText(visible)
+                }
+                pending = String(pending[marker.upperBound...])
+                mode = .finalAnswer
+
+            case .finalAnswer:
+                if let marker = pending.range(of: Self.openingMarker) {
+                    visible.append(contentsOf: pending[..<marker.lowerBound])
+                    pending = String(pending[marker.upperBound...])
+                    mode = .privateReasoning
+                    continue
+                }
+
+                let heldSuffix = Self.markerPrefixSuffix(
+                    in: pending,
+                    marker: Self.openingMarker
+                )
+                let visibleEnd = pending.index(
+                    pending.endIndex,
+                    offsetBy: -heldSuffix.count
+                )
+                visible.append(contentsOf: pending[..<visibleEnd])
+                pending = heldSuffix
+                return normalizedVisibleText(visible)
+            }
+        }
+
+        return normalizedVisibleText(visible)
+    }
+
+    /// Discards an unfinished marker or private-reasoning suffix at end of
+    /// generation. The parsed final response will still replace streamed UI.
+    mutating func finish() {
+        pending = ""
+    }
+
+    private mutating func normalizedVisibleText(_ text: String) -> String? {
+        var result = text
+        if !hasEmittedText {
+            result = String(result.drop(while: { $0.isWhitespace }))
+        }
+        guard !result.isEmpty else { return nil }
+        hasEmittedText = true
+        return result
+    }
+
+    private static func markerPrefixSuffix(in text: String, marker: String) -> String {
+        let maximumLength = min(text.count, marker.count - 1)
+        guard maximumLength > 0 else { return "" }
+        for length in stride(from: maximumLength, through: 1, by: -1) {
+            let suffix = text.suffix(length)
+            if marker.hasPrefix(suffix) { return String(suffix) }
+        }
+        return ""
+    }
+}
+
 /// Builds injection-resistant prompts for Maple's supported clinical tasks.
 public enum OpenMedMaplePrompt {
     /// The fixed safety policy supplied as the first chat message.

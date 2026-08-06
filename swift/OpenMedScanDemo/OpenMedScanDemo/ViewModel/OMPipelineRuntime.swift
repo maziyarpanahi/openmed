@@ -109,7 +109,8 @@ public actor OMPipelineRuntime {
     public func reason(
         maskedText: String,
         question: String,
-        messages: [OpenMedMapleMessage]
+        messages: [OpenMedMapleMessage],
+        onFinalAnswerChunk: (@Sendable (String) async -> Void)? = nil
     ) async throws -> String {
         await unloadPIIRuntimes()
         await unloadRelationRuntimes()
@@ -122,7 +123,8 @@ public actor OMPipelineRuntime {
                 messages: messages,
                 question: question,
                 maximumTokens: 1_536
-            )
+            ),
+            onFinalAnswerChunk: onFinalAnswerChunk
         )
         guard let answer = response.answer, !answer.isEmpty else {
             throw PipelineError.missingMapleAnswer

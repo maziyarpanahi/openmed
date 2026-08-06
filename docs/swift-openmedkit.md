@@ -156,6 +156,20 @@ let brief = try await maple.complete(
         question: "What facts, uncertainties, and follow-up items are documented?"
     )
 )
+
+var streamedAnswer = ""
+let chat = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .chat,
+        document: masked.redactedText ?? "",
+        question: "What follow-up is documented?"
+    ),
+    onFinalAnswerChunk: { chunk in
+        await MainActor.run {
+            streamedAnswer.append(chunk)
+        }
+    }
+)
 ```
 
 For multi-turn chat, pass the prior non-system turns through `messages` and the
@@ -163,6 +177,13 @@ new prompt through `question`. Keep the `document` de-identified: OpenMedKit's
 prompt builder treats it as untrusted input, requests final answers without
 chain-of-thought, and adds a clinician-review boundary, but application-level
 data minimization remains required.
+
+`onFinalAnswerChunk` is called only for reasoning and chat, and only after Maple
+closes its private reasoning segment. De-identification, entity extraction, and
+relation extraction remain buffered until OpenMedKit has parsed complete JSON,
+validated its label vocabulary, repaired exact source spans, and dropped
+relations with unverified endpoints. The returned `chat.answer` is the canonical
+final value and can replace the accumulated UI text when generation completes.
 
 For de-identification, the generated rewrite is never trusted directly:
 OpenMedKit deterministically masks the validated source spans so unrelated

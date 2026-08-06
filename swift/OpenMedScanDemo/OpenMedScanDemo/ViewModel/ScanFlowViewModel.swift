@@ -122,12 +122,19 @@ public final class ScanFlowViewModel: ObservableObject {
 
         public let id: UUID
         public let role: Role
-        public let content: String
+        public var content: String
+        public var isStreaming: Bool
 
-        public init(id: UUID = UUID(), role: Role, content: String) {
+        public init(
+            id: UUID = UUID(),
+            role: Role,
+            content: String,
+            isStreaming: Bool = false
+        ) {
             self.id = id
             self.role = role
             self.content = content
+            self.isStreaming = isStreaming
         }
     }
 
@@ -410,10 +417,19 @@ public final class ScanFlowViewModel: ObservableObject {
             )
         }
         let pendingTurn = MapleChatTurn(role: .user, content: question)
+        let assistantTurn = MapleChatTurn(
+            role: .assistant,
+            content: "",
+            isStreaming: true
+        )
         mapleChatTurns.append(pendingTurn)
+        mapleChatTurns.append(assistantTurn)
         mapleChatDraft = ""
         isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Maple is answering on-device")
+        status = PipelineProgress(
+            phase: .inferencing,
+            detail: "Maple is reasoning privately on-device"
+        )
         defer {
             isWorking = false
             status = nil
@@ -422,17 +438,36 @@ public final class ScanFlowViewModel: ObservableObject {
             let answer = try await runtime.reason(
                 maskedText: masked,
                 question: question,
-                messages: history
+                messages: history,
+                onFinalAnswerChunk: { [self, assistantID = assistantTurn.id] chunk in
+                    await appendMapleFinalAnswerChunk(chunk, to: assistantID)
+                }
             )
-            mapleChatTurns.append(MapleChatTurn(role: .assistant, content: answer))
+            if let index = mapleChatTurns.firstIndex(where: { $0.id == assistantTurn.id }) {
+                mapleChatTurns[index].content = answer
+                mapleChatTurns[index].isStreaming = false
+            }
             HapticsCenter.impact(.soft)
         } catch {
-            mapleChatTurns.removeAll { $0.id == pendingTurn.id }
+            mapleChatTurns.removeAll {
+                $0.id == pendingTurn.id || $0.id == assistantTurn.id
+            }
             mapleChatDraft = question
             errorMessage = error.localizedDescription
             HapticsCenter.notify(.error)
             log.error("Maple chat failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private func appendMapleFinalAnswerChunk(_ chunk: String, to turnID: UUID) {
+        guard let index = mapleChatTurns.firstIndex(where: { $0.id == turnID }) else {
+            return
+        }
+        mapleChatTurns[index].content.append(chunk)
+        status = PipelineProgress(
+            phase: .inferencing,
+            detail: "Streaming Maple's final answer"
+        )
     }
 
     // MARK: - Reset

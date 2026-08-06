@@ -89,6 +89,31 @@ final class OpenMedMapleTests: XCTestCase {
         )
     }
 
+    func testFinalAnswerFilterStreamsOnlyAfterSplitClosingMarker() {
+        var filter = OpenMedMapleFinalAnswerFilter()
+
+        XCTAssertNil(filter.consume("private scratch work</thi"))
+        XCTAssertEqual(filter.consume("nk>\nDocument evidence "), "Document evidence ")
+        XCTAssertEqual(filter.consume("is limited."), "is limited.")
+    }
+
+    func testFinalAnswerFilterNeverStreamsUnfinishedReasoning() {
+        var filter = OpenMedMapleFinalAnswerFilter()
+
+        XCTAssertNil(filter.consume("I should inspect the note carefully"))
+        filter.finish()
+        XCTAssertNil(filter.consume("still private"))
+    }
+
+    func testFinalAnswerFilterSuppressesLaterReasoningSegment() {
+        var filter = OpenMedMapleFinalAnswerFilter()
+
+        XCTAssertEqual(filter.consume("done</think>Visible "), "Visible ")
+        XCTAssertEqual(filter.consume("answer<th"), "answer")
+        XCTAssertNil(filter.consume("ink>hidden again"))
+        XCTAssertEqual(filter.consume("</think>final."), "final.")
+    }
+
     func testDeidentificationUsesValidatedSpansInsteadOfGeneratedRewrite() throws {
         let response = try OpenMedMapleOutputParser.parse(
             """

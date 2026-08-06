@@ -201,7 +201,7 @@ public struct MapleInsightsScreen: View {
                 } else {
                     VStack(spacing: OM.Space.s3) {
                         ForEach(flow.mapleChatTurns) { turn in
-                            chatBubble(turn)
+                            MapleChatBubble(turn: turn)
                         }
                     }
                 }
@@ -289,32 +289,6 @@ public struct MapleInsightsScreen: View {
         }
     }
 
-    private func chatBubble(_ turn: ScanFlowViewModel.MapleChatTurn) -> some View {
-        HStack {
-            if turn.role == .user { Spacer(minLength: 36) }
-            VStack(alignment: .leading, spacing: 5) {
-                Text(turn.role == .user ? "YOU" : "MAPLE")
-                    .font(.om.mono(9, weight: .semibold))
-                    .kerning(1)
-                    .foregroundStyle(
-                        turn.role == .user
-                            ? Color.omPaper.opacity(0.72)
-                            : Color.omTealHover
-                    )
-                Text(turn.content)
-                    .font(.om.body(14))
-                    .foregroundStyle(turn.role == .user ? Color.omPaper : Color.omInk)
-                    .textSelection(.enabled)
-            }
-            .padding(OM.Space.s3)
-            .background(
-                turn.role == .user ? Color.omInk : Color.omTealSoft,
-                in: RoundedRectangle(cornerRadius: OM.Radius.lg, style: .continuous)
-            )
-            if turn.role == .assistant { Spacer(minLength: 36) }
-        }
-    }
-
     private var safetyNote: some View {
         HStack(alignment: .top, spacing: OM.Space.s2) {
             Image(systemName: "cross.case.fill")
@@ -329,5 +303,68 @@ public struct MapleInsightsScreen: View {
     private func submitQuestion() {
         isChatFocused = false
         Task { await flow.askMaple() }
+    }
+}
+
+/// Shared chat presentation used by the live workspace and the simulator reel.
+struct MapleChatBubble: View {
+    let turn: ScanFlowViewModel.MapleChatTurn
+
+    var body: some View {
+        HStack {
+            if turn.role == .user { Spacer(minLength: 36) }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(turn.role == .user ? "YOU" : "MAPLE")
+                        .font(.om.mono(9, weight: .semibold))
+                        .kerning(1)
+                        .foregroundStyle(
+                            turn.role == .user
+                                ? Color.omPaper.opacity(0.72)
+                                : Color.omTealHover
+                        )
+                    if turn.isStreaming, !turn.content.isEmpty {
+                        Circle()
+                            .fill(Color.omTealAccent)
+                            .frame(width: 5, height: 5)
+                            .accessibilityHidden(true)
+                        Text("STREAMING")
+                            .font(.om.mono(8, weight: .semibold))
+                            .kerning(0.7)
+                            .foregroundStyle(Color.omTealAccent)
+                    }
+                }
+                if turn.isStreaming, turn.content.isEmpty {
+                    HStack(spacing: OM.Space.s2) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Color.omTealAccent)
+                        Text("Reasoning privately…")
+                            .font(.om.body(13, italic: true))
+                            .foregroundStyle(Color.omFgMuted)
+                    }
+                    .accessibilityLabel("Maple is reasoning privately")
+                } else {
+                    HStack(alignment: .lastTextBaseline, spacing: 3) {
+                        Text(turn.content)
+                            .font(.om.body(14))
+                            .foregroundStyle(turn.role == .user ? Color.omPaper : Color.omInk)
+                            .textSelection(.enabled)
+                        if turn.isStreaming {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.omTealAccent)
+                                .frame(width: 2, height: 15)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                }
+            }
+            .padding(OM.Space.s3)
+            .background(
+                turn.role == .user ? Color.omInk : Color.omTealSoft,
+                in: RoundedRectangle(cornerRadius: OM.Radius.lg, style: .continuous)
+            )
+            if turn.role == .assistant { Spacer(minLength: 36) }
+        }
     }
 }

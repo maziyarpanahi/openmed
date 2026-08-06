@@ -707,7 +707,14 @@
         }
 
         /// Runs a deterministic task without sending document text off-device.
-        public func complete(_ request: OpenMedMapleRequest) async throws
+        ///
+        /// Reasoning and chat callers may receive final-answer deltas as soon as
+        /// Maple closes its private reasoning segment. Structured tasks remain
+        /// buffered until their complete JSON response has been validated.
+        public func complete(
+            _ request: OpenMedMapleRequest,
+            onFinalAnswerChunk: (@Sendable (String) async -> Void)? = nil
+        ) async throws
             -> OpenMedMapleResponse
         {
             guard let container else {
@@ -741,12 +748,21 @@
                 parameters: parameters
             )
             var generatedText = ""
+            var finalAnswerFilter = OpenMedMapleFinalAnswerFilter()
+            let streamsFinalAnswer = request.task == .reasoning || request.task == .chat
             for await event in stream {
                 try Task.checkCancellation()
                 if case .chunk(let text) = event {
                     generatedText.append(text)
+                    if streamsFinalAnswer,
+                        let onFinalAnswerChunk,
+                        let finalAnswerChunk = finalAnswerFilter.consume(text)
+                    {
+                        await onFinalAnswerChunk(finalAnswerChunk)
+                    }
                 }
             }
+            finalAnswerFilter.finish()
             return try OpenMedMapleOutputParser.parse(
                 generatedText,
                 task: request.task,
