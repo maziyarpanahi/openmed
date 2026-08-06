@@ -95,6 +95,56 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "CohortResolveRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for in-memory ``POST /cohort/resolve``.",
+        "properties": {
+          "concept_ancestors": {
+            "items": {
+              "$ref": "#/components/schemas/ConceptAncestorRequest"
+            },
+            "title": "Concept Ancestors",
+            "type": "array"
+          },
+          "phenotype": {
+            "additionalProperties": true,
+            "title": "Phenotype",
+            "type": "object"
+          },
+          "records_jsonl": {
+            "title": "Records Jsonl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phenotype",
+          "records_jsonl"
+        ],
+        "title": "CohortResolveRequest",
+        "type": "object"
+      },
+      "ConceptAncestorRequest": {
+        "additionalProperties": false,
+        "description": "One caller-supplied concept hierarchy edge.",
+        "properties": {
+          "ancestor_concept_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ancestor Concept Id",
+            "type": "integer"
+          },
+          "descendant_concept_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Descendant Concept Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ancestor_concept_id",
+          "descendant_concept_id"
+        ],
+        "title": "ConceptAncestorRequest",
+        "type": "object"
+      },
       "DeidentifyJobDocument": {
         "additionalProperties": false,
         "description": "One document in an async de-identification job.",
@@ -1239,6 +1289,46 @@
           }
         },
         "summary": "Analyze"
+      }
+    },
+    "/cohort/resolve": {
+      "post": {
+        "operationId": "cohort_resolve_cohort_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CohortResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cohort Resolve Cohort Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cohort Resolve"
       }
     },
     "/fhir/smart-backend/ingestions": {
