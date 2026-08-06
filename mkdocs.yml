@@ -85,6 +85,7 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
+      - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
