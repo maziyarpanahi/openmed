@@ -23,6 +23,7 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 # Every OpenAPI operation maps to exactly one exported Go client method.
 CLIENT_METHOD_BY_OPERATION = {
     ("post", "/analyze"): "Analyze",
+    ("post", "/cohort/resolve"): "ResolveCohort",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
@@ -44,6 +45,8 @@ CLIENT_METHOD_BY_OPERATION = {
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
     "AnalyzeRequest": "AnalyzeRequest",
+    "CohortResolveRequest": "CohortResolveRequest",
+    "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
     "JobWebhookRequest": "JobWebhookRequest",
@@ -420,6 +423,7 @@ def _go_type_matches_schema(go_type: str, schema: dict[str, Any]) -> bool:
         "boolean": {"bool"},
         "integer": {"int"},
         "number": {"float64"},
+        "object": {"JSONObject"},
         "string": {
             "string",
             "AggregationStrategy",
