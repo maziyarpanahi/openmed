@@ -9,6 +9,7 @@ import pytest
 import openmed.interop as interop
 
 OPTIONAL_ADAPTER_MODULE_PREFIXES = (
+    "apache_beam",
     "duckdb",
     "indicnlp",
     "jieba",
@@ -88,6 +89,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     from openmed.interop import adapter_spec, available_adapters
 
     assert available_adapters() == (
+        "beam",
         "cda",
         "cdm_etl",
         "duckdb",
@@ -116,6 +118,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "spark",
         "zh",
     )
+    assert adapter_spec("beam").extra == "beam"
     assert adapter_spec("cda").extra == "core"
     assert adapter_spec("cdm_etl").extra == ""
     assert adapter_spec("duckdb").extra == "duckdb"
