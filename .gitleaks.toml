@@ -40,6 +40,14 @@ regexes = ['''patient_key="synthetic-patient-0001"''']
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
+description = "Synthetic patient key in the date boundary regression fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/structured/test_hierarchies\.py$''']
+regexes = ['''patient_key\s*=\s*"boundary-patient"''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
 description = "Swift demo note describes tokenization, not a token value"
 condition = "AND"
 regexTarget = "line"
