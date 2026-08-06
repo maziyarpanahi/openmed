@@ -270,6 +270,27 @@ def test_n2c2_2022_loader_maps_sdoh_event_arguments(tmp_path: Path) -> None:
     assert fixture.metadata["daily_blocking"] is False
 
 
+def test_n2c2_2022_loader_maps_employment_type_argument(tmp_path: Path) -> None:
+    source = tmp_path / "n2c2-2022"
+    source.mkdir()
+    (source / "employment.txt").write_text(
+        "Patient works as a nurse.\n",
+        encoding="utf-8",
+    )
+    (source / "employment.ann").write_text(
+        "T1\tEmployment 8 13\tworks\n"
+        "T2\tTypeEmploy 19 24\tnurse\n"
+        "E1\tEmployment:T1 TypeEmploy:T2\n",
+        encoding="utf-8",
+    )
+
+    fixture = load_n2c2_2022_relation_fixtures(source)[0]
+
+    assert [relation.to_tuple() for relation in fixture.relations] == [
+        ("HAS_TYPE", "T1", "T2"),
+    ]
+
+
 @pytest.mark.parametrize(
     "corpus",
     (BIORED, N2C2_2018, N2C2_2022),

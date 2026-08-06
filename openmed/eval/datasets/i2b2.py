@@ -144,6 +144,7 @@ N2C2_2022_ENTITY_TO_CANONICAL: Mapping[str, str] = {
     "statustime": OTHER,
     "tobacco": OTHER,
     "type": OTHER,
+    "typeemploy": OTHER,
     "typeliving": OTHER,
 }
 N2C2_2022_RELATION_TO_CANONICAL: Mapping[str, str] = {
@@ -158,6 +159,7 @@ N2C2_2022_RELATION_TO_CANONICAL: Mapping[str, str] = {
     "statustime": "HAS_STATUS",
     "temporality": "HAS_TEMPORALITY",
     "type": "HAS_TYPE",
+    "typeemploy": "HAS_TYPE",
     "typeliving": "HAS_TYPE",
 }
 
