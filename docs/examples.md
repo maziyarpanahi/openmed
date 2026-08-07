@@ -4,6 +4,9 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+For a task-first map from common goals to the exact runnable asset, see the
+[Cookbook](cookbook.md).
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |
