@@ -138,6 +138,7 @@ classification:
     - benchmarks/i18n-throughput.md
     - zero-shot-howto.md
     - zero-shot-ner.md
+    - cookbook.md
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
