@@ -91,6 +91,7 @@ nav:
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - India Health-ID De-identification: india-health-id-deidentification.md
+      - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md

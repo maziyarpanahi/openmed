@@ -162,6 +162,7 @@ classification:
     - indic-name-matching.md
     - languages.md
     - india-health-id-deidentification.md
+    - security/policy-as-data.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
