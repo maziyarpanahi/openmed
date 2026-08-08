@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added pinned DeepGrove Maple Preview support through Python MLX-LM and a
+  native OpenMedKit MLX architecture, with privacy-bounded PII removal,
+  clinical entities, directed relations, and note-grounded reasoning/chat.
+  Added polished iOS scanning, Android Compose, and browser WebGPU demos plus
+  reproducible 4-bit/8-bit MLX planning and checksum-verified ONNX/ORT bundle
+  tooling. Model weights remain external and every clinical or disclosure
+  result requires human review.
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine

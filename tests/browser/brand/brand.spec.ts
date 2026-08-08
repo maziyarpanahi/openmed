@@ -1296,11 +1296,11 @@ test("leaderboard keyboard tabs expose exactly one panel", async ({
   expectCleanAudit(audit);
 });
 
-test("browser demo benchmarks both synthetic WASM and WebGPU branches", async ({
+test("Maple browser demo keeps structured output while streamed chat answers", async ({
   baseURL,
   page,
 }) => {
-  const runtimePath = "/docs/demo/web/test-dual-runtime.js";
+  const runtimePath = "/docs/demo/web/test-maple-runtime.js";
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "gpu", {
       configurable: true,
@@ -1310,20 +1310,63 @@ test("browser demo benchmarks both synthetic WASM and WebGPU branches", async ({
   await page.route(`**${runtimePath}`, async (route) => {
     await route.fulfill({
       body: `
-        export async function createOpenMedPipeline(options) {
-          if (!["wasm", "webgpu"].includes(options.backend)) {
-            throw new Error("unsupported synthetic backend");
-          }
-          return async function detect(text) {
-            const value = "John Doe";
-            const start = text.indexOf(value);
-            return [{
-              entity_group: "NAME",
-              score: options.backend === "webgpu" ? 0.98 : 0.99,
-              start,
-              end: start + value.length,
-              word: value,
-            }];
+        export async function createOpenMedMapleRuntime(options) {
+          options.onProgress({
+            phase: "STREAMING SYNTHETIC MAPLE PACK",
+            loaded: 5310000000,
+            total: 5310000000,
+          });
+          return {
+            details() {
+              return { device: "Synthetic WebGPU adapter", cache: "fixture" };
+            },
+            async *generate(messages, generation) {
+              if (generation.reasoning !== false) {
+                throw new Error("demo tasks must use direct-generation mode");
+              }
+              const task = messages[0].content;
+              let output;
+              if (task.includes("PII_REDACTION")) {
+                output = JSON.stringify({
+                  redacted_text: "MODEL-AUTHORED REDACTION MUST BE IGNORED",
+                  spans: [{ text: "Avery Morgan", type: "NAME" }],
+                  warnings: [],
+                });
+              } else if (task.includes("ENTITY_EXTRACTION")) {
+                output = JSON.stringify({
+                  entities: [{
+                    id: "E1", text: "metformin", type: "MEDICATION",
+                    normalized: "metformin", confidence: 0.98,
+                  }],
+                });
+              } else if (task.includes("RELATION_EXTRACTION")) {
+                output = JSON.stringify({
+                  entities: [
+                    { id: "E1", text: "metformin", type: "MEDICATION" },
+                    { id: "E2", text: "type 2 diabetes", type: "CONDITION" },
+                  ],
+                  relations: [{
+                    source: "E1", type: "TREATS", target: "E2",
+                    evidence: "metformin 500 mg twice daily for type 2 diabetes",
+                    confidence: 0.96,
+                  }],
+                });
+              } else {
+                output = JSON.stringify({
+                  answer: "The note supports a temporal medication-event association.",
+                  evidence: [{
+                    quote: "nausea after the evening dose",
+                    why: "This directly states temporal order.",
+                  }],
+                  uncertainty: "The note does not establish causality.",
+                  safety_note: "Human review is required.",
+                });
+              }
+              const middle = Math.floor(output.length / 2);
+              yield { delta: output.slice(0, middle), index: 0 };
+              yield { delta: output.slice(middle), index: 1 };
+            },
+            dispose() {},
           };
         }
       `,
@@ -1334,22 +1377,44 @@ test("browser demo benchmarks both synthetic WASM and WebGPU branches", async ({
   const audit = monitorPage(page, baseURL);
   await page.goto("/docs/demo/web/", { waitUntil: "domcontentloaded" });
   await expect(page.locator("#webgpu-support")).toContainText(
-    "WebGPU is available",
+    "runtime will verify",
   );
-  await page.locator("#runtime-module").fill("./test-dual-runtime.js");
-  await page.locator("#repo-id").fill("./models/synthetic/");
-  await page
-    .locator("#input-text")
-    .fill("John Doe visited the synthetic clinic.");
-  await page.locator("#benchmark-both").click();
-  await expect(page.locator("#status")).toHaveText(
-    "WASM and WebGPU benchmarks completed.",
+  await page.locator("#runtime-module").fill("./test-maple-runtime.js");
+  await page.locator("#repo-id").fill("./models/maple-synthetic/");
+  await page.locator("#load-model").click();
+  await expect(page.locator("#model-state")).toHaveText("Ready");
+  await expect(page.locator("#runtime-details")).toContainText(
+    "Synthetic WebGPU adapter",
   );
-  for (const backend of ["wasm", "webgpu"]) {
-    await expect(page.locator(`#${backend}-load`)).not.toHaveText("—");
-    await expect(page.locator(`#${backend}-first`)).not.toHaveText("—");
-  }
-  await expect(page.locator("#results mark")).toHaveText("John Doe");
+
+  await page.locator("#run-task").click();
+  await expect(page.locator("#result-heading")).toHaveText("Redaction review");
+  await expect(page.locator("#results mark")).toHaveText("[NAME_1]");
+  await expect(page.locator(".redacted-note")).not.toContainText(
+    "MODEL-AUTHORED REDACTION",
+  );
+  await expect(page.locator("#raw-output")).not.toContainText(
+    "private model scratchpad",
+  );
+
+  await page.locator('[data-task="entities"]').click();
+  await page.locator("#run-task").click();
+  await expect(page.locator(".entity-card")).toContainText("metformin");
+  await expect(page.locator(".entity-card")).toContainText("MEDICATION");
+
+  await page.locator('[data-task="relations"]').click();
+  await page.locator("#run-task").click();
+  await expect(page.locator(".relation-card")).toContainText("TREATS");
+
+  await page.locator("#ask-maple").click();
+  await expect(page.locator('.chat-message[data-role="assistant"] .chat-bubble')).toContainText(
+    "temporal medication-event association",
+  );
+  await expect(page.locator(".chat-uncertainty")).toContainText(
+    "does not establish causality",
+  );
+  await expect(page.locator(".relation-card")).toContainText("TREATS");
+  await expect(page.locator("#chat-metric-tokens")).not.toHaveText("—");
   await expectAccessible(page);
   expectCleanAudit(audit);
 });
@@ -1367,11 +1432,8 @@ test("browser demo model error visual state", async ({
   await page
     .locator("#runtime-module")
     .fill("https://example.invalid/runtime.js");
-  await page.locator("#repo-id").fill("./models/synthetic/");
-  await page
-    .locator("#input-text")
-    .fill("Synthetic demo text used only for the error-state visual baseline.");
-  await page.locator("#run-selected").click();
+  await page.locator("#repo-id").fill("./models/maple-synthetic/");
+  await page.locator("#load-model").click();
   await expect(page.locator("#status")).toHaveAttribute("data-kind", "error");
   await expectAccessible(page);
   await expectVisualState(page, browserName, "browser-demo-error");

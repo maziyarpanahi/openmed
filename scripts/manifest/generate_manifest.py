@@ -331,11 +331,35 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
         or repo_lower.endswith("-mlx")
     ):
         formats.add("mlx-fp")
+    is_mlx_2bit = (
+        "2-bit" in lowered_tags
+        or "2bit" in lowered_tags
+        or "mlx-2bit" in lowered_tags
+        or "-2bit-mlx" in repo_lower
+        or "-mlx-2bit" in repo_lower
+        or any("2bit" in name or "2-bit" in name for name in lowered_names)
+    )
+    if is_mlx_2bit:
+        formats.add("mlx-2bit")
+        formats.discard("mlx-fp")
+    is_mlx_4bit = (
+        "4-bit" in lowered_tags
+        or "4bit" in lowered_tags
+        or "mlx-4bit" in lowered_tags
+        or "-4bit-mlx" in repo_lower
+        or "-mlx-4bit" in repo_lower
+        or any("4bit" in name or "4-bit" in name for name in lowered_names)
+    )
+    if is_mlx_4bit:
+        formats.add("mlx-4bit")
+        formats.discard("mlx-fp")
     if (
         "8bit" in lowered_tags
-        or "quantized" in lowered_tags
+        or "8-bit" in lowered_tags
         or "-mlx-8bit" in repo_lower
-        or any("8bit" in name for name in lowered_names)
+        or "-8bit-mlx" in repo_lower
+        or any("8bit" in name or "8-bit" in name for name in lowered_names)
+        or ("quantized" in lowered_tags and not is_mlx_2bit and not is_mlx_4bit)
     ):
         formats.add("mlx-8bit")
         formats.discard("mlx-fp")

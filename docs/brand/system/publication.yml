@@ -60,6 +60,7 @@ expected_assets:
   - docs/eval/benchmark-leaderboard/leaderboard.json
   - docs/eval/benchmark-leaderboard/reports/golden.report.json
   - docs/demo/web/app.js
+  - docs/demo/web/styles.css
 
 translation_groups:
   documentation_home:
@@ -194,6 +195,7 @@ classification:
     - fhir-smart-guidelines.md
     - icd11-grounding.md
     - export-matrix.md
+    - maple-on-device.md
     - mlx-backend.md
     - performance-mps.md
     - export-mlx-quant.md

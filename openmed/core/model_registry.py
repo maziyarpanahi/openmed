@@ -857,7 +857,9 @@ def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
         return None
 
     formats = set(row.get("formats") or ())
-    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+    if "mlx-2bit" in formats:
+        bytes_per_parameter = 0.30
+    elif formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
         bytes_per_parameter = 0.55
     elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
         bytes_per_parameter = 1.05

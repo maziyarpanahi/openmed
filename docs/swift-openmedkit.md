@@ -19,6 +19,8 @@ Swift MLX supports the first OpenMed artifact families used by the public Apple 
 - `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
 - `openai-privacy-filter`
 - `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
+- DeepGrove `maple` causal language models through the dedicated local
+  `OpenMedMaple` runtime
 
 ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families are still part of the broader rollout work.
 
@@ -36,6 +38,10 @@ iOS Simulator is **not** a Swift MLX validation target.
 watchOS and visionOS use the CoreML-only `PlatformModel` surface and require an
 INT8 Nano-tier artifact. See [Apple Platform Support](./runtimes/apple-platforms.md)
 for selection limits and simulator validation.
+
+Maple Preview 2-bit is a multi-gigabyte generative model. Test it on recent
+Apple hardware with sufficient storage and memory; keep a smaller specialized
+model available when the product must support constrained devices.
 
 ## Apple Platform Matrix
 
@@ -111,6 +117,82 @@ The same converted MLX artifact is now intended to work in both:
 - Swift via OpenMedKit
 
 OpenMedKit prefers the new self-contained artifact layout above. For older MLX repos that were uploaded before `openmed-mlx.json` and tokenizer asset bundling, it also keeps backward compatibility by falling back to `config.json` plus the source Hugging Face tokenizer reference when available.
+
+## Maple Preview: Local Generative Tasks
+
+`OpenMedMaple` loads the exact-head
+[`deepgrove/maple-preview-2bit-mlx`](https://huggingface.co/deepgrove/maple-preview-2bit-mlx)
+checkpoint from a complete local directory. It supports de-identification,
+entity extraction, relation extraction, evidence-grounded reasoning, and chat.
+It never downloads, logs, or persists document text; the host app controls model
+acquisition and must pass a local directory.
+
+```swift
+import OpenMedKit
+
+let modelDirectory = URL(fileURLWithPath: "/path/to/maple-preview-2bit-mlx")
+guard OpenMedMaple.isModelDirectoryReady(modelDirectory) else {
+    fatalError("Download Maple's required config, tokenizer, and three weight shards first")
+}
+
+let maple = try await OpenMedMaple(modelDirectoryURL: modelDirectory)
+let masked = try await maple.complete(
+    OpenMedMapleRequest(task: .deidentify, document: scannedText)
+)
+
+let clinical = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .relationExtraction,
+        document: masked.redactedText ?? "",
+        entityLabels: ["condition", "medication", "dosage", "follow-up plan"],
+        relationLabels: ["treated with", "has dosage", "requires follow-up"]
+    )
+)
+
+let brief = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .reasoning,
+        document: masked.redactedText ?? "",
+        question: "What facts, uncertainties, and follow-up items are documented?"
+    )
+)
+
+var streamedAnswer = ""
+let chat = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .chat,
+        document: masked.redactedText ?? "",
+        question: "What follow-up is documented?"
+    ),
+    onFinalAnswerChunk: { chunk in
+        await MainActor.run {
+            streamedAnswer.append(chunk)
+        }
+    }
+)
+```
+
+For multi-turn chat, pass the prior non-system turns through `messages` and the
+new prompt through `question`. Keep the `document` de-identified: OpenMedKit's
+prompt builder treats it as untrusted input, requests final answers without
+chain-of-thought, and adds a clinician-review boundary, but application-level
+data minimization remains required.
+
+`onFinalAnswerChunk` is called only for reasoning and chat, and only after Maple
+closes its private reasoning segment. De-identification, entity extraction, and
+relation extraction remain buffered until OpenMedKit has parsed complete JSON,
+validated its label vocabulary, repaired exact source spans, and dropped
+relations with unverified endpoints. The returned `chat.answer` is the canonical
+final value and can replace the accumulated UI text when generation completes.
+
+For de-identification, the generated rewrite is never trusted directly:
+OpenMedKit deterministically masks the validated source spans so unrelated
+clinical text cannot be silently rewritten. The runtime pins the public checkpoint revision in
+`OpenMedMaple.pinnedRevision`. Required files are exposed through
+`OpenMedMaple.requiredModelFiles`; the optional approximate
+`model-flashhead.safetensors` is not used. Structured outputs are parsed only
+after spans are validated or repaired against the source document, and
+relations with unverified endpoints are dropped.
 
 ## Quick Start: CoreML
 
@@ -250,7 +332,7 @@ The current Swift MLX runtime is the BERT-family token-classification path share
 
 This is the same first-phase scope as the current public Python MLX BERT-family implementation.
 
-## Demo App
+## Demo Apps
 
 The demo app in [`swift/OpenMedDemo/`](https://github.com/maziyarpanahi/openmed/tree/master/swift/OpenMedDemo) now exposes:
 
@@ -259,6 +341,13 @@ The demo app in [`swift/OpenMedDemo/`](https://github.com/maziyarpanahi/openmed/
 - public OpenMed MLX artifact download, local caching, and offline reuse
 
 On Apple Silicon macOS or a physical iPhone/iPad, the demo can download a supported MLX artifact and run it locally through OpenMedKit.
+
+The scanning demo in
+[`swift/OpenMedScanDemo/`](https://github.com/maziyarpanahi/openmed/tree/master/swift/OpenMedScanDemo)
+shows Maple's complete iOS workflow: VisionKit capture, Vision OCR, PII removal,
+entity and relation extraction, a grounded clinical brief, multi-turn document
+chat, and JSON export. All generative tasks run after de-identification, and the
+app unloads competing MLX runtimes before loading the larger Maple model.
 
 ## CoreML Status
 
