@@ -102,7 +102,17 @@ def test_default_stage_exposes_document_type_classification():
     ).run(text, method="mask")
 
     document_type = result.stage("doc_type_section").metadata["document_type"]
-    assert document_type == {"type": "radiology_report", "confidence": 0.98}
+    assert document_type == {
+        "type": "radiology_report",
+        "loinc_code": "18748-4",
+        "loinc_axes": {
+            "type_of_service": "radiology",
+            "subject_matter_domain": "imaging",
+            "role": "report",
+            "setting": "diagnostic",
+        },
+        "confidence": 0.98,
+    }
 
 
 def test_unavailable_section_hook_leaves_pipeline_output_unchanged():

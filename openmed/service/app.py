@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 from contextlib import asynccontextmanager
@@ -66,6 +67,7 @@ from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
+    CohortResolveRequest,
     DeidentifyJobRequest,
     ModelUnloadRequest,
     OmopLoadRequest,
@@ -199,6 +201,48 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
             "by_reason": by_reason,
         }
     return response
+
+
+def _cohort_resolve_summary(payload: CohortResolveRequest) -> Dict[str, Any]:
+    """Resolve an inline grounded corpus without persisting request content."""
+
+    from ..interop.omop import load_grounded_notes, write_omop_duckdb
+    from ..structured.cohort import (
+        ConceptHierarchy,
+        PhenotypeDefinition,
+        resolve_phenotype,
+    )
+
+    definition = PhenotypeDefinition.from_dict(payload.phenotype)
+    records = _parse_grounded_jsonl_text(payload.records_jsonl)
+    tables = load_grounded_notes(records)
+    hierarchy_rows = [
+        {
+            "ancestor_concept_id": edge.ancestor_concept_id,
+            "descendant_concept_id": edge.descendant_concept_id,
+        }
+        for edge in payload.concept_ancestors
+    ]
+    hierarchy = None
+    if hierarchy_rows:
+        canonical_rows = json.dumps(
+            hierarchy_rows,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        hierarchy = ConceptHierarchy.from_rows(
+            hierarchy_rows,
+            source_sha256=hashlib.sha256(canonical_rows).hexdigest(),
+        )
+    connection = write_omop_duckdb(tables)
+    try:
+        return resolve_phenotype(
+            definition,
+            connection,
+            hierarchy=hierarchy,
+        ).to_dict()
+    finally:
+        connection.close()
 
 
 def _error_response(
@@ -1019,6 +1063,20 @@ def create_app() -> FastAPI:
             },
         ):
             return await run_in_threadpool(_omop_load_summary, payload)
+
+    @app.post("/cohort/resolve")
+    async def cohort_resolve(
+        payload: CohortResolveRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        with trace_service_stage(
+            "cohort_resolve",
+            {
+                "openmed.endpoint": "/cohort/resolve",
+                "openmed.input.length": len(payload.records_jsonl),
+            },
+        ):
+            return await run_in_threadpool(_cohort_resolve_summary, payload)
 
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(

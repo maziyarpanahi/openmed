@@ -1,5 +1,16 @@
 """Synthetic training data generators."""
 
+from .burned_in import (
+    BACKGROUND_MODES,
+    BURNED_IN_LABELS,
+    DEFAULT_CANVAS_SIZE,
+    DEFAULT_FONT_NAMES,
+    DEFAULT_FONT_SIZES,
+    BurnedInExample,
+    BurnedInGenerator,
+    BurnedInTextBox,
+    generate_burned_in_example,
+)
 from .locale_phi import (
     LOCALE_PHI_LABELS,
     SUPPORTED_LOCALE_PHI_LANGUAGES,
@@ -50,6 +61,11 @@ from .translation_augment import (
 __all__ = [
     "CANONICAL_DOCUMENT_TYPES",
     "CANONICAL_SECTION_LABELS",
+    "BACKGROUND_MODES",
+    "BURNED_IN_LABELS",
+    "DEFAULT_CANVAS_SIZE",
+    "DEFAULT_FONT_NAMES",
+    "DEFAULT_FONT_SIZES",
     "DEFAULT_TARGET_LANGUAGES",
     "DEFAULT_SECTION_DATASET_PATH",
     "DEFAULT_SECTION_EVAL_FIXTURE",
@@ -62,6 +78,9 @@ __all__ = [
     "SYNTHETIC_SECTION_LICENSE",
     "SYNTHETIC_SECTION_SOURCE",
     "SUPPORTED_LOCALE_PHI_LANGUAGES",
+    "BurnedInExample",
+    "BurnedInGenerator",
+    "BurnedInTextBox",
     "DictionaryTranslator",
     "LocalePhiExample",
     "LocalePhiGenerator",
@@ -73,6 +92,7 @@ __all__ = [
     "augment_span_annotated_examples",
     "assert_no_eval_overlap",
     "build_section_dataset",
+    "generate_burned_in_example",
     "generate_locale_phi_examples",
     "load_section_dataset",
     "load_section_manifest",

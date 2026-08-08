@@ -123,6 +123,7 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/chinese-terminology-grounding.md
+    - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
@@ -214,6 +215,7 @@ classification:
     - onboarding.md
     - migration.md
     - contributing.md
+    - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
     - security/disclosure-policy.md
