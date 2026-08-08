@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>33 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>34 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -529,10 +529,10 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (34 समर्थित रूट; 33 मॉडल-समर्थित)
+## बहुभाषी PII (35 समर्थित रूट; 34 मॉडल-समर्थित)
 
-निष्कर्षण और डी-आइडेंटिफिकेशन **34 समर्थित PII भाषा codes** में उपलब्ध हैं:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
+निष्कर्षण और डी-आइडेंटिफिकेशन **35 समर्थित PII भाषा codes** में उपलब्ध हैं:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
 Russian routing अभी दस्तावेज़ित multilingual default-model placeholder का उपयोग
 करती है। Bengali, Chinese और Tamil के dedicated registry entries हैं।
 एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family चार अतिरिक्त routes
@@ -664,7 +664,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
 | [OpenMed 2.0.0 release notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
-| [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [Detector plugin SDK](docs/plugin-sdk.md) |
+| [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [एक्सटेंशन प्लगइन SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |
 
 ---

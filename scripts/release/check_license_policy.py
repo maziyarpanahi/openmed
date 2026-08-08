@@ -74,6 +74,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
+    "apache-beam": "Apache-2.0",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
@@ -147,6 +148,7 @@ REVIEWED_LICENSES = {
     "python-docx": "MIT",
     "quickumls": "MIT",
     "rapidfuzz": "MIT",
+    "ray": "Apache-2.0",
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
