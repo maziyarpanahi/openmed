@@ -1,0 +1,95 @@
+{
+  "format": "openmed-agent-skill-compatibility",
+  "schema_version": 1,
+  "hosts": {
+    "agents": {
+      "display_name": "Shared Agent Skills directory",
+      "skills_dir": "~/.agents/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    },
+    "claude": {
+      "display_name": "Claude Code",
+      "skills_dir": "~/.claude/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    },
+    "codex": {
+      "display_name": "OpenAI Codex",
+      "skills_dir": "~/.codex/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    },
+    "opencode": {
+      "display_name": "OpenCode",
+      "skills_dir": "~/.config/opencode/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    }
+  },
+  "packs": {
+    "all": {
+      "description": "Every skill in the local catalog.",
+      "patterns": [
+        "*"
+      ]
+    },
+    "interop": {
+      "description": "FHIR and healthcare interoperability workflows.",
+      "skills": [
+        "assembling-fhir-bundles",
+        "exporting-bulk-fhir",
+        "exporting-to-fhir",
+        "extract-clinical-entities-to-fhir",
+        "scaffolding-smart-on-fhir",
+        "validating-us-core"
+      ]
+    },
+    "privacy": {
+      "description": "De-identification, leakage review, and privacy workflows.",
+      "skills": [
+        "auditing-deid-leakage",
+        "auditing-deidentification-runs",
+        "deidentifying-clinical-text",
+        "enforcing-nophi-logging",
+        "extracting-pii-entities",
+        "generating-synthetic-surrogates",
+        "reviewing-reidentification-risk"
+      ]
+    },
+    "starter": {
+      "description": "Core orientation, model selection, extraction, and privacy skills.",
+      "skills": [
+        "building-with-openmed",
+        "choosing-openmed-models",
+        "deidentifying-clinical-text",
+        "extracting-clinical-entities",
+        "loading-openmed-models"
+      ]
+    }
+  }
+}
