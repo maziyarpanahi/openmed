@@ -62,6 +62,7 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
+from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
 from .registry import add_registry_command
@@ -356,6 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
+    _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
@@ -1655,6 +1657,47 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
     load_parser.set_defaults(handler=_handle_omop_load)
 
 
+def _add_cohort_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add local phenotype resolution commands."""
+
+    cohort_parser = subparsers.add_parser(
+        "cohort",
+        help="Resolve declarative phenotypes over a local OMOP store.",
+    )
+    cohort_sub = cohort_parser.add_subparsers(dest="cohort_command")
+    resolve_parser = cohort_sub.add_parser(
+        "resolve",
+        help="Resolve a phenotype against DuckDB or an OMOP Parquet directory.",
+    )
+    resolve_parser.add_argument(
+        "--definition",
+        type=Path,
+        required=True,
+        help="Phenotype-definition JSON file.",
+    )
+    source = resolve_parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--duckdb",
+        type=Path,
+        help="Existing local DuckDB file containing the OMOP tables.",
+    )
+    source.add_argument(
+        "--parquet",
+        type=Path,
+        help="Directory containing the OMOP table Parquet files.",
+    )
+    resolve_parser.add_argument(
+        "--athena",
+        type=Path,
+        default=None,
+        help=(
+            "Caller-supplied Athena directory or CONCEPT_ANCESTOR.csv used "
+            "for descendant expansion."
+        ),
+    )
+    resolve_parser.set_defaults(handler=_handle_cohort_resolve)
+
+
 def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
     """Add clinical export commands."""
 
@@ -2398,6 +2441,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Trim rendered context windows to this many characters around a span.",
     )
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
+    add_generalization_command(benchmark_sub)
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
@@ -4603,6 +4647,58 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     )
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
+    return emit(args, payload, human=human)
+
+
+def _handle_cohort_resolve(args: argparse.Namespace) -> int:
+    """Resolve a stable phenotype definition over a local cohort store."""
+
+    from ..structured.cohort import (
+        COHORT_ADVISORY,
+        PhenotypeDefinition,
+        PhenotypeDefinitionError,
+        load_athena_hierarchy,
+        resolve_phenotype,
+    )
+
+    try:
+        definition = PhenotypeDefinition.load(args.definition)
+        hierarchy = (
+            load_athena_hierarchy(args.athena) if args.athena is not None else None
+        )
+        result = resolve_phenotype(
+            definition,
+            duckdb_path=args.duckdb,
+            parquet_directory=args.parquet,
+            hierarchy=hierarchy,
+        )
+    except FileNotFoundError as exc:
+        raise CliError(
+            str(exc),
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except PhenotypeDefinitionError as exc:
+        raise CliError(
+            str(exc),
+            code="invalid_phenotype",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ImportError as exc:
+        raise CliError(
+            str(exc),
+            code="missing_dependency",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ValueError as exc:
+        raise CliError(
+            str(exc),
+            code="resolution_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = result.to_dict()
+    human = f"Resolved {len(result.patient_ids)} patient(s). {COHORT_ADVISORY}"
     return emit(args, payload, human=human)
 
 

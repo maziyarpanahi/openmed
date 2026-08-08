@@ -53,6 +53,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
         "code_mixed_hinglish.jsonl",
         "context_multilingual.jsonl",
+        "dicom_sr_content.jsonl",
         "doclevel_relations.jsonl",
         "event_coref.jsonl",
         "code_mixed_deidentification.jsonl",
