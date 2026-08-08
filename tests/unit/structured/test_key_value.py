@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import openmed.structured as structured
 from openmed.structured.key_value import (
     KEY_VALUE_ADVISORY,
     FormField,
@@ -91,3 +92,10 @@ def test_empty_input_is_deterministic_and_typed():
     )
     assert FormField is not None
     assert isinstance(KEY_VALUE_ADVISORY, str) and KEY_VALUE_ADVISORY
+
+
+def test_form_field_extractors_are_public_structured_exports():
+    assert structured.FormField is FormField
+    assert structured.extract_form_fields is extract_form_fields
+    assert structured.extract_key_value_pairs is extract_key_value_pairs
+    assert structured.structure_form_fields is structure_form_fields
