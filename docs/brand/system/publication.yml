@@ -145,6 +145,7 @@ classification:
     - testing.md
     - eval-harness.md
     - clinical-validation-protocol.md
+    - clinical/summary-safety.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - clinical/experiencer-refinement.md
