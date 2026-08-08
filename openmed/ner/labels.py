@@ -50,6 +50,12 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "protocolApplied.series. This is extraction metadata only; it does not "
         "create exporter, recommendation, dosing, or scheduling logic."
     ),
+    "mental_health": (
+        "Substance-use and SDOH (social-determinants-of-health) entities are "
+        "out of scope for this domain and remain owned by OM-056. Mental-health spans "
+        "are high-sensitivity content for redaction review; this catalog is "
+        "extraction metadata only and does not make clinical decisions."
+    ),
 }
 
 

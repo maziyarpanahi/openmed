@@ -1045,6 +1045,100 @@ class TestProceduresRouting:
         assert all(info.category != "Procedures" for _k, info, _r in suggestions)
 
 
+# ---------------------------------------------------------------------------
+# Immunology, mental-health, and dentistry domains (issue #2358)
+# ---------------------------------------------------------------------------
+
+
+class TestImmunologyMentalHealthDentistryDomains:
+    EXPECTED_LABELS = {
+        "immunology": ["Allergen", "AllergicReaction", "Immunization", "Antibody"],
+        "mental_health": [
+            "PsychiatricSymptom",
+            "Diagnosis",
+            "Medication",
+            "Therapy",
+        ],
+        "dentistry": ["Tooth", "DentalCondition", "DentalProcedure", "Restoration"],
+    }
+    EXPECTED_CANONICAL_LABELS = {
+        "Allergen": "ALLERGEN",
+        "AllergicReaction": "FINDING",
+        "Immunization": "IMMUNIZATION",
+        "Antibody": "PROTEIN",
+        "PsychiatricSymptom": "PSYCH_SYMPTOM",
+        "Diagnosis": "PROBLEM",
+        "Medication": "MEDICATION",
+        "Therapy": "PROCEDURE",
+        "Tooth": "TOOTH",
+        "DentalCondition": "CONDITION",
+        "DentalProcedure": "PROCEDURE",
+        "Restoration": "PROCEDURE",
+    }
+
+    def test_domains_are_available_with_non_empty_label_sets(self):
+        domains = available_domains()
+        for domain, expected in self.EXPECTED_LABELS.items():
+            assert domain in domains
+            assert get_default_labels(domain) == expected
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(EXPECTED_CANONICAL_LABELS.items()),
+    )
+    def test_domain_labels_normalize_to_known_canonical_labels(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+
+    def test_mental_health_domain_has_no_sdoh_labels(self):
+        labels = {
+            normalize_canonical_label(label)
+            for label in self.EXPECTED_LABELS["mental_health"]
+        }
+        assert labels.isdisjoint({"SDOH", "SUBSTANCE_USE", "SOCIAL_DETERMINANT"})
+        assert "PSYCH_SYMPTOM" in labels
+        assert risk_level_for("PSYCH_SYMPTOM") == "high"
+
+    def test_specialty_categories_are_forward_registry_metadata(self):
+        from openmed.core.model_registry import CATEGORIES
+
+        expected_categories = {
+            "Immunology": {"ALLERGEN", "FINDING", "IMMUNIZATION", "PROTEIN"},
+            "MentalHealth": {
+                "PSYCH_SYMPTOM",
+                "PROBLEM",
+                "MEDICATION",
+                "PROCEDURE",
+            },
+            "Dentistry": {"TOOTH", "CONDITION", "PROCEDURE"},
+        }
+        for category, expected in expected_categories.items():
+            assert set(_CATEGORY_ENTITY_TYPES[category]) == expected
+            assert category not in CATEGORIES
+
+
+class TestImmunologyMentalHealthDentistryRouting:
+    REPRESENTATIVE_TEXTS = {
+        "Immunology": "Synthetic allergy workup notes anaphylaxis and elevated IgG",
+        "MentalHealth": "Synthetic note describes depression treated with an antidepressant",
+        "Dentistry": "Synthetic dental visit documents caries and a crown",
+    }
+
+    @pytest.mark.parametrize("category", REPRESENTATIVE_TEXTS)
+    def test_match_categories_routes_specialty(self, category):
+        categories = [
+            matched
+            for matched, _reason in _match_categories(
+                self.REPRESENTATIVE_TEXTS[category]
+            )
+        ]
+        assert category in categories
+
+    def test_get_model_suggestions_remains_live_model_fallback(self):
+        for text in self.REPRESENTATIVE_TEXTS.values():
+            assert get_model_suggestions(text)
+
+
 class TestNormalizeLabelIdempotency:
     @pytest.mark.parametrize(
         "label",
