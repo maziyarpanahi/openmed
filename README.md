@@ -4,11 +4,6 @@
 
 <h2>Your Data. Your Model. Your Hardware.</h2>
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
-  <a href="https://trendshift.io/repositories/40195?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/40195/daily?language=Python" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
-</p>
-
 <p><b>Turn clinical text into structured, de-identified insight on hardware you control.</b><br/>
 OpenMed's core local runtime performs extraction and de-identification after required model artifacts are available. Model downloads, remote-provider adapters, telemetry-enabled paths, and user-configured integrations may use a network; review each model and dataset's terms.</p>
 
@@ -663,7 +658,7 @@ MkDocs build.
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
 | [OpenMed 2.0.0 Release Notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
-| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Detector Plugin SDK](docs/plugin-sdk.md) |
+| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Extension Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |
 
 ---
