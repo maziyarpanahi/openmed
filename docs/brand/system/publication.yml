@@ -140,6 +140,7 @@ classification:
     - zero-shot-ner.md
     - examples.md
     - document-adapter-provenance.md
+    - reference/preference-schema.md
     - multimodal/epub-extraction.md
     - multimodal/rtf-extraction.md
     - testing.md

@@ -68,6 +68,7 @@ nav:
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Preference Pair Schema: reference/preference-schema.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
