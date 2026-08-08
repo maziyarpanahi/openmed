@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Sequence
 
-TRANSFORMERS_JS_VERSION = "3.8.1"
+TRANSFORMERS_JS_VERSION = "4.2.0"
 TRANSFORMERS_JS_FILE = "transformers.web.min.js"
 
 
@@ -55,7 +55,7 @@ def build_tokenizer_runtime(output_directory: str | Path) -> Path:
                 f"Transformers.js did not produce {TRANSFORMERS_JS_FILE}"
             )
         payload = source.read_text(encoding="utf-8")
-        for module_name in ("onnxruntime-common", "onnxruntime-web"):
+        for module_name in ("onnxruntime-common", "onnxruntime-web/webgpu"):
             specifier = f'from"{module_name}"'
             if payload.count(specifier) != 1:
                 raise TokenizerRuntimeBuildError(

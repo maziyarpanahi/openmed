@@ -241,18 +241,19 @@ remains a separate release gate.
 ## Web browser clinical studio
 
 [`docs/demo/web/`](/docs/demo/web/) is a standalone, responsive browser experience
-with PII, entity, and relation workflows plus persistent streamed chat beneath
-their results. It includes keyboard-accessible task tabs, model-cache controls,
-and synthetic UI previews. Serve the repository locally:
+with Maple PII, entity, and relation workflows plus persistent streamed chat
+beneath their results. Its bottom conversation picker can use either the loaded
+Maple runtime or a separate LiquidAI LFM2.5 2.6B Q4F16 runtime while preserving
+the completed extraction. It includes keyboard-accessible task tabs,
+model-cache controls, and synthetic UI previews. Serve the repository locally:
 
 ```bash
 python -m http.server 8000
 ```
 
-Then open `http://localhost:8000/docs/demo/web/`. The page accepts an audited,
-same-origin Maple WebGPU adapter or a compatible ONNX Runtime Web implementation.
-Its Content Security Policy has no cloud-inference fallback, and notes and
-outputs are never placed in browser storage.
+Then open `http://localhost:8000/docs/demo/web/`. The page accepts audited,
+same-origin model packs only. Its Content Security Policy has no cloud-inference
+fallback, and notes and outputs are never placed in browser storage.
 
 Stock Transformers.js cannot load Maple's custom MLX checkpoint by itself. The
 browser adapter uses the same unified cache names and dimensions as Android,
@@ -285,6 +286,33 @@ external-data shards, `model.onnx.data.000` through `model.onnx.data.012`. The
 2-bit graph requires the pinned OpenMed ONNX Runtime 1.26 native WebGPU build
 with Asyncify WASM support and the narrow QMoE patch; the demo rejects an
 unmarked stock runtime. This path does not use ONNX Runtime's JSEP build.
+
+### Selectable LFM2.5 chat
+
+The optional conversation runtime pins
+[`LiquidAI/LFM2.5-2.6B-ONNX`](https://huggingface.co/LiquidAI/LFM2.5-2.6B-ONNX)
+at revision `66826372fd4fa166f53be0371c9315745c07cace` and uses its official
+Q4F16 graph. The graph and two external-data files total exactly
+1,534,153,680 bytes; the configuration, chat template, tokenizer, and license
+bring the same-origin pack to 1,552,083,193 bytes. Download the exact nine-file
+layout with the pinned command in the
+[browser demo README](https://github.com/maziyarpanahi/openmed/blob/master/docs/demo/web/README.md#optional-lfm25-conversation-model).
+
+Select **LFM2.5 · 2.6B Q4F16** at the bottom of the page, or use
+`?chat_model=lfm25&lfm_model=./models/lfm2.5-2.6b-onnx-q4f16/`. Its dedicated
+module worker uses vendored Transformers.js 4.2.0 and ONNX Runtime Web with
+remote model loading disabled. Model-asset caching follows the explicit UI
+toggle; prompts and outputs are never persisted. Loading it releases Maple's
+GPU session so both models are not resident simultaneously; the extraction
+remains visible. Real token deltas stream from the worker, then the page
+validates the grounded answer, exact evidence quotes, and uncertainty.
+Hidden-reasoning markers are rejected from visible output.
+
+LFM2.5 is distributed under the custom **LFM Open License v1.0**, not a
+permissive open-source license. Commercial use is licensed only below the
+US$10-million annual-revenue threshold. Redistribution must include the license,
+mark modifications, and retain applicable notices and attribution. Do not
+mirror the pack under OpenMed without explicit license review.
 
 A development validation in actual Chrome 151 loaded the full corrected graph
 through the native WebGPU provider (`apple · metal-3`). Direct streamed PII

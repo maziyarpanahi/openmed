@@ -1,22 +1,23 @@
 # Maple clinical studio for WebGPU
 
-This static example presents three structured workflows and a persistent chat
-powered by one local Maple-Preview causal model:
+This static example presents three structured workflows powered by local
+Maple-Preview and a persistent chat with a selectable local conversation model:
 
 - direct-identifier detection and reviewable PII redaction;
 - clinical entity extraction;
 - evidence-linked relation extraction.
 
-The **Ask Maple about this note** composer remains below PII/NER output, so a
-user can keep the extraction visible while a real model answer streams into the
-conversation. Final answers include exact source evidence and uncertainty;
-private reasoning is neither displayed nor stored.
+The **Ask about this note** composer remains below PII/NER output. Choose Maple
+Preview or LiquidAI LFM2.5 2.6B for conversation while keeping the completed
+extraction visible. Real generated deltas stream into the assistant turn. Final
+answers include exact source evidence and uncertainty; private reasoning is
+neither displayed nor stored.
 
 The page is a runtime shell, not a hosted inference client. It makes no network
 request on initial load, bundles no model weights, and has no cloud fallback.
-The user explicitly supplies a same-origin runtime module and model pack, then
-clicks **Load Maple locally**. A restrictive Content Security Policy prevents
-the demo from connecting to a different origin.
+The user explicitly supplies same-origin model packs, then loads a model
+locally. A restrictive Content Security Policy prevents the demo from
+connecting to a different origin.
 
 The **Preview the interface** button uses deterministic synthetic fixtures. It
 is useful for exploring and testing the UI, but it is clearly labelled and does
@@ -108,6 +109,69 @@ Keep Hugging Face access tokens out of paths, source code, browser storage, and
 committed files. Mirror or export public assets before serving the demo; the
 page will not fetch a model directly from the Hub.
 
+## Optional LFM2.5 conversation model
+
+The conversation-model picker at the bottom can use the official LiquidAI
+LFM2.5 2.6B Q4F16 ONNX export. OpenMed pins revision
+`66826372fd4fa166f53be0371c9315745c07cace`. Acquire only these files from that
+revision:
+
+```bash
+hf download LiquidAI/LFM2.5-2.6B-ONNX \
+  chat_template.jinja config.json generation_config.json LICENSE \
+  tokenizer.json tokenizer_config.json \
+  onnx/model_q4f16.onnx onnx/model_q4f16.onnx_data \
+  onnx/model_q4f16.onnx_data_1 \
+  --revision 66826372fd4fa166f53be0371c9315745c07cace \
+  --local-dir docs/demo/web/models/lfm2.5-2.6b-onnx-q4f16
+```
+
+The three graph files total exactly 1,534,153,680 bytes. The complete local pack
+above is 1,552,083,193 bytes and has this layout:
+
+```text
+models/lfm2.5-2.6b-onnx-q4f16/
+├── chat_template.jinja
+├── config.json
+├── generation_config.json
+├── LICENSE
+├── tokenizer.json
+├── tokenizer_config.json
+└── onnx/
+    ├── model_q4f16.onnx
+    ├── model_q4f16.onnx_data
+    └── model_q4f16.onnx_data_1
+```
+
+Select **LFM2.5 · 2.6B Q4F16**, verify the path, and click **Load LFM2.5
+locally**. The equivalent query string is:
+
+```text
+http://localhost:8000/docs/demo/web/?chat_model=lfm25&lfm_model=./models/lfm2.5-2.6b-onnx-q4f16/
+```
+
+The adapter loads the pack in a dedicated module worker with the vendored
+Transformers.js 4.2.0 and ONNX Runtime Web modules. Remote model loading is
+disabled: all runtime and model requests must stay on the page's origin. Model
+asset caching follows the explicit **Cache model locally** toggle; prompts and
+outputs are never persisted. Loading LFM2.5 releases Maple's GPU session to
+avoid holding both multi-gigabyte models at once, but preserves the completed
+extraction. Reload Maple before running another structured task.
+
+LFM2.5's real token deltas stream from the worker as they are generated. The
+page validates the final grounded-answer schema and exact evidence quotes before
+presenting them as trusted structure; plain text remains visibly marked for
+review. The adapter closes the model template's initial reasoning segment and
+rejects `<think>` markers in visible output.
+
+**License warning:** LFM2.5 uses the custom **LFM Open License v1.0**, not a
+permissive open-source license. Its commercial-use grant applies only while the
+user or Legal Entity is below US$10 million in annual revenue. Redistribution
+requires supplying the license, marking modifications, and retaining applicable
+copyright, patent, trademark, and attribution notices. Review the pinned
+`LICENSE` before use or redistribution; do not mirror or publish this pack as an
+OpenMed artifact without an explicit license review.
+
 ## Build the exact 2-bit browser stack
 
 Start from the completed pinned four-bit WebGPU export and the verified
@@ -144,10 +208,11 @@ python scripts/onnxruntime/build_maple_tokenizer_runtime.py \
   docs/demo/web/vendor
 ```
 
-The tokenizer build pins Transformers.js 3.8.1, disables remote models and
-browser persistence, loads `tokenizer.json` and `tokenizer_config.json` only
+The tokenizer build pins Transformers.js 4.2.0, disables remote models and
+raw-text persistence, loads `tokenizer.json` and `tokenizer_config.json` only
 from the selected same-origin pack, and applies Maple's own chat template with
-the assistant generation prompt. Keep `maple-qmoe2-runtime.mjs` and
+the assistant generation prompt. Model-asset caching is opt-in. Keep
+`maple-qmoe2-runtime.mjs` and
 `maple-tokenizer.mjs` beside the demo; the generated dependencies remain under
 the ignored `vendor/` directory.
 

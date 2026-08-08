@@ -50,6 +50,15 @@ def test_maple_demo_exposes_model_cache_structured_tasks_and_streamed_chat() -> 
         "stop-chat",
         "chat-messages",
         "chat-metric-first-token",
+        "chat-model",
+        "chat-model-description",
+        "chat-model-state",
+        "chat-model-loader",
+        "chat-model-path",
+        "load-chat-model",
+        "cancel-chat-model-load",
+        "release-chat-model",
+        "chat-model-progress",
         "run-task",
         "stop-generation",
         "clear-session",
@@ -64,10 +73,12 @@ def test_maple_demo_exposes_model_cache_structured_tasks_and_streamed_chat() -> 
     assert 'role="tablist"' in html
     assert html.count('role="tab"') == 3
     assert 'role="tabpanel"' in html
-    assert "Ask Maple about this note" in html
+    assert "Ask about this note" in html
     assert "Streams locally" in html
     assert "Human review required" in html
     assert "not a clinical decision system" in html
+    assert '<option value="maple" selected>Maple Preview · 2-bit</option>' in html
+    assert '<option value="lfm25">LFM2.5 · 2.6B Q4F16</option>' in html
 
 
 def test_maple_demo_enforces_same_origin_runtime_contract() -> None:
@@ -90,6 +101,55 @@ def test_maple_demo_enforces_same_origin_runtime_contract() -> None:
     assert "sessionStorage" not in app
     assert "console." not in app
     assert "pagehide" in app
+
+
+def test_maple_demo_keeps_lfm25_chat_local_private_and_worker_isolated() -> None:
+    """The optional conversation model must be local-only and independently releasable."""
+
+    app = (DEMO_DIR / "app.js").read_text(encoding="utf-8")
+    adapter = (DEMO_DIR / "lfm25-chat-web-adapter.mjs").read_text(encoding="utf-8")
+    worker = (DEMO_DIR / "lfm25-chat-worker.mjs").read_text(encoding="utf-8")
+
+    assert '"./lfm25-chat-web-adapter.mjs"' in app
+    assert "createOpenMedLfm25ChatRuntime" in app
+    assert 'networkPolicy: "same-origin-model-assets-only"' in app
+    assert "disposeChatRuntime" in app
+    assert "chat_model" in app
+    assert "lfm_model" in app
+    assert "https://" not in app
+
+    assert 'const SOURCE_MODEL = "LiquidAI/LFM2.5-2.6B-ONNX"' in adapter
+    assert (
+        'const SOURCE_REVISION = "66826372fd4fa166f53be0371c9315745c07cace"' in adapter
+    )
+    assert 'const MODEL_VARIANT = "q4f16"' in adapter
+    assert "const MODEL_BYTES = 1_534_153_680" in adapter
+    assert 'const WORKER_PATH = "./lfm25-chat-worker.mjs"' in adapter
+    assert '"./vendor/transformers.web.min.js"' in adapter
+    assert "env.allowRemoteModels = false" in adapter
+    assert "local_files_only: true" in adapter
+    assert "resolveSameOriginHttpUrl" in adapter
+    assert "requireFloat16WebGpu" in adapter
+    assert "closeTrailingReasoningPrompt" in adapter
+    assert (
+        'FORBIDDEN_REASONING_MARKERS = Object.freeze(["<think>", "</think>"])'
+        in adapter
+    )
+    assert "https://" not in adapter
+
+    assert "new Worker" in adapter
+    assert 'type: "module"' in adapter
+    assert "createOpenMedLfm25ChatRuntime" in worker
+    assert 'import("./vendor/transformers.web.min.js")' in worker
+    assert "postMessage" in worker
+    assert "generationController?.abort" in worker
+    assert "https://" not in worker
+
+    for source in (app, adapter, worker):
+        assert "localStorage" not in source
+        assert "sessionStorage" not in source
+        assert "indexedDB" not in source
+        assert "console." not in source
 
 
 def test_maple_demo_prompts_cover_structured_clinical_tasks() -> None:

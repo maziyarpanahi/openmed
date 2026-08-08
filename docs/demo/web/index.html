@@ -350,13 +350,74 @@
             <div class="chat-heading">
               <div>
                 <p class="eyebrow">Grounded conversation</p>
-                <h3 id="chat-heading">Ask Maple about this note</h3>
+                <h3 id="chat-heading">Ask about this note</h3>
                 <p>
-                  Keep the extraction above, then ask a follow-up. Maple streams its
-                  answer and attaches exact evidence from the note.
+                  Keep the extraction above, choose a local conversation model, then
+                  ask a follow-up with exact evidence from the note.
                 </p>
               </div>
               <span class="stream-badge"><span aria-hidden="true">●</span> Streams locally</span>
+            </div>
+
+            <div class="chat-model-picker" aria-labelledby="chat-model-heading">
+              <div class="chat-model-picker__copy">
+                <span class="model-orb" aria-hidden="true">AI</span>
+                <div>
+                  <strong id="chat-model-heading">Conversation model</strong>
+                  <p id="chat-model-description">
+                    Maple Preview · uses the extraction runtime already loaded above.
+                  </p>
+                </div>
+              </div>
+              <div class="chat-model-picker__controls">
+                <label for="chat-model">Local model</label>
+                <select id="chat-model" name="chat-model">
+                  <option value="maple" selected>Maple Preview · 2-bit</option>
+                  <option value="lfm25">LFM2.5 · 2.6B Q4F16</option>
+                </select>
+                <span id="chat-model-state" class="state-chip" data-state="idle">
+                  Uses Maple
+                </span>
+              </div>
+            </div>
+
+            <div id="chat-model-loader" class="chat-model-loader" hidden>
+              <div class="field">
+                <label for="chat-model-path">Local LFM2.5 Q4F16 pack</label>
+                <input
+                  id="chat-model-path"
+                  name="chat-model-path"
+                  value="./models/lfm2.5-2.6b-onnx-q4f16/"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  aria-describedby="chat-model-note"
+                />
+                <p id="chat-model-note" class="field-note">
+                  Pinned 1.53 GB WebGPU model · same-origin files only. Loading it
+                  releases Maple GPU memory but preserves the extraction above. The
+                  custom LFM Open License 1.0 applies.
+                </p>
+              </div>
+              <div class="chat-model-loader__actions">
+                <button id="load-chat-model" class="quiet-action" type="button">
+                  Load LFM2.5 locally
+                </button>
+                <button id="cancel-chat-model-load" class="text-action" type="button" hidden>
+                  Cancel
+                </button>
+                <button id="release-chat-model" class="text-action" type="button" hidden>
+                  Release LFM2.5
+                </button>
+              </div>
+              <div id="chat-model-progress" class="load-progress" hidden>
+                <div class="load-progress__row">
+                  <strong id="chat-model-progress-label">Preparing LFM2.5</strong>
+                  <span id="chat-model-progress-percent">0%</span>
+                </div>
+                <progress id="chat-model-progress-bar" max="1" value="0">0%</progress>
+                <p id="chat-model-progress-detail">Waiting for the local Q4F16 pack.</p>
+              </div>
             </div>
 
             <div id="chat-messages" class="chat-thread" aria-live="polite">
@@ -385,7 +446,7 @@
                     Stop
                   </button>
                   <button id="ask-maple" class="chat-send" type="button" disabled>
-                    <span>Ask Maple</span><span aria-hidden="true">↗</span>
+                    <span id="chat-send-label">Ask Maple</span><span aria-hidden="true">↗</span>
                   </button>
                 </div>
               </div>
