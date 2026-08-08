@@ -96,6 +96,7 @@ classification:
     - agent-usage.md
     - analyze-text.md
     - rest-service.md
+    - service/self-hosted-redaction.md
     - mcp-clients.md
     - rest-recipes.md
     - serving/tracing.md

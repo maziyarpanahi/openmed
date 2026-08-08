@@ -169,8 +169,13 @@ def test_no_single_stage_dominates_superlinearly_on_long_notes():
     assert the fraction does not more than triple, which tolerates CI noise but
     catches genuine super-linear stage blowups.
     """
-    short = _build_pipeline().run(_synthetic_note(20), method="mask")
-    long = _build_pipeline().run(_synthetic_note(160), method="mask")
+    pipeline = _build_pipeline()
+    # Import and module-initialization costs are not length-dependent stage
+    # work. Warm the same pipeline before comparing the two measurements so a
+    # cold short run cannot make a warmed long run look super-linear.
+    pipeline.run(_synthetic_note(20), method="mask")
+    short = pipeline.run(_synthetic_note(20), method="mask")
+    long = pipeline.run(_synthetic_note(160), method="mask")
 
     short_total = max(sum(short.stage_durations_ms.values()), 1e-6)
     long_total = max(sum(long.stage_durations_ms.values()), 1e-6)
