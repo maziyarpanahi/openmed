@@ -42,6 +42,7 @@ class ModelRecord:
     languages: Tuple[str, ...] = field(default_factory=tuple)
     path: str = ""
     notes: Optional[str] = None
+    license: Optional[str] = None
 
     def to_dict(self) -> Dict[str, object]:
         """Convert to a JSON-serialisable dictionary."""
@@ -54,7 +55,30 @@ class ModelRecord:
         }
         if self.notes:
             payload["notes"] = self.notes
+        if self.license:
+            payload["license"] = self.license
         return payload
+
+
+GLINER_BIOMED_MODEL_ID = "Ihor/gliner-biomed-large-v1.0"
+"""Stable Hugging Face identifier for the registered GLiNER-BioMed model."""
+
+
+GLINER_BIOMED_RECORD = ModelRecord(
+    id=GLINER_BIOMED_MODEL_ID,
+    family=ModelFamily.GLINER.value,
+    domains=("biomedical", "clinical"),
+    languages=("en",),
+    notes=(
+        "Public GLiNER-BioMed checkpoint; weights are loaded through the local "
+        "GLiNER cache when the optional dependency is enabled."
+    ),
+    license="Apache-2.0",
+)
+"""Built-in metadata for the production biomedical zero-shot backbone."""
+
+
+BUILTIN_MODEL_RECORDS = (GLINER_BIOMED_RECORD,)
 
 
 @dataclass(frozen=True)
@@ -342,10 +366,18 @@ def _deduplicate(records: Iterable[ModelRecord]) -> Iterator[ModelRecord]:
 
 
 def load_index(path: Optional[Path] = None) -> ModelIndex:
-    """Load a previously generated index from ``path``."""
+    """Load a generated index, including built-in public model records.
+
+    When ``path`` is omitted, the default local index is used when present and
+    built-in records are added to it. If the default local index does not exist,
+    an index containing the built-in records is returned. Explicit paths retain
+    the existing strict file-not-found behavior.
+    """
 
     index_path = Path(path) if path is not None else DEFAULT_INDEX_PATH
     if not index_path.exists():
+        if path is None:
+            return _builtin_index()
         raise FileNotFoundError(f"Index file not found: {index_path}")
 
     try:
@@ -366,6 +398,7 @@ def load_index(path: Optional[Path] = None) -> ModelIndex:
                 languages=tuple(entry.get("languages", [])),
                 path=entry.get("path", ""),
                 notes=entry.get("notes"),
+                license=entry.get("license"),
             )
         )
 
@@ -384,10 +417,37 @@ def load_index(path: Optional[Path] = None) -> ModelIndex:
         Path(source_dir_raw) if isinstance(source_dir_raw, str) else index_path.parent
     )
 
-    return ModelIndex(
+    index = ModelIndex(
         models=tuple(models),
         generated_at=generated_at.astimezone(timezone.utc),
         source_dir=source_dir,
+    )
+    return _with_builtin_records(index) if path is None else index
+
+
+def _builtin_index() -> ModelIndex:
+    """Return an index containing the models registered by the package."""
+
+    return ModelIndex(
+        models=BUILTIN_MODEL_RECORDS,
+        generated_at=datetime.now(timezone.utc),
+        source_dir=DEFAULT_INDEX_PATH.parent,
+    )
+
+
+def _with_builtin_records(index: ModelIndex) -> ModelIndex:
+    """Add missing built-in records without replacing local metadata."""
+
+    known_ids = {record.id for record in index.models}
+    missing = tuple(
+        record for record in BUILTIN_MODEL_RECORDS if record.id not in known_ids
+    )
+    if not missing:
+        return index
+    return ModelIndex(
+        models=(*index.models, *missing),
+        generated_at=index.generated_at,
+        source_dir=index.source_dir,
     )
 
 
@@ -399,4 +459,7 @@ __all__ = [
     "write_index",
     "load_index",
     "DEFAULT_INDEX_PATH",
+    "GLINER_BIOMED_MODEL_ID",
+    "GLINER_BIOMED_RECORD",
+    "BUILTIN_MODEL_RECORDS",
 ]
