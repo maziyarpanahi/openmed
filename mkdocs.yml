@@ -68,6 +68,7 @@ nav:
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Chat Message Schema: reference/chat-schema.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
@@ -93,7 +94,6 @@ nav:
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
-      - Chat Message Schema: reference/chat-schema.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - Haystack Redaction Component: integrations-haystack.md
