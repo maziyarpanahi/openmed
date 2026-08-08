@@ -164,6 +164,7 @@ classification:
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
+    - security/trace-audit-artifact.md
     - security/tamper-evident-audit-log.md
     - integrations-langchain.md
     - integrations-haystack.md
