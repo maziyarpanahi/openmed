@@ -1,9 +1,13 @@
 """Configuration management for OpenMed."""
 
+import json
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
+
+from jsonschema import Draft202012Validator
 
 from .offline import (
     OFFLINE_ENV_VAR,
@@ -37,6 +41,7 @@ else:
 DEFAULT_CONFIG_DIR = _default_config_root / "openmed"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
 PROFILES_DIR = DEFAULT_CONFIG_DIR / "profiles"
+CONFIG_SCHEMA_FILENAME = "config.schema.json"
 
 # Built-in profile presets
 PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -309,45 +314,19 @@ class OpenMedConfig:
 
         configure_offline_mode(self)
 
+    def validate(self) -> None:
+        """Validate this configuration against the bundled JSON Schema.
+
+        Raises:
+            ValueError: If one or more configuration fields violate the schema.
+        """
+        _validate_config_data(self.to_dict(), source="OpenMedConfig")
+
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "OpenMedConfig":
         """Create config from dictionary."""
-        # Filter out unknown keys
-        valid_keys = {
-            "default_org",
-            "cache_dir",
-            "device",
-            "hf_token",
-            "log_level",
-            "timeout",
-            "use_medical_tokenizer",
-            "medical_tokenizer_exceptions",
-            "chinese_segmentation_backend",
-            "chinese_user_dict_path",
-            "chinese_pkuseg_domain",
-            "clinical_protect_enabled",
-            "clinical_protect_terms",
-            "clinical_protect_use_builtin",
-            "backend",
-            "batch_size",
-            "num_workers",
-            "lazy_model_loading",
-            "pii_model",
-            "pii_model_revision",
-            "onnx_variant",
-            "onnx_intra_op_num_threads",
-            "torch_attention_backend",
-            "load_in_4bit",
-            "bnb_4bit_use_double_quant",
-            "local_only",
-            "cjk_width_convention",
-            "chinese_target_script",
-            "transliteration_aware_name_matching",
-            "indic_name_similarity_threshold",
-            "profile",
-        }
-        filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
-        return cls(**filtered)
+        _validate_config_data(config_dict, source="OpenMedConfig dictionary")
+        return cls(**config_dict)
 
     @classmethod
     def from_profile(cls, profile_name: str, **overrides: Any) -> "OpenMedConfig":
@@ -484,6 +463,83 @@ def ensure_config_directory(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def config_schema_path() -> Path:
+    """Return the path to the bundled OpenMedConfig JSON Schema."""
+    return Path(__file__).resolve().with_name(CONFIG_SCHEMA_FILENAME)
+
+
+@lru_cache(maxsize=1)
+def _config_validator() -> Draft202012Validator:
+    with config_schema_path().open("r", encoding="utf-8") as handle:
+        schema = json.load(handle)
+    if not isinstance(schema, dict):
+        raise ValueError("OpenMedConfig schema must contain a JSON object")
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def _json_compatible(value: Any) -> Any:
+    """Convert path-like values without changing the configuration object."""
+    if isinstance(value, os.PathLike):
+        return os.fspath(value)
+    if isinstance(value, list):
+        return [_json_compatible(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_compatible(item) for item in value]
+    if isinstance(value, Mapping):
+        return {key: _json_compatible(item) for key, item in value.items()}
+    return value
+
+
+def _schema_input(config_data: Mapping[str, Any]) -> Dict[str, Any]:
+    """Prepare config data for JSON Schema validation."""
+    candidate = {key: _json_compatible(value) for key, value in config_data.items()}
+    segmentation_backend = candidate.get("chinese_segmentation_backend")
+    if isinstance(segmentation_backend, str):
+        # __post_init__ applies this normalization before the value is used.
+        candidate["chinese_segmentation_backend"] = segmentation_backend.strip().lower()
+    return candidate
+
+
+def _validation_path(error: Any) -> str:
+    path = ""
+    for part in error.absolute_path:
+        if isinstance(part, int):
+            path += f"[{part}]"
+        else:
+            path = f"{path}.{part}" if path else str(part)
+    return path or "config"
+
+
+def _format_validation_error(error: Any) -> str:
+    path = _validation_path(error)
+    if error.validator == "type":
+        expected = error.validator_value
+        if isinstance(expected, list):
+            expected = " or ".join(expected)
+        return f"{path}: expected {expected}, got {type(error.instance).__name__}"
+    if error.validator == "enum":
+        allowed = ", ".join(repr(value) for value in error.validator_value)
+        return f"{path}: must be one of {allowed}"
+    return f"{path}: {error.message}"
+
+
+def _validate_config_data(config_data: Mapping[str, Any], *, source: str) -> None:
+    """Validate a complete or partial config mapping and aggregate errors."""
+    if not isinstance(config_data, Mapping):
+        raise ValueError(
+            f"OpenMedConfig validation failed for {source}: expected a mapping"
+        )
+
+    errors = sorted(
+        _config_validator().iter_errors(_schema_input(config_data)),
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
+    )
+    if errors:
+        details = "\n".join(f"- {_format_validation_error(error)}" for error in errors)
+        raise ValueError(f"OpenMedConfig validation failed for {source}:\n{details}")
+
+
 def _parse_value(value: str) -> Any:
     lowered = value.lower()
     if lowered == "null":
@@ -505,6 +561,12 @@ def _parse_value(value: str) -> Any:
     except ValueError:
         pass
 
+    # Float
+    try:
+        return float(value)
+    except ValueError:
+        pass
+
     # Fallback to raw string
     return value
 
@@ -516,6 +578,8 @@ def _format_value(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, float):
+        return repr(value)
     return f'"{value}"'
 
 
@@ -553,11 +617,10 @@ def load_config_from_file(path: Optional[Union[str, Path]] = None) -> OpenMedCon
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     file_data = _load_toml(config_path)
+    _validate_config_data(file_data, source=f"configuration file {config_path}")
     merged = get_config().to_dict()
 
-    for key, value in file_data.items():
-        if key in merged:
-            merged[key] = value
+    merged.update(file_data)
 
     return OpenMedConfig.from_dict(merged)
 

@@ -38,6 +38,7 @@
             dependencies = with python.pkgs; [
               faker
               jieba
+              jsonschema
               pysbd
               pyyaml
             ];

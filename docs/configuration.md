@@ -42,6 +42,25 @@ transliteration_aware_name_matching = false
 indic_name_similarity_threshold = 0.80
 ```
 
+### JSON Schema validation
+
+The bundled `openmed/core/config.schema.json` is the source of truth for
+configuration and profile keys. `OpenMedConfig.validate()` checks a config
+against that schema, and `load_config_from_file()` validates TOML keys and
+types before merging them with the defaults. Unknown keys and invalid values
+are reported together in one `ValueError`.
+
+```python
+from openmed.core.config import OpenMedConfig, config_schema_path
+
+config = OpenMedConfig(device="cpu")
+config.validate()
+print(config_schema_path())
+```
+
+The schema path can be supplied to editor tooling for completion and
+diagnostics. Flat profile files use the same set of keys as the main config.
+
 Runtime environment controls can select the config path, provide Hub
 credentials, or choose a device when the loaded config leaves it automatic:
 
