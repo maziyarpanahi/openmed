@@ -383,8 +383,14 @@ def _surface_pattern(surface: str) -> re.Pattern[str] | None:
     parts = surface.split()
     if not parts:
         return None
+
+    alternatives = {
+        r"\s+".join(re.escape(part) for part in parts),
+        *(re.escape(part) for part in parts),
+    }
+    ordered_alternatives = sorted(alternatives, key=len, reverse=True)
     return re.compile(
-        r"(?<!\w)" + r"\s+".join(re.escape(part) for part in parts) + r"(?!\w)",
+        r"(?<!\w)(?:" + "|".join(ordered_alternatives) + r")(?!\w)",
         re.IGNORECASE,
     )
 

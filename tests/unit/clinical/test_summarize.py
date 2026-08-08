@@ -108,6 +108,18 @@ def test_leakage_guard_rejects_backend_reemission_without_exposing_token():
     assert "Casey Example" not in str(raised.value)
 
 
+def test_leakage_guard_rejects_partial_source_name_token():
+    with pytest.raises(SummarizationLeakageError) as raised:
+        summarize_deidentified(
+            _deidentified_result(),
+            model=lambda _text: "Casey returned for follow-up.",
+        )
+
+    assert raised.value.check.passed is False
+    assert raised.value.check.leaked_token_count == 1
+    assert "Casey" not in str(raised.value)
+
+
 def test_result_can_be_unpacked_as_summary_and_leakage_check():
     summary, check = summarize_deidentified(_deidentified_result())
 
