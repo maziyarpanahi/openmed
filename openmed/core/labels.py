@@ -132,6 +132,11 @@ PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
 #: Procedure-record device concepts (issue #313)
 DEVICE: Final = "DEVICE"
+#: Immunology, mental-health, and dentistry domain concepts (issue #2358)
+ALLERGEN: Final = "ALLERGEN"
+IMMUNIZATION: Final = "IMMUNIZATION"
+PSYCH_SYMPTOM: Final = "PSYCH_SYMPTOM"
+TOOTH: Final = "TOOTH"
 
 #: Canonical non-identifier labels shared by the biomedical NER families.
 BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
@@ -414,6 +419,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         PROCEDURE,
         BODY_SITE,
         DEVICE,
+        ALLERGEN,
+        IMMUNIZATION,
+        PSYCH_SYMPTOM,
+        TOOTH,
         PROBLEM,
         SEVERITY,
         DOSAGE,
@@ -745,6 +754,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
+            ALLERGEN,
+            IMMUNIZATION,
+            PSYCH_SYMPTOM,
+            TOOTH,
         }
     ),
     NDPA_SEX_LIFE: frozenset({GENDER, OTHER}),
@@ -875,6 +888,16 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Immunology, mental-health, and dentistry concepts (issue #2358). Mental
+    # health symptoms carry high residual-risk metadata for redaction review.
+    ALLERGEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IMMUNIZATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PSYCH_SYMPTOM: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_HIGH,
+        (SNOMED, HPO),
+    ),
+    TOOTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Relation-extraction heads and attributes (issue #252). Free-text
     # problem/indication text and result values remain medium-risk so rare
     # conditions and distinctive measurements are visible to risk tooling,
@@ -1070,6 +1093,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     DEVICE: HIPAA_UNIQUE_IDENTIFIER,
+    ALLERGEN: HIPAA_UNIQUE_IDENTIFIER,
+    IMMUNIZATION: HIPAA_UNIQUE_IDENTIFIER,
+    PSYCH_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
+    TOOTH: HIPAA_UNIQUE_IDENTIFIER,
     PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
     SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
     DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1208,6 +1235,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
     DEVICE: POPIA_HEALTH_INFORMATION,
+    ALLERGEN: POPIA_HEALTH_INFORMATION,
+    IMMUNIZATION: POPIA_HEALTH_INFORMATION,
+    PSYCH_SYMPTOM: POPIA_HEALTH_INFORMATION,
+    TOOTH: POPIA_HEALTH_INFORMATION,
     PROBLEM: POPIA_HEALTH_INFORMATION,
     SEVERITY: POPIA_HEALTH_INFORMATION,
     DOSAGE: POPIA_HEALTH_INFORMATION,
@@ -1665,6 +1696,19 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vaccinationseries": VACCINE_SERIES,
     "administrationdate": DATE,
     "administrationsite": BODY_SITE,
+    # Immunology, mental-health, and dentistry concepts (issue #2358)
+    "allergen": ALLERGEN,
+    "allergy": ALLERGEN,
+    "allergies": ALLERGEN,
+    "allergicreaction": FINDING,
+    "immunization": IMMUNIZATION,
+    "antibody": PROTEIN,
+    "psychiatricsymptom": PSYCH_SYMPTOM,
+    "therapy": PROCEDURE,
+    "tooth": TOOTH,
+    "dentalcondition": CONDITION,
+    "dentalprocedure": PROCEDURE,
+    "restoration": PROCEDURE,
     # Relation-extraction heads and attributes (issue #252)
     "dx": PROBLEM,
     "problemlist": PROBLEM,
@@ -2193,6 +2237,10 @@ __all__ = [
     "PROCEDURE",
     "BODY_SITE",
     "DEVICE",
+    "ALLERGEN",
+    "IMMUNIZATION",
+    "PSYCH_SYMPTOM",
+    "TOOTH",
     "PROBLEM",
     "SEVERITY",
     "DOSAGE",

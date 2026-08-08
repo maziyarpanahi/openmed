@@ -511,6 +511,28 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.DEVICE,
         label_taxonomy.ANATOMY,
     ],
+    # Forward metadata for future Immunology, MentalHealth, and Dentistry
+    # models; no specialty models are registered today (see issue #2358).
+    "Immunology": [
+        label_taxonomy.ALLERGEN,
+        label_taxonomy.FINDING,
+        label_taxonomy.IMMUNIZATION,
+        label_taxonomy.PROTEIN,
+    ],
+    # Substance-use and SDOH entities remain out of scope for this category
+    # and are owned by OM-056. Mental-health spans are high-sensitivity content
+    # for redaction review.
+    "MentalHealth": [
+        label_taxonomy.PSYCH_SYMPTOM,
+        label_taxonomy.PROBLEM,
+        label_taxonomy.MEDICATION,
+        label_taxonomy.PROCEDURE,
+    ],
+    "Dentistry": [
+        label_taxonomy.TOOTH,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PROCEDURE,
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -1334,6 +1356,18 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "surgery|resection|biopsy|endoscopy|catheter|implant|procedure|laparoscopic": (
         "Procedures",
         "Contains procedure/surgical terms",
+    ),
+    "allerg|anaphylaxis|vaccine|igg|antibody": (
+        "Immunology",
+        "Contains immunology/allergy terms",
+    ),
+    "depression|anxiety|psychosis|suicidal|antidepressant": (
+        "MentalHealth",
+        "Contains mental-health terms",
+    ),
+    "caries|extraction|crown|periodontal|tooth\s*#": (
+        "Dentistry",
+        "Contains dentistry/oral-health terms",
     ),
 }
 

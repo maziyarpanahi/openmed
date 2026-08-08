@@ -408,3 +408,32 @@
 | CareIntervention | CARE_INTERVENTION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+
+## Immunology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Allergen | ALLERGEN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| AllergicReaction | FINDING | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Immunization | IMMUNIZATION | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Antibody | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Mental Health
+
+**Alignment:** Substance-use and SDOH (social-determinants-of-health) entities are out of scope for this domain and remain owned by OM-056. Mental-health spans are high-sensitivity content for redaction review; this catalog is extraction metadata only and does not make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| PsychiatricSymptom | PSYCH_SYMPTOM | CLINICAL_CONCEPT | high | SNOMED, HPO | Not shipped |
+| Diagnosis | PROBLEM | CLINICAL_CONCEPT | medium | ICD-10-CM, SNOMED, HPO | Not shipped |
+| Medication | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
+| Therapy | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Dentistry
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Tooth | TOOTH | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| DentalCondition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
+| DentalProcedure | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Restoration | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
