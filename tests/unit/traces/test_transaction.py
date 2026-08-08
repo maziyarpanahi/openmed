@@ -50,6 +50,10 @@ def test_transaction_replaces_atomically_creates_collision_safe_backup_and_prese
 
     assert result.changed is True
     assert result.backup_path == target.with_name("trace.jsonl.bak.1")
+    target_stat = target.stat()
+    assert (target_stat.st_mode & 0o777) == 0o640
+    assert target_stat.st_atime_ns == original_time
+    assert target_stat.st_mtime_ns == original_time
     assert target.read_text(encoding="utf-8") == f"event={SYNTHETIC_REPLACEMENT}\n"
     assert result.backup_path.read_text(encoding="utf-8") == original
     assert existing_backup.read_text(encoding="utf-8") == "existing backup\n"
@@ -57,10 +61,6 @@ def test_transaction_replaces_atomically_creates_collision_safe_backup_and_prese
     assert replace_sources[0] != target
     assert not replace_sources[0].exists()
 
-    target_stat = target.stat()
-    assert (target_stat.st_mode & 0o777) == 0o640
-    assert target_stat.st_atime_ns == original_time
-    assert target_stat.st_mtime_ns == original_time
     assert result.to_dict() == {
         "changed": True,
         "backup_created": True,
