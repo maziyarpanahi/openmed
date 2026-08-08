@@ -99,6 +99,7 @@ classification:
     - mcp-clients.md
     - rest-recipes.md
     - serving/tracing.md
+    - guides/session-end-hook.md
     - serving/resilience.md
     - deploy/hardened-image.md
     - offline-install.md
