@@ -1,0 +1,130 @@
+"""Focused tests for the local preference-pair schema adapter."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+
+import pytest
+
+from openmed.traces.schemas.preference import (
+    PreferencePair,
+    PreferencePairAdapter,
+    PreferenceSchemaError,
+    SensitiveSpan,
+)
+
+
+def test_redacts_three_branches_with_one_shared_pseudonym_state():
+    record = {
+        "pair_id": "synthetic-pair-01",
+        "prompt": "Contact Ada Example at ada@example.test.",
+        "chosen": "Ada Example confirmed the appointment at ada@example.test.",
+        "rejected": "Please ask Ada Example at ada@example.test to confirm.",
+        "scores": {"chosen": 0.91, "rejected": 0.09},
+        "metadata": {"synthetic": True, "source": "offline-fixture"},
+    }
+    original = deepcopy(record)
+
+    result = PreferencePairAdapter(seed=17).redact(record)
+
+    assert record == original
+    assert result["pair_id"] == record["pair_id"]
+    assert result["scores"] == record["scores"]
+    assert result["metadata"] == record["metadata"]
+    assert "Ada Example" not in result["prompt"]
+    assert "ada@example.test" not in result["prompt"]
+    prompt_name = result["prompt"].split("Contact ", 1)[1].split(" at ", 1)[0]
+    chosen_name = result["chosen"].split(" confirmed", 1)[0]
+    assert prompt_name == chosen_name
+    assert "ada@example.test" not in result["chosen"]
+    assert "ada@example.test" not in result["rejected"]
+
+
+def test_walks_message_content_but_preserves_roles_and_non_content_metadata():
+    record = {
+        "prompt": [
+            {"role": "user", "content": "Email bob@example.test."},
+            {"role": "system", "content": "Use the safe policy."},
+        ],
+        "chosen": {
+            "messages": [{"role": "assistant", "content": "Call bob@example.test."}]
+        },
+        "rejected": [{"role": "assistant", "content": "Ignore bob@example.test."}],
+        "metadata": {"note": "metadata is preserved"},
+    }
+
+    result = PreferencePairAdapter(seed=3).redact(record)
+
+    assert result["prompt"][0]["role"] == "user"
+    assert result["prompt"][1] == record["prompt"][1]
+    assert result["chosen"]["messages"][0]["role"] == "assistant"
+    assert result["metadata"] == record["metadata"]
+    assert "bob@example.test" not in str(result["prompt"])
+    assert "bob@example.test" not in str(result["chosen"])
+    assert "bob@example.test" not in str(result["rejected"])
+
+
+def test_custom_detector_and_two_argument_redactor_share_state():
+    def detector(text: str):
+        start = text.find("SYNTH-42")
+        return () if start < 0 else (SensitiveSpan(start, start + 8, "ID_NUM"),)
+
+    def redactor(text: str, state):
+        return state.redact_spans(text, detector(text))
+
+    record = {
+        "prompt": "SYNTH-42 appears here.",
+        "chosen": "The same SYNTH-42 appears here.",
+        "rejected": "SYNTH-42 is repeated.",
+    }
+
+    result = PreferencePairAdapter(text_redactor=redactor).redact_with_report(record)
+
+    assert result.record["prompt"]
+    assert "SYNTH-42" not in str(result.record)
+    replacement = result.record["prompt"].split(" appears", 1)[0]
+    assert replacement in result.record["chosen"]
+    assert replacement in result.record["rejected"]
+    assert result.report.replacement_count == 3
+    assert "SYNTH-42" not in str(result.report.to_dict())
+
+
+def test_determinism_is_stable_across_adapter_instances():
+    record = {
+        "prompt": "Call +1 415 555 0123.",
+        "chosen": "The number is +1 415 555 0123.",
+        "rejected": "Do not call +1 415 555 0123.",
+    }
+
+    first = PreferencePairAdapter(seed=99).redact(record)
+    second = PreferencePairAdapter(seed=99).redact(record)
+
+    assert first == second
+    assert "+1 415 555 0123" not in str(first)
+
+
+def test_pair_view_preserves_scores_and_extra_metadata_without_raw_repr():
+    pair = PreferencePair.from_mapping(
+        {
+            "prompt": "Synthetic prompt",
+            "chosen": "Synthetic chosen",
+            "rejected": "Synthetic rejected",
+            "score": 1.0,
+            "metadata": {"synthetic": True},
+        }
+    )
+
+    assert pair.scores == 1.0
+    assert pair.metadata == {"synthetic": True}
+    assert pair.to_mapping()["score"] == 1.0
+    assert "Synthetic prompt" not in repr(pair)
+
+
+def test_invalid_pair_errors_do_not_echo_content():
+    secret = "synthetic-secret@example.test"
+
+    with pytest.raises(PreferenceSchemaError) as exc_info:
+        PreferencePairAdapter().redact({"prompt": secret, "chosen": "ok"})
+
+    assert secret not in str(exc_info.value)
+    assert "rejected" in str(exc_info.value)
