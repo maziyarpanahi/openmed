@@ -169,6 +169,7 @@ classification:
     - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
+    - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
     - duckdb-deidentification.md
