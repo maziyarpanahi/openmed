@@ -158,6 +158,7 @@ classification:
     - reidentification-risk.md
     - sms-short-text-deid.md
     - anonymization.md
+    - guides/dataset-upload-guard.md
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
