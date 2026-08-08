@@ -24,7 +24,7 @@ Le moteur local principal d’OpenMed effectue l’extraction et la dé-identifi
 </p>
 
 <p>
-  <b>Exécution locale en priorité</b> &nbsp;·&nbsp; <b>33 langues PII prises en charge par modèle</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Exécution locale en priorité</b> &nbsp;·&nbsp; <b>34 langues PII prises en charge par modèle</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Sur les hôtes non-Apple-Silicon, les noms de modèles MLX sont automatiquement 
 
 ---
 
-## PII multilingue (34 routes prises en charge ; 33 prises en charge par modèle)
+## PII multilingue (35 routes prises en charge ; 34 prises en charge par modèle)
 
 Extraction et dé-identification en `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` et `tr`, soit **le catalogue enregistré de modèles PII** au total.
 

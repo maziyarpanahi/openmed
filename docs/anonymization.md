@@ -417,6 +417,11 @@ path through `create_chinese_segmenter(..., hanlp_model=...)`. OpenMed never
 downloads optional model files implicitly, so provision those assets before
 selecting either backend.
 
+For the cache and storage layout of locally provisioned pkuseg and HanLP
+assets, deployment and upgrade/rollback procedures, institutional dictionary
+governance, and segmentation regression checks, see
+[Chinese Segmentation Operations](chinese-segmentation-operations.md).
+
 ## Privacy-filter family
 
 OpenMed ships three privacy-filter families, all **the same OpenAI
@@ -425,10 +430,10 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **34 supported PII language codes**:
+as its source of truth and supports **35 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
 `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
-`te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.
+`te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
 The optional Indic NER adapter adds four user-configured routes (`gu`, `kn`,
