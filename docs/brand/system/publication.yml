@@ -120,6 +120,7 @@ classification:
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - clinical/abbreviation-disambiguation.md
+    - clinical/nli-verification.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/chinese-terminology-grounding.md
