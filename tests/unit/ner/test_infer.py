@@ -8,8 +8,13 @@ from typing import Any, Dict, List
 import pytest
 
 infer_module = importlib.import_module("openmed.ner.infer")
-from openmed.ner.indexing import ModelIndex, ModelRecord
-from openmed.ner.infer import Entity, NerRequest, infer
+from openmed.ner.indexing import (
+    GLINER_BIOMED_MODEL_ID,
+    ModelIndex,
+    ModelRecord,
+    load_index,
+)
+from openmed.ner.infer import Entity, NerRequest, infer, infer_biomedical
 
 
 class DummyPipeline:
@@ -100,7 +105,7 @@ def test_infer_label_precedence(sample_index: ModelIndex, monkeypatch) -> None:
         labels=["Drug"],
     )
     response = infer(request, index=sample_index)
-    assert {entity.label for entity in response.entities} == {"Drug"}
+    assert {entity.label for entity in response.entities} == {"DRUG"}
 
 
 def test_infer_fallback_to_default_labels(
@@ -125,3 +130,82 @@ def test_infer_fallback_to_default_labels(
     )
     response = infer(request, index=sample_index)
     assert response.meta["labels_used"]
+
+
+def test_builtin_gliner_biomed_record_is_discoverable() -> None:
+    record = next(
+        record for record in load_index().models if record.id == GLINER_BIOMED_MODEL_ID
+    )
+
+    assert record.family == "gliner"
+    assert record.domains == ("biomedical", "clinical")
+    assert record.license == "Apache-2.0"
+
+
+def test_infer_biomedical_uses_defaults_threshold_and_canonical_labels(
+    monkeypatch,
+) -> None:
+    calls: Dict[str, Any] = {}
+
+    class CapturingHandle:
+        def predict_entities(self, text, labels=None, threshold=0.5, flat_ner=True):
+            calls.update(
+                text=text,
+                labels=labels,
+                threshold=threshold,
+                flat_ner=flat_ner,
+            )
+            return [
+                {
+                    "text": "Aspirin",
+                    "start": 0,
+                    "end": 7,
+                    "label": "Drug",
+                    "score": 0.91,
+                },
+                {
+                    "text": "fever",
+                    "start": 21,
+                    "end": 26,
+                    "label": "Disease",
+                    "score": 0.49,
+                },
+                {
+                    "text": "synthetic marker",
+                    "start": 28,
+                    "end": 44,
+                    "label": "CustomThing",
+                    "score": 0.82,
+                },
+            ]
+
+    monkeypatch.setattr(
+        infer_module, "load_gliner_handle", lambda *args, **kwargs: CapturingHandle()
+    )
+    monkeypatch.setattr(infer_module, "ensure_gliner_available", lambda: None)
+
+    response = infer(
+        NerRequest(
+            model_id=GLINER_BIOMED_MODEL_ID,
+            text="Aspirin was used for fever; synthetic marker.",
+            threshold=0.5,
+            domain="biomedical",
+        )
+    )
+    convenience_response = infer_biomedical(
+        "Aspirin was used for fever; synthetic marker.", threshold=0.5
+    )
+
+    assert calls == {
+        "text": "Aspirin was used for fever; synthetic marker.",
+        "labels": ["Disease", "Drug", "Gene", "Organism"],
+        "threshold": 0.5,
+        "flat_ner": True,
+    }
+    assert [(entity.text, entity.label) for entity in response.entities] == [
+        ("Aspirin", "DRUG"),
+        ("synthetic marker", "CustomThing"),
+    ]
+    assert response.meta["model_id"] == GLINER_BIOMED_MODEL_ID
+    assert response.meta["domain_used"] == "biomedical"
+    assert convenience_response.meta["model_id"] == GLINER_BIOMED_MODEL_ID

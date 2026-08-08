@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from openmed.core.config import OpenMedConfig, get_config
+from openmed.core.labels import normalize_label
 from openmed.core.models import ModelLoader
 
 from .families import (
@@ -16,7 +17,12 @@ from .families import (
     load_gliner2_handle,
 )
 from .families.gliner import load_gliner_handle
-from .indexing import DEFAULT_INDEX_PATH, ModelIndex, ModelRecord, load_index
+from .indexing import (
+    GLINER_BIOMED_MODEL_ID,
+    ModelIndex,
+    ModelRecord,
+    load_index,
+)
 from .labels import get_default_labels
 
 
@@ -118,14 +124,41 @@ def infer(
     return response
 
 
+def infer_biomedical(
+    text: str,
+    *,
+    threshold: float = 0.5,
+    labels: Optional[List[str]] = None,
+    model_id: str = GLINER_BIOMED_MODEL_ID,
+    index: Optional[ModelIndex] = None,
+    index_path: Optional[Path] = None,
+    config: Optional[OpenMedConfig] = None,
+    loader: Optional[ModelLoader] = None,
+) -> NerResponse:
+    """Run GLiNER-BioMed with the packaged biomedical label preset."""
+
+    return infer(
+        NerRequest(
+            model_id=model_id,
+            text=text,
+            threshold=threshold,
+            labels=labels,
+            domain="biomedical",
+        ),
+        index=index,
+        index_path=index_path,
+        config=config,
+        loader=loader,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 
 def _load_index(index_path: Optional[Path]) -> ModelIndex:
-    path = index_path or DEFAULT_INDEX_PATH
-    return load_index(path)
+    return load_index(index_path)
 
 
 def _lookup_model(model_id: str, index: ModelIndex) -> ModelRecord:
@@ -216,7 +249,8 @@ def _convert_gliner_entity(item: Any) -> Entity:
     if isinstance(item, dict):
         start = _extract_position(item, "start", 0)
         end = _extract_position(item, "end", 1)
-        label = item.get("label") or item.get("type") or "UNKNOWN"
+        source_label = item.get("label") or item.get("type") or "UNKNOWN"
+        label = _normalise_gliner_label(source_label)
         score = float(item.get("score", 0.0))
         text = item.get("text") or item.get("span_text") or ""
         group = item.get("group")
@@ -237,6 +271,14 @@ def _convert_gliner_entity(item: Any) -> Entity:
         group=group,
         extras=extras,
     )
+
+
+def _normalise_gliner_label(label: Any) -> str:
+    """Return a canonical label while retaining unknown zero-shot labels."""
+
+    source_label = str(label)
+    canonical_label = normalize_label(source_label)
+    return source_label if canonical_label == "OTHER" else canonical_label
 
 
 def _extract_position(item: Dict[str, Any], key: str, span_index: int) -> int:
@@ -311,4 +353,5 @@ __all__ = [
     "Entity",
     "NerResponse",
     "infer",
+    "infer_biomedical",
 ]
