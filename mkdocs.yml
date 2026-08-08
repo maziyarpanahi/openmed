@@ -27,6 +27,7 @@ nav:
       - MCP Client Connections: mcp-clients.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
+      - Streaming Trace Redaction: guides/streaming-traces.md
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
       - Offline & Air-Gapped Installation: offline-install.md
