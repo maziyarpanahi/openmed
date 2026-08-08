@@ -56,6 +56,10 @@ test("validates the unified cached-decoder bundle contract", () => {
 
   assert.equal(contract.graphPath, "model.onnx");
   assert.equal(contract.graphUrl.href, `${MODEL_BASE_URL.href}model.onnx`);
+  assert.equal(
+    contract.chatTemplateUrl.href,
+    `${MODEL_BASE_URL.href}chat_template.jinja`,
+  );
   assert.equal(contract.externalData.length, 1);
   assert.deepEqual(contract.externalData[0], {
     data: `${MODEL_BASE_URL.href}model.onnx.data`,
@@ -76,10 +80,10 @@ test("validates the unified cached-decoder bundle contract", () => {
   );
 
   const wrongQuantization = structuredClone(createManifest());
-  wrongQuantization.quantization = "ternary-2bit-packed";
+  wrongQuantization.quantization = "qmoe-4bit-blockwise-128";
   assert.throws(
     () => validateOpenMedMapleBundleManifest(wrongQuantization, MODEL_BASE_URL),
-    /does not run the 2-bit MLX checkpoint/,
+    /requires qmoe-2bit-ternary-rowwise/,
   );
 });
 
@@ -106,6 +110,10 @@ test("prefills, reuses KV outputs for decode, and disposes resources", async () 
   );
 
   assert.equal(events.length, 1);
+  assert.deepEqual(tokenizer.encodeOptions, {
+    addGenerationPrompt: true,
+    reasoning: true,
+  });
   assert.deepEqual(events[0], {
     index: 0,
     text: "A",
@@ -134,12 +142,65 @@ test("prefills, reuses KV outputs for decode, and disposes resources", async () 
   assert.deepEqual(decode.feeds[contract.pastNames[0]].dims, [1, 4, 2, 128]);
   assert.equal(prefill.runOptions.terminate, false);
 
-  assert.match(runtime.details().Validation, /real Maple WebGPU inference unvalidated/);
+  assert.match(runtime.details().Validation, /Real Chrome WebGPU/);
   await runtime.dispose();
   assert.equal(session.releaseCalls, 1);
   assert.equal(tokenizer.disposeCalls, 1);
   await runtime.dispose();
   assert.equal(session.releaseCalls, 1);
+});
+
+test("passes direct-generation mode through to the tokenizer", async () => {
+  const contract = createContract();
+  const tokenizer = createTokenizer();
+  const runtime = new OpenMedMapleOrtWebRuntime({
+    cache: false,
+    contextTokens: 32,
+    contract,
+    ort: { Tensor: MockTensor },
+    session: createSession(contract, [EOS_TOKEN_ID]),
+    tokenizer,
+  });
+
+  await Array.fromAsync(
+    runtime.generate([{ role: "user", content: "synthetic" }], {
+      maxNewTokens: 1,
+      reasoning: false,
+      temperature: 0,
+    }),
+  );
+
+  assert.deepEqual(tokenizer.encodeOptions, {
+    addGenerationPrompt: true,
+    reasoning: false,
+  });
+  await runtime.dispose();
+});
+
+test("streams a direct answer and stops before Maple repeats after think-close", async () => {
+  const contract = createContract();
+  const tokenizer = createTokenizer();
+  const repeated = `${JSON.stringify({ spans: [] })}</think>ignored`;
+  const runtime = new OpenMedMapleOrtWebRuntime({
+    cache: false,
+    contextTokens: 64,
+    contract,
+    ort: { Tensor: MockTensor },
+    session: createSession(contract, [...repeated].map((value) => value.codePointAt(0))),
+    tokenizer,
+  });
+
+  const events = await Array.fromAsync(
+    runtime.generate([{ role: "user", content: "synthetic" }], {
+      maxNewTokens: 32,
+      reasoning: false,
+      temperature: 0,
+    }),
+  );
+
+  assert.equal(events.at(-1).text, JSON.stringify({ spans: [] }));
+  assert.equal(events.some((event) => event.text.includes("<")), false);
+  await runtime.dispose();
 });
 
 test("propagates generation cancellation into the active ORT run", async () => {
@@ -217,7 +278,7 @@ function createManifest() {
     source_model: "deepgrove/maple-preview",
     source_revision: "a".repeat(40),
     architecture: "MapleForCausalLM",
-    quantization: "qmoe-4bit-blockwise-128",
+    quantization: "qmoe-2bit-ternary-rowwise",
     runtime: "onnxruntime-web",
     tokenizer_path: "tokenizer.json",
     graphs: {
@@ -241,6 +302,7 @@ function createManifest() {
       { path: "model.onnx", size_bytes: 10, sha256: "1".repeat(64) },
       { path: "model.onnx.data", size_bytes: 20, sha256: "2".repeat(64) },
       { path: "tokenizer.json", size_bytes: 30, sha256: "3".repeat(64) },
+      { path: "chat_template.jinja", size_bytes: 31, sha256: "4".repeat(64) },
     ],
   };
 }
@@ -331,7 +393,12 @@ function decoderOutputs(contract, inputLength, totalLength, token) {
 function createTokenizer() {
   return {
     disposeCalls: 0,
-    async encodeMessages() {
+    encodeOptions: null,
+    async encodeMessages(_messages, options) {
+      this.encodeOptions = {
+        addGenerationPrompt: options.addGenerationPrompt,
+        reasoning: options.reasoning,
+      };
       return [151_643, 10];
     },
     async decode(tokenIds) {

@@ -1,12 +1,16 @@
 # Maple clinical studio for WebGPU
 
-This static example presents four workflows powered by a single local
-Maple-Preview causal model:
+This static example presents three structured workflows and a persistent chat
+powered by one local Maple-Preview causal model:
 
 - direct-identifier detection and reviewable PII redaction;
 - clinical entity extraction;
-- evidence-linked relation extraction; and
-- note-grounded questions with an answer, quoted evidence, and uncertainty.
+- evidence-linked relation extraction.
+
+The **Ask Maple about this note** composer remains below PII/NER output, so a
+user can keep the extraction visible while a real model answer streams into the
+conversation. Final answers include exact source evidence and uncertainty;
+private reasoning is neither displayed nor stored.
 
 The page is a runtime shell, not a hosted inference client. It makes no network
 request on initial load, bundles no model weights, and has no cloud fallback.
@@ -23,22 +27,28 @@ not pretend to run Maple.
 The source model is
 [`deepgrove/maple-preview`](https://huggingface.co/deepgrove/maple-preview), a
 custom 20B-parameter / 1B-active reasoning MoE. The portable browser path starts
-from that pinned BF16 source and exports one
-`qmoe-4bit-blockwise-128` ONNX graph for ONNX Runtime Web. The
+from the pinned BF16 ONNX export, then losslessly replaces all 96 attention
+projection tensors and all 24 MoE expert tensors with the published
 [`deepgrove/maple-preview-2bit-mlx`](https://huggingface.co/deepgrove/maple-preview-2bit-mlx)
-checkpoint is an MLX reference for Python and Apple-platform work; it is not an
-ONNX graph and this browser adapter cannot load it. Bundle size and peak GPU
-memory depend on the actual 4-bit export and context length. Measure both on the
-target browser rather than applying the 5.31 GB MLX figure to ONNX.
+ternary weights. The result is one coherent `qmoe-2bit-ternary-rowwise` ONNX
+graph for ONNX Runtime Web. Codes `0/1/2` in the MLX checkpoint map exactly to
+`-alpha/0/+alpha`; the exporter shifts them to ONNX Runtime's two-bit zero point
+without requantizing values. Embeddings and the language-model head retain the
+audited four-bit base-export representation; routers remain FP32 and norms
+remain FP16. The complete local model pack is approximately 5.0 GB. Peak GPU
+memory also includes runtime allocations and the selected KV-cache context, so
+measure it in every target browser.
 
 See the repository-wide [Maple on-device guide](../../maple-on-device.md) for
 the pinned source revisions and the shared MLX/ONNX release gates.
 
 Maple uses custom ternary MoE operators. A stock Transformers.js
 `text-generation` pipeline cannot load the original checkpoint by itself. Use
-an audited Maple WebGPU runtime or a compatible exported ONNX Runtime Web
-implementation behind the adapter contract below. Do not silently substitute a
-remote inference endpoint.
+the pinned OpenMed ONNX Runtime Web build described below. Stock ONNX Runtime
+1.26 supports two-bit `MatMulNBits`, but its QMoE wrapper only admits four- and
+eight-bit experts; OpenMed's narrow patch enables two-bit routing and the correct
+four-values-per-byte packing ratio. Do not silently substitute a remote
+inference endpoint.
 
 ## Run locally
 
@@ -67,31 +77,79 @@ audited browser bundle at paths such as:
 
 ```text
 docs/demo/web/vendor/ort.webgpu.min.mjs
-docs/demo/web/vendor/ort-wasm-simd-threaded.jsep.wasm
-docs/demo/web/vendor/maple-tokenizer.mjs
-docs/demo/web/models/maple-preview-webgpu/maple-bundle.json
-docs/demo/web/models/maple-preview-webgpu/model.onnx
-docs/demo/web/models/maple-preview-webgpu/model.onnx.data
-docs/demo/web/models/maple-preview-webgpu/tokenizer.json
+docs/demo/web/vendor/ort-wasm-simd-threaded.asyncify.mjs
+docs/demo/web/vendor/ort-wasm-simd-threaded.asyncify.wasm
+docs/demo/web/vendor/transformers.web.min.js
+docs/demo/web/maple-tokenizer.mjs
+docs/demo/web/models/maple-preview-2bit-webgpu-coherent/maple-bundle.json
+docs/demo/web/models/maple-preview-2bit-webgpu-coherent/model.onnx
+docs/demo/web/models/maple-preview-2bit-webgpu-coherent/model.onnx.data.000
+docs/demo/web/models/maple-preview-2bit-webgpu-coherent/model.onnx.data.001
+...
+docs/demo/web/models/maple-preview-2bit-webgpu-coherent/model.onnx.data.012
+docs/demo/web/models/maple-preview-2bit-webgpu-coherent/tokenizer.json
 ```
 
 Then enter these values in **Local asset settings**:
 
 ```text
 Runtime adapter: ./maple-ort-web-adapter.mjs
-Model pack:      ./models/maple-preview-webgpu/
+Model pack:      ./models/maple-preview-2bit-webgpu-coherent/
 ```
 
 They can also be supplied without loading anything via the query string:
 
 ```text
-http://localhost:8000/docs/demo/web/?runtime=./maple-ort-web-adapter.mjs&model=./models/maple-preview-webgpu/
+http://localhost:8000/docs/demo/web/?runtime=./maple-ort-web-adapter.mjs&model=./models/maple-preview-2bit-webgpu-coherent/
 ```
 
 The demo rejects cross-origin URLs, credentials, query strings, and fragments.
 Keep Hugging Face access tokens out of paths, source code, browser storage, and
 committed files. Mirror or export public assets before serving the demo; the
 page will not fetch a model directly from the Hub.
+
+## Build the exact 2-bit browser stack
+
+Start from the completed pinned four-bit WebGPU export and the verified
+`deepgrove/maple-preview-2bit-mlx` snapshot. This command rewrites all 24 expert
+tensors, all 96 attention projection tensors, and their quantization
+attributes; it refuses unverified source revisions, reserved ternary code `3`,
+changed artifact hashes, or a mismatched graph:
+
+```bash
+python -m openmed.onnx.maple_export repack-2bit-webgpu \
+  /path/to/maple-preview-4bit-onnx-webgpu \
+  /path/to/maple-preview-2bit-mlx \
+  docs/demo/web/models/maple-preview-2bit-webgpu-coherent
+
+python -m openmed.onnx.maple_export write-web-manifest \
+  docs/demo/web/models/maple-preview-2bit-webgpu-coherent
+```
+
+Build the pinned ONNX Runtime fork from exact revision
+`8c546c37b43caaca1fa25db430dab94b901cf277` (ONNX Runtime v1.26.0). The reviewed
+patch is [`scripts/onnxruntime/patches/maple-qmoe-2bit-webgpu-v1.patch`](../../../scripts/onnxruntime/patches/maple-qmoe-2bit-webgpu-v1.patch),
+and the wrapper requires its `openmed-qmoe2-webgpu-v1` marker before creating a
+session. The build uses ONNX Runtime's native WebGPU execution provider and its
+Asyncify WASM support files; it does not use the JSEP build:
+
+```bash
+git clone --branch v1.26.0 --depth 1 --recurse-submodules \
+  https://github.com/microsoft/onnxruntime.git /tmp/openmed-ort-qmoe2
+
+python scripts/onnxruntime/build_maple_web_runtime.py \
+  /tmp/openmed-ort-qmoe2 docs/demo/web/vendor
+
+python scripts/onnxruntime/build_maple_tokenizer_runtime.py \
+  docs/demo/web/vendor
+```
+
+The tokenizer build pins Transformers.js 3.8.1, disables remote models and
+browser persistence, loads `tokenizer.json` and `tokenizer_config.json` only
+from the selected same-origin pack, and applies Maple's own chat template with
+the assistant generation prompt. Keep `maple-qmoe2-runtime.mjs` and
+`maple-tokenizer.mjs` beside the demo; the generated dependencies remain under
+the ignored `vendor/` directory.
 
 ## Runtime adapter contract
 
@@ -122,7 +180,7 @@ export async function createOpenMedMapleRuntime({
     details() {
       return {
         device: "Apple M-series WebGPU",
-        weights: "Maple 4-bit block-128 QMoE ONNX",
+        weights: "Maple coherent 2-bit attention + QMoE ONNX",
         cache: cache ? "OPFS" : "session only",
       };
     },
@@ -167,7 +225,7 @@ external inputs:
 
 - `vendor/ort.webgpu.min.mjs` and its same-directory ONNX Runtime Web WASM
   support files;
-- `vendor/maple-tokenizer.mjs`; or
+- `vendor/transformers.web.min.js`; or
 - the model directory, graph, external weights, tokenizer data, or
   `maple-bundle.json`.
 
@@ -177,7 +235,7 @@ rejects a different scheme, hostname, or port; credentials; query strings;
 fragments; encoded paths; directory traversal; and manifest files that resolve
 outside `modelUrl`.
 
-The tokenizer module must export:
+The checked-in [`maple-tokenizer.mjs`](maple-tokenizer.mjs) module exports:
 
 ```javascript
 export async function createOpenMedMapleTokenizer({
@@ -233,13 +291,27 @@ creation are not interruptible mid-call; when a load is cancelled during either
 operation, the adapter releases any resulting session as soon as creation
 returns.
 
-This is an integration reference, not evidence of working Maple inference in a
-real browser. Automated browser tests use mocked ONNX Runtime and tokenizer
-modules. The complete pinned 4-bit FLOAT16 graph has passed ONNX validation and
-raw ONNX Runtime 1.25.1 CPU prefill plus cached decode with finite logits; the
-smaller fused-QMoE CPU probe passes too. Maple execution through the WebGPU
-provider, source parity, target-browser memory use, and end-to-end clinical
-quality remain unvalidated release gates.
+The complete 2-bit graph has passed ONNX checking, Maple graph-contract
+validation, and exact ternary source parity for every value in all 96 attention
+projections and all 24 expert blocks. The 5.0 GB pack contains `model.onnx` and
+13 external-data shards named `model.onnx.data.000` through
+`model.onnx.data.012`. Automated tests cover the adapter's cached decoder,
+streaming, cancellation, manifest, same-origin, and structured-output plumbing.
+
+A development run in actual Chrome 151 used the native WebGPU provider reported
+as `apple · metal-3`. Direct streamed PII returned three exact identifier
+surfaces in 12.9 seconds. A prompted entity run over “Metformin 500 mg treats
+type 2 diabetes. Nausea followed the evening dose.” returned four exact
+medication, dosage, condition, and symptom surfaces in 19.1 seconds (125 tokens
+at 7.0 tokens/second), after which the page derived offsets locally. Grounded
+chat exposed its first answer token in 946 ms and completed 108 tokens in 16.2
+seconds at 7.1 tokens/second with two exact evidence quotes and uncertainty.
+
+Those measurements establish a real Chrome load, WebGPU prefill/decode,
+streaming, and coherence check on that development machine. They are not a
+production performance promise. Peak-memory measurement, the complete privacy
+and coherence suite, and equivalent testing on every supported browser/device
+remain release gates.
 
 ### Wrapping an existing Maple runtime
 
@@ -288,12 +360,14 @@ locally. It parses every structure defensively and always writes model content
 with `textContent`; it never injects model HTML. If JSON is malformed, the
 response is shown as an explicit schema-review state.
 
-Maple's chat template starts implicit reasoning. Generated text stays hidden
-until a complete `</think>` delimiter arrives, after which only the final
-payload is used. A complete direct JSON object is also accepted for adapters or
-synthetic fixtures configured without reasoning. Partial prose is never exposed
-as a rationale. The chat workflow requests concise evidence and uncertainty
-rather than private chain-of-thought.
+Maple's chat template normally starts implicit reasoning. For these browser
+tasks, the same-origin tokenizer closes that empty reasoning segment inside the
+prompt and the runtime receives `reasoning: false`. Answer JSON can therefore
+stream from the first generated token. The adapter withholds any partial
+`</think>` suffix and stops if Maple emits that delimiter instead of streaming
+a repeated answer. Compatible custom runtimes must honor the same direct-mode
+contract. The chat workflow requests concise evidence and uncertainty rather
+than private chain-of-thought.
 
 ## Privacy and safety properties
 
@@ -354,6 +428,6 @@ make docs-browser-test
 ```
 
 The automated runtime fixture is synthetic and same-origin. It exercises model
-progress, streamed generation, all four result views, keyboard tabs, cache
-cleanup, responsive layout, accessibility, and the rule that note text never
+progress, streamed generation, three structured result views plus persistent
+chat, keyboard tabs, cache cleanup, responsive layout, accessibility, and the rule that note text never
 crosses a request boundary.

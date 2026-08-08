@@ -77,7 +77,7 @@
           <div class="hero-facts" aria-label="Maple model facts">
             <div><strong>20B</strong><span>parameters</span></div>
             <div><strong>1B</strong><span>active</span></div>
-            <div><strong>4-bit</strong><span>QMoE ONNX</span></div>
+            <div><strong>2-bit</strong><span>ternary QMoE</span></div>
             <div><strong>WebGPU</strong><span>local compute</span></div>
           </div>
         </div>
@@ -145,7 +145,7 @@
                 id="repo-id"
                 name="repo-id"
                 value=""
-                placeholder="./models/maple-preview-webgpu/"
+                placeholder="./models/maple-preview-2bit-webgpu/"
                 autocomplete="off"
                 autocapitalize="none"
                 spellcheck="false"
@@ -206,8 +206,8 @@
             <div><dt>Storage</dt><dd id="storage-detail">Checking…</dd></div>
           </dl>
           <p class="model-caveat">
-            Maple-Preview is a research model. The 4-bit QMoE browser path still
-            requires real WebGPU execution and memory validation on each target.
+            Maple-Preview is a research model. This exact 2-bit ternary QMoE path
+            requires the pinned OpenMed WebGPU runtime and target-device validation.
           </p>
         </aside>
 
@@ -260,19 +260,6 @@
               <span class="task-tab__icon" aria-hidden="true">↗</span>
               <span><strong>Relations</strong><small>Connect evidence</small></span>
             </button>
-            <button
-              id="task-chat"
-              class="task-tab"
-              type="button"
-              role="tab"
-              aria-selected="false"
-              aria-controls="task-workspace"
-              tabindex="-1"
-              data-task="chat"
-            >
-              <span class="task-tab__icon" aria-hidden="true">✦</span>
-              <span><strong>Ask Maple</strong><small>Grounded reasoning</small></span>
-            </button>
           </div>
 
           <div
@@ -313,21 +300,6 @@
               <span id="character-count">0 characters</span>
             </div>
 
-            <div id="question-field" class="question-field" hidden>
-              <label for="question-text">Question for Maple</label>
-              <textarea
-                id="question-text"
-                name="question-text"
-                rows="2"
-                autocomplete="off"
-                spellcheck="true"
-              >What medication-event relationship is supported by this note, and what remains uncertain?</textarea>
-              <p>
-                Maple returns an answer, supporting evidence, and uncertainty—not
-                private chain-of-thought.
-              </p>
-            </div>
-
             <div class="run-row">
               <button id="run-task" class="run-button" type="button" disabled>
                 <span id="run-label">Run PII removal</span>
@@ -363,7 +335,7 @@
             <div id="results" class="results-canvas" aria-live="polite">
               <div class="empty-output">
                 <span aria-hidden="true">✦</span>
-                <strong>One model, four private workflows</strong>
+                <strong>One model, three structured workflows</strong>
                 <p>Select a task above and run it against the synthetic note.</p>
               </div>
             </div>
@@ -372,6 +344,62 @@
               <summary>Model response used for this view</summary>
               <pre><code id="raw-output"></code></pre>
             </details>
+          </section>
+
+          <section class="chat-panel" aria-labelledby="chat-heading">
+            <div class="chat-heading">
+              <div>
+                <p class="eyebrow">Grounded conversation</p>
+                <h3 id="chat-heading">Ask Maple about this note</h3>
+                <p>
+                  Keep the extraction above, then ask a follow-up. Maple streams its
+                  answer and attaches exact evidence from the note.
+                </p>
+              </div>
+              <span class="stream-badge"><span aria-hidden="true">●</span> Streams locally</span>
+            </div>
+
+            <div id="chat-messages" class="chat-thread" aria-live="polite">
+              <div class="chat-empty">
+                <span class="maple-avatar" aria-hidden="true">M</span>
+                <div>
+                  <strong>Grounded answers, not hidden reasoning</strong>
+                  <p>Ask about the note’s medications, events, entities, or uncertainty.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-composer">
+              <label for="question-text">Question about the current note</label>
+              <textarea
+                id="question-text"
+                name="question-text"
+                rows="2"
+                autocomplete="off"
+                spellcheck="true"
+              >What medication-event relationship is supported by this note, and what remains uncertain?</textarea>
+              <div class="chat-composer__footer">
+                <p>⌘/Ctrl + Enter to send · No chain-of-thought is displayed or stored.</p>
+                <div class="chat-actions">
+                  <button id="stop-chat" class="stop-button" type="button" hidden>
+                    Stop
+                  </button>
+                  <button id="ask-maple" class="chat-send" type="button" disabled>
+                    <span>Ask Maple</span><span aria-hidden="true">↗</span>
+                  </button>
+                </div>
+              </div>
+              <div class="chat-status-row">
+                <p id="chat-status" class="status-line" role="status" aria-live="polite">
+                  Load Maple or use the interface preview to start a local conversation.
+                </p>
+                <div class="chat-metrics" aria-label="Chat generation metrics">
+                  <span><strong id="chat-metric-first-token">—</strong> first token</span>
+                  <span><strong id="chat-metric-tokens">—</strong> tokens</span>
+                  <span><strong id="chat-metric-speed">—</strong> tok/s</span>
+                </div>
+              </div>
+            </div>
           </section>
         </section>
       </div>

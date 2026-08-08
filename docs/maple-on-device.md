@@ -194,11 +194,11 @@ full BF16 snapshot is roughly 40 GB, so conversion is a high-memory release
 operation rather than a unit-test job. See the
 [Android demo contract](https://github.com/maziyarpanahi/openmed/blob/master/android/OpenMedMapleDemo/README.md).
 
-### Why portable ONNX is four-bit
+### Why Android portable ONNX remains four-bit
 
 The Apple MLX artifact remains DeepGrove's published two-bit checkpoint. The
-portable ONNX path is separately quantized from BF16 to symmetric four-bit
-experts with 128-value blocks. It uses the official
+Android/mobile ONNX path is separately quantized from BF16 to symmetric
+four-bit experts with 128-value blocks. It uses the official
 [`com.microsoft.QMoE`](https://github.com/microsoft/onnxruntime/blob/main/docs/ContribOperators.md#commicrosoftqmoe)
 operator with interleaved gate/up rows, fused clamped SwiGLU, no separate FC3,
 top-8 normalized routing, and FP32 router MatMuls.
@@ -206,8 +206,10 @@ top-8 normalized routing, and FP32 router MatMuls.
 Although the current QMoE schema describes a two-bit attribute value, the
 ONNX Runtime 1.25.1 CPU/mobile kernel tested here rejects two-bit experts and
 accepts four- or eight-bit experts. It also rejects the unfused separate-FC3
-form for this kernel. Consequently, two-bit ONNX remains future/experimental;
-OpenMed neither emits it nor claims it works on Android or in a browser.
+form for this kernel. Consequently, OpenMed keeps the Android artifact at four
+bits and does not claim that its CPU/mobile runtime supports the browser's
+two-bit graph. The browser path is a separate two-bit export using the patched
+ONNX Runtime 1.26 native WebGPU provider described below.
 
 The checked-in synthetic probe validates that the exact four-bit fused QMoE
 form loads and executes on ONNX Runtime 1.25.1 CPU without downloading Maple:
@@ -231,15 +233,17 @@ RMS normalization to standard ONNX arithmetic, loaded in raw ONNX Runtime
 | `mobile` | FLOAT32 | 24 QMoE + 24 GQA layers; CPU prefill/decode passed |
 | `webgpu` | FLOAT16 | 24 QMoE + 24 GQA layers; CPU prefill/decode passed |
 
-This is conversion and CPU-runtime evidence, not source-logit parity or a
-target-device claim. Physical Android and browser WebGPU runs remain release
-gates.
+This is conversion and CPU-runtime evidence, not source-logit parity or an
+Android target-device claim. A corrected two-bit browser graph has since passed
+a real Chrome WebGPU run as documented below; physical Android execution
+remains a separate release gate.
 
 ## Web browser clinical studio
 
 [`docs/demo/web/`](/docs/demo/web/) is a standalone, responsive browser experience
-with the same four workflows, streaming status, keyboard-accessible task tabs,
-model-cache controls, and synthetic UI previews. Serve the repository locally:
+with PII, entity, and relation workflows plus persistent streamed chat beneath
+their results. It includes keyboard-accessible task tabs, model-cache controls,
+and synthetic UI previews. Serve the repository locally:
 
 ```bash
 python -m http.server 8000
@@ -252,7 +256,11 @@ outputs are never placed in browser storage.
 
 Stock Transformers.js cannot load Maple's custom MLX checkpoint by itself. The
 browser adapter uses the same unified cache names and dimensions as Android,
-but the `webgpu` export uses FLOAT16 caches and logits:
+but the `webgpu` export uses FLOAT16 caches and logits. OpenMed replaces all 96
+attention projection tensors and all 24 MoE expert tensors with the official
+coherent 2-bit MLX ternary weights without a lossy requantization step.
+Embeddings and the language-model head retain their audited four-bit base-export
+representation, while routers remain FP32 and norms remain FP16:
 
 ```bash
 python -m openmed.onnx.maple_export export \
@@ -261,16 +269,34 @@ python -m openmed.onnx.maple_export export \
 python -m openmed.onnx.maple_export export \
   /path/to/maple-bf16 /path/to/maple-onnx-webgpu \
   --target webgpu
-python -m openmed.onnx.maple_export bundle \
-  /path/to/maple-onnx-webgpu /path/to/maple-web.ommaple.zip
+python -m openmed.onnx.maple_export repack-2bit-webgpu \
+  /path/to/maple-onnx-webgpu /path/to/maple-preview-2bit-mlx \
+  /path/to/maple-2bit-onnx-webgpu-coherent
+python -m openmed.onnx.maple_export write-web-manifest \
+  /path/to/maple-2bit-onnx-webgpu-coherent
 ```
 
 The runtime adapter and model pack must implement the contract in the
 [browser demo README](https://github.com/maziyarpanahi/openmed/blob/master/docs/demo/web/README.md). Browser applications normally serve
 the validated ONNX, external-data, tokenizer, and configuration files
-individually rather than ask the page to unzip a multi-gigabyte bundle. WebGPU
-execution is an explicit release gate: the synthetic CPU probe does not prove
-that a browser's chosen ONNX Runtime Web build has the same QMoE kernel.
+individually rather than ask the page to unzip a multi-gigabyte bundle. The
+corrected pack is approximately 5.0 GB and contains `model.onnx` plus 13
+external-data shards, `model.onnx.data.000` through `model.onnx.data.012`. The
+2-bit graph requires the pinned OpenMed ONNX Runtime 1.26 native WebGPU build
+with Asyncify WASM support and the narrow QMoE patch; the demo rejects an
+unmarked stock runtime. This path does not use ONNX Runtime's JSEP build.
+
+A development validation in actual Chrome 151 loaded the full corrected graph
+through the native WebGPU provider (`apple · metal-3`). Direct streamed PII
+returned three exact identifier surfaces in 12.9 seconds. Prompted entity
+extraction returned the exact medication, dosage, condition, and symptom
+surfaces in 19.1 seconds (125 tokens at 7.0 tokens/second), after which the
+browser derived offsets locally. Grounded chat reached its first visible token
+in 946 ms and completed 108 tokens in 16.2 seconds at 7.1 tokens/second with two
+exact evidence quotes and explicit uncertainty. This is one development-machine
+coherence and runtime measurement, not a performance or clinical-quality
+guarantee. Peak memory and the full release suite still need to pass on every
+supported browser and device.
 
 ## Release gates
 

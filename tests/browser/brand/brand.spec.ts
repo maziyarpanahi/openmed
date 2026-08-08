@@ -1296,7 +1296,7 @@ test("leaderboard keyboard tabs expose exactly one panel", async ({
   expectCleanAudit(audit);
 });
 
-test("Maple browser demo runs all four local clinical workflows", async ({
+test("Maple browser demo keeps structured output while streamed chat answers", async ({
   baseURL,
   page,
 }) => {
@@ -1320,7 +1320,10 @@ test("Maple browser demo runs all four local clinical workflows", async ({
             details() {
               return { device: "Synthetic WebGPU adapter", cache: "fixture" };
             },
-            async *generate(messages) {
+            async *generate(messages, generation) {
+              if (generation.reasoning !== false) {
+                throw new Error("demo tasks must use direct-generation mode");
+              }
               const task = messages[0].content;
               let output;
               if (task.includes("PII_REDACTION")) {
@@ -1359,7 +1362,6 @@ test("Maple browser demo runs all four local clinical workflows", async ({
                   safety_note: "Human review is required.",
                 });
               }
-              output = "private model scratchpad that must stay hidden</think>" + output;
               const middle = Math.floor(output.length / 2);
               yield { delta: output.slice(0, middle), index: 0 };
               yield { delta: output.slice(middle), index: 1 };
@@ -1404,15 +1406,15 @@ test("Maple browser demo runs all four local clinical workflows", async ({
   await page.locator("#run-task").click();
   await expect(page.locator(".relation-card")).toContainText("TREATS");
 
-  await page.locator('[data-task="chat"]').click();
-  await page.locator("#run-task").click();
-  await expect(page.locator(".answer-card")).toContainText(
+  await page.locator("#ask-maple").click();
+  await expect(page.locator('.chat-message[data-role="assistant"] .chat-bubble')).toContainText(
     "temporal medication-event association",
   );
-  await expect(page.locator(".uncertainty-note")).toContainText(
+  await expect(page.locator(".chat-uncertainty")).toContainText(
     "does not establish causality",
   );
-  await expect(page.locator("#metric-tokens")).not.toHaveText("—");
+  await expect(page.locator(".relation-card")).toContainText("TREATS");
+  await expect(page.locator("#chat-metric-tokens")).not.toHaveText("—");
   await expectAccessible(page);
   expectCleanAudit(audit);
 });

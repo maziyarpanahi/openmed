@@ -28,7 +28,7 @@ def test_maple_demo_has_published_local_first_entrypoint() -> None:
     assert "https://cdn" not in html
 
 
-def test_maple_demo_exposes_model_cache_and_four_workflows() -> None:
+def test_maple_demo_exposes_model_cache_structured_tasks_and_streamed_chat() -> None:
     """The UI includes explicit loading, cache status, tasks, and safety controls."""
 
     html = (DEMO_DIR / "index.html").read_text(encoding="utf-8")
@@ -46,6 +46,10 @@ def test_maple_demo_exposes_model_cache_and_four_workflows() -> None:
         "model-state",
         "input-text",
         "question-text",
+        "ask-maple",
+        "stop-chat",
+        "chat-messages",
+        "chat-metric-first-token",
         "run-task",
         "stop-generation",
         "clear-session",
@@ -55,11 +59,13 @@ def test_maple_demo_exposes_model_cache_and_four_workflows() -> None:
     ):
         assert f'id="{element_id}"' in html
 
-    for task in ("pii", "entities", "relations", "chat"):
+    for task in ("pii", "entities", "relations"):
         assert f'data-task="{task}"' in html
     assert 'role="tablist"' in html
-    assert html.count('role="tab"') == 4
+    assert html.count('role="tab"') == 3
     assert 'role="tabpanel"' in html
+    assert "Ask Maple about this note" in html
+    assert "Streams locally" in html
     assert "Human review required" in html
     assert "not a clinical decision system" in html
 
@@ -104,7 +110,11 @@ def test_maple_demo_prompts_cover_structured_clinical_tasks() -> None:
     assert '"evidence"' in app
     assert '"uncertainty"' in app
     assert "Do not reveal hidden chain-of-thought" in app
-    assert "stripPrivateReasoning" in app
+    assert "reasoning: false" in app
+    tokenizer = (DEMO_DIR / "maple-tokenizer.mjs").read_text(encoding="utf-8")
+    adapter = (DEMO_DIR / "maple-ort-web-adapter.mjs").read_text(encoding="utf-8")
+    assert "closeTrailingReasoningPrompt" in tokenizer
+    assert "stableDirectAnswer" in adapter
     assert "resolveExactSurface" in app
     assert "redactFromSpans(note, spans)" in app
     assert "textContent" in app
@@ -119,8 +129,8 @@ def test_maple_demo_documents_model_sources_adapter_and_validation() -> None:
 
     assert "deepgrove/maple-preview" in readme
     assert "deepgrove/maple-preview-2bit-mlx" in readme
-    assert "qmoe-4bit-blockwise-128" in readme
-    assert "browser adapter cannot load it" in readme
+    assert "qmoe-2bit-ternary-rowwise" in readme
+    assert "openmed-qmoe2-webgpu-v1" in readme
     assert "createOpenMedMapleRuntime" in readme
     assert "clearOpenMedMapleCache" in readme
     assert "same-origin" in readme
@@ -141,10 +151,15 @@ def test_maple_demo_checks_in_mock_tested_ort_web_adapter_contract() -> None:
     readme = (DEMO_DIR / "README.md").read_text(encoding="utf-8")
 
     assert "export async function createOpenMedMapleRuntime" in adapter
-    assert '"./vendor/ort.webgpu.min.mjs"' in adapter
-    assert '"./vendor/maple-tokenizer.mjs"' in adapter
+    assert '"./maple-qmoe2-runtime.mjs"' in adapter
+    assert '"./maple-tokenizer.mjs"' in adapter
+    tokenizer = (DEMO_DIR / "maple-tokenizer.mjs").read_text(encoding="utf-8")
+    assert '"./vendor/transformers.web.min.js"' in tokenizer
+    assert "env.allowRemoteModels = false" in tokenizer
+    assert "local_files_only: true" in tokenizer
     assert 'const BUNDLE_MANIFEST = "maple-bundle.json"' in adapter
-    assert "qmoe-4bit-blockwise-128" in adapter
+    assert "qmoe-2bit-ternary-rowwise" in adapter
+    assert "openmed-qmoe2-webgpu-v1" in adapter
     assert "past_key_values." in adapter
     assert "present." in adapter
     assert "new Uint16Array(0)" in adapter
@@ -154,6 +169,6 @@ def test_maple_demo_checks_in_mock_tested_ort_web_adapter_contract() -> None:
     assert "resolveSameOriginHttpUrl" in adapter
     assert "https://" not in adapter
 
-    assert "real browser" in readme
-    assert "remain unvalidated release gates" in readme
+    assert "target browser" in readme
+    assert "WebGPU prefill/decode" in readme
     assert "node --test tests/web/test_maple_ort_web_adapter.mjs" in readme

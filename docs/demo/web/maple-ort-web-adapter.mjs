@@ -8,16 +8,19 @@
 
 const ADAPTER_URL = import.meta.url;
 const BUNDLE_MANIFEST = "maple-bundle.json";
+const CHAT_TEMPLATE_PATH = "chat_template.jinja";
 const NETWORK_POLICY = "same-origin-model-assets-only";
-const ORT_MODULE_PATH = "./vendor/ort.webgpu.min.mjs";
-const TOKENIZER_MODULE_PATH = "./vendor/maple-tokenizer.mjs";
+const ORT_MODULE_PATH = "./maple-qmoe2-runtime.mjs";
+const TOKENIZER_MODULE_PATH = "./maple-tokenizer.mjs";
+const DIRECT_ANSWER_END = "</think>";
 const VOCAB_SIZE = 151_936;
 const LAYER_COUNT = 24;
 const KV_HEADS = 4;
 const HEAD_SIZE = 128;
 const SOURCE_MODEL = "deepgrove/maple-preview";
 const ARCHITECTURE = "MapleForCausalLM";
-const QUANTIZATION = "qmoe-4bit-blockwise-128";
+const QUANTIZATION = "qmoe-2bit-ternary-rowwise";
+const RUNTIME_PATCH = "openmed-qmoe2-webgpu-v1";
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const REVISION_PATTERN = /^[0-9a-f]{40,64}$/u;
 
@@ -93,6 +96,7 @@ export async function createOpenMedMapleRuntime(options = {}) {
       );
     }
     tokenizer = await createTokenizer({
+      chatTemplateUrl: contract.chatTemplateUrl.href,
       modelUrl: modelBaseUrl.href,
       networkPolicy: NETWORK_POLICY,
       signal,
@@ -179,6 +183,7 @@ export class OpenMedMapleOrtWebRuntime {
       throwIfAborted(controller.signal);
       const encoded = await this.tokenizer.encodeMessages(messages, {
         addGenerationPrompt: true,
+        reasoning: generation.reasoning !== false,
         signal: controller.signal,
       });
       const promptIds = normalizeTokenIds(encoded, "encoded prompt");
@@ -241,13 +246,20 @@ export class OpenMedMapleOrtWebRuntime {
         // Avoid presenting an incomplete UTF-8 byte-token replacement. The next
         // token normally resolves it into a prefix-stable cumulative string.
         if (decoded.endsWith("\ufffd")) continue;
-        visibleText = decoded;
-        yield {
-          index,
-          text: visibleText,
-          token: tokenId,
-          tokenCount: generatedIds.length,
-        };
+        const direct =
+          generation.reasoning === false
+            ? stableDirectAnswer(decoded)
+            : { complete: false, text: decoded };
+        if (direct.text !== visibleText) {
+          visibleText = direct.text;
+          yield {
+            index,
+            text: visibleText,
+            token: tokenId,
+            tokenCount: generatedIds.length,
+          };
+        }
+        if (direct.complete) break;
       }
     } catch (error) {
       if (controller.signal.aborted) throw abortError(controller.signal.reason);
@@ -262,7 +274,7 @@ export class OpenMedMapleOrtWebRuntime {
   details() {
     return {
       Runtime: "ONNX Runtime Web reference adapter",
-      Validation: "Mock-tested plumbing; real Maple WebGPU inference unvalidated",
+      Validation: "Real Chrome WebGPU model load and generation gate",
       Device: "WebGPU only",
       Graph: "Unified prefill/decode with GPU-resident KV cache",
       Quantization: QUANTIZATION,
@@ -284,6 +296,20 @@ export class OpenMedMapleOrtWebRuntime {
     await releaseResource(session);
     await releaseResource(tokenizer);
   }
+}
+
+function stableDirectAnswer(decoded) {
+  const end = decoded.indexOf(DIRECT_ANSWER_END);
+  if (end !== -1) {
+    return { complete: true, text: decoded.slice(0, end) };
+  }
+  const maximum = Math.min(DIRECT_ANSWER_END.length - 1, decoded.length);
+  for (let length = maximum; length > 0; length -= 1) {
+    if (decoded.endsWith(DIRECT_ANSWER_END.slice(0, length))) {
+      return { complete: false, text: decoded.slice(0, -length) };
+    }
+  }
+  return { complete: false, text: decoded };
 }
 
 export function resolveSameOriginHttpUrl(
@@ -358,8 +384,7 @@ export function validateOpenMedMapleBundleManifest(manifest, modelBaseUrl) {
   }
   if (manifest.quantization !== QUANTIZATION) {
     throw new Error(
-      `The reference WebGPU adapter requires ${QUANTIZATION}; ` +
-        "it does not run the 2-bit MLX checkpoint",
+      `The Maple 2-bit WebGPU adapter requires ${QUANTIZATION}`,
     );
   }
   if (manifest.runtime !== "onnxruntime-web") {
@@ -458,11 +483,19 @@ export function validateOpenMedMapleBundleManifest(manifest, modelBaseUrl) {
   if (!paths.has(tokenizerPath)) {
     throw new Error("The tokenizer is not declared in files");
   }
+  if (!paths.has(CHAT_TEMPLATE_PATH)) {
+    throw new Error(`${CHAT_TEMPLATE_PATH} is not declared in files`);
+  }
   const graphUrl = resolveBundleAssetUrl(modelBaseUrl, graphPath, "Maple graph");
   const tokenizerUrl = resolveBundleAssetUrl(
     modelBaseUrl,
     tokenizerPath,
     "Maple tokenizer data",
+  );
+  const chatTemplateUrl = resolveBundleAssetUrl(
+    modelBaseUrl,
+    CHAT_TEMPLATE_PATH,
+    "Maple chat template",
   );
   const externalData = [...paths]
     .map(([path]) => path)
@@ -484,6 +517,7 @@ export function validateOpenMedMapleBundleManifest(manifest, modelBaseUrl) {
     }
   }
   return Object.freeze({
+    chatTemplateUrl,
     eosTokenIds: new Set(eosTokenIds),
     externalData,
     graphPath,
@@ -744,10 +778,15 @@ function configureOrtEnvironment(ort, vendorBaseUrl) {
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
   }
-  if (ort.env) ort.env.logLevel = "fatal";
+  if (ort.env) ort.env.logLevel = "warning";
 }
 
 function normalizeOrtModule(module) {
+  if (module?.openmedMapleRuntimePatch !== RUNTIME_PATCH) {
+    throw new Error(
+      `The local ONNX Runtime Web build must carry ${RUNTIME_PATCH}`,
+    );
+  }
   const candidate = module?.InferenceSession ? module : module?.default;
   if (
     !candidate ||

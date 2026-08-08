@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const RUNTIME_PATH = "/docs/demo/web/maple-ort-web-adapter.mjs";
 const ORT_MODULE_PATH = "/docs/demo/web/vendor/ort.webgpu.min.mjs";
-const TOKENIZER_MODULE_PATH = "/docs/demo/web/vendor/maple-tokenizer.mjs";
+const TOKENIZER_MODULE_PATH = "/docs/demo/web/maple-tokenizer.mjs";
 const MODEL_BASE_PATH = "/docs/demo/web/models/maple-browser-fixture/";
 const MANIFEST_PATH = `${MODEL_BASE_PATH}maple-bundle.json`;
 const EOS_TOKEN_ID = 151_645;
@@ -41,7 +41,7 @@ test("Maple ORT Web adapter keeps unified decode local and disposable", async ({
       status: 200,
     });
   });
-  await page.route(`**${TOKENIZER_MODULE_PATH}`, async (route) => {
+  await page.route("**/maple-tokenizer.mjs", async (route) => {
     await route.fulfill({
       body: tokenizerModuleFixture(),
       contentType: "text/javascript; charset=utf-8",
@@ -73,7 +73,7 @@ test("Maple ORT Web adapter keeps unified decode local and disposable", async ({
     "ONNX Runtime Web reference adapter",
   );
   await expect(page.locator("#runtime-details")).toContainText(
-    "real Maple WebGPU inference unvalidated",
+    "Real Chrome WebGPU model load and generation gate",
   );
   await page.locator("#run-task").click();
   await expect(page.locator("#status")).toContainText(
@@ -128,6 +128,10 @@ test("Maple ORT Web adapter keeps unified decode local and disposable", async ({
   await expect
     .poll(() => page.evaluate(() => globalThis.__mapleOrtMock.tokenizerDisposes))
     .toBe(1);
+  await page.locator("#run-task").click();
+  await expect(page.locator("#status")).toContainText(/completed locally/i);
+  await expect(page.locator("#results mark").first()).toHaveText("[NAME_1]");
+  await expect(page.locator("#raw-output")).not.toContainText("think");
   expect(consoleErrors).toEqual([]);
   expect(externalRequests).toEqual([]);
   expect(markerLeaks).toEqual([]);
@@ -140,7 +144,7 @@ function mapleManifestFixture() {
     source_model: "deepgrove/maple-preview",
     source_revision: "a".repeat(40),
     architecture: "MapleForCausalLM",
-    quantization: "qmoe-4bit-blockwise-128",
+    quantization: "qmoe-2bit-ternary-rowwise",
     runtime: "onnxruntime-web",
     tokenizer_path: "tokenizer.json",
     graphs: {
@@ -164,6 +168,7 @@ function mapleManifestFixture() {
       { path: "model.onnx", size_bytes: 10, sha256: "1".repeat(64) },
       { path: "model.onnx.data", size_bytes: 20, sha256: "2".repeat(64) },
       { path: "tokenizer.json", size_bytes: 30, sha256: "3".repeat(64) },
+      { path: "chat_template.jinja", size_bytes: 31, sha256: "4".repeat(64) },
     ],
   };
 }
@@ -177,6 +182,9 @@ function tokenizerModuleFixture(): string {
     export async function createOpenMedMapleTokenizer(options) {
       if (!options.tokenizerUrl.endsWith("/tokenizer.json")) {
         throw new Error("unexpected tokenizer URL");
+      }
+      if (!options.chatTemplateUrl.endsWith("/chat_template.jinja")) {
+        throw new Error("unexpected chat template URL");
       }
       return {
         async encodeMessages() { return [151643, 10]; },

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import zipfile
 from pathlib import Path
@@ -12,6 +13,10 @@ import pytest
 
 from openmed.onnx.maple_bundle import MAPLE_SOURCE_MODEL, MAPLE_SOURCE_REVISION
 from openmed.onnx.maple_export import (
+    MAPLE_MLX_MODEL,
+    MAPLE_MLX_REVISION,
+    MAPLE_MLX_SOURCE_RECEIPT_FILENAME,
+    MAPLE_ONNX_2BIT_QUANTIZATION,
     MAPLE_ONNX_EXPORT_REQUIREMENTS,
     MAPLE_ONNX_GRAPH_FILENAME,
     MAPLE_ONNX_QUANTIZATION,
@@ -20,13 +25,20 @@ from openmed.onnx.maple_export import (
     MAPLE_QMOE_BLOCK_SIZE,
     MAPLE_SOURCE_RECEIPT_FILENAME,
     MapleOnnxExportError,
+    _ExternalDataShardWriter,
     _make_maple_builder_type,
+    _maple_2bit_initializer_contracts,
+    _MapleMlxTernarySource,
+    _validate_maple_2bit_repack_targets,
+    _validate_maple_2bit_replacement,
     build_maple_onnx_export_bundle,
+    inspect_maple_mlx_source,
     inspect_maple_onnx_source,
     main,
     maple_onnx_export_requirements,
     plan_maple_onnx_export,
     validate_maple_onnx_graph,
+    write_maple_onnx_export_manifest,
 )
 
 
@@ -95,6 +107,40 @@ def _write_fake_source(root: Path, *, verified: bool = True) -> Path:
     return root
 
 
+def _write_fake_mlx_source(root: Path, *, verified: bool = True) -> Path:
+    root.mkdir()
+    config = _maple_config()
+    config.update(
+        {
+            "model_type": "maple",
+            "quantization": {
+                "bits": 2,
+                "group_size": 128,
+                "mode": "affine",
+                "lm_head": {"bits": 4, "group_size": 64},
+            },
+        }
+    )
+    _write_json(root / "config.json", config)
+    (root / "maple.py").write_text("# pinned synthetic runtime\n", encoding="utf-8")
+    _write_json(root / "tokenizer.json", {"model": {"type": "BPE"}})
+    _write_json(root / "tokenizer_config.json", {"model_max_length": 131_072})
+    for index in range(1, 4):
+        (root / f"model-{index:05d}-of-00003.safetensors").write_bytes(
+            f"shard-{index}".encode()
+        )
+    if verified:
+        _write_json(
+            root / MAPLE_MLX_SOURCE_RECEIPT_FILENAME,
+            {
+                "schema_version": 1,
+                "source_model": MAPLE_MLX_MODEL,
+                "source_revision": MAPLE_MLX_REVISION,
+            },
+        )
+    return root
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -111,6 +157,32 @@ def test_inspects_pinned_bf16_source_without_loading_weights(tmp_path):
         "model-00001-of-00002.safetensors",
         "model-00002-of-00002.safetensors",
     )
+
+
+def test_inspects_pinned_lossless_two_bit_mlx_source(tmp_path):
+    source = _write_fake_mlx_source(tmp_path / "mlx")
+
+    inspection = inspect_maple_mlx_source(source)
+
+    assert inspection.source_model == MAPLE_MLX_MODEL
+    assert inspection.source_revision == MAPLE_MLX_REVISION
+    assert inspection.revision_verified is True
+    assert inspection.weight_shards == tuple(
+        f"model-{index:05d}-of-00003.safetensors" for index in range(1, 4)
+    )
+
+
+def test_rejects_unverified_or_wrongly_quantized_mlx_source(tmp_path):
+    unverified = _write_fake_mlx_source(tmp_path / "unverified-mlx", verified=False)
+    with pytest.raises(MapleOnnxExportError, match="MLX source revision is unverified"):
+        inspect_maple_mlx_source(unverified)
+
+    wrong = _write_fake_mlx_source(tmp_path / "wrong-mlx")
+    config = _maple_config()
+    config.update({"model_type": "maple", "quantization": {"bits": 4}})
+    _write_json(wrong / "config.json", config)
+    with pytest.raises(MapleOnnxExportError, match="2-bit affine group-128"):
+        inspect_maple_mlx_source(wrong)
 
 
 def test_rejects_unverified_or_quantized_source(tmp_path):
@@ -298,7 +370,166 @@ def test_maple_builder_adapter_selects_alternating_rope_and_fused_qmoe():
     assert adapter.nodes == []
 
 
-def _write_fake_completed_export(root: Path, *, target: str = "mobile") -> Path:
+def test_mlx_ternary_codes_map_exactly_to_ort_two_bit_zero_point():
+    np = pytest.importorskip("numpy")
+    source = object.__new__(_MapleMlxTernarySource)
+    source._np = np
+    # MLX packs sixteen little-endian codes per uint32. The published model
+    # uses only 0/1/2 for -alpha/0/+alpha.
+    mlx_codes = np.array([0, 1, 2, 0] * 4, dtype=np.uint32)
+    packed = np.array(
+        [sum(int(code) << (2 * index) for index, code in enumerate(mlx_codes))],
+        dtype=np.uint32,
+    )
+    tensor = SimpleNamespace(numpy=lambda: packed)
+
+    shifted = source._shift_codes(tensor)
+    ort_codes = np.array(
+        [(int(shifted[0]) >> (2 * index)) & 0x3 for index in range(4)],
+        dtype=np.int8,
+    )
+
+    assert ort_codes.tolist() == [1, 2, 3, 1]
+    assert (ort_codes - 2).tolist() == [-1, 0, 1, -1]
+
+
+def test_mlx_ternary_repack_rejects_reserved_code_three():
+    np = pytest.importorskip("numpy")
+    source = object.__new__(_MapleMlxTernarySource)
+    source._np = np
+    tensor = SimpleNamespace(numpy=lambda: np.array([3], dtype=np.uint32))
+
+    with pytest.raises(MapleOnnxExportError, match="reserved two-bit code 3"):
+        source._shift_codes(tensor)
+
+
+def test_mlx_ternary_attention_uses_rowwise_two_bit_contract():
+    np = pytest.importorskip("numpy")
+    source = object.__new__(_MapleMlxTernarySource)
+    source._np = np
+    packed = np.zeros((2048, 128), dtype=np.uint32)
+
+    class FakeTensor:
+        def __init__(self, value):
+            self.value = value
+
+        def numpy(self):
+            return self.value
+
+        def float(self):
+            return self
+
+    source._tensor_slice = lambda key, *_args: (
+        FakeTensor(np.ones((2048,), dtype=np.float32))
+        if key.endswith("row_alpha")
+        else FakeTensor(packed)
+    )
+
+    qweight = io.BytesIO()
+    assert source._write_attention(0, "q", "Q4", qweight) == (2048, 1, 512)
+    assert len(qweight.getvalue()) == 2048 * 512
+    assert qweight.getvalue()[:4] == b"UUUU"
+
+    scales = io.BytesIO()
+    assert source._write_attention(0, "q", "scales", scales) == (2048, 1)
+    assert len(scales.getvalue()) == 2048 * 2
+
+
+def _fake_maple_2bit_repack_model():
+    contracts = _maple_2bit_initializer_contracts()
+    initializers = [
+        SimpleNamespace(
+            name=name,
+            external_data=[SimpleNamespace(key="length", value=str(length))],
+        )
+        for name, (_dimensions, length) in contracts.items()
+    ]
+    nodes = []
+    for layer_id in range(24):
+        nodes.append(
+            SimpleNamespace(
+                op_type="QMoE",
+                name=f"/model/layers.{layer_id}/moe",
+                input=[
+                    "hidden",
+                    "router",
+                    f"model.layers.{layer_id}.moe.fc1.qweight",
+                    f"model.layers.{layer_id}.moe.fc1.scales",
+                    "",
+                    f"model.layers.{layer_id}.moe.fc2.qweight",
+                    f"model.layers.{layer_id}.moe.fc2.scales",
+                ],
+            )
+        )
+        for projection in "qkvo":
+            prefix = f"model.layers.{layer_id}.attn.{projection}_proj.MatMul"
+            nodes.append(
+                SimpleNamespace(
+                    op_type="MatMulNBits",
+                    name=(f"/model/layers.{layer_id}/attn/{projection}_proj/MatMul_Q4"),
+                    input=[
+                        "hidden",
+                        f"{prefix}.weight_Q4",
+                        f"{prefix}.weight_scales",
+                    ],
+                )
+            )
+    return SimpleNamespace(graph=SimpleNamespace(node=nodes, initializer=initializers))
+
+
+def test_two_bit_repack_requires_exact_graph_initializer_names():
+    model = _fake_maple_2bit_repack_model()
+    contracts = _validate_maple_2bit_repack_targets(model)
+    assert len(contracts) == 288
+
+    model.graph.node[0].input[2] += ".renamed"
+    with pytest.raises(MapleOnnxExportError, match="initializer inputs changed"):
+        _validate_maple_2bit_repack_targets(model)
+
+
+def test_two_bit_repack_rejects_missing_or_malformed_replacements():
+    model = _fake_maple_2bit_repack_model()
+    missing = model.graph.initializer.pop()
+    with pytest.raises(MapleOnnxExportError, match="initializers are missing"):
+        _validate_maple_2bit_repack_targets(model)
+
+    contracts = _maple_2bit_initializer_contracts()
+    name = "model.layers.0.attn.q_proj.MatMul.weight_Q4"
+    dimensions, length = contracts[name]
+    with pytest.raises(MapleOnnxExportError, match="invalid 2-bit replacement"):
+        _validate_maple_2bit_replacement(
+            name,
+            dimensions,
+            length - 1,
+            contracts,
+        )
+    assert missing.name in contracts
+
+
+def test_browser_external_data_writer_bounds_each_sidecar(tmp_path):
+    with _ExternalDataShardWriter(tmp_path, maximum_bytes=10) as writer:
+        first_name, first, first_offset = writer.reserve(6)
+        first.write(b"abcd")
+        writer.finish_initializer(first_offset, 4)
+        second_name, second, second_offset = writer.reserve(7)
+        second.write(b"1234567")
+        writer.finish_initializer(second_offset, 7)
+
+    assert first_name == "model.onnx.data.000"
+    assert second_name == "model.onnx.data.001"
+    assert (tmp_path / first_name).read_bytes() == b"abcd"
+    assert (tmp_path / second_name).read_bytes() == b"1234567"
+    with _ExternalDataShardWriter(tmp_path / "other", maximum_bytes=10) as writer:
+        with pytest.raises(MapleOnnxExportError, match="shard limit"):
+            writer.reserve(11)
+
+
+def _write_fake_completed_export(
+    root: Path,
+    *,
+    target: str = "mobile",
+    quantization: str = MAPLE_ONNX_QUANTIZATION,
+) -> Path:
     root.mkdir()
     payloads = {
         MAPLE_ONNX_GRAPH_FILENAME: b"synthetic-onnx-graph",
@@ -315,6 +546,7 @@ def _write_fake_completed_export(root: Path, *, target: str = "mobile") -> Path:
         "source_model": MAPLE_SOURCE_MODEL,
         "source_revision": MAPLE_SOURCE_REVISION,
         "target": target,
+        "quantization": quantization,
         "graph": {"path": MAPLE_ONNX_GRAPH_FILENAME},
         "files": [
             {
@@ -333,7 +565,10 @@ def test_packages_unified_export_and_integrity_receipt(tmp_path, monkeypatch):
     export = _write_fake_completed_export(tmp_path / "export")
     monkeypatch.setattr(
         "openmed.onnx.maple_export.validate_maple_onnx_graph",
-        lambda *_args, **_kwargs: {"maple_graph_contract_completed": True},
+        lambda *_args, **_kwargs: {
+            "maple_graph_contract_completed": True,
+            "qmoe_expert_weight_bits": 4,
+        },
     )
 
     result = build_maple_onnx_export_bundle(export, tmp_path / "maple.zip")
@@ -348,13 +583,62 @@ def test_packages_unified_export_and_integrity_receipt(tmp_path, monkeypatch):
         assert MAPLE_ONNX_RECEIPT_FILENAME in archive.namelist()
 
 
+def test_packages_two_bit_webgpu_export(tmp_path, monkeypatch):
+    export = _write_fake_completed_export(
+        tmp_path / "export",
+        target="webgpu",
+        quantization=MAPLE_ONNX_2BIT_QUANTIZATION,
+    )
+    monkeypatch.setattr(
+        "openmed.onnx.maple_export.validate_maple_onnx_graph",
+        lambda *_args, **_kwargs: {
+            "maple_graph_contract_completed": True,
+            "qmoe_expert_weight_bits": 2,
+        },
+    )
+
+    result = build_maple_onnx_export_bundle(export, tmp_path / "maple-qmoe2.zip")
+
+    assert result.manifest["runtime"] == "onnxruntime-web"
+    assert result.manifest["quantization"] == MAPLE_ONNX_2BIT_QUANTIZATION
+
+
+def test_writes_unpacked_two_bit_web_manifest(tmp_path, monkeypatch):
+    export = _write_fake_completed_export(
+        tmp_path / "export",
+        target="webgpu",
+        quantization=MAPLE_ONNX_2BIT_QUANTIZATION,
+    )
+    monkeypatch.setattr(
+        "openmed.onnx.maple_export.validate_maple_onnx_graph",
+        lambda *_args, **_kwargs: {"qmoe_expert_weight_bits": 2},
+    )
+
+    destination = write_maple_onnx_export_manifest(export)
+    manifest = json.loads(destination.read_text(encoding="utf-8"))
+
+    assert destination.name == "maple-bundle.json"
+    assert manifest["runtime"] == "onnxruntime-web"
+    assert manifest["quantization"] == MAPLE_ONNX_2BIT_QUANTIZATION
+    assert {item["path"] for item in manifest["files"]} >= {
+        MAPLE_ONNX_GRAPH_FILENAME,
+        "model.onnx.data",
+        "tokenizer.json",
+    }
+    with pytest.raises(FileExistsError, match="overwrite"):
+        write_maple_onnx_export_manifest(export)
+
+
 def test_rejects_completed_export_with_tampered_artifact(tmp_path, monkeypatch):
     export = _write_fake_completed_export(tmp_path / "export")
     artifact = export / "model.onnx.data"
     artifact.write_bytes(b"x" * artifact.stat().st_size)
     monkeypatch.setattr(
         "openmed.onnx.maple_export.validate_maple_onnx_graph",
-        lambda *_args, **_kwargs: {"maple_graph_contract_completed": True},
+        lambda *_args, **_kwargs: {
+            "maple_graph_contract_completed": True,
+            "qmoe_expert_weight_bits": 4,
+        },
     )
 
     with pytest.raises(MapleOnnxExportError, match="artifact hash changed"):
@@ -362,12 +646,17 @@ def test_rejects_completed_export_with_tampered_artifact(tmp_path, monkeypatch):
 
 
 def _write_structural_maple_graph(
-    path: Path, *, unsupported_normalization: bool = False
+    path: Path,
+    *,
+    expert_bits: int = 4,
+    target: str = "mobile",
+    unsupported_normalization: bool = False,
 ) -> None:
     np = pytest.importorskip("numpy")
     onnx = pytest.importorskip("onnx")
     from onnx import TensorProto, helper, numpy_helper
 
+    io_type = TensorProto.FLOAT16 if target == "webgpu" else TensorProto.FLOAT
     batch = "batch_size"
     sequence = "sequence_length"
     past = "past_sequence_length"
@@ -380,23 +669,17 @@ def _write_structural_maple_graph(
             "attention_mask", TensorProto.INT64, [batch, total]
         ),
         helper.make_tensor_value_info(
-            "hidden_states", TensorProto.FLOAT, [batch, sequence, 2048]
+            "hidden_states", io_type, [batch, sequence, 2048]
         ),
+        helper.make_tensor_value_info("query", io_type, [batch, sequence, 2048]),
+        helper.make_tensor_value_info("key", io_type, [batch, sequence, 512]),
+        helper.make_tensor_value_info("value", io_type, [batch, sequence, 512]),
         helper.make_tensor_value_info(
-            "query", TensorProto.FLOAT, [batch, sequence, 2048]
-        ),
-        helper.make_tensor_value_info("key", TensorProto.FLOAT, [batch, sequence, 512]),
-        helper.make_tensor_value_info(
-            "value", TensorProto.FLOAT, [batch, sequence, 512]
-        ),
-        helper.make_tensor_value_info(
-            "logits_input", TensorProto.FLOAT, [batch, sequence, 151_936]
+            "logits_input", io_type, [batch, sequence, 151_936]
         ),
     ]
     outputs = [
-        helper.make_tensor_value_info(
-            "logits", TensorProto.FLOAT, [batch, sequence, 151_936]
-        )
+        helper.make_tensor_value_info("logits", io_type, [batch, sequence, 151_936])
     ]
     nodes = [helper.make_node("Identity", ["logits_input"], ["logits"])]
     initializers = [
@@ -428,6 +711,31 @@ def _write_structural_maple_graph(
             )
         )
     for layer_id in range(24):
+        attention_bits = expert_bits
+        attention_block = 128 if attention_bits == 4 else 2048
+        for projection, output_size in (
+            ("q", 2048),
+            ("k", 512),
+            ("v", 512),
+            ("o", 2048),
+        ):
+            nodes.append(
+                helper.make_node(
+                    "MatMulNBits",
+                    ["hidden_states", "fc1", "fc1_scale"],
+                    [f"attention_projection.{layer_id}.{projection}"],
+                    name=(
+                        f"/model/layers.{layer_id}/attn/"
+                        f"{projection}_proj/MatMul_Q{attention_bits}"
+                    ),
+                    domain="com.microsoft",
+                    K=2048,
+                    N=output_size,
+                    accuracy_level=4,
+                    bits=attention_bits,
+                    block_size=attention_block,
+                )
+            )
         router = f"/model/layers.{layer_id}/moe/router/MatMul"
         router_output = f"router.{layer_id}"
         router_flat = f"router_flat.{layer_id}"
@@ -459,8 +767,8 @@ def _write_structural_maple_graph(
                     activation_alpha=1.0,
                     activation_beta=0.0,
                     activation_type="swiglu",
-                    block_size=128,
-                    expert_weight_bits=4,
+                    block_size=128 if expert_bits == 4 else 0,
+                    expert_weight_bits=expert_bits,
                     k=8,
                     normalize_routing_weights=1,
                     swiglu_fusion=1,
@@ -475,21 +783,19 @@ def _write_structural_maple_graph(
         present_value = f"present.{layer_id}.value"
         inputs.extend(
             [
+                helper.make_tensor_value_info(past_key, io_type, [batch, 4, past, 128]),
                 helper.make_tensor_value_info(
-                    past_key, TensorProto.FLOAT, [batch, 4, past, 128]
-                ),
-                helper.make_tensor_value_info(
-                    past_value, TensorProto.FLOAT, [batch, 4, past, 128]
+                    past_value, io_type, [batch, 4, past, 128]
                 ),
             ]
         )
         outputs.extend(
             [
                 helper.make_tensor_value_info(
-                    present_key, TensorProto.FLOAT, [batch, 4, total, 128]
+                    present_key, io_type, [batch, 4, total, 128]
                 ),
                 helper.make_tensor_value_info(
-                    present_value, TensorProto.FLOAT, [batch, 4, total, 128]
+                    present_value, io_type, [batch, 4, total, 128]
                 ),
             ]
         )
@@ -557,6 +863,16 @@ def test_validates_unified_graph_contract_with_external_data(tmp_path):
     assert validation["qmoe_nodes"] == 24
     assert validation["group_query_attention_nodes"] == 24
     assert validation["external_data_files"] == ["model.onnx.data"]
+
+
+def test_validates_two_bit_ternary_qmoe_graph_contract(tmp_path):
+    graph = tmp_path / MAPLE_ONNX_GRAPH_FILENAME
+    _write_structural_maple_graph(graph, expert_bits=2, target="webgpu")
+
+    validation = validate_maple_onnx_graph(graph, target="webgpu")
+
+    assert validation["qmoe_expert_weight_bits"] == 2
+    assert validation["qmoe_block_size"] == 0
 
 
 def test_rejects_nonportable_normalization_contrib_ops(tmp_path):

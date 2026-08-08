@@ -72,9 +72,8 @@ class MapleBundleBuild:
         return sum(int(item["size_bytes"]) for item in self.manifest["files"])
 
 
-def build_maple_onnx_bundle(
+def create_maple_onnx_bundle_manifest(
     source_directory: str | Path,
-    output_path: str | Path,
     *,
     prefill_path: str = "decoder_model.ort",
     decode_path: str | None = "decoder_with_past_model.ort",
@@ -86,22 +85,12 @@ def build_maple_onnx_bundle(
     max_context_tokens: int = 4096,
     max_input_tokens: int = 3072,
     eos_token_ids: Iterable[int] = MAPLE_DEFAULT_EOS_TOKEN_IDS,
-) -> MapleBundleBuild:
-    """Package exported Maple decoder graphs in a deterministic ZIP container.
-
-    The output uses stored ZIP entries because already-quantized model graphs
-    generally compress poorly and mobile import should not need extra scratch
-    space. Existing output is rejected to avoid silently replacing a validated
-    artifact.
-    """
+) -> Mapping[str, Any]:
+    """Create and validate a manifest for an unpacked or ZIP Maple bundle."""
 
     root = Path(source_directory).expanduser().resolve()
-    destination = Path(output_path).expanduser().resolve()
-    if destination.exists():
-        raise FileExistsError(f"refusing to overwrite existing bundle: {destination}")
     if not root.is_dir():
         raise FileNotFoundError(f"Maple bundle source directory does not exist: {root}")
-
     requested_paths = _deduplicate_paths(
         path
         for path in (prefill_path, decode_path, tokenizer_path, *extra_files)
@@ -140,6 +129,50 @@ def build_maple_onnx_bundle(
         "files": [record.to_dict() for record in file_records],
     }
     _validate_manifest(manifest)
+    return manifest
+
+
+def build_maple_onnx_bundle(
+    source_directory: str | Path,
+    output_path: str | Path,
+    *,
+    prefill_path: str = "decoder_model.ort",
+    decode_path: str | None = "decoder_with_past_model.ort",
+    tokenizer_path: str = "tokenizer.json",
+    extra_files: Iterable[str] = ("tokenizer_config.json", "config.json"),
+    runtime: str = "onnxruntime-mobile",
+    quantization: str = "qmoe-4bit-blockwise-128",
+    source_revision: str = MAPLE_SOURCE_REVISION,
+    max_context_tokens: int = 4096,
+    max_input_tokens: int = 3072,
+    eos_token_ids: Iterable[int] = MAPLE_DEFAULT_EOS_TOKEN_IDS,
+) -> MapleBundleBuild:
+    """Package exported Maple decoder graphs in a deterministic ZIP container.
+
+    The output uses stored ZIP entries because already-quantized model graphs
+    generally compress poorly and mobile import should not need extra scratch
+    space. Existing output is rejected to avoid silently replacing a validated
+    artifact.
+    """
+
+    root = Path(source_directory).expanduser().resolve()
+    destination = Path(output_path).expanduser().resolve()
+    if destination.exists():
+        raise FileExistsError(f"refusing to overwrite existing bundle: {destination}")
+    manifest = create_maple_onnx_bundle_manifest(
+        root,
+        prefill_path=prefill_path,
+        decode_path=decode_path,
+        tokenizer_path=tokenizer_path,
+        extra_files=extra_files,
+        runtime=runtime,
+        quantization=quantization,
+        source_revision=source_revision,
+        max_context_tokens=max_context_tokens,
+        max_input_tokens=max_input_tokens,
+        eos_token_ids=eos_token_ids,
+    )
+    file_records = tuple(MapleBundleFile(**item) for item in manifest["files"])
     manifest_bytes = _manifest_bytes(manifest)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -487,5 +520,6 @@ __all__ = [
     "MapleBundleError",
     "MapleBundleFile",
     "build_maple_onnx_bundle",
+    "create_maple_onnx_bundle_manifest",
     "validate_maple_onnx_bundle",
 ]
