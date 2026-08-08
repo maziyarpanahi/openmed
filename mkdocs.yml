@@ -27,6 +27,7 @@ nav:
       - MCP Client Connections: mcp-clients.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
+      - Read-only Trace Scan Report: guides/trace-audit.md
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
       - Offline & Air-Gapped Installation: offline-install.md
