@@ -1,0 +1,1 @@
+"""Local repository guard utilities."""
