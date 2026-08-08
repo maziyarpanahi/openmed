@@ -94,6 +94,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent-skills/validation.md
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md
