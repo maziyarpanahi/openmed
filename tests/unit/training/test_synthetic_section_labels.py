@@ -41,10 +41,12 @@ def test_fixed_seed_writes_byte_identical_dataset_and_manifest(tmp_path: Path) -
 def test_records_emit_aligned_bio_tags_canonical_boundaries_and_doc_type(
     tmp_path: Path,
 ) -> None:
-    result = build_section_dataset(31, 6, tmp_path / "section.jsonl")
+    result = build_section_dataset(
+        31, len(CANONICAL_DOCUMENT_TYPES), tmp_path / "section.jsonl"
+    )
     rows = load_section_dataset(result.dataset_path)
 
-    assert len(rows) == 6
+    assert len(rows) == len(CANONICAL_DOCUMENT_TYPES)
     assert {row["doc_type"] for row in rows} == set(CANONICAL_DOCUMENT_TYPES)
     for row in rows:
         assert row["schema_version"] == SECTION_RECORD_SCHEMA_VERSION

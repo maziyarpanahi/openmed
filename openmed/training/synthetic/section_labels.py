@@ -52,6 +52,7 @@ _DOC_TYPE_TITLES: Final[dict[str, str]] = {
     "radiology_report": "RADIOLOGY REPORT",
     "pathology_report": "PATHOLOGY REPORT",
     "operative_note": "OPERATIVE NOTE",
+    "history_and_physical": "HISTORY AND PHYSICAL",
     "consult_note": "CONSULTATION NOTE",
 }
 _SECTION_CONTENT: Final[dict[str, tuple[str, ...]]] = {
@@ -70,6 +71,10 @@ _SECTION_CONTENT: Final[dict[str, tuple[str, ...]]] = {
     "chief_complaint": (
         "A fictional visit reason is included as a section-boundary example.",
         "Synthetic concern wording exercises the chief-complaint header.",
+    ),
+    "diagnosis": (
+        "Synthetic diagnosis wording is a generic label-training placeholder.",
+        "The fictional diagnosis section contains no patient or clinical advice.",
     ),
     "family_history": (
         "Synthetic family context is included without a real person or event.",
@@ -114,6 +119,26 @@ _SECTION_CONTENT: Final[dict[str, tuple[str, ...]]] = {
     "social_history": (
         "Synthetic social context uses a generic fictional living arrangement.",
         "The example has no real social or geographic details.",
+    ),
+    "staging": (
+        "Synthetic staging language is included only to exercise section labels.",
+        "The fictional stage entry is a non-clinical demonstration value.",
+    ),
+    "grading": (
+        "Synthetic grading language is included only for boundary coverage.",
+        "The fictional grade entry is a generic training placeholder.",
+    ),
+    "specimen": (
+        "Synthetic specimen wording describes a generic demonstration sample.",
+        "The fictional specimen entry contains no real laboratory information.",
+    ),
+    "synoptic": (
+        "Synthetic synoptic content is included for structured-boundary training.",
+        "The fictional synoptic checklist contains generic demonstration text.",
+    ),
+    "technique": (
+        "Synthetic technique wording describes a generic report method.",
+        "The fictional technique section is a non-diagnostic placeholder.",
     ),
 }
 _PREFIXES: Final[tuple[str, ...]] = (
