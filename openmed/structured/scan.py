@@ -22,6 +22,7 @@ enumerate column combinations.
 
 from __future__ import annotations
 
+import importlib
 import math
 import re
 import unicodedata
@@ -36,11 +37,19 @@ from typing import Any
 
 from openmed.core.labels import (
     CLINICAL_CONCEPT,
+    DATE,
     DATE_OF_BIRTH,
     DIRECT_IDENTIFIER,
+    EMAIL,
+    ID_NUM,
+    LOCATION,
     OTHER,
+    PERSON,
+    PHONE,
     QUASI_IDENTIFIER,
     SENSITIVE_ATTRIBUTE,
+    SSN,
+    STREET_ADDRESS,
     normalize_label,
     policy_label_for,
 )
@@ -50,6 +59,8 @@ from .table_io import read_table
 __all__ = [
     "ColumnClassification",
     "ColumnRole",
+    "ProfilerNotAvailableError",
+    "ProfilerReportError",
     "RoleOverrideError",
     "TableRoleScan",
     "scan_table",
@@ -79,6 +90,14 @@ class RoleOverrideError(ValueError):
     """Raised when a caller override names an unknown column or role."""
 
 
+class ProfilerNotAvailableError(ImportError):
+    """Raised when the explicitly requested DataProfiler backend is absent."""
+
+
+class ProfilerReportError(ValueError):
+    """Raised when DataProfiler cannot produce a usable structured report."""
+
+
 # Canonical labels whose taxonomy policy is ``DIRECT_IDENTIFIER`` but which a
 # k-anonymity generalization pipeline treats as quasi-identifiers, because the
 # value is generalized (birth year, age band) rather than removed outright.
@@ -105,6 +124,23 @@ _COLUMN_OWNER_AFFIXES = (
     "clinician",
     "doctor",
 )
+
+_PROFILE_BACKENDS = frozenset({"auto", "native", "dataprofiler"})
+_DATAPROFILER_LABELS = {
+    "ADDRESS": STREET_ADDRESS,
+    "BAN": ID_NUM,
+    "CREDIT_CARD": ID_NUM,
+    "DATE": DATE,
+    "DATETIME": DATE,
+    "DRIVERS_LICENSE": ID_NUM,
+    "EMAIL_ADDRESS": EMAIL,
+    "HASH_OR_KEY": ID_NUM,
+    "PERSON": PERSON,
+    "PHONE_NUMBER": PHONE,
+    "SSN": SSN,
+    "UUID": ID_NUM,
+    "US_STATE": LOCATION,
+}
 
 
 @dataclass(frozen=True)
@@ -230,6 +266,7 @@ def scan_table(
     *,
     overrides: Mapping[str, str | ColumnRole] | None = None,
     max_rows: int | None = None,
+    profile_backend: str = "auto",
 ) -> TableRoleScan:
     """Classify every column of a table into a privacy role.
 
@@ -242,6 +279,12 @@ def scan_table(
             reports ``confidence`` 1.0 and ``overridden`` true.
         max_rows: Optional cap on the number of rows profiled. Statistics are
             derived from at most this many rows; ``None`` reads every row.
+        profile_backend: ``"auto"`` uses Capital One DataProfiler when it is
+            installed and otherwise keeps the native aggregate-statistics
+            result. ``"native"`` disables the optional integration, while
+            ``"dataprofiler"`` requires it. Only DataProfiler's column name,
+            predicted label, and aggregate confidence are consumed; samples
+            and raw values from its report are discarded.
 
     Returns:
         A :class:`TableRoleScan`; it behaves as a ``{column: role}`` mapping
@@ -249,17 +292,34 @@ def scan_table(
 
     Raises:
         RoleOverrideError: If an override names an unknown column or role.
+        ProfilerNotAvailableError: If ``profile_backend="dataprofiler"`` and
+            the optional package is unavailable.
+        ProfilerReportError: If an explicitly requested profiler returns an
+            invalid report.
         ValueError: If the input type is unsupported or the table is empty.
     """
 
+    if profile_backend not in _PROFILE_BACKENDS:
+        choices = ", ".join(sorted(_PROFILE_BACKENDS))
+        raise ValueError(f"profile_backend must be one of: {choices}")
+
     columns, columnar = _columnar_view(path_or_df, max_rows=max_rows)
     resolved_overrides = _resolve_overrides(columns, overrides)
+
+    profiler_hints: dict[str, tuple[str, float]] = {}
+    if profile_backend != "native":
+        try:
+            profiler_hints = _dataprofiler_hints(columnar)
+        except (ProfilerNotAvailableError, ProfilerReportError):
+            if profile_backend == "dataprofiler":
+                raise
 
     classifications = tuple(
         _classify_column(
             column,
             columnar[column],
             override=resolved_overrides.get(column),
+            profiler_hint=profiler_hints.get(column),
         )
         for column in columns
     )
@@ -294,6 +354,7 @@ def _classify_column(
     values: Sequence[Any],
     *,
     override: ColumnRole | None,
+    profiler_hint: tuple[str, float] | None = None,
 ) -> ColumnClassification:
     label = _normalize_column_label(column)
     canonical_label = None if label == OTHER else label
@@ -313,6 +374,21 @@ def _classify_column(
         canonical_label=canonical_label,
         stats=stats,
     )
+    if profiler_hint is not None:
+        profiler_label, profiler_confidence = profiler_hint
+        profiler_role = _role_for_label(profiler_label)
+        # DataProfiler is an additional fail-closed signal. It may promote a
+        # native safe classification or strengthen a direct identifier, but it
+        # never downgrades a native privacy role.
+        if role is ColumnRole.SAFE or profiler_role is ColumnRole.DIRECT_ID:
+            role = profiler_role
+            canonical_label = profiler_label
+            confidence = max(confidence, profiler_confidence)
+        signals = (
+            *signals,
+            f"dataprofiler_label={profiler_label}",
+            f"dataprofiler_confidence={profiler_confidence:.6f}",
+        )
     return ColumnClassification(
         column=column,
         role=role,
@@ -321,6 +397,71 @@ def _classify_column(
         overridden=False,
         signals=signals,
     )
+
+
+def _dataprofiler_hints(
+    columnar: Mapping[str, Sequence[Any]],
+) -> dict[str, tuple[str, float]]:
+    """Return PHI-free canonical-label hints from optional DataProfiler."""
+
+    report = _dataprofiler_report(columnar)
+    data_stats = report.get("data_stats", report.get("data stats"))
+    if not isinstance(data_stats, Sequence) or isinstance(data_stats, (str, bytes)):
+        raise ProfilerReportError("DataProfiler returned no column statistics")
+
+    hints: dict[str, tuple[str, float]] = {}
+    for item in data_stats:
+        if not isinstance(item, Mapping):
+            raise ProfilerReportError("DataProfiler returned invalid column statistics")
+        column = item.get("column_name")
+        raw_label = item.get("data_label")
+        if not isinstance(column, str) or not isinstance(raw_label, str):
+            continue
+        canonical_label = _DATAPROFILER_LABELS.get(raw_label.strip().upper())
+        if canonical_label is None:
+            continue
+        hints[column] = (canonical_label, _dataprofiler_confidence(item, raw_label))
+    return hints
+
+
+def _dataprofiler_report(
+    columnar: Mapping[str, Sequence[Any]],
+) -> Mapping[str, Any]:
+    """Run the optional profiler without retaining its raw-value samples."""
+
+    try:
+        dataprofiler = importlib.import_module("dataprofiler")
+        pandas = importlib.import_module("pandas")
+    except ImportError as exc:
+        raise ProfilerNotAvailableError(
+            "DataProfiler support requires the optional DataProfiler package"
+        ) from exc
+
+    try:
+        frame = pandas.DataFrame(
+            {name: list(values) for name, values in columnar.items()}
+        )
+        profiler = dataprofiler.Profiler(frame)
+        report = profiler.report(report_options={"output_format": "serializable"})
+    except Exception:
+        raise ProfilerReportError("DataProfiler could not profile the table") from None
+    if not isinstance(report, Mapping):
+        raise ProfilerReportError("DataProfiler returned an invalid report")
+    return report
+
+
+def _dataprofiler_confidence(item: Mapping[str, Any], label: str) -> float:
+    statistics = item.get("statistics")
+    if isinstance(statistics, Mapping):
+        for key in ("data_label_representation", "avg_predictions"):
+            probabilities = statistics.get(key)
+            if isinstance(probabilities, Mapping):
+                value = probabilities.get(label)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    confidence = float(value)
+                    if math.isfinite(confidence):
+                        return min(1.0, max(0.0, confidence))
+    return 0.8
 
 
 def _normalize_column_label(column: str) -> str:

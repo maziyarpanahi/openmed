@@ -212,7 +212,11 @@ _HAN_CHARACTER_CLASS = "\u3400-\u4dbf\u4e00-\u9fff"
 def _load_chinese_surnames() -> frozenset[str]:
     """Load the packaged public-domain/CC0 Chinese surname gazetteer."""
 
-    resource = resources.files("openmed.clinical").joinpath(_CHINESE_SURNAME_RESOURCE)
+    # Resolve through the top-level package so importing core PII helpers does
+    # not execute the clinical package's eager public-export imports.
+    resource = resources.files("openmed").joinpath(
+        "clinical", _CHINESE_SURNAME_RESOURCE
+    )
     with resource.open("r", encoding="utf-8") as handle:
         surnames = {
             line.strip()
