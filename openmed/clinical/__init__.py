@@ -474,6 +474,17 @@ from .status_vocab import (
     normalize_living_status,
     normalize_substance_status,
 )
+from .summarize import (
+    DEFAULT_SUMMARIZATION_MODE,
+    SUMMARIZATION_ADVISORY,
+    LeakageCheck,
+    SummarizationLeakageError,
+    SummarizationOrderError,
+    SummarizationResult,
+    SummarizerBackend,
+    summarize,
+    summarize_deidentified,
+)
 from .summary_card import (
     CODING_COUNT_LABELS,
     ENTITY_CATEGORY_LABELS,
@@ -726,6 +737,15 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "DEFAULT_SUMMARIZATION_MODE",
+    "SUMMARIZATION_ADVISORY",
+    "LeakageCheck",
+    "SummarizationLeakageError",
+    "SummarizationOrderError",
+    "SummarizationResult",
+    "SummarizerBackend",
+    "summarize",
+    "summarize_deidentified",
     "NormalizedTimex",
     "normalize_temporal",
     "EVENT_ANCHORING_ADVISORY",
