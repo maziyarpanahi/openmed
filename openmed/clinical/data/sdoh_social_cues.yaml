@@ -1,0 +1,49 @@
+schema_version: 1
+provenance:
+  task: OM-214
+  source: OpenMed curated deterministic social-determinant cue table.
+  license: Apache-2.0 repository asset.
+  restricted_data: false
+  data_policy: Synthetic and public phrases only; no SHAC source text is bundled.
+determinants:
+  employment:
+    category: employment
+    score: 0.95
+    status_priority: [never, retired, disabled, student, unemployed, former, employed]
+    status_cues:
+      employed: ["currently employed", "employed", "working", "works", "full-time", "full time", "part-time", "part time", "has a job"]
+      unemployed: ["unemployed", "not employed", "jobless", "without work", "out of work", "no job", "laid off"]
+      retired: ["retired", "retiree"]
+      disabled: ["on disability", "disability benefits", "unable to work", "disabled"]
+      student: ["student", "in school", "attends school"]
+      former: ["previously employed", "formerly employed", "past employment", "stopped working", "quit job", "lost job"]
+      never: ["never employed", "no employment history", "denies employment"]
+    types:
+      teacher: ["school teacher", "teacher", "educator"]
+      nurse: ["registered nurse", "licensed practical nurse", "nurse"]
+      physician: ["physician", "doctor"]
+      engineer: ["engineer"]
+      driver: ["truck driver", "bus driver", "driver"]
+      construction_worker: ["construction worker"]
+      service_worker: ["food service worker", "service worker", "cashier"]
+      office_worker: ["office worker", "administrative assistant"]
+  living_status:
+    category: living_status
+    score: 0.95
+    status_priority: [never, former, homeless, assisted_living, lives_alone, lives_with_family, housed]
+    status_cues:
+      housed: ["stable housing", "has housing", "lives at home", "home with", "own apartment", "own home", "housed"]
+      homeless: ["living in shelter", "street homeless", "without housing", "no housing", "homeless", "unhoused", "shelter"]
+      lives_alone: ["lives alone", "living alone", "alone at home"]
+      lives_with_family: ["lives with family", "living with family", "lives with spouse", "lives with daughter", "lives with son", "stays with family"]
+      assisted_living: ["assisted living", "skilled nursing facility", "nursing home", "long-term care", "long term care", "group home", "SNF"]
+      former: ["formerly homeless", "previously homeless", "past homelessness", "prior homelessness", "history of homelessness", "no longer homeless"]
+      never: ["denies homelessness", "not homeless", "never homeless", "no housing insecurity"]
+  food_insecurity:
+    category: food_insecurity
+    score: 0.90
+    status: current
+    value: food_insecure
+    cues: ["food insecurity", "food insecure", "SNAP", "skips meals"]
+    extension_beyond_core_shac: true
+    extension_note: Food insecurity is an OpenMed extension beyond the five core SHAC determinant categories.

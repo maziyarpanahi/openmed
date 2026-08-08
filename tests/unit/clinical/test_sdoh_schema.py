@@ -14,6 +14,8 @@ from openmed.clinical.sdoh import (
 )
 from openmed.clinical.sections import detect_sections
 
+_SOCIAL_EXTRACTORS = frozenset({"employment", "food_insecurity", "living_status"})
+
 
 def test_sdoh_finding_round_trips_through_dict() -> None:
     finding = SDOHFinding(
@@ -40,23 +42,24 @@ def test_sdoh_finding_round_trips_through_dict() -> None:
     assert SDOHFinding.from_dict(payload) == finding
 
 
-def test_extract_sdoh_without_registered_determinants_returns_empty() -> None:
-    assert available_determinant_extractors() == ()
+def test_extract_sdoh_without_matching_cues_returns_empty() -> None:
+    assert _SOCIAL_EXTRACTORS <= set(available_determinant_extractors())
     assert extract_sdoh("Synthetic Social History note.", spans=[]) == []
 
 
 def test_registered_extractor_is_scoped_to_social_history_section() -> None:
     text = (
-        "Assessment: Synthetic tobacco mention.\n"
-        "Social History: Synthetic tobacco mention.\n"
-        "Plan: Synthetic tobacco mention."
+        "Assessment: Synthetic dummy-marker mention.\n"
+        "Social History: Synthetic dummy-marker mention.\n"
+        "Plan: Synthetic dummy-marker mention."
     )
-    trigger = "tobacco"
+    trigger = "dummy-marker"
     all_spans = [
         {"start": index, "end": index + len(trigger)}
         for index in _substring_offsets(text, trigger)
     ]
     received_spans: list[Sequence[Any]] = []
+    registered_before = available_determinant_extractors()
 
     def dummy_extractor(
         source_text: str,
@@ -99,7 +102,7 @@ def test_registered_extractor_is_scoped_to_social_history_section() -> None:
     ]
     assert social_section["start"] <= findings[0].span[0]
     assert findings[0].span[1] <= social_section["end"]
-    assert available_determinant_extractors() == ()
+    assert available_determinant_extractors() == registered_before
 
 
 def _substring_offsets(text: str, substring: str) -> list[int]:
