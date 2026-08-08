@@ -2,19 +2,26 @@
 
 FHIR Bulk Data Access exports resources as newline-delimited JSON files, often
 one file per resource type. This module keeps that workflow local and
-streaming: it reads one line at a time, applies the existing FHIR
-``$de-identify`` operation logic, and writes de-identified NDJSON without
-loading a whole export file into memory.
+streaming: it reads one line at a time, applies either the existing FHIR
+``$de-identify`` operation logic or an explicit field-level schema policy, and
+writes de-identified NDJSON without loading a whole export file into memory.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import AsyncIterable, Iterable, Iterator
+from collections.abc import AsyncIterable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO
+
+from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS
+from openmed.structured.schema_policy import (
+    SchemaPolicy,
+    apply_schema_policy,
+    load_schema_policy,
+)
 
 from .fhir_operations import Deidentifier, de_identify_resource
 
@@ -152,6 +159,9 @@ def deidentify_ndjson(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: SchemaPolicy | Mapping[str, Any] | str | Path | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
 ) -> NDJSONFileSummary:
     """Stream one NDJSON file through FHIR resource de-identification.
 
@@ -165,6 +175,11 @@ def deidentify_ndjson(
         policy: Privacy policy profile passed to the FHIR operation wrapper.
         method: De-identification method passed to the FHIR operation wrapper.
         deidentifier: Optional privacy pipeline override, mainly for tests.
+        schema_policy: Optional FHIR field-level schema policy. When omitted,
+            the legacy FHIR free-text operation is used.
+        date_shift_secret: HMAC key material required by schema-policy date
+            fields. The secret is never retained in summaries.
+        date_shift_max_days: Maximum absolute patient-keyed date shift.
 
     Returns:
         A file summary with line counts, successful resources, and errors.
@@ -186,6 +201,9 @@ def deidentify_ndjson(
             policy=policy,
             method=method,
             deidentifier=deidentifier,
+            schema_policy=schema_policy,
+            date_shift_secret=date_shift_secret,
+            date_shift_max_days=date_shift_max_days,
         )
 
 
@@ -198,6 +216,9 @@ def deidentify_ndjson_stream(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: SchemaPolicy | Mapping[str, Any] | str | Path | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
 ) -> NDJSONFileSummary:
     """Stream NDJSON text lines through FHIR resource de-identification.
 
@@ -213,6 +234,9 @@ def deidentify_ndjson_stream(
         policy: Privacy policy profile passed to the FHIR operation wrapper.
         method: De-identification method passed to the FHIR operation wrapper.
         deidentifier: Optional privacy pipeline override, mainly for tests.
+        schema_policy: Optional FHIR field-level schema policy.
+        date_shift_secret: HMAC key material for patient-keyed date fields.
+        date_shift_max_days: Maximum absolute patient-keyed date shift.
 
     Returns:
         A file summary with counts, sanitized errors, and the SHA-256 digest of
@@ -226,6 +250,9 @@ def deidentify_ndjson_stream(
         policy=policy,
         method=method,
         deidentifier=deidentifier,
+        schema_policy=schema_policy,
+        date_shift_secret=date_shift_secret,
+        date_shift_max_days=date_shift_max_days,
     )
     for line_number, line in enumerate(lines, start=1):
         processor.process_line(line, line_number)
@@ -241,6 +268,9 @@ async def deidentify_ndjson_async(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: SchemaPolicy | Mapping[str, Any] | str | Path | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
 ) -> NDJSONFileSummary:
     """Stream async NDJSON lines to a de-identified NDJSON file.
 
@@ -260,6 +290,9 @@ async def deidentify_ndjson_async(
             policy=policy,
             method=method,
             deidentifier=deidentifier,
+            schema_policy=schema_policy,
+            date_shift_secret=date_shift_secret,
+            date_shift_max_days=date_shift_max_days,
         )
         line_number = 0
         async for line in lines:
@@ -276,11 +309,22 @@ class _NDJSONStreamProcessor:
     policy: str
     method: str
     deidentifier: Deidentifier | None
+    schema_policy: SchemaPolicy | Mapping[str, Any] | str | Path | None = None
+    date_shift_secret: str | bytes | None = None
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS
     lines_processed: int = 0
     resources_deidentified: int = 0
     blank_lines: int = 0
     errors: list[NDJSONLineError] = field(default_factory=list)
     _digest: Any = field(default_factory=hashlib.sha256)
+    _loaded_schema_policy: SchemaPolicy | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        if self.schema_policy is not None:
+            loaded = load_schema_policy(self.schema_policy)
+            if loaded.schema != "fhir":
+                raise ValueError("FHIR NDJSON requires a FHIR schema policy")
+            self._loaded_schema_policy = loaded
 
     def process_line(self, line: str, line_number: int) -> None:
         """Process one physical NDJSON line."""
@@ -292,12 +336,23 @@ class _NDJSONStreamProcessor:
 
         try:
             resource = _parse_resource_line(Path(str(self.source)), line, line_number)
-            transformed = de_identify_resource(
-                resource,
-                policy=self.policy,
-                method=self.method,
-                deidentifier=self.deidentifier,
-            )
+            if self._loaded_schema_policy is None:
+                transformed = de_identify_resource(
+                    resource,
+                    policy=self.policy,
+                    method=self.method,
+                    deidentifier=self.deidentifier,
+                )
+            else:
+                transformed = apply_schema_policy(
+                    resource,
+                    self._loaded_schema_policy,
+                    schema="fhir",
+                    date_shift_secret=self.date_shift_secret,
+                    date_shift_max_days=self.date_shift_max_days,
+                    deidentifier=self.deidentifier,
+                    text_method=self.method,
+                )
         except FHIRNDJSONLineError as exc:
             self.errors.append(exc.to_summary_error())
             return
@@ -342,6 +397,9 @@ def deidentify_export(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: SchemaPolicy | Mapping[str, Any] | str | Path | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
 ) -> BulkExportSummary:
     """De-identify every ``*.ndjson`` file in a FHIR bulk export directory.
 
@@ -354,6 +412,9 @@ def deidentify_export(
         policy: Privacy policy profile passed to each file processor.
         method: De-identification method passed to each file processor.
         deidentifier: Optional privacy pipeline override, mainly for tests.
+        schema_policy: Optional FHIR field-level schema policy.
+        date_shift_secret: HMAC key material for patient-keyed date fields.
+        date_shift_max_days: Maximum absolute patient-keyed date shift.
 
     Returns:
         An aggregate summary with one :class:`NDJSONFileSummary` per file.
@@ -381,6 +442,9 @@ def deidentify_export(
                 policy=policy,
                 method=method,
                 deidentifier=deidentifier,
+                schema_policy=schema_policy,
+                date_shift_secret=date_shift_secret,
+                date_shift_max_days=date_shift_max_days,
             )
         )
 
