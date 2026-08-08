@@ -77,6 +77,8 @@ def _identifier(value: Any, field: str) -> str:
     text = str(value).strip()
     if not _SAFE_IDENTIFIER_RE.fullmatch(text):
         raise BudgetTrackingError(f"{field} must be a safe identifier")
+    if any(pattern.search(text) for pattern in _PHI_PATTERNS):
+        raise BudgetTrackingError(f"{field} must not contain PHI-shaped data")
     return text
 
 

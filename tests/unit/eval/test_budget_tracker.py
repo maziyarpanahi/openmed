@@ -214,6 +214,19 @@ def test_ledger_requires_orchestrator_link_and_excludes_raw_phi(tmp_path: Path) 
             wall_clock_seconds=1,
         )
 
+    with pytest.raises(BudgetTrackingError, match="PHI-shaped"):
+        StageTimingDocument(
+            run_id="123-45-6789",
+            orchestrator_run_id="123-45-6789",
+            stages=(_stage("synthetic-three", "PII", "Small", runner_minutes=1),),
+        )
+
+    with pytest.raises(BudgetTrackingError, match="PHI-shaped"):
+        build_budget_entry(
+            run_id="123-45-6789",
+            stages=(_stage("synthetic-four", "PII", "Small", runner_minutes=1),),
+        )
+
     missing_link = build_budget_entry(
         run_id="run-missing",
         stages=(_stage("synthetic-two", "PII", "Small", runner_minutes=1),),
