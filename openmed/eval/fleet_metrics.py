@@ -11,6 +11,15 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from openmed.core.model_registry import MANIFEST_PATH, load_manifest_rows
+from openmed.eval.budget_tracker import (
+    DEFAULT_BUDGET_LEDGER,
+    BudgetLedgerEntry,
+    BudgetTotals,
+    budget_entries_in_window,
+    load_budget_ledger,
+    rolling_budget_breakdown,
+    rolling_weekly_totals,
+)
 
 MEDIAN_AGE_TARGET_DAYS = 30
 TIMESTAMP_FIELDS = (
@@ -208,6 +217,151 @@ class FleetFreshnessMetrics:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(self.to_markdown(), encoding="utf-8")
         return output_path
+
+
+@dataclass(frozen=True)
+class FleetBudgetMetrics:
+    """Fleet-wide rolling spend with family/tier queue-priority inputs."""
+
+    as_of: datetime
+    window_days: int
+    run_count: int
+    totals: BudgetTotals
+    by_family: Mapping[str, BudgetTotals]
+    by_tier: Mapping[str, BudgetTotals]
+    by_family_tier: Mapping[str, BudgetTotals]
+    by_workload: Mapping[str, BudgetTotals]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return rolling fleet budget metrics as deterministic JSON data."""
+
+        priority = sorted(
+            self.by_family_tier.items(),
+            key=lambda item: (
+                item[1].estimated_cost_usd,
+                item[1].carbon_kg,
+                item[0],
+            ),
+        )
+        return {
+            "as_of": self.as_of.isoformat().replace("+00:00", "Z"),
+            "breakdown": {
+                "family": _budget_totals_mapping(self.by_family),
+                "family_tier": _budget_totals_mapping(self.by_family_tier),
+                "tier": _budget_totals_mapping(self.by_tier),
+                "workload": _budget_totals_mapping(self.by_workload),
+            },
+            "queue_cost_priority": [
+                {
+                    "family_tier": label,
+                    **totals.to_dict(),
+                }
+                for label, totals in priority
+            ],
+            "run_count": self.run_count,
+            "totals": self.totals.to_dict(),
+            "window_days": self.window_days,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize rolling fleet budget metrics deterministically."""
+
+        return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write rolling fleet budget metrics to *path*."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return output_path
+
+
+def compute_fleet_budget_metrics(
+    entries: Iterable[BudgetLedgerEntry],
+    *,
+    as_of: datetime | str | None = None,
+    window_days: int = 7,
+) -> FleetBudgetMetrics:
+    """Compute queryable rolling spend and carbon across committed runs."""
+
+    materialized = tuple(entries)
+    as_of_datetime = _parse_budget_as_of(as_of)
+    selected = budget_entries_in_window(
+        materialized,
+        as_of=as_of_datetime,
+        window_days=window_days,
+    )
+    return FleetBudgetMetrics(
+        as_of=as_of_datetime,
+        window_days=window_days,
+        run_count=len(selected),
+        totals=rolling_weekly_totals(
+            selected,
+            as_of=as_of_datetime,
+            window_days=window_days,
+        ),
+        by_family=rolling_budget_breakdown(
+            selected,
+            dimension="family",
+            as_of=as_of_datetime,
+            window_days=window_days,
+        ),
+        by_tier=rolling_budget_breakdown(
+            selected,
+            dimension="tier",
+            as_of=as_of_datetime,
+            window_days=window_days,
+        ),
+        by_family_tier=rolling_budget_breakdown(
+            selected,
+            dimension="family_tier",
+            as_of=as_of_datetime,
+            window_days=window_days,
+        ),
+        by_workload=rolling_budget_breakdown(
+            selected,
+            dimension="workload",
+            as_of=as_of_datetime,
+            window_days=window_days,
+        ),
+    )
+
+
+def compute_fleet_budget_metrics_from_ledger(
+    ledger_path: str | Path = DEFAULT_BUDGET_LEDGER,
+    *,
+    as_of: datetime | str | None = None,
+    window_days: int = 7,
+) -> FleetBudgetMetrics:
+    """Load the committed budget ledger and compute rolling fleet metrics."""
+
+    return compute_fleet_budget_metrics(
+        load_budget_ledger(ledger_path),
+        as_of=as_of,
+        window_days=window_days,
+    )
+
+
+def _budget_totals_mapping(
+    value: Mapping[str, BudgetTotals],
+) -> dict[str, dict[str, int | float]]:
+    return {label: value[label].to_dict() for label in sorted(value)}
+
+
+def _parse_budget_as_of(value: datetime | str | None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"Invalid budget as_of timestamp: {value!r}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def compute_fleet_freshness(
@@ -496,10 +650,13 @@ def _format_bool(value: bool | None) -> str:
 
 __all__ = [
     "FleetCheckpoint",
+    "FleetBudgetMetrics",
     "FleetFreshnessMetrics",
     "MEDIAN_AGE_TARGET_DAYS",
     "TIMESTAMP_FIELDS",
     "build_arg_parser",
+    "compute_fleet_budget_metrics",
+    "compute_fleet_budget_metrics_from_ledger",
     "compute_fleet_freshness",
     "compute_fleet_freshness_from_manifest",
     "main",

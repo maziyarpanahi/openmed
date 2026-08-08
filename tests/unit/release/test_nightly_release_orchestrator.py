@@ -219,6 +219,45 @@ def test_releasable_candidate_runs_every_stage_and_audits_offline(
     assert outcome[candidate.candidate_id]["smoke_test"] == orchestrate.SMOKE_PASSED
 
 
+def test_orchestrator_commits_phi_free_stage_timings(tmp_path: Path) -> None:
+    candidate = _candidate("timed")
+    runtime = _FakeRuntime(tmp_path)
+    ledger = tmp_path / "gates" / "release_runs.jsonl"
+    reports = tmp_path / "gates" / "release_reports"
+    timing_path = reports / "run-timed" / "budget-stage-timings.json"
+    ticks = iter(float(value) for value in range(16))
+
+    orchestrate.orchestrate_nightly(
+        [candidate],
+        run_id="run-timed",
+        git_sha=FIXED_SHA,
+        runtime=runtime,
+        ledger_path=ledger,
+        reports_dir=reports,
+        clock=lambda: FIXED_TIME,
+        monotonic_clock=lambda: next(ticks),
+        stage_timings_path=timing_path,
+    )
+
+    payload = json.loads(timing_path.read_text(encoding="utf-8"))
+    assert payload["run_id"] == payload["orchestrator_run_id"] == "run-timed"
+    assert {stage["stage"] for stage in payload["stages"]} == {
+        "build",
+        "eval",
+        "gate",
+        "last-green",
+        "model-card",
+        "promote",
+        "publish",
+        "smoke",
+    }
+    assert all(stage["wall_clock_seconds"] == 1.0 for stage in payload["stages"])
+    assert all(stage["runner_minutes"] == 0.016667 for stage in payload["stages"])
+    persisted = timing_path.read_text(encoding="utf-8")
+    assert "Patient Example" not in persisted
+    assert "123-45-6789" not in persisted
+
+
 def test_quarantined_candidate_never_publishes_and_batch_continues(
     tmp_path: Path,
 ) -> None:
@@ -337,6 +376,14 @@ def test_workflow_schedules_batch_guards_publish_and_commits_audit_state() -> No
     )
     assert "continue-on-error: true" in workflow
     assert "python scripts/release/orchestrate.py run" in workflow
+    assert "python scripts/release/budget_report.py status" in workflow
+    assert "python scripts/release/budget_report.py record" in workflow
+    assert "--max-candidates" in workflow
+    assert "gates/budget_ledger.jsonl" in workflow
+    assert (
+        "Advisory release budget OVER"
+        in (ROOT / "scripts" / "release" / "budget_report.py").read_text()
+    )
     assert "gates/release_runs.jsonl" in workflow
     assert "gates/release_reports/" in workflow
     assert "peter-evans/create-pull-request@v8" in workflow
