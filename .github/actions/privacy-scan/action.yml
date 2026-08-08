@@ -1,0 +1,49 @@
+name: OpenMed privacy scan
+description: Scan explicit repository paths for likely sensitive values without exposing matches
+
+inputs:
+  paths:
+    description: Newline-delimited files, directories, or glob patterns to scan
+    required: true
+  policy:
+    description: Built-in policy name or a JSON policy document path
+    required: false
+    default: default
+  synthetic-fixture-allowlist:
+    description: Newline-delimited synthetic fixture paths/globs, or @path-list.json
+    required: false
+    default: ""
+  artifact-name:
+    description: Name of the uploaded machine-readable report artifact
+    required: false
+    default: privacy-scan-report
+  artifact-path:
+    description: Path for the machine-readable JSON report
+    required: false
+    default: privacy-scan-report.json
+
+runs:
+  using: composite
+  steps:
+    - name: Scan explicit paths
+      shell: bash
+      env:
+        PRIVACY_SCAN_PATHS: ${{ inputs.paths }}
+        PRIVACY_SCAN_POLICY: ${{ inputs.policy }}
+        PRIVACY_SCAN_ALLOWLIST: ${{ inputs.synthetic-fixture-allowlist }}
+        PRIVACY_SCAN_OUTPUT: ${{ inputs.artifact-path }}
+      run: |
+        set -euo pipefail
+        python "${GITHUB_ACTION_PATH}/../../../scripts/privacy_scan.py" \
+          --paths "$PRIVACY_SCAN_PATHS" \
+          --policy "$PRIVACY_SCAN_POLICY" \
+          --synthetic-fixture-allowlist "$PRIVACY_SCAN_ALLOWLIST" \
+          --output "$PRIVACY_SCAN_OUTPUT"
+
+    - name: Upload privacy scan report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.artifact-path }}
+        if-no-files-found: error
