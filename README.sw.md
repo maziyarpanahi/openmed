@@ -509,7 +509,7 @@ kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
 | [Maelezo ya Toleo la OpenMed 2.0.0](docs/release/v2.0.0.md) | [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Mifano](docs/examples.md) |
 | [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
-| [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Detector](docs/plugin-sdk.md) |
+| [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Upanuzi](docs/plugin-sdk.md) |
 | [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |
 
 ---

@@ -658,7 +658,7 @@ MkDocs build.
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
 | [OpenMed 2.0.0 Release Notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
-| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Detector Plugin SDK](docs/plugin-sdk.md) |
+| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Extension Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |
 
 ---
