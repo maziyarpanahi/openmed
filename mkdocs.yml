@@ -97,6 +97,7 @@ nav:
       - LangChain Redaction Wrapper: integrations-langchain.md
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
+      - OpenSearch Ingest Redaction Processor: integrations/opensearch.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
