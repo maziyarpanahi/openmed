@@ -320,6 +320,211 @@ def _policy_name_arg(value: str) -> str:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
+def _completion_specs(
+    parser: argparse.ArgumentParser,
+) -> dict[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Return shell-completion commands and options from an argparse tree."""
+
+    specs: dict[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]] = {}
+    seen: set[tuple[int, tuple[str, ...]]] = set()
+
+    def visit(current: argparse.ArgumentParser, path: tuple[str, ...]) -> None:
+        marker = (id(current), path)
+        if marker in seen:
+            return
+        seen.add(marker)
+
+        child_action = _find_subparsers(current)
+        commands = tuple(child_action.choices) if child_action is not None else ()
+        options = tuple(
+            dict.fromkeys(
+                option
+                for action in current._actions
+                if not isinstance(action, argparse._SubParsersAction)
+                for option in action.option_strings
+            )
+        )
+        specs[path] = (commands, options)
+
+        if child_action is not None:
+            for name, child in child_action.choices.items():
+                visit(child, (*path, name))
+
+    visit(parser, ())
+    return specs
+
+
+def _shell_literal(value: str) -> str:
+    """Quote a completion term for POSIX-like shell source."""
+
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+        .replace("`", "\\`")
+    )
+    return f'"{escaped}"'
+
+
+def _completion_transition_cases(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> list[str]:
+    lines = ['    case "$path:$word" in']
+    for path, (commands, _) in specs.items():
+        parent = " ".join(path)
+        for command in commands:
+            child_path = " ".join((*path, command))
+            lines.append(
+                f"        {_shell_literal(f'{parent}:{command}')}) "
+                f"path={_shell_literal(child_path)} ;;"
+            )
+    lines.append("    esac")
+    return lines
+
+
+def _completion_candidate_cases(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> list[str]:
+    lines = ['    case "$path" in']
+    for path, (commands, options) in specs.items():
+        candidates = (*commands, *options)
+        if not candidates:
+            continue
+        lines.append(
+            f"        {_shell_literal(' '.join(path))}) "
+            f"candidates={_shell_literal(' '.join(candidates))} ;;"
+        )
+    lines.extend(['        *) candidates="" ;;', "    esac"])
+    return lines
+
+
+def _bash_completion_script(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> str:
+    lines = [
+        "# OpenMed completion for Bash.",
+        "_openmed_completion() {",
+        '    local cur="${COMP_WORDS[COMP_CWORD]}"',
+        '    local path="" word candidates',
+        "    local i",
+        "    for ((i=1; i<COMP_CWORD; i++)); do",
+        '        word="${COMP_WORDS[i]}"',
+        '        case "$word" in',
+        "            --) break ;;",
+        "            -*) continue ;;",
+        "        esac",
+    ]
+    lines.extend(_completion_transition_cases(specs))
+    lines.extend(
+        [
+            "    done",
+            *_completion_candidate_cases(specs),
+            '    COMPREPLY=( $(compgen -W "$candidates" -- "$cur") )',
+            "}",
+            "complete -F _openmed_completion openmed",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _zsh_completion_script(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> str:
+    lines = [
+        "#compdef openmed",
+        "",
+        "_openmed() {",
+        '    local path="" word candidates',
+        "    integer index",
+        "    for (( index = 2; index < CURRENT; index++ )); do",
+        '        word="${words[index]}"',
+        '        case "$word" in',
+        "            --) break ;;",
+        "            -*) continue ;;",
+        "        esac",
+    ]
+    lines.extend(_completion_transition_cases(specs))
+    lines.extend(
+        [
+            "    done",
+            *_completion_candidate_cases(specs),
+            "    compadd -- ${(s: :)candidates}",
+            "}",
+            "",
+            "compdef _openmed openmed",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _fish_condition(path: tuple[str, ...]) -> str:
+    if not path:
+        return "__fish_use_subcommand"
+    return "; and ".join(f"__fish_seen_subcommand_from {command}" for command in path)
+
+
+def _fish_completion_script(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> str:
+    lines = ["# OpenMed completion for Fish."]
+    for path, (commands, options) in specs.items():
+        condition = _fish_condition(path)
+        for command in commands:
+            lines.append(
+                "complete -c openmed -f "
+                f"-n {_shell_literal(condition)} -a {_shell_literal(command)}"
+            )
+        for option in options:
+            if option.startswith("--"):
+                lines.append(
+                    "complete -c openmed -f "
+                    f"-n {_shell_literal(condition)} "
+                    f"-l {_shell_literal(option[2:])}"
+                )
+            elif option.startswith("-") and len(option) == 2:
+                lines.append(
+                    "complete -c openmed -f "
+                    f"-n {_shell_literal(condition)} "
+                    f"-s {_shell_literal(option[1:])}"
+                )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _completion_script(
+    shell: str,
+    parser: argparse.ArgumentParser,
+) -> str:
+    """Render a completion script for one of the supported shells."""
+
+    specs = _completion_specs(parser)
+    renderers = {
+        "bash": _bash_completion_script,
+        "zsh": _zsh_completion_script,
+        "fish": _fish_completion_script,
+    }
+    return renderers[shell](specs)
+
+
+def _add_completion_command(subparsers: argparse._SubParsersAction) -> None:
+    completion_parser = subparsers.add_parser(
+        "completion",
+        help="Generate a shell completion script.",
+    )
+    completion_sub = completion_parser.add_subparsers(
+        dest="completion_shell",
+        required=True,
+    )
+    for shell in ("bash", "zsh", "fish"):
+        shell_parser = completion_sub.add_parser(
+            shell,
+            help=f"Generate a {shell} completion script.",
+        )
+        shell_parser.set_defaults(handler=_handle_completion)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create the top-level CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -365,6 +570,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
+    _add_completion_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
     _add_doctor_command(subparsers)
@@ -2543,6 +2749,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
+
+
+def _handle_completion(args: argparse.Namespace) -> int:
+    """Write the requested shell completion script to stdout."""
+
+    shell = args.completion_shell
+    script = _completion_script(shell, build_parser())
+    return emit(
+        args,
+        {"shell": shell, "script": script},
+        human=script,
+    )
 
 
 def _load_and_apply_config(args: argparse.Namespace) -> OpenMedConfig:
