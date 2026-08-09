@@ -60,6 +60,14 @@ from .kanon import (
     kanon_report,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
+from .privacy_budget import (
+    PRIVACY_BUDGET_LEDGER_SCHEMA_VERSION,
+    PrivacyBudget,
+    PrivacyBudgetDecision,
+    PrivacyBudgetExceeded,
+    PrivacyBudgetLedger,
+    PrivacyBudgetSpend,
+)
 from .reid import (
     LongitudinalCorpus,
     LongitudinalEvidence,
@@ -134,6 +142,12 @@ __all__ = [
     "LongitudinalNote",
     "LongitudinalPatient",
     "PopulationRiskAssessment",
+    "PRIVACY_BUDGET_LEDGER_SCHEMA_VERSION",
+    "PrivacyBudget",
+    "PrivacyBudgetDecision",
+    "PrivacyBudgetExceeded",
+    "PrivacyBudgetLedger",
+    "PrivacyBudgetSpend",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
