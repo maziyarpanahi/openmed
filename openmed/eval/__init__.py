@@ -778,6 +778,22 @@ from openmed.eval.suites.policy_compliance import (
     PolicyProfileComplianceResult,
     run_policy_compliance,
 )
+from openmed.eval.suites.temporal_consistency import (
+    SCORED_AXES as TEMPORAL_CONSISTENCY_AXES,
+)
+from openmed.eval.suites.temporal_consistency import (
+    TEMPORAL_CONSISTENCY,
+    TEMPORAL_CONSISTENCY_FIXTURE_PATH,
+    TEMPORAL_CONSISTENCY_SCHEMA_VERSION,
+    AxisAccuracy,
+    TemporalConsistencyFixture,
+    TemporalConsistencyResult,
+    evaluate_temporal_consistency,
+    load_temporal_consistency_fixtures,
+    run_temporal_consistency_suite,
+    score_temporal_consistency,
+    temporal_consistency_metadata,
+)
 from openmed.eval.surrogate_quality import (
     DEFAULT_SURROGATE_QUALITY_FIXTURE,
     DEFAULT_SURROGATE_QUALITY_LOCALES,
@@ -933,6 +949,18 @@ __all__ = [
     "india_surrogate_consistency_metadata",
     "run_india_clinical_suite_report",
     "run_india_surrogate_consistency_gate",
+    "TEMPORAL_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY_AXES",
+    "TEMPORAL_CONSISTENCY_FIXTURE_PATH",
+    "TEMPORAL_CONSISTENCY_SCHEMA_VERSION",
+    "TemporalConsistencyFixture",
+    "TemporalConsistencyResult",
+    "AxisAccuracy",
+    "evaluate_temporal_consistency",
+    "load_temporal_consistency_fixtures",
+    "run_temporal_consistency_suite",
+    "score_temporal_consistency",
+    "temporal_consistency_metadata",
     "CalibrationArtifactPaths",
     "ConformalCalibrationGroup",
     "ConformalCalibrationReport",
