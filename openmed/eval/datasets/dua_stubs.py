@@ -38,6 +38,7 @@ DUA_GATED_CORPORA: tuple[str, ...] = (
 
 DUA_PATH_REMEDIATION: Mapping[str, str] = {
     "biored": "pass path=... or set OPENMED_BIORED_PATH",
+    "made": "pass path=... or set OPENMED_MADE_PATH",
     "n2c2-2018": "pass path=... or set OPENMED_N2C2_2018_PATH",
     "n2c2-2022": "pass path=... or set OPENMED_N2C2_2022_PATH",
 }

@@ -93,6 +93,16 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "access. OpenMed reads only a user-supplied local BRAT copy."
         ),
     ),
+    "made": DatasetLicense(
+        dataset="made",
+        license_id="MADE-1.0-UMass-DUA",
+        source_url="https://bio-nlp.org/dataset/made1",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "MADE 1.0 medication and ADE annotations require approved local "
+            "access. OpenMed reads only a user-supplied BioC or BRAT copy."
+        ),
+    ),
     "n2c2-2022": DatasetLicense(
         dataset="n2c2-2022",
         license_id="n2c2-DBMI-SHAC-DUA",
