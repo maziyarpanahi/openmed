@@ -283,5 +283,23 @@
     "CareIntervention",
     "PainScore",
     "SkinAssessment"
+  ],
+  "immunology": [
+    "Allergen",
+    "AllergicReaction",
+    "Immunization",
+    "Antibody"
+  ],
+  "mental_health": [
+    "PsychiatricSymptom",
+    "Diagnosis",
+    "Medication",
+    "Therapy"
+  ],
+  "dentistry": [
+    "Tooth",
+    "DentalCondition",
+    "DentalProcedure",
+    "Restoration"
   ]
 }
