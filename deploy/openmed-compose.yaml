@@ -1,0 +1,59 @@
+# Offline-first, single-service Compose bundle for local OpenMed deployments.
+# Build the image before moving the host to an air-gapped environment.
+
+services:
+  openmed:
+    image: "${OPENMED_IMAGE:-openmed:distroless}"
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.distroless
+    user: "65532:65532"
+    ports:
+      - "${OPENMED_BIND_ADDRESS:-127.0.0.1}:${OPENMED_PORT:-8080}:8080"
+    environment:
+      OPENMED_PROFILE: "${OPENMED_PROFILE:-prod}"
+      OPENMED_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+      HF_HOME: /cache/huggingface
+      HF_HUB_CACHE: /cache/huggingface/hub
+      TRANSFORMERS_CACHE: /cache/huggingface/transformers
+      OPENMED_CACHE_DIR: /cache/openmed
+      OPENMED_SERVICE_PRELOAD_MODELS: "${OPENMED_SERVICE_PRELOAD_MODELS:-}"
+      OPENMED_SERVICE_KEEP_ALIVE: "${OPENMED_SERVICE_KEEP_ALIVE:-10m}"
+      OPENMED_SERVICE_MAX_RESIDENT_MODELS: "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
+      OPENMED_SERVICE_TRUSTED_HOSTS: "${OPENMED_SERVICE_TRUSTED_HOSTS:-localhost,127.0.0.1}"
+      OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT: ""
+      OPENMED_SERVICE_METRICS_ENABLED: "false"
+      OPENMED_SERVICE_TRACING_ENABLED: "false"
+      OPENMED_SERVICE_OTLP_ENDPOINT: ""
+      OPENMED_OPENHIM_MEDIATOR_ENABLED: "false"
+    volumes:
+      - openmed-cache:/cache
+      - "${OPENMED_MODEL_DIR:-../models}:/models:ro"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/python3
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen("http://127.0.0.1:8080/readyz", timeout=3).read()
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  openmed-cache:
+    name: "${OPENMED_CACHE_VOLUME_NAME:-openmed-cache}"
