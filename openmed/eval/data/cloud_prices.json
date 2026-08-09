@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "currency": "USD",
+  "captured_at": "2026-08-08",
+  "hardware_cost_model": {
+    "purchase_price_usd": 1200.0,
+    "amortization_hours": 8760.0,
+    "operating_cost_usd_per_hour": 0.03,
+    "assumption": "Synthetic planning estimate; replace with measured hardware TCO."
+  },
+  "prices": [
+    {
+      "id": "aws-comprehend-medical",
+      "provider": "AWS",
+      "service": "Comprehend Medical",
+      "billing_unit": "100 characters",
+      "price_usd_per_unit": 0.01,
+      "unit_characters": 100,
+      "source_url": "https://aws.amazon.com/comprehend/medical/pricing/",
+      "capture_date": "2026-08-08",
+      "verify": true
+    },
+    {
+      "id": "azure-language-health",
+      "provider": "Azure",
+      "service": "Language service - Text Analytics for health",
+      "billing_unit": "1000 text records, modeled at 1000 characters each",
+      "price_usd_per_unit": 1.0,
+      "unit_characters": 1000000,
+      "source_url": "https://azure.microsoft.com/en-us/pricing/details/language-service/",
+      "capture_date": "2026-08-08",
+      "verify": true
+    }
+  ]
+}
