@@ -221,6 +221,10 @@ beam = [
   "apache-beam>=2.73,<3",
 ]
 
+airflow = [
+  "apache-airflow>=2.10,<4",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",

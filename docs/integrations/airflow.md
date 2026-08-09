@@ -1,0 +1,69 @@
+# Airflow Redaction Operator
+
+OpenMed provides an optional Airflow operator for bounded, local-first
+redaction of one UTF-8 file or one in-memory record batch. Install the extra
+when the Airflow runtime is available:
+
+```bash
+pip install "openmed[airflow]"
+```
+
+The operator does not make a network request itself. The default OpenMed
+deidentifier is configured for cache-only model loading; pre-stage the model
+on each worker or inject a local deidentifier/loader explicitly.
+
+## File input
+
+File tasks require an explicit output path. Plain files are treated as one
+text value. Files ending in `.jsonl` or `.ndjson` are treated as record batches;
+`.json` files may contain one record, one string, or a list of records.
+
+```python
+from openmed.interop.airflow import OpenMedRedactionOperator
+
+redact_notes = OpenMedRedactionOperator(
+    task_id="redact_notes",
+    input_path="staged/notes.jsonl",
+    output_path="staged/notes.redacted.jsonl",
+    text_field="note",
+    max_input_bytes=10 * 1024 * 1024,
+    max_records=10_000,
+)
+```
+
+Only the configured text field is transformed in structured records. Other
+fields are copied as part of the requested output and should be selected with
+the same privacy review as any other workflow output.
+
+## Record batches
+
+Record batches may contain strings or mappings. Mappings must contain the
+configured text field. Without an output path, the operator returns the
+redacted batch through the normal Airflow task result; for durable task
+artifacts, provide an output path.
+
+```python
+redact_batch = OpenMedRedactionOperator(
+    task_id="redact_batch",
+    records=[{"text": "synthetic note"}, {"text": "another note"}],
+    text_field="text",
+)
+```
+
+The default bounds are 10 MiB per file and 10,000 records. Lower them for
+smaller task contracts. Oversized or malformed inputs fail before any output
+is written.
+
+## Retry and privacy behavior
+
+Outputs are written atomically. A file output receives a companion
+`<output>.openmed-fingerprint.json` sidecar unless `fingerprint_path` is set.
+The sidecar contains only schema metadata, SHA-256 fingerprints, counts, and
+byte sizes. On a retry, a matching input/configuration fingerprint and a
+verified output fingerprint produce a `status="skipped"` result without
+running the redactor again. A mismatched existing sidecar fails closed rather
+than overwriting an output belonging to another run.
+
+Task logs and failure messages contain only operation metadata and fingerprints;
+they do not include input values, output text, or the original exception text
+from a deidentifier.

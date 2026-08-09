@@ -103,6 +103,7 @@ nav:
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
+      - Airflow Redaction Operator: integrations/airflow.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md

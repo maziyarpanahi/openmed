@@ -48,6 +48,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "airflow": AdapterSpec(
+        name="airflow",
+        module="openmed.interop.airflow",
+        extra="airflow",
+        description="Airflow operator for bounded local redaction",
+    ),
     "beam": AdapterSpec(
         name="beam",
         module="openmed.interop.beam_transform",
