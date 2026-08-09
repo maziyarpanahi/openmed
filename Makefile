@@ -1,6 +1,8 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
+.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
+
+UV ?= uv
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -8,7 +10,7 @@ help: ## Show this help message
 
 build: ## Build the package
 	@echo "🔨 Building package..."
-	python3 -m build
+	$(UV) run --frozen --extra dev --with build python -m build
 
 publish: ## Publish to PyPI using Hatch
 	@echo "📤 Publishing to PyPI..."
@@ -21,25 +23,29 @@ clean: ## Clean build artifacts
 	rm -rf dist/ build/ *.egg-info/
 
 install: ## Install the package locally
-	@echo "📦 Installing package locally..."
-	pip install -e .
+	@echo "📦 Syncing the locked uv development environment..."
+	$(UV) sync --frozen --extra dev
+
+lock-check: ## Verify that uv.lock matches pyproject.toml
+	@echo "🔎 Checking uv.lock against pyproject.toml..."
+	$(UV) lock --check
 
 lint: ## Run Ruff lint checks
 	@echo "🔎 Running Ruff lint checks..."
-	ruff check .
+	$(UV) run --frozen --extra dev ruff check .
 
 type-check: ## Type-check the annotated public-module scope
 	@echo "🔎 Running scoped mypy checks..."
-	mypy
+	$(UV) run --frozen --extra dev mypy
 
 format: ## Apply Ruff import fixes and formatting
 	@echo "🎨 Formatting Python code with Ruff..."
-	ruff check --fix .
-	ruff format .
+	$(UV) run --frozen --extra dev ruff check --fix .
+	$(UV) run --frozen --extra dev ruff format .
 
 format-check: ## Check Ruff formatting without modifying files
 	@echo "🔎 Checking Ruff formatting..."
-	ruff format --check .
+	$(UV) run --frozen --extra dev ruff format --check .
 
 lint-swift: ## Run Swift format lint checks for OpenMedKit
 	@echo "🔎 Running Swift format lint checks..."
@@ -53,7 +59,7 @@ quality: lint type-check format-check test ## Run the local quality gate
 
 test: ## Run the test suite
 	@echo "🧪 Running tests..."
-	pytest
+	$(UV) run --frozen --extra dev pytest
 
 sbom: ## Generate a CycloneDX 1.6 SBOM (sbom.cdx.json) for the runtime dependencies
 	@echo "📦 Generating CycloneDX SBOM..."
@@ -98,20 +104,20 @@ docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages 
 
 test-build: ## Test build without publishing
 	@echo "🧪 Testing build..."
-	python3 -m build
+	$(UV) run --frozen --extra dev --with build python -m build
 	@echo "✅ Build successful! Check dist/ directory"
 
 bump-patch: ## Bump patch version (0.1.1 -> 0.1.2)
 	@echo "📈 Bumping patch version..."
-	python3 scripts/release/release.py patch
+	$(UV) run --frozen --extra dev python scripts/release/release.py patch
 
 bump-minor: ## Bump minor version (0.1.1 -> 0.2.0)
 	@echo "📈 Bumping minor version..."
-	python3 scripts/release/release.py minor
+	$(UV) run --frozen --extra dev python scripts/release/release.py minor
 
 bump-major: ## Bump major version (0.1.1 -> 1.0.0)
 	@echo "📈 Bumping major version..."
-	python3 scripts/release/release.py major
+	$(UV) run --frozen --extra dev python scripts/release/release.py major
 
 # Quick commands for common workflows
 patch: bump-patch release ## Bump patch version and release

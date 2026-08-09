@@ -21,6 +21,15 @@ jobs:
       with:
         python-version: "3.11"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Detect CJK and Indic test changes
       id: i18n_changes
       env:
@@ -59,8 +68,8 @@ jobs:
 
     - name: Assert built wheel contains no restricted vocabulary data
       run: |
-        python -m pip install build
-        python -m build --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
+        uv run --no-project --with build python -m build \
+          --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
         python scripts/release/check_license_policy.py \
           --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
 
@@ -124,6 +133,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -162,6 +172,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -188,6 +199,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -238,6 +250,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -281,6 +294,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -329,6 +343,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -360,23 +375,22 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-spacy-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-spacy-
-          ${{ runner.os }}-pip-
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install spaCy test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,spacy]"
+        uv sync --frozen --extra dev --extra spacy --python 3.11
 
     - name: Run spaCy adapter tests
       run: |
-        pytest tests/unit/interop/test_spacy_component.py -q
+        uv run pytest tests/unit/interop/test_spacy_component.py -q
 
   yasbd-integration:
     needs: [repo-policy, lint]
@@ -395,6 +409,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -421,27 +436,26 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-i18n-cjk-indic-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-i18n-cjk-indic-
-          ${{ runner.os }}-pip-
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install CJK and Indic test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,zh,indic]"
+        uv sync --frozen --extra dev --extra zh --extra indic --python 3.11
 
     - name: Run CJK and Indic fixture tests
       run: |
-        pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
+        uv run pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
 
     - name: Trust-CI no-raw-PHI logging guard
       run: |
-        pytest tests/unit/test_no_raw_text_logging.py -q
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
   build:
     needs:
@@ -476,6 +490,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
