@@ -1,74 +1,64 @@
-# Software Bill of Materials (SBOM)
+# Deterministic SBOM evidence
 
-OpenMed publishes a [CycloneDX](https://cyclonedx.org/) software bill of
-materials so downstream healthcare integrators can inventory the dependency tree
-and answer a supply-chain audit. The SBOM names `openmed` as the root component
-and lists the dependencies resolved in the target environment.
-
-This page covers the Python package SBOM. Container image releases publish a
-separate [image SBOM](../supply-chain/sbom.md) generated from the built Docker
-image.
+OpenMed can produce a machine-readable [CycloneDX](https://cyclonedx.org/)
+software bill of materials from the repository's local dependency manifests.
+The evidence bundle identifies the runtime dependency closure, package artifact
+hashes recorded by `uv.lock`, the source revision, and hashes of both input
+manifests.
 
 ## Generate it locally
 
 ```bash
-make sbom
+python scripts/licenses/sbom.py --output sbom.cdx.json
 ```
 
-This syncs the locked **runtime** environment and writes `sbom.cdx.json`
-(CycloneDX 1.6 JSON) to the repository root. Equivalent one-liner:
+The generator reads `pyproject.toml` and `uv.lock` only. It does not resolve
+packages, inspect an installed environment, contact a package index, or require
+network access. When `--source-revision` is omitted, it reads the local Git
+`HEAD`; a revision can be supplied explicitly for an exported source tree:
 
 ```bash
-uv sync --frozen
-uv run --no-project --with 'cyclonedx-bom>=4.6,<7' \
-  python scripts/security/generate_sbom.py
+python scripts/licenses/sbom.py \
+  --source-revision <commit-sha> \
+  --output sbom.cdx.json
 ```
 
-The generator
-([`scripts/security/generate_sbom.py`](https://github.com/maziyarpanahi/openmed/blob/master/scripts/security/generate_sbom.py))
-introspects the environment with `cyclonedx-py environment`, then stamps the
-package version onto the root component — hatch resolves the version
-dynamically from `openmed/__about__.py`, which PEP 621 metadata alone cannot
-express.
+The default output is `sbom.cdx.json` at the repository root. It is a generated
+artifact and is not committed (see `.gitignore`). The JSON has no generated
+timestamp or random serial number, so repeated runs over the same revision and
+manifests are byte-identical.
 
-`sbom.cdx.json` is a generated artifact and is **not** committed (see
-`.gitignore`).
+## Evidence and privacy boundaries
 
-## Cover specific extras
+The `metadata.properties` section records:
 
-By default the SBOM reflects the base runtime dependencies (`openmed` plus
-`pysbd` and `Faker`). To capture a particular install profile, sync that extra
-first, then regenerate:
+- `openmed:source-revision`
+- `openmed:pyproject-sha256`
+- `openmed:uv-lock-sha256`
+- `openmed:manifest-sha256`
 
-```bash
-uv sync --frozen --extra service --extra hf
-uv run --no-project --with 'cyclonedx-bom>=4.6,<7' \
-  python scripts/security/generate_sbom.py
-```
+Package PURLs, versions, and artifact hashes come from safe fields in the local
+manifests. Explicit lock-file license values and the repository's reviewed
+runtime license defaults populate component licenses. Lock-file download URLs,
+credentials, local source paths, build paths, timestamps, and environment
+details are intentionally omitted. If a package has no license value in the
+local evidence, the component is marked `NOASSERTION`; the generator never
+guesses a license from a network service.
 
-## Where it is published
+This artifact supports dependency inventory and reproducibility checks. It is
+not a compliance certification or a clinical decision guarantee.
 
-- **CI** — the `sbom` job in `.github/workflows/ci.yml` regenerates the SBOM on
-  every push and pull request and uploads `sbom.cdx.json` as the `sbom`
-  artifact.
-- **Releases** — on each tagged publish, `.github/workflows/publish.yml`
-  regenerates the SBOM and attaches `sbom.cdx.json` as an asset on the GitHub
-  release for that tag (it is also kept as a workflow artifact). SBOM handling
-  there is fail-open and never blocks a release.
+## Environment SBOMs
 
-## Consume and verify
+The existing `make sbom` target and CI jobs also publish an environment SBOM
+using `scripts/security/generate_sbom.py`. That workflow is useful for the
+installed runtime profile and may resolve an environment with package tooling;
+use the generator above when the evidence must be reproducible from checked-in
+manifests without network access.
 
-The generator validates the document against the CycloneDX 1.6 schema before
-writing it. Downstream, load `sbom.cdx.json` into any CycloneDX-aware tool — for
-example [Dependency-Track](https://dependencytrack.org/) — or scan it for known
-vulnerabilities:
+## Existing release SBOMs
 
-```bash
-grype sbom:sbom.cdx.json     # or: trivy sbom sbom.cdx.json
-```
-
-To confirm the inventory yourself, regenerate it with `make sbom` and diff the
-`components` list; only the timestamp and serial number change between runs.
-
-See also [Supply Chain Controls](supply-chain.md) and the
-[Dependency Policy](dependency-policy.md).
+Container releases publish a separate [image SBOM](../supply-chain/sbom.md)
+that covers operating-system packages and image contents. The deterministic
+evidence bundle described here is the source-manifest view for the Python
+package and does not replace the image SBOM.
