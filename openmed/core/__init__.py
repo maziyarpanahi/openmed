@@ -58,6 +58,20 @@ from .language_router import (
     LanguageRun,
     PyCLD2LanguageIdentifier,
 )
+from .model_cache_policy import (
+    CACHE_POLICY_MANIFEST,
+    CACHE_POLICY_SCHEMA,
+    CacheArtifact,
+    CacheIntegrityError,
+    CacheOwnershipError,
+    EvictionCandidate,
+    EvictionPlan,
+    EvictionResult,
+    ModelCachePolicy,
+    ModelCachePolicyError,
+    sha256_path,
+    verify_artifact_checksum,
+)
 from .model_integrity import ModelIntegrityError
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
@@ -123,6 +137,18 @@ from .surrogate_vault import (
 __all__ = [
     "ModelLoader",
     "ModelIntegrityError",
+    "ModelCachePolicy",
+    "ModelCachePolicyError",
+    "CacheArtifact",
+    "CacheIntegrityError",
+    "CacheOwnershipError",
+    "EvictionCandidate",
+    "EvictionPlan",
+    "EvictionResult",
+    "CACHE_POLICY_MANIFEST",
+    "CACHE_POLICY_SCHEMA",
+    "sha256_path",
+    "verify_artifact_checksum",
     "load_model",
     "ModelQuery",
     "ModelSearchResult",
