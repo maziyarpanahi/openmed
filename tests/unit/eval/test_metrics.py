@@ -44,6 +44,7 @@ def test_eval_modules_import_cleanly():
     assert openmed.eval.report.BenchmarkReport
     assert openmed.eval.suites.DEFAULT_SUITES == (
         "golden",
+        "openmed-synth",
         "i2b2",
         "n2c2",
         "shield",

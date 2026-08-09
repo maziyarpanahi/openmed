@@ -246,6 +246,17 @@ from openmed.eval.suites.naamapadam import (
     naamapadam_suite_metadata,
     run_naamapadam,
 )
+from openmed.eval.suites.openmed_synth import (
+    OPENMED_SYNTH,
+    OPENMED_SYNTH_DATASET_CARD,
+    OPENMED_SYNTH_DEFAULT_CORPUS_SIZE,
+    OPENMED_SYNTH_DEFAULT_SEED,
+    OPENMED_SYNTH_REFERENCE_MODEL,
+    load_openmed_synth_fixtures,
+    openmed_synth_reference_runner,
+    openmed_synth_suite_metadata,
+    run_openmed_synth_benchmark,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -299,6 +310,7 @@ PROMOTION_ONLY_RELATION_SUITES: tuple[str, ...] = (
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
+    OPENMED_SYNTH,
     I2B2,
     N2C2,
     SHIELD,
@@ -339,6 +351,14 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     suite = validate_suite_name(name)
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == OPENMED_SYNTH:
+        return load_openmed_synth_fixtures(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == GROUNDING_CALIBRATION:
         from openmed.eval.suites.grounding_calibration import load_grounding_gold
 
@@ -438,6 +458,14 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         )
 
         return grounding_calibration_metadata(**kwargs)
+    if suite == OPENMED_SYNTH:
+        return openmed_synth_suite_metadata(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
     if suite == MASAKHANER:
@@ -566,6 +594,11 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 __all__ = [
     "BIORED",
     "GOLDEN",
+    "OPENMED_SYNTH",
+    "OPENMED_SYNTH_DATASET_CARD",
+    "OPENMED_SYNTH_DEFAULT_CORPUS_SIZE",
+    "OPENMED_SYNTH_DEFAULT_SEED",
+    "OPENMED_SYNTH_REFERENCE_MODEL",
     "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
@@ -631,6 +664,10 @@ __all__ = [
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
+    "load_openmed_synth_fixtures",
+    "openmed_synth_reference_runner",
+    "openmed_synth_suite_metadata",
+    "run_openmed_synth_benchmark",
     "run_comparator_matrix",
     "run_indic_encoder_recall_delta",
     "evaluate_chinese_terminology_leakage",
