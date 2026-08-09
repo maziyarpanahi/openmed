@@ -28,6 +28,7 @@ def test_transaction_replaces_atomically_creates_collision_safe_backup_and_prese
     original = f"event={SYNTHETIC_VALUE}\n"
     target.write_text(original, encoding="utf-8", newline="")
     os.chmod(target, 0o640)
+    original_mode = target.stat().st_mode & 0o777
     original_time = 1_700_000_123_456_789_000
     os.utime(target, ns=(original_time, original_time))
     existing_backup = target.with_name(target.name + ".bak")
@@ -52,7 +53,7 @@ def test_transaction_replaces_atomically_creates_collision_safe_backup_and_prese
     assert result.changed is True
     assert result.backup_path == target.with_name("trace.jsonl.bak.1")
     target_stat = target.stat()
-    assert (target_stat.st_mode & 0o777) == 0o640
+    assert (target_stat.st_mode & 0o777) == original_mode
     assert target_stat.st_atime_ns == original_time
     assert target_stat.st_mtime_ns == original_time
     assert target.read_text(encoding="utf-8") == f"event={SYNTHETIC_REPLACEMENT}\n"
