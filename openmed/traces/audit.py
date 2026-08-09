@@ -13,7 +13,7 @@ import json
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Literal, TypeAlias
 
 AUDIT_SCHEMA_VERSION = 1
@@ -55,9 +55,10 @@ def _file_name(value: object) -> str:
     # Absolute paths would disclose a home directory.  The basename still
     # gives a stable file grouping while keeping the report local-sensitive.
     try:
-        path = Path(text)
-        if path.is_absolute():
-            return _metadata_text(path.name, fallback=_DEFAULT_FILE)
+        posix_path = PurePosixPath(text)
+        windows_path = PureWindowsPath(text)
+        if posix_path.is_absolute() or windows_path.is_absolute():
+            return _metadata_text(posix_path.name, fallback=_DEFAULT_FILE)
     except (OSError, ValueError):
         return _DEFAULT_FILE
     return text

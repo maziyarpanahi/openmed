@@ -117,13 +117,22 @@ def test_collector_is_read_only_and_accepts_opaque_status_items() -> None:
     assert _SENSITIVE_VALUE not in report.to_json()
 
 
-def test_absolute_file_labels_are_reduced_to_a_basename() -> None:
+@pytest.mark.parametrize(
+    "file_label, directory",
+    [
+        ("/private/example/synthetic-trace.jsonl", "/private/example"),
+        (r"C:\private\example\synthetic-trace.jsonl", "C:/private/example"),
+    ],
+)
+def test_absolute_file_labels_are_reduced_to_a_basename(
+    file_label: str, directory: str
+) -> None:
     report = build_trace_audit(
         [
             {
                 "store": "synthetic",
                 "category": "message",
-                "file": "/private/example/synthetic-trace.jsonl",
+                "file": file_label,
                 "start": 3,
                 "end": 7,
             }
@@ -131,7 +140,7 @@ def test_absolute_file_labels_are_reduced_to_a_basename() -> None:
     )
 
     assert report.files[0]["file"] == "synthetic-trace.jsonl"
-    assert "/private/example" not in report.to_terminal()
+    assert directory not in report.to_terminal()
 
 
 def test_invalid_input_is_value_free() -> None:
