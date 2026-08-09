@@ -436,18 +436,19 @@ def _write_payload(
                 pass
 
     if timestamps is not None:
-        os.utime(
-            path,
-            ns=timestamps,
-            follow_symlinks=False,
-        )
+        if os.utime in os.supports_follow_symlinks:
+            os.utime(path, ns=timestamps, follow_symlinks=False)
+        else:
+            os.utime(path, ns=timestamps)
 
 
 def _chmod_descriptor(descriptor: int, path: Path, mode: int) -> None:
     if hasattr(os, "fchmod"):
         os.fchmod(descriptor, mode)
-    else:
+    elif os.chmod in os.supports_follow_symlinks:
         os.chmod(path, mode, follow_symlinks=False)
+    else:
+        os.chmod(path, mode)
 
 
 def _reserve_backup_path(

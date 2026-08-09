@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import openmed.traces.transaction as transaction_module
 from openmed.traces.transaction import (
     TransactionConflictError,
     TransactionRedactionError,
@@ -161,3 +162,41 @@ def test_unchanged_candidate_does_not_create_backup(tmp_path: Path) -> None:
     assert result.changed is False
     assert result.backup_path is None
     assert not target.with_name(target.name + ".bak").exists()
+
+
+def test_metadata_fallback_omits_unsupported_follow_symlinks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "candidate.tmp"
+    target.touch()
+    original_chmod = os.chmod
+    original_utime = os.utime
+    calls: list[str] = []
+
+    def chmod_without_follow_symlinks(path: Path, mode: int) -> None:
+        calls.append("chmod")
+        original_chmod(path, mode)
+
+    def utime_without_follow_symlinks(
+        path: Path,
+        *,
+        ns: tuple[int, int],
+    ) -> None:
+        calls.append("utime")
+        original_utime(path, ns=ns)
+
+    monkeypatch.delattr(transaction_module.os, "fchmod", raising=False)
+    monkeypatch.setattr(transaction_module.os, "supports_follow_symlinks", set())
+    monkeypatch.setattr(transaction_module.os, "chmod", chmod_without_follow_symlinks)
+    monkeypatch.setattr(transaction_module.os, "utime", utime_without_follow_symlinks)
+
+    transaction_module._write_payload(
+        target,
+        b"synthetic replacement",
+        mode=0o600,
+        timestamps=(1_700_000_123_456_789_000,) * 2,
+    )
+
+    assert target.read_bytes() == b"synthetic replacement"
+    assert calls == ["chmod", "utime"]
