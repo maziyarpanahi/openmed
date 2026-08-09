@@ -158,7 +158,7 @@ from .snapshot_cache import (
     snapshot_path,
     store_snapshot,
 )
-from .types import Candidate, GroundedSpan
+from .types import GROUNDING_CONFIDENCE_BANDS, Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
@@ -206,6 +206,7 @@ __all__ = [
     "FREE_VOCAB_SYSTEMS",
     "GROUNDING_ASSERTION_STATUSES",
     "GROUNDING_ASSIST_ONLY_ADVISORY",
+    "GROUNDING_CONFIDENCE_BANDS",
     "GROUNDING_METHODS",
     "GROUNDING_POLICIES",
     "GroundingAlternative",
