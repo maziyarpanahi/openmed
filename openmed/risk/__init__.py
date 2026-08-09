@@ -4,6 +4,23 @@ Intended contents include quasi-identifier detection, uniqueness/k-anonymity
 measurement, and adversarial re-identification analysis.
 """
 
+from .access_review import (
+    ACCESS_MODES,
+    ACCESS_REVIEW_SCHEMA_VERSION,
+    EXPORT_ACCESS,
+    READ_ACCESS,
+    AccessModeReview,
+    AccessReviewError,
+    AccessReviewReport,
+    AccessReviewValidationError,
+    WorkflowAccessReview,
+    WorkflowRequirement,
+    access_review_report,
+    build_access_review_report,
+    render_access_review,
+    review_access,
+    review_structured_access,
+)
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
     CURRENT_EPSILON_POLICY_SCHEMA_VERSION,
@@ -99,6 +116,8 @@ from .synthetic_tabular import (
 )
 
 __all__ = [
+    "ACCESS_MODES",
+    "ACCESS_REVIEW_SCHEMA_VERSION",
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
     "CompositionRule",
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
@@ -120,7 +139,9 @@ __all__ = [
     "DPSurrogateSensitivityRegistry",
     "DPSurrogateSpend",
     "EpsilonPolicy",
+    "EXPORT_ACCESS",
     "GenerationSpend",
+    "READ_ACCESS",
     "ColumnDistribution",
     "EquivalenceClass",
     "KAnonymityEngine",
@@ -137,11 +158,19 @@ __all__ = [
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
+    "AccessModeReview",
+    "AccessReviewError",
+    "AccessReviewReport",
+    "AccessReviewValidationError",
+    "WorkflowAccessReview",
+    "WorkflowRequirement",
+    "access_review_report",
     "analyze_k_anonymity",
     "apply_suppression",
     "assess_population_risk",
     "budget_for_policy",
     "build_longitudinal_corpus",
+    "build_access_review_report",
     "cross_modal_linkage_risk_report",
     "epsilon_policy_for",
     "evaluate_budget",
@@ -152,6 +181,8 @@ __all__ = [
     "quasi_identifier_key",
     "quasi_identifier_key_bytes",
     "risk_report",
+    "review_access",
+    "review_structured_access",
     "sample_synthetic_table",
     "tabular_fidelity_report",
     "MemoryCeilingError",
@@ -175,6 +206,7 @@ __all__ = [
     "release_dataset_digest",
     "release_schema_digest",
     "render_release_assessment_dashboard",
+    "render_access_review",
     "render_risk_dashboard",
     "safe_risk_summary",
     "validate_released_output",
