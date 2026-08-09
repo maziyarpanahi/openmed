@@ -3,11 +3,14 @@
 import pytest
 
 from openmed.core import model_registry
+from openmed.core.labels import ANATOMY, DISEASE, normalize_label
 from openmed.core.model_registry import (
     CATEGORIES,
     OPENMED_MODELS,
     ModelInfo,
+    build_registry,
     get_default_pii_model,
+    get_ner_models_by_language,
     get_pii_models_by_language,
     load_manifest_rows,
 )
@@ -24,6 +27,22 @@ from openmed.core.pii_i18n import (
 MULTILINGUAL_DEFAULT_LANGUAGES = {"as", "he", "id", "mr", "or", "ro", "th"}
 V2_REGISTRY_LANGUAGES = {"bn", "ta", "zh"}
 OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - SUPPORTED_LANGUAGES
+
+PT_ANATOMY_NER_MANIFEST_ROW = {
+    "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-Portuguese-Base-110M",
+    "family": "NER",
+    "task": "token-classification",
+    "tier": "Base",
+    "param_count": 110_000_000,
+    "canonical_labels": ["ANATOMY"],
+}
+EN_ANATOMY_NER_MANIFEST_ROW = {
+    "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-BioClinical-108M",
+    "family": "NER",
+    "task": "token-classification",
+    "languages": ["en"],
+    "canonical_labels": ["ANATOMY"],
+}
 
 
 class TestRegistryCompleteness:
@@ -234,3 +253,43 @@ class TestHelperFunctions:
         assert model_registry.get_pii_models_by_language("hi") == {
             "pii_hi_supported": supported
         }
+
+
+class TestPortugueseNerRegistry:
+    """Verify Portuguese NER rows are classified and language-filterable."""
+
+    def test_portuguese_anatomy_row_gets_category_and_language(self):
+        registry = build_registry([PT_ANATOMY_NER_MANIFEST_ROW])
+        info = next(iter(registry.values()))
+
+        assert info.category == "Anatomy"
+        assert info.languages == ["pt"]
+
+    def test_ner_models_by_language_excludes_english_models(self, monkeypatch):
+        registry = build_registry(
+            [PT_ANATOMY_NER_MANIFEST_ROW, EN_ANATOMY_NER_MANIFEST_ROW]
+        )
+        monkeypatch.setattr(model_registry, "OPENMED_MODELS", registry)
+
+        portuguese_models = get_ner_models_by_language("pt")
+
+        assert [info.model_id for info in portuguese_models.values()] == [
+            PT_ANATOMY_NER_MANIFEST_ROW["repo_id"]
+        ]
+        assert get_ner_models_by_language("pt")
+        assert not any(
+            info.model_id == EN_ANATOMY_NER_MANIFEST_ROW["repo_id"]
+            for info in portuguese_models.values()
+        )
+
+    def test_ner_language_helper_is_a_top_level_export(self):
+        import openmed
+
+        assert openmed.get_ner_models_by_language is get_ner_models_by_language
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        (("DOENCA", DISEASE), ("ANATOMIA", ANATOMY)),
+    )
+    def test_portuguese_family_labels_normalize(self, label, expected):
+        assert normalize_label(label, lang="pt") == expected

@@ -1565,6 +1565,9 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "proteinfamilyorgroup": PROTEIN,
     "proteinfamiliyorgroup": PROTEIN,
     "proteinvariant": PROTEIN,
+    # Portuguese biomedical NER family labels.
+    "doenca": DISEASE,
+    "anatomia": ANATOMY,
     "dna": DNA,
     "rna": RNA,
     "anatomy": ANATOMY,

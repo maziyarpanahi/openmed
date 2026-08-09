@@ -635,12 +635,49 @@ def _clean_model_tokens(tokens: Iterable[str]) -> List[str]:
     return cleaned
 
 
+_PORTUGUESE_NER_LANGUAGE_TOKENS = frozenset(
+    {"portuguese", "brazil", "brazilian", "pt", "ptbr", "br"}
+)
+_PORTUGUESE_NER_CATEGORY_TOKENS = {
+    "Hematology": frozenset({"bloodcancerdetect", "hematology", "hematologia"}),
+    "Disease": frozenset({"diseasedetect", "disease", "doenca"}),
+    "Pharmaceutical": frozenset(
+        {"pharmadetect", "pharmaceutical", "drug", "medicamento"}
+    ),
+    "Oncology": frozenset({"oncologydetect", "oncology", "cancer"}),
+    "Anatomy": frozenset({"anatomydetect", "anatomy", "anatomia"}),
+    "Genomics": frozenset({"genomedetect", "genomicdetect", "dnadetect", "genomics"}),
+    "Chemical": frozenset({"chemicaldetect", "chemical", "chem", "quimica", "quimico"}),
+    "Species": frozenset({"speciesdetect", "organismdetect", "species", "organism"}),
+    "Protein": frozenset({"proteindetect", "protein", "proteina"}),
+    "Pathology": frozenset({"pathologydetect", "pathology", "patologia"}),
+}
+
+
+def _portuguese_ner_category_from_row(row: Dict[str, Any]) -> Optional[str]:
+    """Return the inferred category for a Portuguese NER repository, if any."""
+    if str(row.get("family") or "").casefold() != "ner":
+        return None
+
+    tokens = {token.casefold() for token in _split_repo_tokens(row.get("repo_id", ""))}
+    if not tokens.intersection(_PORTUGUESE_NER_LANGUAGE_TOKENS):
+        return None
+
+    for category, family_tokens in _PORTUGUESE_NER_CATEGORY_TOKENS.items():
+        if tokens.intersection(family_tokens):
+            return category
+    return None
+
+
 def _category_from_row(row: Dict[str, Any]) -> str:
     repo = row.get("repo_id", "").lower()
     family = str(row.get("family") or "").lower()
 
     if family == "pii" or "pii" in repo or "privacy-filter" in repo:
         return "Privacy"
+    portuguese_category = _portuguese_ner_category_from_row(row)
+    if portuguese_category is not None:
+        return portuguese_category
     if "bloodcancerdetect" in repo or "hematology" in repo or "leukemia" in repo:
         return "Hematology"
     if "diseasedetect" in repo:
@@ -677,7 +714,7 @@ def _display_name_from_row(row: Dict[str, Any]) -> str:
 
 
 def _specialization_from_row(row: Dict[str, Any], category: str) -> str:
-    languages = row.get("languages") or []
+    languages = _languages_from_row(row)
     language = ""
     if len(languages) == 1 and languages[0] != "en":
         language = f"{languages[0].upper()} "
@@ -752,8 +789,16 @@ def _size_category(row: Dict[str, Any]) -> str:
     return "Unknown"
 
 
+def _languages_from_row(row: Dict[str, Any]) -> List[str]:
+    """Return manifest languages, inferring Portuguese for tagged NER repos."""
+    if _portuguese_ner_category_from_row(row) is not None:
+        return ["pt"]
+    return list(row.get("languages") or [])
+
+
 def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
     category = _category_from_row(row)
+    languages = _languages_from_row(row)
     return ModelInfo(
         model_id=row["repo_id"],
         display_name=_display_name_from_row(row),
@@ -765,7 +810,7 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         recommended_confidence=_recommended_confidence(category),
         family=str(row.get("family") or "Unknown"),
         task=str(row.get("task") or "unknown"),
-        languages=list(row.get("languages") or []),
+        languages=languages,
         tier=row.get("tier"),
         param_count=row.get("param_count"),
         architecture=row.get("architecture"),
@@ -1613,6 +1658,21 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
     language_models.update(optional_indic)
     language_models.update(_configured_indic_encoder_pii_models(lang))
     return language_models
+
+
+def get_ner_models_by_language(lang: str) -> Dict[str, ModelInfo]:
+    """Return non-privacy NER models whose manifest language matches ``lang``."""
+    normalized_lang = str(lang).strip().casefold()
+    if not normalized_lang:
+        return {}
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if info.category != "Privacy"
+        and info.family.casefold() == "ner"
+        and normalized_lang
+        in {language.casefold() for language in (info.languages or [])}
+    }
 
 
 def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
