@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     )
     from .core.results import AnalyzeResult
     from .processing import BatchProcessor
+    from .processing.advanced_ner import extract_clinical_entities
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {
@@ -165,6 +166,7 @@ _LAZY_IMPORTS = {
     "redact_dataset": ".processing",
     "sentence_utils": ".processing",
     "AdvancedNERProcessor": ".processing.advanced_ner",
+    "extract_clinical_entities": ".processing.advanced_ner",
     "StreamingReplayResult": ".processing.advanced_ner",
     "StreamingTokenClassifier": ".processing.advanced_ner",
     "create_advanced_processor": ".processing.advanced_ner",
@@ -856,6 +858,7 @@ __all__ = [
     "process_batch",
     "redact_dataset",
     "AdvancedNERProcessor",
+    "extract_clinical_entities",
     "StreamingReplayResult",
     "StreamingTokenClassifier",
     "create_advanced_processor",
