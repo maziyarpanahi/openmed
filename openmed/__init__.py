@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
+    from .aio import aanalyze_text, abatch, adeidentify, aextract_pii
     from .core import ModelLoader, OpenMedConfig
     from .core.capabilities import (
         BackendSpec,
@@ -95,6 +96,10 @@ _LAZY_IMPORTS = {
     "deidentify": ".core.pii",
     "extract_pii": ".core.pii",
     "reidentify": ".core.pii",
+    "aextract_pii": ".aio",
+    "adeidentify": ".aio",
+    "aanalyze_text": ".aio",
+    "abatch": ".aio",
     "PII_PATTERNS": ".core.pii_entity_merger",
     "PIIPattern": ".core.pii_entity_merger",
     "calculate_dominant_label": ".core.pii_entity_merger",
@@ -885,6 +890,8 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "aanalyze_text",
+    "abatch",
     "explain",
     "ExplainReport",
     "generate_text",
@@ -910,6 +917,8 @@ __all__ = [
     "extract_pii",
     "deidentify",
     "reidentify",
+    "aextract_pii",
+    "adeidentify",
     "PIIEntity",
     "DeidentificationResult",
     # Per-request resource and timeout budgets

@@ -23,6 +23,7 @@ nav:
   - Core Guides:
       - Building with an Agent: agent-usage.md
       - Analyze Text Helper: analyze-text.md
+      - Async API: async-api.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
       - REST API Recipes: rest-recipes.md
