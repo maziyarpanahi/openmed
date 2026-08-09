@@ -14,11 +14,14 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 
 from __future__ import annotations
 
+import importlib.metadata as importlib_metadata
 import json
+import logging
 import re
 from functools import lru_cache
 from importlib import resources
-from typing import Callable, Dict
+from threading import RLock
+from typing import Any, Callable, Dict, Sequence
 
 from .. import labels as L
 from ..language_pack import (
@@ -36,6 +39,13 @@ from .locales import ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
+
+PROVIDER_ENTRY_POINT_GROUP = "openmed.providers"
+"""Entry-point group for locally installed anonymizer provider registrars."""
+
+logger = logging.getLogger(__name__)
+_PROVIDER_DISCOVERY_LOCK = RLock()
+_PROVIDER_DISCOVERY_COMPLETE = False
 
 _INDIA_LOCALES = frozenset({"as_IN", "en_IN", "hi_IN", "mr_IN", "or_IN", "ta_IN"})
 
@@ -1365,6 +1375,96 @@ def register_label_generator(
     LANGUAGE_PACK_GENERATORS[(language_pack.code, script, canonical_label)] = generator
 
 
+def discover_provider_plugins() -> None:
+    """Load installed anonymizer provider registrars once.
+
+    Packages may publish a zero-argument callable in the
+    ``openmed.providers`` entry-point group. The callable should register its
+    Faker providers and/or label generators through
+    :func:`openmed.core.anonymizer.register_clinical_provider` and
+    :func:`register_label_generator`. A Faker ``BaseProvider`` subclass may
+    also be published directly for provider-only plugins.
+
+    Discovery is lazy, local, and process-scoped. A broken entry point is
+    isolated and logged as a warning so it cannot prevent anonymization or
+    importing :mod:`openmed`.
+    """
+
+    global _PROVIDER_DISCOVERY_COMPLETE
+
+    with _PROVIDER_DISCOVERY_LOCK:
+        if _PROVIDER_DISCOVERY_COMPLETE:
+            return
+        _PROVIDER_DISCOVERY_COMPLETE = True
+
+        try:
+            entry_points = _entry_points_for_group(PROVIDER_ENTRY_POINT_GROUP)
+        except Exception as exc:  # pragma: no cover - stdlib compatibility guard
+            logger.warning(
+                "Failed to enumerate OpenMed anonymizer provider plugins: %s",
+                exc.__class__.__name__,
+            )
+            return
+
+        for entry_point in entry_points:
+            entry_name = _entry_point_name(entry_point)
+            try:
+                loaded = entry_point.load()
+                if _is_faker_provider_class(loaded):
+                    from . import register_clinical_provider
+
+                    register_clinical_provider(loaded)
+                elif callable(loaded):
+                    loaded()
+                else:
+                    raise TypeError(
+                        "entry point must load a registrar or Faker BaseProvider"
+                    )
+            except Exception as exc:  # noqa: BLE001 - isolate third-party plugins
+                logger.warning(
+                    "Failed to load OpenMed anonymizer provider plugin %s: %s",
+                    entry_name,
+                    exc.__class__.__name__,
+                )
+
+
+def _entry_points_for_group(group: str) -> Sequence[Any]:
+    """Return entry points for *group* across supported metadata APIs."""
+
+    try:
+        return tuple(importlib_metadata.entry_points(group=group))
+    except TypeError:
+        entry_points = importlib_metadata.entry_points()
+        if hasattr(entry_points, "select"):
+            return tuple(entry_points.select(group=group))
+        return tuple(entry_points.get(group, ()))
+
+
+def _entry_point_name(entry_point: Any) -> str:
+    try:
+        name = getattr(entry_point, "name")
+    except Exception:  # pragma: no cover - malformed third-party object
+        return "<unknown>"
+    return name if isinstance(name, str) and name else "<unknown>"
+
+
+def _is_faker_provider_class(value: Any) -> bool:
+    try:
+        from faker.providers import BaseProvider
+
+        return isinstance(value, type) and issubclass(value, BaseProvider)
+    except (ImportError, TypeError):  # pragma: no cover - Faker is a hard dep
+        return False
+
+
+def _reset_provider_discovery_for_tests() -> None:
+    """Reset lazy provider discovery state for isolated tests."""
+
+    global _PROVIDER_DISCOVERY_COMPLETE
+    with _PROVIDER_DISCOVERY_LOCK:
+        _PROVIDER_DISCOVERY_COMPLETE = False
+
+
 def resolve_label_generator(
     canonical_label: str,
     *,
@@ -1379,6 +1479,8 @@ def resolve_label_generator(
         resolution suppress approximation warnings only when Faker's locale
         data is not being used for the selected provider.
     """
+
+    discover_provider_plugins()
 
     if language_pack is not None and script in language_pack.scripts:
         generator = LANGUAGE_PACK_GENERATORS.get(
@@ -1466,6 +1568,8 @@ __all__ = [
     "Generator",
     "LANGUAGE_PACK_GENERATORS",
     "LABEL_GENERATORS",
+    "PROVIDER_ENTRY_POINT_GROUP",
+    "discover_provider_plugins",
     "register_india_label_generators",
     "register_label_generator",
     "resolve_label_generator",

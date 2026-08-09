@@ -87,6 +87,7 @@ nav:
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
+      - Anonymizer Provider Plugins: plugins.md
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
