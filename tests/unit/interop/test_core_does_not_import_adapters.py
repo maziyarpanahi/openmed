@@ -33,6 +33,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "quickumls",
     "scispacy",
     "scrubadub",
+    "snowflake",
     "spacy",
 )
 
@@ -119,6 +120,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "scispacy_linker",
         "scrubadub",
         "search_pipeline",
+        "snowflake",
         "spacy",
         "spark",
         "zh",
@@ -148,6 +150,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("scispacy_linker").extra == "scispacy"
     assert adapter_spec("scrubadub").extra == "scrubadub"
     assert adapter_spec("search_pipeline").extra == "haystack"
+    assert adapter_spec("snowflake").extra == "snowflake"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"
     assert adapter_spec("spark").extra == "spark"

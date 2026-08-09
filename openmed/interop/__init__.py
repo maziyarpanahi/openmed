@@ -180,6 +180,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="spark",
         description="PySpark pandas_udf for batch column de-identification",
     ),
+    "snowflake": AdapterSpec(
+        name="snowflake",
+        module="openmed.interop.snowflake_udf",
+        extra="snowflake",
+        description="Snowpark Python UDF for in-warehouse de-identification",
+    ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",
         module="openmed.interop.gliner_biomed",

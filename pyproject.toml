@@ -251,6 +251,10 @@ spark = [
   "pyarrow>=16",
 ]
 
+snowflake = [
+  "snowflake-snowpark-python>=1.0,<2",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",

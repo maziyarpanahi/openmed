@@ -173,6 +173,7 @@ classification:
     - integrations/dask.md
     - duckdb-deidentification.md
     - spark-deidentification.md
+    - snowflake-udf.md
     - prefect-integration.md
     - spacy-component.md
     - hl7v2-deidentification.md

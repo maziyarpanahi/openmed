@@ -102,6 +102,7 @@ nav:
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - PySpark De-identification UDFs: spark-deidentification.md
+      - Snowflake Python De-identification UDFs: snowflake-udf.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
