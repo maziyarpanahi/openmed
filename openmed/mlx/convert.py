@@ -110,6 +110,16 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("classifier.", "classifier."),
 ]
 
+_MODERNBERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
+    # Current Transformers checkpoints use ``model`` as the base-model
+    # prefix. Keep that prefix because the MLX implementation mirrors the
+    # token-classification module layout.
+    ("modernbert.", "model."),
+    # Accept the older BERT-style names used by early ModernBERT exports.
+    ("model.embeddings.word_embeddings.", "model.embeddings.tok_embeddings."),
+    ("model.encoder.layer.", "model.layers."),
+]
+
 _OPF_MODEL_TYPES = {
     "openai-privacy-filter",
     "privacy-filter",
@@ -317,6 +327,10 @@ def _infer_source_model_type(key: str, model_type: str | None) -> str:
         return "roberta"
     if key.startswith("electra."):
         return "electra"
+    if key.startswith("model.embeddings.tok_embeddings.") or key.startswith(
+        "model.layers."
+    ):
+        return "modernbert"
     return "bert"
 
 
@@ -333,6 +347,8 @@ def remap_key(key: str, model_type: str | None = None) -> str:
         replacements = _ROBERTA_KEY_REPLACEMENTS + _BERT_KEY_REPLACEMENTS
     elif source_model_type == "electra":
         replacements = _ELECTRA_KEY_REPLACEMENTS
+    elif resolved_model_type == "modernbert":
+        replacements = _MODERNBERT_KEY_REPLACEMENTS
     else:
         replacements = _BERT_KEY_REPLACEMENTS
 

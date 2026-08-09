@@ -28,6 +28,7 @@ _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = {
     "xlm_roberta": "bert",
     "deberta": "deberta-v2",
     "deberta-v2": "deberta-v2",
+    "modernbert": "modernbert",
 }
 
 _CUSTOM_FAMILIES = {
@@ -191,7 +192,10 @@ def normalize_model_config(
             normalized.get("attention_probs_dropout_prob", 0.1),
         ),
     )
-    normalized.setdefault("layer_norm_eps", normalized.get("layer_norm_eps", 1e-12))
+    normalized.setdefault(
+        "layer_norm_eps",
+        normalized.get("norm_eps", normalized.get("layer_norm_eps", 1e-12)),
+    )
 
     if source_model_type == "distilbert":
         normalized.setdefault("type_vocab_size", 0)
@@ -201,6 +205,35 @@ def normalize_model_config(
         normalized.setdefault(
             "_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1
         )
+    elif source_model_type == "modernbert":
+        normalized.setdefault("hidden_act", normalized.get("hidden_activation", "gelu"))
+        normalized.setdefault(
+            "embedding_dropout", normalized.get("embedding_dropout", 0.0)
+        )
+        normalized.setdefault("mlp_dropout", normalized.get("mlp_dropout", 0.0))
+        normalized.setdefault(
+            "classifier_dropout", normalized.get("classifier_dropout", 0.0)
+        )
+        normalized.setdefault("norm_bias", normalized.get("norm_bias", False))
+        normalized.setdefault("attention_bias", normalized.get("attention_bias", False))
+        normalized.setdefault("mlp_bias", normalized.get("mlp_bias", False))
+        normalized.setdefault(
+            "global_attn_every_n_layers",
+            normalized.get("global_attn_every_n_layers", 3),
+        )
+        normalized.setdefault("local_attention", normalized.get("local_attention", 128))
+        normalized.setdefault(
+            "global_rope_theta",
+            normalized.get(
+                "global_rope_theta",
+                normalized.get("rope_theta", 160000.0),
+            ),
+        )
+        normalized.setdefault(
+            "local_rope_theta",
+            normalized.get("local_rope_theta", 10000.0),
+        )
+        normalized.setdefault("_mlx_position_offset", 0)
     elif family == "openai-privacy-filter":
         normalized.setdefault("num_experts", normalized.get("num_local_experts", 128))
         normalized.setdefault(
@@ -261,6 +294,14 @@ def build_model(
         from openmed.mlx.models.deberta_v2_tc import DebertaV2ForTokenClassification
 
         return DebertaV2ForTokenClassification(config)
+
+    if (
+        family == "modernbert"
+        and resolve_artifact_task(config, manifest=manifest) == "token-classification"
+    ):
+        from openmed.mlx.models.modernbert_tc import ModernBertForTokenClassification
+
+        return ModernBertForTokenClassification(config)
 
     if family == "openai-privacy-filter":
         from openmed.mlx.models.privacy_filter import (
