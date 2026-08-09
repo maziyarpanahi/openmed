@@ -39,7 +39,7 @@ For the model families available by clinical specialty, use the
 | OMOP and CDM loading | Deterministic note-to-CDM extraction and OMOP CDM loader foundations. | `openmed/interop/cdm_etl.py`, `openmed/interop/omop/cdm_loader.py` |
 | FHIR operations and bulk export | `$de-identify` resource/Bundle wrappers and FHIR Bulk NDJSON de-identification summaries. | `openmed/interop/fhir_operations.py`, `openmed/interop/fhir_bulk.py`, `examples/v17_multimodal_browser_interop.py` |
 | HL7 v2 and CDA/C-CDA | HL7 v2 segment/field redaction, CDA/C-CDA XML de-identification, and multimodal XML dispatch. | `openmed/interop/hl7v2.py`, `openmed/interop/cda.py`, [HL7 v2 De-identification](./hl7v2-deidentification.md) |
-| Optional adapters | Presidio, PHILTER, pyDeid, GLiNER-BioMed, LangChain, and spaCy adapter surfaces. | `openmed/interop/`, [LangChain Redaction Wrapper](./integrations-langchain.md), [spaCy Pipeline Component](./spacy-component.md) |
+| Optional adapters | Presidio, PHILTER, pyDeid, GLiNER-BioMed, LangChain, and spaCy adapter surfaces. | `openmed/interop/`, [Integration Capability Matrix](./integrations/matrix.md), [LangChain Redaction Wrapper](./integrations-langchain.md), [spaCy Pipeline Component](./spacy-component.md) |
 
 ## Clinical Extraction
 
