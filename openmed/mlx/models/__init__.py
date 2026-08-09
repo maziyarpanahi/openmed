@@ -12,6 +12,9 @@ _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = {
     "bert": "bert",
     "distilbert": "bert",
     "electra": "bert",
+    "modernbert": "modernbert",
+    "modern-bert": "modernbert",
+    "longformer": "longformer",
     "openai-privacy-filter": "openai-privacy-filter",
     "privacy-filter": "openai-privacy-filter",
     # ``OpenMed/privacy-filter-nemotron*`` is the OpenAI Privacy Filter
@@ -234,6 +237,79 @@ def normalize_model_config(
             "bidirectional_right_context",
             normalized.get("bidirectional_right_context", default_context),
         )
+    elif family == "modernbert":
+        normalized.setdefault("type_vocab_size", 0)
+        normalized.setdefault("_mlx_position_offset", 0)
+        normalized.setdefault(
+            "norm_eps",
+            normalized.get("norm_eps", normalized.get("layer_norm_eps", 1e-5)),
+        )
+        normalized.setdefault("norm_bias", normalized.get("norm_bias", False))
+        normalized.setdefault(
+            "hidden_activation",
+            normalized.get("hidden_activation", normalized.get("hidden_act", "gelu")),
+        )
+        normalized.setdefault(
+            "embedding_dropout",
+            normalized.get("embedding_dropout", normalized.get("dropout", 0.0)),
+        )
+        normalized.setdefault(
+            "attention_dropout",
+            normalized.get("attention_dropout", 0.0),
+        )
+        normalized.setdefault("mlp_dropout", normalized.get("mlp_dropout", 0.0))
+        normalized.setdefault(
+            "classifier_dropout",
+            normalized.get("classifier_dropout", 0.0),
+        )
+        normalized.setdefault("attention_bias", normalized.get("attention_bias", False))
+        normalized.setdefault("mlp_bias", normalized.get("mlp_bias", False))
+        normalized.setdefault(
+            "classifier_bias", normalized.get("classifier_bias", False)
+        )
+        normalized.setdefault(
+            "classifier_activation",
+            normalized.get("classifier_activation", "gelu"),
+        )
+        normalized.setdefault("local_attention", normalized.get("local_attention", 128))
+        normalized.setdefault("sliding_window", int(normalized["local_attention"]) // 2)
+        if not normalized.get("layer_types"):
+            every_n_layers = int(normalized.get("global_attn_every_n_layers", 3))
+            every_n_layers = max(1, every_n_layers)
+            normalized["layer_types"] = [
+                "full_attention" if index % every_n_layers == 0 else "sliding_attention"
+                for index in range(int(normalized["num_hidden_layers"]))
+            ]
+        rope_parameters = normalized.get("rope_parameters")
+        if not isinstance(rope_parameters, dict) or not any(
+            key in rope_parameters
+            for key in ("full_attention", "sliding_attention", "global", "local")
+        ):
+            shared_theta = (
+                rope_parameters.get("rope_theta")
+                if isinstance(rope_parameters, dict)
+                else None
+            )
+            normalized["rope_parameters"] = {
+                "full_attention": {
+                    "rope_theta": float(
+                        normalized.get("global_rope_theta", shared_theta or 160000.0)
+                    )
+                },
+                "sliding_attention": {
+                    "rope_theta": float(
+                        normalized.get("local_rope_theta", shared_theta or 10000.0)
+                    )
+                },
+            }
+    elif family == "longformer":
+        normalized.setdefault("type_vocab_size", 2)
+        normalized.setdefault("_mlx_position_offset", 0)
+        attention_window = normalized.get("attention_window", 512)
+        if isinstance(attention_window, (list, tuple)):
+            normalized["attention_window"] = [int(value) for value in attention_window]
+        else:
+            normalized["attention_window"] = int(attention_window)
     else:
         normalized.setdefault("type_vocab_size", normalized.get("type_vocab_size", 2))
         normalized.setdefault("_mlx_position_offset", 0)
@@ -261,6 +337,16 @@ def build_model(
         from openmed.mlx.models.deberta_v2_tc import DebertaV2ForTokenClassification
 
         return DebertaV2ForTokenClassification(config)
+
+    if family == "modernbert":
+        from openmed.mlx.models.modernbert_tc import ModernBertForTokenClassification
+
+        return ModernBertForTokenClassification(config)
+
+    if family == "longformer":
+        from openmed.mlx.models.longformer_tc import LongformerForTokenClassification
+
+        return LongformerForTokenClassification(config)
 
     if family == "openai-privacy-filter":
         from openmed.mlx.models.privacy_filter import (
