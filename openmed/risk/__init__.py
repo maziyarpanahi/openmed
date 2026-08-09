@@ -97,6 +97,16 @@ from .synthetic_tabular import (
     sample_synthetic_table,
     tabular_fidelity_report,
 )
+from .tabular_report import (
+    TabularRiskReport,
+    TabularRiskThresholds,
+    build_tabular_risk_report,
+    compute_tabular_risk_report,
+    generate_tabular_risk_report,
+    render_tabular_risk_json,
+    render_tabular_risk_markdown,
+    tabular_risk_report,
+)
 
 __all__ = [
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
@@ -154,6 +164,14 @@ __all__ = [
     "risk_report",
     "sample_synthetic_table",
     "tabular_fidelity_report",
+    "TabularRiskReport",
+    "TabularRiskThresholds",
+    "build_tabular_risk_report",
+    "compute_tabular_risk_report",
+    "generate_tabular_risk_report",
+    "render_tabular_risk_json",
+    "render_tabular_risk_markdown",
+    "tabular_risk_report",
     "MemoryCeilingError",
     "StreamingKanonDecision",
     "StreamingKanonState",
