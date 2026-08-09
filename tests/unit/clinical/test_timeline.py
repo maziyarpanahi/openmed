@@ -10,10 +10,13 @@ from openmed.clinical import (
     HISTORICAL,
     RECENT,
     TIMELINE_ASSISTIVE_DISCLAIMER,
+    TimeExpr,
     anchor_events,
     detect_timexes,
     evaluate_timeline_gold,
+    extract_timex,
     normalize_temporal,
+    order_events,
     resolve_temporality,
     resolve_timeline,
 )
@@ -38,6 +41,80 @@ def test_timex_detection_types_and_provenance_offsets() -> None:
     assert by_text["daily"].timex_type == "SET"
     for timex in timexes:
         assert text[timex.start : timex.end] == timex.text
+
+
+def test_extract_timex_exposes_kinds_and_optional_document_anchoring() -> None:
+    text = (
+        "On 2026-06-01 she had surgery. Symptoms began 3 days ago and lasted "
+        "for 2 weeks."
+    )
+
+    unanchored = extract_timex(text)
+    assert all(isinstance(expression, TimeExpr) for expression in unanchored)
+    by_text = {expression.text: expression for expression in unanchored}
+    assert by_text["2026-06-01"].kind == "DATE"
+    assert by_text["for 2 weeks"].kind == "DURATION"
+    assert by_text["3 days ago"].value is None
+    assert by_text["3 days ago"].relative_value == "P3D"
+    assert by_text["3 days ago"].offset_days == -3
+
+    anchored = extract_timex(text, document_time="2026-06-15")
+    anchored_by_text = {expression.text: expression for expression in anchored}
+    assert anchored_by_text["3 days ago"].value == "2026-06-12"
+    assert anchored_by_text["3 days ago"].reference_time == "2026-06-15"
+
+
+def test_compact_order_events_assigns_doc_time_rel_and_stable_partial_order() -> None:
+    text = "History of MI 3 days ago. Chest pain then surgery in 2 days."
+    timexes = extract_timex(text, document_time="2026-06-15")
+    spans = [
+        {
+            "id": "history-mi",
+            "label": "EVENT",
+            "text": "MI",
+            "start": text.index("MI"),
+            "end": text.index("MI") + len("MI"),
+            "context": text,
+        },
+        {
+            "id": "surgery",
+            "label": "EVENT",
+            "text": "surgery",
+            "start": text.index("surgery"),
+            "end": text.index("surgery") + len("surgery"),
+            "context": text,
+        },
+    ]
+
+    timeline = order_events(reversed(spans), timexes)
+
+    assert [event.event_id for event in timeline] == ["history-mi", "surgery"]
+    assert [event.doc_time_rel for event in timeline] == ["before", "after"]
+    assert timeline[0].normalized_value == "2026-06-12"
+    assert timeline[1].normalized_value == "2026-06-17"
+    assert timeline.is_cycle_free
+    assert len(timeline.reduced_graph) == 1
+    assert "History of" not in json.dumps(timeline.to_dict())
+
+
+def test_order_events_orders_then_cue_deterministically() -> None:
+    text = "Pain improved then surgery followed."
+    spans = [
+        {
+            "label": "EVENT",
+            "text": value,
+            "start": text.index(value),
+            "end": text.index(value) + len(value),
+        }
+        for value in ("Pain", "surgery")
+    ]
+
+    baseline = order_events(text, spans)
+    reordered = order_events(text, reversed(spans))
+
+    assert [event.text for event in baseline] == ["Pain", "surgery"]
+    assert baseline.to_dict() == reordered.to_dict()
+    assert len(baseline.reduced_graph) == 1
 
 
 def test_resolve_timeline_chained_anchors_and_reference_provenance() -> None:
