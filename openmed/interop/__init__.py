@@ -102,6 +102,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="langchain",
         description="LangChain redaction runnable adapter",
     ),
+    "medspacy_context": AdapterSpec(
+        name="medspacy_context",
+        module="openmed.interop.medspacy_context",
+        extra="medspacy",
+        description="medspaCy ConText assertion context adapter",
+    ),
     "llamaindex": AdapterSpec(
         name="llamaindex",
         module="openmed.interop.llamaindex",
@@ -416,7 +422,10 @@ def get_llamaindex_tools() -> tuple[Any, ...]:
 
 
 def _normalize_adapter_name(name: str) -> str:
-    return str(name or "").strip().lower().replace("-", "_")
+    normalized = str(name or "").strip().lower().replace("-", "_")
+    if normalized == "medspacy":
+        return "medspacy_context"
+    return normalized
 
 
 def _iter_sdk_plugins(**policy: Any) -> tuple[Any, ...]:
