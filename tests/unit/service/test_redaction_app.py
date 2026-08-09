@@ -82,10 +82,17 @@ def test_file_redaction_writes_explicit_artifact_and_review_page_is_content_free
 
 
 def test_default_service_does_not_require_network(monkeypatch) -> None:
-    def fail_connect(*_args, **_kwargs):
+    original_connect = socket.socket.connect
+
+    def fail_external_connect(sock, address):
+        # Windows implements ``socketpair()`` with a loopback connection when
+        # AnyIO starts TestClient's event loop.  That is test-harness plumbing,
+        # not application network access.
+        if isinstance(address, tuple) and address[0] in {"127.0.0.1", "::1"}:
+            return original_connect(sock, address)
         raise AssertionError("network access is not allowed in this test")
 
-    monkeypatch.setattr(socket.socket, "connect", fail_connect)
+    monkeypatch.setattr(socket.socket, "connect", fail_external_connect)
     with TestClient(create_app()) as client:
         response = client.post("/redact/text", json={"text": SYNTHETIC_TEXT})
 
