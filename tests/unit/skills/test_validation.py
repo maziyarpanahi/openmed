@@ -58,6 +58,21 @@ def test_repository_catalog_passes_the_offline_gate() -> None:
     assert report.helper_count >= 2
 
 
+def test_interpreter_helpers_do_not_depend_on_posix_mode_bits(tmp_path: Path) -> None:
+    validator = _load_validator()
+    python_helper = tmp_path / "skills" / "helper.py"
+    shell_helper = tmp_path / "scripts" / "skills" / "helper.sh"
+    python_helper.parent.mkdir(parents=True)
+    shell_helper.parent.mkdir(parents=True)
+    python_helper.write_text("print('synthetic')\n", encoding="utf-8")
+    shell_helper.write_text("printf 'synthetic\\n'\n", encoding="utf-8")
+
+    assert validator._executable_helpers(tmp_path) == [
+        python_helper,
+        shell_helper,
+    ]
+
+
 def test_missing_reference_and_pack_membership_are_path_based(tmp_path: Path) -> None:
     validator = _load_validator()
     secret_marker = "synthetic-sensitive-value"

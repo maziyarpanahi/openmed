@@ -29,6 +29,7 @@ HELPER_TEST_OVERRIDES = {
     Path("skills") / "build_catalog.py": Path("tests/unit/test_skills_catalog.py"),
     Path("scripts") / "skills" / "validate.py": FOCUSED_TEST_PATH,
 }
+INTERPRETER_HELPER_SUFFIXES = frozenset({".py", ".sh"})
 
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 INLINE_LINK_RE = re.compile(
@@ -430,7 +431,10 @@ def _executable_helpers(repo_root: Path) -> list[Path]:
         if not root.is_dir():
             continue
         for path in sorted(root.rglob("*")):
-            if path.is_file() and path.stat().st_mode & 0o111:
+            if path.is_file() and (
+                path.stat().st_mode & 0o111
+                or path.suffix.lower() in INTERPRETER_HELPER_SUFFIXES
+            ):
                 helpers.append(path)
     return helpers
 
