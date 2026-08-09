@@ -437,6 +437,16 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.DISEASE,
         label_taxonomy.CELL,
     ],
+    # Forward metadata for future lab-value models; no dedicated Lab model is
+    # registered today. LOINC grounding remains an external follow-up.
+    "Lab": [
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.LAB_VALUE,
+        label_taxonomy.UNIT,
+        label_taxonomy.REFERENCE_RANGE,
+        label_taxonomy.ABNORMAL_FLAG,
+        label_taxonomy.SPECIMEN,
+    ],
     # Forward metadata for future Cardiology models; no Cardiology model is
     # registered today (see issue #317).
     "Cardiology": [
@@ -1318,6 +1328,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "blood|lymph|leukemia|lymphoma": (
         "Hematology",
         "Contains hematological terms",
+    ),
+    "\\blab\\b|mmol\\s*/\\s*l\\b|mg\\s*/\\s*dl\\b|\\bwbc\\b|hemoglobin|creatinine|reference\\s+range|elevated|abnormal|\\bpanel\\b": (
+        "Lab",
+        "Contains laboratory measurement terms",
     ),
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",
