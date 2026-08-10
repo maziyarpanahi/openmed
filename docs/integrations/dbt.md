@@ -5,7 +5,7 @@ redacted in a model. The macro compiles to SQL and keeps the selected policy
 visible in the model definition; it does not inspect rows, call a service, or
 make a network request.
 
-Copy [`integrations/dbt/macros/redact.sql`](../../integrations/dbt/macros/redact.sql)
+Copy [`integrations/dbt/macros/redact.sql`](https://github.com/maziyarpanahi/openmed/blob/master/integrations/dbt/macros/redact.sql)
 into a project's dbt `macro-paths`, or package it with the project's dbt
 integration. The default implementation emits the parameterized warehouse UDF
 call `openmed_deidentify(text, policy)`. Register or provision that equivalent
