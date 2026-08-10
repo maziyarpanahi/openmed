@@ -1,5 +1,15 @@
 """Integration helpers for OpenMed deployments."""
 
+from .capability_probe import (
+    CAPABILITY_PROBE_SCHEMA_VERSION,
+    CapabilityAdapter,
+    CapabilityCheck,
+    CapabilityProbeReport,
+    CapabilityStatus,
+    probe_capabilities,
+    probe_capability,
+    provider_fingerprint,
+)
 from .columnar_redactor import (
     ColumnarProgress,
     ColumnarRedactionResult,
@@ -45,6 +55,11 @@ from .spark_streaming import (
 )
 
 __all__ = [
+    "CAPABILITY_PROBE_SCHEMA_VERSION",
+    "CapabilityAdapter",
+    "CapabilityCheck",
+    "CapabilityProbeReport",
+    "CapabilityStatus",
     "ColumnarProgress",
     "ColumnarRedactionResult",
     "DEFAULT_DATAFLOW_TOOL_MODEL",
@@ -69,6 +84,9 @@ __all__ = [
     "process_flow_file",
     "process_json_lines",
     "process_record",
+    "probe_capabilities",
+    "probe_capability",
+    "provider_fingerprint",
     "redact_columnar",
     "redact_columnar_dataset",
     "redact_lakehouse",
