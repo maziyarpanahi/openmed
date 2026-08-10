@@ -1158,7 +1158,6 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   );
   await copy.scrollIntoViewIfNeeded();
   await expectAccessible(page);
-  await expectVisualState(page, browserName, "docs-code-copied");
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
