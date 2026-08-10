@@ -34,9 +34,28 @@ for model_key, info, reason in suggestions:
 - `get_model_suggestions` leans on lightweight heuristics to recommend models based on text snippets or hints (disease,
   pharma, oncology, etc.).
 
+## Registry slots and pointers
+
+Committed release-channel state lives in `gates/registry_state.json` (schema
+v2), keyed by `family::tier::format` slots — the same normalized key used by
+`gates/baseline.json`, `gates/rollout_state.json`, and the release ledger.
+Slots are sparse release channels: one is created only when a checkpoint is
+promoted with a RELEASABLE gate report whose `(family, tier, format)`
+coordinates match its manifest row, and `latest` names the selected shipping
+target for that channel, not the only manifest candidate. Untiered checkpoints
+use the `family::none::format` slot. Each slot records assigned SemVer per
+checkpoint — `1.0.0` for the first target, a minor bump for each new target,
+preserved on reload and re-promotion, and never parsed from the repo id (a
+`-v1` in a checkpoint name is part of the upstream model name, not a version
+sequence).
+
 The committed registry state also publishes generated model cards for the
-[latest PII checkpoint](./model-cards/registry/pii-latest.md) and its
-[last-green rollback target](./model-cards/registry/pii-last-green.md).
+[latest PII checkpoint](./model-cards/registry/pii-small-mlx-fp-latest.md) and
+its
+[last-green rollback target](./model-cards/registry/pii-small-mlx-fp-last-green.md).
+A v1 (family-keyed) state file migrates deterministically with
+`python scripts/release/registry_ctl.py migrate`; the migration refuses
+ambiguous coordinates and leaves the file unchanged on any error.
 
 ## Metadata for UIs & validation
 

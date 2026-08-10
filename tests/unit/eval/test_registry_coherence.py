@@ -9,8 +9,9 @@ import pytest
 
 from openmed.eval.release_gates import _manifest_coherence_check
 
-_REPO_ID = "OpenMed/synthetic-pii-v1"
-_MISSING_ID = "OpenMed/synthetic-pii-v2"
+_REPO_ID = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
+_MISSING_ID = "OpenMed/OpenMed-PII-SuperClinical-Large-434M"
+_SLOT = "pii::small::mlx-fp"
 
 
 @pytest.mark.parametrize("dangling", ["pointer", "lineage"])
@@ -21,9 +22,9 @@ def test_manifest_coherence_fails_for_dangling_registry_targets(
     manifest = _write_manifest(tmp_path)
     state = _state_payload()
     if dangling == "pointer":
-        state["families"]["PII"]["pointers"]["canary"] = _MISSING_ID
+        state["slots"][_SLOT]["pointers"]["canary"] = _MISSING_ID
     else:
-        state["families"]["PII"]["lineage"] = [_edge(_REPO_ID, _MISSING_ID)]
+        state["slots"][_SLOT]["lineage"] = [_edge(_REPO_ID, _MISSING_ID)]
     state_path = tmp_path / "registry_state.json"
     state_path.write_text(json.dumps(state), encoding="utf-8")
 
@@ -63,7 +64,7 @@ def _identity() -> dict[str, object]:
         "family": "PII",
         "tier": "Small",
         "param_count": 44_000_000,
-        "format": "pytorch",
+        "format": "mlx-fp",
         "eval_set_hash": "sha256:synthetic-eval",
         "leakage_fixture_hash": "sha256:synthetic-leakage",
     }
@@ -80,7 +81,7 @@ def _write_manifest(tmp_path: Path) -> Path:
                 "languages": ["en"],
                 "tier": "Small",
                 "param_count": 44_000_000,
-                "formats": ["pytorch"],
+                "formats": ["mlx-fp", "pytorch"],
             }
         )
         + "\n",
@@ -91,10 +92,10 @@ def _write_manifest(tmp_path: Path) -> Path:
 
 def _state_payload() -> dict[str, object]:
     return {
-        "schema_version": 1,
-        "families": {
-            "PII": {
-                "versions": {_REPO_ID: "1.0.0"},
+        "schema_version": 2,
+        "slots": {
+            _SLOT: {
+                "checkpoints": {_REPO_ID: "1.0.0"},
                 "pointers": {
                     "latest": _REPO_ID,
                     "canary": None,

@@ -6,7 +6,7 @@ import importlib.util
 import json
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
@@ -1070,13 +1070,21 @@ def _add_pointer_aliases(
     registry_state: Mapping[str, Any],
 ) -> None:
     by_repo_id = {model.model_id: model for model in registry.values()}
-    for family, pointers in pointer_targets(registry_state).items():
+    slots = registry_state.get("slots", {})
+    for slot, pointers in pointer_targets(registry_state).items():
+        checkpoints = slots.get(slot, {}).get("checkpoints", {})
         for pointer_name, repo_id in pointers.items():
             if repo_id is None:
                 continue
             model = by_repo_id.get(repo_id)
-            if model is not None:
-                registry[_slug(f"{family}_{pointer_name}")] = model
+            if model is None:
+                continue
+            # Pointer aliases carry the slot's assigned registry version, not
+            # the display version parsed from the repo name.
+            assigned = checkpoints.get(repo_id)
+            if isinstance(assigned, str) and assigned:
+                model = replace(model, semantic_version=assigned)
+            registry[_slug(f"{slot}_{pointer_name}")] = model
 
 
 def _build_registry(

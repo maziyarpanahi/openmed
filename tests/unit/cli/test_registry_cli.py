@@ -1,4 +1,9 @@
-"""Focused command tests for ``openmed registry``."""
+"""Focused command tests for ``openmed registry``.
+
+Fixtures mirror real manifest shapes: distinct untiered checkpoints sharing one
+coarse slot, not invented ``-v1``/``-v2`` stems (which occur zero times in
+``models.jsonl``).
+"""
 
 from __future__ import annotations
 
@@ -9,8 +14,9 @@ import pytest
 
 from openmed.cli.main import main
 
-_V1 = "OpenMed/synthetic-pii-v1"
-_V2 = "OpenMed/synthetic-pii-v2"
+_NER_A = "OpenMed/OpenMed-NER-AnatomyDetect-BigMed-278M"
+_NER_B = "OpenMed/OpenMed-NER-AnatomyDetect-BigMed-560M"
+_NER_SLOT = "ner::none::pytorch"
 
 
 def test_registry_list_emits_named_pointers(
@@ -23,8 +29,8 @@ def test_registry_list_emits_named_pointers(
         [
             "registry",
             "list",
-            "--family",
-            "PII",
+            "--slot",
+            _NER_SLOT,
             "--manifest",
             str(manifest),
             "--state",
@@ -37,9 +43,9 @@ def test_registry_list_emits_named_pointers(
     assert result == 0
     assert payload["command"] == "registry list"
     assert payload["data"]["pointers"] == {
-        "latest": _V2,
-        "canary": _V2,
-        "last_green": _V1,
+        "latest": _NER_B,
+        "canary": _NER_B,
+        "last_green": _NER_A,
     }
 
 
@@ -53,11 +59,11 @@ def test_registry_rollback_updates_only_local_state(
         json.dumps(
             {
                 "decision": "RELEASABLE",
-                "repo_id": _V1,
-                "family": "PII",
-                "tier": "Small",
+                "repo_id": _NER_A,
+                "family": "NER",
+                "tier": None,
                 "format": "pytorch",
-                "repro_hash": "sha256:synthetic-gate-v1",
+                "repro_hash": "sha256:synthetic-gate-278m",
             }
         ),
         encoding="utf-8",
@@ -67,7 +73,7 @@ def test_registry_rollback_updates_only_local_state(
         [
             "registry",
             "rollback",
-            "PII",
+            _NER_SLOT,
             "--gate-report",
             str(gate),
             "--manifest",
@@ -81,9 +87,9 @@ def test_registry_rollback_updates_only_local_state(
     persisted = json.loads(state.read_text(encoding="utf-8"))
 
     assert result == 0
-    assert payload["data"]["pointers"]["latest"] == _V1
+    assert payload["data"]["pointers"]["latest"] == _NER_A
     assert payload["data"]["pointers"]["canary"] is None
-    assert persisted["families"]["PII"]["lineage"][-1]["relation"] == (
+    assert persisted["slots"][_NER_SLOT]["lineage"][-1]["relation"] == (
         "rolled-back-from"
     )
 
@@ -95,16 +101,16 @@ def _write_inputs(tmp_path: Path) -> tuple[Path, Path]:
             json.dumps(
                 {
                     "repo_id": repo_id,
-                    "family": "PII",
+                    "family": "NER",
                     "task": "token-classification",
                     "languages": ["en"],
-                    "tier": "Small",
-                    "param_count": 44_000_000,
+                    "tier": None,
+                    "param_count": 278_000_000,
                     "formats": ["pytorch"],
                 }
             )
             + "\n"
-            for repo_id in (_V1, _V2)
+            for repo_id in (_NER_A, _NER_B)
         ),
         encoding="utf-8",
     )
@@ -112,14 +118,14 @@ def _write_inputs(tmp_path: Path) -> tuple[Path, Path]:
     state.write_text(
         json.dumps(
             {
-                "schema_version": 1,
-                "families": {
-                    "PII": {
-                        "versions": {_V1: "1.0.0", _V2: "2.0.0"},
+                "schema_version": 2,
+                "slots": {
+                    _NER_SLOT: {
+                        "checkpoints": {_NER_A: "1.0.0", _NER_B: "1.1.0"},
                         "pointers": {
-                            "latest": _V2,
-                            "canary": _V2,
-                            "last_green": _V1,
+                            "latest": _NER_B,
+                            "canary": _NER_B,
+                            "last_green": _NER_A,
                         },
                         "lineage": [],
                     }

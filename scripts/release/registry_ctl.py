@@ -20,6 +20,7 @@ from openmed.core.registry_service import (
     REGISTRY_STATE_PATH,
     RegistryError,
     RegistryService,
+    migrate_registry_state_file,
 )
 from openmed.eval.release_gates import GateReport
 
@@ -35,21 +36,25 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     list_parser = commands.add_parser("list", help="List named pointers.")
-    list_parser.add_argument("--family", default=None)
+    list_parser.add_argument("--slot", default=None)
 
-    lineage_parser = commands.add_parser("lineage", help="Show family lineage.")
-    lineage_parser.add_argument("family")
+    lineage_parser = commands.add_parser("lineage", help="Show slot lineage.")
+    lineage_parser.add_argument("slot")
 
     rollback_parser = commands.add_parser(
         "rollback", help="Repoint latest to last_green."
     )
-    rollback_parser.add_argument("family")
+    rollback_parser.add_argument("slot")
     rollback_parser.add_argument("--gate-report", type=Path, required=True)
 
     commands.add_parser(
         "regenerate", help="Regenerate README counts and registry model cards."
     )
     commands.add_parser("check", help="Check committed registry-derived surfaces.")
+    commands.add_parser(
+        "migrate",
+        help="Migrate a committed v1 registry state file to the v2 slot schema.",
+    )
     return parser
 
 
@@ -58,6 +63,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "migrate":
+            migrated = migrate_registry_state_file(
+                state_path=args.state,
+                manifest_path=args.manifest,
+            )
+            print(
+                json.dumps(
+                    {"slots": sorted(migrated["slots"])},
+                    sort_keys=True,
+                )
+            )
+            return 0
         if args.command == "regenerate":
             snapshot = regenerate_registry_surfaces(
                 manifest_path=args.manifest,
@@ -95,17 +112,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             state_path=args.state,
         )
         if args.command == "list":
-            print(json.dumps(service.pointers(args.family), indent=2, sort_keys=True))
+            print(json.dumps(service.pointers(args.slot), indent=2, sort_keys=True))
             return 0
         if args.command == "lineage":
-            print(json.dumps(service.lineage(args.family), indent=2, sort_keys=True))
+            print(json.dumps(service.lineage(args.slot), indent=2, sort_keys=True))
             return 0
         if args.command == "rollback":
             report = GateReport.from_dict(
                 json.loads(args.gate_report.read_text(encoding="utf-8"))
             )
-            service.rollback(args.family, gate_report=report)
-            print(json.dumps(service.pointers(args.family), indent=2, sort_keys=True))
+            service.rollback(args.slot, gate_report=report)
+            print(json.dumps(service.pointers(args.slot), indent=2, sort_keys=True))
             return 0
     except (OSError, ValueError, RegistryError) as exc:
         print(f"Registry command failed: {exc}", file=sys.stderr)
