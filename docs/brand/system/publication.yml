@@ -168,6 +168,7 @@ classification:
     - integrations-langchain.md
     - integrations-haystack.md
     - integrations-llamaindex.md
+    - integrations/opensearch.md
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
