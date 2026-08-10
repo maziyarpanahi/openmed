@@ -102,6 +102,7 @@ classification:
     - serving/resilience.md
     - deploy/hardened-image.md
     - offline-install.md
+    - install/smoke-check.md
     - serving/async-jobs.md
     - serving/grpc.md
     - serving/authentication.md

@@ -30,6 +30,7 @@ nav:
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
       - Offline & Air-Gapped Installation: offline-install.md
+      - Offline Install Smoke Check: install/smoke-check.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - gRPC Service: serving/grpc.md
       - REST Authentication: serving/authentication.md
