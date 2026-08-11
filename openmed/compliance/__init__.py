@@ -5,6 +5,16 @@ surrogate vault, de-identification audit reports, and a tamper-evident audit
 chain, plus deterministic technical control crosswalks for auditor handoff.
 """
 
+from .artifact_size_budget import (
+    ArtifactBudgetCategory,
+    ArtifactDescriptor,
+    ArtifactSectionDescriptor,
+    ArtifactSizeBudget,
+    ArtifactSizeBudgetResult,
+    ArtifactSizeBudgetViolation,
+    check_artifact_size_budget,
+    evaluate_artifact_size_budget,
+)
 from .audit_chain import (
     AuditRecord,
     AuditSink,
@@ -94,6 +104,14 @@ __all__ = [
     "AuditRecord",
     "AuditSink",
     "HashChainAuditLog",
+    "ArtifactBudgetCategory",
+    "ArtifactDescriptor",
+    "ArtifactSectionDescriptor",
+    "ArtifactSizeBudget",
+    "ArtifactSizeBudgetResult",
+    "ArtifactSizeBudgetViolation",
+    "check_artifact_size_budget",
+    "evaluate_artifact_size_budget",
     "DEFAULT_DATA_USE_POLICY",
     "DEFAULT_DENIED_ACTIONS",
     "DataUseAction",
