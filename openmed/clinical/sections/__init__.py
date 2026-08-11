@@ -60,6 +60,22 @@ from .learned import (
     load_section_head,
     predict_section_candidates,
 )
+from .provenance import (
+    SECTION_PROVENANCE_ADVISORY,
+    SECTION_PROVENANCE_SCHEMA_VERSION,
+    SectionBoundary,
+    SectionProvenanceError,
+    SectionProvenanceIssue,
+    SectionProvenanceRecord,
+    SectionProvenanceReport,
+    SectionRange,
+    SectionSourceMap,
+    SectionSpanRange,
+    check_section_provenance,
+    validate_section_boundaries,
+    validate_section_provenance,
+    validate_section_ranges,
+)
 
 __all__ = [
     "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE",
@@ -111,4 +127,18 @@ __all__ = [
     "SectionHead",
     "load_section_head",
     "predict_section_candidates",
+    "SECTION_PROVENANCE_ADVISORY",
+    "SECTION_PROVENANCE_SCHEMA_VERSION",
+    "SectionBoundary",
+    "SectionProvenanceError",
+    "SectionProvenanceIssue",
+    "SectionProvenanceRecord",
+    "SectionProvenanceReport",
+    "SectionRange",
+    "SectionSourceMap",
+    "SectionSpanRange",
+    "check_section_provenance",
+    "validate_section_boundaries",
+    "validate_section_provenance",
+    "validate_section_ranges",
 ]
