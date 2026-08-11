@@ -117,6 +117,7 @@ nav:
       - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
+      - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
       - FHIR Interop Helpers: fhir-interop.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
