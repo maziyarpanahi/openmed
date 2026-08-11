@@ -79,6 +79,18 @@ from .iso27701 import (
     render_control_evidence_markdown,
 )
 from .release_evidence import build_release_expert_review_evidence
+from .report_cardinality import (
+    DEFAULT_REPORT_CARDINALITY_BUDGET,
+    CardinalityBudget,
+    CardinalityReport,
+    CardinalityViolation,
+    ReportCardinalityBudget,
+    ReportCardinalityReport,
+    ReportCardinalityViolation,
+    check_report_cardinality,
+    enforce_report_cardinality,
+    evaluate_report_cardinality,
+)
 from .safe_harbor import (
     SAFE_HARBOR_ATTESTATION_NOTICE,
     SAFE_HARBOR_ATTESTATION_SCHEMA_VERSION,
@@ -142,6 +154,16 @@ __all__ = [
     "UtilityAggregate",
     "build_expert_review_evidence",
     "build_release_expert_review_evidence",
+    "DEFAULT_REPORT_CARDINALITY_BUDGET",
+    "CardinalityBudget",
+    "CardinalityReport",
+    "CardinalityViolation",
+    "ReportCardinalityBudget",
+    "ReportCardinalityReport",
+    "ReportCardinalityViolation",
+    "check_report_cardinality",
+    "enforce_report_cardinality",
+    "evaluate_report_cardinality",
     "CONTROL_STATUSES",
     "MANIFEST_FILENAME",
     "MARKDOWN_FILENAME",
