@@ -331,6 +331,11 @@ from .radiology_report import (
     RadiologyReportTemplate,
     parse_radiology_report,
 )
+from .record_filter import (
+    PATIENT_RECORD_FILTER_ADVISORY,
+    PatientRecordSpan,
+    filter_patient_record,
+)
 from .relations import (
     CMEIE_ENTITY_TYPES,
     CMEIE_RELATION_MAPPING,
@@ -836,6 +841,9 @@ __all__ = [
     "clinical_status_from_assertion",
     "deduplicate_problem_list",
     "problem_mentions_from_grounded_terms",
+    "PATIENT_RECORD_FILTER_ADVISORY",
+    "PatientRecordSpan",
+    "filter_patient_record",
     "FrequencyNormalization",
     "DurationNormalization",
     "DoseNormalization",
