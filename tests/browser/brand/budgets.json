@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 300,
-    "maximum_total_bytes": 21364736,
-    "maximum_unique_payload_bytes": 20971520,
+    "maximum_files": 315,
+    "maximum_total_bytes": 23068672,
+    "maximum_unique_payload_bytes": 22544384,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -32,7 +32,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits are based on the staged v2.1.0 bundle, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
+    "Artifact limits are based on the staged v2.2 release-candidate bundle, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
