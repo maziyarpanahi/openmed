@@ -331,7 +331,7 @@ def discover_service_error_categories(
     )
     categories: set[str] = set()
     try:
-        paths = sorted(root.glob("*.py"))
+        paths = sorted(root.rglob("*.py"))
     except OSError as exc:
         raise APIContractError("The service error contract could not be read") from exc
 
@@ -585,21 +585,45 @@ def _required_fields(
             )
         )
 
-    for keyword in ("allOf", "anyOf", "oneOf"):
+    variants = schema.get("allOf", ())
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        for index, variant in enumerate(variants):
+            if isinstance(variant, Mapping):
+                fields.extend(
+                    _required_fields(
+                        document,
+                        variant,
+                        schema_path=f"{schema_path}/allOf/{index}",
+                        relative_prefix=relative_prefix,
+                        seen_refs=seen_refs,
+                    )
+                )
+
+    for keyword in ("anyOf", "oneOf"):
         variants = schema.get(keyword, ())
         if not isinstance(variants, Sequence) or isinstance(variants, (str, bytes)):
             continue
-        for index, variant in enumerate(variants):
-            if not isinstance(variant, Mapping):
-                continue
-            fields.extend(
-                _required_fields(
-                    document,
-                    variant,
-                    schema_path=f"{schema_path}/{keyword}/{index}",
-                    relative_prefix=relative_prefix,
-                    seen_refs=seen_refs,
+        variant_fields = [
+            _required_fields(
+                document,
+                variant,
+                schema_path=f"{schema_path}/{keyword}/{index}",
+                relative_prefix=relative_prefix,
+                seen_refs=seen_refs,
+            )
+            for index, variant in enumerate(variants)
+            if isinstance(variant, Mapping)
+        ]
+        if variant_fields:
+            common_paths = set(field.relative_path for field in variant_fields[0])
+            for candidate_fields in variant_fields[1:]:
+                common_paths.intersection_update(
+                    field.relative_path for field in candidate_fields
                 )
+            fields.extend(
+                field
+                for field in variant_fields[0]
+                if field.relative_path in common_paths
             )
 
     items = schema.get("items")

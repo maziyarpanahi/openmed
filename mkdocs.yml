@@ -85,6 +85,7 @@ nav:
       - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - Service API Compatibility Gate: api/compatibility-gate.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md

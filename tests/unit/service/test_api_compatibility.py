@@ -142,6 +142,27 @@ def test_nested_required_field_uses_a_schema_path() -> None:
     )
 
 
+def test_union_variant_field_is_not_treated_as_unconditionally_required() -> None:
+    before = _contract()
+    after = json.loads(json.dumps(before))
+    schema = after["components"]["schemas"]["AnalyzeRequest"]
+    schema["anyOf"] = [
+        {
+            "properties": {"synthetic_required": {"type": "string"}},
+            "required": ["synthetic_required"],
+        },
+        {"properties": {"optional_mode": {"type": "string"}}},
+    ]
+
+    report = compare_contracts(before, after)
+
+    assert report.is_compatible
+    assert not any(
+        issue.schema_path and "synthetic_required" in issue.schema_path
+        for issue in report.breaking
+    )
+
+
 def test_check_gate_reads_baseline_and_uses_an_offline_app(tmp_path: Path) -> None:
     baseline_path = tmp_path / "openapi.json"
     baseline = _contract()
