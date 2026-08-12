@@ -85,6 +85,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.1.0.md
     - release/v2.0.0.md
     - release/v1.6-v1.7-feature-coverage.md
     - getting-started.md
@@ -255,6 +256,7 @@ classification:
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md
     - model-cards/registry/pii-latest.md
+    - migration/2.0-to-2.1.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md
