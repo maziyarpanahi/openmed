@@ -119,6 +119,7 @@ nav:
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR Profile Declarations: fhir/profile-declarations.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
