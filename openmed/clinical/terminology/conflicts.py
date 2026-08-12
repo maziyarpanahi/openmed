@@ -62,6 +62,7 @@ DISCARD_CATEGORIES: tuple[str, ...] = (
 _SELECTION_RULE = "source_priority>version>exactness>score>stable_identity"
 _VERSION_TOKEN_RE = re.compile(r"\d+|[a-z]+", re.IGNORECASE)
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+_POST_RELEASE_LABELS = frozenset({"post", "rev", "r"})
 
 _DEFAULT_EXACTNESS_PRIORITY: dict[str, float] = {
     "unknown": 0.0,
@@ -669,13 +670,33 @@ def _version_rank(
 def _natural_version_key(version: str) -> tuple[Any, ...]:
     normalized = version.casefold().strip()
     if not normalized:
-        return (0, ())
+        return (0, (), 0, ())
+    if normalized.startswith("v") and len(normalized) > 1 and normalized[1].isdigit():
+        normalized = normalized[1:]
     tokens = _VERSION_TOKEN_RE.findall(normalized)
     if not tokens:
-        return (1, ((1, normalized),))
+        return (1, (), 1, ((1, normalized),))
+
+    core: list[tuple[int, int | str]] = []
+    suffix: list[tuple[int, int | str]] = []
+    in_suffix = False
+    for token in tokens:
+        if not token.isdigit():
+            in_suffix = True
+        target = suffix if in_suffix else core
+        target.append((0, int(token)) if token.isdigit() else (1, token))
+
+    if not suffix:
+        release_stage = 2
+    elif str(suffix[0][1]) in _POST_RELEASE_LABELS:
+        release_stage = 3
+    else:
+        release_stage = 1
     return (
         1,
-        tuple((0, int(token)) if token.isdigit() else (1, token) for token in tokens),
+        tuple(core),
+        release_stage,
+        tuple(suffix),
     )
 
 

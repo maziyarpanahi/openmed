@@ -48,6 +48,7 @@ nav:
       - Advanced NER & Output Formatting: output-formatting.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+      - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md

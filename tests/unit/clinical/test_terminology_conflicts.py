@@ -112,6 +112,19 @@ def test_version_order_is_numeric_and_independent_of_input_order() -> None:
     assert first.to_dict() == second.to_dict()
 
 
+def test_stable_version_outranks_its_prerelease() -> None:
+    result = resolve_terminology_conflicts(
+        (
+            _candidate("RELEASE-CANDIDATE", version="v2.2rc1"),
+            _candidate("STABLE", version="2.2"),
+        )
+    )
+
+    assert result.selected is not None
+    assert result.selected.code == "STABLE"
+    assert result.discarded_categories == ("older_version",)
+
+
 def test_existing_grounding_candidate_and_mapping_are_supported() -> None:
     grounding_candidate = Candidate(
         system="SYNTHETIC",
