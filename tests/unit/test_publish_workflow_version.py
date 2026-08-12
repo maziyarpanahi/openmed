@@ -19,6 +19,7 @@ ANDROID_BUILD = ROOT / "android" / "openmedkit" / "build.gradle.kts"
 ANDROID_README = ROOT / "android" / "README.md"
 JITPACK_CONFIG = ROOT / "jitpack.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
+PYPROJECT = ROOT / "pyproject.toml"
 WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
 WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
 BRAND_CLAIMS = ROOT / "docs" / "brand" / "system" / "claims.yml"
@@ -106,6 +107,18 @@ def test_only_publish_workflow_uses_pypi_publish_action():
     assert "PYPI_API_TOKEN" in publish_workflow
 
 
+def test_distribution_builder_stays_compatible_with_pypi_publish_action():
+    pyproject = PYPROJECT.read_text(encoding="utf-8")
+    provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'requires = ["hatchling==1.31.0"]' in pyproject
+    assert "pip install build twine 'hatchling==1.31.0'" in provenance_workflow
+    assert "python -m build --no-isolation" in provenance_workflow
+    assert "Verify distribution metadata compatibility" in provenance_workflow
+    assert 'wheel_metadata_version" != "2.4"' in provenance_workflow
+    assert 'sdist_metadata_version" != "2.4"' in provenance_workflow
+
+
 def test_publish_workflow_keeps_release_gates():
     publish_workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
     provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
@@ -168,6 +181,16 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
         for step in npm_publish["steps"]
         if step.get("name") == "Publish npm package with provenance"
     )
+    existing_release_step = next(
+        step
+        for step in npm_publish["steps"]
+        if step.get("name") == "Check for an existing matching npm release"
+    )
+    credential_step = next(
+        step
+        for step in npm_publish["steps"]
+        if step.get("name") == "Verify npm credentials"
+    )
 
     assert npm_verify["permissions"] == {"contents": "read"}
     assert npm_verify["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
@@ -191,6 +214,14 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
     assert publish_step["run"] == (
         "npm publish --ignore-scripts --access public --provenance"
     )
+    assert existing_release_step["id"] == "npm-release"
+    assert "registry_git_head" in existing_release_step["run"]
+    assert "downloaded_shasum" in existing_release_step["run"]
+    assert "registry_content_digest" in existing_release_step["run"]
+    assert "diff --recursive --brief --no-dereference" in existing_release_step["run"]
+    assert 'echo "exists=true" >> "$GITHUB_OUTPUT"' in existing_release_step["run"]
+    assert credential_step["if"] == "steps.npm-release.outputs.exists != 'true'"
+    assert publish_step["if"] == "steps.npm-release.outputs.exists != 'true'"
     assert publish_step["env"]["NODE_AUTH_TOKEN"] == ("${{ secrets.NPM_ACCESS_TOKEN }}")
     assert npm_publish["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
     assert sbom["needs"] == ["publish", "npm-publish"]

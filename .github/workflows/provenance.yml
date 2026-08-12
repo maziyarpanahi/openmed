@@ -71,7 +71,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          pip install build twine 'hatchling==1.31.0'
 
       - name: Clean package cache
         run: |
@@ -162,7 +162,31 @@ jobs:
 
       - name: Build package
         run: |
-          python -m build
+          python -m build --no-isolation
+
+      - name: Verify distribution metadata compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          sdists=(dist/*.tar.gz)
+          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ]; then
+            echo "Expected exactly one wheel and one source distribution."
+            exit 1
+          fi
+
+          wheel_metadata_version=$(unzip -p "${wheels[0]}" '*/METADATA' \
+            | awk -F ': ' '$1 == "Metadata-Version" { print $2; exit }')
+          sdist_metadata_path=$(tar -tzf "${sdists[0]}" \
+            | awk '/\/PKG-INFO$/ { print; exit }')
+          sdist_metadata_version=$(tar -xOf "${sdists[0]}" "$sdist_metadata_path" \
+            | awk -F ': ' '$1 == "Metadata-Version" { print $2; exit }')
+          if [ "$wheel_metadata_version" != "2.4" ] \
+             || [ "$sdist_metadata_version" != "2.4" ]; then
+            echo "Unsupported distribution metadata versions: wheel=$wheel_metadata_version sdist=$sdist_metadata_version"
+            exit 1
+          fi
 
       - name: Check package
         run: |
