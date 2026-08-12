@@ -142,6 +142,29 @@ def test_offset_sections_are_selected_per_match_without_copying_source_text() ->
     assert "shared term" not in serialized["metadata"]
 
 
+def test_offset_sections_do_not_claim_matches_outside_their_ranges() -> None:
+    match = ConceptMatch(
+        system_uri=SYSTEM_URI,
+        code="OUTSIDE",
+        display="Synthetic outside concept",
+        score=1.0,
+        match_type="exact",
+        matched_term="shared term",
+        metadata={"semantic_type": "condition", "start": 40, "end": 45},
+    )
+
+    result = apply_section_context(
+        (match,),
+        (
+            {"label": "Allergies", "start": 0, "end": 10},
+            {"label": "Medications", "start": 10, "end": 30},
+        ),
+    )
+
+    assert result[0].section is None
+    assert "section" not in result[0].metadata
+
+
 def test_matcher_applies_context_before_limit() -> None:
     matches = _matcher().lookup(
         "shared term",

@@ -426,7 +426,14 @@ def _entry_for_match(
                 containing, key=lambda entry: (entry.end - entry.start, entry.label)
             )
 
-    return entries[0] if entries else None
+    return next(
+        (
+            entry
+            for entry in entries
+            if entry.match_key is None and entry.start is None and entry.end is None
+        ),
+        None,
+    )
 
 
 def _metadata_values(
