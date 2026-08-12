@@ -8,9 +8,12 @@ returns the filename, MIME values, archive member names, or payload bytes.
 
 from __future__ import annotations
 
+import bz2
+import gzip
 import hashlib
 import io
 import json
+import lzma
 import os
 import re
 import tarfile
@@ -449,6 +452,8 @@ def _member_path_is_unsafe(name: str) -> bool:
     normalized = name.replace("\\", "/")
     if normalized.startswith("/"):
         return True
+    if re.match(r"^[A-Za-z]:", normalized):
+        return True
     return any(part == ".." for part in normalized.split("/"))
 
 
@@ -599,6 +604,34 @@ def _inspect_tar(
     return _unique_reasons(reasons)
 
 
+def _decompress_archive_payload(
+    payload: bytes,
+    *,
+    archive_kind: str,
+    policy: DocumentQuarantinePolicy,
+) -> tuple[bytes | None, tuple[str, ...]]:
+    """Decompress one stream without exceeding the configured byte budget."""
+
+    source = io.BytesIO(payload)
+    try:
+        if archive_kind == "gzip":
+            stream = gzip.GzipFile(fileobj=source, mode="rb")
+        elif archive_kind == "bzip2":
+            stream = bz2.BZ2File(source, mode="rb")
+        elif archive_kind == "xz":
+            stream = lzma.LZMAFile(source, mode="rb")
+        else:  # pragma: no cover - guarded by the archive dispatcher
+            return None, (REASON_ARCHIVE_INVALID,)
+        with stream:
+            decompressed = stream.read(policy.max_archive_uncompressed_bytes + 1)
+    except (EOFError, OSError, ValueError, lzma.LZMAError):
+        return None, (REASON_ARCHIVE_INVALID,)
+
+    if len(decompressed) > policy.max_archive_uncompressed_bytes:
+        return None, (REASON_ARCHIVE_SIZE_LIMIT_EXCEEDED,)
+    return decompressed, ()
+
+
 def _inspect_archive(
     payload: bytes,
     sniffed: _SniffResult,
@@ -606,6 +639,8 @@ def _inspect_archive(
     depth: int,
     policy: DocumentQuarantinePolicy,
 ) -> tuple[str, ...]:
+    if depth > policy.max_archive_depth:
+        return (REASON_ARCHIVE_DEPTH_EXCEEDED,)
     if sniffed.archive_kind == "zip":
         return _inspect_zip(payload, depth=depth, policy=policy)
     if sniffed.archive_kind == "tar":
@@ -616,12 +651,31 @@ def _inspect_archive(
             require_tar=True,
         )
     if sniffed.archive_kind in {"gzip", "bzip2", "xz"}:
-        return _inspect_tar(
+        decompressed, reasons = _decompress_archive_payload(
             payload,
-            depth=depth,
+            archive_kind=sniffed.archive_kind,
             policy=policy,
-            require_tar=False,
         )
+        if reasons or decompressed is None:
+            return reasons
+        nested = _sniff_payload(decompressed)
+        if nested.archive_kind == "tar":
+            # Compression is part of the tar container, not another nesting
+            # level (for example, a top-level .tar.gz remains depth one).
+            return _inspect_tar(
+                decompressed,
+                depth=depth,
+                policy=policy,
+                require_tar=True,
+            )
+        if nested.is_archive:
+            return _inspect_archive(
+                decompressed,
+                nested,
+                depth=depth + 1,
+                policy=policy,
+            )
+        return ()
     return ()
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import io
 import zipfile
@@ -10,6 +11,9 @@ from openmed.interop.document_quarantine import (
     DEFAULT_POLICY,
     REASON_ACCEPTED,
     REASON_ARCHIVE_DEPTH_EXCEEDED,
+    REASON_ARCHIVE_INVALID,
+    REASON_ARCHIVE_PATH_TRAVERSAL,
+    REASON_ARCHIVE_SIZE_LIMIT_EXCEEDED,
     REASON_DECLARED_MIME_SNIFF_MISMATCH,
     REASON_SIZE_LIMIT_EXCEEDED,
     Disposition,
@@ -121,3 +125,44 @@ def test_malformed_archive_is_rejected_without_exposing_parser_details() -> None
     assert result.disposition is Disposition.REJECTED
     assert result.reason_codes == ("archive_invalid",)
     assert "synthetic-invalid-archive" not in repr(result)
+
+
+def test_compressed_non_tar_payload_obeys_uncompressed_size_limit() -> None:
+    payload = gzip.compress(b"x" * 128)
+
+    result = classify_document(
+        payload,
+        declared_mime="application/gzip",
+        filename="synthetic.txt.gz",
+        policy=DocumentQuarantinePolicy(max_archive_uncompressed_bytes=64),
+    )
+
+    assert result.disposition is Disposition.REJECTED
+    assert result.reason_codes == (REASON_ARCHIVE_SIZE_LIMIT_EXCEEDED,)
+
+
+def test_invalid_compressed_stream_is_rejected_without_parser_details() -> None:
+    payload = b"\x1f\x8bsynthetic-invalid-compressed-stream"
+
+    result = classify_document(
+        payload,
+        declared_mime="application/gzip",
+        filename="synthetic.gz",
+    )
+
+    assert result.disposition is Disposition.REJECTED
+    assert result.reason_codes == (REASON_ARCHIVE_INVALID,)
+    assert "synthetic-invalid-compressed-stream" not in repr(result)
+
+
+def test_windows_drive_archive_member_path_is_rejected() -> None:
+    payload = _zip_with_member("C:/synthetic.txt", b"offline fixture")
+
+    result = classify_document(
+        payload,
+        declared_mime="application/zip",
+        filename="synthetic.zip",
+    )
+
+    assert result.disposition is Disposition.REJECTED
+    assert result.reason_codes == (REASON_ARCHIVE_PATH_TRAVERSAL,)
