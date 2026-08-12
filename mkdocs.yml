@@ -122,6 +122,7 @@ nav:
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
+      - FHIR SDC Privacy Projection: fhir/sdc-privacy.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
