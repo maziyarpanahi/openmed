@@ -55,13 +55,20 @@ def _canonical_json(value: Any) -> str:
         return json.dumps(
             value,
             allow_nan=False,
-            default=str,
+            default=_stable_json_fallback,
             ensure_ascii=True,
             separators=(",", ":"),
             sort_keys=True,
         )
     except (TypeError, ValueError, OverflowError):
         return json.dumps(type(value).__name__, ensure_ascii=True)
+
+
+def _stable_json_fallback(value: Any) -> dict[str, str]:
+    """Represent unsupported policy values without address-bearing reprs."""
+
+    value_type = type(value)
+    return {"type": f"{value_type.__module__}.{value_type.__qualname__}"}
 
 
 DEFAULT_TIMELINE_POLICY_FINGERPRINT = _hash_value(_DEFAULT_POLICY_DESCRIPTOR)
@@ -147,11 +154,12 @@ class TimelineProvenanceExport:
     def __post_init__(self) -> None:
         if self.schema_version != TIMELINE_PROVENANCE_SCHEMA_VERSION:
             raise ValueError("unsupported timeline provenance schema version")
-        object.__setattr__(
-            self,
-            "events",
-            tuple(sorted(self.events, key=_event_sort_key)),
-        )
+        events = tuple(self.events)
+        if any(not isinstance(event, TimelineProvenanceEvent) for event in events):
+            raise TypeError("events must contain TimelineProvenanceEvent records")
+        # The builder has already applied the full timeline-position-aware key.
+        # Re-sorting here by offsets would silently discard explicit positions.
+        object.__setattr__(self, "events", events)
         object.__setattr__(
             self,
             "policy_fingerprint",
@@ -524,8 +532,17 @@ def _fingerprint_from_policy(policy: Any) -> str:
         if plan_fingerprint is not _MISSING and plan_fingerprint is not None:
             return _fingerprint(plan_fingerprint)
 
-    to_dict = _read(policy, ("to_dict",), default=_MISSING)
-    value = to_dict() if callable(to_dict) else policy
+    if isinstance(policy, Mapping):
+        to_dict = policy.get("to_dict", _MISSING)
+    else:
+        to_dict = getattr(policy, "to_dict", _MISSING)
+    if callable(to_dict):
+        try:
+            value = to_dict()
+        except Exception:
+            value = _stable_json_fallback(policy)
+    else:
+        value = policy
     return _hash_value({"policy": value})
 
 
@@ -572,20 +589,6 @@ def _sort_key(raw_event: Any, event: TimelineProvenanceEvent) -> tuple[Any, ...]
     return (
         position_missing,
         position if position is not None else 0,
-        event.start,
-        event.end,
-        event.event_id,
-        event.assertion_status,
-        event.temporal_confidence if event.temporal_confidence is not None else -1.0,
-        event.policy_fingerprint,
-        event.value_hash or "",
-    )
-
-
-def _event_sort_key(event: TimelineProvenanceEvent) -> tuple[Any, ...]:
-    """Return the canonical sort key for an already-sanitized event."""
-
-    return (
         event.start,
         event.end,
         event.event_id,

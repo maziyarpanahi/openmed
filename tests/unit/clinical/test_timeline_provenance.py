@@ -109,3 +109,28 @@ def test_timeline_export_rejects_invalid_offsets_without_echoing_values() -> Non
         )
 
     assert SYNTHETIC_VALUE not in str(error.value)
+
+
+def test_explicit_timeline_position_takes_precedence_over_source_offsets() -> None:
+    exported = export_timeline_provenance(
+        [
+            {"event_id": "offset-first", "start": 1, "end": 2, "position": 1},
+            {"event_id": "position-first", "start": 8, "end": 9, "position": 0},
+        ]
+    )
+
+    assert [event["event_id"] for event in exported["events"]] == [
+        "position-first",
+        "offset-first",
+    ]
+
+
+def test_policy_to_dict_produces_stable_instance_independent_fingerprint() -> None:
+    class SyntheticPolicy:
+        def to_dict(self) -> dict[str, object]:
+            return {"profile": "synthetic", "revision": 2}
+
+    first = export_timeline_provenance(_events(), policy=SyntheticPolicy())
+    second = export_timeline_provenance(_events(), policy=SyntheticPolicy())
+
+    assert first["policy_fingerprint"] == second["policy_fingerprint"]
