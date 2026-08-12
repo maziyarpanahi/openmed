@@ -12,6 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
       - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
@@ -347,5 +348,7 @@ exclude_docs: |
   __pycache__/**
   overrides/**
   demo/web/README.md
+  demo/web/models/**
+  demo/web/vendor/**
   website/**
   brand/**

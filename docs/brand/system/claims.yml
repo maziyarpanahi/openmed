@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-07-29",
+  "generated_at": "2026-08-11",
   "generation": {
     "command": "python scripts/brand/update_claims.py --write",
     "network": "forbidden",
@@ -11,13 +11,13 @@
   "claims": {
     "package_version": {
       "status": "verified",
-      "value": "2.0.0",
-      "display": "OpenMed SDK 2.0.0",
+      "value": "2.1.0",
+      "display": "OpenMed SDK 2.1.0",
       "definition": "Version declared by openmed/__about__.py.",
       "source": "openmed/__about__.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "OpenMed SDK 2.0.0",
+      "public_wording": "OpenMed SDK 2.1.0",
       "qualification": "Package version, not proof of PyPI publication.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -37,28 +37,28 @@
     },
     "repository_model_snapshot": {
       "status": "verified",
-      "value": 1520,
-      "display": "1,520 manifest entries",
+      "value": 2266,
+      "display": "2,266 manifest entries",
       "definition": "Unique repo_id rows in committed models.jsonl; no rounding. This is a repository snapshot, not a live Hugging Face count.",
       "source": "models.jsonl",
-      "as_of": "2026-07-29",
+      "as_of": "2026-08-11",
       "owner": "repository-owner",
-      "public_wording": "The committed catalog snapshot contains 1,520 unique entries.",
+      "public_wording": "The committed catalog snapshot contains 2,266 unique entries.",
       "qualification": "Dated offline snapshot; availability can change.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-11",
       "follow_up_by": null
     },
     "hugging_face_openmed_owned_snapshot": {
       "status": "verified",
-      "value": 1520,
-      "display": "1,520 OpenMed-owned entries",
+      "value": 2266,
+      "display": "2,266 OpenMed-owned entries",
       "definition": "Committed manifest repo_id rows whose exact namespace is OpenMed; de-duplicated by repo_id.",
       "source": "models.jsonl",
-      "as_of": "2026-07-29",
+      "as_of": "2026-08-11",
       "owner": "repository-owner",
-      "public_wording": "The committed snapshot records 1,520 OpenMed-namespace entries.",
+      "public_wording": "The committed snapshot records 2,266 OpenMed-namespace entries.",
       "qualification": "Not a live organization inventory.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-11",
       "follow_up_by": null
     },
     "broader_compatible_model_count": {
@@ -138,13 +138,13 @@
     },
     "model_backed_pii_languages": {
       "status": "verified",
-      "value": 34,
-      "display": "34 model-backed PII languages",
+      "value": 33,
+      "display": "33 model-backed PII languages",
       "definition": "DEFAULT_PII_MODELS keys minus DEFAULT_MODEL_PLACEHOLDER_LANGUAGES.",
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "34 model-backed PII languages",
+      "public_wording": "33 model-backed PII languages",
       "qualification": "Excludes placeholder and user-supplied routes.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -177,7 +177,6 @@
         "ro",
         "sv",
         "sw",
-        "ta",
         "te",
         "th",
         "tr",
@@ -192,7 +191,7 @@
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, sv, sw, ta, te, th, tr, uk, vi, xh, zh, zu",
+      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, vi, xh, zh, zu",
       "qualification": "Codes are model-backed, not benchmark equivalence.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -200,7 +199,8 @@
     "placeholder_pii_languages": {
       "status": "verified",
       "value": [
-        "ru"
+        "ru",
+        "ta"
       ],
       "display": null,
       "definition": "Named built-in routes using a placeholder model.",
@@ -265,15 +265,15 @@
     },
     "pii_family_manifest_entries": {
       "status": "verified",
-      "value": 655,
-      "display": "655 PII-family manifest entries",
+      "value": 1018,
+      "display": "1018 PII-family manifest entries",
       "definition": "Rows in models.jsonl whose family is exactly PII.",
       "source": "models.jsonl",
-      "as_of": "2026-07-29",
+      "as_of": "2026-08-11",
       "owner": "repository-owner",
-      "public_wording": "The committed snapshot has 655 PII-family entries.",
+      "public_wording": "The committed snapshot has 1018 PII-family entries.",
       "qualification": "Snapshot entries, not live checkpoints or downloads.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-11",
       "follow_up_by": null
     },
     "pii_checkpoint_count": {
@@ -304,15 +304,15 @@
     },
     "mlx_manifest_entries": {
       "status": "verified",
-      "value": 662,
-      "display": "662 MLX-format manifest entries",
+      "value": 661,
+      "display": "661 MLX-format manifest entries",
       "definition": "Rows in models.jsonl with at least one format value beginning with mlx; each row counted once.",
       "source": "models.jsonl",
-      "as_of": "2026-07-29",
+      "as_of": "2026-08-11",
       "owner": "repository-owner",
-      "public_wording": "The committed snapshot has 662 MLX-format entries.",
+      "public_wording": "The committed snapshot has 661 MLX-format entries.",
       "qualification": "Manifest format availability can change upstream.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-11",
       "follow_up_by": null
     },
     "pii_entity_types": {
@@ -395,18 +395,19 @@
     "model_license_population": {
       "status": "verified",
       "value": {
-        "apache-2.0": 1511,
-        "other": 5,
-        "unknown": 4
+        "apache-2.0": 2255,
+        "mit": 4,
+        "other": 4,
+        "unknown": 3
       },
       "display": "mixed and partially unknown",
       "definition": "Exact license field values in the committed model manifest; missing values remain unknown.",
       "source": "models.jsonl",
-      "as_of": "2026-07-29",
+      "as_of": "2026-08-11",
       "owner": "repository-owner",
       "public_wording": "Model licenses vary; review each model repository.",
       "qualification": "Never inherit the SDK's Apache-2.0 license onto models.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-11",
       "follow_up_by": null
     },
     "sdk_license": {

@@ -11,6 +11,22 @@ const criticalSurfaces = [
   { name: "browser demo", path: "/docs/demo/web/" },
   { name: "RTL fixture", path: "/docs/demo/rtl/" },
 ];
+const GITHUB_METADATA_URLS = [
+  "https://api.github.com/repos/maziyarpanahi/openmed",
+  "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
+] as const;
+
+test.beforeEach(async ({ page }) => {
+  for (const url of GITHUB_METADATA_URLS) {
+    await page.route(url, (route) =>
+      route.fulfill({
+        body: "{}",
+        contentType: "application/json",
+        status: 503,
+      }),
+    );
+  }
+});
 
 type PageAudit = {
   consoleErrors: string[];
@@ -22,10 +38,9 @@ type PageAudit = {
 };
 
 function isGitHubMetadataRequest(url: URL): boolean {
-  return [
-    "https://api.github.com/repos/maziyarpanahi/openmed",
-    "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
-  ].includes(url.href);
+  return GITHUB_METADATA_URLS.includes(
+    url.href as (typeof GITHUB_METADATA_URLS)[number],
+  );
 }
 
 function isGitHubMetadataConsoleError(message: ConsoleMessage): boolean {
