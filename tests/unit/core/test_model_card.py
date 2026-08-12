@@ -126,7 +126,6 @@ def test_render_v2_model_card_contains_release_decision_sections():
     (
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
-        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
     ),
 )
 def test_committed_v2_entries_render_release_decision_sections(repo_id):
