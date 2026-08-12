@@ -13,6 +13,7 @@ from openmed.clinical.grounding import (
     SectionContextConfig,
     apply_section_context,
 )
+from openmed.clinical.grounding.calibration import fit_grounding_calibrator
 
 SYSTEM_URI = "https://example.org/fhir/CodeSystem/synthetic-grounding"
 
@@ -173,6 +174,31 @@ def test_matcher_applies_context_before_limit() -> None:
     )
 
     assert [match.code for match in matches] == ["MEDICATION-1"]
+
+
+def test_matcher_composes_section_context_and_calibration() -> None:
+    calibrator = fit_grounding_calibrator(
+        (
+            {"system": SYSTEM_URI, "label": "concept", "score": 0.2},
+            {"system": SYSTEM_URI, "label": "concept", "score": 0.9},
+        ),
+        (False, True),
+    )
+
+    match = _matcher().lookup(
+        "shared term",
+        sections="Medications",
+        limit=1,
+        calibrator=calibrator,
+        review_threshold=0.75,
+        label="concept",
+    )[0]
+
+    assert match.code == "MEDICATION-1"
+    assert match.section == "medications"
+    assert match.calibrated_confidence == pytest.approx(1.0)
+    assert match.review_required is False
+    assert match.to_dict()["section"] == "medications"
 
 
 def test_excluded_matches_can_be_retained_for_audit() -> None:

@@ -191,6 +191,10 @@ class ConceptMatch:
             "calibrated_confidence": self.calibrated_confidence,
             "review_required": self.review_required,
             "calibration": dict(self.calibration),
+            "section": self.section,
+            "experiencer": self.experiencer,
+            "section_bias": self.section_bias,
+            "context_score": self.context_score,
         }
 
     @property
