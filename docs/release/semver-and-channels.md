@@ -77,6 +77,14 @@ delta, device-tier, span-integrity, and regression checks before it can move to
 stable. Library releases must also pass the repository policy, dependency
 license policy, and test suite.
 
+Model promotion and Library/SDK publication remain separate release streams.
+`.github/workflows/release-gates.yml` runs on its schedule or by explicit model
+candidate dispatch; an SDK `v*` tag does not promote a model. A Library/SDK
+release that changes a `canary`, `latest`, or `last_green` model pointer must
+first complete the model workflow with real staged golden and SHIELD evidence.
+When those pointers are unchanged, the SDK tag uses the retained last-green
+model evidence and the tag-driven package, platform, and repository gates.
+
 ## Nightly Model Orchestration
 
 `.github/workflows/nightly-release.yml` runs at 02:17 UTC each weekday. Its
