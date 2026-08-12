@@ -56,6 +56,7 @@ nav:
       - Temporal Normalization: clinical/temporal-normalization.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md
+      - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
