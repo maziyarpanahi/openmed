@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Pinned release builds to Hatchling 1.31.0 and Core Metadata 2.4 for
-  compatibility with the production PyPI publisher, and made immutable-tag npm
-  recovery skip an existing version only after its source commit and packaged
-  contents match a fresh tag build.
+- Fixed production builds to emit Core Metadata 2.4 for compatibility with the
+  PyPI publisher, pinned the recovery workflow for older immutable tags, and
+  made npm recovery skip an existing version only after its source commit and
+  packaged contents match a fresh tag build.
 
 ## [2.1.0] - 2026-08-12
 

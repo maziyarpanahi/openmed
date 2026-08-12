@@ -28,10 +28,11 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 - The reusable provenance job in `.github/workflows/provenance.yml` builds and
   checks the distributions, generates SLSA provenance, and verifies the
   attestations before upload.
-- Release builds use Hatchling 1.31.0 and require Core Metadata 2.4 until the
-  pinned PyPI publishing action supports Core Metadata 2.5. The reusable
-  workflow installs that backend explicitly and builds without isolation so an
-  immutable-tag recovery cannot silently select a newer incompatible backend.
+- The source configuration requires Core Metadata 2.4 for both wheel and sdist
+  until the pinned PyPI publishing action supports Core Metadata 2.5. The
+  reusable workflow additionally installs Hatchling 1.31.0 and builds without
+  isolation so recovery of an older immutable tag that predates that source
+  setting cannot silently select a newer incompatible backend.
 - The publish job downloads those verified distributions, uses
   `pypa/gh-action-pypi-publish`, and grants only `contents: read`.
 - The publish job attaches the `pypi` GitHub environment so it can read the
@@ -121,10 +122,11 @@ but `pypa/gh-action-pypi-publish@v1.14.1` rejected the wheel before upload. npm
 had already published `openmed@2.1.0`, so a blind recovery dispatch would have
 attempted to publish the immutable npm version twice.
 
-Release builds now pin Hatchling 1.31.0, verify that both wheel and sdist use
-Core Metadata 2.4, and make npm recovery content-aware and idempotent. Keep the
-tag immutable: recover through `workflow_dispatch` from current `master`, which
-uses the repaired workflow while checking out and verifying the original tag.
+Wheel and sdist targets now explicitly emit Core Metadata 2.4, the recovery
+workflow pins Hatchling 1.31.0 for older immutable tags, and npm recovery is
+content-aware and idempotent. Keep the tag immutable: recover through
+`workflow_dispatch` from current `master`, which uses the repaired workflow
+while checking out and verifying the original tag.
 
 ## PyPI project setup
 

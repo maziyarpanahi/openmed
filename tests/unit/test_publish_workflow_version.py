@@ -111,7 +111,8 @@ def test_distribution_builder_stays_compatible_with_pypi_publish_action():
     pyproject = PYPROJECT.read_text(encoding="utf-8")
     provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
 
-    assert 'requires = ["hatchling==1.31.0"]' in pyproject
+    assert 'requires = ["hatchling"]' in pyproject
+    assert pyproject.count('core-metadata-version = "2.4"') == 2
     assert "pip install build twine 'hatchling==1.31.0'" in provenance_workflow
     assert "python -m build --no-isolation" in provenance_workflow
     assert "Verify distribution metadata compatibility" in provenance_workflow
