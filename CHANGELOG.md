@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PyPI publisher, pinned the recovery workflow for older immutable tags, and
   made npm recovery skip an existing version only after its source commit and
   packaged contents match a fresh tag build.
+- Stopped redundant tag-triggered Pages deployments that GitHub's master-only
+  environment protection rules reject; documentation continues to deploy from
+  `master`.
 
 ## [2.1.0] - 2026-08-12
 
