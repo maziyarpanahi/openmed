@@ -21,7 +21,7 @@ try:
 except ImportError as exc:  # pragma: no cover - exercised by packaging users
     raise ImportError(
         "SQLAlchemy redaction requires the 'sqlalchemy' extra. "
-        "Install with `python -m pip install --upgrade \"openmed[sqlalchemy]\"`."
+        'Install with `python -m pip install --upgrade "openmed[sqlalchemy]"`.'
     ) from exc
 
 DEFAULT_SQLALCHEMY_POLICY = "hipaa_safe_harbor"
