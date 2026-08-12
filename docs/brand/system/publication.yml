@@ -200,6 +200,7 @@ classification:
     - fhir/bulk-checkpoints.md
     - fhir/operation-outcome.md
     - fhir/sdc-privacy.md
+    - fhir/document-intake-quarantine.md
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
