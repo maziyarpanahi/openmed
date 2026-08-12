@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -23,6 +25,8 @@ val generatedCatalogAssetsDir = layout.buildDirectory.dir("generated/assets/open
 val generatedCatalogAsset = generatedCatalogAssetsDir.map {
     it.file("openmed_model_catalog.jsonl")
 }
+val consumerRulesFile = layout.projectDirectory.file("consumer-rules.pro")
+val releaseAar = layout.buildDirectory.file("outputs/aar/${project.name}-release.aar")
 val centralStagingRepository = layout.buildDirectory.dir("central-staging")
 val centralPortalBundle = layout.buildDirectory.dir("central-portal")
 val pythonExecutable = providers.gradleProperty("openmedPython")
@@ -65,6 +69,7 @@ android {
         // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
         targetSdk = 33
+        consumerProguardFiles("consumer-rules.pro")
     }
 
     compileOptions {
@@ -108,8 +113,44 @@ tasks.matching { it.name.endsWith("Assets") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
 }
 
+val verifyReleaseConsumerRules by tasks.registering {
+    group = "verification"
+    description = "Verifies that the release AAR packages every consumer rule."
+    dependsOn("bundleReleaseAar")
+    inputs.file(consumerRulesFile)
+    inputs.file(releaseAar)
+
+    doLast {
+        val aarFile = releaseAar.get().asFile
+        if (!aarFile.isFile) {
+            throw GradleException("Release AAR does not exist: ${aarFile.path}")
+        }
+
+        val packagedRules = ZipFile(aarFile).use { archive ->
+            val entry = archive.getEntry("proguard.txt")
+                ?: throw GradleException("Release AAR does not contain proguard.txt")
+            archive.getInputStream(entry).bufferedReader().use { reader ->
+                reader.readLines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+                    .toSet()
+            }
+        }
+        val requiredRules = consumerRulesFile.asFile.readLines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        val missingRules = requiredRules.filterNot(packagedRules::contains)
+        if (missingRules.isNotEmpty()) {
+            throw GradleException(
+                "Release AAR is missing consumer rules: ${missingRules.joinToString()}",
+            )
+        }
+    }
+}
+
 tasks.matching { it.name.startsWith("test") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
+    dependsOn(verifyReleaseConsumerRules)
 }
 
 val verifyReleasePublicationVersion by tasks.registering {

@@ -7,9 +7,9 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-OpenMed `2.0.0` establishes a stable major-version contract across Python,
-Swift, Kotlin/Android, JavaScript, REST, and local deployment surfaces. It
-combines policy-aware de-identification, expanded clinical and structured-data
+OpenMed `2.1.0` extends the stable v2 contract across Python, Swift,
+Kotlin/Android, JavaScript, REST, and local deployment surfaces. It combines
+policy-aware de-identification, expanded clinical and structured-data
 workflows, broad multilingual PII coverage, and fail-closed release evidence:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility
@@ -20,9 +20,9 @@ workflows, broad multilingual PII coverage, and fail-closed release evidence:
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
   browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
   Transformers.js export bundles.
-- **34 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr,
+- **35 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr,
   he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr,
-  uk, xh, zh, and zu**, with Russian using a documented multilingual default-model
+  uk, vi, xh, zh, and zu**, with Russian using a documented multilingual default-model
   placeholder and Bengali, Chinese, and Tamil using dedicated registry entries,
   plus locale-aware validation and surrogate generation. A user-configured
   Indic NER adapter adds four optional routes and can also serve Assamese,
@@ -85,7 +85,8 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – major-version installation coordinates, compatibility guidance, platform coverage, and qualification requirements.
+- [OpenMed 2.1.0 Release Notes](./release/v2.1.0.md) – current installation coordinates, compatibility guidance, platform coverage, and qualification requirements.
+- [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – historical major-version contract and v2 baseline.
 - [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – historical Swift packaging, Android release hardening, and dependency-security fixes for the final 1.9 patch.
 - [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – historical cross-platform runtime and service release inventory.
 - [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – historical coverage checklist across examples, docs, website, and source modules.
@@ -99,7 +100,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – review the current installation coordinates, compatibility contract, and validation requirements.
+3. [OpenMed 2.1.0 Release Notes](./release/v2.1.0.md) – review the current installation coordinates, compatibility contract, and validation requirements.
 4. Core guides:
     - [Analyze Text Helper](./analyze-text.md) for single-call inference.
     - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.

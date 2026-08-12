@@ -85,6 +85,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.1.0.md
     - release/v2.0.0.md
     - release/v1.6-v1.7-feature-coverage.md
     - getting-started.md
@@ -123,6 +124,7 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/chinese-terminology-grounding.md
+    - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
@@ -215,6 +217,7 @@ classification:
     - onboarding.md
     - migration.md
     - contributing.md
+    - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
     - security/disclosure-policy.md
@@ -253,6 +256,7 @@ classification:
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md
     - model-cards/registry/pii-latest.md
+    - migration/2.0-to-2.1.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md
