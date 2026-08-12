@@ -21,6 +21,7 @@ from openmed.eval.golden import (
 from openmed.eval.hard_negative_mining import (
     FALSE_NEGATIVE,
     FALSE_POSITIVE,
+    HardNegativeManifest,
     HardNegativeManifestError,
     load_hard_negative_manifest,
     mine_hard_negative_manifest,
@@ -286,6 +287,127 @@ def test_error_miner_rejects_non_synthetic_source_text() -> None:
 
     with pytest.raises(HardNegativeManifestError, match="synthetic"):
         mine_hard_negative_manifest(errors)
+
+
+def test_validation_errors_do_not_echo_untrusted_values(tmp_path) -> None:
+    sentinel = "sensitive-patient-marker"
+    invalid_path = tmp_path / f"{sentinel}.json"
+    invalid_path.write_text("{", encoding="utf-8")
+
+    def assert_hidden(operation) -> None:
+        with pytest.raises(HardNegativeManifestError) as exc_info:
+            operation()
+        assert sentinel not in str(exc_info.value)
+
+    assert_hidden(
+        lambda: HardNegativeManifest(
+            entries=(),
+            source_report_hash="sha256:test",
+            source_fixture_count=0,
+            scanned_error_count=0,
+            schema_version=sentinel,
+        )
+    )
+    assert_hidden(
+        lambda: HardNegativeManifest(
+            entries=(),
+            source_report_hash="sha256:test",
+            source_fixture_count=0,
+            scanned_error_count=0,
+            manifest_id=sentinel,
+        )
+    )
+    assert_hidden(lambda: load_hard_negative_manifest(invalid_path))
+    assert_hidden(
+        lambda: mine_hard_negative_manifest(
+            [
+                {
+                    "end": 1,
+                    "error_type": FALSE_POSITIVE,
+                    "fixture_id": sentinel,
+                    "label": "PERSON",
+                    "start": 0,
+                    "text": "x",
+                }
+            ]
+        )
+    )
+    assert_hidden(
+        lambda: mine_hard_negative_manifest(
+            [
+                {
+                    "end": 1,
+                    "error_type": FALSE_POSITIVE,
+                    "fixture_id": sentinel,
+                    "label": "PERSON",
+                    "start": 0,
+                    "synthetic": True,
+                }
+            ]
+        )
+    )
+    assert_hidden(
+        lambda: mine_hard_negative_manifest(
+            [
+                {
+                    "end": 2,
+                    "error_type": FALSE_POSITIVE,
+                    "fixture_id": sentinel,
+                    "label": "PERSON",
+                    "start": 0,
+                    "synthetic": True,
+                    "text": "x",
+                }
+            ]
+        )
+    )
+    assert_hidden(
+        lambda: mine_hard_negative_manifest(
+            [
+                {
+                    "end": 1,
+                    "error_type": sentinel,
+                    "fixture_id": "synthetic-fixture",
+                    "label": "PERSON",
+                    "start": 0,
+                    "synthetic": True,
+                    "text": "x",
+                }
+            ]
+        )
+    )
+    assert_hidden(
+        lambda: mine_hard_negative_manifest(
+            [],
+            fixtures=[
+                {
+                    "gold_spans": [],
+                    "id": sentinel,
+                    "metadata": {},
+                    "text": "x",
+                }
+            ],
+        )
+    )
+    assert_hidden(
+        lambda: mine_hard_negative_manifest(
+            [],
+            fixtures=[
+                {
+                    "gold_spans": [],
+                    "id": sentinel,
+                    "metadata": {"synthetic": True},
+                    "text": "a",
+                },
+                {
+                    "gold_spans": [],
+                    "id": sentinel,
+                    "metadata": {"synthetic": True},
+                    "text": "b",
+                },
+            ],
+        )
+    )
 
 
 def _synthetic_records() -> list[dict[str, object]]:

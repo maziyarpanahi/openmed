@@ -326,13 +326,9 @@ class HardNegativeManifest:
 
     def __post_init__(self) -> None:
         if self.schema_version != HARD_NEGATIVE_MANIFEST_SCHEMA_VERSION:
-            raise HardNegativeManifestError(
-                f"unsupported manifest schema: {self.schema_version}"
-            )
+            raise HardNegativeManifestError("unsupported manifest schema")
         if self.manifest_id != HARD_NEGATIVE_MANIFEST_ID:
-            raise HardNegativeManifestError(
-                f"unsupported manifest id: {self.manifest_id}"
-            )
+            raise HardNegativeManifestError("unsupported manifest id")
         if not self.synthetic:
             raise HardNegativeManifestError("hard-negative manifests must be synthetic")
         if not isinstance(self.source_report_hash, str) or not self.source_report_hash:
@@ -534,10 +530,10 @@ class HardNegativeManifest:
         manifest_path = Path(path)
         try:
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             raise HardNegativeManifestError(
-                f"invalid hard-negative manifest JSON: {manifest_path}"
-            ) from exc
+                "invalid hard-negative manifest JSON"
+            ) from None
         if not isinstance(payload, Mapping):
             raise HardNegativeManifestError("hard-negative manifest must be an object")
         return cls.from_mapping(payload)
@@ -914,31 +910,23 @@ def _occurrence_from_mapping(
     if not fixture_id:
         raise HardNegativeManifestError("error examples require fixture_id")
     if not synthetic:
-        raise HardNegativeManifestError(
-            f"error example {fixture_id!r} must be explicitly synthetic"
-        )
+        raise HardNegativeManifestError("error example must be explicitly synthetic")
     if source_text is None:
-        raise HardNegativeManifestError(
-            f"missing synthetic fixture text for {fixture_id!r}"
-        )
+        raise HardNegativeManifestError("synthetic fixture text is missing")
 
     try:
         start = int(data["start"])
         end = int(data["end"])
     except (KeyError, TypeError, ValueError) as exc:
         raise HardNegativeManifestError(
-            f"error example {fixture_id!r} requires integer start/end offsets"
+            "error example requires integer start/end offsets"
         ) from exc
     if not (0 <= start < end <= len(source_text)):
-        raise HardNegativeManifestError(
-            f"error example {fixture_id!r} has invalid span offsets"
-        )
+        raise HardNegativeManifestError("error example has invalid span offsets")
 
     label = data.get("label") or data.get("canonical_label") or fallback_label
     if not label:
-        raise HardNegativeManifestError(
-            f"error example {fixture_id!r} requires a label"
-        )
+        raise HardNegativeManifestError("error example requires a label")
     normalized_label = normalize_label(str(label))
     error_type = _normalise_error_type(
         data.get("error_type") or data.get("failure_kind") or data.get("kind"),
@@ -1035,7 +1023,7 @@ def _fixture_map(source: Any) -> dict[str, BenchmarkFixture]:
         previous = result.get(fixture.fixture_id)
         if previous is not None and previous.text != fixture.text:
             raise HardNegativeManifestError(
-                f"conflicting synthetic fixture text for {fixture.fixture_id!r}"
+                "synthetic fixture identifiers must be unique"
             )
         result[fixture.fixture_id] = fixture
     return result
@@ -1069,17 +1057,11 @@ def _coerce_fixture(payload: Mapping[str, Any]) -> BenchmarkFixture:
 
 def _assert_synthetic_fixture(fixture: BenchmarkFixture) -> None:
     if fixture.metadata.get("synthetic") is not True:
-        raise HardNegativeManifestError(
-            f"fixture {fixture.fixture_id!r} must be explicitly marked synthetic"
-        )
+        raise HardNegativeManifestError("fixture must be explicitly marked synthetic")
     if fixture.metadata.get("contains_real_phi") is True:
-        raise HardNegativeManifestError(
-            f"fixture {fixture.fixture_id!r} declares real PHI"
-        )
+        raise HardNegativeManifestError("fixture declares real PHI")
     if _has_restricted_source(fixture.metadata):
-        raise HardNegativeManifestError(
-            f"fixture {fixture.fixture_id!r} references a restricted source"
-        )
+        raise HardNegativeManifestError("fixture references a restricted source")
 
 
 def _mapping_is_synthetic(data: Mapping[str, Any]) -> bool:
@@ -1132,7 +1114,7 @@ def _normalise_error_type(value: Any, *, default: str | None) -> str:
         raise HardNegativeManifestError("error examples require an error type")
     normalized = _ERROR_TYPE_ALIASES.get(str(value).strip().lower())
     if normalized is None:
-        raise HardNegativeManifestError(f"unsupported benchmark error type: {value}")
+        raise HardNegativeManifestError("unsupported benchmark error type")
     return normalized
 
 
