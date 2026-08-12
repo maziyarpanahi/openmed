@@ -8,7 +8,7 @@ span, and label counts as Dagster metadata.
 Install the optional integration and start a local Dagster code location:
 
 ```bash
-pip install "openmed[dagster]"
+python -m pip install --upgrade "openmed[dagster]"
 dagster dev -f examples/dagster/definitions.py
 ```
 
