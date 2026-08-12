@@ -191,6 +191,7 @@ classification:
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
     - fhir/reference-integrity.md
+    - fhir/bulk-checkpoints.md
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
