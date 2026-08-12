@@ -160,6 +160,7 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - api/deidentification.md
+    - api/compatibility-gate.md
     - reidentification-risk.md
     - sms-short-text-deid.md
     - anonymization.md
