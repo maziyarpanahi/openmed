@@ -251,7 +251,7 @@ class TestConstants:
         assert "Hindi" in DEFAULT_PII_MODELS["hi"]
         assert "Bengali" in DEFAULT_PII_MODELS["bn"]
         assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
-        assert "Tamil" in DEFAULT_PII_MODELS["ta"]
+        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
         assert "Telugu" in DEFAULT_PII_MODELS["te"]
         assert "Portuguese" in DEFAULT_PII_MODELS["pt"]
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
