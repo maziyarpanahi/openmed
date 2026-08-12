@@ -21,10 +21,10 @@ UNROUTED_SCRIPT = "Unrouted"
 
 REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 
-# These built-in routes intentionally use a named fallback until a dedicated
-# PII model is published. They must not be represented as trained/model-backed
-# languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
+# These built-in routes intentionally use a named fallback until dedicated
+# public PII weights are available. They must not be represented as
+# trained/model-backed languages in release claims.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -155,7 +155,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
     ),
     _pack(
         "ta",
-        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+        "OpenMed/privacy-filter-multilingual",
         "ta_IN",
         ("Tamil",),
         national_id_provider=("ta_IN", "aadhaar"),

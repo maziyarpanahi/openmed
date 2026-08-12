@@ -99,7 +99,18 @@ ALLOWED_FORMATS = (
     "gguf",
     "unknown",
 )
-ALLOWED_LICENSES = ("apache-2.0", "other")
+ALLOWED_LICENSES = (
+    "apache-2.0",
+    "bsd-2-clause",
+    "bsd-3-clause",
+    "cc-by-3.0",
+    "cc-by-4.0",
+    "cc0-1.0",
+    "isc",
+    "mit",
+    "unlicense",
+    "other",
+)
 ALLOWED_RECOMMENDED_TIERS = ("phone", "laptop", "workstation", "server")
 SCRIPT_COVERAGE_TARGETS = (
     "han_simplified",

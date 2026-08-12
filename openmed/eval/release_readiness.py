@@ -32,7 +32,7 @@ READY = "READY"
 NOT_READY = "NOT_READY"
 
 _REQUIRED_DOCS: tuple[str, ...] = ("README.md", "CHANGELOG.md")
-_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/1.9-to-2.0.md")
+_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/2.0-to-2.1.md")
 _DEFAULT_API_COMPAT_REPORT = Path("gates/api_compat_report.json")
 _DEFAULT_E2E_REPORT = Path("gates/e2e_golden_pass.json")
 _DISCLAIMER_MODULE = Path("openmed/clinical/__init__.py")
@@ -331,7 +331,7 @@ def _check_e2e_golden(repo_root: Path, report_path: Path) -> GateCheck:
 
 def evaluate_readiness(
     *,
-    version: str = "2.0.0",
+    version: str = "2.1.0",
     repo_root: Path | str | None = None,
     gate_report: GateReport | None = None,
     gate_report_key: bytes | str | None = None,
@@ -407,7 +407,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_API_COMPAT_REPORT,
     )
     parser.add_argument("--e2e-report", type=Path, default=_DEFAULT_E2E_REPORT)
-    parser.add_argument("--version", default="2.0.0")
+    parser.add_argument("--version", default="2.1.0")
     parser.add_argument("--signing-key")
     parser.add_argument("--key-id", default="release-readiness")
     parser.add_argument("--output", type=Path)
