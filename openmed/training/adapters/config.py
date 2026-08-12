@@ -466,6 +466,13 @@ DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = MappingProxyType(
             languages=("id",),
             scripts=("Latin",),
         ),
+        "austroasiatic": LanguageFamily(
+            family_id="austroasiatic",
+            display_name="Austroasiatic",
+            languages=("vi",),
+            scripts=("Latin",),
+            high_resource_languages=("vi",),
+        ),
         "japonic": LanguageFamily(
             family_id="japonic",
             display_name="Japonic",

@@ -12,6 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
       - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
@@ -51,13 +52,14 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
+      - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
-      - Detector Plugin SDK: plugin-sdk.md
+      - Extension Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
@@ -145,6 +147,7 @@ nav:
       - Onboarding: onboarding.md
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
+      - Model Release Queue: model-release-queue.md
       - Nix Development: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
@@ -345,5 +348,7 @@ exclude_docs: |
   __pycache__/**
   overrides/**
   demo/web/README.md
+  demo/web/models/**
+  demo/web/vendor/**
   website/**
   brand/**

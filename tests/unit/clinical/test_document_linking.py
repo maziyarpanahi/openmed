@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
 from itertools import combinations
 
 import pytest
 
 from openmed.clinical import (
     DOCUMENT_LINKING_ADVISORY,
+    DeduplicatedEntity,
     DocumentCluster,
     DocumentEdge,
     DocumentProvenance,
     EdgeKind,
+    EntityOccurrence,
+    LinkedDocumentTimeline,
+    LinkedTimelineDocument,
+    build_linked_document_timeline,
+    build_summary_card,
     link_documents,
 )
 
@@ -27,12 +33,18 @@ def _doc(
     note_datetime: str | None = None,
     *,
     provenance: dict | None = None,
+    patient_id: str | None = None,
+    entities: list[dict] | None = None,
 ) -> dict:
     d: dict = {"doc_id": doc_id, "text": text}
     if note_datetime is not None:
         d["note_datetime"] = note_datetime
     if provenance is not None:
         d["provenance"] = provenance
+    if patient_id is not None:
+        d["patient_id"] = patient_id
+    if entities is not None:
+        d["entities"] = entities
     return d
 
 
@@ -100,6 +112,34 @@ class TestInputValidation:
     def test_empty_texts_do_not_form_false_duplicate_cluster(self):
         clusters = link_documents([_doc("d1", ""), _doc("d2", "!!!")])
         assert len(clusters) == 2
+
+    def test_patient_id_is_all_or_none(self):
+        with pytest.raises(ValueError, match="every document or none"):
+            link_documents(
+                [
+                    _doc("d1", LONG_TEXT, patient_id="patient-a"),
+                    _doc("d2", LONG_TEXT),
+                ]
+            )
+
+    def test_entity_offsets_must_reference_source_document(self):
+        with pytest.raises(ValueError, match=r"len\(text\)"):
+            link_documents(
+                [
+                    _doc(
+                        "d1",
+                        "Synthetic note",
+                        entities=[
+                            {
+                                "category": "problem",
+                                "text": "outside",
+                                "start": 20,
+                                "end": 27,
+                            }
+                        ],
+                    )
+                ]
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +319,366 @@ class TestClusteringF1:
 
 
 # ---------------------------------------------------------------------------
+# Patient grouping and cross-document entity de-duplication
+# ---------------------------------------------------------------------------
+
+
+class TestPatientGrouping:
+    def test_exact_caller_patient_ids_define_offline_cluster_boundaries(self):
+        docs = [
+            _doc(
+                "p2-copy",
+                LONG_TEXT,
+                "2026-01-04",
+                patient_id="patient-b",
+            ),
+            _doc(
+                "p1-first",
+                LONG_TEXT,
+                "2026-01-01",
+                patient_id="patient-a",
+            ),
+            _doc(
+                "p1-unrelated",
+                "Synthetic dermatology follow-up for a stable plaque.",
+                "2026-02-01",
+                patient_id="patient-a",
+            ),
+        ]
+
+        clusters = link_documents(docs)
+
+        assert [cluster.patient_id for cluster in clusters] == [
+            "patient-a",
+            "patient-b",
+        ]
+        assert [document["doc_id"] for document in clusters[0].documents] == [
+            "p1-first",
+            "p1-unrelated",
+        ]
+        assert clusters[1].edges == []
+
+
+class TestEntityDeduplication:
+    def test_repeated_event_entities_in_one_document_remain_distinct(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "encounter-1",
+                    "Synthetic repeated creatinine results.",
+                    patient_id="patient-a",
+                    entities=[
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "text": "creatinine",
+                        },
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "text": "creatinine",
+                        },
+                    ],
+                )
+            ]
+        )[0]
+
+        assert len(cluster.entities) == 2
+        assert [
+            occurrence.entity_index
+            for entity in cluster.entities
+            for occurrence in entity.provenance
+        ] == [0, 1]
+
+    def test_coded_event_surfaces_remain_distinct_in_linked_documents(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "encounter-1",
+                    LONG_TEXT,
+                    "2026-01-01",
+                    patient_id="patient-a",
+                    entities=[
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "value": "5.1",
+                        }
+                    ],
+                ),
+                _doc(
+                    "encounter-2",
+                    LONG_TEXT,
+                    "2026-01-02",
+                    patient_id="patient-a",
+                    entities=[
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "value": "7.2",
+                        }
+                    ],
+                ),
+            ]
+        )[0]
+
+        assert len(cluster.edges) == 1
+        assert len(cluster.entities) == 2
+
+    def test_summary_card_uses_canonical_category_aliases(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "encounter-1",
+                    "Synthetic longitudinal category aliases.",
+                    patient_id="patient-a",
+                    entities=[
+                        {"category": "conditions", "text": "diabetes"},
+                        {"category": "diagnoses", "text": "hypertension"},
+                        {"category": "medicines", "text": "aspirin"},
+                        {
+                            "category": "laboratory_tests",
+                            "system": "loinc",
+                            "code": "2160-0",
+                        },
+                        {"category": "procedures", "text": "appendectomy"},
+                    ],
+                )
+            ]
+        )[0]
+
+        card = build_summary_card(cluster)
+
+        assert card.problems == 2
+        assert card.medications == 1
+        assert card.labs == 1
+        assert card.procedures == 1
+        assert card.other == 0
+
+    def test_carried_forward_entities_count_once_with_every_occurrence(self):
+        first_text = "Diabetes mellitus. Continue metformin."
+        second_text = "DM is stable. Continue metformin. New asthma."
+        docs = [
+            _doc(
+                "encounter-1",
+                first_text,
+                "2026-01-01",
+                patient_id="patient-a",
+                provenance={"source": "synthetic", "encounter": 1},
+                entities=[
+                    {
+                        "entity_id": "raw-diabetes-1",
+                        "category": "problem",
+                        "text": "Diabetes mellitus",
+                        "system": "snomed",
+                        "code": "44054006",
+                        "start": 0,
+                        "end": 17,
+                    },
+                    {
+                        "category": "medication",
+                        "text": "metformin",
+                        "start": 28,
+                        "end": 37,
+                    },
+                ],
+            ),
+            _doc(
+                "encounter-2",
+                second_text,
+                "2026-02-01",
+                patient_id="patient-a",
+                provenance={"source": "synthetic", "encounter": 2},
+                entities=[
+                    {
+                        "entity_id": "raw-diabetes-2",
+                        "category": "condition",
+                        "text": "DM",
+                        "coding": [{"system": "snomed", "code": "44054006"}],
+                        "start": 0,
+                        "end": 2,
+                    },
+                    {
+                        "category": "drug",
+                        "text": "metformin",
+                        "start": 23,
+                        "end": 32,
+                    },
+                    {
+                        "category": "problem",
+                        "text": "asthma",
+                        "start": 38,
+                        "end": 44,
+                    },
+                ],
+            ),
+        ]
+
+        cluster = link_documents(docs)[0]
+
+        assert len(cluster.deduplicated_entities) == 3
+        diabetes = next(
+            entity for entity in cluster.entities if entity.code == "44054006"
+        )
+        medication = next(
+            entity for entity in cluster.entities if entity.category == "medications"
+        )
+        assert [item.doc_id for item in diabetes.provenance] == [
+            "encounter-1",
+            "encounter-2",
+        ]
+        assert [item.doc_id for item in medication.provenance] == [
+            "encounter-1",
+            "encounter-2",
+        ]
+        assert all(item.surface_hash for item in diabetes.provenance)
+        assert all(item.document_provenance.metadata for item in diabetes.provenance)
+
+        card = build_summary_card(cluster)
+        assert card.problems == 2
+        assert card.medications == 1
+        assert card.coded_entities == 1
+        assert build_summary_card(cluster.to_dict()) == card
+
+        serialized = json.dumps(
+            [entity.to_dict() for entity in cluster.entities], sort_keys=True
+        )
+        for source_surface in ("Diabetes mellitus", "DM is stable", "metformin"):
+            assert source_surface not in serialized
+        assert "raw-diabetes-1" not in serialized
+        assert "raw-diabetes-2" not in serialized
+
+    def test_synthetic_cross_document_deduplication_precision_is_at_least_090(self):
+        docs = [
+            _doc(
+                "a1",
+                "Synthetic diabetes and aspirin note.",
+                patient_id="patient-a",
+                entities=[
+                    {"category": "problem", "system": "icd10", "code": "E11.9"},
+                    {"category": "medication", "text": "aspirin"},
+                    {"category": "lab", "system": "loinc", "code": "2160-0"},
+                ],
+            ),
+            _doc(
+                "a2",
+                "Synthetic DM and aspirin follow-up.",
+                patient_id="patient-a",
+                entities=[
+                    {
+                        "category": "condition",
+                        "coding": [{"system": "icd10", "code": "E11.9"}],
+                    },
+                    {"category": "drug", "text": "aspirin"},
+                    {"category": "lab", "system": "loinc", "code": "2160-0"},
+                    {"category": "problem", "text": "asthma"},
+                ],
+            ),
+            _doc(
+                "b1",
+                "Separate synthetic diabetes note.",
+                patient_id="patient-b",
+                entities=[{"category": "problem", "system": "icd10", "code": "E11.9"}],
+            ),
+        ]
+        gold_pairs = {
+            frozenset({("a1", 0), ("a2", 0)}),
+            frozenset({("a1", 1), ("a2", 1)}),
+        }
+
+        clusters = link_documents(docs)
+        predicted_pairs = {
+            frozenset(
+                {
+                    (left.doc_id, left.entity_index),
+                    (right.doc_id, right.entity_index),
+                }
+            )
+            for cluster in clusters
+            for entity in cluster.entities
+            for left, right in combinations(entity.provenance, 2)
+        }
+        true_positives = len(predicted_pairs & gold_pairs)
+        precision = true_positives / len(predicted_pairs)
+
+        assert precision >= 0.90
+        assert predicted_pairs == gold_pairs
+        patient_a = next(
+            cluster for cluster in clusters if cluster.patient_id == "patient-a"
+        )
+        assert sum(entity.category == "labs" for entity in patient_a.entities) == 2
+
+    def test_context_disagreement_prevents_false_entity_merge(self):
+        docs = [
+            _doc(
+                "d1",
+                "Synthetic diabetes mention.",
+                patient_id="patient-a",
+                entities=[
+                    {
+                        "category": "problem",
+                        "system": "icd10",
+                        "code": "E11.9",
+                        "experiencer": "patient",
+                    }
+                ],
+            ),
+            _doc(
+                "d2",
+                "Synthetic family diabetes mention.",
+                patient_id="patient-a",
+                entities=[
+                    {
+                        "category": "problem",
+                        "system": "icd10",
+                        "code": "E11.9",
+                        "experiencer": "family",
+                    }
+                ],
+            ),
+        ]
+
+        assert len(link_documents(docs)[0].entities) == 2
+
+
+class TestTimelineConsumption:
+    def test_timeline_adapter_exposes_retained_documents_and_relationships(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "earlier",
+                    LONG_TEXT,
+                    "2026-01-01",
+                    patient_id="patient-a",
+                    provenance={"source": "synthetic"},
+                ),
+                _doc(
+                    "later",
+                    LONG_TEXT,
+                    "2026-01-02",
+                    patient_id="patient-a",
+                    provenance={"source": "synthetic"},
+                ),
+            ]
+        )[0]
+
+        timeline = build_linked_document_timeline(cluster)
+
+        assert isinstance(timeline, LinkedDocumentTimeline)
+        assert all(
+            isinstance(item, LinkedTimelineDocument) for item in timeline.documents
+        )
+        assert [item.doc_id for item in timeline.documents] == ["earlier", "later"]
+        assert timeline.documents[0].superseded is True
+        assert timeline.relationships[0].kind == EdgeKind.NEAR_DUPLICATE
+        assert "text" not in json.dumps(timeline.to_dict(), sort_keys=True)
+
+
+# ---------------------------------------------------------------------------
 # Offline / no-network assertion
 # ---------------------------------------------------------------------------
 
@@ -349,8 +749,12 @@ class TestSerialization:
             assert "text" not in d["target_provenance"]
 
     def test_public_types_and_disclaimer_are_exported(self):
+        assert DeduplicatedEntity
         assert DocumentCluster
         assert DocumentEdge
         assert DocumentProvenance
         assert EdgeKind
+        assert EntityOccurrence
+        assert LinkedDocumentTimeline
+        assert LinkedTimelineDocument
         assert "assistive software outputs" in DOCUMENT_LINKING_ADVISORY
