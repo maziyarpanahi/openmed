@@ -1,4 +1,6 @@
-"""Local FHIR interoperability helpers."""
+"""Offline FHIR interoperability helpers."""
+
+from __future__ import annotations
 
 from .bulk_checkpoint import (
     BULK_CHECKPOINT_MANIFEST_VERSION,
@@ -24,11 +26,24 @@ from .bulk_checkpoint import (
     validate_resume_compatibility,
     write_checkpoint,
 )
+from .reference_integrity import (
+    REFERENCE_INTEGRITY_SCHEMA_VERSION,
+    FHIRReferenceIntegrityReport,
+    ReferenceIntegrityFinding,
+    ReferenceIntegrityReport,
+    check_bundle_reference_integrity,
+    check_fhir_reference_integrity,
+    check_reference_integrity,
+    fhir_reference_integrity_report,
+    reference_integrity_report,
+)
 
 __all__ = [
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_SCHEMA_VERSION",
+    "FHIRReferenceIntegrityReport",
+    "REFERENCE_INTEGRITY_SCHEMA_VERSION",
     "BulkCheckpoint",
     "BulkCheckpointCompatibilityError",
     "BulkCheckpointError",
@@ -36,14 +51,21 @@ __all__ = [
     "BulkCheckpointSchemaError",
     "FHIRBulkCheckpoint",
     "FHIRBulkCheckpointManifest",
+    "ReferenceIntegrityFinding",
+    "ReferenceIntegrityReport",
     "assert_resume_compatible",
     "build_checkpoint",
+    "check_bundle_reference_integrity",
+    "check_fhir_reference_integrity",
+    "check_reference_integrity",
     "create_checkpoint",
     "digest_page_token",
+    "fhir_reference_integrity_report",
     "fingerprint_endpoint_scope",
     "fingerprint_policy",
     "is_resume_compatible",
     "load_checkpoint",
+    "reference_integrity_report",
     "save_checkpoint",
     "validate_resume",
     "validate_resume_compatibility",
