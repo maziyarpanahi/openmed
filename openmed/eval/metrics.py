@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from math import ceil, isfinite
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.decoding.spans import iter_grapheme_cluster_spans
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
@@ -18,6 +18,9 @@ from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
+
+if TYPE_CHECKING:
+    from openmed.eval.report import BenchmarkReport
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
 PIPELINE_EVAL_STAGES: tuple[str, ...] = (
@@ -191,6 +194,37 @@ class RateMetric:
         }
 
     def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class SrContentAccuracy:
+    """Node-level exact-match accuracy for DICOM SR content extraction.
+
+    A predicted content item counts as correct when its concept name, value
+    type, rendered value, and coded unit all match the gold item keyed by the
+    same ``node_path``. This mirrors the SR extraction gate: every node in the
+    content tree must be reproduced exactly.
+    """
+
+    accuracy: float
+    matched: int
+    total: int
+    missing_nodes: tuple[str, ...] = ()
+    mismatched_nodes: tuple[str, ...] = ()
+    extra_nodes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "accuracy": self.accuracy,
+            "matched": self.matched,
+            "total": self.total,
+            "missing_nodes": list(self.missing_nodes),
+            "mismatched_nodes": list(self.mismatched_nodes),
+            "extra_nodes": list(self.extra_nodes),
+        }
+
+    def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
 
 
@@ -968,6 +1002,587 @@ class FaithfulnessMetrics:
 
     def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
+
+
+class FactRecallResult(dict[str, Any]):
+    """Structured clinical-fact recall with omission and support findings.
+
+    The mapping deliberately keeps the compact public shape requested by the
+    summary-faithfulness evaluator: ``recall``, ``omitted``, and
+    ``unsupported``. Facts in the two lists are normalized tuples, so the
+    payload remains JSON-serializable through :class:`BenchmarkReport` while
+    callers can still inspect the structured fact components directly.
+    """
+
+    def __init__(
+        self,
+        *,
+        recall: float,
+        omitted: Sequence[tuple[str, ...]],
+        unsupported: Sequence[tuple[str, ...]],
+    ) -> None:
+        super().__init__(
+            recall=float(recall),
+            omitted=[tuple(fact) for fact in omitted],
+            unsupported=[tuple(fact) for fact in unsupported],
+        )
+
+    @property
+    def recall(self) -> float:
+        """Return the fraction of source facts preserved by the summary."""
+
+        return float(self["recall"])
+
+    @property
+    def omitted(self) -> list[tuple[str, ...]]:
+        """Return source facts that were not found in the summary."""
+
+        return list(self["omitted"])
+
+    @property
+    def unsupported(self) -> list[tuple[str, ...]]:
+        """Return summary facts that were not found in the source."""
+
+        return list(self["unsupported"])
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a fresh JSON-ready representation of the result."""
+
+        return {
+            "recall": self.recall,
+            "omitted": [list(fact) for fact in self.omitted],
+            "unsupported": [list(fact) for fact in self.unsupported],
+        }
+
+
+_CLINICAL_FACT_TYPE_ALIASES: Mapping[str, str] = {
+    "condition": "problem",
+    "diagnosis": "problem",
+    "disease": "problem",
+    "problem": "problem",
+    "active_problem": "problem",
+    "problem_list": "problem",
+    "lab": "lab",
+    "lab_result": "lab",
+    "lab_test": "lab",
+    "lab_value": "lab",
+    "analyte": "lab",
+    "med": "medication",
+    "medication": "medication",
+    "medicine": "medication",
+    "drug": "medication",
+    "chemical": "medication",
+    "antibiotic": "medication",
+}
+_CLINICAL_FACT_ATTRIBUTE_KEYS = frozenset(
+    {
+        "abnormal_flag",
+        "body_site",
+        "code",
+        "code_system",
+        "dose",
+        "duration",
+        "flag",
+        "form",
+        "frequency",
+        "indication",
+        "reference_range",
+        "result",
+        "route",
+        "severity",
+        "status",
+        "strength",
+        "unit",
+        "value",
+    }
+)
+_CLINICAL_FACT_VALUE_KEYS = (
+    "value",
+    "surface_form",
+    "surface",
+    "text",
+    "display",
+    "name",
+    "term",
+    "concept",
+    "code",
+)
+_CLINICAL_FACT_NUMERIC_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
+
+
+def fact_recall(
+    source_facts: Iterable[Any],
+    summary_facts: Iterable[Any],
+) -> FactRecallResult:
+    """Measure structured clinical facts preserved by a summary.
+
+    Facts are matched as normalized tuples rather than as source or summary
+    strings. The first tuple component is canonicalized to ``problem``,
+    ``medication``, or ``lab`` when a known alias is supplied; remaining
+    components retain their structure and are compared case-insensitively.
+    Duplicate facts are counted once. An empty source fact set has recall 1.0,
+    while every summary-only fact is still reported as unsupported.
+
+    Args:
+        source_facts: Structured facts extracted from the source note. Tuples,
+            mappings, and extractor result records are accepted.
+        summary_facts: Structured facts extracted from the generated summary.
+
+    Returns:
+        A mapping with ``recall``, ``omitted``, and ``unsupported`` keys.
+        Omitted facts come from the source set; unsupported facts come from the
+        summary set. No offsets or raw note text are required for matching.
+    """
+
+    source = _normalize_clinical_fact_records(source_facts)
+    summary = _normalize_clinical_fact_records(summary_facts)
+    summary_keys = {record[0] for record in summary}
+    source_keys = {record[0] for record in source}
+    omitted = [record[1] for record in source if record[0] not in summary_keys]
+    unsupported = [record[1] for record in summary if record[0] not in source_keys]
+    matched = len(source) - len(omitted)
+    recall = _safe_rate(matched, len(source), zero_denominator=1.0)
+    return FactRecallResult(
+        recall=recall,
+        omitted=omitted,
+        unsupported=unsupported,
+    )
+
+
+def extract_clinical_facts(
+    text: str,
+    spans: Iterable[Any] | Callable[[str], Iterable[Any]],
+    *,
+    sections: Iterable[Mapping[str, Any]] | None = None,
+) -> tuple[tuple[str, ...], ...]:
+    """Derive structured problem, medication, and laboratory facts.
+
+    The helper consumes NER-like spans or a callback that produces the same
+    spans for a supplied text. It then reuses the deterministic OM-043
+    problem, medication, and laboratory relation extractors. Source offsets
+    are used only to resolve relations; returned facts are offset-independent,
+    which lets the same helper compare a source note with a summary.
+
+    Args:
+        text: Source or summary text indexed by the supplied spans.
+        spans: NER-like mappings/``EntitySpan`` values, or a local callable
+            receiving ``text`` and returning those spans.
+        sections: Optional precomputed section spans passed to the relation
+            extractors.
+
+    Returns:
+        Deduplicated tuples such as ``("problem", "pneumonia")``,
+        ``("medication", "lisinopril")``, and
+        ``("lab", "sodium", "130", "mmol/L", "low")``.
+
+    Note:
+        This function never downloads or invokes a model by itself. A caller
+        that needs model-backed spans must provide an explicitly configured
+        local callback.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    raw_spans = spans(text) if callable(spans) else spans
+    span_items = _coerce_clinical_fact_spans(text, raw_spans)
+    if not span_items:
+        return ()
+
+    # The OM-043 extractors share the same caller-provided span vocabulary but
+    # expect canonical heads for the three clinical concept families.
+    relation_spans = [
+        {
+            **span,
+            "label": _relation_label_for_clinical_fact(span["label"]),
+        }
+        for span in span_items
+    ]
+    section_items = tuple(sections) if sections is not None else None
+
+    from openmed.clinical.relations import (
+        extract_lab_results,
+        extract_medication_relations,
+        extract_problem_relations,
+    )
+
+    # Running all three relation extractors keeps this adapter on the same
+    # deterministic OM-043 path used by downstream structured extraction. The
+    # problem and medication relations identify valid relation-scoped heads;
+    # their attributes are intentionally not counted as separate summary facts.
+    problem_relations = extract_problem_relations(
+        text,
+        relation_spans,
+        sections=section_items,
+    )
+    medication_relations = extract_medication_relations(
+        text,
+        relation_spans,
+        sections=section_items,
+    )
+    lab_results = extract_lab_results(
+        text,
+        relation_spans,
+        sections=section_items,
+    )
+    del problem_relations, medication_relations
+
+    lab_by_analyte = {result.analyte.offset_key(): result for result in lab_results}
+    facts: list[tuple[str, ...]] = []
+    for span in span_items:
+        fact_type = _clinical_fact_type_for_label(span["label"])
+        if fact_type is None:
+            continue
+        start = int(span["start"])
+        end = int(span["end"])
+        surface = text[start:end].strip()
+        if not surface:
+            continue
+        if fact_type == "lab" and _is_numeric_fact_surface(surface):
+            continue
+        if fact_type == "lab":
+            result = lab_by_analyte.get((start, end))
+            if result is not None:
+                fact = _lab_result_fact(result)
+            else:
+                fact = ("lab", surface)
+        else:
+            fact = (fact_type, surface)
+        facts.append(fact)
+
+    return tuple(record[1] for record in _normalize_clinical_fact_records(facts))
+
+
+def summary_faithfulness_metrics(
+    source_text: str,
+    summary_text: str,
+    source_spans: Iterable[Any] | Callable[[str], Iterable[Any]],
+    summary_spans: Iterable[Any] | Callable[[str], Iterable[Any]],
+    *,
+    rouge: Mapping[str, Any] | None = None,
+    sections: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build summary-faithfulness metrics from two structured span sets.
+
+    ``rouge`` is copied into the returned metrics mapping when supplied, so a
+    caller can place lexical overlap and clinical-fact recall in one
+    :class:`~openmed.eval.report.BenchmarkReport` without comparing note text
+    directly.
+    """
+
+    source_facts = extract_clinical_facts(
+        source_text,
+        source_spans,
+        sections=sections,
+    )
+    summary_facts = extract_clinical_facts(summary_text, summary_spans)
+    metrics: dict[str, Any] = {
+        "fact_recall": fact_recall(source_facts, summary_facts).to_dict()
+    }
+    if rouge is not None:
+        metrics["rouge"] = dict(rouge)
+    return metrics
+
+
+def build_summary_faithfulness_report(
+    source_facts: Iterable[Any],
+    summary_facts: Iterable[Any],
+    *,
+    rouge: Mapping[str, Any] | None = None,
+    suite: str = "summarize-faithfulness",
+    model_name: str = "clinical-fact-recall",
+    device: str = "local",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> BenchmarkReport:
+    """Return a :class:`BenchmarkReport` containing fact recall and ROUGE.
+
+    The import is local to keep ``openmed.eval.metrics`` independent of the
+    report serializer during module initialization.
+    """
+
+    from openmed.eval.report import BenchmarkReport
+
+    metrics: dict[str, Any] = {
+        "fact_recall": fact_recall(source_facts, summary_facts).to_dict()
+    }
+    if rouge is not None:
+        metrics["rouge"] = dict(rouge)
+    return BenchmarkReport(
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        fixture_count=1,
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata=dict(metadata or {}),
+    )
+
+
+def _normalize_clinical_fact_records(
+    facts: Iterable[Any],
+) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    records: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    seen: set[tuple[str, ...]] = set()
+    for fact in facts:
+        display = _clinical_fact_tuple(fact)
+        key = _clinical_fact_key(display)
+        if key in seen:
+            continue
+        seen.add(key)
+        records.append((key, display))
+    return records
+
+
+def _clinical_fact_tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, Mapping):
+        return _clinical_fact_tuple_from_mapping(value)
+    if isinstance(value, (tuple, list)):
+        if not value:
+            raise ValueError("clinical facts must not be empty")
+        parts = tuple(_clinical_fact_component(item) for item in value)
+        return _canonicalize_clinical_fact_parts(parts)
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        payload = to_dict()
+        if isinstance(payload, Mapping):
+            return _clinical_fact_tuple_from_mapping(payload)
+    data = getattr(value, "__dict__", None)
+    if isinstance(data, Mapping):
+        return _clinical_fact_tuple_from_mapping(data)
+    if isinstance(value, str):
+        return ("fact", value.strip())
+    raise TypeError(
+        "clinical facts must be tuples, mappings, or records with to_dict()"
+    )
+
+
+def _clinical_fact_tuple_from_mapping(
+    value: Mapping[str, Any],
+) -> tuple[str, ...]:
+    raw_type = next(
+        (
+            value.get(key)
+            for key in (
+                "fact_type",
+                "kind",
+                "category",
+                "entity_type",
+                "concept_type",
+                "type",
+                "label",
+            )
+            if value.get(key) is not None
+        ),
+        "fact",
+    )
+    fact_type = _canonical_clinical_fact_type(raw_type)
+    if fact_type == "lab":
+        name = _first_mapping_value(
+            value,
+            ("analyte", "lab_name", "test", "name", "term", "text"),
+        )
+        result = _first_mapping_value(
+            value,
+            ("result", "lab_value", "measurement", "value"),
+        )
+        parts = [fact_type]
+        if name is not None:
+            parts.append(_clinical_fact_component(name))
+        elif result is not None:
+            parts.append(_clinical_fact_component(result))
+            result = None
+        if result is not None and name is not None:
+            parts.append(_clinical_fact_component(result))
+        for key in ("unit", "abnormal_flag", "flag"):
+            item = value.get(key)
+            if item is not None and str(item).strip():
+                parts.append(_clinical_fact_component(item))
+        return _canonicalize_clinical_fact_parts(tuple(parts))
+
+    surface = _first_mapping_value(value, _CLINICAL_FACT_VALUE_KEYS)
+    parts = [fact_type]
+    if surface is not None:
+        parts.append(_clinical_fact_component(surface))
+    attributes = value.get("attributes")
+    if isinstance(attributes, Mapping):
+        for key in sorted(attributes, key=str):
+            item = attributes[key]
+            if item is not None and str(item).strip():
+                parts.append(f"{key}={_clinical_fact_component(item)}")
+    for key in sorted(_CLINICAL_FACT_ATTRIBUTE_KEYS - {"value"}):
+        item = value.get(key)
+        if item is None or not str(item).strip() or key == "code":
+            continue
+        if key == "code_system" and value.get("code") is None:
+            continue
+        parts.append(f"{key}={_clinical_fact_component(item)}")
+    return _canonicalize_clinical_fact_parts(tuple(parts))
+
+
+def _first_mapping_value(
+    value: Mapping[str, Any],
+    keys: Sequence[str],
+) -> Any | None:
+    for key in keys:
+        item = value.get(key)
+        if item is None:
+            continue
+        if isinstance(item, Mapping):
+            nested = _first_mapping_value(item, _CLINICAL_FACT_VALUE_KEYS)
+            if nested is not None:
+                return nested
+        elif str(item).strip():
+            return item
+    return None
+
+
+def _canonicalize_clinical_fact_parts(
+    parts: tuple[str, ...],
+) -> tuple[str, ...]:
+    if not parts:
+        raise ValueError("clinical facts must not be empty")
+    fact_type = _canonical_clinical_fact_type(parts[0])
+    cleaned = [fact_type]
+    for part in parts[1:]:
+        item = str(part).strip()
+        if item:
+            cleaned.append(item)
+    # Attribute key/value pairs are order-independent; positional clinical
+    # tuple components such as lab name/value/unit remain positional.
+    if len(cleaned) > 2 and all("=" in part for part in cleaned[2:]):
+        cleaned[2:] = sorted(cleaned[2:], key=lambda item: item.casefold())
+    if len(cleaned) < 2:
+        raise ValueError("clinical facts require a type and value")
+    return tuple(cleaned)
+
+
+def _canonical_clinical_fact_type(value: Any) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(value).casefold()).strip("_")
+    return _CLINICAL_FACT_TYPE_ALIASES.get(normalized, normalized or "fact")
+
+
+def _clinical_fact_component(value: Any) -> str:
+    if isinstance(value, Mapping):
+        return ";".join(
+            f"{key}={_clinical_fact_component(value[key])}"
+            for key in sorted(value, key=str)
+        )
+    if isinstance(value, (tuple, list)):
+        return ";".join(_clinical_fact_component(item) for item in value)
+    return str(value).strip()
+
+
+def _clinical_fact_key(value: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_normalize_clinical_fact_component(item) for item in value)
+
+
+def _normalize_clinical_fact_component(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value)).casefold().strip()
+    if _CLINICAL_FACT_NUMERIC_RE.fullmatch(normalized):
+        try:
+            return f"{float(normalized):.15g}"
+        except ValueError:
+            pass
+    return re.sub(r"[^a-z0-9]+", "", normalized)
+
+
+def _coerce_clinical_fact_spans(
+    text: str,
+    spans: Iterable[Any],
+) -> list[dict[str, Any]]:
+    if spans is None:
+        return []
+    result: list[dict[str, Any]] = []
+    for item in spans:
+        data: Mapping[str, Any] | None
+        if isinstance(item, Mapping):
+            data = item
+        else:
+            to_dict = getattr(item, "to_dict", None)
+            payload = to_dict() if callable(to_dict) else None
+            if isinstance(payload, Mapping):
+                data = payload
+            else:
+                raw_data = getattr(item, "__dict__", None)
+                data = raw_data if isinstance(raw_data, Mapping) else None
+        if data is None:
+            continue
+        try:
+            start = int(data.get("start", data.get("start_char", -1)))
+            end = int(data.get("end", data.get("end_char", -1)))
+        except (TypeError, ValueError):
+            continue
+        if start < 0 or end <= start or end > len(text):
+            continue
+        label = data.get("label") or data.get("entity") or data.get("entity_type")
+        if label is None or not str(label).strip():
+            continue
+        result.append(
+            {
+                **dict(data),
+                "label": str(label).replace("B-", "").replace("I-", ""),
+                "start": start,
+                "end": end,
+                "text": text[start:end],
+            }
+        )
+    return sorted(
+        result,
+        key=lambda item: (item["start"], item["end"], str(item["label"])),
+    )
+
+
+def _clinical_fact_type_for_label(label: Any) -> str | None:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(label).casefold()).strip("_")
+    canonical = _canonical_clinical_fact_type(normalized)
+    if canonical in {"problem", "medication", "lab"}:
+        return canonical
+    if normalized in {"condition", "diagnosis", "disease", "problem"}:
+        return "problem"
+    if normalized in {"drug", "chemical", "medicine", "medication", "med"}:
+        return "medication"
+    if normalized in {"lab_test", "lab_value", "lab_result", "analyte", "lab"}:
+        return "lab"
+    return None
+
+
+def _relation_label_for_clinical_fact(label: Any) -> str:
+    fact_type = _clinical_fact_type_for_label(label)
+    if fact_type == "problem":
+        return "PROBLEM"
+    if fact_type == "medication":
+        return "MEDICATION"
+    if fact_type == "lab":
+        normalized = re.sub(r"[^a-z0-9]+", "_", str(label).casefold()).strip("_")
+        if normalized in {"lab_value", "lab_result", "result_value"}:
+            return "LAB_VALUE"
+        return "LAB_TEST"
+    return str(label)
+
+
+def _is_numeric_fact_surface(value: str) -> bool:
+    return bool(_CLINICAL_FACT_NUMERIC_RE.fullmatch(value.strip()))
+
+
+def _lab_result_fact(result: Any) -> tuple[str, ...]:
+    parts = ["lab", str(result.analyte.text).strip()]
+    if result.value is not None:
+        parts.append(_format_clinical_fact_number(result.value))
+    if result.unit:
+        parts.append(str(result.unit).strip())
+    if result.abnormal_flag:
+        parts.append(str(result.abnormal_flag).strip())
+    return _canonicalize_clinical_fact_parts(tuple(parts))
+
+
+def _format_clinical_fact_number(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return f"{value:.15g}"
+    return str(value).strip()
 
 
 def normalize_eval_span(
@@ -2785,6 +3400,75 @@ def compute_resource_metrics(
     )
 
 
+_SR_MATCH_FIELDS: tuple[str, ...] = (
+    "concept_name",
+    "value_type",
+    "value",
+    "unit_code",
+)
+
+
+def compute_sr_content_accuracy(
+    predicted_items: Sequence[Mapping[str, Any]],
+    gold_items: Sequence[Mapping[str, Any]],
+) -> SrContentAccuracy:
+    """Compute node-level exact-match accuracy for DICOM SR content extraction.
+
+    Items are aligned by ``node_path``. A gold node is matched only when a
+    predicted node with the same path reproduces its concept name, value type,
+    rendered value, and coded unit exactly. Accuracy is matched gold nodes over
+    total gold nodes; unmatched gold, mismatched, and unexpected extra predicted
+    node paths are reported for diagnosis.
+
+    Args:
+        predicted_items: Extracted SR content items (for example the
+            ``content_items`` list from
+            :func:`openmed.multimodal.extract_dicom_sr`).
+        gold_items: Reference SR content items for the same object.
+
+    Returns:
+        An :class:`SrContentAccuracy` summary.
+    """
+    predicted_by_path = {
+        str(item.get("node_path", "")): item for item in predicted_items
+    }
+    gold_paths = {str(item.get("node_path", "")) for item in gold_items}
+    total = len(gold_items)
+    matched = 0
+    missing: list[str] = []
+    mismatched: list[str] = []
+
+    for gold in gold_items:
+        path = str(gold.get("node_path", ""))
+        prediction = predicted_by_path.get(path)
+        if prediction is None:
+            missing.append(path)
+            continue
+        if all(
+            _sr_field_equal(prediction.get(field), gold.get(field))
+            for field in _SR_MATCH_FIELDS
+        ):
+            matched += 1
+        else:
+            mismatched.append(path)
+
+    extra = [path for path in predicted_by_path if path not in gold_paths]
+
+    accuracy = matched / total if total else 1.0
+    return SrContentAccuracy(
+        accuracy=accuracy,
+        matched=matched,
+        total=total,
+        missing_nodes=tuple(missing),
+        mismatched_nodes=tuple(mismatched),
+        extra_nodes=tuple(sorted(extra)),
+    )
+
+
+def _sr_field_equal(left: Any, right: Any) -> bool:
+    return left == right
+
+
 def reliability_bins(
     predictions_with_confidence: Iterable[Any],
     n_bins: int = 10,
@@ -3138,6 +3822,8 @@ def compute_metrics_bundle(
     default_language: str = "en",
     default_device: str = "cpu",
     source_text: str | None = None,
+    source_facts: Iterable[Any] | None = None,
+    summary_facts: Iterable[Any] | None = None,
 ) -> dict[str, Any]:
     """Compute the standard OM-018 benchmark metric bundle.
 
@@ -3145,6 +3831,8 @@ def compute_metrics_bundle(
     ``report.metrics['latency']['cold_start_ms']``. It is the first fixture
     call's wall-clock latency (model/tokenizer load plus first forward pass)
     and is excluded from the steady-state ``p50``/``p95``/``count`` sample.
+    When both ``source_facts`` and ``summary_facts`` are supplied, the bundle
+    also includes the structured ``fact_recall`` summary metric.
     """
     text_length = len(source_text) if source_text is not None else None
     metrics = {
@@ -3225,6 +3913,10 @@ def compute_metrics_bundle(
             extracted_facts,
             source_text=source_text,
         ).to_dict()
+    if source_facts is not None or summary_facts is not None:
+        if source_facts is None or summary_facts is None:
+            raise ValueError("source_facts and summary_facts must be provided together")
+        metrics["fact_recall"] = fact_recall(source_facts, summary_facts).to_dict()
     if extraction_outputs is not None:
         metrics["extraction_reemission_leakage"] = (
             compute_extraction_reemission_leakage(
@@ -5149,6 +5841,7 @@ __all__ = [
     "EvalSpan",
     "PipelineFact",
     "RateMetric",
+    "SrContentAccuracy",
     "F1Metrics",
     "CoreferenceClusteringScore",
     "TemporalAwarenessMetrics",
@@ -5167,12 +5860,17 @@ __all__ = [
     "FAITHFULNESS_SCHEMA_VERSION",
     "FaithfulnessFinding",
     "FaithfulnessMetrics",
+    "FactRecallResult",
     "normalize_eval_span",
     "normalize_eval_spans",
     "normalize_pipeline_fact",
     "normalize_pipeline_facts",
     "pipeline_fact_mismatch_fields",
     "compute_span_grounded_faithfulness",
+    "fact_recall",
+    "extract_clinical_facts",
+    "summary_faithfulness_metrics",
+    "build_summary_faithfulness_report",
     "merge_faithfulness_metrics",
     "normalize_radiology_entity",
     "normalize_radiology_entities",
@@ -5214,6 +5912,7 @@ __all__ = [
     "assert_temporal_consistency_gate",
     "compute_latency_summary",
     "compute_resource_metrics",
+    "compute_sr_content_accuracy",
     "coverage_gaps_by_language",
     "reliability_bins",
     "expected_calibration_error",
