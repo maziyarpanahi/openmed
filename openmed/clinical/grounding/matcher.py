@@ -13,7 +13,7 @@ import unicodedata
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 __all__ = [
     "AbbreviationMap",
@@ -91,6 +91,9 @@ class ConceptMatch:
     match_type: MatchType
     matched_term: str
     metadata: Mapping[str, object] = field(default_factory=dict, hash=False)
+    calibrated_confidence: float | None = None
+    review_required: bool = False
+    calibration: Mapping[str, object] = field(default_factory=dict, hash=False)
     section: str | None = None
     experiencer: str | None = None
     section_bias: float = 0.0
@@ -114,6 +117,18 @@ class ConceptMatch:
         if not isinstance(self.metadata, Mapping):
             raise TypeError("metadata must be a mapping")
         object.__setattr__(self, "metadata", dict(self.metadata))
+        if self.calibrated_confidence is not None:
+            confidence = float(self.calibrated_confidence)
+            if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+                raise ValueError(
+                    "calibrated_confidence must be finite and between 0.0 and 1.0"
+                )
+            object.__setattr__(self, "calibrated_confidence", confidence)
+        if not isinstance(self.review_required, bool):
+            raise TypeError("review_required must be a boolean")
+        if not isinstance(self.calibration, Mapping):
+            raise TypeError("calibration must be a mapping")
+        object.__setattr__(self, "calibration", dict(self.calibration))
         if self.section is not None and (
             not isinstance(self.section, str) or not self.section.strip()
         ):
@@ -137,6 +152,46 @@ class ConceptMatch:
         """Return the stable vocabulary URI and code identity."""
 
         return (self.system_uri, self.code)
+
+    @property
+    def calibrated_score(self) -> float | None:
+        """Return the calibrated confidence using the grounding span name."""
+
+        return self.calibrated_confidence
+
+    @property
+    def abstained(self) -> bool:
+        """Return whether this match was withheld pending review."""
+
+        return self.review_required
+
+    @property
+    def abstain(self) -> bool:
+        """Return the short-form abstention flag for this match."""
+
+        return self.review_required
+
+    @property
+    def needs_review(self) -> bool:
+        """Return whether this match requires human review."""
+
+        return self.review_required
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-ready match including optional calibration metadata."""
+
+        return {
+            "system_uri": self.system_uri,
+            "code": self.code,
+            "display": self.display,
+            "score": self.score,
+            "match_type": self.match_type,
+            "matched_term": self.matched_term,
+            "metadata": dict(self.metadata),
+            "calibrated_confidence": self.calibrated_confidence,
+            "review_required": self.review_required,
+            "calibration": dict(self.calibration),
+        }
 
     @property
     def ranking_score(self) -> float:
@@ -229,6 +284,10 @@ class LexicalMatcher:
         query: str,
         *,
         limit: int | None = None,
+        calibrator: Any | None = None,
+        review_threshold: float | Mapping[str, Any] | None = None,
+        threshold: float | Mapping[str, Any] | None = None,
+        label: str = "*",
         sections: object | None = None,
         experiencer: str | None = None,
         section_rules: Mapping[str, object] | None = None,
@@ -237,8 +296,13 @@ class LexicalMatcher:
 
         Exact matches rank ahead of normalized matches, which rank ahead of
         abbreviation matches.  A concept reachable through multiple terms is
-        returned once at its best score.  When ``sections`` or ``experiencer``
-        is provided, section context is applied before ``limit`` is enforced.
+        returned once at its best score.  When ``calibrator`` is supplied, the
+        selected matches also carry a calibrated confidence and a review flag.
+
+        Calibration is opt-in and consumes a caller-fitted, local calibrator;
+        lookup never fits parameters or accesses a network resource. When
+        ``sections`` or ``experiencer`` is provided, section context is applied
+        before ``limit`` is enforced.
         """
 
         if not isinstance(query, str):
@@ -247,6 +311,8 @@ class LexicalMatcher:
             not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0
         ):
             raise ValueError("limit must be a positive integer or None")
+        if review_threshold is not None and threshold is not None:
+            raise ValueError("provide only one of review_threshold or threshold")
         normalized_query = normalize_term(query)
         if not normalized_query:
             return ()
@@ -295,13 +361,32 @@ class LexicalMatcher:
             )
         if limit is not None:
             matches = matches[:limit]
-        return matches
+        if calibrator is None:
+            if review_threshold is not None or threshold is not None:
+                raise ValueError("a calibrator is required for review thresholds")
+            return tuple(matches)
+
+        from .calibration import apply_concept_match_calibration
+
+        selected_threshold = (
+            review_threshold if review_threshold is not None else threshold
+        )
+        return apply_concept_match_calibration(
+            tuple(matches),
+            calibrator,
+            review_threshold=selected_threshold,
+            label=label,
+        )
 
     def match(
         self,
         query: str,
         *,
         limit: int | None = None,
+        calibrator: Any | None = None,
+        review_threshold: float | Mapping[str, Any] | None = None,
+        threshold: float | Mapping[str, Any] | None = None,
+        label: str = "*",
         sections: object | None = None,
         experiencer: str | None = None,
         section_rules: Mapping[str, object] | None = None,
@@ -311,6 +396,10 @@ class LexicalMatcher:
         return self.lookup(
             query,
             limit=limit,
+            calibrator=calibrator,
+            review_threshold=review_threshold,
+            threshold=threshold,
+            label=label,
             sections=sections,
             experiencer=experiencer,
             section_rules=section_rules,
