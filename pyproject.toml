@@ -68,6 +68,7 @@ dev = [
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.22",
+  "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -126,6 +127,10 @@ dask = [
 
 dagster = [
   "dagster>=1.8,<2",
+]
+
+sqlalchemy = [
+  "sqlalchemy>=2.0,<3",
 ]
 
 spacy = [

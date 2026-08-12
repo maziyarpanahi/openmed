@@ -172,6 +172,7 @@ classification:
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - spark-deidentification.md
     - prefect-integration.md
