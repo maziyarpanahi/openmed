@@ -124,6 +124,7 @@ classification:
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/terminology-provenance.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
