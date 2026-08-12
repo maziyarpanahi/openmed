@@ -118,6 +118,7 @@ classification:
     - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
+    - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - clinical/abbreviation-disambiguation.md
