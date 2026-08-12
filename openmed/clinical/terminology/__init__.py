@@ -1,5 +1,19 @@
-"""Offline terminology snapshot provenance helpers."""
+"""Offline terminology provenance and reconciliation helpers."""
 
+from .conflicts import (
+    CONFLICT_RESOLUTION_SCHEMA_VERSION,
+    DISCARD_CATEGORIES,
+    TERMINOLOGY_CONFLICT_ADVISORY,
+    CandidateProvenance,
+    ConflictResolution,
+    ConflictResolutionPolicy,
+    DiscardedCandidate,
+    TerminologyCandidate,
+    TerminologyCandidateProvenance,
+    TerminologyConflictResolver,
+    resolve_conflicts,
+    resolve_terminology_conflicts,
+)
 from .provenance import (
     EXPIRY_STATUS_EXPIRED,
     EXPIRY_STATUS_EXPIRING,
@@ -31,12 +45,19 @@ from .provenance import (
 )
 
 __all__ = [
+    "CONFLICT_RESOLUTION_SCHEMA_VERSION",
+    "DISCARD_CATEGORIES",
     "EXPIRY_STATUS_EXPIRED",
     "EXPIRY_STATUS_EXPIRING",
     "EXPIRY_STATUS_FRESH",
     "EXPIRY_STATUS_FUTURE",
     "EXPIRY_STATUS_NO_POLICY",
     "PROVENANCE_SCHEMA_VERSION",
+    "TERMINOLOGY_CONFLICT_ADVISORY",
+    "CandidateProvenance",
+    "ConflictResolution",
+    "ConflictResolutionPolicy",
+    "DiscardedCandidate",
     "ExpiryPolicy",
     "FreshnessReport",
     "ProvenanceReport",
@@ -44,6 +65,9 @@ __all__ = [
     "SnapshotFreshness",
     "SnapshotManifest",
     "SnapshotManifestError",
+    "TerminologyCandidate",
+    "TerminologyCandidateProvenance",
+    "TerminologyConflictResolver",
     "TerminologySnapshotManifest",
     "build_freshness_report",
     "build_provenance_report",
@@ -57,5 +81,7 @@ __all__ = [
     "render_freshness_report",
     "render_provenance_report",
     "require_fresh_snapshot",
+    "resolve_conflicts",
+    "resolve_terminology_conflicts",
     "save_snapshot_manifest",
 ]
