@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 No changes yet.
 
-## [2.1.0] - 2026-08-11
+## [2.1.0] - 2026-08-12
 
 OpenMed 2.1 is the first feature release on the stable v2 line. The audited
 source scope covers every current-master change after the `v2.0.0` integration
@@ -135,6 +135,15 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   the preceding separator. Offsets remain half-open code-point indices and every
   run still tiles the source exactly (#1570).
 ### Fixed
+
+- Separated fail-closed model promotion from tag-driven Library/SDK
+  publication so an SDK tag cannot accidentally attempt a pointer promotion
+  without a staged challenger, while retaining API compatibility and migration
+  enforcement in the tag-driven provenance job. Recalibrated the synthetic
+  Chinese and Indic throughput gate from six GitHub-hosted Ubuntu runs instead
+  of comparing hosted Linux against an Apple Silicon workstation baseline.
+  Also fixed Transformers 5 local-snapshot loading so `local_files_only` is not
+  forwarded twice to `AutoConfig`.
 
 - Refreshed the canonical public model snapshot from 1,520 to 2,266 entries and
   restored the Android AAR's generated on-device catalog with 753 permissively

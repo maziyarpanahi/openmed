@@ -150,6 +150,10 @@ def test_publish_workflow_keeps_release_gates():
     assert "steps.release_metadata.outputs.next_version" not in provenance_workflow
     assert "Verify version matches tag" in provenance_workflow
     assert "Verify release source ref" in provenance_workflow
+    assert "Verify API compatibility and migration guide" in provenance_workflow
+    assert "PREVIOUS_TAG=$(git describe --tags --abbrev=0" in provenance_workflow
+    assert "scripts/release/api_surface_diff.py" in provenance_workflow
+    assert 'API_ARGS+=(--check "$MIGRATION_GUIDE")' in provenance_workflow
     assert "twine check dist/*" in provenance_workflow
 
 

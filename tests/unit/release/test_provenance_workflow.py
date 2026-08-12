@@ -70,6 +70,10 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert '"${WORKFLOW_REVISION}:scripts/release/changelog.py"' in content
     assert '--repo "$GITHUB_WORKSPACE"' in content
     assert "python scripts/release/changelog.py" not in content
+    assert "Verify API compatibility and migration guide" in content
+    assert "PREVIOUS_TAG=$(git describe --tags --abbrev=0" in content
+    assert 'API_ARGS+=(--check "$MIGRATION_GUIDE")' in content
+    assert 'python scripts/release/api_surface_diff.py "${API_ARGS[@]}"' in content
 
 
 def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():

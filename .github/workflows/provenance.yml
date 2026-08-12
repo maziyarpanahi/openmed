@@ -136,6 +136,30 @@ jobs:
             exit 1
           fi
 
+      - name: Verify API compatibility and migration guide
+        if: inputs.release-tag != '' || github.ref_type == 'tag'
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${RELEASE_COMMIT}^")
+          BASE_VERSION=${PREVIOUS_TAG#v}
+          RELEASE_VERSION=${RELEASE_TAG#v}
+          BASE_SERIES=${BASE_VERSION%.*}
+          RELEASE_SERIES=${RELEASE_VERSION%.*}
+          API_ARGS=(
+            "$PREVIOUS_TAG"
+            "$RELEASE_COMMIT"
+            --json "$RUNNER_TEMP/api-surface-diff.json"
+          )
+          if [ "$BASE_SERIES" != "$RELEASE_SERIES" ]; then
+            MIGRATION_GUIDE="docs/migration/${BASE_SERIES}-to-${RELEASE_SERIES}.md"
+            API_ARGS+=(--check "$MIGRATION_GUIDE")
+          fi
+          python scripts/release/api_surface_diff.py "${API_ARGS[@]}"
+
       - name: Build package
         run: |
           python -m build

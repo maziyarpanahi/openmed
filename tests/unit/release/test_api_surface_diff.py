@@ -327,17 +327,23 @@ def test_real_migration_guide_covers_every_detected_break(tmp_path):
     assert api_surface_diff.check_migration_document(diff, incomplete) == (omitted,)
 
 
-def test_release_workflow_runs_gate_only_for_tags():
-    workflow = (ROOT / ".github" / "workflows" / "release-gates.yml").read_text(
+def test_model_release_workflow_is_separate_from_sdk_tags():
+    model_workflow = (ROOT / ".github" / "workflows" / "release-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    publish_workflow = (ROOT / ".github" / "workflows" / "publish.yml").read_text(
         encoding="utf-8"
     )
 
-    assert 'tags:\n      - "v*"' in workflow
-    assert "fetch-depth: 0" in workflow
-    assert "Check API migration guide completeness" in workflow
-    assert "if: startsWith(github.ref, 'refs/tags/v2.1.')" in workflow
-    assert "scripts/release/api_surface_diff.py" in workflow
-    assert 'pip install -e ".[dev,hf,zh,indic]"' in workflow
-    assert "default: v2.0.0" in workflow
-    assert "default: docs/migration/2.0-to-2.1.md" in workflow
-    assert "API migration guide completeness gate passed." in workflow
+    assert "\n  push:" not in model_workflow
+    assert "workflow_dispatch:" in model_workflow
+    assert "schedule:" in model_workflow
+    assert "fetch-depth: 0" in model_workflow
+    assert "Check API migration guide completeness" in model_workflow
+    assert "if: github.event_name == 'workflow_dispatch'" in model_workflow
+    assert "scripts/release/api_surface_diff.py" in model_workflow
+    assert 'pip install -e ".[dev,hf,zh,indic]"' in model_workflow
+    assert "default: v2.0.0" in model_workflow
+    assert "default: docs/migration/2.0-to-2.1.md" in model_workflow
+    assert "API migration guide completeness gate passed." in model_workflow
+    assert "tags:\n      - 'v*'" in publish_workflow

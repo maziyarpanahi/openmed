@@ -337,5 +337,5 @@ def test_release_workflow_gates_publish_on_readiness():
     for step_name in ("Quarantine incomplete or failing candidate", "Fail closed"):
         condition = steps[step_name]["if"]
         assert "github.event_name == 'workflow_dispatch'" in condition
-        assert "github.event_name == 'push'" in condition
+        assert "github.event_name == 'push'" not in condition
         assert "steps.check-candidate.outputs.exists != 'true'" in condition
