@@ -121,6 +121,7 @@ nav:
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
+      - FHIR OperationOutcome Reports: fhir/operation-outcome.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
