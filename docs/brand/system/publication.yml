@@ -190,6 +190,7 @@ classification:
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
+    - fhir/sdc-privacy.md
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
