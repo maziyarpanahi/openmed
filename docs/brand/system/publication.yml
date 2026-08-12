@@ -149,6 +149,7 @@ classification:
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - clinical/experiencer-refinement.md
+    - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/awq-grounding.md
     - tiers.md
