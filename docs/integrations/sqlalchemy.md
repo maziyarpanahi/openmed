@@ -8,7 +8,7 @@ ordinary `Text` columns.
 Install the optional dependency:
 
 ```bash
-pip install "openmed[sqlalchemy]"
+python -m pip install --upgrade "openmed[sqlalchemy]"
 ```
 
 ## Redacting text type
