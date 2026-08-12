@@ -88,6 +88,7 @@ REVIEWED_LICENSES = {
     "fastapi": "MIT",
     "fsspec": "BSD-3-Clause",
     "gcsfs": "BSD-3-Clause",
+    "gitpython": "BSD-3-Clause",
     "gliner": "Apache-2.0",
     "grpcio": "Apache-2.0",
     "griffe": "ISC",
