@@ -150,6 +150,25 @@ def test_asset_config_rejects_unknown_policy_profile() -> None:
         )
 
 
+def test_redaction_rejects_non_text_values_without_coercing_rows() -> None:
+    rows = [{"note": 1234}]
+    config = dagster_assets._resolve_config({"text_columns": ["note"]})
+
+    with pytest.raises(TypeError, match="strings or None"):
+        dagster_assets._redact_rows(
+            rows,
+            config=config,
+            process_batch_fn=_fake_process_batch,
+        )
+
+    assert rows == [{"note": 1234}]
+
+
+def test_config_rejects_non_text_column_names() -> None:
+    with pytest.raises(ValueError, match="sequence of names"):
+        dagster_assets._resolve_config({"text_columns": [1234]})
+
+
 def _fake_process_batch(texts: list[str], **kwargs: Any) -> Any:
     replacements = {
         "John Doe": ("[PERSON]", "PERSON"),

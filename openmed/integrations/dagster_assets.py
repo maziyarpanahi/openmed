@@ -60,11 +60,13 @@ def _normalize_text_columns(columns: Any) -> tuple[str, ...]:
         values = (columns,)
     else:
         try:
-            values = tuple(str(column) for column in columns)
+            values = tuple(columns)
         except TypeError as exc:
             raise ValueError("text_columns must be a non-empty sequence") from exc
 
-    if not values or any(not column.strip() for column in values):
+    if not values or any(
+        not isinstance(column, str) or not column.strip() for column in values
+    ):
         raise ValueError("text_columns must be a non-empty sequence of names")
     if len(values) != len(set(values)):
         raise ValueError("text_columns must not contain duplicates")
@@ -146,7 +148,9 @@ def _redact_rows(
             value = row[column]
             if value is None:
                 continue
-            text = value if isinstance(value, str) else str(value)
+            if not isinstance(value, str):
+                raise TypeError("configured text columns must contain strings or None")
+            text = value
             if not text:
                 continue
             positions.append(row_index)
