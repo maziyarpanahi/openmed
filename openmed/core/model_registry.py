@@ -582,6 +582,10 @@ _LEGACY_MODEL_ALIASES = {
     ],
     "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+    # The former dedicated Tamil checkpoint is no longer in the public Hub
+    # catalog. Keep its registry key as a compatibility alias for the explicit
+    # multilingual placeholder while callers migrate to qualified weights.
+    "OpenMed/privacy-filter-multilingual": ["pii_ta_msuperclinical_large"],
 }
 
 
