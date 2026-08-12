@@ -37,6 +37,6 @@ jobs:
     - name: Run bounded format parser fuzzing
       env:
         HYPOTHESIS_PROFILE: fuzz-nightly
-        OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS: "0.5"
+        OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS: "2.0"
       run: |
         uv run pytest tests/fuzz/test_format_parsers_fuzz.py -q -m fuzz

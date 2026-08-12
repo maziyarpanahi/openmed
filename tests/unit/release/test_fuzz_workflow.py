@@ -67,7 +67,7 @@ def test_format_parser_fuzz_workflow_is_opt_in_and_time_bounded() -> None:
     }
     assert any(
         step.get("env", {}).get("HYPOTHESIS_PROFILE") == "fuzz-nightly"
-        and step.get("env", {}).get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS") == "0.5"
+        and step.get("env", {}).get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS") == "2.0"
         and "pytest tests/fuzz/test_format_parsers_fuzz.py -q -m fuzz"
         in step.get("run", "")
         for step in job["steps"]

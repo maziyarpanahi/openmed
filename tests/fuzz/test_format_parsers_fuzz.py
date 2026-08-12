@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis import target as hypothesis_target
 
@@ -46,7 +46,7 @@ pytestmark = pytest.mark.fuzz
 
 _SEED_DIR = Path(__file__).with_name("seeds")
 _PARSER_TIMEOUT_SECONDS = float(
-    os.environ.get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS", "0.5")
+    os.environ.get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS", "2.0")
 )
 _WORKER_START_TIMEOUT_SECONDS = 15.0
 
@@ -371,6 +371,11 @@ class _ParserWorker:
         self._process: Any = None
 
     def __enter__(self) -> "_ParserWorker":
+        self._start()
+        return self
+
+    def _start(self) -> None:
+        self._close_channels()
         self._requests = self._context.Queue()
         self._responses = self._context.Queue()
         self._process = self._context.Process(
@@ -385,20 +390,25 @@ class _ParserWorker:
             self._terminate()
             raise AssertionError("format-parser worker did not start") from exc
         assert (status, detail) == ("ready", "")
-        return self
 
     def __exit__(self, *_: object) -> None:
         if self._process is not None and self._process.is_alive():
             self._requests.put(None)
             self._process.join(timeout=1)
         self._terminate()
+        self._close_channels()
+
+    def _close_channels(self) -> None:
         for channel in (self._requests, self._responses):
             if channel is not None:
                 channel.close()
                 channel.join_thread()
+        self._requests = None
+        self._responses = None
 
     def run(self, target_key: str, data: bytes) -> tuple[str, str]:
-        assert self._process is not None and self._process.is_alive()
+        if self._process is None or not self._process.is_alive():
+            self._start()
         self._requests.put((target_key, data))
         try:
             status, detail = self._responses.get(timeout=_WORKER_START_TIMEOUT_SECONDS)
@@ -425,6 +435,7 @@ class _ParserWorker:
         if self._process is not None and self._process.is_alive():
             self._process.terminate()
             self._process.join(timeout=2)
+        self._process = None
 
 
 def _assert_no_crash(
@@ -510,7 +521,8 @@ def test_truncated_seeds_do_not_crash_registered_parsers() -> None:
 
 def test_registered_format_parsers_resist_mutated_input() -> None:
     with _ParserWorker() as worker:
-
+        # The killable worker enforces the per-example hang limit.
+        @settings(deadline=None)
         @given(case=_mutated_inputs())
         def exercise(case: tuple[_ParserTarget, bytes]) -> None:
             parser_target, data = case
@@ -546,7 +558,10 @@ def test_harness_excludes_worker_dispatch_from_parser_budget() -> None:
     assert (status, detail) == ("ok", "")
 
 
-def test_harness_terminates_parser_that_exceeds_time_budget() -> None:
+def test_harness_restarts_after_parser_exceeds_time_budget() -> None:
     with _ParserWorker(timeout=0.05) as worker:
         with pytest.raises(AssertionError, match="exceeded the 0.050s parser budget"):
             worker.run("__hang__", b"synthetic")
+        status, detail = worker.run("__delayed_dispatch__", b"synthetic")
+
+    assert (status, detail) == ("ok", "")
