@@ -165,28 +165,48 @@ jobs:
           python -m build --no-isolation
 
       - name: Verify distribution metadata compatibility
-        shell: bash
         run: |
-          set -euo pipefail
-          shopt -s nullglob
-          wheels=(dist/*.whl)
-          sdists=(dist/*.tar.gz)
-          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ]; then
-            echo "Expected exactly one wheel and one source distribution."
-            exit 1
-          fi
+          python - <<'PY'
+          from email.parser import BytesParser
+          from pathlib import Path
+          import tarfile
+          import zipfile
 
-          wheel_metadata_version=$(unzip -p "${wheels[0]}" '*/METADATA' \
-            | awk -F ': ' '$1 == "Metadata-Version" { print $2; exit }')
-          sdist_metadata_path=$(tar -tzf "${sdists[0]}" \
-            | awk '/\/PKG-INFO$/ { print; exit }')
-          sdist_metadata_version=$(tar -xOf "${sdists[0]}" "$sdist_metadata_path" \
-            | awk -F ': ' '$1 == "Metadata-Version" { print $2; exit }')
-          if [ "$wheel_metadata_version" != "2.4" ] \
-             || [ "$sdist_metadata_version" != "2.4" ]; then
-            echo "Unsupported distribution metadata versions: wheel=$wheel_metadata_version sdist=$sdist_metadata_version"
-            exit 1
-          fi
+          expected_metadata_version = "2.4"
+          wheels = list(Path("dist").glob("*.whl"))
+          sdists = list(Path("dist").glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              raise SystemExit("Expected exactly one wheel and one source distribution.")
+
+          with zipfile.ZipFile(wheels[0]) as archive:
+              metadata_files = [
+                  name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+              ]
+              if len(metadata_files) != 1:
+                  raise SystemExit("Expected exactly one wheel METADATA file.")
+              wheel_metadata = BytesParser().parsebytes(archive.read(metadata_files[0]))
+
+          with tarfile.open(sdists[0], "r:gz") as archive:
+              metadata_members = [
+                  member
+                  for member in archive.getmembers()
+                  if member.isfile() and member.name.endswith("/PKG-INFO")
+              ]
+              if len(metadata_members) != 1:
+                  raise SystemExit("Expected exactly one sdist PKG-INFO file.")
+              metadata_file = archive.extractfile(metadata_members[0])
+              if metadata_file is None:
+                  raise SystemExit("Could not read sdist PKG-INFO.")
+              sdist_metadata = BytesParser().parsebytes(metadata_file.read())
+
+          versions = {
+              "wheel": wheel_metadata["Metadata-Version"],
+              "sdist": sdist_metadata["Metadata-Version"],
+          }
+          if set(versions.values()) != {expected_metadata_version}:
+              raise SystemExit(f"Unsupported distribution metadata versions: {versions}")
+          print(f"Distribution metadata version: {expected_metadata_version}")
+          PY
 
       - name: Check package
         run: |

@@ -47,8 +47,9 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert "pip install build twine 'hatchling==1.31.0'" in content
     assert "python -m build --no-isolation" in content
     assert "Verify distribution metadata compatibility" in content
-    assert 'wheel_metadata_version" != "2.4"' in content
-    assert 'sdist_metadata_version" != "2.4"' in content
+    assert 'expected_metadata_version = "2.4"' in content
+    assert 'wheel_metadata["Metadata-Version"]' in content
+    assert 'sdist_metadata["Metadata-Version"]' in content
     assert "twine check dist/*" in content
     assert "actions/attest@v4" in content
     assert "continue-on-error: true" in content

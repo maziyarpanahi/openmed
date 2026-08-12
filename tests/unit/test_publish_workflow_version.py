@@ -115,8 +115,9 @@ def test_distribution_builder_stays_compatible_with_pypi_publish_action():
     assert "pip install build twine 'hatchling==1.31.0'" in provenance_workflow
     assert "python -m build --no-isolation" in provenance_workflow
     assert "Verify distribution metadata compatibility" in provenance_workflow
-    assert 'wheel_metadata_version" != "2.4"' in provenance_workflow
-    assert 'sdist_metadata_version" != "2.4"' in provenance_workflow
+    assert 'expected_metadata_version = "2.4"' in provenance_workflow
+    assert 'wheel_metadata["Metadata-Version"]' in provenance_workflow
+    assert 'sdist_metadata["Metadata-Version"]' in provenance_workflow
 
 
 def test_publish_workflow_keeps_release_gates():
