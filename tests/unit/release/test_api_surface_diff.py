@@ -117,6 +117,73 @@ def test_transitive_class_reexport_keeps_members_without_importing():
     assert surface["fixturepkg.Client.request"].signature == "(value: str) -> str"
 
 
+def test_lazy_reexport_map_keeps_signatures_and_class_members():
+    sources = {
+        PurePosixPath("fixturepkg/__init__.py"): (
+            "_LAZY_IMPORTS = {'public': '.api', 'Client': '.api'}\n"
+            "__all__ = ['public', 'Client']\n"
+        ),
+        PurePosixPath("fixturepkg/api.py"): (
+            "def public(value: str, optional: int = 1) -> str:\n"
+            "    return value\n\n"
+            "class Client:\n"
+            "    def request(self, value: str) -> str:\n"
+            "        return value\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.public"].signature == (
+        "(value: str, optional: int = 1) -> str"
+    )
+    assert surface["fixturepkg.Client"].kind == "class"
+    assert surface["fixturepkg.Client.request"].signature == "(value: str) -> str"
+
+
+def test_lazy_reexport_map_honors_attribute_aliases():
+    sources = {
+        PurePosixPath("fixturepkg/__init__.py"): (
+            "_LAZY_IMPORTS = {'public': '.api'}\n"
+            "_LAZY_ATTRIBUTE_NAMES = {'public': 'implementation'}\n"
+            "__all__ = ['public']\n"
+        ),
+        PurePosixPath("fixturepkg/api.py"): (
+            "def implementation(value: str) -> str:\n    return value\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.public"].signature == "(value: str) -> str"
+    assert surface["fixturepkg.public"].source_target == "fixturepkg.api.implementation"
+
+
+def test_resolving_a_previously_opaque_import_is_not_breaking():
+    before = {
+        "fixturepkg.VALUE": api_surface_diff.Symbol(
+            name="fixturepkg.VALUE",
+            module="fixturepkg",
+            qualname="VALUE",
+            kind="import",
+            source_target="fixturepkg.api.VALUE",
+        )
+    }
+    after = {
+        "fixturepkg.VALUE": api_surface_diff.Symbol(
+            name="fixturepkg.VALUE",
+            module="fixturepkg",
+            qualname="VALUE",
+            kind="data",
+            source_target="fixturepkg.api.VALUE",
+        )
+    }
+
+    diff = api_surface_diff.diff_surfaces(before, after, package="fixturepkg")
+
+    assert diff.breaking == ()
+
+
 def test_package_local_reexport_without_all_remains_public():
     sources = {
         PurePosixPath("fixturepkg/api.py"): "VALUE = {'en'}\n",
@@ -268,6 +335,9 @@ def test_release_workflow_runs_gate_only_for_tags():
     assert 'tags:\n      - "v*"' in workflow
     assert "fetch-depth: 0" in workflow
     assert "Check API migration guide completeness" in workflow
-    assert "if: startsWith(github.ref, 'refs/tags/v1.9.')" in workflow
+    assert "if: startsWith(github.ref, 'refs/tags/v2.1.')" in workflow
     assert "scripts/release/api_surface_diff.py" in workflow
+    assert 'pip install -e ".[dev,hf,zh,indic]"' in workflow
+    assert "default: v2.0.0" in workflow
+    assert "default: docs/migration/2.0-to-2.1.md" in workflow
     assert "API migration guide completeness gate passed." in workflow
