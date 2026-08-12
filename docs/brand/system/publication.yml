@@ -111,6 +111,7 @@ classification:
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
     - model-loader.md
+    - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
     - model-manifest.md
@@ -118,11 +119,15 @@ classification:
     - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
+    - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/terminology-provenance.md
+    - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
@@ -150,6 +155,7 @@ classification:
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - clinical/experiencer-refinement.md
+    - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/awq-grounding.md
     - tiers.md
@@ -157,6 +163,7 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - api/deidentification.md
+    - api/compatibility-gate.md
     - reidentification-risk.md
     - sms-short-text-deid.md
     - anonymization.md
@@ -173,6 +180,7 @@ classification:
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - spark-deidentification.md
     - prefect-integration.md
@@ -191,6 +199,11 @@ classification:
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
+    - fhir/reference-integrity.md
+    - fhir/bulk-checkpoints.md
+    - fhir/operation-outcome.md
+    - fhir/sdc-privacy.md
+    - fhir/document-intake-quarantine.md
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
@@ -204,6 +217,7 @@ classification:
     - runtimes/onnxruntime-web.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
+    - android-integration.md
     - export-onnx-android.md
     - android-tokenization.md
     - android-parity.md
