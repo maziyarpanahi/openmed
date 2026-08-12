@@ -19,6 +19,7 @@ from openmed.clinical.terminology.provenance import (
     build_provenance_report,
     build_snapshot_manifest,
     checksum_bytes,
+    checksum_file,
     load_snapshot_manifest,
     render_freshness_report,
     require_fresh_snapshot,
@@ -135,6 +136,14 @@ def test_checksum_and_rendering_are_offline_and_value_free(tmp_path: Path) -> No
     assert "# Terminology Snapshot Freshness Report" in rendered
     assert "no_expiry_policy" in rendered
     assert "synthetic bytes only" not in rendered
+
+
+def test_checksum_file_streams_snapshots_larger_than_one_chunk(tmp_path: Path) -> None:
+    snapshot = b"a" * (1024 * 1024) + b"bounded-tail"
+    snapshot_path = tmp_path / "large-snapshot.bin"
+    snapshot_path.write_bytes(snapshot)
+
+    assert checksum_file(snapshot_path) == checksum_bytes(snapshot)
 
 
 def test_invalid_manifest_does_not_echo_sensitive_input() -> None:

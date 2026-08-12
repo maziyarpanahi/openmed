@@ -23,6 +23,7 @@ from typing import Any
 
 PROVENANCE_SCHEMA_VERSION = 1
 _SHA256_HEX_LENGTH = 64
+_CHECKSUM_CHUNK_SIZE = 1024 * 1024
 _UTC = timezone.utc
 
 EXPIRY_STATUS_FRESH = "fresh"
@@ -396,7 +397,11 @@ def checksum_file(path: str | Path) -> str:
     """Return the canonical checksum of one local snapshot file."""
 
     try:
-        return checksum_bytes(Path(path).read_bytes())
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as snapshot_file:
+            while chunk := snapshot_file.read(_CHECKSUM_CHUNK_SIZE):
+                digest.update(chunk)
+        return f"sha256:{digest.hexdigest()}"
     except (OSError, TypeError, ValueError):
         raise _invalid("snapshot path") from None
 
