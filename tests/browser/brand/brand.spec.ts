@@ -1112,7 +1112,9 @@ test("docs search, locale, theme, and code copy controls operate", async ({
     zh: "/docs/zh/",
   });
   const languageButton = page.getByRole("button", { name: /select language/i });
+  await page.keyboard.press("Tab");
   await languageButton.focus();
+  await expect(languageButton).toBeFocused();
   await expectVisualState(page, browserName, "docs-locale-focus");
 
   await languageButton.evaluate((button) => button.blur());
