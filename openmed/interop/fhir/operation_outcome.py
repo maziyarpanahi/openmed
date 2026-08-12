@@ -183,6 +183,7 @@ _PATH_SECRET = re.compile(
 )
 _PATH_LONG_NUMBER = re.compile(r"(?<![\[\]])\b\d{4,}\b")
 _PATH_RESOURCE_ID = re.compile(r"(?<![:/])\/([a-z0-9][a-z0-9_.-]*)\b", re.IGNORECASE)
+_PATH_COMPARISON = re.compile(r"!=|!~|<=|>=|=|~|<|>")
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -637,10 +638,46 @@ def _redact_expression(value: str) -> str | None:
     if not expression or len(expression) > 256:
         return None
     expression = _PATH_LITERAL.sub('"[REDACTED]"', expression)
+    expression = _redact_parenthesized_content(expression)
+    if expression is None:
+        return None
+    comparison = _PATH_COMPARISON.search(expression)
+    if comparison is not None:
+        expression = expression[: comparison.end()].rstrip() + ' "[REDACTED]"'
     expression = _PATH_SECRET.sub("[REDACTED]", expression)
     expression = _PATH_LONG_NUMBER.sub("[REDACTED]", expression)
     expression = _PATH_RESOURCE_ID.sub("/[REDACTED]", expression)
     return expression
+
+
+def _redact_parenthesized_content(expression: str) -> str | None:
+    """Remove all non-empty function arguments from a structural expression."""
+
+    output: list[str] = []
+    index = 0
+    while index < len(expression):
+        character = expression[index]
+        if character == ")":
+            return None
+        if character != "(":
+            output.append(character)
+            index += 1
+            continue
+
+        depth = 1
+        end = index + 1
+        while end < len(expression) and depth:
+            if expression[end] == "(":
+                depth += 1
+            elif expression[end] == ")":
+                depth -= 1
+            end += 1
+        if depth:
+            return None
+        content = expression[index + 1 : end - 1]
+        output.append("()" if not content.strip() else "([REDACTED])")
+        index = end
+    return "".join(output)
 
 
 def _severity_rank(severity: str) -> int:

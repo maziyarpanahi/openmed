@@ -62,8 +62,37 @@ def test_expression_literals_are_redacted_without_losing_the_structural_path():
     )
 
     expression = outcome["issue"][0]["expression"]
-    assert expression == ['Patient.identifier.where(value="[REDACTED]")']
+    assert expression == ["Patient.identifier.where([REDACTED])"]
     assert "Synthetic-MRN-0001" not in json.dumps(outcome)
+
+
+def test_unquoted_predicate_values_and_malformed_paths_fail_closed() -> None:
+    outcome = build_operation_outcome(
+        [
+            {
+                "category": "policy",
+                "path": "Patient.name.where(given=Synthetic-PHI-Bare)",
+            },
+            {
+                "category": "policy",
+                "path": "Patient.name.where(given=Synthetic-PHI-Unclosed",
+            },
+            {
+                "category": "policy",
+                "path": "Patient.name.given = Synthetic-PHI-Tail extra-value",
+            },
+        ]
+    )
+
+    serialized = json.dumps(outcome)
+    assert "Synthetic-PHI-Bare" not in serialized
+    assert "Synthetic-PHI-Unclosed" not in serialized
+    assert "Synthetic-PHI-Tail" not in serialized
+    assert "extra-value" not in serialized
+    expressions = [issue.get("expression") for issue in outcome["issue"]]
+    assert ["Patient.name.where([REDACTED])"] in expressions
+    assert ['Patient.name.given = "[REDACTED]"'] in expressions
+    assert None in expressions
 
 
 def test_json_and_counts_renderings_are_deterministic_and_counts_only():
