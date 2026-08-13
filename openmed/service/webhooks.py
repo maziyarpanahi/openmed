@@ -12,6 +12,7 @@ import httpx
 from .signing import (
     NONCE_HEADER,
     SIGNATURE_HEADER,
+    SIGNATURE_PREFIX,
     TIMESTAMP_HEADER,
     sign_request,
 )

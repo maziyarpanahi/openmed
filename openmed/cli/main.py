@@ -1281,7 +1281,6 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
 
     lab_parser = risk_sub.add_parser(
         "lab",
-        aliases=("privacy-lab", "structured-lab"),
         help=(
             "Profile, transform, and report structured privacy risk with "
             "explicit offline policy choices."
