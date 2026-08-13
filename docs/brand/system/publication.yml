@@ -122,6 +122,9 @@ classification:
     - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - grounding.md
+    - interop/snomed-terminology-bridge.md
+    - clinical/code-crosswalk.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
@@ -208,6 +211,7 @@ classification:
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
+    - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
     - mlx-backend.md
