@@ -175,6 +175,7 @@ classification:
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
     - integrations-langchain.md
+    - integrations/arrow-flight.md
     - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
