@@ -4,6 +4,8 @@ Intended contents include quasi-identifier detection, uniqueness/k-anonymity
 measurement, and adversarial re-identification analysis.
 """
 
+from typing import Any
+
 from .aggregate_dp import (
     AggregateDPBudgetLedger,
     AggregateDPRelease,
@@ -13,7 +15,7 @@ from .aggregate_dp import (
     DPBudgetLedger,
     DPBudgetSpend,
     laplace_aggregate,
-    release_aggregate as release_dp_aggregate,
+    release_aggregate,
 )
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
@@ -70,7 +72,7 @@ from .differential_privacy import (
     laplace_mechanism,
     laplace_noise,
     laplace_scale,
-    release_aggregate,
+    release_aggregate as release_dp_aggregate,
     release_count,
     release_histogram,
     release_mean,
@@ -108,8 +110,24 @@ from .membership import (
     MembershipSelfTestError,
     MembershipSelfTestResult,
     bounded_membership_inference_self_test,
-    membership_inference_self_test,
-    run_membership_inference_self_test,
+)
+from .membership import (
+    membership_inference_self_test as _bounded_membership_inference_self_test,
+)
+from .membership import (
+    run_membership_inference_self_test as _run_bounded_membership_inference_self_test,
+)
+from .membership_inference import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_BUDGET,
+    DEFAULT_RISKIEST_RECORD_COUNT,
+    MembershipInferenceReport,
+    MembershipInferenceResult,
+)
+from .membership_inference import (
+    membership_inference_self_test as _table_membership_inference_self_test,
+)
+from .membership_inference import (
+    run_membership_inference_self_test as _run_table_membership_inference_self_test,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .qi_profiler import (
@@ -162,6 +180,27 @@ from .synthetic_tabular import (
     tabular_fidelity_report,
 )
 
+
+def membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
+    """Run the bounded-QI or table membership self-test.
+
+    Calls that declare ``quasi_identifiers`` retain the bounded exact-match
+    API. Other calls use the table attack-advantage API.
+    """
+
+    if "quasi_identifiers" in kwargs:
+        return _bounded_membership_inference_self_test(*args, **kwargs)
+    return _table_membership_inference_self_test(*args, **kwargs)
+
+
+def run_membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
+    """Compatibility dispatcher for both membership self-test APIs."""
+
+    if "quasi_identifiers" in kwargs:
+        return _run_bounded_membership_inference_self_test(*args, **kwargs)
+    return _run_table_membership_inference_self_test(*args, **kwargs)
+
+
 __all__ = [
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
     "AggregateDPBudgetLedger",
@@ -176,6 +215,7 @@ __all__ = [
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_CORRELATION_TOLERANCE",
     "DEFAULT_MARGINAL_TOLERANCE",
+    "DEFAULT_MEMBERSHIP_ADVANTAGE_BUDGET",
     "DEFAULT_POLICY_BUDGETS",
     "DEFAULT_QI_WEIGHTS",
     "DEFAULT_RDP_ORDERS",
@@ -219,10 +259,13 @@ __all__ = [
     "LongitudinalPatient",
     "MembershipSelfTestError",
     "MembershipSelfTestResult",
+    "MembershipInferenceReport",
+    "MembershipInferenceResult",
     "PopulationRiskAssessment",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
+    "DEFAULT_RISKIEST_RECORD_COUNT",
     "analyze_k_anonymity",
     "analyze_l_diversity",
     "apply_suppression",
@@ -260,10 +303,10 @@ __all__ = [
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
     "l_diversity_report",
+    "release_aggregate",
     "quasi_identifier_key",
     "quasi_identifier_key_bytes",
     "risk_report",
-    "release_aggregate",
     "run_membership_inference_self_test",
     "sample_synthetic_table",
     "tabular_fidelity_report",
