@@ -52,6 +52,7 @@ dev = [
   "Pillow==12.3.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
+  "openpyxl>=3.1,<4",
   "fastapi>=0.110",
   "httpx>=0.27",
   "dask[dataframe]>=2024.8",
@@ -68,6 +69,7 @@ dev = [
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.22",
+  "strawberry-graphql[fastapi]>=0.316,<1",
   "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
 ]
@@ -90,6 +92,10 @@ lid = [
 ]
 
 openmrs = [
+  "httpx>=0.27",
+]
+
+fhir = [
   "httpx>=0.27",
 ]
 
@@ -162,9 +168,11 @@ interop-gpl = []
 
 multimodal = [
   "numpy>=1.26",
+  "openpyxl>=3.1,<4",
   "onnx>=1.21",
   "pdfplumber>=0.11",
   "python-docx>=1.1",
+  "python-pptx>=1.0",
   "Pillow>=10.0",
   "python-doctr>=1.0",
   "piexif>=1.1",
@@ -276,6 +284,7 @@ service = [
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "protobuf>=5.26,<7",
+  "strawberry-graphql[fastapi]>=0.316,<1",
   "uvicorn[standard]>=0.29",
 ]
 
@@ -342,6 +351,7 @@ yasbd = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-executable-udf = "openmed.integrations.executable_udf:main"
 openmed-mcp = "openmed.mcp.server:main"
 
 [tool.uv]

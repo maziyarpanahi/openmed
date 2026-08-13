@@ -50,6 +50,7 @@ When authentication is enabled, the current built-in route scopes are:
 | `POST /analyze` | `analyze:write` |
 | `POST /pii/extract` | `pii:read` |
 | `POST /pii/deidentify` | `pii:write` |
+| `POST /pii/deidentify/stream` | `pii:write` |
 
 `GET /health`, `GET /livez`, `GET /readyz`, `GET /metrics`, `/docs`,
 `/redoc`, and `/openapi.json` are exempt so health checks, local API docs, and
