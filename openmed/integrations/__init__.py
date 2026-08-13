@@ -51,6 +51,14 @@ from .spark_streaming import (
     deidentify_write_stream,
     write_deidentified_stream,
 )
+from .stream_processor import (
+    DEFAULT_STREAM_BATCH_SIZE,
+    DEFAULT_STREAM_POLICY,
+    DeidentifyMapFunction,
+    StreamDeidentifyMapFunction,
+    StreamSink,
+    run_stream_job,
+)
 
 __all__ = [
     "ColumnarProgress",
@@ -61,6 +69,9 @@ __all__ = [
     "DEFAULT_BATCH_ID_COLUMN",
     "DEFAULT_RAY_PII_MODEL",
     "DEFAULT_SPARK_POLICY",
+    "DEFAULT_STREAM_BATCH_SIZE",
+    "DEFAULT_STREAM_POLICY",
+    "DeidentifyMapFunction",
     "ActorPoolConcurrency",
     "BatchFormat",
     "ENTITY_COUNT_ATTRIBUTE",
@@ -73,6 +84,8 @@ __all__ = [
     "SparkDeidentifyColumn",
     "SparkDeidentifySink",
     "SparkDeidentifyStreamBuilder",
+    "StreamDeidentifyMapFunction",
+    "StreamSink",
     "DataflowToolConfig",
     "DataflowToolProcessorError",
     "clear_pipeline_cache",
@@ -90,6 +103,7 @@ __all__ = [
     "redact_log_events",
     "redact_ndjson_lines",
     "redact_ndjson_stream",
+    "run_stream_job",
     "script_processor",
     "write_deidentified_stream",
 ]
