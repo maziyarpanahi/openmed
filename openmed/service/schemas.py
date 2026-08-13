@@ -168,6 +168,14 @@ def _normalize_records_jsonl(value: Any) -> str:
     return value
 
 
+def _normalize_phenotype(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("phenotype must be an object")
+    if not value:
+        raise ValueError("phenotype must not be empty")
+    return value
+
+
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
     method = values.get("method", "mask")
     shift_dates = values.get("shift_dates")
@@ -776,3 +784,40 @@ else:
         @validator("vocabulary_version", pre=True)
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+
+class ConceptAncestorRequest(_StrictModel):
+    """One caller-supplied concept hierarchy edge."""
+
+    ancestor_concept_id: int = Field(gt=0)
+    descendant_concept_id: int = Field(gt=0)
+
+
+class CohortResolveRequest(_StrictModel):
+    """Request schema for in-memory ``POST /cohort/resolve``."""
+
+    phenotype: dict[str, Any]
+    records_jsonl: str
+    concept_ancestors: list[ConceptAncestorRequest] = Field(default_factory=list)
+
+    if PYDANTIC_V2:
+
+        @field_validator("phenotype", mode="before")
+        @classmethod
+        def _validate_phenotype(cls, value: Any) -> dict[str, Any]:
+            return _normalize_phenotype(value)
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+    else:  # pragma: no cover
+
+        @validator("phenotype", pre=True)
+        def _validate_phenotype(cls, value: Any) -> dict[str, Any]:
+            return _normalize_phenotype(value)
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
