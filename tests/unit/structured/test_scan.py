@@ -11,6 +11,7 @@ import pytest
 from openmed.structured import (
     ColumnClassification,
     ColumnRole,
+    ProfilerNotAvailableError,
     RoleOverrideError,
     TableRoleScan,
     scan_column_roles,
@@ -114,6 +115,56 @@ def test_unknown_column_defaults_to_safe_with_low_confidence() -> None:
 
     assert scan["widget_serial_token"] is ColumnRole.SAFE
     assert scan.confidence["widget_serial_token"] < 0.5
+
+
+def test_dataprofiler_hint_promotes_sensitive_identifier_without_raw_samples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_values = ["opaque-one", "opaque-two"]
+    report = {
+        "data_stats": [
+            {
+                "column_name": "mystery",
+                "data_label": "EMAIL_ADDRESS",
+                "samples": source_values,
+                "statistics": {"data_label_representation": {"EMAIL_ADDRESS": 0.97}},
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        "openmed.structured.scan._dataprofiler_report",
+        lambda columnar: report,
+    )
+
+    result = scan_table(
+        [{"mystery": value} for value in source_values],
+        profile_backend="dataprofiler",
+    )
+
+    assert result["mystery"] is ColumnRole.DIRECT_ID
+    assert result.confidence["mystery"] == pytest.approx(0.97)
+    serialized = json.dumps(result.as_dict(), sort_keys=True)
+    assert "dataprofiler_label=EMAIL" in serialized
+    assert all(value not in serialized for value in source_values)
+
+
+def test_explicit_dataprofiler_backend_fails_clearly_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unavailable(columnar):
+        raise ProfilerNotAvailableError("optional profiler unavailable")
+
+    monkeypatch.setattr(
+        "openmed.structured.scan._dataprofiler_report",
+        unavailable,
+    )
+
+    with pytest.raises(ProfilerNotAvailableError, match="optional profiler"):
+        scan_table([{"age": 40}], profile_backend="dataprofiler")
+
+    assert (
+        scan_table([{"age": 40}], profile_backend="auto")["age"] is ColumnRole.QUASI_ID
+    )
 
 
 def test_owner_qualified_identifier_headers_are_not_treated_as_safe() -> None:

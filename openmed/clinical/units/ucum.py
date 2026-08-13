@@ -8,6 +8,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal, TypedDict
 
+from openmed.clinical.lexicons.clinical_norm import (
+    canonical_unit_alias,
+    normalize_language,
+)
+
 UnitParseStatus = Literal["ok", "unknown", "ambiguous"]
 Dimension = tuple[tuple[str, int], ...]
 
@@ -292,7 +297,11 @@ def _failure(
     )
 
 
-def _resolve_alias(raw_unit: str) -> tuple[str, UnitProvenance] | UnitParse:
+def _resolve_alias(
+    raw_unit: str,
+    *,
+    language: object | None = None,
+) -> tuple[str, UnitProvenance] | UnitParse:
     key = _alias_key(raw_unit)
     if not key:
         return _failure(raw_unit, "unknown", "unit is empty")
@@ -307,7 +316,18 @@ def _resolve_alias(raw_unit: str) -> tuple[str, UnitProvenance] | UnitParse:
     normalized = _clean_unit_text(raw_unit)
     notes = ["parsed as UCUM clinical subset"]
     source = "ucum_subset"
-    if key in _ALIASES:
+    if language is not None and (
+        localized_alias := canonical_unit_alias(raw_unit, language=language)
+    ):
+        normalized = localized_alias
+        source_language = normalize_language(language)
+        notes = [
+            "localized clinical normalization alias",
+            f"alias {raw_unit!r} resolved to {normalized!r}",
+            f"source language {source_language!r}",
+        ]
+        source = "clinical_norm_lexicon"
+    elif key in _ALIASES:
         normalized, note = _ALIASES[key]
         notes = [note, f"alias {raw_unit!r} resolved to {normalized!r}"]
         source = "alias_table"
@@ -400,11 +420,15 @@ def _parse_factor(
     return dimension, atom.scale**exponent, atom.is_affine, None
 
 
-def _parse_unit_expression(raw_unit: object) -> UnitParse:
+def _parse_unit_expression(
+    raw_unit: object,
+    *,
+    language: object | None = None,
+) -> UnitParse:
     if not isinstance(raw_unit, str):
         return _failure("", "unknown", "unit must be a string")
 
-    resolved = _resolve_alias(raw_unit)
+    resolved = _resolve_alias(raw_unit, language=language)
     if isinstance(resolved, UnitParse):
         return resolved
 
@@ -478,7 +502,11 @@ def _parse_unit_expression(raw_unit: object) -> UnitParse:
     )
 
 
-def parse_unit(unit: object) -> ParsedUnit:
+def parse_unit(
+    unit: object,
+    *,
+    language: object | None = None,
+) -> ParsedUnit:
     """Parse a UCUM-subset unit string into a canonical dimension.
 
     The supported subset intentionally covers common clinical mass, amount,
@@ -487,7 +515,7 @@ def parse_unit(unit: object) -> ParsedUnit:
     instead of guessing.
     """
 
-    parsed = _parse_unit_expression(unit)
+    parsed = _parse_unit_expression(unit, language=language)
     if parsed.expression is None:
         return {
             "status": parsed.status,

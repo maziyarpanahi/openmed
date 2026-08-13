@@ -702,6 +702,17 @@ def find_semantic_units(
     return units
 
 
+def _entity_sort_key(entity: Dict[str, Any]) -> Tuple[int, int, str, float, str]:
+    """Return a total ordering for model entities independent of input order."""
+    return (
+        int(entity["start"]),
+        int(entity["end"]),
+        str(entity.get("entity_type", "")),
+        -float(entity.get("score", 0.0)),
+        str(entity.get("word", "")),
+    )
+
+
 def calculate_dominant_label(
     entities: List[Dict[str, Any]], tie_breaker: str = "confidence"
 ) -> Tuple[str, float]:
@@ -749,7 +760,10 @@ def calculate_dominant_label(
             label: sum(label_confidences[label]) / len(label_confidences[label])
             for label in candidates
         }
-        dominant_label = max(avg_confidences, key=avg_confidences.get)
+        dominant_label = min(
+            candidates,
+            key=lambda label: (-avg_confidences[label], str(label)),
+        )
     else:  # tie_breaker == 'first'
         # Use first occurrence
         for entity in entities:
@@ -809,9 +823,15 @@ def merge_entities_with_semantic_units(
 
         entities = normalize_indian_clinical_entities(entities)
 
+    # Model adapters are allowed to produce equivalent rows through dict/set
+    # aggregation. Establish a total order before any index-based tie-break or
+    # overlap bookkeeping so hash-seed-dependent input order cannot affect the
+    # selected label or final span list.
+    entities = sorted(entities, key=_entity_sort_key)
+
     if not use_semantic_patterns:
         # Just return entities as-is if not using patterns
-        ordered = sorted(entities, key=lambda x: x["start"])
+        ordered = list(entities)
         return (
             merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
         )
@@ -821,7 +841,7 @@ def merge_entities_with_semantic_units(
 
     if not semantic_units:
         # No semantic units found, return original entities
-        ordered = sorted(entities, key=lambda x: x["start"])
+        ordered = list(entities)
         return (
             merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
         )
@@ -978,7 +998,7 @@ def _coalesce_overlapping_merged_entities(
     if not entities:
         return []
 
-    ordered = sorted(entities, key=lambda entity: (entity["start"], entity["end"]))
+    ordered = sorted(entities, key=_entity_sort_key)
     clusters: List[List[Dict[str, Any]]] = []
     current = [ordered[0]]
     current_end = int(ordered[0]["end"])
@@ -1078,7 +1098,7 @@ def merge_india_code_mixed_spans(
 
     ordered = sorted(
         (dict(entity) for entity in entities),
-        key=lambda entity: (int(entity["start"]), int(entity["end"])),
+        key=_entity_sort_key,
     )
     merged: list[Dict[str, Any]] = []
     current = ordered[0]
