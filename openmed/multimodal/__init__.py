@@ -16,6 +16,11 @@ from openmed.interop import cda as _cda
 from . import contacts_calendar as _contacts_calendar
 from . import dicom as _dicom
 
+# Importing the DICOM SR adapter registers content-aware SR flattening for
+# ``.dcm`` files. pydicom is imported lazily, so the public multimodal import
+# path stays free of the optional imaging extra.
+from . import dicom_sr as _dicom_sr
+
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_docx as _documents_docx
@@ -25,6 +30,7 @@ from .base import (
     ExtractedDocument,
     SourceSpan,
     ensure_multimodal_available,
+    is_multimodal_available,
     redact_document,
     register_handler,
 )
@@ -57,6 +63,12 @@ from .dicom import (
     deidentify_dicom_headers,
     redact_dicom_pixels,
 )
+from .dicom_sr import (
+    DICOM_SR_ADVISORY,
+    SrContentItem,
+    extract_dicom_sr,
+    walk_sr_content_tree,
+)
 from .documents_docx import (
     DocxRedaction,
     DocxRunRange,
@@ -78,6 +90,17 @@ from .image import (
     redact_image,
     verify_image_metadata,
     verify_image_redaction,
+)
+from .layout import (
+    FakeLayoutEngine,
+    FakeLayoutInput,
+    LayoutBlock,
+    LayoutColumn,
+    LayoutDocument,
+    LayoutMapEntry,
+    LayoutSpan,
+    LayoutWordSpan,
+    parse_layout,
 )
 from .metadata_scrub import (
     MetadataFinding,
@@ -111,6 +134,7 @@ from .pptx import (
     map_text_spans_to_pptx_runs,
     write_redacted_pptx,
 )
+from .rtf import extract_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -149,6 +173,7 @@ __all__ = [
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
+    "is_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "ChatLogRedactionSummary",
@@ -174,6 +199,10 @@ __all__ = [
     "DicomResidualTextReport",
     "deidentify_dicom_headers",
     "redact_dicom_pixels",
+    "DICOM_SR_ADVISORY",
+    "SrContentItem",
+    "extract_dicom_sr",
+    "walk_sr_content_tree",
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
@@ -188,6 +217,7 @@ __all__ = [
     "map_text_spans_to_pptx_runs",
     "write_redacted_pptx",
     "extract_epub",
+    "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
@@ -212,6 +242,15 @@ __all__ = [
     "register_ocr_engine",
     "available_ocr_engines",
     "run_doctr_ocr",
+    "FakeLayoutEngine",
+    "FakeLayoutInput",
+    "LayoutBlock",
+    "LayoutColumn",
+    "LayoutDocument",
+    "LayoutMapEntry",
+    "LayoutSpan",
+    "LayoutWordSpan",
+    "parse_layout",
     "DEFAULT_SMS_MODEL",
     "SHORT_TEXT",
     "SHORT_TEXT_PRESET",
