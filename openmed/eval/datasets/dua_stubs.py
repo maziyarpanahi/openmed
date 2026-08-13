@@ -23,8 +23,11 @@ DEFAULT_SYNTHETIC_RADIOLOGY_PATH = (
 )
 
 DUA_GATED_CORPORA: tuple[str, ...] = (
+    "biored",
     "i2b2",
     "n2c2",
+    "n2c2-2018",
+    "n2c2-2022",
     "shac",
     "thyme",
     "mednli",
@@ -32,6 +35,12 @@ DUA_GATED_CORPORA: tuple[str, ...] = (
     "mimic",
     RADGRAPH,
 )
+
+DUA_PATH_REMEDIATION: Mapping[str, str] = {
+    "biored": "pass path=... or set OPENMED_BIORED_PATH",
+    "n2c2-2018": "pass path=... or set OPENMED_N2C2_2018_PATH",
+    "n2c2-2022": "pass path=... or set OPENMED_N2C2_2022_PATH",
+}
 
 
 class DUACredentialRequired(PermissionError):
@@ -155,8 +164,13 @@ class DUACorpusStub:
 
     def load(self, credentialed_path: str | Path | None = None) -> DatasetLoadResult:
         if credentialed_path is None:
+            remediation = DUA_PATH_REMEDIATION.get(
+                self.name,
+                "supply an approved credentialed local path",
+            )
             raise DUACredentialRequired(
-                f"{self.name} requires a credentialed local path and cannot be bundled"
+                f"{self.name} requires a credentialed local path and cannot be "
+                f"bundled; {remediation}. No corpus rows were loaded."
             )
         path = Path(credentialed_path)
         if not path.exists():
@@ -401,6 +415,7 @@ def _validate_synthetic_radiology_metadata(metadata: Mapping[str, Any]) -> None:
 __all__ = [
     "DEFAULT_SYNTHETIC_RADIOLOGY_PATH",
     "DUA_GATED_CORPORA",
+    "DUA_PATH_REMEDIATION",
     "DUACorpusStub",
     "DUACredentialRequired",
     "RADGRAPH",

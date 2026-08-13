@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from collections.abc import Collection, Iterable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
@@ -366,6 +366,37 @@ def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
             yield cluster_start, index
             cluster_start = index
     yield cluster_start, len(text)
+
+
+def grapheme_break_checker(text: str) -> Callable[[int], bool]:
+    """Return a predicate reporting whether an index starts a new cluster.
+
+    :func:`iter_grapheme_cluster_spans` tests every offset in ``text``, which is
+    wasteful for callers that only care about a handful of candidate positions.
+    The returned callable answers one offset at a time, so such a caller pays
+    for the offsets it actually inspects. Ideographic description sequences are
+    resolved once up front, keeping the predicate consistent with
+    :func:`iter_grapheme_cluster_spans` for the same string.
+
+    Args:
+        text: Original, unnormalized Unicode text.
+
+    Returns:
+        A predicate that is true when its ``index`` argument begins a new
+        extended grapheme cluster. Offsets ``0`` and ``len(text)`` are cluster
+        boundaries by definition and are reported as such.
+    """
+
+    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
+
+    def has_break(index: int) -> bool:
+        if index <= 0 or index >= len(text):
+            return True
+        if ids_internal_boundaries:
+            return _has_grapheme_break_at(text, index, ids_internal_boundaries)
+        return _has_grapheme_break(text, index)
+
+    return has_break
 
 
 def snap_span_to_grapheme_boundaries(
@@ -746,7 +777,7 @@ def refine_privacy_filter_span(
 def _find_structured_match(
     span_text: str,
     pattern: re.Pattern[str],
-    script_runs: list[tuple[int, int, str]],
+    script_runs: Sequence[tuple[int, int, str]],
 ) -> tuple[int, int] | None:
     guarded = any(script in _SCRIPT_REFINEMENT_GUARDS for _, _, script in script_runs)
     if not guarded:

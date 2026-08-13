@@ -44,7 +44,12 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     }
     assert "actions/checkout@v7" in content
     assert "actions/setup-python@v7" in content
-    assert "python -m build" in content
+    assert "pip install build twine 'hatchling==1.31.0'" in content
+    assert "python -m build --no-isolation" in content
+    assert "Verify distribution metadata compatibility" in content
+    assert 'expected_metadata_version = "2.4"' in content
+    assert 'wheel_metadata["Metadata-Version"]' in content
+    assert 'sdist_metadata["Metadata-Version"]' in content
     assert "twine check dist/*" in content
     assert "actions/attest@v4" in content
     assert "continue-on-error: true" in content
@@ -70,6 +75,10 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert '"${WORKFLOW_REVISION}:scripts/release/changelog.py"' in content
     assert '--repo "$GITHUB_WORKSPACE"' in content
     assert "python scripts/release/changelog.py" not in content
+    assert "Verify API compatibility and migration guide" in content
+    assert "PREVIOUS_TAG=$(git describe --tags --abbrev=0" in content
+    assert 'API_ARGS+=(--check "$MIGRATION_GUIDE")' in content
+    assert 'python scripts/release/api_surface_diff.py "${API_ARGS[@]}"' in content
 
 
 def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
