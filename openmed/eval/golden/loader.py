@@ -41,19 +41,30 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
 _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
-_TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
+_TOP_LEVEL_FIXTURES: tuple[Path, ...] = tuple(
+    _GOLDEN_DIR / name
+    for name in (
+        "be.jsonl",
+        "ch.jsonl",
+        "financial_ids.jsonl",
+    )
+)
 _SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
         "code_mixed_hinglish.jsonl",
         "context_multilingual.jsonl",
+        "dicom_sr_content.jsonl",
+        "doclevel_relations.jsonl",
         "event_coref.jsonl",
         "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
+        "grounded_codeable_concepts.jsonl",
         "grounding_export.jsonl",
         "grounding_vocab_synthetic.jsonl",
         "india_clinical.jsonl",
         "indic_name_variants.json",
         "joint_entity_relation.jsonl",
+        "relation_calibration.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",
@@ -67,6 +78,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "radiology_entity_relations.jsonl",
         "hgvs_parse.jsonl",
         "measurement_trend.jsonl",
+        "norm_multilingual.jsonl",
         "temporal_tlinks.jsonl",
         "tnm_stage.jsonl",
         "oncotree_map.jsonl",
