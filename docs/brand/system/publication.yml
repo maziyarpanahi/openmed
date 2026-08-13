@@ -122,6 +122,9 @@ classification:
     - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - grounding.md
+    - interop/snomed-terminology-bridge.md
+    - clinical/code-crosswalk.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
@@ -148,6 +151,9 @@ classification:
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
+    - multimodal/xlsx-cell-redaction.md
+    - multimodal/odt-extraction.md
+    - multimodal/pptx-redaction.md
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
@@ -175,13 +181,17 @@ classification:
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
     - integrations-langchain.md
+    - integrations/arrow-flight.md
     - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/pandas-on-spark.md
+    - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
+    - integrations/distributed-sql-udf.md
     - spark-deidentification.md
     - prefect-integration.md
     - spacy-component.md
@@ -199,6 +209,8 @@ classification:
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
+    - interop/fhir-bulk-data.md
+    - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
     - fhir/bulk-checkpoints.md
     - fhir/operation-outcome.md
@@ -207,6 +219,7 @@ classification:
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
+    - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
     - mlx-backend.md
