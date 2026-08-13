@@ -9,6 +9,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN_TRACKED_PATTERNS = ("RELEASE_NOTE*.md",)
+DUA_RELATION_CORPUS_MARKERS = ("biored", "n2c2", "shac")
+DUA_RELATION_DATA_EXTENSIONS = frozenset(
+    {
+        ".a1",
+        ".a2",
+        ".ann",
+        ".bioc",
+        ".csv",
+        ".gz",
+        ".json",
+        ".jsonl",
+        ".ndjson",
+        ".tar",
+        ".tsv",
+        ".txt",
+        ".xml",
+        ".zip",
+    }
+)
 
 
 def git_ls_files(pattern: str) -> list[str]:
@@ -66,6 +85,20 @@ def git_deleted_files(pattern: str) -> set[str]:
     return deleted
 
 
+def tracked_dua_relation_corpus_files() -> list[str]:
+    """Return tracked BioRED/n2c2 text or annotation payload paths."""
+
+    offenders: list[str] = []
+    for value in git_ls_files("."):
+        path = Path(value)
+        normalized = path.as_posix().casefold()
+        if path.suffix.casefold() not in DUA_RELATION_DATA_EXTENSIONS:
+            continue
+        if any(marker in normalized for marker in DUA_RELATION_CORPUS_MARKERS):
+            offenders.append(value)
+    return offenders
+
+
 def main() -> int:
     forbidden_files: list[str] = []
     for pattern in FORBIDDEN_TRACKED_PATTERNS:
@@ -78,8 +111,13 @@ def main() -> int:
     tracked_ignored_files = [
         path for path in git_tracked_ignored_files() if path not in deleted_files
     ]
+    dua_relation_corpus_files = [
+        path
+        for path in tracked_dua_relation_corpus_files()
+        if path not in deleted_files
+    ]
 
-    if forbidden_files or tracked_ignored_files:
+    if forbidden_files or tracked_ignored_files or dua_relation_corpus_files:
         print("Repository policy failed:", file=sys.stderr)
         if forbidden_files:
             print(
@@ -95,11 +133,20 @@ def main() -> int:
             )
             for path in sorted(set(tracked_ignored_files)):
                 print(f"- remove tracked ignored file: {path}", file=sys.stderr)
+        if dua_relation_corpus_files:
+            print(
+                "- BioRED/n2c2 relation corpus text and annotations must remain "
+                "outside the repository",
+                file=sys.stderr,
+            )
+            for path in sorted(set(dua_relation_corpus_files)):
+                print(f"- remove tracked DUA corpus file: {path}", file=sys.stderr)
         return 1
 
     print("Repository policy passed")
     print("- no tracked RELEASE_NOTE* files found")
     print("- no tracked ignored files found")
+    print("- no tracked BioRED/n2c2 relation corpus payloads found")
     return 0
 
 
