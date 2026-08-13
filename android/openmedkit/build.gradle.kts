@@ -153,6 +153,10 @@ tasks.matching { it.name.startsWith("test") }.configureEach {
     dependsOn(verifyReleaseConsumerRules)
 }
 
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty("openmedkit.moduleDirectory", projectDir.absolutePath)
+}
+
 val verifyReleasePublicationVersion by tasks.registering {
     group = "publishing"
     description = "Fails when the OpenMedKit publication version is a SNAPSHOT or malformed."
