@@ -11,7 +11,17 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
-    from .core import ModelLoader, OpenMedConfig
+    from .core import ModelCachePolicy, ModelLoader, OpenMedConfig
+    from .core.capabilities import (
+        BackendSpec,
+        BackendStatus,
+        MissingOptionalDependencyError,
+    )
+    from .core.document_stream import (
+        DocumentStreamDeidentifier,
+        DocumentStreamResult,
+        deidentify_document_stream,
+    )
     from .core.pii import (
         DeidentificationResult,
         PIIEntity,
@@ -26,7 +36,15 @@ if TYPE_CHECKING:
 _LAZY_IMPORTS = {
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
+    "ModelCachePolicy": ".core",
     "load_model": ".core",
+    "BackendSpec": ".core.capabilities",
+    "BackendStatus": ".core.capabilities",
+    "MissingOptionalDependencyError": ".core.capabilities",
+    "available_backends": ".core.capabilities",
+    "backend_status": ".core.capabilities",
+    "is_backend_available": ".core.capabilities",
+    "require_backend": ".core.capabilities",
     "LANG_TO_LOCALE": ".core.anonymizer",
     "Anonymizer": ".core.anonymizer",
     "AnonymizerConfig": ".core.anonymizer",
@@ -46,6 +64,9 @@ _LAZY_IMPORTS = {
     "RequestBudget": ".core.budget",
     "coerce_budget": ".core.budget",
     "CustomRecognizer": ".core.custom_recognizer",
+    "DocumentStreamDeidentifier": ".core.document_stream",
+    "DocumentStreamResult": ".core.document_stream",
+    "deidentify_document_stream": ".core.document_stream",
     "ExplainReport": ".core.explain",
     "explain": ".core.explain",
     "CachedModel": ".core.hf_hub",
@@ -140,6 +161,7 @@ _LAZY_IMPORTS = {
     "format_predictions": ".processing",
     "postprocess_text": ".processing",
     "preprocess_text": ".processing",
+    "resolve_sections": ".processing",
     "process_batch": ".processing",
     "redact_dataset": ".processing",
     "sentence_utils": ".processing",
@@ -806,14 +828,23 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "ModelCachePolicy",
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",
+    "BackendSpec",
+    "BackendStatus",
+    "MissingOptionalDependencyError",
+    "available_backends",
+    "backend_status",
+    "is_backend_available",
+    "require_backend",
     "TextProcessor",
     "IndicNormalization",
     "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
+    "resolve_sections",
     "TokenizationHelper",
     "OutputFormatter",
     "format_predictions",
@@ -897,6 +928,9 @@ __all__ = [
     "StreamingDeidentificationEvent",
     "StreamingDeidentifier",
     "deidentify_stream",
+    "DocumentStreamDeidentifier",
+    "DocumentStreamResult",
+    "deidentify_document_stream",
     "replay_token_classifier",
     "stream_token_classifier",
     "redaction_preview",
