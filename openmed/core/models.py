@@ -7,6 +7,8 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
+from .capabilities import raise_missing_backend
+
 logger = logging.getLogger(__name__)
 
 HF_AVAILABLE = find_spec("transformers") is not None
@@ -19,10 +21,7 @@ pipeline: Any = None
 def _require_transformers() -> None:
     """Raise actionable guidance when Transformers is unavailable."""
     if not HF_AVAILABLE:
-        raise ImportError(
-            "HuggingFace transformers is required. "
-            "Install with: pip install transformers"
-        )
+        raise_missing_backend("hf", feature="HuggingFace Transformers inference")
 
 
 def _ensure_hf_auto_config() -> None:
@@ -92,6 +91,22 @@ from .offline import (
     is_local_only,
     network_blocked_if_offline,
 )
+
+
+def is_hf_available() -> bool:
+    """Return True when HuggingFace Transformers is importable.
+
+    Mirrors the module-level ``HF_AVAILABLE`` flag so callers can branch on the
+    ``hf`` backend using the same convention as the other optional seams.
+    """
+
+    return bool(HF_AVAILABLE)
+
+
+def ensure_hf_available() -> None:
+    """Raise an actionable error when the ``hf`` extra is not installed."""
+
+    _require_transformers()
 
 
 class ModelLoader:
@@ -379,6 +394,7 @@ class ModelLoader:
         )
 
         model_kwargs: Dict[str, Any] = {}
+        effective_local_only = bool(requested_local_loading.get("local_files_only"))
         try:
             # Create pipeline directly with model name for better caching
             pipeline_device = kwargs.get("device", self._get_device_id())
@@ -393,6 +409,12 @@ class ModelLoader:
                 pipeline_model_reference,
                 kwargs,
             )
+            prepared_reference_is_local = (
+                self._as_existing_local_path(pipeline_model_reference) is not None
+            )
+            prepared_reference_local_only = bool(
+                local_loading_kwargs.get("local_files_only")
+            )
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
             # Transformers forwards loader options through ``model_kwargs``;
@@ -400,10 +422,15 @@ class ModelLoader:
             pipeline_load_kwargs.pop("local_files_only", None)
             model_kwargs.update(local_loading_kwargs)
             cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
-            if cache_dir is None and local_loading_kwargs.get("local_files_only"):
+            if cache_dir is None and prepared_reference_local_only:
                 cache_dir = getattr(self.config, "cache_dir", None)
             if cache_dir is not None:
                 model_kwargs.setdefault("cache_dir", cache_dir)
+            if prepared_reference_is_local:
+                # Transformers 5 already marks filesystem model references as
+                # local. Repeating the option through ``model_kwargs`` makes
+                # AutoConfig receive ``local_files_only`` twice.
+                model_kwargs.pop("local_files_only", None)
             if "quantization_config" in pipeline_load_kwargs:
                 model_kwargs.setdefault(
                     "quantization_config",
@@ -421,7 +448,11 @@ class ModelLoader:
             pipeline_kwargs.update(pipeline_load_kwargs)
             self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
-            effective_local_only = bool(model_kwargs.get("local_files_only"))
+            effective_local_only = bool(
+                requested_local_loading.get("local_files_only")
+                or prepared_reference_local_only
+                or model_kwargs.get("local_files_only")
+            )
             with network_blocked_if_offline(
                 self.config,
                 local_only=effective_local_only,
@@ -435,11 +466,9 @@ class ModelLoader:
         except Exception as e:
             logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
-            fallback_load_kwargs = {
-                key: model_kwargs[key]
-                for key in ("local_files_only",)
-                if key in model_kwargs
-            }
+            fallback_load_kwargs = (
+                {"local_files_only": True} if effective_local_only else {}
+            )
             with network_blocked_if_offline(
                 self.config,
                 local_only=bool(fallback_load_kwargs.get("local_files_only")),

@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...grounding.assertion_grounding import AssertedGroundedSpan
-from ..codeable_concept import to_codeable_concept
+from .codeable_concept import to_codeable_concept
 
 __all__ = [
     "CONDITION_CLINICAL_SYSTEM",

@@ -39,6 +39,8 @@ from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import InputError as InputError
 from ..processing.text import validate_pii_input
 from .budget import BudgetClock, RequestBudget, coerce_budget
+from .capabilities import MissingOptionalDependencyError
+from .capabilities import install_hint as _optional_dependency_install_instruction
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -49,6 +51,7 @@ from .custom_recognizer import (
 from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
+    stable_offset_from_seed,
 )
 from .decoding import iter_grapheme_cluster_spans, remap_normalized_span
 from .offline import network_blocked_if_offline
@@ -89,37 +92,6 @@ DeidentificationMethod = Literal[
     "shift_dates",
     "format_preserve",
 ]
-
-
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
-
-    def __init__(
-        self,
-        *,
-        package: str,
-        feature: str,
-        extra: str | None = None,
-    ) -> None:
-        instruction = _optional_dependency_install_instruction(package, extra)
-        super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
-        )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
-
-
-def _optional_dependency_install_instruction(
-    package: str,
-    extra: str | None = None,
-) -> str:
-    if extra:
-        return (
-            f"Install it with `pip install openmed[{extra}]` "
-            f"or `pip install {package}`."
-        )
-    return f"Install it with `pip install {package}`."
 
 
 def _optional_dependency_status(
@@ -365,6 +337,7 @@ _DAY_FIRST_LANGS = frozenset(
         "sv",
         "da",
         "no",
+        "vi",
     }
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
@@ -602,26 +575,59 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
         INDIC_NER_LANGUAGES,
         INDIC_NER_MODEL_ENV,
         NATIONAL_ID_ONLY_LANGUAGES,
+        OPTIONAL_PII_MODEL,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+        USER_SUPPLIED_PII_MODEL,
     )
 
     accepted_languages = (
-        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
     lang = validate_language(lang, supported=accepted_languages)
+
+    # Registry placeholders published by discovery surfaces such as
+    # ``openmed_list_pii_languages``. They are not loadable repositories, so
+    # echoing one back must fail with the same actionable guidance as omitting
+    # ``model_name`` rather than with a namespaced download error.
+    placeholder_models = {OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL}
+
+    def _no_model_error() -> ValueError:
+        # Only ``ne`` and ``ur`` reach the first branch; the optional Indic NER
+        # routes have an env-var path and are named in the third branch instead.
+        no_weights = sorted(USER_SUPPLIED_MODEL_LANGUAGES - INDIC_NER_LANGUAGES)
+        if lang in no_weights:
+            return ValueError(
+                f"Language '{lang}' has no bundled OpenMed PII model; pass an "
+                "explicit model_name (user-supplied-model languages: "
+                f"{', '.join(no_weights)})"
+            )
+        if lang in NATIONAL_ID_ONLY_LANGUAGES:
+            return ValueError(
+                f"Language '{lang}' has deterministic pattern-only support; "
+                "pass an explicit model_name for model-backed inference"
+            )
+        return ValueError(
+            f"Language '{lang}' uses optional Indic NER weights; pass an "
+            f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
+        )
+
+    if model_name in placeholder_models:
+        if get_default_pii_model(lang) is not None:
+            raise ValueError(
+                f"'{model_name}' is a registry placeholder, not a loadable "
+                "model; omit model_name to use the default for language "
+                f"'{lang}', or pass an explicit model repository or local path"
+            )
+        raise _no_model_error()
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)
         if resolved is None:
-            if lang in NATIONAL_ID_ONLY_LANGUAGES:
-                raise ValueError(
-                    f"Language '{lang}' has deterministic pattern-only support; "
-                    "pass an explicit model_name for model-backed inference"
-                )
-            raise ValueError(
-                f"Language '{lang}' uses optional Indic NER weights; pass an "
-                f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
-            )
+            raise _no_model_error()
         return resolved
     return model_name
 
@@ -2112,6 +2118,7 @@ def _build_deidentification_result(
             patient_key=patient_key,
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
+            seed=seed,
         )
 
     anonymizer = None
@@ -2579,9 +2586,10 @@ def deidentify(
         patient_key: Optional stable patient identifier used only to derive a
             deterministic HMAC date-shift offset. Raw keys are not logged,
             persisted, or returned.
-        date_shift_max_days: Maximum absolute offset for random or
+        date_shift_max_days: Maximum absolute offset for random, seeded, or
             patient-keyed date shifting. Defaults to 365 when ``patient_key``
-            is supplied and neither this nor ``date_shift_days`` is set.
+            or ``seed`` is supplied and neither this nor ``date_shift_days``
+            is set.
         date_shift_secret: Required HMAC key material for patient-keyed
             offsets. Reuse the same value across sessions to keep offsets
             stable.
@@ -2603,8 +2611,11 @@ def deidentify(
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
-        seed: Optional integer seed for cross-run reproducibility of
-            ``consistent=True`` replacements. Implies ``consistent=True``.
+        seed: Optional request-scoped integer seed for cross-run
+            reproducibility of replacements and automatic date shifting.
+            Implies ``consistent=True`` for replacement methods. Explicit
+            ``date_shift_days`` and patient-keyed offsets still take
+            precedence for ``method="shift_dates"``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
@@ -3255,6 +3266,7 @@ def _resolve_date_shift_days(
     patient_key: Optional[str | bytes],
     date_shift_max_days: Optional[int],
     date_shift_secret: Optional[str | bytes],
+    seed: Optional[int] = None,
 ) -> int:
     if patient_key is not None:
         return _stable_date_shift_days(
@@ -3266,6 +3278,14 @@ def _resolve_date_shift_days(
 
     if date_shift_days is not None:
         return date_shift_days
+
+    if seed is not None:
+        max_days = (
+            _validate_date_shift_max_days(date_shift_max_days)
+            if date_shift_max_days is not None
+            else DEFAULT_DATE_SHIFT_MAX_DAYS
+        )
+        return stable_offset_from_seed(seed, max_days=max_days)
 
     if date_shift_max_days is not None:
         max_days = _validate_date_shift_max_days(date_shift_max_days)
