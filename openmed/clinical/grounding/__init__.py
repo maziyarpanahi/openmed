@@ -1,7 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
-from .api import DEFAULT_GROUNDING_SYSTEMS, ground
+from .api import DEFAULT_GROUNDING_SYSTEMS, ground, ground_payload
 from .assertion_grounding import (
     ASSERTION_GROUNDING_ADVISORY,
     GROUNDING_ASSERTION_STATUSES,
@@ -24,10 +24,20 @@ from .athena import (
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
 from .crosswalk import (
     DEFAULT_CROSSWALK_RESOURCES,
+    Crosswalk,
+    CrosswalkCandidate,
+    CrosswalkConfigurationError,
+    CrosswalkDataError,
     CrosswalkEntry,
     CrosswalkFormatError,
     CrosswalkLicenseError,
+    CrosswalkProvenance,
     CrosswalkResource,
+    ICDSNOMEDCrosswalk,
+    UMLSCodeCrosswalk,
+    UMLSCrosswalk,
+    UMLSMappingSource,
+    crosswalk,
     load_crosswalk,
     load_default_crosswalks,
 )
@@ -173,11 +183,13 @@ from .snapshot_cache import (
     snapshot_path,
     store_snapshot,
 )
+from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
 from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
     RestrictedVocabularyError,
+    SnapshotManifest,
     VocabConcept,
     VocabLoader,
     VocabLoaderError,
@@ -207,10 +219,15 @@ __all__ = [
     "CompositeGroundingResult",
     "ConceptMatch",
     "ConceptReference",
+    "Crosswalk",
+    "CrosswalkCandidate",
+    "CrosswalkConfigurationError",
+    "CrosswalkDataError",
     "CPT4_VOCABULARY_ID",
     "CrosswalkEntry",
     "CrosswalkFormatError",
     "CrosswalkLicenseError",
+    "CrosswalkProvenance",
     "CrosswalkResource",
     "DEFAULT_CROSSWALK_RESOURCES",
     "DenseCandidateGenerator",
@@ -237,6 +254,7 @@ __all__ = [
     "IndexBackendUnavailableError",
     "IndexUpdateSummary",
     "InvalidVocabularyLoaderError",
+    "ICDSNOMEDCrosswalk",
     "ICD10CM_CODE_PATTERN",
     "ICD10CM_LICENSE_NOTE",
     "ICD10CM_SYSTEM_URI",
@@ -276,6 +294,7 @@ __all__ = [
     "PostCoordinationStage",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RESTRICTED_SYSTEM_URIS",
+    "RESTRICTED_SYSTEMS",
     "RXNORM_SYSTEM_URI",
     "RankingConfig",
     "Refinement",
@@ -283,6 +302,8 @@ __all__ = [
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "SYSTEM_URIS",
+    "SnapshotManifest",
     "RulesPostCoordinationDecomposer",
     "RxNormLoader",
     "RxNormLoaderError",
@@ -292,6 +313,9 @@ __all__ = [
     "SectionContextConfig",
     "SectionContextRule",
     "TwoStageRetriever",
+    "UMLSCodeCrosswalk",
+    "UMLSMappingSource",
+    "UMLSCrosswalk",
     "UserKeyVocabularyLoader",
     "VocabConcept",
     "VocabLoader",
@@ -310,11 +334,13 @@ __all__ = [
     "build_index",
     "build_or_load_index",
     "build_expression",
+    "crosswalk",
     "decompose_laterality_site_mention",
     "decompose_mention",
     "decompose_and_relink",
     "generate_candidates",
     "ground",
+    "ground_payload",
     "ground_multilingual",
     "ground_with_context",
     "get_index",
@@ -335,6 +361,8 @@ __all__ = [
     "register_loader",
     "retrieve_candidates",
     "scan_provenance_for_raw_text",
+    "canonical_system",
+    "system_uri",
     "DEFAULT_CACHE_ENV",
     "DEFAULT_GROUNDING_CACHE_ENV",
     "INDEX_ARTIFACT_FILENAME",
