@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterable, Mapping
-from typing import Any, TypeAlias
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from openmed.clinical.grounding.assertion_grounding import (
     GROUNDING_HYPOTHETICAL,
@@ -12,7 +12,7 @@ from openmed.clinical.grounding.assertion_grounding import (
     GROUNDING_REFUTED,
     assertion_grounding_status,
 )
-from openmed.clinical.grounding.types import Candidate, GroundedSpan
+from openmed.clinical.grounding.types import GroundedSpan
 from openmed.interop.omop import (
     OmopCdmTables,
     OmopConstraintViolation,
@@ -20,10 +20,26 @@ from openmed.interop.omop import (
     validate_omop_tables,
 )
 
+from ._common import (
+    DOMAIN_BY_LABEL,
+    DOMAIN_BY_SYSTEM,
+    ConceptResolver,
+    resolve_concept,
+)
+from .condition_occurrence import (
+    CONDITION_OCCURRENCE_COLUMNS,
+    to_condition_occurrence,
+)
+from .drug_exposure import DRUG_EXPOSURE_COLUMNS, to_drug_exposure
+
 __all__ = [
+    "CONDITION_OCCURRENCE_COLUMNS",
     "CORE_OMOP_TABLES",
     "ConceptResolver",
+    "DRUG_EXPOSURE_COLUMNS",
     "achilles_smoke_check",
+    "to_condition_occurrence",
+    "to_drug_exposure",
     "to_omop",
 ]
 
@@ -34,22 +50,6 @@ CORE_OMOP_TABLES: tuple[str, ...] = (
     "procedure_occurrence",
 )
 
-_DOMAIN_BY_LABEL = {
-    "CONDITION": "Condition",
-    "MEDICATION": "Drug",
-    "LAB_TEST": "Measurement",
-    "PROCEDURE": "Procedure",
-}
-_DOMAIN_BY_SYSTEM = {
-    "HPO": "Condition",
-    "ICD10CM": "Condition",
-    "ICD11": "Condition",
-    "MESH": "Condition",
-    "SNOMED": "Condition",
-    "UMLS": "Condition",
-    "RXNORM": "Drug",
-    "LOINC": "Measurement",
-}
 _CONCEPT_COLUMN_BY_TABLE = {
     "condition_occurrence": "condition_concept_id",
     "drug_exposure": "drug_concept_id",
@@ -57,54 +57,65 @@ _CONCEPT_COLUMN_BY_TABLE = {
     "procedure_occurrence": "procedure_concept_id",
 }
 
-ConceptResolver: TypeAlias = (
-    Mapping[tuple[str, str], int]
-    | Callable[[GroundedSpan, Candidate | None], int | None]
-)
-
 
 def to_omop(
     grounded: GroundedSpan | Iterable[GroundedSpan],
     *,
+    table: str | None = None,
     document_text: str | None = None,
     document_id: str = "openmed-document",
-    person_id: str = "openmed-subject",
+    person_id: str | None = None,
     visit_id: str | None = None,
     note_date: str | None = None,
     concept_resolver: ConceptResolver | None = None,
+    resolver: ConceptResolver | Any | None = None,
     vocabulary_version: str | None = None,
-) -> OmopCdmTables:
-    """Export grounded spans into OMOP CDM v5.4 table rows.
+) -> OmopCdmTables | tuple[dict[str, Any], ...]:
+    """Export grounded spans into OMOP CDM v5.4 rows.
 
-    The returned :class:`~openmed.interop.omop.OmopCdmTables` includes the four
-    core clinical tables named by :data:`CORE_OMOP_TABLES` plus the supporting
-    ``concept``, ``person``, ``visit_occurrence``, ``note``, ``note_nlp``, and
-    ``source_to_concept_map`` tables needed for referential validation.
+    With no ``table`` argument this preserves the existing local-first export:
+    an :class:`~openmed.interop.omop.OmopCdmTables` containing the four core
+    clinical tables plus supporting concept, person, visit, note, NOTE_NLP, and
+    source-to-concept rows. When ``table`` is ``condition_occurrence`` or
+    ``drug_exposure``, the function returns only that table's exact CDM v5.4
+    row dicts through the table-specific exporters.
 
-    A caller-supplied resolver maps ``(system, code)`` pairs to Athena standard
-    ``concept_id`` values. Missing mappings remain ``concept_id=0`` while the
-    source system/code/value are preserved; the exporter never fabricates an
-    OMOP concept identifier. Refuted, hypothetical, and non-patient assertions
-    are excluded from occurrence tables.
-
-    Args:
-        grounded: One span or an iterable from a single source document.
-        document_text: Original source text. When omitted, a deterministic text
-            shell is reconstructed from span offsets for NOTE_NLP integrity.
-        document_id: Stable source-document identifier.
-        person_id: Stable source person identifier (hashed by the CDM loader).
-        visit_id: Optional source visit identifier.
-        note_date: Optional ISO note date.
-        concept_resolver: Mapping or callable returning standard concept IDs.
-        vocabulary_version: Optional vocabulary release/version provenance.
-
-    Returns:
-        In-memory OMOP CDM v5.4 tables with deterministic identifiers.
+    A caller-supplied resolver maps grounded source codes to Athena standard
+    concept IDs. Missing mappings remain concept ID ``0`` while source text and
+    code provenance are retained. Refuted, hypothetical, and non-patient
+    assertions are excluded from the default occurrence-table export.
     """
 
+    if concept_resolver is not None and resolver is not None:
+        raise ValueError("provide only one of concept_resolver or resolver")
+    active_resolver = concept_resolver if concept_resolver is not None else resolver
     spans = (grounded,) if isinstance(grounded, GroundedSpan) else tuple(grounded)
     if any(not isinstance(span, GroundedSpan) for span in spans):
         raise TypeError("to_omop expects GroundedSpan objects")
+
+    if table is not None:
+        if table not in {"condition_occurrence", "drug_exposure"}:
+            raise ValueError(
+                "table must be 'condition_occurrence', 'drug_exposure', or None"
+            )
+        if table == "condition_occurrence":
+            return to_condition_occurrence(
+                spans,
+                concept_resolver=active_resolver,
+                person_id=person_id,
+                visit_id=visit_id,
+                document_id=document_id,
+                note_date=note_date,
+            )
+        return to_drug_exposure(
+            spans,
+            concept_resolver=active_resolver,
+            person_id=person_id,
+            visit_id=visit_id,
+            document_id=document_id,
+            note_date=note_date,
+        )
+
     source_text = _document_text(spans, document_text)
     entities: list[dict[str, Any]] = []
     for span in spans:
@@ -112,15 +123,15 @@ def to_omop(
             continue
         domain = _domain(span)
         candidate = span.candidates[0] if span.candidates else None
-        concept_id = _concept_id(span, candidate, concept_resolver)
+        resolved = resolve_concept(span, active_resolver)
         entities.append(
             {
                 "text": span.text,
                 "start": span.start,
                 "end": span.end,
                 "domain_id": domain,
-                "concept_id": concept_id,
-                "source_concept_id": 0,
+                "concept_id": resolved.standard_concept_id,
+                "source_concept_id": resolved.source_concept_id,
                 "code": candidate.code if candidate else "",
                 "vocabulary_id": candidate.system if candidate else "UNMAPPED",
                 "concept_name": candidate.display if candidate else span.text,
@@ -129,7 +140,7 @@ def to_omop(
 
     note: dict[str, Any] = {
         "document_id": document_id,
-        "person_id": person_id,
+        "person_id": person_id or "openmed-subject",
         "note_text": source_text,
         "entities": entities,
     }
@@ -149,16 +160,9 @@ def achilles_smoke_check(
     """Run an offline ACHILLES-style structural preflight over core tables.
 
     Full OHDSI ACHILLES requires a deployed CDM database and is deliberately
-    not bundled. This documented smoke subset checks the prerequisites most
-    relevant to generated grounding rows: expected tables/columns, nonnegative
-    standard concept IDs, positive deterministic keys, and all concept/note
-    references validated by :func:`validate_omop_tables`.
-
-    Args:
-        tables: In-memory OMOP CDM tables to inspect.
-
-    Returns:
-        Deterministically ordered structural violations, or an empty tuple.
+    not bundled. This smoke subset checks expected tables/columns,
+    nonnegative standard concept IDs, positive deterministic keys, and all
+    concept/note references validated by :func:`validate_omop_tables`.
     """
 
     violations = list(validate_omop_tables(tables))
@@ -185,12 +189,8 @@ def achilles_smoke_check(
                     )
                 )
                 continue
-            concept_id = row[concept_column]
-            if (
-                isinstance(concept_id, bool)
-                or not isinstance(concept_id, int)
-                or concept_id < 0
-            ):
+            concept = row[concept_column]
+            if isinstance(concept, bool) or not isinstance(concept, int) or concept < 0:
                 violations.append(
                     OmopConstraintViolation(
                         table=table,
@@ -238,12 +238,12 @@ def _document_text(spans: tuple[GroundedSpan, ...], document_text: str | None) -
 
 def _domain(span: GroundedSpan) -> str:
     label = (span.canonical_label or "").upper()
-    if label in _DOMAIN_BY_LABEL:
-        return _DOMAIN_BY_LABEL[label]
+    if label in DOMAIN_BY_LABEL:
+        return DOMAIN_BY_LABEL[label]
     if span.candidates:
         system = span.candidates[0].system.upper()
-        if system in _DOMAIN_BY_SYSTEM:
-            return _DOMAIN_BY_SYSTEM[system]
+        if system in DOMAIN_BY_SYSTEM:
+            return DOMAIN_BY_SYSTEM[system]
     raise ValueError("cannot infer an OMOP domain; provide a supported canonical_label")
 
 
@@ -256,31 +256,6 @@ def _exportable_assertion(span: GroundedSpan) -> bool:
         GROUNDING_HYPOTHETICAL,
         GROUNDING_NON_PATIENT,
     }
-
-
-def _concept_id(
-    span: GroundedSpan,
-    candidate: Candidate | None,
-    resolver: ConceptResolver | None,
-) -> int:
-    if resolver is None:
-        return 0
-    if callable(resolver):
-        resolved = resolver(span, candidate)
-    elif candidate is None:
-        resolved = None
-    else:
-        keys = (
-            (candidate.system, candidate.code),
-            (candidate.system.upper(), candidate.code),
-            (candidate.system.casefold(), candidate.code),
-        )
-        resolved = next((resolver[key] for key in keys if key in resolver), None)
-    if resolved is None:
-        return 0
-    if isinstance(resolved, bool) or not isinstance(resolved, int) or resolved <= 0:
-        raise ValueError("concept_resolver values must be positive integers or None")
-    return resolved
 
 
 def _vocabulary_version(spans: tuple[GroundedSpan, ...]) -> str:

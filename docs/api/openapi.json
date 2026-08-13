@@ -352,6 +352,64 @@
         "title": "DeidentifyJobRequest",
         "type": "object"
       },
+      "GroundRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for the offline terminology grounding route.",
+        "properties": {
+          "entities": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entities"
+          },
+          "offline": {
+            "default": true,
+            "title": "Offline",
+            "type": "boolean"
+          },
+          "source_language": {
+            "default": "en",
+            "title": "Source Language",
+            "type": "string"
+          },
+          "systems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Systems",
+            "type": "array"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "top_k": {
+            "default": 5,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "title": "GroundRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1451,6 +1509,47 @@
           }
         },
         "summary": "Smart Backend Ingestion Summary"
+      }
+    },
+    "/ground": {
+      "post": {
+        "description": "Ground text or pre-extracted entities against local snapshots.",
+        "operationId": "ground_route_ground_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ground Route Ground Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ground Route"
       }
     },
     "/health": {

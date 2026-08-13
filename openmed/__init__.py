@@ -86,6 +86,7 @@ _LAZY_IMPORTS = {
     "get_model_suggestions": ".core.model_registry",
     "get_models_by_category": ".core.model_registry",
     "get_pii_models_by_language": ".core.model_registry",
+    "ground": ".clinical.grounding",
     "list_model_categories": ".core.model_registry",
     "ModelQuery": ".core.model_search",
     "ModelSearchResult": ".core.model_search",
