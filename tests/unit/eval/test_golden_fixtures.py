@@ -1605,6 +1605,11 @@ def test_per_language_id_traps_cover_all_wired_languages():
         assert "start" in hn and "end" in hn
         assert "text" in hn and "identifier_type" in hn and "reason" in hn
         assert fixture.text[hn["start"] : hn["end"]] == hn["text"]
+        for span in fixture.gold_spans:
+            assert not (hn["start"] < span.end and span.start < hn["end"]), (
+                f"{fixture.fixture_id}: hard negative [{hn['start']}:{hn['end']}] "
+                f"overlaps gold span [{span.start}:{span.end}]"
+            )
         assert fixture.expected_output["method"] == "mask"
         assert fixture.expected_output["text"]
 

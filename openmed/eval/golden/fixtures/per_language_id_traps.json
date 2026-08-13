@@ -374,8 +374,8 @@
         "locale": "ja_JP",
         "hard_negatives": [
           {
-            "start": 13,
-            "end": 26,
+            "start": 31,
+            "end": 44,
             "text": "1234 5678 901",
             "identifier_type": "my_number",
             "reason": "format_mismatch"
