@@ -150,6 +150,7 @@ classification:
     - profiles.md
     - plugin-sdk.md
     - batch-processing.md
+    - batch-howto.md
     - legacy-indic-encoding.md
     - profiling.md
     - benchmarks/low-resource.md
@@ -205,6 +206,7 @@ classification:
     - prefect-integration.md
     - spacy-component.md
     - hl7v2-deidentification.md
+    - interop/hl7v2-narrative-extraction.md
     - interop/x12-837-redaction.md
     - compliance.md
     - compliance/21-cfr-part-11-audit-trail.md
