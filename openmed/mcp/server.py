@@ -12,6 +12,10 @@ from inspect import Signature
 from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
+from openmed.agent.security.injection_guard import (
+    InjectionGuard,
+    PromptInjectionDetected,
+)
 from openmed.clinical.exporters.fhir import to_bundle, to_fhir
 from openmed.clinical.grounding import (
     DEFAULT_GROUNDING_SYSTEMS,
@@ -164,6 +168,8 @@ def _error_envelope(error: BaseException) -> Dict[str, Any]:
     if isinstance(error, MCPGatewaySecurityError):
         return safe_error_payload(error)
 
+    if isinstance(error, PromptInjectionDetected):
+        return {"error": error.to_dict(), "is_error": True}
     error_module = error.__class__.__module__
     if isinstance(error, ToolSchemaValidationError):
         code = "invalid_result"
@@ -224,6 +230,7 @@ def _mcp_return_annotation(spec: ToolSpec) -> Any:
 def _render_structured_mcp_tool(
     spec: ToolSpec,
     handler: Callable[..., Dict[str, Any]],
+    injection_guard: Optional[InjectionGuard] = None,
 ) -> Callable[..., Any]:
     """Render one registry tool with structured success and error results."""
 
@@ -232,7 +239,12 @@ def _render_structured_mcp_tool(
 
     def _tool(*args: Any, **kwargs: Any) -> Any:
         try:
-            payload = registry_tool(*args, **kwargs)
+            if injection_guard is None:
+                payload = registry_tool(*args, **kwargs)
+            else:
+                bound = spec.signature.bind_partial(*args, **kwargs)
+                guarded = injection_guard.guard_input(bound.arguments)
+                payload = registry_tool(**guarded.value)
         except Exception as error:
             return _call_tool_result(_error_envelope(error), is_error=True)
         return _call_tool_result(payload, is_error=False)
@@ -285,6 +297,7 @@ def _current_mcp_access_token() -> Any:
 
 def _structured_fastmcp(
     base_class: Any,
+    injection_guard: Optional[InjectionGuard] = None,
     *,
     policy: Optional[MCPToolPolicy] = None,
 ) -> Any:
@@ -292,7 +305,10 @@ def _structured_fastmcp(
 
     from jsonschema import validate
 
-    tool_policy = policy or MCPToolPolicy()
+    tool_policy = policy
+    selected_guard = injection_guard or InjectionGuard.from_env(
+        "OPENMED_MCP_INJECTION_GUARD_MODE"
+    )
 
     class _OpenMedFastMCP(base_class):
         async def call_tool(
@@ -305,20 +321,22 @@ def _structured_fastmcp(
                 granted_scopes = tuple(
                     str(scope) for scope in getattr(access_token, "scopes", ())
                 )
-                permission_granted = (
-                    access_token is None and tool_policy.allow_local_state_changes
-                ) or tool_policy.has_state_change_permission(granted_scopes)
                 tool = self._tool_manager.get_tool(name)
                 if tool is None:
                     raise KeyError(name)
-                validate(instance=arguments, schema=tool.parameters)
-                tool_policy.validate_tool_call(
-                    name,
-                    arguments,
-                    granted_scopes=granted_scopes,
-                    permission_granted=permission_granted,
-                )
-                return await super().call_tool(name, arguments)
+                guarded = selected_guard.guard_arguments(arguments)
+                validate(instance=guarded.value, schema=tool.parameters)
+                if tool_policy is not None:
+                    permission_granted = (
+                        access_token is None and tool_policy.allow_local_state_changes
+                    ) or tool_policy.has_state_change_permission(granted_scopes)
+                    tool_policy.validate_tool_call(
+                        name,
+                        guarded.value,
+                        granted_scopes=granted_scopes,
+                        permission_granted=permission_granted,
+                    )
+                return await super().call_tool(name, guarded.value)
             except Exception as error:
                 return _call_tool_result(_error_envelope(error), is_error=True)
 
@@ -1508,6 +1526,7 @@ MCP_TOOL_NAMES: frozenset[str] = frozenset(build_mcp_tool_handlers(None))
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
+    injection_guard: Optional[InjectionGuard] = None,
 ) -> None:
     handlers = build_mcp_tool_handlers(runtime_provider)
     for spec in TOOL_REGISTRY.latest_specs():
@@ -1517,7 +1536,13 @@ def _register_tools(
             description=spec.description,
             annotations=_mcp_annotations(spec),
             structured_output=True,
-        )(_render_structured_mcp_tool(spec, handlers[spec.name]))
+        )(
+            _render_structured_mcp_tool(
+                spec,
+                handlers[spec.name],
+                injection_guard,
+            )
+        )
         _synchronize_registered_schemas(server, spec)
 
 
@@ -1637,6 +1662,7 @@ def create_mcp_server(
     auth_config: Optional[MCPAuthorizationConfig] = None,
     token_verifier: Any = None,
     auth_server_provider: Any = None,
+    injection_guard_mode: Optional[str] = None,
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
     if authorization_config is not None and auth_config is not None:
@@ -1664,7 +1690,15 @@ def create_mcp_server(
         max_nesting=gateway_config.max_nesting,
         max_nodes=gateway_config.max_nodes,
     )
-    FastMCP = _structured_fastmcp(_load_fastmcp(), policy=policy)
+    if injection_guard_mode is None:
+        injection_guard = InjectionGuard.from_env("OPENMED_MCP_INJECTION_GUARD_MODE")
+    else:
+        injection_guard = InjectionGuard(mode=injection_guard_mode)
+    FastMCP = _structured_fastmcp(
+        _load_fastmcp(),
+        policy=policy,
+        injection_guard=injection_guard,
+    )
 
     server_kwargs: dict[str, Any] = {
         "instructions": MCP_INSTRUCTIONS,
@@ -1699,7 +1733,7 @@ def create_mcp_server(
             }
         )
     server = FastMCP("OpenMed", **server_kwargs)
-    _register_tools(server, runtime_provider)
+    _register_tools(server, runtime_provider, injection_guard)
     _register_resources(server, runtime_provider)
     _register_prompts(server)
     return server
