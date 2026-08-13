@@ -51,6 +51,7 @@ nav:
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
+      - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md

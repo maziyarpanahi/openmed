@@ -123,6 +123,7 @@ classification:
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - grounding.md
+    - interop/snomed-terminology-bridge.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
