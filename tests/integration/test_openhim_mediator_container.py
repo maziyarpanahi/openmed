@@ -47,6 +47,7 @@ def test_openhim_dockerfile_probes_local_heartbeat() -> None:
 def test_openhim_dockerfile_includes_forced_package_data() -> None:
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
+    assert "COPY models.jsonl /app/models.jsonl" in dockerfile
     assert (
         "COPY eval/redteam/corpus/adversarial_phi.jsonl "
         "/app/eval/redteam/corpus/adversarial_phi.jsonl" in dockerfile
