@@ -198,6 +198,7 @@ classification:
     - spacy-component.md
     - hl7v2-deidentification.md
     - compliance.md
+    - compliance/21-cfr-part-11-audit-trail.md
     - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md
     - compliance/north-africa-pdpl-0908-checklist.md
