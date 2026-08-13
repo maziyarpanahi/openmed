@@ -174,4 +174,3 @@ Build the documentation with the same strict command used by CI:
 ```bash
 mkdocs build --strict
 ```
-

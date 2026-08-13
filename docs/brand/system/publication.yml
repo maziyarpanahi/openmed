@@ -139,6 +139,7 @@ classification:
     - profiles.md
     - plugin-sdk.md
     - batch-processing.md
+    - batch-howto.md
     - legacy-indic-encoding.md
     - profiling.md
     - benchmarks/low-resource.md
