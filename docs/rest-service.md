@@ -21,6 +21,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
 - `POST /omop/load`
+- `POST /cohort/resolve`
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
 schema and returns `404` unless metrics are enabled.

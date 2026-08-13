@@ -140,6 +140,7 @@ promoting the new version.
 - [Changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md)
 - [Release Streams, SemVer, and Channels](release/semver-and-channels.md)
 - [Migrating from 1.9 to 2.0](migration/1.9-to-2.0.md)
+- [OpenMed 2.1.0 Release Notes](release/v2.1.0.md)
 - [OpenMed 2.0.0 Release Notes](release/v2.0.0.md)
 - [OpenMed 1.9.1 Release Notes](release/v1.9.1.md)
 - [OpenMed 1.9.0 Release Notes](release/v1.9.0.md)
