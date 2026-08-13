@@ -1,8 +1,9 @@
 """Multimodal ingestion and redaction package for section 4.2.
 
 Provides the shared ingest/redact contract (``ExtractedDocument`` and the
-``redact_document`` dispatcher) that PDF/DOCX/PPTX/HTML/image/DICOM ingesters
-build on. The per-format parsers and OCR adapters live in sibling modules and
+``redact_document`` dispatcher) that PDF/DOCX/HTML->text+offsets, PPTX, OCR,
+and image/DICOM ingesters build on. The per-format parsers and OCR adapters live
+in sibling modules and
 are registered lazily via :func:`register_handler`; this package stays
 importable without the ``multimodal`` extra installed.
 """

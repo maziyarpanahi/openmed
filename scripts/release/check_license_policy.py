@@ -81,6 +81,7 @@ REVIEWED_LICENSES = {
     "confluent-kafka": "Apache-2.0",
     "coremltools": "BSD-3-Clause",
     "cryptography": "Apache-2.0 OR BSD-3-Clause",
+    "dagster": "Apache-2.0",
     "dask": "BSD-3-Clause",
     "duckdb": "MIT",
     "easyocr": "Apache-2.0",
