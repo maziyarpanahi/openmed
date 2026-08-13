@@ -122,6 +122,7 @@ classification:
     - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - grounding.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
