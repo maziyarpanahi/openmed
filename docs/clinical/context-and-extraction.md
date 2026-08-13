@@ -83,7 +83,7 @@ backward compatibility. A registered non-English pack is otherwise isolated:
 missing cues keep the default recent, certain, and affirmed axes rather than
 borrowing English cues.
 
-The shipped `en`, `es`, `fr`, `de`, `zh`, and `hi` packs live in
+The shipped `en`, `es`, `fr`, `de`, `zh`, `hi`, and `pt` packs live in
 `openmed/clinical/lexicons/context_cues.py`. They are compact,
 OpenMed-authored surface-form tables distributed with the repository under
 Apache-2.0. They are not verbatim exports of a publication's supplementary
@@ -105,7 +105,7 @@ compatible with Apache-2.0.
 | [Velupillai et al., *Cue-based assertion classification for Swedish clinical text—developing a lexicon for pyConTextSwe*](https://pmc.ncbi.nlm.nih.gov/articles/PMC4104142/) | The practice of testing language-specific cues, inflections, uncertainty, and error-driven refinements independently. | Swedish is not a shipped pack, and no pyConTextSwe cue or clinical sentence was copied. |
 
 The English pack migrated the pre-registry OpenMed tuples to preserve existing
-behavior. The Spanish, French, German, Chinese, and Hindi packs are
+behavior. The Spanish, French, German, Chinese, Hindi, and Portuguese packs are
 OpenMed-maintained baselines authored as small lists of common surface forms.
 The multilingual publications above informed their structure and review
 criteria; they are not a claim that every shipped phrase occurs in those
@@ -113,6 +113,19 @@ resources. Chinese and Hindi entries in particular are OpenMed-authored
 applications of the published cue-and-scope method, not translations imported
 from those publications. Their committed evaluation evidence is the synthetic
 fixture described below, not a restricted clinical corpus.
+
+The Portuguese pack was authored from no external lexical source: no URL, DOI,
+or third-party cue list was consulted or copied, so there is no upstream
+license to honor beyond this repository's Apache-2.0 terms. Its entries are
+common Brazilian and European Portuguese clinical surface forms, and every one
+of them carries a behavioral regression case in
+`tests/unit/clinical/test_context_multilingual.py`; an exact-set test fails if
+a cue is added without one. Two review notes are recorded rather than assumed.
+Bare `se` is excluded from the conditional cues because it is also the
+reflexive clitic, and bare `previo`/`previa` are excluded because
+`placenta previa` is a diagnosis rather than a temporal marker. The pack has
+not yet had a fluent-clinician sign-off; the shipped evidence is the cue-level
+regression table and the synthetic fixture, not a native-speaker review.
 
 ### Lexicon Fields
 
@@ -230,6 +243,44 @@ patient condition. The `ClinicalAssertion.experiencer` field is available for
 callers that already have an experiencer layer.
 
 ## Assertion Records
+
+`assert_context(text, spans)` is the document-level API. It returns copied span
+mappings with `negation`, `uncertainty`, `experiencer`, and `temporality`, and
+also places those fields under `metadata["clinical_context"]` for compatibility
+with formatted NER results. Input spans are not mutated.
+
+Pass detected or upstream `SectionSpan` metadata through `sections=` to apply
+section-scoped priors. The span must fall inside the section's half-open
+`start`/`end` range. Canonical labels and supported LOINC section codes are
+accepted. With this opt-in path, each result also contains `context_sources`
+and `metadata["clinical_context_sources"]`, recording the winning source for
+each axis.
+
+Precedence is deterministic for every axis:
+
+1. `local` — an explicit in-clause modifier wins.
+2. `section` — a containing-section prior is used when no local modifier wins.
+3. `default` — the existing global default is used otherwise.
+
+Family History supplies `experiencer=family`; Past Medical History supplies
+`temporality=historical`. Section header text is not treated as a local cue, so
+provenance distinguishes a section prior from an explicit statement in the
+section body. Omitting `sections` preserves the prior output shape and values.
+
+```python
+from openmed.clinical import assert_context
+from openmed.clinical.sections import detect_sections
+
+text = "Past Medical History:\nPneumonia."
+start = text.index("Pneumonia")
+[span] = assert_context(
+    text,
+    [{"text": "Pneumonia", "start": start, "end": start + 9}],
+    sections=detect_sections(text),
+)
+print(span["temporality"])
+print(span["context_sources"]["temporality"])
+```
 
 `assert_context_axes()` returns a compact `ClinicalAssertion` for downstream
 grounding. It deliberately does not build FHIR, OMOP, or other clinical records

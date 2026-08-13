@@ -16,7 +16,7 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 
 from openmed.mcp.server import create_mcp_server
-from openmed.mcp.tool_registry import TOOL_REGISTRY
+from openmed.mcp.tool_registry import CLINICAL_WORKFLOW_SPEC, TOOL_REGISTRY
 from openmed.service.security import MCPAuthorizationConfig
 
 
@@ -142,3 +142,28 @@ def test_remote_server_wires_protected_resource_auth_and_per_tool_scope() -> Non
     }
     assert "/mcp" in routes
     assert "/.well-known/oauth-protected-resource/mcp" in routes
+
+
+def test_clinical_workflow_prompt_and_resources_are_exposed_over_mcp() -> None:
+    server = _server()
+    prompts = asyncio.run(server.list_prompts())
+    resources = asyncio.run(server.list_resources())
+
+    assert CLINICAL_WORKFLOW_SPEC.prompt_name in {prompt.name for prompt in prompts}
+    resource_uris = {str(resource.uri) for resource in resources}
+    assert CLINICAL_WORKFLOW_SPEC.resource_uri in resource_uris
+    assert CLINICAL_WORKFLOW_SPEC.fixture_uri in resource_uris
+
+    workflow_contents = asyncio.run(
+        server.read_resource(CLINICAL_WORKFLOW_SPEC.resource_uri)
+    )
+    fixture_contents = asyncio.run(
+        server.read_resource(CLINICAL_WORKFLOW_SPEC.fixture_uri)
+    )
+    workflow = json.loads(workflow_contents[0].content)
+    fixture = json.loads(fixture_contents[0].content)
+
+    assert workflow["execution"]["default"] == "local"
+    assert workflow["execution"]["network_egress"] is False
+    assert fixture["synthetic"] is True
+    assert fixture["artifacts"]["export"]["bundle"]["resourceType"] == "Bundle"
