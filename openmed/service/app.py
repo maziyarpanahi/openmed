@@ -89,6 +89,7 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
+from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
@@ -107,10 +108,12 @@ _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _MODEL_BACKED_PATHS = frozenset(
     {
+        "/graphql",
         "/analyze",
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
+        "/pii/deidentify/stream",
         "/jobs",
         _PRIVACY_GATEWAY_PATH,
         _SMART_BACKEND_START_PATH,
@@ -354,6 +357,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
+            high_watermark=runtime.batching.high_watermark,
+            low_watermark=runtime.batching.low_watermark,
+            max_queue_wait_ms=runtime.batching.max_queue_wait_ms,
+            queue_name="analyze",
             metrics=runtime.metrics,
         )
         app.state.pii_extract_batcher = DynamicBatcher(
@@ -361,6 +368,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
+            high_watermark=runtime.batching.high_watermark,
+            low_watermark=runtime.batching.low_watermark,
+            max_queue_wait_ms=runtime.batching.max_queue_wait_ms,
+            queue_name="pii_extract",
             metrics=runtime.metrics,
         )
     app.state.throttle = ServiceThrottle(
@@ -1077,6 +1088,16 @@ def create_app() -> FastAPI:
             priority=priority,
         )
 
+    @app.post("/pii/deidentify/stream")
+    async def pii_deidentify_stream(
+        payload: PIIDeidentifyStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
+        set_access_log_model_name(request, payload.model_name)
+        runtime = _get_service_runtime(request)
+        events = deidentify_ndjson_stream(payload, runtime)
+        return StreamingResponse(events, media_type="application/x-ndjson")
+
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
         payload: PrivacyGatewayRequest,
@@ -1348,6 +1369,10 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
+
+    from .graphql_app import mount_graphql
+
+    mount_graphql(app, runtime_getter=_get_service_runtime)
 
     if app.state.tracing.enabled:
         app.add_middleware(

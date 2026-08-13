@@ -101,11 +101,14 @@ classification:
     - rest-recipes.md
     - serving/tracing.md
     - serving/resilience.md
+    - serving/backpressure.md
     - deploy/hardened-image.md
     - offline-install.md
     - serving/async-jobs.md
     - serving/grpc.md
+    - serving/graphql.md
     - serving/authentication.md
+    - serving/load-testing.md
     - deploy/helm.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
