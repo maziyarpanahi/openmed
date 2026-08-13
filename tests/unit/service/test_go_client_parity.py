@@ -23,6 +23,7 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 # Every OpenAPI operation maps to exactly one exported Go client method.
 CLIENT_METHOD_BY_OPERATION = {
     ("post", "/analyze"): "Analyze",
+    ("post", "/cohort/resolve"): "ResolveCohort",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
@@ -45,6 +46,8 @@ CLIENT_METHOD_BY_OPERATION = {
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
     "AnalyzeRequest": "AnalyzeRequest",
+    "CohortResolveRequest": "CohortResolveRequest",
+    "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
     "JobWebhookRequest": "JobWebhookRequest",
@@ -183,7 +186,15 @@ def test_go_request_requiredness_and_zero_defaults_match_openapi() -> None:
 
 
 def test_go_pii_languages_match_core_and_openapi() -> None:
-    from openmed.core.pii_i18n import INDIC_NER_LANGUAGES, SUPPORTED_LANGUAGES
+    from openmed.core.pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
+
+    registered_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
     go_languages = set(
@@ -203,10 +214,8 @@ def test_go_pii_languages_match_core_and_openapi() -> None:
         if isinstance(properties.get("lang"), dict) and "enum" in properties["lang"]
     }
 
-    assert go_languages == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
-    assert openapi_language_sets == {
-        frozenset(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)
-    }
+    assert go_languages == registered_languages
+    assert openapi_language_sets == {frozenset(registered_languages)}
 
 
 def test_go_openapi_enum_constants_match() -> None:
@@ -416,6 +425,7 @@ def _go_type_matches_schema(go_type: str, schema: dict[str, Any]) -> bool:
         "boolean": {"bool"},
         "integer": {"int"},
         "number": {"float64"},
+        "object": {"JSONObject"},
         "string": {
             "string",
             "AggregationStrategy",

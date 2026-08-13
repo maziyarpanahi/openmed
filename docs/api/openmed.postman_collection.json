@@ -607,6 +607,48 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Cohort",
+      "item": [
+        {
+          "name": "Resolve Cohort",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phenotype\": {\n    \"schema_version\": \"openmed.cohort.phenotype.v1\",\n    \"id\": \"example-diabetes\",\n    \"name\": \"Example diabetes phenotype\",\n    \"concept_sets\": [\n      {\n        \"id\": \"diabetes\",\n        \"vocabulary\": \"OMOP\",\n        \"concept_ids\": [201826],\n        \"include_descendants\": false\n      }\n    ],\n    \"expression\": {\n      \"operator\": \"criterion\",\n      \"criterion\": {\n        \"id\": \"has-diabetes\",\n        \"concept_set\": \"diabetes\",\n        \"occurrence\": {\"minimum\": 1},\n        \"assertion\": {\"negation\": [\"affirmed\"]}\n      }\n    }\n  },\n  \"records_jsonl\": \"{\\\"document_id\\\": \\\"synthetic-cohort-note-001\\\", \\\"entities\\\": [{\\\"concept_id\\\": 201826, \\\"domain_id\\\": \\\"Condition\\\", \\\"end\\\": 18, \\\"start\\\": 10, \\\"text\\\": \\\"diabetes\\\", \\\"vocabulary_id\\\": \\\"OMOP\\\"}], \\\"note_date\\\": \\\"2026-01-02\\\", \\\"note_text\\\": \\\"Synthetic diabetes marker.\\\", \\\"person_id\\\": \\\"synthetic-cohort-person-001\\\"}\\n\",\n  \"concept_ancestors\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/cohort/resolve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cohort",
+                "resolve"
+              ]
+            },
+            "description": "Resolve a stable phenotype over newline-delimited synthetic grounded records in memory and return internal patient IDs plus PHI-free evidence pointers and provenance."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

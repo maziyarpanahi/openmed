@@ -14,6 +14,16 @@ is raised cleanly, so no thread is killed and no partial state is corrupted.
 Budgets are always optional. When no budget is supplied (or ``None`` is passed),
 behavior is byte-for-byte identical to the historical unlimited default.
 
+Clock choice: elapsed wall time is measured with :func:`time.perf_counter`, the
+highest-resolution clock available for short durations. :func:`time.monotonic`
+is not usable here because on Windows it is backed by ``GetTickCount64()`` with
+a 15.6 ms granularity until CPython 3.13, which makes any ``max_wall_time``
+below one tick unenforceable and quantizes every longer budget to the nearest
+tick. Both clocks are monotonic and both have an undefined reference point, so
+only differences are meaningful -- which is all :attr:`BudgetClock.elapsed`
+computes. ``started_at`` is created and consumed in the same process and is
+never serialized or compared across processes.
+
 Privacy: neither the budget object nor :class:`BudgetExceededError` ever
 captures raw input text or PHI. Errors carry only counts, limits, and the name
 of the checkpoint at which the budget was exceeded.
@@ -163,7 +173,7 @@ class RequestBudget:
         The returned :class:`BudgetClock` shares this budget's limits and is the
         object the pipeline checks at each safe checkpoint.
         """
-        return BudgetClock(budget=self, started_at=time.monotonic())
+        return BudgetClock(budget=self, started_at=time.perf_counter())
 
     def check_input_length(
         self,
@@ -206,7 +216,7 @@ class BudgetClock:
     @property
     def elapsed(self) -> float:
         """Seconds elapsed since the clock started."""
-        return time.monotonic() - self.started_at
+        return time.perf_counter() - self.started_at
 
     def check_input_length(
         self,
