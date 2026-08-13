@@ -43,6 +43,13 @@ text should follow `docs/migration/2.0-to-2.1.md`.
 
 ### Added
 
+- Added an experiencer-aware patient-record span filter
+  (`openmed.clinical.filter_patient_record`) that partitions per-span
+  `ClinicalAssertion` records into patient-record eligible and excluded sets.
+  Non-patient experiencers (`family` and `other`) and hypothetical spans are
+  excluded with auditable reasons; negated patient spans are retained and
+  marked `refuted`. Includes a medical-device-style advisory disclaimer that
+  the filter is a record-construction aid, not a clinical decision (#2251).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
