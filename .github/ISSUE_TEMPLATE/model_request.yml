@@ -1,0 +1,68 @@
+name: Model or language request
+description: Request a model or language support addition to the manifest-driven model catalog
+title: "[MODEL] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **No PHI in issues.** This form is public. Never paste real patient data, PHI/PII, or other sensitive information here.
+        Use a de-identified example with placeholder values instead.
+
+        The catalog lives in `models.jsonl` (see [Model Manifest](https://github.com/maziyarpanahi/openmed/blob/master/docs/model-manifest.md)).
+        Each row is keyed by Hugging Face `repo_id`. Model requests are evaluated against that manifest.
+  - type: dropdown
+    id: request-type
+    attributes:
+      label: Request type
+      description: What are you requesting?
+      multiple: false
+      options:
+        - New model
+        - New language support for an existing model
+        - New format/quantization for an existing model
+    validations:
+      required: true
+  - type: input
+    id: repo-id
+    attributes:
+      label: Hugging Face repo_id
+      description: The model id, e.g. `OpenMed/medical-ner`. Required for a new model or format request.
+      placeholder: OpenMed/...
+  - type: input
+    id: languages
+    attributes:
+      label: Language(s)
+      description: BCP 47-style language codes (comma separated), e.g. `ar, fa`. Required for a language-support request.
+      placeholder: ar, fa
+  - type: dropdown
+    id: family
+    attributes:
+      label: Model family
+      description: Which catalog family best fits the request?
+      multiple: false
+      options:
+        - NER
+        - PII
+        - Vision
+        - ZeroShot
+        - Other
+      default: 0
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: The clinical or processing workflow this model/language enables, and why the existing catalog does not cover it.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to the model card, paper, or license, plus any measured benchmarks. For language requests, note the script coverage you need.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add any other context here (no PHI).

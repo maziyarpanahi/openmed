@@ -1,0 +1,75 @@
+name: Bug report
+description: Create a report to help us improve
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **No PHI in issues.** This form is public. Never paste real patient data, PHI/PII, or other sensitive information here.
+        A redaction bypass or PHI/PII leak must be reported **privately** via our
+        [security advisory form](https://github.com/maziyarpanahi/openmed/security/advisories/new) —
+        see [SECURITY.md](https://github.com/maziyarpanahi/openmed/blob/master/SECURITY.md).
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The smallest code snippet or command that triggers the bug, and the steps to run it.
+      placeholder: |
+        1. Import/install '...'
+        2. Run command '....'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: If applicable, paste the full error message or traceback here.
+      render: shell
+  - type: input
+    id: openmed-version
+    attributes:
+      label: OpenMed version
+      description: e.g. 0.1.1 (run `openmed --version` or `pip show openmed`).
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: e.g. Ubuntu 22.04, macOS 14.0, Windows 11.
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: e.g. 3.10.12.
+    validations:
+      required: true
+  - type: input
+    id: model-id
+    attributes:
+      label: Model id
+      description: The model id from the catalog you were using, if any (e.g. `medical-ner`).
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here (screenshots welcome, but no PHI).

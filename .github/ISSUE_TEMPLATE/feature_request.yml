@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest an idea for this project
+title: "[FEATURE] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **No PHI in issues.** This form is public. Never paste real patient data, PHI/PII, or other sensitive information here.
+        Use a de-identified example with placeholder values instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem?
+      description: A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Describe alternatives you've considered
+      description: A clear and concise description of any alternative solutions or features you've considered.
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: Describe the specific use case or workflow this feature would enable.
+    validations:
+      required: true
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation suggestions
+      description: If you have ideas about how this could be implemented, please share them.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add any other context or screenshots about the feature request here (no PHI).
