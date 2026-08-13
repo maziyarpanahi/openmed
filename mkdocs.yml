@@ -103,6 +103,7 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
+      - Policy-aware Redaction Diffs: security/redaction-diff.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
