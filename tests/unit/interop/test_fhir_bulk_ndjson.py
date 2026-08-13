@@ -224,3 +224,27 @@ def test_deidentify_export_mirrors_ndjson_directory_structure(tmp_path):
     observation = _read_ndjson(out_dir / "nested" / "Observation.ndjson")[0]
     assert patient["name"][0]["text"] == "[NAME]"
     assert observation["note"][0]["text"] == "[NAME] lives at [ADDRESS]."
+
+
+def test_deidentify_ndjson_applies_field_level_fhir_policy(tmp_path):
+    in_path = tmp_path / "Patient.ndjson"
+    out_path = tmp_path / "out" / "Patient.ndjson"
+    patient = _patient("synthetic-patient")
+    patient["birthDate"] = "1980-01-15"
+    patient["national_id"] = "synthetic-uncovered-id"
+    _write_ndjson(in_path, [patient])
+
+    summary = deidentify_ndjson(
+        in_path,
+        out_path,
+        schema_policy="fhir_hipaa_safe_harbor",
+        date_shift_secret=b"synthetic-fhir-ndjson-test-key",
+        deidentifier=fake_deidentify,
+    )
+
+    assert summary.ok
+    output = _read_ndjson(out_path)[0]
+    assert "name" not in output
+    assert "telecom" not in output
+    assert "national_id" not in output
+    assert output["birthDate"] != "1980-01-15"

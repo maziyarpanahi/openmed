@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "name": "fhir_research_limited_dataset",
+  "schema": "fhir",
+  "base_policy": "research_limited_dataset",
+  "default_action": "keep",
+  "identifier_fields": [
+    "*.identifier[].value",
+    "*.name[]",
+    "*.telecom[]",
+    "*.contact[]"
+  ],
+  "fields": {
+    "Patient.resourceType": "keep",
+    "Patient.id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Patient.meta": "keep",
+    "Patient.identifier[].system": "keep",
+    "Patient.identifier[].value": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Patient.active": "keep",
+    "Patient.name": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Patient.telecom": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Patient.gender": {
+      "action": "keep",
+      "field_type": "sensitive"
+    },
+    "Patient.birthDate": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "Patient.deceasedBoolean": "keep",
+    "Patient.deceasedDateTime": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "Patient.address[].use": "keep",
+    "Patient.address[].type": "keep",
+    "Patient.address[].text": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Patient.address[].line": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Patient.address[].city": {
+      "action": "keep",
+      "field_type": "quasi-identifier"
+    },
+    "Patient.address[].district": {
+      "action": "keep",
+      "field_type": "quasi-identifier"
+    },
+    "Patient.address[].state": {
+      "action": "keep",
+      "field_type": "quasi-identifier"
+    },
+    "Patient.address[].postalCode": {
+      "action": "generalize",
+      "field_type": "quasi-identifier",
+      "generalization": "zip",
+      "level": 1
+    },
+    "Patient.address[].country": "keep",
+    "Patient.maritalStatus": "keep",
+    "Patient.multipleBirthBoolean": "keep",
+    "Patient.multipleBirthInteger": {
+      "action": "generalize",
+      "field_type": "quasi-identifier",
+      "generalization": "age",
+      "level": 0
+    },
+    "Patient.communication": "keep",
+    "Patient.contact": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Patient.generalPractitioner[].reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Patient.managingOrganization.reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.resourceType": "keep",
+    "Observation.id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.meta": "keep",
+    "Observation.identifier[].system": "keep",
+    "Observation.identifier[].value": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Observation.status": "keep",
+    "Observation.category": "keep",
+    "Observation.code.coding": "keep",
+    "Observation.code.text": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    },
+    "Observation.subject.reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.subject.display": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Observation.encounter.reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.effectiveDateTime": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "Observation.effectiveDate": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "Observation.effectiveInstant": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "Observation.issued": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "Observation.performer[].reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.performer[].display": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Observation.valueString": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    },
+    "Observation.valueCodeableConcept.coding": "keep",
+    "Observation.valueCodeableConcept.text": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    },
+    "Observation.valueQuantity": "keep",
+    "Observation.dataAbsentReason": "keep",
+    "Observation.interpretation": "keep",
+    "Observation.note[].text": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    },
+    "Observation.bodySite": "keep",
+    "Observation.method": "keep",
+    "Observation.specimen.reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.device.reference": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Observation.referenceRange[].text": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    }
+  }
+}
