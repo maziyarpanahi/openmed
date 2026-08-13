@@ -12,9 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 OpenMed 2.2 completes the trustworthy clinical-data-exchange milestone across
 terminology grounding, document intake, FHIR, OMOP, structured privacy, MCP,
 service security, and offline release evidence. The final audited
-`v2.1.0..v2.2.0` range contains 97 commits and 460 changed files, including 31
-merged feature-integration PRs, release-preparation PR #2699, and the
-contributor commits preserved by the v2.2 batches.
+`v2.1.0..v2.2.0` range contains 98 commits and 462 changed files, including 31
+merged feature-integration PRs, release-preparation PR #2699,
+release-evidence correction PR #2700, and the contributor commits preserved by
+the v2.2 batches.
 
 The static public Python surface grows from 31,619 to 37,307 symbols with
 5,688 additions, zero removals or narrowed signatures, and zero new
@@ -103,14 +104,14 @@ internal logging PHI-safe by default.
 
 ### Release integration ledger
 
-- GitHub-generated release-note PRs (32): #2228, #2230, #2237, #2239, #2241,
+- GitHub-generated release-note PRs (33): #2228, #2230, #2237, #2239, #2241,
   #2243, #2244, #2541, #2543, #2548, #2549, #2550, #2551, #2678, #2679,
   #2680, #2681, #2682, #2685, #2686, #2687, #2688, #2689, #2690, #2691,
-  #2692, #2693, #2694, #2695, #2696, #2698, and #2699.
+  #2692, #2693, #2694, #2695, #2696, #2698, #2699, and #2700.
 - All 95 issues assigned to the `v2.2` milestone are closed. The final two
   issues that had no contributor PR were implemented in #2696 and #2698.
 - The GitHub generated-note set is intentionally smaller than the complete
-  97-commit ancestry range because the maintainer batches preserve source
+  98-commit ancestry range because the maintainer batches preserve source
   contributor commits while presenting one reviewed integration PR per
   coherent subsystem.
 
