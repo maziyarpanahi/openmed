@@ -124,6 +124,7 @@ classification:
     - clinical/concept-grounding.md
     - grounding.md
     - interop/snomed-terminology-bridge.md
+    - clinical/code-crosswalk.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
