@@ -85,6 +85,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.2-standards-matrix.md
     - release/v2.1.0.md
     - release/v2.0.0.md
     - release/v1.6-v1.7-feature-coverage.md
