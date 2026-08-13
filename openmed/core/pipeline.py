@@ -1056,10 +1056,12 @@ class Pipeline:
 
     def stage2_language_script(self, text: str) -> LanguageRoute:
         from . import pii
+        from .model_registry import get_default_pii_model
         from .pii_i18n import (
-            DEFAULT_PII_MODELS,
             INDIC_NER_LANGUAGES,
+            NATIONAL_ID_ONLY_LANGUAGES,
             SUPPORTED_LANGUAGES,
+            USER_SUPPLIED_MODEL_LANGUAGES,
         )
         from .script_detect import detect_script
 
@@ -1088,7 +1090,14 @@ class Pipeline:
 
         script = detect_script(text)
         lang = self.lang
-        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        # Mirror ``pii._resolve_effective_pii_model`` so an explicit language the
+        # core accepts is never rejected one stage earlier.
+        accepted_languages = (
+            SUPPORTED_LANGUAGES
+            | INDIC_NER_LANGUAGES
+            | NATIONAL_ID_ONLY_LANGUAGES
+            | USER_SUPPLIED_MODEL_LANGUAGES
+        )
         if lang not in accepted_languages:
             raise ValueError(
                 f"Unsupported language '{lang}'. "
@@ -1099,7 +1108,10 @@ class Pipeline:
             lang=lang,
             script=script,
             model_name=model_name,
-            metadata={"available_default_model": DEFAULT_PII_MODELS.get(lang)},
+            # ``get_default_pii_model`` resolves registry placeholders to
+            # ``None``, so a language with no bundled weights never reports a
+            # sentinel string as an available model.
+            metadata={"available_default_model": get_default_pii_model(lang)},
         )
 
     def stage3_doc_type_section(
