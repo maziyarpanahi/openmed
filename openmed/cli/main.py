@@ -357,6 +357,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
+    _add_ground_command(subparsers)
+    _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
@@ -1655,6 +1657,107 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         help="Validate CDM constraints and report PHI-free violation counts.",
     )
     load_parser.set_defaults(handler=_handle_omop_load)
+
+
+def _add_ground_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add the shared offline grounding command."""
+
+    ground_parser = subparsers.add_parser(
+        "ground",
+        help="Ground text or pre-extracted entities against local snapshots.",
+    )
+    input_group = ground_parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
+        "--text",
+        help="Synthetic or caller-owned text to treat as one span.",
+    )
+    input_group.add_argument(
+        "--input",
+        type=Path,
+        help="JSON/JSONL file containing text or pre-extracted entities.",
+    )
+    ground_parser.add_argument(
+        "--system",
+        dest="systems",
+        action="append",
+        help="Vocabulary system to search; repeat for multiple systems.",
+    )
+    ground_parser.add_argument(
+        "--source-language",
+        default="en",
+        help="Source language tag used for multilingual aliases.",
+    )
+    ground_parser.add_argument(
+        "--top-k",
+        type=_positive_int,
+        default=5,
+        help="Maximum ranked candidates per retrieval channel (default: 5).",
+    )
+    ground_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Local grounding snapshot cache directory.",
+    )
+    ground_parser.add_argument(
+        "--offline",
+        dest="offline",
+        action="store_true",
+        default=True,
+        help="Disable network access during grounding (default).",
+    )
+    ground_parser.add_argument(
+        "--online",
+        dest="offline",
+        action="store_false",
+        help="Allow configured snapshot downloads during grounding.",
+    )
+    ground_parser.set_defaults(handler=_handle_ground)
+
+
+def _add_grounding_snapshot_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add explicit import/download lifecycle commands for snapshots."""
+
+    grounding_parser = subparsers.add_parser(
+        "grounding",
+        help="Manage checksum-verified terminology snapshots.",
+    )
+    grounding_sub = grounding_parser.add_subparsers(dest="grounding_command")
+
+    import_parser = grounding_sub.add_parser(
+        "import",
+        help="Import a local permissive vocabulary snapshot into the cache.",
+    )
+    import_parser.add_argument("--system", required=True)
+    import_parser.add_argument("--input", type=Path, required=True)
+    import_parser.add_argument("--version", required=True)
+    import_parser.add_argument("--sha256", default=None)
+    import_parser.add_argument("--cache-dir", type=Path, default=None)
+    import_parser.add_argument("--license-note", default="")
+    import_parser.add_argument("--replace", action="store_true")
+    import_parser.set_defaults(handler=_handle_grounding_snapshot_import)
+
+    download_parser = grounding_sub.add_parser(
+        "download",
+        help="Download and checksum-verify one configured public snapshot.",
+    )
+    download_parser.add_argument("--system", required=True)
+    download_parser.add_argument("--url", required=True)
+    download_parser.add_argument("--sha256", required=True)
+    download_parser.add_argument("--version", default=None)
+    download_parser.add_argument("--checksum-url", default=None)
+    download_parser.add_argument("--artifact-name", default="concepts.tsv")
+    download_parser.add_argument("--archive-member", default=None)
+    download_parser.add_argument("--cache-dir", type=Path, default=None)
+    download_parser.add_argument("--timeout", type=float, default=60.0)
+    download_parser.set_defaults(handler=_handle_grounding_snapshot_download)
+
+    list_parser = grounding_sub.add_parser(
+        "list",
+        help="List locally imported terminology snapshots.",
+    )
+    list_parser.add_argument("--cache-dir", type=Path, default=None)
+    list_parser.set_defaults(handler=_handle_grounding_snapshot_list)
 
 
 def _add_cohort_command(subparsers: argparse._SubParsersAction) -> None:
@@ -4648,6 +4751,170 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
     return emit(args, payload, human=human)
+
+
+def _handle_ground(args: argparse.Namespace) -> int:
+    """Run the canonical offline grounding facade."""
+
+    from ..clinical.grounding import RankingConfig, VocabLoader, ground_payload
+    from ..clinical.grounding.vocab import RestrictedVocabularyError, VocabLoaderError
+    from ..core.offline import OfflineModeError
+
+    systems = tuple(args.systems or ("rxnorm", "icd10cm", "loinc", "hpo"))
+    inputs: Any
+    if args.text is not None:
+        inputs = args.text
+    else:
+        try:
+            raw = args.input.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise CliError(
+                "Grounding input file was not found.",
+                code="input_not_found",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        except OSError as exc:
+            raise CliError(
+                "Grounding input file could not be read.",
+                code="input_read_failed",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        try:
+            if args.input.suffix.casefold() == ".jsonl":
+                inputs = [json.loads(line) for line in raw.splitlines() if line.strip()]
+            else:
+                inputs = json.loads(raw)
+        except json.JSONDecodeError:
+            inputs = raw
+        if isinstance(inputs, MappingABC) and "entities" in inputs:
+            inputs = inputs["entities"]
+        elif isinstance(inputs, MappingABC) and "text" in inputs:
+            inputs = inputs["text"]
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=args.offline)
+    try:
+        payload = ground_payload(
+            inputs,
+            systems=systems,
+            loader=loader,
+            config=RankingConfig(k=args.top_k),
+            source_language=args.source_language,
+            offline=args.offline,
+        )
+    except RestrictedVocabularyError as exc:
+        raise CliError(
+            "Restricted terminology requires a configured user-supplied "
+            "out-of-process endpoint.",
+            code="restricted_terminology_unconfigured",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except OfflineModeError as exc:
+        raise CliError(
+            "The requested vocabulary snapshot is unavailable offline.",
+            code="offline_snapshot_unavailable",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except VocabLoaderError as exc:
+        raise CliError(
+            "The requested vocabulary snapshot could not be verified.",
+            code="snapshot_invalid",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The grounding request is invalid.",
+            code="grounding_invalid_request",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    human = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
+    return emit(args, payload, human=human)
+
+
+def _handle_grounding_snapshot_import(args: argparse.Namespace) -> int:
+    """Import one local snapshot and emit its manifest."""
+
+    from ..clinical.grounding import VocabLoader
+    from ..clinical.grounding.vocab import VocabLoaderError
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=True)
+    try:
+        manifest = loader.import_snapshot(
+            args.system,
+            args.input,
+            version=args.version,
+            sha256=args.sha256,
+            license_note=args.license_note,
+            replace=args.replace,
+        )
+    except (OSError, TypeError, ValueError, VocabLoaderError) as exc:
+        raise CliError(
+            "The vocabulary snapshot could not be imported.",
+            code="snapshot_import_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = manifest.to_dict()
+    return emit(
+        args,
+        payload,
+        human=f"Imported {manifest.system} snapshot {manifest.version}.",
+    )
+
+
+def _handle_grounding_snapshot_download(args: argparse.Namespace) -> int:
+    """Download one explicitly configured and checksum-pinned snapshot."""
+
+    from ..clinical.grounding import VocabLoader, VocabSource
+    from ..clinical.grounding.vocab import VocabLoaderError
+    from ..core.offline import OfflineModeError
+
+    source = VocabSource(
+        system=args.system,
+        url=args.url,
+        sha256=args.sha256,
+        checksum_url=args.checksum_url,
+        artifact_name=args.artifact_name,
+        archive_member=args.archive_member,
+        version=args.version,
+    )
+    loader = VocabLoader(
+        cache_dir=args.cache_dir,
+        local_only=False,
+        registry={args.system: source},
+        timeout=args.timeout,
+    )
+    try:
+        manifest = loader.download_snapshot(args.system)
+    except OfflineModeError as exc:
+        raise CliError(
+            "Snapshot download is blocked by offline mode.",
+            code="offline_download_blocked",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (OSError, TypeError, ValueError, VocabLoaderError) as exc:
+        raise CliError(
+            "The vocabulary snapshot could not be downloaded and verified.",
+            code="snapshot_download_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = manifest.to_dict()
+    return emit(
+        args,
+        payload,
+        human=f"Downloaded {manifest.system} snapshot {manifest.version}.",
+    )
+
+
+def _handle_grounding_snapshot_list(args: argparse.Namespace) -> int:
+    """List checksum-pinned snapshots without touching the network."""
+
+    from ..clinical.grounding import VocabLoader
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=True)
+    payload = {
+        "snapshots": [manifest.to_dict() for manifest in loader.list_snapshots()]
+    }
+    return emit(args, payload, human=json.dumps(payload, indent=2, sort_keys=True))
 
 
 def _handle_cohort_resolve(args: argparse.Namespace) -> int:

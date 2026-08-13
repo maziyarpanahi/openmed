@@ -1,7 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
-from .api import DEFAULT_GROUNDING_SYSTEMS, ground
+from .api import DEFAULT_GROUNDING_SYSTEMS, ground, ground_payload
 from .assertion_grounding import (
     ASSERTION_GROUNDING_ADVISORY,
     GROUNDING_ASSERTION_STATUSES,
@@ -176,11 +176,13 @@ from .snapshot_cache import (
     snapshot_path,
     store_snapshot,
 )
+from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
 from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
     RestrictedVocabularyError,
+    SnapshotManifest,
     VocabConcept,
     VocabLoader,
     VocabLoaderError,
@@ -280,6 +282,7 @@ __all__ = [
     "PostCoordinationStage",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RESTRICTED_SYSTEM_URIS",
+    "RESTRICTED_SYSTEMS",
     "RXNORM_SYSTEM_URI",
     "RankingConfig",
     "Refinement",
@@ -287,6 +290,8 @@ __all__ = [
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "SYSTEM_URIS",
+    "SnapshotManifest",
     "RulesPostCoordinationDecomposer",
     "RxNormLoader",
     "RxNormLoaderError",
@@ -323,6 +328,7 @@ __all__ = [
     "decompose_and_relink",
     "generate_candidates",
     "ground",
+    "ground_payload",
     "ground_multilingual",
     "ground_with_context",
     "get_index",
@@ -343,6 +349,8 @@ __all__ = [
     "register_loader",
     "retrieve_candidates",
     "scan_provenance_for_raw_text",
+    "canonical_system",
+    "system_uri",
     "DEFAULT_CACHE_ENV",
     "DEFAULT_GROUNDING_CACHE_ENV",
     "INDEX_ARTIFACT_FILENAME",
