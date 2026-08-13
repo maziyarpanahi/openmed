@@ -98,6 +98,7 @@ classification:
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md
+    - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
     - serving/resilience.md
@@ -259,6 +260,10 @@ classification:
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
+    - security/prompt-injection-guard.md
+    - security/mcp-consent-receipts.md
+    - security/mcp-authorization-matrix.md
+    - security/mcp-upstream-policy.md
     - security/hf-token-policy.md
     - security/supply-chain.md
     - supply-chain/vulnerability-scanning.md
