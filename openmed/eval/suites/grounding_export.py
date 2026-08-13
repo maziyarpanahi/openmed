@@ -30,6 +30,9 @@ __all__ = [
 
 GROUNDING_EXPORT = "grounding_export_roundtrip"
 FHIR_R4_VERSION = "4.0.1"
+# The official validator rejects unresolved custom extensions unless their
+# exact URL domain is allowlisted. Keep that exception scoped to OpenMed.
+_OPENMED_FHIR_EXTENSION_BASE_URL = "https://openmed.ai/fhir/StructureDefinition/"
 DEFAULT_GROUNDING_EXPORT_FIXTURE = (
     Path(__file__).resolve().parents[1]
     / "golden"
@@ -241,6 +244,8 @@ def validate_with_hl7_validator(
                 FHIR_R4_VERSION,
                 "-tx",
                 "n/a",
+                "-extension",
+                _OPENMED_FHIR_EXTENSION_BASE_URL,
                 "-output",
                 str(output),
             ],

@@ -1,5 +1,16 @@
 """Synthetic training data generators."""
 
+from .burned_in import (
+    BACKGROUND_MODES,
+    BURNED_IN_LABELS,
+    DEFAULT_CANVAS_SIZE,
+    DEFAULT_FONT_NAMES,
+    DEFAULT_FONT_SIZES,
+    BurnedInExample,
+    BurnedInGenerator,
+    BurnedInTextBox,
+    generate_burned_in_example,
+)
 from .locale_phi import (
     LOCALE_PHI_LABELS,
     SUPPORTED_LOCALE_PHI_LANGUAGES,
@@ -28,10 +39,18 @@ from .translation_augment import (
 )
 
 __all__ = [
+    "BACKGROUND_MODES",
+    "BURNED_IN_LABELS",
+    "DEFAULT_CANVAS_SIZE",
+    "DEFAULT_FONT_NAMES",
+    "DEFAULT_FONT_SIZES",
     "DEFAULT_TARGET_LANGUAGES",
     "LOCALE_PHI_LABELS",
     "SYNTHETIC_SOURCE",
     "SUPPORTED_LOCALE_PHI_LANGUAGES",
+    "BurnedInExample",
+    "BurnedInGenerator",
+    "BurnedInTextBox",
     "DictionaryTranslator",
     "LocalePhiExample",
     "LocalePhiGenerator",
@@ -41,6 +60,7 @@ __all__ = [
     "SyntheticPhiSpan",
     "TranslationAugmentedExample",
     "augment_span_annotated_examples",
+    "generate_burned_in_example",
     "generate_locale_phi_examples",
     "load_span_jsonl",
     "normalize_span_annotations",

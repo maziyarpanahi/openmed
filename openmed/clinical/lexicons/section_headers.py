@@ -27,6 +27,7 @@ _REQUIRED_ENGLISH_SECTION_LABELS = frozenset(
         "impression",
         "medications",
         "past_medical_history",
+        "problem_list",
         "social_history",
     }
 )
