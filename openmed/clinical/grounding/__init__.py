@@ -14,6 +14,13 @@ from .assertion_grounding import (
     assertion_grounding_status,
     ground_with_context,
 )
+from .athena import (
+    ATHENA_REQUIRED_FILES,
+    CPT4_VOCABULARY_ID,
+    AthenaBundleError,
+    AthenaConcept,
+    AthenaResolver,
+)
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
 from .crosswalk import (
     DEFAULT_CROSSWALK_RESOURCES,
@@ -196,10 +203,14 @@ from .vocab import (
 
 __all__ = [
     "ASSERTION_GROUNDING_ADVISORY",
+    "ATHENA_REQUIRED_FILES",
     "AliasEmbeddingIndex",
     "AliasEncoder",
     "AssertedGroundedSpan",
     "AssertionGroundingStatus",
+    "AthenaBundleError",
+    "AthenaConcept",
+    "AthenaResolver",
     "Candidate",
     "CandidateRankingStage",
     "COMPOSITE_GROUNDING_DECISIONS",
@@ -212,6 +223,7 @@ __all__ = [
     "CrosswalkCandidate",
     "CrosswalkConfigurationError",
     "CrosswalkDataError",
+    "CPT4_VOCABULARY_ID",
     "CrosswalkEntry",
     "CrosswalkFormatError",
     "CrosswalkLicenseError",
