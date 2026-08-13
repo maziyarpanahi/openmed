@@ -9,6 +9,7 @@ from importlib import import_module as _import_module
 from pathlib import Path
 from typing import Any
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.interop.function_tools import (
     RuntimeProvider,
     create_tool_callable,
@@ -120,6 +121,34 @@ class OpenMedRedactionTransform:
         runnable_lambda = _load_runnable_lambda()
         return runnable_lambda(self.invoke, name=name)
 
+    def index_document(
+        self,
+        index: Any,
+        vault: Any,
+        *,
+        document_id: str,
+        text: str,
+        chunk_size: int = 1000,
+    ) -> Any:
+        """Redact and ingest one note into a redaction-preserving index.
+
+        This method keeps the existing LangChain redaction configuration as the
+        single detector configuration while the retrieval index owns unique
+        placeholders, encrypted mapping storage, and chunk offsets.
+        """
+
+        index_document = getattr(index, "index_document", None)
+        if not callable(index_document):
+            raise TypeError("index must expose index_document()")
+        return index_document(
+            document_id,
+            text,
+            vault=vault,
+            chunk_size=chunk_size,
+            deidentifier=self._deidentifier_or_default(),
+            deidentify_kwargs=self.config.to_deidentify_kwargs(),
+        )
+
     def _redact_value(self, value: Any) -> Any:
         if isinstance(value, str):
             return self._redact_text(value)
@@ -185,6 +214,98 @@ class OpenMedRedactionTransform:
         return deidentify
 
 
+class OpenMedRetrievalChain:
+    """Compose local redaction/retrieval with gateway-only model boundaries."""
+
+    def __init__(
+        self,
+        *,
+        redaction_transform: OpenMedRedactionTransform,
+        index: Any,
+        vault: Any,
+        retriever: Any,
+        external_llm: Any,
+        reidentifier: Any,
+    ) -> None:
+        from openmed.interop.retrieval import (
+            AuthorizedReidentifier,
+            GatewayBoundExternalLLM,
+        )
+
+        if not isinstance(external_llm, GatewayBoundExternalLLM):
+            raise TypeError(
+                "external_llm must be a gateway-bound retrieval model wrapper"
+            )
+        if not isinstance(reidentifier, AuthorizedReidentifier):
+            raise TypeError(
+                "reidentifier must enforce gateway authorization and auditing"
+            )
+        self.redaction_transform = redaction_transform
+        self.index = index
+        self.vault = vault
+        self.retriever = retriever
+        self.external_llm = external_llm
+        self.reidentifier = reidentifier
+
+    def index_document(
+        self,
+        document_id: str,
+        text: str,
+        *,
+        chunk_size: int = 1000,
+    ) -> Any:
+        """Run the configured local redactor before retrieval ingestion."""
+
+        return self.redaction_transform.index_document(
+            self.index,
+            self.vault,
+            document_id=document_id,
+            text=text,
+            chunk_size=chunk_size,
+        )
+
+    def invoke(
+        self,
+        input: Mapping[str, Any],
+        config: Any | None = None,
+        **kwargs: Any,
+    ) -> str:
+        """Retrieve redacted context, call the gateway, then authorize restore."""
+
+        del config, kwargs
+        if not isinstance(input, Mapping):
+            raise TypeError("retrieval chain input must be a mapping")
+        try:
+            query = input["query"]
+            principal = input["principal"]
+        except KeyError as exc:
+            raise KeyError(
+                "retrieval chain input requires query and principal"
+            ) from exc
+        if not isinstance(query, str) or not isinstance(principal, str):
+            raise TypeError("query and principal must be strings")
+        k = input.get("k", 4)
+        if not isinstance(k, int) or isinstance(k, bool):
+            raise TypeError("k must be an integer")
+
+        redacted_query = self.redaction_transform.invoke(query)
+        if not isinstance(redacted_query, str):
+            raise TypeError("redaction transform must return a string for query input")
+        passages = self.retriever.retrieve(redacted_query, k=k)
+        response = self.external_llm.invoke(redacted_query, passages)
+        return self.reidentifier.reidentify(
+            response.text,
+            document_keys=response.document_keys,
+            principal=principal,
+        )
+
+    def as_runnable(self, *, name: str = "openmed_redacted_retrieval") -> Any:
+        """Return a LangChain runnable wrapping the complete retrieval flow."""
+
+        runnable_lambda = _load_runnable_lambda()
+        return runnable_lambda(self.invoke, name=name)
+
+
 def create_redaction_transform(
     *,
     config: LangChainRedactionConfig | None = None,
@@ -219,6 +340,33 @@ def create_redaction_runnable(
         deidentifier=deidentifier,
     )
     return transform.as_runnable(name=name)
+
+
+def create_retrieval_chain(
+    *,
+    index: Any,
+    vault: Any,
+    retriever: Any,
+    external_llm: Any,
+    reidentifier: Any,
+    redaction_transform: OpenMedRedactionTransform | None = None,
+    config: LangChainRedactionConfig | None = None,
+    deidentifier: Deidentifier | None = None,
+) -> OpenMedRetrievalChain:
+    """Create a dependency-light redacted retrieval composition."""
+
+    transform = redaction_transform or create_redaction_transform(
+        config=config,
+        deidentifier=deidentifier,
+    )
+    return OpenMedRetrievalChain(
+        redaction_transform=transform,
+        index=index,
+        vault=vault,
+        retriever=retriever,
+        external_llm=external_llm,
+        reidentifier=reidentifier,
+    )
 
 
 def create_tool_definitions() -> tuple[dict[str, Any], ...]:
@@ -264,10 +412,7 @@ def _load_structured_tool() -> Any:
     try:
         module = _import_module("langchain_core.tools")
     except ImportError as exc:
-        raise ImportError(
-            "LangChain tools require the 'langchain' extra. "
-            "Install with `pip install openmed[langchain]`."
-        ) from exc
+        raise_missing_backend("langchain", feature="LangChain tools", cause=exc)
 
     try:
         return module.StructuredTool
@@ -281,10 +426,7 @@ def _load_runnable_lambda() -> Any:
     try:
         module = _import_module("langchain_core.runnables")
     except ImportError as exc:
-        raise ImportError(
-            "LangChain support requires the 'langchain' extra. "
-            "Install with `pip install openmed[langchain]`."
-        ) from exc
+        raise_missing_backend("langchain", feature="LangChain support", cause=exc)
 
     try:
         return module.RunnableLambda
@@ -302,6 +444,8 @@ __all__ = [
     "Deidentifier",
     "LangChainRedactionConfig",
     "OpenMedRedactionTransform",
+    "OpenMedRetrievalChain",
+    "create_retrieval_chain",
     "create_tool_definitions",
     "create_redaction_runnable",
     "create_redaction_transform",

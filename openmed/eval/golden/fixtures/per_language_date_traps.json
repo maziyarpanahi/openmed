@@ -1,0 +1,416 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "fixtures": [
+    {
+      "id": "golden-per-language-date-trap-en",
+      "language": "en",
+      "text": "Synthetic chart: visit on 03/14/2026, follow-up on 07/20/2026, final review on 11/05/2026.",
+      "gold_spans": [
+        {
+          "start": 26,
+          "end": 36,
+          "label": "DATE",
+          "text": "03/14/2026"
+        },
+        {
+          "start": 51,
+          "end": 61,
+          "label": "DATE",
+          "text": "07/20/2026"
+        },
+        {
+          "start": 79,
+          "end": 89,
+          "label": "DATE",
+          "text": "11/05/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "en_US",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetic chart: visit on [DATE], follow-up on [DATE], final review on [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-fr",
+      "language": "fr",
+      "text": "Dossier synthétique: visite le 14/03/2026, suivi le 20/07/2026, revue finale le 05/11/2026.",
+      "gold_spans": [
+        {
+          "start": 31,
+          "end": 41,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 52,
+          "end": 62,
+          "label": "DATE",
+          "text": "20/07/2026"
+        },
+        {
+          "start": 80,
+          "end": 90,
+          "label": "DATE",
+          "text": "05/11/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "fr_FR",
+        "expected_output": {
+          "method": "mask",
+          "text": "Dossier synthétique: visite le [DATE], suivi le [DATE], revue finale le [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-de",
+      "language": "de",
+      "text": "Synthetische Akte: Besuch am 14.03.2026, Nachuntersuchung am 20.07.2026, Abschluss am 05.11.2026.",
+      "gold_spans": [
+        {
+          "start": 29,
+          "end": 39,
+          "label": "DATE",
+          "text": "14.03.2026"
+        },
+        {
+          "start": 61,
+          "end": 71,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 86,
+          "end": 96,
+          "label": "DATE",
+          "text": "05.11.2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "de_DE",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetische Akte: Besuch am [DATE], Nachuntersuchung am [DATE], Abschluss am [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-it",
+      "language": "it",
+      "text": "Cartella sintetica: visita il 14/03/2026, follow-up il 20/07/2026, revisione finale il 05/11/2026.",
+      "gold_spans": [
+        {
+          "start": 30,
+          "end": 40,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 55,
+          "end": 65,
+          "label": "DATE",
+          "text": "20/07/2026"
+        },
+        {
+          "start": 87,
+          "end": 97,
+          "label": "DATE",
+          "text": "05/11/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "it_IT",
+        "expected_output": {
+          "method": "mask",
+          "text": "Cartella sintetica: visita il [DATE], follow-up il [DATE], revisione finale il [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-es",
+      "language": "es",
+      "text": "Nota sintética: visita el 14/03/2026, seguimiento el 20/07/2026, revisión final el 05/11/2026.",
+      "gold_spans": [
+        {
+          "start": 26,
+          "end": 36,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 53,
+          "end": 63,
+          "label": "DATE",
+          "text": "20/07/2026"
+        },
+        {
+          "start": 83,
+          "end": 93,
+          "label": "DATE",
+          "text": "05/11/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "es_ES",
+        "expected_output": {
+          "method": "mask",
+          "text": "Nota sintética: visita el [DATE], seguimiento el [DATE], revisión final el [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-nl",
+      "language": "nl",
+      "text": "Synthetisch dossier: bezoek op 14-03-2026, follow-up op 20-07-2026, eindbeoordeling op 05-11-2026.",
+      "gold_spans": [
+        {
+          "start": 31,
+          "end": 41,
+          "label": "DATE",
+          "text": "14-03-2026"
+        },
+        {
+          "start": 56,
+          "end": 66,
+          "label": "DATE",
+          "text": "20-07-2026"
+        },
+        {
+          "start": 87,
+          "end": 97,
+          "label": "DATE",
+          "text": "05-11-2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "nl_NL",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetisch dossier: bezoek op [DATE], follow-up op [DATE], eindbeoordeling op [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-hi",
+      "language": "hi",
+      "text": "सिंथेटिक चार्ट: दौरा 14/03/2026 को, फॉलो-अप 20/07/2026 को, अंतिम समीक्षा 05/11/2026 को।",
+      "gold_spans": [
+        {
+          "start": 21,
+          "end": 31,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 44,
+          "end": 54,
+          "label": "DATE",
+          "text": "20/07/2026"
+        },
+        {
+          "start": 73,
+          "end": 83,
+          "label": "DATE",
+          "text": "05/11/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "hi_IN",
+        "expected_output": {
+          "method": "mask",
+          "text": "सिंथेटिक चार्ट: दौरा [DATE] को, फॉलो-अप [DATE] को, अंतिम समीक्षा [DATE] को।"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-te",
+      "language": "te",
+      "text": "కృత్రిమ చార్ట్: సందర్శన 14/03/2026 న, ఫాలో-అప్ 20/07/2026 న, అంతిమ సమీక్ష 05/11/2026 న.",
+      "gold_spans": [
+        {
+          "start": 24,
+          "end": 34,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 47,
+          "end": 57,
+          "label": "DATE",
+          "text": "20/07/2026"
+        },
+        {
+          "start": 74,
+          "end": 84,
+          "label": "DATE",
+          "text": "05/11/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "en_IN",
+        "expected_output": {
+          "method": "mask",
+          "text": "కృత్రిమ చార్ట్: సందర్శన [DATE] న, ఫాలో-అప్ [DATE] న, అంతిమ సమీక్ష [DATE] న."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-pt",
+      "language": "pt",
+      "text": "Nota sintética: visita em 14/03/2026, retorno em 20/07/2026, revisão final em 05/11/2026.",
+      "gold_spans": [
+        {
+          "start": 26,
+          "end": 36,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 49,
+          "end": 59,
+          "label": "DATE",
+          "text": "20/07/2026"
+        },
+        {
+          "start": 78,
+          "end": 88,
+          "label": "DATE",
+          "text": "05/11/2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "pt_BR",
+        "expected_output": {
+          "method": "mask",
+          "text": "Nota sintética: visita em [DATE], retorno em [DATE], revisão final em [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-ar",
+      "language": "ar",
+      "text": "ملاحظة اصطناعية: زيارة في ١٤/٠٣/٢٠٢٦، متابعة في ٢٠/٠٧/٢٠٢٦، مراجعة نهائية في ٠٥/١١/٢٠٢٦.",
+      "gold_spans": [
+        {
+          "start": 26,
+          "end": 36,
+          "label": "DATE",
+          "text": "١٤/٠٣/٢٠٢٦"
+        },
+        {
+          "start": 48,
+          "end": 58,
+          "label": "DATE",
+          "text": "٢٠/٠٧/٢٠٢٦"
+        },
+        {
+          "start": 77,
+          "end": 87,
+          "label": "DATE",
+          "text": "٠٥/١١/٢٠٢٦"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "ar_EG",
+        "expected_output": {
+          "method": "mask",
+          "text": "ملاحظة اصطناعية: زيارة في [DATE]، متابعة في [DATE]، مراجعة نهائية في [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-ja",
+      "language": "ja",
+      "text": "合成メモ: 初診 2026年3月14日、再診 2026-07-20、最終確認 2026年11月5日。",
+      "gold_spans": [
+        {
+          "start": 9,
+          "end": 19,
+          "label": "DATE",
+          "text": "2026年3月14日"
+        },
+        {
+          "start": 23,
+          "end": 33,
+          "label": "DATE",
+          "text": "2026-07-20"
+        },
+        {
+          "start": 39,
+          "end": 49,
+          "label": "DATE",
+          "text": "2026年11月5日"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "ja_JP",
+        "expected_output": {
+          "method": "mask",
+          "text": "合成メモ: 初診 [DATE]、再診 [DATE]、最終確認 [DATE]。"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-tr",
+      "language": "tr",
+      "text": "Sentetik not: ziyaret 14.03.2026, kontrol 20.07.2026, son değerlendirme 05.11.2026.",
+      "gold_spans": [
+        {
+          "start": 22,
+          "end": 32,
+          "label": "DATE",
+          "text": "14.03.2026"
+        },
+        {
+          "start": 42,
+          "end": 52,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 72,
+          "end": 82,
+          "label": "DATE",
+          "text": "05.11.2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "tr_TR",
+        "expected_output": {
+          "method": "mask",
+          "text": "Sentetik not: ziyaret [DATE], kontrol [DATE], son değerlendirme [DATE]."
+        }
+      }
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden"
+}
