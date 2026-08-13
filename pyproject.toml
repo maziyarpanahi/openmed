@@ -68,6 +68,7 @@ dev = [
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.22",
+  "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -124,6 +125,14 @@ dask = [
   "dask[dataframe]>=2024.8",
 ]
 
+dagster = [
+  "dagster>=1.8,<2",
+]
+
+sqlalchemy = [
+  "sqlalchemy>=2.0,<3",
+]
+
 spacy = [
   "click>=8.0",
   "spacy>=3.8.9",
@@ -146,6 +155,10 @@ scispacy = [
 quickumls = [
   "quickumls>=1.4,<2",
 ]
+
+# sdcMicro and R are installed separately under GPL-2.0. This explicit extra
+# opts into the subprocess-only bridge without adding GPL code or dependencies.
+interop-gpl = []
 
 multimodal = [
   "numpy>=1.26",
@@ -213,6 +226,10 @@ agents = [
   "llama-index-core>=0.10,<1",
 ]
 
+beam = [
+  "apache-beam>=2.73,<3",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -231,6 +248,10 @@ cloud = [
   "s3fs>=2025.9.0",
   "gcsfs>=2025.9.0",
   "adlfs>=2025.8.0",
+]
+
+ray = [
+  "ray[data]>=2.30,<3",
 ]
 
 spark = [
@@ -308,7 +329,8 @@ docs = [
   "mkdocs-llmstxt>=0.5.0,<1",
   "mkdocs-minify-plugin>=0.8.0",
   "mkdocs-static-i18n>=1.3,<2",
-  "pymdown-extensions>=10.8",
+  "pymdown-extensions>=11.0.1,<12",
+  "gitpython>=3.1.58,<4",
   "mkdocstrings[python]",
   "griffe",
 ]
@@ -322,6 +344,15 @@ openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"
 
 [tool.uv]
+constraint-dependencies = [
+  "betterproto==2.0.0b6; python_version >= '3.11'",
+]
+override-dependencies = [
+  # Beam 2.75 caps these below their patched releases even though its
+  # DirectRunner remains compatible with the secure versions.
+  "cryptography>=50,<51",
+  "httplib2>=0.32",
+]
 conflicts = [
   [
     { extra = "awq" },
@@ -355,6 +386,12 @@ include = [
   "/README.md",
   "/pyproject.toml"
 ]
+
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.wheel]
+core-metadata-version = "2.4"
 
 [tool.hatch.build.targets.wheel.force-include]
 "eval/redteam/corpus/adversarial_phi.jsonl" = "openmed/eval/data/adversarial_phi.jsonl"

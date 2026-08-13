@@ -48,7 +48,7 @@ update the canonical files and provenance hashes; never edit the PNG pixels.
 Outside that explicit social-export exception, repository/runtime truth always
 overrides handoff copy. The reviewed handoff
 contains 1.8.x/1.9.1 examples, 17/27/29-language values, and 340M/30M/9.4M
-metrics; the current repository is OpenMed 2.0.0 and documents 34 supported
+metrics; the current repository is OpenMed 2.1.0 and documents 34 supported
 PII language codes. At the audit baseline, public "model-backed" surfaces said
 29, 30, and 32. The implementation resolves that definition
 deterministically to 33 model-backed codes from the authoritative
