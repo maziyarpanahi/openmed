@@ -5,6 +5,23 @@ measurement, and adversarial re-identification analysis.
 """
 
 from .audit_diff import AuditDiff, diff_audit_reports
+from .audit_retention import (
+    AUDIT_RETENTION_FORMAT,
+    AUDIT_RETENTION_VERSION,
+    AuditArtifact,
+    AuditArtifactRecord,
+    AuditRetentionPolicy,
+    AuditRetentionReport,
+    DeletionFingerprint,
+    RetainedArtifactSummary,
+    RetentionPolicy,
+    RetentionReport,
+    RetentionRule,
+    artifact_set_fingerprint,
+    scrub,
+    scrub_audit_artifacts,
+    verify_remaining_artifacts,
+)
 from .budget import (
     CURRENT_EPSILON_POLICY_SCHEMA_VERSION,
     DEFAULT_DP_SURROGATE_SENSITIVITIES,
@@ -100,7 +117,14 @@ from .synthetic_tabular import (
 
 __all__ = [
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
+    "AUDIT_RETENTION_FORMAT",
+    "AUDIT_RETENTION_VERSION",
+    "AuditArtifact",
+    "AuditArtifactRecord",
+    "AuditRetentionPolicy",
+    "AuditRetentionReport",
     "CompositionRule",
+    "DeletionFingerprint",
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_CORRELATION_TOLERANCE",
     "DEFAULT_MARGINAL_TOLERANCE",
@@ -129,6 +153,10 @@ __all__ = [
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
     "RiskBudgetViolation",
+    "RetainedArtifactSummary",
+    "RetentionPolicy",
+    "RetentionReport",
+    "RetentionRule",
     "LongitudinalCorpus",
     "LongitudinalEvidence",
     "LongitudinalNote",
@@ -138,6 +166,7 @@ __all__ = [
     "SuppressionProposal",
     "TabularProfile",
     "analyze_k_anonymity",
+    "artifact_set_fingerprint",
     "apply_suppression",
     "assess_population_risk",
     "budget_for_policy",
@@ -153,6 +182,8 @@ __all__ = [
     "quasi_identifier_key_bytes",
     "risk_report",
     "sample_synthetic_table",
+    "scrub",
+    "scrub_audit_artifacts",
     "tabular_fidelity_report",
     "MemoryCeilingError",
     "StreamingKanonDecision",
@@ -178,6 +209,7 @@ __all__ = [
     "render_risk_dashboard",
     "safe_risk_summary",
     "validate_released_output",
+    "verify_remaining_artifacts",
     "write_release_assessment_dashboard",
     "write_risk_dashboard",
 ]
