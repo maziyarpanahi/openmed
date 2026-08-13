@@ -1,9 +1,9 @@
 """Tests for the [multimodal] optional-dependency extra and import isolation.
 
 The multimodal foundation must not pull heavy ingestion dependencies
-(pdfplumber/python-docx/Pillow) into the base ``import openmed`` path, and
-``redact_document`` must raise a clear, actionable error naming the extra when
-those dependencies are absent.
+(pdfplumber/python-docx/python-pptx/Pillow) into the base ``import openmed``
+path, and ``redact_document`` must raise a clear, actionable error naming the
+extra when those dependencies are absent.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from openmed.multimodal.exceptions import MissingDependencyError
 HEAVY_MODULES = (
     "pdfplumber",
     "docx",
+    "pptx",
     "PIL",
     "doctr",
     "piexif",
