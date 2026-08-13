@@ -33,10 +33,12 @@ nav:
       - Hardened Service Image: deploy/hardened-image.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
       - GraphQL Service: serving/graphql.md
       - REST Authentication: serving/authentication.md
       - Service Load Testing & Latency SLOs: serving/load-testing.md
+      - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md

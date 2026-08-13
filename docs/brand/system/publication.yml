@@ -105,10 +105,12 @@ classification:
     - deploy/hardened-image.md
     - offline-install.md
     - serving/async-jobs.md
+    - serving/request-signing.md
     - serving/grpc.md
     - serving/graphql.md
     - serving/authentication.md
     - serving/load-testing.md
+    - serving/mtls.md
     - deploy/helm.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
