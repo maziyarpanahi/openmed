@@ -39,6 +39,8 @@ from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import InputError as InputError
 from ..processing.text import validate_pii_input
 from .budget import BudgetClock, RequestBudget, coerce_budget
+from .capabilities import MissingOptionalDependencyError
+from .capabilities import install_hint as _optional_dependency_install_instruction
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -90,37 +92,6 @@ DeidentificationMethod = Literal[
     "shift_dates",
     "format_preserve",
 ]
-
-
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
-
-    def __init__(
-        self,
-        *,
-        package: str,
-        feature: str,
-        extra: str | None = None,
-    ) -> None:
-        instruction = _optional_dependency_install_instruction(package, extra)
-        super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
-        )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
-
-
-def _optional_dependency_install_instruction(
-    package: str,
-    extra: str | None = None,
-) -> str:
-    if extra:
-        return (
-            f"Install it with `pip install openmed[{extra}]` "
-            f"or `pip install {package}`."
-        )
-    return f"Install it with `pip install {package}`."
 
 
 def _optional_dependency_status(
@@ -366,6 +337,7 @@ _DAY_FIRST_LANGS = frozenset(
         "sv",
         "da",
         "no",
+        "vi",
     }
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
@@ -603,26 +575,59 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
         INDIC_NER_LANGUAGES,
         INDIC_NER_MODEL_ENV,
         NATIONAL_ID_ONLY_LANGUAGES,
+        OPTIONAL_PII_MODEL,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+        USER_SUPPLIED_PII_MODEL,
     )
 
     accepted_languages = (
-        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
     lang = validate_language(lang, supported=accepted_languages)
+
+    # Registry placeholders published by discovery surfaces such as
+    # ``openmed_list_pii_languages``. They are not loadable repositories, so
+    # echoing one back must fail with the same actionable guidance as omitting
+    # ``model_name`` rather than with a namespaced download error.
+    placeholder_models = {OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL}
+
+    def _no_model_error() -> ValueError:
+        # Only ``ne`` and ``ur`` reach the first branch; the optional Indic NER
+        # routes have an env-var path and are named in the third branch instead.
+        no_weights = sorted(USER_SUPPLIED_MODEL_LANGUAGES - INDIC_NER_LANGUAGES)
+        if lang in no_weights:
+            return ValueError(
+                f"Language '{lang}' has no bundled OpenMed PII model; pass an "
+                "explicit model_name (user-supplied-model languages: "
+                f"{', '.join(no_weights)})"
+            )
+        if lang in NATIONAL_ID_ONLY_LANGUAGES:
+            return ValueError(
+                f"Language '{lang}' has deterministic pattern-only support; "
+                "pass an explicit model_name for model-backed inference"
+            )
+        return ValueError(
+            f"Language '{lang}' uses optional Indic NER weights; pass an "
+            f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
+        )
+
+    if model_name in placeholder_models:
+        if get_default_pii_model(lang) is not None:
+            raise ValueError(
+                f"'{model_name}' is a registry placeholder, not a loadable "
+                "model; omit model_name to use the default for language "
+                f"'{lang}', or pass an explicit model repository or local path"
+            )
+        raise _no_model_error()
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)
         if resolved is None:
-            if lang in NATIONAL_ID_ONLY_LANGUAGES:
-                raise ValueError(
-                    f"Language '{lang}' has deterministic pattern-only support; "
-                    "pass an explicit model_name for model-backed inference"
-                )
-            raise ValueError(
-                f"Language '{lang}' uses optional Indic NER weights; pass an "
-                f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
-            )
+            raise _no_model_error()
         return resolved
     return model_name
 

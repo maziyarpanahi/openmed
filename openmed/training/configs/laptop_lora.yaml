@@ -1,6 +1,7 @@
 schema_version: openmed.training.recipe.v1
 preset_name: laptop_lora
 mode: B
+clinical_family_targets: [doctype, section, relex_med, relex_ade, link]
 backbone:
   model_ref: openmed/backbones/laptop-clinical-lora-base
   revision: policy-spine-v1
