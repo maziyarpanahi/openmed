@@ -9,6 +9,7 @@ from openmed.clinical.timeline.resolver import (
     EVENT_ANCHORING_ADVISORY,
     ORDER_EVENTS_SCHEMA_VERSION,
     TIMELINE_ASSISTIVE_DISCLAIMER,
+    DocTimeRel,
     EventAnchoringResult,
     EventAnchorSource,
     EventTemporalAnchor,
@@ -31,15 +32,18 @@ from openmed.clinical.timeline.resolver import (
 from openmed.clinical.timeline.timex import (
     RelativeDirection,
     TemporalExpression,
+    TimeExpr,
     TimexType,
     detect_timexes,
     duration_value,
+    extract_timex,
     normalize_unit,
     parse_number,
 )
 
 __all__ = [
     "EVENT_ANCHORING_ADVISORY",
+    "DocTimeRel",
     "EventAnchorSource",
     "EventAnchoringResult",
     "EventTemporalAnchor",
@@ -51,6 +55,7 @@ __all__ = [
     "RelativeDirection",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
+    "TimeExpr",
     "TemporalExpression",
     "Timeline",
     "TimelineEdgeProvenance",
@@ -65,6 +70,7 @@ __all__ = [
     "TimexType",
     "detect_timexes",
     "duration_value",
+    "extract_timex",
     "evaluate_timeline_gold",
     "normalize_unit",
     "order_events",
