@@ -4,7 +4,7 @@
 It is a Gradle `com.android.library` module under the top-level `android/`
 build and uses the Android namespace `org.openmed.openmedkit`.
 
-Public applications consume the immutable `v2.0.0` release through JitPack. See the
+Public applications consume the immutable `v2.1.0` release through JitPack. See the
 [Android installation guide](../README.md#install-openmedkit-200) for the
 repository and dependency declarations.
 

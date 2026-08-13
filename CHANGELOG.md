@@ -7,15 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed production builds to emit Core Metadata 2.4 for compatibility with the
+  PyPI publisher, pinned the recovery workflow for older immutable tags, and
+  made npm recovery skip an existing version only after its source commit and
+  packaged contents match a fresh tag build.
+- Stopped redundant tag-triggered Pages deployments that GitHub's master-only
+  environment protection rules reject; documentation continues to deploy from
+  `master`.
+
+## [2.1.0] - 2026-08-12
+
+OpenMed 2.1 is the first feature release on the stable v2 line. The audited
+source scope covers every current-master change after the `v2.0.0` integration
+boundary at `b9ab7a3d`. The current published `v2.0.0` tag resolves to the
+rewritten-history commit `94ace7d` and is an ancestor of `master` through that
+boundary. Public API compatibility compares the tagged trees directly, while
+the integration ledger below follows changes after the integration boundary.
+
+The range adds clinical section, note-type, relation, temporal, coreference,
+radiology, discharge, medication, dosing, and fact-faithfulness workflows;
+offline terminology grounding, OMOP, FHIR, OpenEHR, cohort, and clinical MCP
+surfaces; structured generalization, relational privacy, differential-privacy,
+streaming, and attacker-model risk tools; multilingual, RTF, DICOM-SR, OCR,
+Android, Flutter, Beam, Ray, Spark, plugin, and model-cache adapters; and
+expanded deterministic, signed, rollback-safe evaluation and release gates.
+
+The static Python API grows from 20,538 to 31,619 public symbols with 11,081
+additions, zero breaking changes, and zero new deprecations. REST grows
+additively from 15 paths and 12 component schemas to 17 paths and 15 schemas.
+Android's offset implementation now matches the documented Unicode scalar
+contract; callers that treated offsets as Kotlin UTF-16 indices for non-BMP
+text should follow `docs/migration/2.0-to-2.1.md`.
+
 ### Added
 
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
   reporting, and an append-only offline audit ledger (#1243).
+- Completed longitudinal document linking with exact caller-supplied patient
+  boundaries, conservative cross-document entity de-duplication with complete
+  hashed occurrence provenance, and summary-card/timeline adapters (#1284).
 - Added offline family-transfer adapter routing that prefers installed target
   adapters, falls back to compatible donor adapters with scored provenance,
   and returns explicit unsupported or unavailable routing failures (#1331).
+- Added stdlib-only RTF text extraction (`openmed.multimodal.extract_rtf`,
+  dispatched by `redact_document` for `.rtf`) with a character-offset map back
+  to the source. Destination groups such as `\fonttbl`, `\colortbl`, `\info`,
+  `\pict`, and `\*`-marked extensions are skipped; control words, control
+  symbols, `\'hh` codepage escapes (`\ansicpg`-aware), `\uN` Unicode escapes
+  with the group-scoped `\ucN` fallback count, and `\bin` payloads are handled
+  without leaking markup into the extracted text (#856).
 - Completed clinical temporal timeline composition with DCT/TIMEX anchors on
   every ordered event, transitively reduced public TLINK graphs, metric-ready
   edge keys, and retained/pruned privacy-safe decision provenance (#1253).
@@ -41,9 +85,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
   contract, with explicit errors for missing dependencies, unknown backends,
   and conflicting preconstructed segmenters (#1848).
+- Added deterministic Urdu-versus-Arabic disambiguation for shared Arabic
+  script runs. `urdu_language_evidence()` scores the six Urdu-exclusive letters
+  (tteh, ddal, rreh, noon ghunna, heh doachashmee, yeh barree) and their sixteen
+  Arabic presentation forms, derived from single-character NFKC decompositions
+  so the Koranic stop-sign ligatures `U+FDF0`/`U+FDF1` are excluded. Extended
+  Arabic-Indic digits reinforce an existing letter signal but never trigger one,
+  keeping Persian on the Arabic route. Evidence moves `ur` ahead of `ar` in the
+  run's candidate order, and runs report `stdlib:urdu-cues` when an Urdu pack is
+  registered or `stdlib:arabic-fallback` at a lower confidence when none is.
+  Script-run offsets and grapheme boundaries are unchanged (#1571).
 
+- Registered the Indic and Urdu routing candidates (`mr`, `ne`, `bn`, `as`,
+  `ta`, `kn`, `ml`, `gu`, `pa`, `or`, `ur`) across the public language
+  surfaces. Nepali and Urdu now have display names, model prefixes, and REST,
+  MCP, TypeScript, and Go language enums; Nepali resolves to Faker's native
+  `ne_NP` locale. Languages in `USER_SUPPLIED_MODEL_LANGUAGES` claim no bundled
+  default model and raise an actionable `ValueError` naming every user-supplied
+  code when `model_name` is omitted, while `SUPPORTED_LANGUAGES` stays
+  model-backed-only so documented model-backed counts are unchanged (#1569).
+- Promoted Vietnamese (`vi`) to a model-backed PII language pack routed to
+  `OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1`, taking
+  `SUPPORTED_LANGUAGES` to 35 codes. Adds Vietnamese month names, deterministic
+  locale PHI generation, `vi_VN` surrogate and CCCD provider coverage across the
+  REST, MCP, TypeScript, and Go surfaces, and a second synthetic golden i18n
+  fixture exercising a native `ngày D tháng M năm YYYY` date, an `0xx` mobile,
+  a 12-digit CCCD, and a diacritic-bearing address (#263).
+
+- Added grapheme-aligned mixed-script run routing. `segment_by_script` now
+  yields `ScriptRun`, a tuple-compatible `NamedTuple`, and every run boundary
+  falls on an extended grapheme-cluster boundary, so a run can no longer split a
+  combining sequence, an Indic virama conjunct, a zero-width joiner sequence, or
+  a regional-indicator pair. Each cluster takes the script of its first
+  script-bearing code point, keeping a cross-script combining mark attached to
+  the base character it decorates. `LanguageRun` gained `candidates`,
+  `normalizer`, `tokenizer`, and `numeral_set`, and `SCRIPT_NORMALIZERS`,
+  `SCRIPT_NUMERAL_SETS`, `normalizer_for_script`, and `numeral_set_for_script`
+  expose the per-script routing tables (#1570).
+
+- Added `decide_rollback()` in `openmed/eval/rollout.py`, the pure decision
+  function mapping a gate diff to a rollback target. It diffs monitored
+  per-label recall and residual leakage against the committed last-green
+  baseline via `eval/history.diff_against_baseline`, applies the shared
+  `G7_RECALL_DROP_LIMIT` tolerance, and returns `HOLD` / `ADVANCE` /
+  `ROLLBACK`. A regression past tolerance rolls back to the committed
+  `last_green` pointer and never advances, even when the candidate's own gate
+  is `RELEASABLE`. The decision is side-effect-free and reproducible from the
+  report plus committed baseline and rollout state with no live API call, and
+  emits a PHI-free audit record carrying metric names, numeric deltas, store
+  keys and hashes only (#1803).
+
+### Changed
+
+- Script runs that previously began inside a grapheme cluster now begin at the
+  cluster boundary. A token opening with a combining mark, such as the Gurmukhi
+  addak U+0A71, starts one code point earlier because UAX #29 binds that mark to
+  the preceding separator. Offsets remain half-open code-point indices and every
+  run still tiles the source exactly (#1570).
 ### Fixed
 
+- Separated fail-closed model promotion from tag-driven Library/SDK
+  publication so an SDK tag cannot accidentally attempt a pointer promotion
+  without a staged challenger, while retaining API compatibility and migration
+  enforcement in the tag-driven provenance job. Recalibrated the synthetic
+  Chinese and Indic throughput gate from six GitHub-hosted Ubuntu runs instead
+  of comparing hosted Linux against an Apple Silicon workstation baseline.
+  Also fixed Transformers 5 local-snapshot loading so `local_files_only` is not
+  forwarded twice to `AutoConfig`.
+
+- Refreshed the canonical public model snapshot from 1,520 to 2,266 entries and
+  restored the Android AAR's generated on-device catalog with 753 permissively
+  licensed ONNX/TFLite entries. Manifest refreshes now disable implicit Hub
+  authentication, preserve audited metadata for retained and converted models,
+  distinguish generative PII models from token-classification evidence, and
+  retain MIT license metadata. Android packaging now fails closed instead of
+  writing an empty catalog.
+
+- Replaced the Tamil default's authenticated-only checkpoint with the existing
+  public multilingual placeholder and classified Tamil alongside Russian as a
+  non-model-backed compatibility route. The stable
+  `pii_ta_msuperclinical_large` registry key now resolves to that placeholder;
+  production Tamil extraction still requires explicitly qualified weights.
+
+- Fixed quadratic script segmentation on text containing long combining-mark
+  runs whose marks carry a different script from their base. Such input passes
+  `validate_pii_input` because the combining and format-sequence guards reset on
+  each other's characters, and previously cost seconds per document in
+  `segment_by_script`, `route_runs`, and `is_indic_text`. Cluster starts are now
+  memoized so segmentation stays linear (#1570).
+
+- Fixed `Pipeline.stage2_language_script` rejecting national-ID-only and
+  user-supplied language codes that `openmed.core.pii` already accepted, so an
+  explicit `lang` is no longer refused one stage earlier (#1569).
+- Fixed the shared input gateway rejecting `USER_SUPPLIED_MODEL_LANGUAGES`
+  codes. `openmed.utils.gateway.validate_language` now includes them in its
+  default acceptance set, so the REST and MCP edges accept every code they
+  advertise on their language enums instead of returning `unsupported_language`
+  for `ne` and `ur`. `include_national_id` still toggles exactly
+  `NATIONAL_ID_ONLY_LANGUAGES` (#1569).
+- Fixed day-first date handling for Vietnamese so shifted, replacement, and
+  format-preserving date surrogates all render `DD/MM/YYYY` instead of
+  `MM/DD/YYYY`, matching the `dmy` locale contract already declared for `vi`
+  (#263).
+- Corrected the `languages` metadata on the 18 `OpenMed-PII-Vietnamese-*`
+  manifest rows from `["en"]` to `["vi"]`, so Vietnamese PII checkpoints resolve
+  through `get_pii_models_by_language("vi")`. Those 34 registry keys move from
+  `pii_vietnamese_*` to `pii_vi_*` and, as with the Bengali, Chinese, and Tamil
+  reclassification, they no longer appear in
+  `get_pii_models_by_language("en")`, which drops from 219 to 185 entries
+  (#263).
 - Fixed the PySpark batch de-identification adapter so
   `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
   UDF construction instead of failing with an unsupported `Any` signature
@@ -53,6 +203,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consistently, and added bounded validation causes to structured-release CLI
   errors instead of replacing actionable `TypeError` and `ValueError` details
   with a generic schema mismatch.
+
+### Release integration ledger
+
+- PR-associated integrations (213): #335, #340, #1286, #1315, #1344,
+  #1358, #1360, #1369, #1370, #1903, #1904, #1905, #1906, #1907,
+  #1909, #1910, #1911, #1912, #1913, #1914, #1915, #1916, #1917, #1918,
+  #1919, #1920, #1921, #1922, #1923, #1924, #1925, #1926, #1928, #1929,
+  #1930, #1931, #1932, #1933, #1934, #1935, #1936, #1937, #1938, #1940,
+  #1941, #1943, #1945, #1946, #1949, #1951, #1953, #1954, #1955, #1956,
+  #1957, #1958, #1959, #1960, #1972, #1982, #1984, #1987, #1988, #1993,
+  #1994, #1996, #1997, #1999, #2000, #2001, #2002, #2003, #2004, #2005,
+  #2006, #2007, #2008, #2009, #2010, #2011, #2012, #2013, #2014, #2017,
+  #2018, #2019, #2021, #2022, #2023, #2024, #2025, #2026, #2041, #2043,
+  #2045, #2047, #2050, #2052, #2054, #2055, #2056, #2057, #2058, #2059,
+  #2060, #2061, #2062, #2063, #2064, #2065, #2066, #2067, #2068, #2070,
+  #2071, #2072, #2073, #2074, #2075, #2076, #2077, #2078, #2079, #2080,
+  #2081, #2084, #2086, #2087, #2088, #2089, #2090, #2091, #2103, #2104,
+  #2105, #2106, #2108, #2110, #2111, #2112, #2114, #2115, #2116, #2117,
+  #2118, #2119, #2120, #2121, #2122, #2124, #2125, #2126, #2128, #2129,
+  #2131, #2132, #2134, #2136, #2137, #2138, #2139, #2141, #2143, #2144,
+  #2145, #2146, #2147, #2148, #2150, #2151, #2153, #2180, #2182, #2183,
+  #2184, #2188, #2189, #2190, #2194, #2198, #2199, #2201, #2203, #2205,
+  #2207, #2209, #2211, #2212, #2213, #2216, #2217, #2218, #2219, #2221,
+  #2222, #2223, #2224, #2231, #2232, #2235, #2236, #2238, #2240, #2242,
+  #2253, #2256, #2266, #2269, #2270, #2271, #2272, #2273, and #2275.
+- Direct integrations: `9b867bcc` (nursing-care observation domain),
+  `9b3fa7b4` (TNM extraction), `3c5dad71` (HGVS parsing), `e41628df` (NER
+  family label maps), `37d5817f` (release run ledger), `544e75bf` (private
+  marketplace owner email), and `a6e10b6b` (README maintenance).
+- Final release hardening in this change set covers public-manifest refresh,
+  fail-closed Android catalog generation, lazy-export API comparison, release
+  workflow defaults, dependency policy, deterministic test reliability, and
+  fail-closed Pages artifact boundaries. It is described here without a
+  preassigned commit hash so the permanent changelog remains correct after
+  maintainer review and merge.
+- GitHub's generated-note set contains 153 entries. The ancestry ledger above
+  is authoritative for range accounting because it also includes integrations
+  excluded from generated notes and direct commits without associated PRs.
 
 ## [2.0.0] - 2026-07-28
 
@@ -2277,7 +2465,9 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/maziyarpanahi/openmed/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/maziyarpanahi/openmed/releases/tag/v2.0.0
 [1.9.1]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1

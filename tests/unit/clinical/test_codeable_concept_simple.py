@@ -2,9 +2,11 @@
 
 import pytest
 
+from openmed.clinical.exporters.codeable_concept_check import check_codeable_concept
 from openmed.clinical.exporters.codeable_concept_simple import (
     codeable_concept,
     coding,
+    document_type_codeable_concept,
     system_uri,
 )
 
@@ -189,3 +191,39 @@ class TestCodeableConcept:
         codeable_concept(original)
 
         assert original == snapshot
+
+
+class TestDocumentTypeCodeableConcept:
+    def test_document_type_maps_to_a_fhir_document_reference_type(self):
+        result = document_type_codeable_concept("radiology_report")
+
+        assert result == {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": "18748-4",
+                    "display": "Diagnostic imaging study",
+                }
+            ],
+            "text": "Diagnostic imaging study",
+        }
+        assert check_codeable_concept(result) == []
+
+    def test_classifier_mapping_is_accepted_and_caller_code_is_not_trusted(self):
+        result = document_type_codeable_concept(
+            {
+                "type": "progress_note",
+                "loinc_code": "99999-9",
+                "loinc_axes": None,
+                "confidence": 0.98,
+            }
+        )
+
+        assert result["coding"][0]["code"] == "11506-3"
+        assert result["coding"][0]["system"] == "http://loinc.org"
+
+    def test_unknown_or_low_confidence_type_emits_text_only_sentinel(self):
+        assert document_type_codeable_concept("unknown") == {"text": "unknown"}
+        assert document_type_codeable_concept("radiology_report", confidence=0.5) == {
+            "text": "radiology_report"
+        }
