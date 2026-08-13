@@ -11,12 +11,148 @@ applies a zero-tolerance PHI-token leakage gate to injected synthetic
 identifiers. Leakage findings contain hashes and offsets, never identifier
 text.
 
-The bundled Chinese PII default is a documented multilingual routing
-placeholder, not a dedicated Chinese clinical NER checkpoint. CMeEE, CBLUE,
-eHealth corpora, and related model weights are not redistributed: callers must
-provision licensed assets outside the repository and pass an explicit local
-path to `load_cmeee`. Missing paths and repository-internal real-data paths fail
-with license-boundary guidance.
+CMeEE, CBLUE, eHealth corpora, and related model weights are not
+redistributed: callers must provision licensed assets outside the repository
+and pass an explicit local path to `load_cmeee`. Missing paths and
+repository-internal real-data paths fail with license-boundary guidance.
+
+### Model-card evidence for the Chinese route
+
+`chinese_clinical_ner_metadata()` emits a `model_evidence` block instead of a
+fixed claim about which checkpoint serves `zh`:
+
+| Field | Meaning |
+| --- | --- |
+| `routed_default_model` | The checkpoint the `zh` language pack resolves to today |
+| `dedicated_zh_model` | `False` only while `zh` still routes to the multilingual fallback |
+| `weights_bundled` | Always `False`; OpenMed ships no weights |
+
+Record that block verbatim in a model card. Two cases need explicit evidence:
+
+- **Multilingual fallback.** If `dedicated_zh_model` is `False`, state that
+  Chinese coverage comes from `OpenMed/privacy-filter-multilingual` and report
+  per-label recall separately for Han-script fixtures, because a fallback
+  encoder's Chinese recall is not implied by its aggregate score.
+- **Dedicated local model.** If you substitute your own checkpoint, the card
+  must carry its license, provenance, and training-corpus statement. A model
+  trained on CMeEE or any other CBLUE task must not be evaluated on that same
+  task's split without disclosing the overlap; record the split hashes you
+  scored against.
+
+The routed default is a PII checkpoint scored here for entity coverage, not a
+CMeEE-trained clinical NER checkpoint. That distinction belongs in the card.
+
+## CBLUE task coverage
+
+The `cblue-task-coverage` suite extends the user-supplied benchmark interface
+to the CBLUE task shapes that carry clinical entity annotations:
+
+| Task | Shape | Path variable |
+| --- | --- | --- |
+| `chip-cdn` | Diagnosis-term normalization | `OPENMED_CHIP_CDN_PATH` |
+| `imcs-v2-ner` | Medical-dialogue entity recognition | `OPENMED_IMCS_V2_NER_PATH` |
+
+Relation decoding (`cmeie`) is deliberately out of scope. Requesting it raises
+rather than silently returning an empty result.
+
+The two committed fixtures contain no benchmark data. Every surface form is
+composed from a closed, invented vocabulary of enumerator morphemes, and both
+offsets and BIO tags are computed rather than hand-written. The generator is
+deterministic by construction — it draws no random numbers and reads no
+external state — so the fixtures can be reproduced byte for byte:
+
+```bash
+python scripts/benchmarks/generate_cblue_synthetic_fixtures.py --check
+```
+
+### Tested local-asset layouts
+
+Both layouts below are exercised by the offline test suite. Either set one
+variable per task, or set `OPENMED_CBLUE_PATH` to a root that contains one
+directory per task id:
+
+```text
+$OPENMED_CBLUE_PATH/
+  chip-cdn/          # CHIP-CDN rows: {"text": ..., "normalized_result": "a##b"}
+  imcs-v2-ner/       # IMCS-V2-NER rows: {"sentence": ..., "BIO_label": ...}
+```
+
+`sentence` may be a string or a character list, and `BIO_label` a
+whitespace-joined string or a tag list; character offsets are decoded from the
+tag sequence rather than read from the row. CHIP-CDN standard terms are split
+on `##`. Paths are resolved explicitly: the task variable wins over
+`OPENMED_CBLUE_PATH`, and an argument wins over both.
+
+### Evaluation commands
+
+```python
+from openmed.eval.suites import load_suite_fixtures, suite_metadata
+from openmed.eval.suites.cblue_coverage import run_cblue_task_coverage
+
+# Offline smoke run over the bundled synthetic fixtures.
+fixtures = load_suite_fixtures("cblue-task-coverage")
+
+# Licensed local data, one path per task.
+fixtures = load_suite_fixtures(
+    "cblue-task-coverage",
+    paths={"chip-cdn": "/data/cblue/chip-cdn", "imcs-v2-ner": "/data/cblue/imcs"},
+)
+
+report = run_cblue_task_coverage(
+    fixtures, model_name="your-local-model", runner=your_runner
+)
+print(suite_metadata("cblue-task-coverage")["tasks"])
+```
+
+### Interpreting the report
+
+`metrics.tasks` holds one entry per task shape with `exact_span_f1`,
+`span_count`, and `label_counts`; `chip-cdn` adds `normalization_accuracy`,
+the share of mentions whose predicted standard-term set matched gold exactly.
+`metrics.gate` fails closed when a fixture cannot prove its origin. Reason
+codes are `missing_license_block`, `incomplete_license_block`,
+`unexpected_redistribution`, `missing_source_path_hash`, `unexpected_script`,
+`unexpected_language`, `unmapped_source_label`, `raw_source_path_in_metadata`,
+`missing_normalized_terms`, `unknown_task`, and `no_task_fixtures`. Findings
+carry fixture ids, reason codes, metadata key names, and hashes only; source
+paths appear as SHA-256 digests so a report can be attached to a ticket
+without disclosing where licensed data lives.
+
+A `no_task_fixtures` failure means a task shape produced nothing. Treat it as a
+configuration error, not a score of zero.
+
+### Upgrade and rollback
+
+Adding a task shape changes `DEFAULT_SUITES`, so pin the OpenMed version that
+produced any archived report. To upgrade, re-run the offline smoke path first
+(`run_synthetic_cblue_task_coverage_smoke()`); it needs no licensed data and
+no network, so it isolates loader regressions from data problems. Then re-run
+against local data and compare `metrics.tasks` per task rather than a single
+aggregate, because label mixes differ sharply between the two shapes. To roll
+back, reinstall the pinned version and re-run the same smoke path: it is
+deterministic, so an unchanged report confirms the rollback rather than
+merely a successful install. Reports are self-describing; `metadata.tasks`
+records which path variable was configured for each task at run time.
+
+### Optional local model assets
+
+Set `OPENMED_ZH_CLINICAL_NER_MODEL_DIR` to a checkpoint directory you are
+licensed to use, then run `run_chinese_clinical_ner_conformance`. It enforces
+the span and canonical-label contract — a span out of bounds, inverted, or
+misaligned to the text it claims raises `ChineseClinicalNerContractError`,
+while nested and overlapping spans are allowed because nested entities are
+normal in CMeEE data. On top of the suite's existing `per_label` and
+`phi_token_leakage` metrics it adds latency percentiles and local-asset
+evidence: a path fingerprint and whitelisted artifact descriptors, never the
+local path or the directory basename. When the variable is unset the optional
+check skips with configuration guidance.
+
+Two limits are worth stating. Passing proves the contract and the skip
+semantics, not the measured quality of any checkpoint — quality numbers only
+exist for your own opt-in run. And the PHI-leakage gate judges
+de-identification behaviour, so a CMeEE-trained entity model will
+legitimately leave the synthetic identifiers standing; pass
+`fail_on_leakage=False` for such a model and read leakage as evidence.
 
 ## Clinical PHI flagship SHIELD comparison
 
@@ -238,6 +374,52 @@ report = run_benchmark(fixtures, suite="my-suite", model_name="my-model", runner
 cold_ms = report.metrics["latency"]["cold_start_ms"]
 print(f"Cold-start latency: {cold_ms:.1f} ms")
 ```
+
+## Family-transfer evaluation
+
+`cross_lingual_family_transfer_report` scores the bundled synthetic Indic
+donor/target gold in three modes: an untargeted multilingual baseline, Hindi
+donor-adapter zero-shot inference for Telugu, and a Telugu-adapted path. The
+same report re-scores the donor before and after adaptation so target F1 is
+published alongside an explicit donor non-regression result.
+
+The runner receives `transfer_mode`, `evaluation_role`, `family`,
+`donor_language`, `target_language`, and `adapter_language` in fixture metadata.
+It can therefore select locally provisioned model and adapter assets without a
+network call. JSON and Markdown artifacts contain only aggregate metrics,
+language codes, and donor-to-target deltas; synthetic fixture text and spans
+are excluded.
+
+For release qualification, pass measured `AdapterParameterAccounting` keyed by
+the configured output adapter ID. The report then adds a `full_model` target
+mode on the same synthetic gold and jointly requires the adapted target to
+retain at least 90% of the full per-language model F1 while training no more
+than 10% of its parameters. Both thresholds are explicit arguments, and the
+aggregate JSON and Markdown evidence records the thresholds, observed ratios,
+and pass/fail results.
+
+```python
+from openmed.eval import cross_lingual_family_transfer_report
+from openmed.training.adapters import AdapterParameterAccounting
+
+report = cross_lingual_family_transfer_report(
+    "local-family-transfer-model",
+    runner=local_family_transfer_runner,
+    parameter_accounting_by_adapter={
+        "family-transfer/indic-hi-to-te": AdapterParameterAccounting(
+            shared_backbone_parameter_count=110_000_000,
+            adapter_trainable_parameter_count=524_288,
+            task_head_trainable_parameter_count=65_536,
+            full_language_model_trainable_parameter_count=110_065_536,
+        )
+    },
+)
+print(report.to_markdown())
+```
+
+The counts above are synthetic examples; release evidence must use measured
+counts from the locally provisioned backbone, adapter, task head, and full-model
+reference.
 
 ## Grounding accuracy gate
 

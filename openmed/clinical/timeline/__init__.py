@@ -1,14 +1,31 @@
 """Clinical timeline normalization public API."""
 
+from openmed.clinical.timeline.longitudinal import (
+    LinkedDocumentTimeline,
+    LinkedTimelineDocument,
+    build_linked_document_timeline,
+)
 from openmed.clinical.timeline.resolver import (
+    EVENT_ANCHORING_ADVISORY,
+    ORDER_EVENTS_SCHEMA_VERSION,
     TIMELINE_ASSISTIVE_DISCLAIMER,
+    EventAnchoringResult,
+    EventAnchorSource,
+    EventTemporalAnchor,
     NormalizedInterval,
+    OrderedTimelineEvent,
     ResolvedTimeline,
+    Timeline,
+    TimelineEdgeProvenance,
+    TimelineEdgeStatus,
     TimelineEvaluationResult,
     TimelineEvent,
     TimelineRelation,
     TimelineRelationKind,
+    TimexAnchorReference,
+    anchor_events,
     evaluate_timeline_gold,
+    order_events,
     resolve_timeline,
 )
 from openmed.clinical.timeline.timex import (
@@ -22,20 +39,35 @@ from openmed.clinical.timeline.timex import (
 )
 
 __all__ = [
+    "EVENT_ANCHORING_ADVISORY",
+    "EventAnchorSource",
+    "EventAnchoringResult",
+    "EventTemporalAnchor",
+    "LinkedDocumentTimeline",
+    "LinkedTimelineDocument",
     "NormalizedInterval",
+    "ORDER_EVENTS_SCHEMA_VERSION",
+    "OrderedTimelineEvent",
     "RelativeDirection",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
     "TemporalExpression",
+    "Timeline",
+    "TimelineEdgeProvenance",
+    "TimelineEdgeStatus",
     "TimelineEvaluationResult",
     "TimelineEvent",
     "TimelineRelation",
     "TimelineRelationKind",
+    "TimexAnchorReference",
+    "anchor_events",
+    "build_linked_document_timeline",
     "TimexType",
     "detect_timexes",
     "duration_value",
     "evaluate_timeline_gold",
     "normalize_unit",
+    "order_events",
     "parse_number",
     "resolve_timeline",
 ]

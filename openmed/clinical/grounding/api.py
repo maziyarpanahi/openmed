@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from openmed.core.labels import normalize_label
 from openmed.core.offline import network_blocked_if_offline
 
-from ..context import ClinicalAssertion, RerankContext
+from ..context import ClinicalAssertion, ClinicalContextResult, RerankContext
+from .decompose import decompose_and_relink
 from .embeddings import AliasEncoder
 from .matcher import ConceptMatch, LexicalMatcher
+from .postcoordination import PostCoordinationStage
 from .ranker import CandidateRankingStage, RankingConfig
 from .restricted import UserKeyVocabularyLoader
 from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
@@ -67,6 +70,9 @@ def ground(
     source_language: str | None = None,
     offline: bool = False,
     local_only: bool | None = None,
+    normalize_composites: bool = False,
+    composite_atomic_terms: Iterable[str] | None = None,
+    postcoordination: PostCoordinationStage | None = None,
 ) -> list[GroundedSpan]:
     """Ground clinical spans to one selected concept per requested system.
 
@@ -90,10 +96,24 @@ def ground(
         encoder: Optional local dense encoder. No encoder download occurs.
         config: Optional ranking configuration.
         restricted_loaders: Explicit user-key-gated local UMLS/SNOMED loaders.
+        restricted_endpoint: Optional caller-configured out-of-process endpoint
+            for restricted terminology lookups.
         source_language: Default source language when a span omits one.
+        offline: Whether to block network access during grounding.
+        local_only: Compatibility alias for ``offline`` when provided.
+        normalize_composites: Opt in to rules-first composite decomposition and
+            child re-linking before emission. Exact whole-span concepts remain
+            single pre-coordinated results; uncodable proposals are retained as
+            post-coordination abstentions.
+        composite_atomic_terms: Additional atomic multi-word concepts that the
+            opt-in normalizer must never split.
+        postcoordination: Optional user-key-gated SNOMED expression stage. It is
+            consulted only after lookup abstains or scores below the stage's
+            pre-coordination threshold.
 
     Returns:
-        One :class:`GroundedSpan` per input, including abstentions.
+        Grounded spans, including abstentions. The default returns one per input;
+        the opt-in composite stage may emit one span per linked child.
 
     Raises:
         ValueError: If no systems are requested or a span is malformed.
@@ -124,6 +144,9 @@ def ground(
             restricted_endpoint=restricted_endpoint,
             source_language=source_language,
             offline=offline,
+            normalize_composites=normalize_composites,
+            composite_atomic_terms=composite_atomic_terms,
+            postcoordination=postcoordination,
         )
 
 
@@ -188,8 +211,22 @@ def _ground_spans(
     restricted_endpoint: Any,
     source_language: str | None,
     offline: bool,
+    normalize_composites: bool,
+    composite_atomic_terms: Iterable[str] | None,
+    postcoordination: PostCoordinationStage | None,
 ) -> list[GroundedSpan]:
     ordered_systems = _normalize_systems(systems)
+    if not isinstance(normalize_composites, bool):
+        raise TypeError("normalize_composites must be a boolean")
+    if postcoordination is not None and not isinstance(
+        postcoordination, PostCoordinationStage
+    ):
+        raise TypeError("postcoordination must be a PostCoordinationStage")
+    if isinstance(composite_atomic_terms, (str, bytes)):
+        raise TypeError("composite_atomic_terms must be an iterable of terms")
+    atomic_terms = (
+        None if composite_atomic_terms is None else tuple(composite_atomic_terms)
+    )
     free_systems = tuple(
         system for system in ordered_systems if system in _FREE_ALIASES
     )
@@ -215,62 +252,102 @@ def _ground_spans(
     results: list[GroundedSpan] = []
     for index, raw_span in enumerate(spans):
         span = _coerce_span(raw_span, index=index, default_language=source_language)
-        candidates: list[Candidate] = []
-        alternatives: list[Candidate] = []
-        if stage is not None:
-            ranked = stage.rank(
-                span.text,
-                free_systems,
-                context=_rerank_context(raw_span, span.assertion),
-                source_language=span.source_language,
-            )
-            ranked_candidates = [item.candidate for item in ranked]
-            candidates.extend(_select_one_per_system(ranked_candidates))
-            selected_keys = {(item.system, item.code) for item in candidates}
-            alternatives.extend(
-                item
-                for item in ranked_candidates
-                if (item.system, item.code) not in selected_keys
-            )
-        for system in restricted_systems:
-            matcher, gated_loader = gated[system]
-            matches = matcher.lookup(span.text, limit=1)
-            if not matches:
-                continue
-            match = matches[0]
-            candidates.append(
-                Candidate(
-                    system=system.upper(),
-                    code=match.code,
-                    display=match.display,
-                    score=match.score,
-                    source_language=span.source_language,
-                    source="endpoint" if restricted_endpoint else "sparse",
-                    matched_alias=match.matched_term,
-                    match_kind=match.match_type,
-                    vocab_version=_restricted_version(gated_loader),
-                )
-            )
+        rerank_context = _rerank_context(raw_span, span.assertion)
 
-        candidates = _ordered_candidates(candidates, ordered_systems)
-        results.append(
-            GroundedSpan(
-                text=span.text,
+        def rank_surface(surface: str) -> tuple[list[Candidate], list[Candidate]]:
+            candidates: list[Candidate] = []
+            alternatives: list[Candidate] = []
+            if stage is not None:
+                ranked = stage.rank(
+                    surface,
+                    free_systems,
+                    context=rerank_context,
+                    source_language=span.source_language,
+                )
+                ranked_candidates = [item.candidate for item in ranked]
+                candidates.extend(_select_one_per_system(ranked_candidates))
+                selected_keys = {(item.system, item.code) for item in candidates}
+                alternatives.extend(
+                    item
+                    for item in ranked_candidates
+                    if (item.system, item.code) not in selected_keys
+                )
+            for system in restricted_systems:
+                matcher, gated_loader = gated[system]
+                matches = matcher.lookup(surface, limit=1)
+                if not matches:
+                    continue
+                match = matches[0]
+                candidates.append(
+                    Candidate(
+                        system=system.upper(),
+                        code=match.code,
+                        display=match.display,
+                        score=match.score,
+                        source_language=span.source_language,
+                        source="endpoint" if restricted_endpoint else "sparse",
+                        matched_alias=match.matched_term,
+                        match_kind=match.match_type,
+                        vocab_version=_restricted_version(gated_loader),
+                    )
+                )
+            return _ordered_candidates(candidates, ordered_systems), alternatives
+
+        def link_surface(surface: str) -> list[Candidate]:
+            return rank_surface(surface)[0]
+
+        if normalize_composites:
+            byte_start = _first_value(raw_span, ("byte_start", "start_byte"))
+            if byte_start is None:
+                byte_start = span.metadata.get("byte_start", span.start)
+            decomposition = decompose_and_relink(
+                span.text,
+                linker=link_surface,
                 start=span.start,
-                end=span.end,
-                candidates=tuple(candidates),
-                alternatives=tuple(alternatives),
+                byte_start=byte_start,
+                atomic_terms=atomic_terms,
                 canonical_label=span.canonical_label,
                 assertion=span.assertion,
                 source_language=span.source_language,
                 metadata=span.metadata,
-                section=span.section,
-                provenance={
-                    "offline": bool(offline),
-                    "snapshot_provenance": snapshots,
-                },
             )
+            emitted = tuple(
+                replace(
+                    item,
+                    section=span.section,
+                    provenance={
+                        **item.provenance,
+                        "offline": bool(offline),
+                        "snapshot_provenance": snapshots,
+                    },
+                )
+                for item in decomposition.spans
+            )
+            if postcoordination is not None:
+                emitted = tuple(postcoordination.apply(item) for item in emitted)
+            results.extend(emitted)
+            continue
+
+        candidates, alternatives = rank_surface(span.text)
+        grounded_span = GroundedSpan(
+            text=span.text,
+            start=span.start,
+            end=span.end,
+            candidates=tuple(candidates),
+            alternatives=tuple(alternatives),
+            canonical_label=span.canonical_label,
+            assertion=span.assertion,
+            source_language=span.source_language,
+            metadata=span.metadata,
+            section=span.section,
+            provenance={
+                "offline": bool(offline),
+                "snapshot_provenance": snapshots,
+            },
         )
+        if postcoordination is not None:
+            grounded_span = postcoordination.apply(grounded_span)
+        results.append(grounded_span)
     return results
 
 
@@ -408,6 +485,8 @@ def _coerce_span(
     default_language: str | None,
 ) -> GroundedSpan:
     if isinstance(raw_span, GroundedSpan):
+        if isinstance(raw_span.assertion, ClinicalContextResult):
+            return replace(raw_span, assertion=raw_span.assertion.to_assertion())
         return raw_span
     if isinstance(raw_span, str):
         return GroundedSpan(
@@ -427,10 +506,19 @@ def _coerce_span(
     if end is None:
         end = start + len(text)
     label = _first_value(raw_span, _LABEL_FIELDS)
-    assertion = _coerce_assertion(_first_value(raw_span, ("assertion", "context")))
     language = _first_value(raw_span, ("source_language", "language", "lang"))
     metadata = _first_value(raw_span, ("metadata", "meta")) or {}
     section = _first_value(raw_span, ("section", "section_label"))
+    assertion_value = _first_value(raw_span, ("assertion", "context"))
+    if assertion_value is None and isinstance(metadata, Mapping):
+        assertion_value = metadata.get("clinical_context")
+    if assertion_value is None and isinstance(raw_span, Mapping):
+        if any(
+            key in raw_span
+            for key in ("temporality", "certainty", "uncertainty", "negation")
+        ):
+            assertion_value = raw_span
+    assertion = _coerce_assertion(assertion_value)
     canonical_label = None
     if label is not None and str(label).strip():
         canonical_label = normalize_label(
@@ -454,9 +542,11 @@ def _coerce_assertion(value: Any) -> ClinicalAssertion | None:
         return None
     if isinstance(value, ClinicalAssertion):
         return value
+    if isinstance(value, ClinicalContextResult):
+        return value.to_assertion()
     if isinstance(value, Mapping):
         temporality = value.get("temporality")
-        certainty = value.get("certainty")
+        certainty = value.get("certainty", value.get("uncertainty"))
         if temporality is None or certainty is None:
             return None
         return ClinicalAssertion(

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from .systems import system_uri
 
 if TYPE_CHECKING:
-    from openmed.clinical.context import ClinicalAssertion
+    from openmed.clinical.context import ClinicalAssertion, ClinicalContextResult
 
 
 @dataclass(frozen=True)
@@ -108,7 +108,7 @@ class GroundedSpan:
     abstained: bool = False
     provenance: Mapping[str, Any] = field(default_factory=dict)
     canonical_label: str | None = None
-    assertion: ClinicalAssertion | None = None
+    assertion: ClinicalAssertion | ClinicalContextResult | None = None
     source_language: str = "en"
     metadata: Mapping[str, Any] = field(default_factory=dict, compare=False)
     alternatives: tuple[Candidate, ...] = ()

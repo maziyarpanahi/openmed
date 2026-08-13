@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -23,12 +24,14 @@ from openmed.mcp import server as mcp_server
 from openmed.mcp.tool_registry import (
     CLINICAL_STAGE_ORDER,
     TOOL_REGISTRY,
+    PluginTool,
     ToolCompatibilityError,
     ToolRegistry,
     ToolSchemaValidationError,
     ToolSpec,
     check_tool_registry_compatibility,
     invoke_tool,
+    register_plugin_tools,
     validate_registered_tool_output,
 )
 
@@ -115,9 +118,12 @@ def test_mcp_language_listing_discovers_v2_registry_entries() -> None:
     payload = mcp_server.openmed_list_pii_languages()
     languages = {item["code"]: item for item in payload["languages"]}
 
-    for code in ("bn", "ta", "zh"):
+    for code in ("bn", "zh"):
         assert languages[code]["default_pii_model"].startswith("OpenMed/OpenMed-PII-")
         assert languages[code]["model_count"] >= 1
+
+    assert languages["ta"]["default_pii_model"] == "OpenMed/privacy-filter-multilingual"
+    assert languages["ta"]["model_count"] == 0
 
 
 def test_tool_registry_resource_is_generated_from_specs() -> None:
@@ -126,7 +132,7 @@ def test_tool_registry_resource_is_generated_from_specs() -> None:
     mcp_server._register_resources(fake)
     payload = json.loads(fake.resources["openmed://tool-registry"]())
 
-    assert payload["schema_version"] == "1.0.0"
+    assert payload["schema_version"] == "1.1.0"
     assert [tool["name"] for tool in payload["tools"]] == [
         spec.name for spec in TOOL_REGISTRY.all_specs()
     ]
@@ -189,6 +195,68 @@ def test_registry_supports_multiple_versions_side_by_side() -> None:
         "1.0.0",
         "2.0.0",
     ]
+
+
+def test_valid_plugin_tool_is_lazily_registered_with_stable_metadata() -> None:
+    tool = PluginTool(
+        spec=ToolSpec(
+            name="synthetic_plugin_status",
+            title="Synthetic Plugin Status",
+            description="Return deterministic synthetic plugin status.",
+            version="1.2.0",
+            stability="stable",
+            input_schema={
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {},
+                "required": [],
+            },
+            output_schema={
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"status": {"type": "string"}},
+                "required": ["status"],
+            },
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+        handler=lambda: {"status": "synthetic-ok"},
+    )
+
+    class ToolBearingComponent:
+        openmed_tools = (tool,)
+
+    metadata = SimpleNamespace(
+        plugin_id="synthetic-tool-plugin",
+        component_id="status-component",
+        qualified_id="synthetic-tool-plugin:status-component",
+    )
+    registration = SimpleNamespace(
+        metadata=metadata,
+        component=ToolBearingComponent(),
+        loaded_by_policy_opt_in=False,
+    )
+    registry = ToolRegistry(
+        plugin_loader=lambda target: register_plugin_tools(
+            (registration,),
+            registry=target,
+        )
+    )
+
+    assert [spec.name for spec in registry.latest_specs()] == [
+        "synthetic_plugin_status"
+    ]
+    spec = registry.get("synthetic_plugin_status")
+    assert spec.version == "1.2.0"
+    assert spec.stability == "stable"
+    assert spec.document()["plugin"] == {
+        "plugin_id": "synthetic-tool-plugin",
+        "component_id": "status-component",
+        "qualified_id": "synthetic-tool-plugin:status-component",
+    }
+    assert invoke_tool(spec, registry.handler(spec.name)) == {"status": "synthetic-ok"}
 
 
 @pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
