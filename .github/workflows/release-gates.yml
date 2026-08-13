@@ -1,9 +1,6 @@
-name: Release Gates
+name: Model Release Gates
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       candidate:
@@ -29,15 +26,15 @@ on:
       api_base_ref:
         description: Git ref used as the public API compatibility baseline.
         required: false
-        default: v1.9.1
+        default: v2.0.0
       migration_guide:
         description: Migration guide required for the release.
         required: false
-        default: docs/migration/1.9-to-2.0.md
+        default: docs/migration/2.0-to-2.1.md
       release_version:
         description: Version recorded in the readiness report.
         required: false
-        default: 2.0.0
+        default: 2.1.0
       rollback_family:
         description: Family supplied by an automated status monitor for rollback.
         required: false
@@ -76,9 +73,9 @@ jobs:
       STAGED_MANIFEST: ${{ github.event.inputs.staged_manifest || 'artifacts/staged-models.jsonl' }}
       BENCHMARK_MODEL: ${{ github.event.inputs.benchmark_model || '' }}
       BENCHMARK_DEVICE: ${{ github.event.inputs.benchmark_device || 'cpu' }}
-      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v1.9.1' }}
-      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/1.9-to-2.0.md' }}
-      RELEASE_VERSION: ${{ github.event.inputs.release_version || (github.event_name == 'push' && github.ref_name) || '2.0.0' }}
+      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v2.0.0' }}
+      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/2.0-to-2.1.md' }}
+      RELEASE_VERSION: ${{ github.event.inputs.release_version || '2.1.0' }}
       RELEASE_STAGE: ${{ github.workspace }}/release-stage
 
     steps:
@@ -94,7 +91,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[hf,zh,indic]" pytest
+          pip install -e ".[dev,hf,zh,indic]"
 
       - name: Run Chinese and Indic throughput benchmark
         id: i18n_benchmark
@@ -138,12 +135,12 @@ jobs:
           path: grounding-accuracy-gate.json
 
       - name: Check API migration guide completeness
-        if: startsWith(github.ref, 'refs/tags/v1.9.')
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python scripts/release/api_surface_diff.py \
-            v1.8.0 "$GITHUB_SHA" \
+            "$API_BASE_REF" "$GITHUB_SHA" \
             --json "$RUNNER_TEMP/api-surface-diff.json" \
-            --check docs/migration/1.8-to-1.9.md
+            --check "$MIGRATION_GUIDE"
           echo "API migration guide completeness gate passed." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check for complete staged candidate

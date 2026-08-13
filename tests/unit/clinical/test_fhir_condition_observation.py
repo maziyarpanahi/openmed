@@ -102,12 +102,19 @@ def test_condition_maps_assertion_status_and_codeable_concept() -> None:
     _assert_r4_shape(condition, "Condition")
     assert _coding(condition, "clinicalStatus")["code"] == "active"
     assert _coding(condition, "verificationStatus")["code"] == "confirmed"
-    assert _coding(condition, "code") == {
+    code = _coding(condition, "code")
+    assert {
+        "system": code["system"],
+        "code": code["code"],
+        "display": code["display"],
+        "version": code["version"],
+    } == {
         "system": "http://hl7.org/fhir/sid/icd-10-cm",
         "code": "J18.9",
         "display": "synthetic pneumonia",
         "version": "synthetic-r4-v1",
     }
+    assert code["extension"]
 
 
 def test_negated_condition_is_refuted_and_family_history_is_excluded() -> None:
