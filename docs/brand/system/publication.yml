@@ -210,6 +210,7 @@ classification:
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
+    - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
     - mlx-backend.md

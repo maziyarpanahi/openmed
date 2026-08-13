@@ -1557,6 +1557,37 @@ def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
     )
     bundle_parser.set_defaults(handler=_handle_fhir_bundle)
 
+    validate_parser = fhir_sub.add_parser(
+        "validate",
+        help="Run the offline supported-profile checks over a FHIR JSON payload.",
+    )
+    validate_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="FHIR resource or Bundle JSON file to validate.",
+    )
+    validate_parser.add_argument(
+        "--version",
+        choices=("R4", "R5"),
+        default="R4",
+        help="Explicit FHIR release of the input (default: R4).",
+    )
+    validate_parser.add_argument(
+        "--profile",
+        choices=("fhir-r4-core", "fhir-r5-core", "ips", "ipa", "clinical-document"),
+        default=None,
+        help="Optional profile from the checked-in local profile matrix.",
+    )
+    validate_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the OperationOutcome JSON.",
+    )
+    add_json_flag(validate_parser)
+    validate_parser.set_defaults(handler=_handle_fhir_validate)
+
 
 def _add_icd11_command(subparsers: argparse._SubParsersAction) -> None:
     """Add offline ICD-11 snapshot management commands."""
@@ -4606,6 +4637,58 @@ def _handle_fhir_bundle(args: argparse.Namespace) -> int:
         "resource_count": len(resources),
     }
     return emit(args, payload, human=f"FHIR Bundle written to: {args.output}")
+
+
+def _handle_fhir_validate(args: argparse.Namespace) -> int:
+    try:
+        source = json.loads(args.input.read_text(encoding="utf-8"))
+        from ..clinical.exporters.fhir import validate_exchange
+
+        outcome = validate_exchange(
+            source,
+            version=args.version,
+            profile=args.profile,
+        )
+        if args.output is not None:
+            args.output.write_text(
+                json.dumps(outcome, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+    except FileNotFoundError:
+        raise CliError(
+            f"Input file not found: {args.input}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"FHIR validation failed: {exc}",
+            code="validation_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    blocking = sum(
+        issue.get("severity") in {"fatal", "error"}
+        for issue in outcome.get("issue", [])
+        if isinstance(issue, MappingABC)
+    )
+    payload = {
+        "input": str(args.input),
+        "version": args.version,
+        "profile": args.profile,
+        "valid": blocking == 0,
+        "outcome": outcome,
+    }
+    human = json.dumps(outcome, indent=2, sort_keys=True)
+    return_code = emit(args, payload, human=human)
+    return 1 if blocking else return_code
 
 
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
