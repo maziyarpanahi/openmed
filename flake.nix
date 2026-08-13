@@ -91,6 +91,63 @@
               python.pkgs.setuptools
             ];
           });
+          # Keep Nix's development shell inside the version bounds declared
+          # by the canonical dev extra. The pinned nixpkgs revision trails
+          # both packages, while the tests exercise their current APIs.
+          mcp = python.pkgs.mcp.overridePythonAttrs (_: {
+            version = "1.27.1";
+            src = pkgs.fetchFromGitHub {
+              owner = "modelcontextprotocol";
+              repo = "python-sdk";
+              tag = "v1.27.1";
+              hash = "sha256-LhoLcFC5+7xOCfud23sbHyTMxKYmdeZh0c+UtGdvzCs=";
+            };
+          });
+          crossWeb = python.pkgs.cross-web.overridePythonAttrs (_: {
+            version = "0.7.0";
+            src = pkgs.fetchPypi {
+              pname = "cross_web";
+              version = "0.7.0";
+              hash = "sha256-FfvIuagkoFXbgSf9bkPgdzB09iD97LaytYfT0KK91Fk=";
+            };
+            dependencies = [ python.pkgs.typing-extensions ];
+            doCheck = false;
+            nativeCheckInputs = [ ];
+          });
+          strawberryGraphql =
+            python.pkgs.strawberry-graphql.overridePythonAttrs (_: {
+              version = "0.319.0";
+              src = pkgs.fetchFromGitHub {
+                owner = "strawberry-graphql";
+                repo = "strawberry";
+                tag = "0.319.0";
+                hash = "sha256-7mbinSIb0AhqMggaziiLCZQBJ0i2G6Dq0ZjGVnFLDiY=";
+              };
+              postPatch = ''
+                substituteInPlace pyproject.toml \
+                  --replace-fail 'version = "0.318.1"' 'version = "0.319.0"'
+                substituteInPlace pyproject.toml \
+                  --replace-fail "uv_build>=0.11,<0.12" "uv_build"
+                substituteInPlace pyproject.toml \
+                  --replace-fail "--emoji" ""
+              '';
+              build-system = [ python.pkgs.uv-build ];
+              dependencies = with python.pkgs; [
+                crossWeb
+                graphql-core
+                packaging
+                python-dateutil
+                typing-extensions
+              ];
+
+              # The OpenMed suite runs after entering the dev shell. Avoid
+              # Strawberry's upstream optional-integration matrix here: it
+              # pulls every supported web framework into the build graph and
+              # makes shell construction depend on their unrelated test
+              # suites (including Sanic's timing-sensitive network tests).
+              doCheck = false;
+              nativeCheckInputs = [ ];
+            });
 
           devPythonPackages =
             (with python.pkgs; [
@@ -108,6 +165,7 @@
               mypy
               numpy
               opencc
+              openpyxl
               opentelemetry-api
               opentelemetry-exporter-otlp-proto-http
               opentelemetry-sdk
@@ -120,13 +178,17 @@
               pytest-cov
               pytest-timeout
               python-dateutil
+              python-multipart
               rich
+              sqlalchemy
               typer
             ])
             ++ [
               grpcio
               grpcio-tools
+              mcp
               openmed
+              strawberryGraphql
             ];
           pythonPath = python.pkgs.makePythonPath devPythonPackages;
         in

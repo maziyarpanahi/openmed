@@ -1058,7 +1058,7 @@ def _validate_claims(errors: list[str]) -> None:
             f"claims registry lacks required contract fields {sorted(missing_claims)}"
         )
     expected_values = {
-        "package_version": "2.1.0",
+        "package_version": "2.2.0",
         "repository_model_snapshot": 2266,
         "hugging_face_openmed_owned_snapshot": 2266,
         "supported_pii_languages": 35,

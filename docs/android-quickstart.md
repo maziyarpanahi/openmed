@@ -45,11 +45,11 @@ Then add the release coordinate in the module `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.1.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.2.0")
 }
 ```
 
-JitPack resolves the immutable `v2.1.0` tag and publishes the `openmedkit`
+JitPack resolves the immutable `v2.2.0` tag and publishes the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
 credentials.
 

@@ -3,4 +3,4 @@ name: openmed-service
 description: Helm chart for the OpenMed de-identification REST service.
 type: application
 version: 0.1.0
-appVersion: "2.1.0"
+appVersion: "2.2.0"

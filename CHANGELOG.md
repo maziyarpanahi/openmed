@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-13
+
+OpenMed 2.2 completes the trustworthy clinical-data-exchange milestone across
+terminology grounding, document intake, FHIR, OMOP, structured privacy, MCP,
+service security, and offline release evidence. The final audited
+`v2.1.0..v2.2.0` range contains 97 commits and 460 changed files, including 31
+merged feature-integration PRs, release-preparation PR #2699, and the
+contributor commits preserved by the v2.2 batches.
+
+The static public Python surface grows from 31,619 to 37,307 symbols with
+5,688 additions, zero removals or narrowed signatures, and zero new
+deprecations. The REST surface grows additively from 17 to 19 paths and from
+15 to 17 component schemas through `POST /ground` and
+`POST /pii/deidentify/stream`. Swift package source is unchanged. Android
+keeps its public method signatures while making diagnostic descriptions and
+internal logging PHI-safe by default.
+
+### Added
+
+- Added a local-first terminology workbench with checksum-pinned vocabulary
+  snapshots, exact and ranked grounding, calibration, section context,
+  caller-supplied Athena and crosswalk support, value-free provenance, and
+  explicit terminology-conflict decisions.
+- Added FHIR R4 patient-summary and clinical-document assembly, explicit R4/R5
+  conversion boundaries, local profile validation, Bundle reference-integrity
+  reports, privacy-safe SDC form handling, OperationOutcome helpers, Bulk Data
+  pagination and resumable digest-only checkpoints, and a FHIR-to-OMOP CDM 5.4
+  bridge with caller-supplied vocabulary mappings.
+- Added deterministic clinical form and key/value extraction, cross-format
+  offset projection, PDF table reconstruction, XLSX/PPTX/ODT intake, HL7 v2
+  narrative handling, X12 837 redaction, and fail-closed MIME quarantine for
+  document intake.
+- Added structured privacy profiling and release controls for k-anonymity,
+  l-diversity, t-closeness, membership-inference self-tests, aggregate-only
+  differential privacy, qualified-review evidence, and local ARX/sdcMicro
+  bridge boundaries.
+- Added PHI-safe integrations for Arrow Flight, SQLAlchemy, PostgreSQL
+  PL/Python, executable UDFs, distributed SQL, Dataflow, Dagster, Ray,
+  pandas-on-Spark, search ingest, and stream processors.
+- Added service grounding and streaming de-identification routes, GraphQL,
+  backpressure and batching controls, load-test assets, model-cache quotas,
+  a CPU INT8 token-classification path, and additive Go/TypeScript client
+  coverage.
+- Added mTLS, HMAC replay protection, prompt-injection guards, MCP protected
+  resource and OAuth-style authorization boundaries, consent receipts,
+  upstream endpoint policy, and Part 11-oriented aggregate audit evidence.
+- Added local-first Android inference guards with no INTERNET permission,
+  socket-denial tests, opt-in typed aggregate logging, hashed entity
+  descriptions, and explicit assistive-use documentation.
+- Added hard-negative mining, per-language identifier/date traps, clinical
+  domain coverage, FHIR round-trip fixtures, timeline provenance, and the
+  versioned v2.2 synthetic conformance matrix with pinned FHIR, OMOP, and
+  evidence hashes.
+- Added optional `fhir`, `dagster`, and `sqlalchemy` extras, expanded the
+  multimodal and service extras, and added the `openmed-executable-udf` entry
+  point.
+
+### Changed
+
+- Grounding, interoperability, structured privacy, service, and MCP features
+  remain offline-first and require caller-supplied licensed terminology,
+  credentials, models, or external runtimes where applicable; no restricted
+  vocabulary or real-patient fixture is bundled.
+- Android `EntityPrediction.description` now emits label, offsets,
+  confidence, and a SHA-256 digest instead of raw detected text. Applications
+  that need a local UI preview must read the explicit `text` field and must not
+  send it to diagnostics or telemetry.
+- Active Python, npm, Swift, Android/JitPack, Helm, container, website, and
+  documentation coordinates now target `2.2.0` / `v2.2.0`.
+- Rebased the wheel-size gate to the reproducible 4,076,360-byte v2.2 wheel
+  after auditing 62,667 additions and 786 removals across 169 Python files.
+  The gate retains 10% headroom with a 4,483,996-byte maximum; the payload
+  contains source, synthetic metadata, and the committed model manifest rather
+  than an unexpected binary or restricted vocabulary asset.
+
 ### Fixed
 
 - Fixed production builds to emit Core Metadata 2.4 for compatibility with the
@@ -16,6 +91,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stopped redundant tag-triggered Pages deployments that GitHub's master-only
   environment protection rules reject; documentation continues to deploy from
   `master`.
+- Restored the v2.1 public `openmed.clinical.grounding.SnapshotManifest`
+  binding while exposing the new vocabulary manifest as
+  `VocabularySnapshotManifest`, and retained `ConceptResolver` as a public
+  type alias after the OMOP exporter became a package. The v2.1-to-v2.2 static
+  API gate now reports zero breaking symbols.
+- Reconciled the combined v2.2 batches so FHIR profiles, OMOP mappings,
+  grounding provenance, privacy reports, service schemas, generated clients,
+  documentation publication, and shared fixtures agree on one integrated
+  contract.
+
+### Release integration ledger
+
+- GitHub-generated release-note PRs (32): #2228, #2230, #2237, #2239, #2241,
+  #2243, #2244, #2541, #2543, #2548, #2549, #2550, #2551, #2678, #2679,
+  #2680, #2681, #2682, #2685, #2686, #2687, #2688, #2689, #2690, #2691,
+  #2692, #2693, #2694, #2695, #2696, #2698, and #2699.
+- All 95 issues assigned to the `v2.2` milestone are closed. The final two
+  issues that had no contributor PR were implemented in #2696 and #2698.
+- The GitHub generated-note set is intentionally smaller than the complete
+  97-commit ancestry range because the maintainer batches preserve source
+  contributor commits while presenting one reviewed integration PR per
+  coherent subsystem.
 
 ## [2.1.0] - 2026-08-12
 
@@ -2475,7 +2572,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/maziyarpanahi/openmed/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/maziyarpanahi/openmed/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/maziyarpanahi/openmed/releases/tag/v2.0.0
 [1.9.1]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...v1.9.1

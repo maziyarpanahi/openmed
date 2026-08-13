@@ -80,6 +80,19 @@ def test_gitpython_license_is_reviewed_without_installed_metadata(monkeypatch):
     assert reason == "permissive license"
 
 
+def test_strawberry_graphql_license_is_reviewed_without_installed_metadata(
+    monkeypatch,
+):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("strawberry-graphql")
+    allowed, reason = policy.is_allowed_license("strawberry-graphql", license_text)
+
+    assert license_text == "MIT"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_current_package_data_has_no_restricted_vocab_dumps():
     assert policy.audit_restricted_vocab_data(ROOT) == []
 

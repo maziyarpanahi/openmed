@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, TypeAlias
 
 from openmed.clinical.grounding.assertion_grounding import (
     GROUNDING_HYPOTHETICAL,
@@ -12,7 +12,7 @@ from openmed.clinical.grounding.assertion_grounding import (
     GROUNDING_REFUTED,
     assertion_grounding_status,
 )
-from openmed.clinical.grounding.types import GroundedSpan
+from openmed.clinical.grounding.types import Candidate, GroundedSpan
 from openmed.interop.omop import (
     OmopCdmTables,
     OmopConstraintViolation,
@@ -23,7 +23,6 @@ from openmed.interop.omop import (
 from ._common import (
     DOMAIN_BY_LABEL,
     DOMAIN_BY_SYSTEM,
-    ConceptResolver,
     resolve_concept,
 )
 from .condition_occurrence import (
@@ -48,6 +47,11 @@ CORE_OMOP_TABLES: tuple[str, ...] = (
     "drug_exposure",
     "measurement",
     "procedure_occurrence",
+)
+
+ConceptResolver: TypeAlias = (
+    Mapping[tuple[str, str], int]
+    | Callable[[GroundedSpan, Candidate | None], int | None]
 )
 
 _CONCEPT_COLUMN_BY_TABLE = {

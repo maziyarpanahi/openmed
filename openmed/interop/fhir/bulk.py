@@ -696,7 +696,7 @@ def deidentify_ndjson(
     try:
         with (
             source.open("r", encoding="utf-8") as input_stream,
-            temporary.open("w", encoding="utf-8") as output_stream,
+            temporary.open("w", encoding="utf-8", newline="") as output_stream,
         ):
             summary = deidentify_ndjson_stream(
                 input_stream,
