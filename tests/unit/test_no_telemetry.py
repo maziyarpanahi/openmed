@@ -65,12 +65,18 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "core/offline.py": "the offline network-block guard itself (OM-005)",
     "eval/datasets/drugprot.py": "opt-in evaluation dataset download",
     "eval/suites/shield.py": "opt-in evaluation dataset/rows fetch",
+    "interop/fhir_server.py": "opt-in user-configured FHIR server HTTP client",
     "interop/openmrs.py": "opt-in facility-local OpenMRS HTTP client",
+    "mcp/upstream_endpoint_policy.py": (
+        "opt-in user-configured upstream endpoint policy and probe"
+    ),
+    "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
     "service/openhim_mediator.py": (
         "opt-in OpenHIM mediator registration/heartbeat (user-configured)"
     ),
     "service/privacy_gateway.py": "opt-in privacy-gateway forwarding (user-configured)",
+    "service/security.py": ("opt-in remote MCP/OAuth metadata and token validation"),
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",
     "training/recipe.py": "opt-in training distributed rendezvous",
