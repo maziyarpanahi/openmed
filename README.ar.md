@@ -118,7 +118,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.1.0"),
 ]
 ```
 
@@ -329,7 +329,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII متعدد اللغات (34 مسارًا مدعومًا؛ 33 مدعومًا بالنماذج)
+## PII متعدد اللغات (35 مسارًا مدعومًا؛ 33 مدعومًا بالنماذج)
 
 الاستخراج وإزالة الهوية في `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و`tr`، **فهرس نماذج PII المسجّل** إجمالاً.
 

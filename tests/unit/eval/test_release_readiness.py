@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -54,7 +56,7 @@ def _make_repo_root(tmp_path: Path) -> Path:
     (root / "README.md").write_text("# OpenMed\n", encoding="utf-8")
     (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
-    migration = root / "docs" / "migration" / "1.9-to-2.0.md"
+    migration = root / "docs" / "migration" / "2.0-to-2.1.md"
     migration.parent.mkdir(parents=True)
     migration.write_text("# Migration Guide\n", encoding="utf-8")
 
@@ -65,7 +67,7 @@ def _make_repo_root(tmp_path: Path) -> Path:
             {
                 "schema_version": 1,
                 "before_ref": "v1.9.0",
-                "after_ref": "v2.0.0",
+                "after_ref": "v2.1.0",
                 "summary": {
                     "before_symbols": 100,
                     "after_symbols": 105,
@@ -187,7 +189,7 @@ def test_quarantined_extraction_gate_propagates(tmp_path):
 
 def test_missing_migration_guide_fails_closed(tmp_path):
     root = _make_repo_root(tmp_path)
-    (root / "docs" / "migration" / "1.9-to-2.0.md").unlink()
+    (root / "docs" / "migration" / "2.0-to-2.1.md").unlink()
 
     report = _evaluate(root)
 
@@ -195,7 +197,7 @@ def test_missing_migration_guide_fails_closed(tmp_path):
     check = next(
         item for item in report.failing_checks() if item.gate == "required_docs"
     )
-    assert "docs/migration/1.9-to-2.0.md" in check.reason
+    assert "docs/migration/2.0-to-2.1.md" in check.reason
 
 
 def test_disclaimer_comment_does_not_satisfy_gate(tmp_path):
@@ -298,7 +300,14 @@ def test_cli_writes_report_and_returns_success(tmp_path):
 
 
 def test_release_workflow_gates_publish_on_readiness():
-    workflow = Path(".github/workflows/release-gates.yml").read_text(encoding="utf-8")
+    workflow_path = Path(".github/workflows/release-gates.yml")
+    workflow = workflow_path.read_text(encoding="utf-8")
+    parsed = yaml.load(workflow, Loader=yaml.BaseLoader)
+    steps = {
+        step["name"]: step
+        for step in parsed["jobs"]["release-gates"]["steps"]
+        if "name" in step
+    }
 
     assert "Stage candidate before evaluation" in workflow
     assert "Run golden and public SHIELD benchmarks" in workflow
@@ -325,3 +334,8 @@ def test_release_workflow_gates_publish_on_readiness():
     assert 'if [ "$elapsed_seconds" -ge 600 ]' in workflow
     assert "steps.readiness.outcome == 'success'" in workflow
     assert "steps.readiness.outcome != 'success'" in workflow
+    for step_name in ("Quarantine incomplete or failing candidate", "Fail closed"):
+        condition = steps[step_name]["if"]
+        assert "github.event_name == 'workflow_dispatch'" in condition
+        assert "github.event_name == 'push'" not in condition
+        assert "steps.check-candidate.outputs.exists != 'true'" in condition
