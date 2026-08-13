@@ -13,6 +13,8 @@ import pytest
 
 from openmed.core.labels import (
     AIRWAY_MANAGEMENT,
+    ALLERGEN,
+    ALLERGY_CRITICALITY,
     CANONICAL_LABELS,
     CKD_STAGE,
     CLINICAL_CONCEPT,
@@ -28,14 +30,19 @@ from openmed.core.labels import (
     NUTRITIONAL_STATUS,
     OXYGEN_SUPPORT,
     PROTEIN_CHANGE,
+    REACTION_MANIFESTATION,
+    REACTION_SEVERITY,
     RENAL_FUNCTION_MEASURE,
     RESPIRATORY_FINDING,
     SPIROMETRY_MEASURE,
     URINE_FINDING,
     VARIANT_DESCRIPTOR,
     ZYGOSITY,
+    hipaa_class_for,
     normalize_label,
     policy_label_for,
+    risk_level_for,
+    system_hints_for,
 )
 from openmed.core.pipeline import Pipeline
 from openmed.ner.labels import available_domains, get_default_labels
@@ -225,6 +232,105 @@ PEDIATRICS_GROWTH_FIXTURE = (
     / "clinical"
     / "pediatrics_growth.jsonl"
 )
+
+
+ALLERGY_INTOLERANCE_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "allergy_intolerance.jsonl"
+)
+
+
+class TestAllergyIntoleranceDomain:
+    """FHIR AllergyIntolerance-aligned labels and offline fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "Allergen",
+        "ReactionManifestation",
+        "ReactionSeverity",
+        "Criticality",
+        "AllergyType",
+        "OnsetContext",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "Allergen": ALLERGEN,
+        "ReactionManifestation": REACTION_MANIFESTATION,
+        "ReactionSeverity": REACTION_SEVERITY,
+        "Criticality": ALLERGY_CRITICALITY,
+        "AllergyType": "OTHER",
+        "OnsetContext": "OTHER",
+    }
+    EXPECTED_ENTITIES = [
+        ("Allergen", 0, 10, "Penicillin"),
+        ("ReactionManifestation", 18, 38, "hives and angioedema"),
+        ("ReactionSeverity", 40, 46, "severe"),
+        ("Criticality", 57, 61, "high"),
+        ("AllergyType", 75, 82, "allergy"),
+        ("OnsetContext", 98, 107, "childhood"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in ALLERGY_INTOLERANCE_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves(self):
+        assert "allergy_intolerance" in available_domains()
+        assert get_default_labels("allergy_intolerance") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == CLINICAL_CONCEPT
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+        assert hipaa_class_for(expected)
+
+    def test_fixture_reports_offline_per_label_coverage(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "not a contraindication check" in disclaimer
+
+        observed_labels = {entity["label"] for entity in row["entities"]}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+    def test_fixture_entities_match_expected(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"], (
+                    entity
+                )
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
 
 
 class TestPediatricsGrowthDomain:

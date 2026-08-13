@@ -135,6 +135,8 @@ classification:
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/medication-reconciliation.md
+    - clinical/event-timeline.md
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md

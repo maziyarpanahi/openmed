@@ -2638,6 +2638,43 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
 
+    domain_coverage_parser = benchmark_sub.add_parser(
+        "domain-coverage",
+        help="Gate shipped clinical label maps against synthetic span fixtures.",
+    )
+    domain_coverage_parser.add_argument(
+        "--domain",
+        action="append",
+        dest="domains",
+        default=None,
+        help="Inspect one domain; repeat for a selected offline coverage scope.",
+    )
+    domain_coverage_parser.add_argument(
+        "--label-map",
+        type=Path,
+        default=None,
+        help="Optional local JSON label map override.",
+    )
+    domain_coverage_parser.add_argument(
+        "--fixture-dir",
+        type=Path,
+        default=None,
+        help="Optional directory containing synthetic clinical JSONL fixtures.",
+    )
+    domain_coverage_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the machine-readable coverage summary.",
+    )
+    domain_coverage_parser.add_argument(
+        "--markdown-output",
+        type=Path,
+        default=None,
+        help="Optional path for the aggregate Markdown coverage report.",
+    )
+    domain_coverage_parser.set_defaults(handler=_handle_benchmark_domain_coverage)
+
     mobile_parser = benchmark_sub.add_parser(
         "mobile",
         help="Parse mobile benchmark options.",
@@ -5980,6 +6017,31 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
         )
 
     return _write_json_payload(args, payload, args.output)
+
+
+def _handle_benchmark_domain_coverage(args: argparse.Namespace) -> int:
+    """Run the offline clinical-domain label-map coverage gate."""
+    from openmed.eval.domain_coverage import run_domain_coverage
+
+    try:
+        report = run_domain_coverage(
+            label_map_path=args.label_map,
+            fixture_dir=args.fixture_dir,
+            domains=args.domains,
+        )
+        if args.output is not None:
+            report.write_json(args.output)
+        if args.markdown_output is not None:
+            report.write_markdown(args.markdown_output)
+    except (OSError, ValueError) as exc:
+        raise CliError(
+            f"Clinical domain coverage could not run: {exc}",
+            code="domain_coverage_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    result = emit(args, report.to_dict(), human=report.to_markdown())
+    return result if report.passed else EXIT_ERROR
 
 
 def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
