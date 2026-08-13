@@ -4938,16 +4938,24 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     from openmed.eval.datasets import CLINICAL_PRIVACY_MODEL_ID
     from openmed.eval.harness import run_benchmark
     from openmed.eval.suites import (
+        OPENMED_SYNTH,
+        OPENMED_SYNTH_REFERENCE_MODEL,
         SHIELD,
         load_suite_fixtures,
+        openmed_synth_reference_runner,
         run_clinical_phi_shield_benchmark,
         suite_metadata,
     )
+
+    suite = str(args.suite or SHIELD)
+    explicit_models = bool(args.models)
 
     try:
         models = _parse_model_args(args.models or [])
     except ValueError as exc:
         raise CliError(str(exc), code="invalid_argument", exit_code=EXIT_USAGE)
+    if not models and suite == OPENMED_SYNTH:
+        models = [OPENMED_SYNTH_REFERENCE_MODEL]
     if not models:
         raise CliError(
             "At least one model identifier is required.",
@@ -4955,7 +4963,6 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
             exit_code=EXIT_USAGE,
         )
 
-    suite = str(args.suite or SHIELD)
     if args.checkpoint_manifest_ref and args.checkpoint_manifest is None:
         raise CliError(
             "--checkpoint-manifest-ref requires --checkpoint-manifest.",
@@ -5031,6 +5038,11 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
                 suite=suite,
                 model_name=model,
                 device=args.device,
+                runner=(
+                    openmed_synth_reference_runner
+                    if suite == OPENMED_SYNTH and not explicit_models
+                    else None
+                ),
                 metadata=metadata,
             )
             for model in models
