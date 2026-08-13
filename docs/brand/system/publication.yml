@@ -181,13 +181,17 @@ classification:
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
     - integrations-langchain.md
+    - integrations/arrow-flight.md
     - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/pandas-on-spark.md
+    - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
+    - integrations/distributed-sql-udf.md
     - spark-deidentification.md
     - prefect-integration.md
     - spacy-component.md

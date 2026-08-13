@@ -110,13 +110,17 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
+      - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
