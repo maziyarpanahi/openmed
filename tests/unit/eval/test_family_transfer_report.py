@@ -13,6 +13,7 @@ from openmed.eval import (
     load_family_transfer_fixtures,
 )
 from openmed.eval.harness import BenchmarkFixture
+from openmed.training.adapters import AdapterParameterAccounting
 
 
 def test_bundled_family_transfer_gold_is_synthetic_and_paired() -> None:
@@ -80,6 +81,106 @@ def test_report_exposes_family_modes_deltas_and_donor_non_regression() -> None:
     assert "OM-SYN-" not in markdown
 
 
+def test_report_qualifies_f1_retention_and_parameter_efficiency() -> None:
+    accounting = AdapterParameterAccounting(
+        shared_backbone_parameter_count=110_000_000,
+        adapter_trainable_parameter_count=524_288,
+        task_head_trainable_parameter_count=65_536,
+        full_language_model_trainable_parameter_count=110_065_536,
+    )
+
+    report = cross_lingual_family_transfer_report(
+        "synthetic-family-transfer-model",
+        runner=_passing_runner,
+        parameter_accounting_by_adapter={"family-transfer/indic-hi-to-te": accounting},
+        adapted_f1_fraction_floor=0.90,
+        trainable_fraction_ceiling=0.01,
+    )
+
+    qualification = report.comparisons[0].efficiency
+    assert qualification is not None
+    assert qualification.full_language_model.f1 == pytest.approx(1.0)
+    assert qualification.adapted_f1_fraction_of_full_model == pytest.approx(1.0)
+    assert qualification.adapted_f1_fraction_passed is True
+    assert qualification.parameter_accounting.trainable_parameter_count == 589_824
+    assert qualification.parameter_efficiency_passed is True
+    assert qualification.passed is True
+    assert report.passed is True
+
+    payload = report.to_dict()
+    assert payload["summary"]["all_efficiency_qualifications_passed"] is True
+    evidence = payload["families"]["indic"][0]["efficiency"]
+    assert evidence["adapted_f1_fraction_floor"] == pytest.approx(0.90)
+    assert evidence["parameter_accounting"]["trainable_fraction_of_full_model"] < 0.01
+    serialized = report.to_json()
+    markdown = report.to_markdown()
+    assert "Adapter efficiency qualification" in markdown
+    assert "OM-SYN-" not in serialized
+    assert "OM-SYN-" not in markdown
+
+
+def test_report_requires_parameter_accounting_for_each_evaluated_adapter() -> None:
+    with pytest.raises(
+        ValueError,
+        match="missing parameter accounting.*family-transfer/indic-hi-to-te",
+    ):
+        cross_lingual_family_transfer_report(
+            "synthetic-family-transfer-model",
+            runner=_passing_runner,
+            parameter_accounting_by_adapter={},
+        )
+
+
+def test_report_fails_when_adapted_f1_misses_full_model_fraction() -> None:
+    report = cross_lingual_family_transfer_report(
+        "synthetic-family-transfer-model",
+        runner=_f1_retention_failure_runner,
+        parameter_accounting_by_adapter={
+            "family-transfer/indic-hi-to-te": AdapterParameterAccounting(
+                shared_backbone_parameter_count=110_000_000,
+                adapter_trainable_parameter_count=524_288,
+                task_head_trainable_parameter_count=65_536,
+                full_language_model_trainable_parameter_count=110_065_536,
+            )
+        },
+        adapted_f1_fraction_floor=0.90,
+        trainable_fraction_ceiling=0.01,
+    )
+
+    comparison = report.comparisons[0]
+    qualification = comparison.efficiency
+    assert qualification is not None
+    assert comparison.target_adapted.f1 == pytest.approx(0.80)
+    assert comparison.adapted_target_passed is True
+    assert qualification.adapted_f1_fraction_of_full_model == pytest.approx(0.80)
+    assert qualification.adapted_f1_fraction_passed is False
+    assert qualification.parameter_efficiency_passed is True
+    assert report.passed is False
+
+
+def test_report_fails_when_trainable_fraction_exceeds_ceiling() -> None:
+    report = cross_lingual_family_transfer_report(
+        "synthetic-family-transfer-model",
+        runner=_passing_runner,
+        parameter_accounting_by_adapter={
+            "family-transfer/indic-hi-to-te": AdapterParameterAccounting(
+                shared_backbone_parameter_count=110_000_000,
+                adapter_trainable_parameter_count=524_288,
+                task_head_trainable_parameter_count=65_536,
+                full_language_model_trainable_parameter_count=110_065_536,
+            )
+        },
+        trainable_fraction_ceiling=0.001,
+    )
+
+    qualification = report.comparisons[0].efficiency
+    assert qualification is not None
+    assert qualification.adapted_f1_fraction_passed is True
+    assert qualification.parameter_efficiency_passed is False
+    assert qualification.passed is False
+    assert report.passed is False
+
+
 def test_report_flags_a_post_adaptation_donor_regression() -> None:
     report = cross_lingual_family_transfer_report(
         "synthetic-family-transfer-model",
@@ -119,7 +220,12 @@ def _passing_runner(
     assert device == "cpu"
     role = fixture.metadata["evaluation_role"]
     mode = fixture.metadata["transfer_mode"]
-    if role == "donor" or mode == "adapted":
+    if mode == "full_model":
+        assert role == "target"
+        assert fixture.metadata["adapter_language"] is None
+        assert fixture.metadata["source_language"] == "te"
+        assert fixture.metadata["full_language_model"] is True
+    if role == "donor" or mode in {"adapted", "full_model"}:
         return _gold_predictions(fixture)
     if mode == "zero_shot" and fixture.fixture_id.endswith("001"):
         return _gold_predictions(fixture)
@@ -136,6 +242,32 @@ def _donor_regression_runner(
     if role == "donor" and mode == "adapted":
         return []
     if role == "donor" or mode in {"zero_shot", "adapted"}:
+        return _gold_predictions(fixture)
+    return []
+
+
+def _f1_retention_failure_runner(
+    fixture: BenchmarkFixture,
+    model_name: str,
+    device: str,
+):
+    role = fixture.metadata["evaluation_role"]
+    mode = fixture.metadata["transfer_mode"]
+    if role == "donor" or mode == "full_model":
+        return _gold_predictions(fixture)
+    if mode == "adapted":
+        predictions = _gold_predictions(fixture)
+        if fixture.fixture_id.endswith("001"):
+            predictions.append(
+                {
+                    "start": 0,
+                    "end": 1,
+                    "label": "PERSON",
+                    "text": fixture.text[:1],
+                }
+            )
+        return predictions
+    if mode == "zero_shot" and fixture.fixture_id.endswith("001"):
         return _gold_predictions(fixture)
     return []
 

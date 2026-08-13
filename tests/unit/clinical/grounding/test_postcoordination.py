@@ -9,11 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from eval.suites.postcoordinated_expressions import (
-    SYNTHETIC_EXPRESSION_GOLD,
-    evaluate_postcoordinated_expressions,
-    synthetic_ecl_validator,
-)
 from openmed.clinical.exporters.codeable_concept import to_codeable_concept
 from openmed.clinical.exporters.fhir import (
     POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL,
@@ -21,12 +16,15 @@ from openmed.clinical.exporters.fhir import (
     to_fhir,
 )
 from openmed.clinical.grounding import (
+    LATERALITY_SITE_PATTERN,
+    LATERALITY_SITE_SLOTS,
     Candidate,
     ConceptReference,
     ECLConstraint,
     ECLValidationError,
     ECLValidator,
     GroundedSpan,
+    LateralitySiteDecomposer,
     PostCoordinationStage,
     Refinement,
     RestrictedVocabularyError,
@@ -36,30 +34,40 @@ from openmed.clinical.grounding import (
     build_expression,
     ground,
 )
+from openmed.eval.suites.postcoordinated_expressions import (
+    SYNTHETIC_EXPRESSION_GOLD,
+    evaluate_postcoordinated_expressions,
+    synthetic_ecl_validator,
+)
 
 _EDITION = "https://synthetic.invalid/sct/edition/20260101"
 _FOCUS = ConceptReference("810901")
 _ATTRIBUTES = {
     "laterality": ConceptReference("700101"),
+    "finding_site": ConceptReference("700105"),
     "severity": ConceptReference("700102"),
     "morphology": ConceptReference("700103"),
     "causative_agent": ConceptReference("700104"),
 }
 _VALUES = {
     "laterality": ConceptReference("820101"),
+    "finding_site": ConceptReference("820105"),
     "severity": ConceptReference("820102"),
     "morphology": ConceptReference("820103"),
     "causative_agent": ConceptReference("820104"),
 }
 _FRAGMENTS = {
     "left modifier": "laterality",
+    "site modifier": "finding_site",
     "severe modifier": "severity",
     "shape modifier": "morphology",
     "agent modifier": "causative_agent",
 }
 _COMPOSITE = (
-    "synthetic focus, left modifier, severe modifier, shape modifier, agent modifier"
+    "synthetic focus, left modifier, site modifier, severe modifier, shape modifier, "
+    "agent modifier"
 )
+_LATERALITY_SITE_MENTION = "synthetic focus of left modifier site modifier"
 
 
 class _Resolver:
@@ -107,6 +115,31 @@ def _decomposer() -> RulesPostCoordinationDecomposer:
     return RulesPostCoordinationDecomposer(focus, refinement)
 
 
+def _laterality_site_decomposer() -> LateralitySiteDecomposer:
+    def focus(fragment):
+        return _FOCUS if fragment.text == "synthetic focus" else None
+
+    def laterality(fragment):
+        if fragment.text != "left modifier":
+            return None
+        return Refinement(
+            "laterality",
+            _ATTRIBUTES["laterality"],
+            _VALUES["laterality"],
+        )
+
+    def finding_site(fragment):
+        if fragment.text != "site modifier":
+            return None
+        return Refinement(
+            "finding_site",
+            _ATTRIBUTES["finding_site"],
+            _VALUES["finding_site"],
+        )
+
+    return LateralitySiteDecomposer(focus, laterality, finding_site)
+
+
 def _stage(
     *,
     threshold: float = 0.75,
@@ -116,6 +149,19 @@ def _stage(
         license_key="synthetic-user-license-proof",
         validator=_validator(reject_slot=reject_slot),
         decomposer=_decomposer(),
+        precoordination_threshold=threshold,
+    )
+
+
+def _laterality_site_stage(
+    *,
+    threshold: float = 0.75,
+    reject_slot: str | None = None,
+) -> PostCoordinationStage:
+    return PostCoordinationStage(
+        license_key="synthetic-user-license-proof",
+        validator=_validator(reject_slot=reject_slot),
+        decomposer=_laterality_site_decomposer(),
         precoordination_threshold=threshold,
     )
 
@@ -175,6 +221,52 @@ def test_decomposer_reuses_composite_offsets_for_all_attribute_types() -> None:
         assert _COMPOSITE[local_start:local_end] == item.mention.text
 
 
+def test_laterality_site_decomposer_resolves_natural_pattern_with_offsets() -> None:
+    decomposition = _laterality_site_decomposer().decompose(
+        _LATERALITY_SITE_MENTION,
+        start=13,
+        byte_start=29,
+    )
+
+    assert decomposition is not None
+    assert decomposition.normalization.strategy == "unsplit"
+    assert decomposition.focus_mention.text == "synthetic focus"
+    assert decomposition.focus_mention.start == 13
+    assert [item.mention.text for item in decomposition.refinements] == [
+        "left modifier",
+        "site modifier",
+    ]
+    assert {
+        item.refinement.slot for item in decomposition.refinements
+    } == LATERALITY_SITE_SLOTS
+    for item in decomposition.refinements:
+        local_start = item.mention.start - 13
+        local_end = item.mention.end - 13
+        assert _LATERALITY_SITE_MENTION[local_start:local_end] == item.mention.text
+        assert item.mention.byte_start == 29 + len(
+            _LATERALITY_SITE_MENTION[:local_start].encode("utf-8")
+        )
+        assert item.mention.byte_end == item.mention.byte_start + len(
+            item.mention.text.encode("utf-8")
+        )
+
+    composite = _laterality_site_decomposer().decompose(
+        "synthetic focus, left modifier, site modifier"
+    )
+    assert composite is not None
+    assert composite.normalization.strategy == "coordination"
+    assert [item.refinement.slot for item in composite.refinements] == [
+        "laterality",
+        "finding_site",
+    ]
+    assert (
+        _laterality_site_decomposer().decompose(
+            "synthetic focus of left modifier",
+        )
+        is None
+    )
+
+
 def test_invalid_ecl_composition_is_rejected_and_never_emitted() -> None:
     refinement = Refinement(
         "laterality",
@@ -198,6 +290,20 @@ def test_invalid_ecl_composition_is_rejected_and_never_emitted() -> None:
         in rejected.provenance["snomed_postcoordination"]["reasons"]
     )
 
+    rejected_site = _laterality_site_stage(reject_slot="finding_site").apply(
+        GroundedSpan(
+            _LATERALITY_SITE_MENTION,
+            0,
+            len(_LATERALITY_SITE_MENTION),
+            canonical_label="CONDITION",
+        )
+    )
+    assert rejected_site.abstained is True
+    assert rejected_site.candidates == ()
+    assert rejected_site.provenance["snomed_postcoordination"]["reasons"] == [
+        "value_outside_domain"
+    ]
+
 
 def test_postcoordination_requires_key_and_does_not_retain_it() -> None:
     with pytest.raises(RestrictedVocabularyError, match="user-supplied"):
@@ -218,11 +324,11 @@ def test_mixed_grounding_prefers_precoordinated_and_composes_only_abstention(
     results = ground(
         [
             {"text": "precoordinated finding", "label": "condition"},
-            {"text": _COMPOSITE, "label": "condition"},
+            {"text": _LATERALITY_SITE_MENTION, "label": "condition"},
         ],
         systems=["icd10cm"],
         loader=_free_loader(tmp_path),
-        postcoordination=_stage(),
+        postcoordination=_laterality_site_stage(),
     )
 
     assert results[0].codes == {"icd10cm": "SYN-PRE-1"}
@@ -230,6 +336,14 @@ def test_mixed_grounding_prefers_precoordinated_and_composes_only_abstention(
     assert results[1].codes["snomed"].startswith(f"{_FOCUS.concept_id} :")
     assert results[1].candidates[0].source == "post-coordinated"
     assert results[1].provenance["snomed_postcoordination"]["validated"] is True
+    assert (
+        results[1].provenance["snomed_postcoordination"]["pattern"]
+        == LATERALITY_SITE_PATTERN
+    )
+    assert {
+        item["slot"]
+        for item in results[1].provenance["snomed_postcoordination"]["refinements"]
+    } == LATERALITY_SITE_SLOTS
 
 
 def test_low_score_triggers_composition_but_sufficient_score_is_preferred() -> None:
@@ -263,11 +377,11 @@ def test_low_score_triggers_composition_but_sufficient_score_is_preferred() -> N
 
 
 def test_fhir_codeable_concept_marks_expression_as_composed() -> None:
-    composed = _stage().apply(
+    composed = _laterality_site_stage().apply(
         GroundedSpan(
-            _COMPOSITE,
+            _LATERALITY_SITE_MENTION,
             0,
-            len(_COMPOSITE),
+            len(_LATERALITY_SITE_MENTION),
             canonical_label="CONDITION",
         )
     )
@@ -331,7 +445,7 @@ def test_synthetic_eval_reports_required_metrics_without_network(monkeypatch) ->
     assert report["case_count"] >= 25
     assert report["expression_exact_match"] >= 0.70
     assert report["validation_rate"] == 1.0
-    assert set(report["attribute_slot_f1"]) == set(_ATTRIBUTES)
+    assert set(report["attribute_slot_f1"]) == LATERALITY_SITE_SLOTS
     assert all(value == 1.0 for value in report["attribute_slot_f1"].values())
     assert report["metadata"] == {
         "offline": True,
