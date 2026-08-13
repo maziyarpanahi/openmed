@@ -100,6 +100,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
+      - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
@@ -126,6 +127,7 @@ nav:
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
+      - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md

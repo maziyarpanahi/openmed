@@ -198,6 +198,13 @@ def _non_negative_float(value: str) -> float:
     return parsed
 
 
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than 0")
+    return parsed
+
+
 def _unit_interval_float(value: str) -> float:
     parsed = float(value)
     if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
@@ -1078,6 +1085,24 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     safe_harbor_parser.set_defaults(handler=_handle_compliance_safe_harbor)
 
+    part11_export_parser = compliance_sub.add_parser(
+        "part11-export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(part11_export_parser)
+
+    # Keep a discoverable noun/verb spelling alongside the flat command name.
+    part11_parser = compliance_sub.add_parser(
+        "part11",
+        help="21 CFR Part 11 audit-trail utilities.",
+    )
+    part11_sub = part11_parser.add_subparsers(dest="part11_command")
+    nested_export_parser = part11_sub.add_parser(
+        "export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(nested_export_parser)
+
     expert_verify_parser = compliance_sub.add_parser(
         "expert-review-verify",
         help="Verify a PHI-safe de-identification expert-review evidence bundle.",
@@ -1129,6 +1154,32 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     attestation_verify_parser.set_defaults(handler=_handle_expert_attestation_verify)
+
+
+def _add_part11_export_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the input/output arguments shared by Part 11 export aliases."""
+
+    parser.add_argument(
+        "input",
+        type=Path,
+        help=(
+            "JSON file containing safe event objects, an events array, or an "
+            "existing Part 11 trail."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        required=True,
+        help="Path for the local Part 11 audit-trail JSON file.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing output file atomically.",
+    )
+    parser.set_defaults(handler=_handle_compliance_part11_export)
 
 
 def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1227,6 +1278,145 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     )
     discover_parser.add_argument("--overwrite", action="store_true")
     discover_parser.set_defaults(handler=_handle_risk_discover)
+
+    lab_parser = risk_sub.add_parser(
+        "lab",
+        aliases=("privacy-lab", "structured-lab"),
+        help=(
+            "Profile, transform, and report structured privacy risk with "
+            "explicit offline policy choices."
+        ),
+    )
+    lab_parser.add_argument("input", type=Path)
+    lab_parser.add_argument(
+        "--evidence",
+        "-e",
+        type=Path,
+        required=True,
+        help="PHI-safe JSON method/evidence report.",
+    )
+    lab_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help="Optional transformed release table; written only when policy passes.",
+    )
+    lab_parser.add_argument(
+        "--qi",
+        type=_column_list_arg,
+        required=True,
+        help="Comma-separated quasi-identifier columns; no automatic selection.",
+    )
+    lab_parser.add_argument(
+        "--qi-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal quasi-identifier column name.",
+    )
+    lab_parser.add_argument(
+        "--sensitive",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated sensitive attributes; omit only after review.",
+    )
+    lab_parser.add_argument(
+        "--sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal sensitive-attribute column name.",
+    )
+    lab_parser.add_argument("--direct-id", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--direct-id-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--non-sensitive", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--non-sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--exclude", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--exclude-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--privacy-unit", default=None)
+    lab_parser.add_argument("--k", type=_positive_int, required=True)
+    lab_parser.add_argument("--l", type=_positive_int, default=1)
+    lab_parser.add_argument("--t", type=_unit_interval_float, default=1.0)
+    suppression_group = lab_parser.add_mutually_exclusive_group()
+    suppression_group.add_argument(
+        "--suppression-limit",
+        "--max-suppressed-units",
+        dest="suppression_limit",
+        type=_non_negative_int,
+        default=None,
+    )
+    suppression_group.add_argument(
+        "--suppression-rate",
+        "--max-suppression-rate",
+        dest="suppression_rate",
+        type=_unit_interval_float,
+        default=0.0,
+    )
+    lab_parser.add_argument(
+        "--membership-candidates",
+        type=Path,
+        default=None,
+        help="Optional local candidate population for the bounded self-test.",
+    )
+    lab_parser.add_argument(
+        "--membership-max-inference-rate",
+        type=_unit_interval_float,
+        default=None,
+    )
+    lab_parser.add_argument(
+        "--membership-max-candidates",
+        type=_positive_int,
+        default=10_000,
+    )
+    lab_parser.add_argument(
+        "--hierarchies",
+        type=Path,
+        default=None,
+        help="Optional local JSON generalization hierarchy configuration.",
+    )
+    lab_parser.add_argument(
+        "--population-scope",
+        default="release_cohort",
+        help="Coded user-declared population assumption.",
+    )
+    lab_parser.add_argument("--overwrite", action="store_true")
+    lab_parser.set_defaults(handler=_handle_risk_lab)
+
+    dp_parser = risk_sub.add_parser(
+        "dp-aggregate",
+        help="Release named numeric aggregates under an explicit DP ledger.",
+    )
+    dp_parser.add_argument(
+        "input",
+        type=Path,
+        help="Local JSON object mapping aggregate names to numeric values.",
+    )
+    dp_parser.add_argument("--output", "-o", type=Path, required=True)
+    dp_parser.add_argument("--epsilon", type=_positive_float, required=True)
+    dp_parser.add_argument("--delta", type=_unit_interval_float, default=0.0)
+    dp_parser.add_argument("--budget-epsilon", type=_positive_float, required=True)
+    dp_parser.add_argument("--budget-delta", type=_unit_interval_float, default=0.0)
+    dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
+    dp_parser.add_argument("--label", default="aggregate_query")
+    dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument("--overwrite", action="store_true")
+    dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
     assess_parser = risk_sub.add_parser(
         "assess",
@@ -3424,6 +3614,83 @@ def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
     )
 
 
+def _handle_compliance_part11_export(args: argparse.Namespace) -> int:
+    """Export safe event mappings to a verified Part 11 audit trail."""
+
+    from ..compliance.part11 import (
+        PART11_FORMAT,
+        Part11AuditTrail,
+        build_part11_audit_trail,
+    )
+
+    try:
+        source = args.input.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to read the Part 11 input file.",
+            code="input_read_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        parsed = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in Part 11 input at line {exc.lineno} column {exc.colno}.",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        if isinstance(parsed, MappingABC) and parsed.get("format") == PART11_FORMAT:
+            trail = Part11AuditTrail.from_dict(parsed)
+        else:
+            if isinstance(parsed, MappingABC):
+                events = parsed.get("events", parsed.get("records"))
+                if events is None:
+                    events = [parsed]
+            else:
+                events = parsed
+            if not isinstance(events, Sequence) or isinstance(events, (str, bytes)):
+                raise TypeError("Part 11 input must contain an event list")
+            trail = build_part11_audit_trail(events)
+        if not trail.verify():
+            raise ValueError("Part 11 audit trail integrity verification failed")
+        serialized = trail.to_json() + "\n"
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to build the Part 11 audit trail: {exc}",
+            code="part11_export_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        _write_safe_text(args.output, serialized, overwrite=args.overwrite)
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to write the Part 11 audit-trail file.",
+            code="output_write_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "output": str(args.output),
+        "record_count": len(trail.records),
+        "head_hash": trail.head_hash,
+        "trail_hash": trail.trail_hash,
+        "verified": True,
+    }
+    return emit(
+        args,
+        payload,
+        human=(
+            f"Part 11 audit trail written to: {args.output}\n"
+            f"Records: {len(trail.records)}\n"
+            "Verification: PASS"
+        ),
+    )
+
+
 def _handle_expert_review_verify(args: argparse.Namespace) -> int:
     from ..compliance import ExpertReviewEvidenceReport
 
@@ -3687,6 +3954,209 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
         f"Manifest: {args.output}\n"
     )
     return emit(args, payload, human=human)
+
+
+def _handle_risk_lab(args: argparse.Namespace) -> int:
+    from ..structured import (
+        SUPPORTED_TABLE_SUFFIXES,
+        StructuredPrivacyPolicy,
+        read_table,
+        run_structured_privacy_lab,
+        write_table,
+    )
+
+    quasi_identifiers = _merged_column_args(args.qi, args.qi_column)
+    sensitive_attributes = _merged_column_args(
+        args.sensitive,
+        args.sensitive_column,
+    )
+    direct_identifiers = _merged_column_args(
+        args.direct_id,
+        args.direct_id_column,
+    )
+    non_sensitive_attributes = _merged_column_args(
+        args.non_sensitive,
+        args.non_sensitive_column,
+    )
+    excluded_attributes = _merged_column_args(
+        args.exclude,
+        args.exclude_column,
+    )
+    input_paths = [(args.input, "Structured lab input", SUPPORTED_TABLE_SUFFIXES)]
+    if args.membership_candidates is not None:
+        input_paths.append(
+            (
+                args.membership_candidates,
+                "Membership candidate input",
+                SUPPORTED_TABLE_SUFFIXES,
+            )
+        )
+    if args.hierarchies is not None:
+        input_paths.append(
+            (args.hierarchies, "Hierarchy configuration", frozenset({".json"}))
+        )
+    output_paths = [(args.evidence, "Privacy lab evidence", frozenset({".json"}))]
+    if args.output is not None:
+        output_paths.append(
+            (args.output, "Structured lab release", SUPPORTED_TABLE_SUFFIXES)
+        )
+    _preflight_structured_paths(
+        inputs=tuple(input_paths),
+        outputs=tuple(output_paths),
+        overwrite=args.overwrite,
+    )
+    try:
+        records = read_table(args.input)
+        candidates = (
+            read_table(args.membership_candidates)
+            if args.membership_candidates is not None
+            else None
+        )
+        hierarchies = _load_lab_hierarchies(args.hierarchies)
+    except (ImportError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise CliError(
+            "Failed to read a structured privacy lab input.",
+            code="privacy_lab_input_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    try:
+        policy = StructuredPrivacyPolicy(
+            quasi_identifiers=quasi_identifiers,
+            target_k=args.k,
+            sensitive_attributes=sensitive_attributes,
+            direct_identifiers=direct_identifiers,
+            non_sensitive_attributes=non_sensitive_attributes,
+            excluded_attributes=excluded_attributes,
+            privacy_unit=args.privacy_unit,
+            target_l=args.l,
+            target_t=args.t,
+            suppression_limit=args.suppression_limit,
+            suppression_rate=args.suppression_rate,
+            membership_max_inference_rate=args.membership_max_inference_rate,
+            membership_max_candidates=args.membership_max_candidates,
+        )
+        result = run_structured_privacy_lab(
+            records,
+            policy,
+            population_assumptions={"scope": args.population_scope},
+            membership_candidates=candidates,
+            hierarchies=hierarchies,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The structured privacy lab configuration or input is invalid.",
+            code="invalid_privacy_lab_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+    try:
+        _write_safe_text(
+            args.evidence,
+            result.evidence.to_json() + "\n",
+            overwrite=args.overwrite,
+        )
+        if args.output is not None and result.meets_policy:
+            if result.anonymization is None:
+                raise ValueError("no transformed release is available")
+            write_table(
+                args.output,
+                result.records,
+                overwrite=args.overwrite,
+            )
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to write structured privacy lab outputs.",
+            code="privacy_lab_output_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "evidence": str(args.evidence),
+        "output": str(args.output) if args.output is not None else None,
+        "transformation_status": result.transformation_status,
+        "meets_policy": result.meets_policy,
+        "source_dataset_digest": result.profile.dataset_digest,
+        "evidence_integrity_digest": result.evidence.to_dict()["integrity_digest"],
+    }
+    human = (
+        "Structured privacy risk lab\n"
+        f"Meets configured policy: {_pass_fail(result.meets_policy)}\n"
+        f"Transformation: {result.transformation_status}\n"
+        f"Evidence: {args.evidence}\n"
+        "The evidence is aggregate-only and requires qualified expert review.\n"
+    )
+    emitted = emit(args, payload, human=human)
+    return emitted if result.meets_policy else EXIT_ERROR
+
+
+def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
+    from ..risk import (
+        AggregateDPBudgetLedger,
+        DPAggregateBudgetExceeded,
+        release_aggregate,
+    )
+
+    _preflight_structured_paths(
+        inputs=((args.input, "Aggregate input", frozenset({".json"})),),
+        outputs=((args.output, "Aggregate output", frozenset({".json"})),),
+        overwrite=args.overwrite,
+    )
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        ledger = AggregateDPBudgetLedger(
+            max_epsilon=args.budget_epsilon,
+            max_delta=args.budget_delta,
+        )
+        release = release_aggregate(
+            payload,
+            ledger=ledger,
+            epsilon=args.epsilon,
+            delta=args.delta,
+            sensitivity=args.sensitivity,
+            label=args.label,
+            seed=args.seed,
+        )
+        _write_safe_text(
+            args.output,
+            json.dumps(
+                release.to_dict(),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            overwrite=args.overwrite,
+        )
+    except (DPAggregateBudgetExceeded, ImportError, OSError, TypeError, ValueError):
+        raise CliError(
+            "The aggregate differential-privacy release failed safely.",
+            code="dp_aggregate_failed",
+            exit_code=EXIT_ERROR,
+        ) from None
+    result = {
+        "output": str(args.output),
+        "scope": "aggregate_only",
+        "row_level_anonymization": False,
+        "ledger": ledger.to_dict(),
+    }
+    return emit(
+        args,
+        result,
+        human=(
+            "Aggregate differential-privacy release complete\n"
+            f"Output: {args.output}\n"
+            "This output is aggregate-only and is not row-level anonymization.\n"
+        ),
+    )
+
+
+def _load_lab_hierarchies(path: Path | None) -> Mapping[str, Any] | None:
+    if path is None:
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError("hierarchy configuration must be an object")
+    return payload
 
 
 def _handle_risk_assess(args: argparse.Namespace) -> int:
