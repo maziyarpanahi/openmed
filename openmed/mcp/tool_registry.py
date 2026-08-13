@@ -17,6 +17,7 @@ from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
 
@@ -707,6 +708,22 @@ def render_langchain_tool_definitions(
     return render_adapter_tool_definitions("langchain", specs=specs)
 
 
+def render_graph_orchestration_tool_definitions(
+    specs: Iterable[ToolSpec] | None = None,
+) -> tuple[JsonObject, ...]:
+    """Render state-graph adapter definitions from canonical tool specs."""
+
+    return render_adapter_tool_definitions("graph_orchestration", specs=specs)
+
+
+def render_search_pipeline_tool_definitions(
+    specs: Iterable[ToolSpec] | None = None,
+) -> tuple[JsonObject, ...]:
+    """Render modular-search adapter definitions from canonical tool specs."""
+
+    return render_adapter_tool_definitions("search_pipeline", specs=specs)
+
+
 def render_presidio_tool_definitions(
     specs: Iterable[ToolSpec] | None = None,
 ) -> tuple[JsonObject, ...]:
@@ -1045,7 +1062,12 @@ _KEEP_ALIVE_PARAMETER = _parameter(
 )
 _LANG_PARAMETER = _parameter(
     "lang",
-    _schema("string", enum=sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)),
+    _schema(
+        "string",
+        enum=sorted(
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+        ),
+    ),
     str,
     "en",
     "PII language code.",
@@ -2064,9 +2086,11 @@ __all__ = [
     "input_schema",
     "invoke_tool",
     "render_adapter_tool_definitions",
+    "render_graph_orchestration_tool_definitions",
     "render_langchain_tool_definitions",
     "render_mcp_tool",
     "render_presidio_tool_definitions",
+    "render_search_pipeline_tool_definitions",
     "render_tool_registry_document",
     "register_plugin_tools",
     "validate_registered_tool_output",

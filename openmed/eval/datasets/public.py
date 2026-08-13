@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
@@ -80,6 +83,133 @@ PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
     },
 }
 
+CLINICAL_MODEL_FAMILIES: tuple[str, ...] = (
+    "doctype",
+    "section",
+    "relex_med",
+    "relex_ade",
+    "link",
+)
+CLINICAL_LINK_VOCABULARIES: tuple[str, ...] = (
+    "rxnorm",
+    "icd10cm",
+    "loinc",
+    "hpo",
+    "mesh",
+)
+
+
+@dataclass(frozen=True)
+class ClinicalDatasetBinding:
+    """Metadata-only dataset policy for one clinical model family.
+
+    The binding describes permitted uses without carrying paths, credentials,
+    corpus rows, or controlled-vocabulary content. Optional bindings represent
+    evaluations that can run only when the caller already has licensed access.
+    """
+
+    dataset: str
+    uses: tuple[str, ...]
+    access: str
+    required: bool = True
+    user_key_gated: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.dataset:
+            raise ValueError("clinical dataset binding requires a dataset id")
+        if not self.uses or set(self.uses) - {"train", "eval"}:
+            raise ValueError("clinical dataset uses must contain train and/or eval")
+        if len(set(self.uses)) != len(self.uses):
+            raise ValueError("clinical dataset uses must not contain duplicates")
+        if self.access not in {
+            "public",
+            "synthetic",
+            "dua-eval-only",
+            "user-supplied",
+        }:
+            raise ValueError("unknown clinical dataset access policy")
+        if self.access == "dua-eval-only" and self.uses != ("eval",):
+            raise ValueError("DUA datasets are eval-only")
+        if self.user_key_gated and self.access != "user-supplied":
+            raise ValueError("user-key gating requires user-supplied access")
+
+
+CLINICAL_FAMILY_DATASET_BINDINGS: Mapping[str, tuple[ClinicalDatasetBinding, ...]] = (
+    MappingProxyType(
+        {
+            "doctype": (
+                ClinicalDatasetBinding(
+                    "synthetic_section_doctype",
+                    ("train", "eval"),
+                    "synthetic",
+                ),
+            ),
+            "section": (
+                ClinicalDatasetBinding(
+                    "synthetic_section_doctype",
+                    ("train", "eval"),
+                    "synthetic",
+                ),
+            ),
+            "relex_med": (
+                ClinicalDatasetBinding("drugprot", ("train", "eval"), "public"),
+                ClinicalDatasetBinding(
+                    "n2c2", ("eval",), "dua-eval-only", required=False
+                ),
+                ClinicalDatasetBinding(
+                    "made", ("eval",), "dua-eval-only", required=False
+                ),
+            ),
+            "relex_ade": (
+                ClinicalDatasetBinding("drugprot", ("train", "eval"), "public"),
+                ClinicalDatasetBinding(
+                    "n2c2", ("eval",), "dua-eval-only", required=False
+                ),
+                ClinicalDatasetBinding(
+                    "made", ("eval",), "dua-eval-only", required=False
+                ),
+            ),
+            "link": (
+                ClinicalDatasetBinding(
+                    "redistributable_vocabulary",
+                    ("train",),
+                    "user-supplied",
+                ),
+                ClinicalDatasetBinding("medmentions", ("eval",), "public"),
+                ClinicalDatasetBinding(
+                    "umls",
+                    ("eval",),
+                    "user-supplied",
+                    required=False,
+                    user_key_gated=True,
+                ),
+                ClinicalDatasetBinding(
+                    "snomed",
+                    ("eval",),
+                    "user-supplied",
+                    required=False,
+                    user_key_gated=True,
+                ),
+            ),
+        }
+    )
+)
+
+_CLINICAL_EVIDENCE_FIELDS = frozenset(
+    {
+        "corpus_bundled",
+        "license_id",
+        "manifest_hash",
+        "metrics",
+        "redistributable",
+        "restricted_vocabulary_bundled",
+        "user_key_gated",
+        "uses",
+        "vocab",
+    }
+)
+_SHA256_PREFIX = "sha256:"
+
 _CONTROLLED_METADATA_KEYS = {
     "cui",
     "concept_id",
@@ -105,6 +235,16 @@ _GATED_CONTENT_MARKERS = (
     "MedNLI",
     "MADE",
     "MIMIC",
+)
+_UNAMBIGUOUS_GATED_MARKERS = frozenset(
+    {"UMLS", "SNOMED", "CPT", "i2b2", "n2c2", "MedNLI"}
+)
+_STRUCTURED_GATED_MARKERS = frozenset(_GATED_CONTENT_MARKERS) - (
+    _UNAMBIGUOUS_GATED_MARKERS
+)
+_STRUCTURED_MARKER_RE = re.compile(
+    r'"(?:corpus|dataset|label|source)"\s*:\s*"(?P<marker>[^"]+)"',
+    re.IGNORECASE,
 )
 _DATA_EXTENSIONS = {".csv", ".json", ".jsonl", ".ndjson", ".tsv", ".txt"}
 
@@ -311,6 +451,134 @@ def map_public_label(dataset: str, label: str, *, language: str = "en") -> str:
     return canonical
 
 
+def clinical_family_dataset_bindings(
+    family: str,
+) -> tuple[ClinicalDatasetBinding, ...]:
+    """Return the immutable dataset policy for a clinical model family.
+
+    Args:
+        family: Canonical clinical family identifier.
+
+    Returns:
+        Ordered dataset bindings for required and optional sources.
+
+    Raises:
+        ValueError: If ``family`` is unknown.
+    """
+
+    try:
+        return CLINICAL_FAMILY_DATASET_BINDINGS[family]
+    except KeyError as exc:
+        raise ValueError(f"unknown clinical model family: {family}") from exc
+
+
+def validate_clinical_family_dataset_evidence(
+    family: str,
+    evidence: Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Validate aggregate-only dataset evidence for a completed training run.
+
+    Required training/evaluation sources must be present with a stable manifest
+    hash. DUA sources can appear only as optional evaluation evidence, and every
+    source must explicitly state that neither corpus rows nor restricted
+    vocabulary content is bundled.
+
+    Args:
+        family: Canonical clinical family identifier.
+        evidence: Per-dataset aggregate metrics and provenance declarations.
+
+    Returns:
+        Canonical aggregate-only evidence ordered by dataset identifier.
+
+    Raises:
+        TypeError: If the evidence shape is not mapping-based.
+        ValueError: If required evidence is absent or violates dataset policy.
+    """
+
+    if not isinstance(evidence, Mapping):
+        raise TypeError("clinical dataset evidence must be a mapping")
+
+    bindings = clinical_family_dataset_bindings(family)
+    policy = {binding.dataset: binding for binding in bindings}
+    unknown = sorted(set(evidence) - set(policy))
+    if unknown:
+        raise ValueError("unexpected clinical dataset evidence: " + ", ".join(unknown))
+    missing = sorted(
+        binding.dataset
+        for binding in bindings
+        if binding.required and binding.dataset not in evidence
+    )
+    if missing:
+        raise ValueError(
+            "missing required clinical dataset evidence: " + ", ".join(missing)
+        )
+
+    validated: dict[str, dict[str, Any]] = {}
+    for dataset in sorted(evidence):
+        raw = evidence[dataset]
+        if not isinstance(raw, Mapping):
+            raise TypeError(f"dataset evidence for {dataset} must be a mapping")
+        extra = sorted(set(raw) - _CLINICAL_EVIDENCE_FIELDS)
+        if extra:
+            raise ValueError(
+                f"dataset evidence for {dataset} contains unsupported fields: "
+                + ", ".join(extra)
+            )
+
+        binding = policy[dataset]
+        uses = _evidence_uses(raw.get("uses"), dataset=dataset)
+        if uses != binding.uses:
+            raise ValueError(
+                f"dataset evidence for {dataset} must declare uses {binding.uses!r}"
+            )
+        manifest_hash = str(raw.get("manifest_hash") or "")
+        if not _valid_sha256(manifest_hash):
+            raise ValueError(
+                f"dataset evidence for {dataset} requires a sha256 manifest_hash"
+            )
+        if raw.get("corpus_bundled") is not False:
+            raise ValueError(f"dataset evidence for {dataset} must not bundle rows")
+        if raw.get("restricted_vocabulary_bundled") is not False:
+            raise ValueError(
+                f"dataset evidence for {dataset} must not bundle restricted vocabulary"
+            )
+        if binding.user_key_gated and raw.get("user_key_gated") is not True:
+            raise ValueError(
+                f"dataset evidence for {dataset} must declare user_key_gated=true"
+            )
+
+        metrics = _evidence_metrics(raw.get("metrics", {}), dataset=dataset)
+        if dataset == "medmentions" and "top1_accuracy" not in metrics:
+            raise ValueError("MedMentions evidence requires top1_accuracy")
+        if dataset == "redistributable_vocabulary":
+            if raw.get("redistributable") is not True:
+                raise ValueError(
+                    "concept-linking training vocabulary must be redistributable"
+                )
+            vocab = raw.get("vocab")
+            if not isinstance(vocab, str) or not vocab.strip():
+                raise ValueError("concept-linking evidence requires a vocabulary id")
+            if vocab.strip().casefold() not in CLINICAL_LINK_VOCABULARIES:
+                raise ValueError(
+                    "concept-linking training vocabulary must be a supported "
+                    "redistributable vocabulary"
+                )
+
+        item = {
+            "access": binding.access,
+            "corpus_bundled": False,
+            "manifest_hash": manifest_hash,
+            "metrics": metrics,
+            "restricted_vocabulary_bundled": False,
+            "uses": list(uses),
+        }
+        for key in ("license_id", "redistributable", "user_key_gated", "vocab"):
+            if key in raw:
+                item[key] = raw[key]
+        validated[dataset] = item
+    return validated
+
+
 def assert_no_gated_content_committed(root: str | Path) -> None:
     """Fail if committed dataset payload files contain gated-code markers."""
 
@@ -318,9 +586,7 @@ def assert_no_gated_content_committed(root: str | Path) -> None:
     offenders: list[str] = []
     for path in _iter_payload_files(root_path):
         text = path.read_text(encoding="utf-8", errors="ignore")
-        for marker in _GATED_CONTENT_MARKERS:
-            if marker in text:
-                offenders.append(f"{path}: {marker}")
+        offenders.extend(f"{path}: {marker}" for marker in _gated_markers(path, text))
     if offenders:
         raise AssertionError(
             "gated dataset content must not be committed: " + ", ".join(offenders)
@@ -395,6 +661,62 @@ def _plain_metadata(value: Any) -> Any:
     return value
 
 
+def _evidence_uses(value: Any, *, dataset: str) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)) or not value:
+        raise ValueError(f"dataset evidence for {dataset} requires uses")
+    uses = tuple(str(item) for item in value)
+    if len(set(uses)) != len(uses) or set(uses) - {"train", "eval"}:
+        raise ValueError(f"dataset evidence for {dataset} has invalid uses")
+    return uses
+
+
+def _evidence_metrics(value: Any, *, dataset: str) -> dict[str, float]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"dataset evidence metrics for {dataset} must be a mapping")
+    metrics: dict[str, float] = {}
+    for key, raw in value.items():
+        if (
+            not isinstance(key, str)
+            or not key
+            or isinstance(raw, bool)
+            or not isinstance(raw, (int, float))
+            or not math.isfinite(float(raw))
+        ):
+            raise ValueError(
+                f"dataset evidence metrics for {dataset} must be finite numbers"
+            )
+        metrics[key] = float(raw)
+    return metrics
+
+
+def _valid_sha256(value: str) -> bool:
+    if not value.startswith(_SHA256_PREFIX):
+        return False
+    digest = value.removeprefix(_SHA256_PREFIX)
+    return len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    )
+
+
+def _gated_markers(path: Path, text: str) -> tuple[str, ...]:
+    folded = text.casefold()
+    found = {
+        marker for marker in _UNAMBIGUOUS_GATED_MARKERS if marker.casefold() in folded
+    }
+    structured_values = {
+        match.group("marker").casefold()
+        for match in _STRUCTURED_MARKER_RE.finditer(text)
+    }
+    for marker in _STRUCTURED_GATED_MARKERS:
+        if marker in text or marker.casefold() in structured_values:
+            found.add(marker)
+        elif path.suffix.casefold() in {".csv", ".tsv"} and re.search(
+            rf"(?i)(?:^|[,\t])\s*{re.escape(marker)}\s*(?:[,\t]|$)", text
+        ):
+            found.add(marker)
+    return tuple(sorted(found))
+
+
 def _iter_payload_files(root: Path) -> Iterable[Path]:
     if root.is_file():
         if root.suffix.lower() in _DATA_EXTENSIONS:
@@ -406,6 +728,10 @@ def _iter_payload_files(root: Path) -> Iterable[Path]:
 
 
 __all__ = [
+    "CLINICAL_FAMILY_DATASET_BINDINGS",
+    "CLINICAL_LINK_VOCABULARIES",
+    "CLINICAL_MODEL_FAMILIES",
+    "ClinicalDatasetBinding",
     "DatasetLoadResult",
     "DatasetUnavailable",
     "PUBLIC_DATASETS",
@@ -416,6 +742,8 @@ __all__ = [
     "PublicDatasetSpan",
     "adapter_for",
     "assert_no_gated_content_committed",
+    "clinical_family_dataset_bindings",
     "load_public_dataset",
     "map_public_label",
+    "validate_clinical_family_dataset_evidence",
 ]

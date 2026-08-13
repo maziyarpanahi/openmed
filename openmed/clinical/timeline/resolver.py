@@ -723,6 +723,7 @@ def order_events(
     text: str,
     spans: Iterable[EntitySpan | Mapping[str, Any]],
     *,
+    tlink_candidates: Iterable[TemporalRelationCandidate] | None = None,
     document_creation_time: str | date | datetime | None = None,
 ) -> Timeline:
     """Order supplied EVENT spans using privacy-safe typed TLINK candidates.
@@ -737,6 +738,10 @@ def order_events(
     Args:
         text: Source clinical note used only during in-memory extraction.
         spans: Existing EVENT and TIMEX spans with offsets into ``text``.
+        tlink_candidates: Optional typed directed TLINK candidates supplied by
+            a classifier or deterministic extractor. When omitted, candidates
+            are extracted from ``text`` and ``spans`` for backward
+            compatibility.
         document_creation_time: Optional ISO DCT. When omitted, a span marked
             ``is_dct=true`` or labeled ``DCT`` supplies its normalized value.
 
@@ -748,14 +753,20 @@ def order_events(
     """
 
     span_items = tuple(spans)
-    candidates = extract_tlink_candidates(text, span_items)
+    candidates = _order_events_candidates(
+        text,
+        span_items,
+        tlink_candidates=tlink_candidates,
+    )
     references = {
         reference.span_id: reference
-        for reference in _safe_ordering_span_references(text, span_items)
+        for reference in _safe_ordering_span_references(
+            text,
+            span_items,
+            preserve_span_ids=tlink_candidates is not None,
+        )
     }
-    for candidate in candidates:
-        _keep_stronger_reference(references, candidate.source)
-        _keep_stronger_reference(references, candidate.target)
+    _merge_timeline_candidate_references(references, candidates)
 
     nodes = tuple(_timeline_span_node(reference) for reference in references.values())
     candidate_edges = tuple(
@@ -992,6 +1003,8 @@ def _order_events_dct(
 def _safe_ordering_span_references(
     text: str,
     spans: Sequence[EntitySpan | Mapping[str, Any]],
+    *,
+    preserve_span_ids: bool = False,
 ) -> tuple[TemporalSpanReference, ...]:
     references: dict[str, TemporalSpanReference] = {}
     for item in spans:
@@ -999,11 +1012,15 @@ def _safe_ordering_span_references(
             start = item.start
             end = item.end
             raw_label = item.label
+            raw_role: object | None = item.role
+            raw_span_id: object | None = item.span_id
             score = float(item.score)
         elif isinstance(item, EntitySpan):
             start = item.start
             end = item.end
             raw_label = item.label
+            raw_role = None
+            raw_span_id = None
             score = float(item.score)
         else:
             metadata = item.get("metadata") or {}
@@ -1012,12 +1029,15 @@ def _safe_ordering_span_references(
             start = int(item.get("start", item.get("start_char", -1)))
             end = int(item.get("end", item.get("end_char", -1)))
             raw_label = str(item.get("label", item.get("entity", "")))
+            raw_role = item.get("role", metadata.get("role"))
+            raw_span_id = item.get("id", item.get("span_id"))
             score = float(item.get("score", metadata.get("confidence", 1.0)))
 
         label = _timeline_span_label(raw_label)
-        if label in _EVENT_SPAN_LABELS:
+        normalized_role = str(raw_role or "").strip().upper()
+        if normalized_role == "EVENT" or label in _EVENT_SPAN_LABELS:
             role: Literal["EVENT", "TIMEX"] = "EVENT"
-        elif label in _TIMEX_SPAN_LABELS:
+        elif normalized_role == "TIMEX" or label in _TIMEX_SPAN_LABELS:
             role = "TIMEX"
         else:
             continue
@@ -1026,8 +1046,13 @@ def _safe_ordering_span_references(
         if not math.isfinite(score):
             raise ValueError("temporal span score must be finite")
 
+        span_id = f"{role.casefold()}:{label.casefold()}:{start}:{end}"
+        if preserve_span_ids and raw_span_id is not None:
+            span_id = str(raw_span_id).strip()
+            if not span_id:
+                raise ValueError("temporal span id must be non-empty")
         reference = TemporalSpanReference(
-            span_id=f"{role.casefold()}:{label.casefold()}:{start}:{end}",
+            span_id=span_id,
             label=label,
             role=role,
             start=start,
@@ -1057,6 +1082,95 @@ def _keep_stronger_reference(
     current = references.get(candidate.span_id)
     if current is None or candidate.score > current.score:
         references[candidate.span_id] = candidate
+
+
+def _order_events_candidates(
+    text: str,
+    spans: Sequence[EntitySpan | Mapping[str, Any]],
+    *,
+    tlink_candidates: Iterable[TemporalRelationCandidate] | None,
+) -> tuple[TemporalRelationCandidate, ...]:
+    if tlink_candidates is None:
+        return extract_tlink_candidates(text, spans)
+
+    candidates = tuple(tlink_candidates)
+    for candidate in candidates:
+        if not isinstance(candidate, TemporalRelationCandidate):
+            raise TypeError(
+                "tlink_candidates must contain TemporalRelationCandidate objects"
+            )
+        for reference in (candidate.source, candidate.target):
+            if reference.end > len(text):
+                raise ValueError("TLINK candidate span offsets exceed source text")
+            if reference.text_hash != hash_text(text[reference.start : reference.end]):
+                raise ValueError("TLINK candidate span hash does not match source text")
+        if candidate.cue.end > len(text):
+            raise ValueError("TLINK candidate cue offsets exceed source text")
+        if candidate.cue.text_hash != hash_text(
+            text[candidate.cue.start : candidate.cue.end]
+        ):
+            raise ValueError("TLINK candidate cue hash does not match source text")
+
+    return tuple(
+        sorted(
+            candidates,
+            key=lambda candidate: (
+                candidate.stable_key(),
+                -candidate.confidence,
+                candidate.source.span_id,
+                candidate.target.span_id,
+            ),
+        )
+    )
+
+
+def _merge_timeline_candidate_references(
+    references: dict[str, TemporalSpanReference],
+    candidates: Sequence[TemporalRelationCandidate],
+) -> None:
+    candidate_references: dict[str, TemporalSpanReference] = {}
+    candidate_ids_by_span: dict[tuple[str, int, int], str] = {}
+    for candidate in candidates:
+        for reference in (candidate.source, candidate.target):
+            existing_candidate = candidate_references.get(reference.span_id)
+            if existing_candidate is not None and existing_candidate != reference:
+                raise ValueError(
+                    f"temporal span id {reference.span_id!r} has conflicting metadata"
+                )
+
+            span_key = (reference.role, reference.start, reference.end)
+            existing_candidate_id = candidate_ids_by_span.get(span_key)
+            if (
+                existing_candidate_id is not None
+                and existing_candidate_id != reference.span_id
+            ):
+                raise ValueError(
+                    "TLINK candidates use multiple ids for the same temporal span"
+                )
+
+            existing_reference = references.get(reference.span_id)
+            if (
+                existing_reference is not None
+                and (
+                    existing_reference.role,
+                    existing_reference.start,
+                    existing_reference.end,
+                )
+                != span_key
+            ):
+                raise ValueError(
+                    f"temporal span id {reference.span_id!r} has conflicting offsets"
+                )
+
+            for node_id, current in tuple(references.items()):
+                if node_id == reference.span_id:
+                    continue
+                if (current.role, current.start, current.end) == span_key:
+                    del references[node_id]
+
+            candidate_references[reference.span_id] = reference
+            candidate_ids_by_span[span_key] = reference.span_id
+            references[reference.span_id] = reference
 
 
 def _timeline_span_node(reference: TemporalSpanReference) -> SpanNode:
