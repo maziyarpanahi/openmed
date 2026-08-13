@@ -18,10 +18,14 @@ from openmed.core.capabilities import require_backend as _require_backend
 _LAZY_EXPORTS = ("create_mcp_server", "main")
 
 __all__ = [
+    "MCPAuthConfig",
+    "MCPAuthorizationConfig",
+    "MCPTokenVerifier",
+    "MCPToolPolicy",
     "create_mcp_server",
-    "main",
     "ensure_mcp_available",
     "is_mcp_available",
+    "main",
 ]
 
 
@@ -42,5 +46,25 @@ def __getattr__(name: str) -> Any:
         from .server import create_mcp_server, main
 
         exports = {"create_mcp_server": create_mcp_server, "main": main}
+        return exports[name]
+    if name in {
+        "MCPAuthConfig",
+        "MCPAuthorizationConfig",
+        "MCPTokenVerifier",
+        "MCPToolPolicy",
+    }:
+        from openmed.service.security import (
+            MCPAuthConfig,
+            MCPAuthorizationConfig,
+            MCPTokenVerifier,
+            MCPToolPolicy,
+        )
+
+        exports = {
+            "MCPAuthConfig": MCPAuthConfig,
+            "MCPAuthorizationConfig": MCPAuthorizationConfig,
+            "MCPTokenVerifier": MCPTokenVerifier,
+            "MCPToolPolicy": MCPToolPolicy,
+        }
         return exports[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

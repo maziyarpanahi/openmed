@@ -98,6 +98,7 @@ classification:
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md
+    - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
     - serving/resilience.md

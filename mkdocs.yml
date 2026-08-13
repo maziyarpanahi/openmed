@@ -26,6 +26,7 @@ nav:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
+      - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
