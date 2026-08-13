@@ -19,12 +19,15 @@ import logging
 import re
 import unicodedata
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn
+from types import MappingProxyType
+from typing import TYPE_CHECKING, NamedTuple, NoReturn
 
+from ..processing.text import INDIC_DIGIT_SCRIPTS as _DIGIT_FOLDED_SCRIPTS
+from ..processing.text import INDIC_SCRIPTS as _NORMALIZER_INDIC_SCRIPTS
 from ..processing.text import InputError, validate_pii_input
 from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
@@ -132,6 +135,57 @@ SUPPORTED_SCRIPTS = (
     "Greek",
     "Hebrew",
     "Thai",
+)
+
+#: Normalizer identifier applied to each detected script.
+INDIC_NORMALIZER = "indic-nfc"
+DEFAULT_NORMALIZER = "unicode-defense"
+
+#: Native decimal numeral set a script writes numbers with.
+ASCII_NUMERAL_SET = "ascii"
+
+# Scripts outside the Brahmi family that have their own decimal digits. Arabic
+# covers the Arabic-Indic block (U+0660-U+0669) and the extended block used in
+# Persian and Urdu orthography (U+06F0-U+06F9); ``normalize_arabic_indic_digits``
+# folds both. Scripts absent from this table write numbers with ASCII digits,
+# including the fullwidth forms that width normalization maps back to ASCII, so
+# they report ``ASCII_NUMERAL_SET``.
+_NON_BRAHMI_NUMERAL_SETS: Mapping[str, str] = MappingProxyType(
+    {
+        "Arabic": "arabic-indic",
+        "Thai": "thai",
+    }
+)
+
+_ROUTABLE_SCRIPTS = (*SUPPORTED_SCRIPTS, UNKNOWN_SCRIPT)
+
+# ``INDIC_SCRIPTS`` above is this module's own public export. The
+# identically named tuple in ``openmed.processing.text`` is imported under
+# an alias on purpose: an unaliased import would rebind that export and
+# silently change this module's public surface. The two are pinned to the
+# same nine scripts by
+# ``test_indic_script_sets_agree_across_modules``; do not collapse the
+# alias.
+SCRIPT_NORMALIZERS: Mapping[str, str] = MappingProxyType(
+    {
+        script: (
+            INDIC_NORMALIZER
+            if script in _NORMALIZER_INDIC_SCRIPTS
+            else DEFAULT_NORMALIZER
+        )
+        for script in _ROUTABLE_SCRIPTS
+    }
+)
+
+SCRIPT_NUMERAL_SETS: Mapping[str, str] = MappingProxyType(
+    {
+        script: (
+            script.casefold()
+            if script.casefold() in _DIGIT_FOLDED_SCRIPTS
+            else _NON_BRAHMI_NUMERAL_SETS.get(script, ASCII_NUMERAL_SET)
+        )
+        for script in _ROUTABLE_SCRIPTS
+    }
 )
 
 ZERO_WIDTH_CHARS = frozenset(
@@ -979,8 +1033,37 @@ def detect_chinese_script(text: str) -> ChineseScriptEstimate:
     )
 
 
-def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:
-    """Yield contiguous ``(start, end, script)`` runs covering ``text``.
+class ScriptRun(NamedTuple):
+    """One contiguous, grapheme-aligned Unicode script run.
+
+    The run is a plain ``(start, end, script)`` tuple, so callers that unpack
+    it or compare it against tuples keep working unchanged. ``start`` and
+    ``end`` are half-open code-point offsets into the exact source string and
+    always fall on extended grapheme-cluster boundaries.
+    """
+
+    start: int
+    end: int
+    script: str
+
+    def extract(self, text: str) -> str:
+        """Return this run's exact slice from ``text``."""
+
+        return text[self.start : self.end]
+
+
+def segment_by_script(text: str) -> Iterator[ScriptRun]:
+    """Yield contiguous grapheme-aligned runs covering ``text``.
+
+    Every boundary falls on an extended grapheme-cluster boundary, so a run can
+    never split a combining sequence, an Indic virama conjunct, a zero-width
+    joiner sequence, or a regional-indicator pair. Each cluster takes the script
+    of its first script-bearing code point, which keeps a cross-script combining
+    mark attached to the base character it decorates.
+
+    Cluster boundaries are resolved only at the offsets where the script
+    changes, so single-script text costs no more than plain code-point
+    scanning.
 
     Neutral characters are assigned to the surrounding run: leading neutral
     characters attach to the first detected script, and later neutral characters
@@ -991,8 +1074,16 @@ def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:
     if not text:
         return
 
+    # Imported lazily because ``openmed.core.decoding.spans`` imports this
+    # module at import time; a module-level import here would be circular.
+    from .decoding.spans import grapheme_break_checker
+
+    starts_cluster = None
     run_start = 0
     current_script: str | None = None
+    previous_script_index = -1
+    cached_cluster_start = -1
+    cached_cluster_end = -1
 
     for index, char in enumerate(text):
         script = _script_for_char(char)
@@ -1000,25 +1091,71 @@ def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:
             continue
         if current_script is None:
             current_script = script
+            previous_script_index = index
             continue
         if script == current_script:
+            previous_script_index = index
             continue
 
-        yield run_start, index, current_script
-        run_start = index
+        # The script changed. Resolve the grapheme cluster containing this code
+        # point and start a run at the cluster, never inside it. Boundaries are
+        # only ever tested here, so single-script text pays nothing for the
+        # grapheme pass.
+        if starts_cluster is None:
+            starts_cluster = grapheme_break_checker(text)
+        # Offsets in ``[cached_cluster_start, cached_cluster_end]`` are already
+        # known to share one cluster, so the walk stops as soon as it reaches
+        # them. Without the memo, a cluster of k extending marks that each carry
+        # a different script from the base would rewind to the cluster start k
+        # times, making segmentation quadratic on adversarial input. With it,
+        # the rewinds telescope and the whole scan stays linear.
+        cluster_start = index
+        while cluster_start > 0 and not starts_cluster(cluster_start):
+            previous = cluster_start - 1
+            if cached_cluster_start <= previous <= cached_cluster_end:
+                cluster_start = cached_cluster_start
+                break
+            cluster_start = previous
+        cached_cluster_start = cluster_start
+        cached_cluster_end = index
+        if cluster_start <= previous_script_index:
+            # A mark decorating an earlier base: the cluster already took the
+            # script of its first script-bearing code point.
+            previous_script_index = index
+            continue
+
+        yield ScriptRun(run_start, cluster_start, current_script)
+        run_start = cluster_start
         current_script = script
+        previous_script_index = index
 
     if current_script is None:
-        yield 0, len(text), UNKNOWN_SCRIPT
+        yield ScriptRun(0, len(text), UNKNOWN_SCRIPT)
         return
 
-    yield run_start, len(text), current_script
+    yield ScriptRun(run_start, len(text), current_script)
 
 
 def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     """Return candidate language codes for a detected script."""
 
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
+
+
+def normalizer_for_script(script: str) -> str:
+    """Return the normalizer identifier applied to ``script``."""
+
+    return SCRIPT_NORMALIZERS.get(script, DEFAULT_NORMALIZER)
+
+
+def numeral_set_for_script(script: str) -> str:
+    """Return the native decimal numeral set ``script`` writes numbers with.
+
+    Scripts that write numbers with ASCII digits return ``"ascii"``. Nothing is
+    implied about whether a fold has already been applied to a given text.
+    """
+
+    return SCRIPT_NUMERAL_SETS.get(script, ASCII_NUMERAL_SET)
 
 
 _ASSAMESE_EXCLUSIVE_LETTERS = frozenset({"\u09f0", "\u09f1"})
@@ -1050,6 +1187,64 @@ def assamese_language_evidence(text: str) -> int:
     return ra_wa_count + (2 * month_count)
 
 
+_URDU_EXCLUSIVE_LETTERS = frozenset(
+    {
+        "ٹ",  # tteh
+        "ڈ",  # ddal
+        "ڑ",  # rreh
+        "ں",  # noon ghunna
+        "ھ",  # heh doachashmee
+        "ے",  # yeh barree
+    }
+)
+_ARABIC_PRESENTATION_RANGES = ((0xFB50, 0xFDFF), (0xFE70, 0xFEFF))
+_EXTENDED_ARABIC_INDIC_DIGITS = frozenset(
+    chr(codepoint) for codepoint in range(0x06F0, 0x06FA)
+)
+
+
+def _urdu_presentation_forms() -> frozenset[str]:
+    """Derive the Arabic presentation forms of the Urdu-exclusive letters.
+
+    Only single-character NFKC decompositions count. Multi-character ligatures
+    are excluded on purpose: U+FDF0 and U+FDF1 (the Koranic stop signs salla
+    and qala) decompose through yeh barree yet occur in Arabic religious text,
+    so treating them as Urdu evidence would misroute Arabic.
+    """
+
+    forms = set()
+    for start, end in _ARABIC_PRESENTATION_RANGES:
+        for codepoint in range(start, end + 1):
+            char = chr(codepoint)
+            folded = unicodedata.normalize("NFKC", char)
+            if len(folded) == 1 and folded in _URDU_EXCLUSIVE_LETTERS:
+                forms.add(char)
+    return frozenset(forms)
+
+
+_URDU_LETTER_EVIDENCE = _URDU_EXCLUSIVE_LETTERS | _urdu_presentation_forms()
+
+
+def urdu_language_evidence(text: str) -> int:
+    """Return deterministic Urdu evidence in Arabic-script text.
+
+    The score counts the Urdu-exclusive letters tteh, ddal, rreh, noon ghunna,
+    heh doachashmee and yeh barree (U+0679, U+0688, U+0691, U+06BA, U+06BE,
+    U+06D2) together with their Arabic presentation forms. Extended
+    Arabic-Indic digits (U+06F0-U+06F9) reinforce an existing letter signal but
+    never trigger one on their own, because Persian uses the same digits and
+    none of the six letters. Shared Arabic block membership is not evidence.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    letter_count = sum(char in _URDU_LETTER_EVIDENCE for char in text)
+    if letter_count == 0:
+        return 0
+    digit_count = sum(char in _EXTENDED_ARABIC_INDIC_DIGITS for char in text)
+    return letter_count + digit_count
+
+
 def candidate_languages_for_text(
     text: str,
     script: str | None = None,
@@ -1059,19 +1254,27 @@ def candidate_languages_for_text(
     Bengali and Assamese share a Unicode block. Assamese-exclusive ra/wa
     letters and Assamese month spellings move ``"as"`` ahead of ``"bn"``;
     without that evidence the catalog's established Bengali-first order is
-    preserved.
+    preserved. Arabic and Urdu share a block in the same way, and the
+    Urdu-exclusive letters move ``"ur"`` ahead of ``"ar"`` under the same rule.
     """
 
     detected_script = detect_script(text) if script is None else script
     candidates = candidate_languages_for_script(detected_script)
     if (
-        detected_script != "Bengali"
-        or "as" not in candidates
-        or "bn" not in candidates
-        or assamese_language_evidence(text) == 0
+        detected_script == "Bengali"
+        and "as" in candidates
+        and "bn" in candidates
+        and assamese_language_evidence(text) > 0
     ):
-        return candidates
-    return ("as", *(code for code in candidates if code != "as"))
+        return ("as", *(code for code in candidates if code != "as"))
+    if (
+        detected_script == "Arabic"
+        and "ur" in candidates
+        and "ar" in candidates
+        and urdu_language_evidence(text) > 0
+    ):
+        return ("ur", *(code for code in candidates if code != "ur"))
+    return candidates
 
 
 def confusable_skeleton(text: str) -> str:
@@ -1747,6 +1950,7 @@ def _is_identifier_char(char: str) -> bool:
 
 __all__ = [
     "ALLOWED_INGESTION_ENCODINGS",
+    "ASCII_NUMERAL_SET",
     "CJK_SCRIPTS",
     "CONFUSABLE_DATA_LICENSE",
     "CONFUSABLE_DATA_URL",
@@ -1754,17 +1958,22 @@ __all__ = [
     "ChineseScriptEstimate",
     "ChineseScriptVariant",
     "ConfusableIngestionWarning",
+    "DEFAULT_NORMALIZER",
     "DecodedIngestionText",
     "DetectionNormalization",
     "EncodingConversionError",
     "EncodingIngestionError",
     "EncodingInputLimitError",
+    "INDIC_NORMALIZER",
     "INDIC_SCRIPTS",
     "INDIAN_NAME_LANGUAGES",
     "INDIAN_NAME_SCRIPTS",
     "MixedScriptSpan",
     "MAX_INGESTION_BYTES",
+    "SCRIPT_NORMALIZERS",
+    "SCRIPT_NUMERAL_SETS",
     "ScriptDetectionWindow",
+    "ScriptRun",
     "SCRIPT_LANGUAGE_HINTS",
     "SIMPLIFIED_VARIANT_CHARS",
     "SUPPORTED_SCRIPTS",
@@ -1787,6 +1996,9 @@ __all__ = [
     "is_han_dominant",
     "mixed_script_spans",
     "normalize_for_pii_detection",
+    "normalizer_for_script",
+    "numeral_set_for_script",
     "render_indian_name",
     "segment_by_script",
+    "urdu_language_evidence",
 ]

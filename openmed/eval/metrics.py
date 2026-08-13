@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from math import ceil, isfinite
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.decoding.spans import iter_grapheme_cluster_spans
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
@@ -18,6 +18,9 @@ from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
+
+if TYPE_CHECKING:
+    from openmed.eval.report import BenchmarkReport
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
 PIPELINE_EVAL_STAGES: tuple[str, ...] = (
@@ -51,6 +54,18 @@ PIPELINE_STAGE_FACT_FIELDS: Mapping[str, tuple[str, ...]] = {
 }
 FAITHFULNESS_SCHEMA_VERSION = "openmed.eval.span_grounded_faithfulness.v1"
 MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
+TEMPORAL_AWARENESS_F1_FLOOR = 0.75
+TEMPORAL_CONSISTENCY_VIOLATION_CEILING = 0
+TEMPORAL_RELATION_LABELS: tuple[str, ...] = (
+    "BEFORE",
+    "AFTER",
+    "OVERLAP",
+    "CONTAINS",
+    "BEGINS_ON",
+    "ENDS_ON",
+)
+_TEMPORAL_TRANSITIVE_LABELS = frozenset({"BEFORE", "CONTAINS"})
+_TEMPORAL_PARTIAL_ORDER_LABELS = frozenset({"BEFORE", "CONTAINS"})
 RADIOLOGY_ENTITY_ANATOMY = "ANATOMY"
 RADIOLOGY_ENTITY_OBSERVATION = "OBSERVATION"
 RADIOLOGY_ENTITY_TYPES: tuple[str, ...] = (
@@ -64,6 +79,19 @@ RADIOLOGY_UNCERTAINTY_CLASSES: tuple[str, ...] = (
     RADIOLOGY_UNCERTAINTY_PRESENT,
     RADIOLOGY_UNCERTAINTY_ABSENT,
     RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+)
+RISK_COVERAGE_ARTIFACT = "openmed.eval.risk_coverage"
+RISK_COVERAGE_SCHEMA_VERSION = 1
+RISK_COVERAGE_AURC_CONVENTION = (
+    "Trapezoidal integral of empirical retained-set risk over raw-count "
+    "coverage at each unique confidence threshold, ties grouped, with a "
+    "(coverage=0, risk=0) origin. Oracle AURC ranks all correct relations "
+    "before incorrect relations; excess AURC is observed minus oracle AURC."
+)
+RISK_COVERAGE_EMPIRICAL_NOTE = (
+    "Threshold rows are empirical point estimates, not finite-sample risk "
+    "bounds or conformal/RCPS guarantees. retained_count is the raw sample "
+    "size; retained_weight must not be substituted for it."
 )
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
@@ -170,6 +198,37 @@ class RateMetric:
 
 
 @dataclass(frozen=True)
+class SrContentAccuracy:
+    """Node-level exact-match accuracy for DICOM SR content extraction.
+
+    A predicted content item counts as correct when its concept name, value
+    type, rendered value, and coded unit all match the gold item keyed by the
+    same ``node_path``. This mirrors the SR extraction gate: every node in the
+    content tree must be reproduced exactly.
+    """
+
+    accuracy: float
+    matched: int
+    total: int
+    missing_nodes: tuple[str, ...] = ()
+    mismatched_nodes: tuple[str, ...] = ()
+    extra_nodes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "accuracy": self.accuracy,
+            "matched": self.matched,
+            "total": self.total,
+            "missing_nodes": list(self.missing_nodes),
+            "mismatched_nodes": list(self.mismatched_nodes),
+            "extra_nodes": list(self.extra_nodes),
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class F1Metrics:
     """Precision/recall/F1 counts for span matching."""
 
@@ -188,6 +247,116 @@ class F1Metrics:
             "true_positives": self.true_positives,
             "false_positives": self.false_positives,
             "false_negatives": self.false_negatives,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class DocumentLevelRelationMetrics:
+    """Document relation F1 with intra- and cross-sentence recall slices."""
+
+    overall: F1Metrics
+    intra_sentence_recall: float
+    cross_sentence_recall: float
+    intra_sentence_gold: int
+    cross_sentence_gold: int
+    match: str
+
+    @property
+    def precision(self) -> float:
+        """Return overall document-level relation precision."""
+
+        return self.overall.precision
+
+    @property
+    def recall(self) -> float:
+        """Return overall document-level relation recall."""
+
+        return self.overall.recall
+
+    @property
+    def f1(self) -> float:
+        """Return overall document-level relation F1."""
+
+        return self.overall.f1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible relation metric report."""
+
+        return {
+            **self.overall.to_dict(),
+            "intra_sentence_recall": self.intra_sentence_recall,
+            "cross_sentence_recall": self.cross_sentence_recall,
+            "counts": {
+                "intra_sentence_gold": self.intra_sentence_gold,
+                "cross_sentence_gold": self.cross_sentence_gold,
+            },
+            "match": self.match,
+        }
+
+
+@dataclass(frozen=True)
+class CoreferenceClusteringScore:
+    """Documented B-cubed proxy score for coreference clustering.
+
+    Precision and recall are averaged per mention from the overlap between its
+    predicted and gold clusters; ``f1`` is their harmonic mean. This transparent
+    proxy is used instead of the full CoNLL MUC/B3/CEAF average for the small,
+    synthetic event-coreference gate.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    metric: str
+    item_count: int
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        """Return a JSON-compatible metric payload."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "metric": self.metric,
+            "item_count": self.item_count,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class TemporalAwarenessMetrics:
+    """Closure-aware precision, recall, and F1 over reduced TLINK graphs.
+
+    Precision checks reduced predicted relations against the gold closure;
+    recall checks reduced gold relations against the predicted closure. The two
+    match counts are kept separately because closure-aware scoring does not
+    necessarily have one symmetric true-positive count.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    precision_matches: int
+    recall_matches: int
+    predicted_reduced_relations: int
+    gold_reduced_relations: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        """Return aggregate counts without node ids or source text."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "precision_matches": self.precision_matches,
+            "recall_matches": self.recall_matches,
+            "predicted_reduced_relations": self.predicted_reduced_relations,
+            "gold_reduced_relations": self.gold_reduced_relations,
         }
 
     def __getitem__(self, key: str) -> int | float:
@@ -546,7 +715,7 @@ class CriticalFindingRecallMetrics:
 
 @dataclass(frozen=True)
 class ConsistencyMetric:
-    """Consistency score with concrete violation counts."""
+    """Consistency score with PHI-free violation details."""
 
     score: float
     consistent: int
@@ -559,6 +728,35 @@ class ConsistencyMetric:
             "consistent": self.consistent,
             "total": self.total,
             "violations": self.violations,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class TemporalConsistencyGateResult:
+    """Merge-blocking temporal-awareness and closure-consistency verdict."""
+
+    passed: bool
+    blocking: bool
+    awareness: TemporalAwarenessMetrics
+    consistency: ConsistencyMetric
+    awareness_floor: float = TEMPORAL_AWARENESS_F1_FLOOR
+    violation_ceiling: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING
+    failure_reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, raw-text-free gate payload."""
+
+        return {
+            "awareness": self.awareness.to_dict(),
+            "awareness_floor": self.awareness_floor,
+            "blocking": self.blocking,
+            "consistency": self.consistency.to_dict(),
+            "failure_reasons": list(self.failure_reasons),
+            "passed": self.passed,
+            "violation_ceiling": self.violation_ceiling,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -804,6 +1002,587 @@ class FaithfulnessMetrics:
 
     def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
+
+
+class FactRecallResult(dict[str, Any]):
+    """Structured clinical-fact recall with omission and support findings.
+
+    The mapping deliberately keeps the compact public shape requested by the
+    summary-faithfulness evaluator: ``recall``, ``omitted``, and
+    ``unsupported``. Facts in the two lists are normalized tuples, so the
+    payload remains JSON-serializable through :class:`BenchmarkReport` while
+    callers can still inspect the structured fact components directly.
+    """
+
+    def __init__(
+        self,
+        *,
+        recall: float,
+        omitted: Sequence[tuple[str, ...]],
+        unsupported: Sequence[tuple[str, ...]],
+    ) -> None:
+        super().__init__(
+            recall=float(recall),
+            omitted=[tuple(fact) for fact in omitted],
+            unsupported=[tuple(fact) for fact in unsupported],
+        )
+
+    @property
+    def recall(self) -> float:
+        """Return the fraction of source facts preserved by the summary."""
+
+        return float(self["recall"])
+
+    @property
+    def omitted(self) -> list[tuple[str, ...]]:
+        """Return source facts that were not found in the summary."""
+
+        return list(self["omitted"])
+
+    @property
+    def unsupported(self) -> list[tuple[str, ...]]:
+        """Return summary facts that were not found in the source."""
+
+        return list(self["unsupported"])
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a fresh JSON-ready representation of the result."""
+
+        return {
+            "recall": self.recall,
+            "omitted": [list(fact) for fact in self.omitted],
+            "unsupported": [list(fact) for fact in self.unsupported],
+        }
+
+
+_CLINICAL_FACT_TYPE_ALIASES: Mapping[str, str] = {
+    "condition": "problem",
+    "diagnosis": "problem",
+    "disease": "problem",
+    "problem": "problem",
+    "active_problem": "problem",
+    "problem_list": "problem",
+    "lab": "lab",
+    "lab_result": "lab",
+    "lab_test": "lab",
+    "lab_value": "lab",
+    "analyte": "lab",
+    "med": "medication",
+    "medication": "medication",
+    "medicine": "medication",
+    "drug": "medication",
+    "chemical": "medication",
+    "antibiotic": "medication",
+}
+_CLINICAL_FACT_ATTRIBUTE_KEYS = frozenset(
+    {
+        "abnormal_flag",
+        "body_site",
+        "code",
+        "code_system",
+        "dose",
+        "duration",
+        "flag",
+        "form",
+        "frequency",
+        "indication",
+        "reference_range",
+        "result",
+        "route",
+        "severity",
+        "status",
+        "strength",
+        "unit",
+        "value",
+    }
+)
+_CLINICAL_FACT_VALUE_KEYS = (
+    "value",
+    "surface_form",
+    "surface",
+    "text",
+    "display",
+    "name",
+    "term",
+    "concept",
+    "code",
+)
+_CLINICAL_FACT_NUMERIC_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
+
+
+def fact_recall(
+    source_facts: Iterable[Any],
+    summary_facts: Iterable[Any],
+) -> FactRecallResult:
+    """Measure structured clinical facts preserved by a summary.
+
+    Facts are matched as normalized tuples rather than as source or summary
+    strings. The first tuple component is canonicalized to ``problem``,
+    ``medication``, or ``lab`` when a known alias is supplied; remaining
+    components retain their structure and are compared case-insensitively.
+    Duplicate facts are counted once. An empty source fact set has recall 1.0,
+    while every summary-only fact is still reported as unsupported.
+
+    Args:
+        source_facts: Structured facts extracted from the source note. Tuples,
+            mappings, and extractor result records are accepted.
+        summary_facts: Structured facts extracted from the generated summary.
+
+    Returns:
+        A mapping with ``recall``, ``omitted``, and ``unsupported`` keys.
+        Omitted facts come from the source set; unsupported facts come from the
+        summary set. No offsets or raw note text are required for matching.
+    """
+
+    source = _normalize_clinical_fact_records(source_facts)
+    summary = _normalize_clinical_fact_records(summary_facts)
+    summary_keys = {record[0] for record in summary}
+    source_keys = {record[0] for record in source}
+    omitted = [record[1] for record in source if record[0] not in summary_keys]
+    unsupported = [record[1] for record in summary if record[0] not in source_keys]
+    matched = len(source) - len(omitted)
+    recall = _safe_rate(matched, len(source), zero_denominator=1.0)
+    return FactRecallResult(
+        recall=recall,
+        omitted=omitted,
+        unsupported=unsupported,
+    )
+
+
+def extract_clinical_facts(
+    text: str,
+    spans: Iterable[Any] | Callable[[str], Iterable[Any]],
+    *,
+    sections: Iterable[Mapping[str, Any]] | None = None,
+) -> tuple[tuple[str, ...], ...]:
+    """Derive structured problem, medication, and laboratory facts.
+
+    The helper consumes NER-like spans or a callback that produces the same
+    spans for a supplied text. It then reuses the deterministic OM-043
+    problem, medication, and laboratory relation extractors. Source offsets
+    are used only to resolve relations; returned facts are offset-independent,
+    which lets the same helper compare a source note with a summary.
+
+    Args:
+        text: Source or summary text indexed by the supplied spans.
+        spans: NER-like mappings/``EntitySpan`` values, or a local callable
+            receiving ``text`` and returning those spans.
+        sections: Optional precomputed section spans passed to the relation
+            extractors.
+
+    Returns:
+        Deduplicated tuples such as ``("problem", "pneumonia")``,
+        ``("medication", "lisinopril")``, and
+        ``("lab", "sodium", "130", "mmol/L", "low")``.
+
+    Note:
+        This function never downloads or invokes a model by itself. A caller
+        that needs model-backed spans must provide an explicitly configured
+        local callback.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    raw_spans = spans(text) if callable(spans) else spans
+    span_items = _coerce_clinical_fact_spans(text, raw_spans)
+    if not span_items:
+        return ()
+
+    # The OM-043 extractors share the same caller-provided span vocabulary but
+    # expect canonical heads for the three clinical concept families.
+    relation_spans = [
+        {
+            **span,
+            "label": _relation_label_for_clinical_fact(span["label"]),
+        }
+        for span in span_items
+    ]
+    section_items = tuple(sections) if sections is not None else None
+
+    from openmed.clinical.relations import (
+        extract_lab_results,
+        extract_medication_relations,
+        extract_problem_relations,
+    )
+
+    # Running all three relation extractors keeps this adapter on the same
+    # deterministic OM-043 path used by downstream structured extraction. The
+    # problem and medication relations identify valid relation-scoped heads;
+    # their attributes are intentionally not counted as separate summary facts.
+    problem_relations = extract_problem_relations(
+        text,
+        relation_spans,
+        sections=section_items,
+    )
+    medication_relations = extract_medication_relations(
+        text,
+        relation_spans,
+        sections=section_items,
+    )
+    lab_results = extract_lab_results(
+        text,
+        relation_spans,
+        sections=section_items,
+    )
+    del problem_relations, medication_relations
+
+    lab_by_analyte = {result.analyte.offset_key(): result for result in lab_results}
+    facts: list[tuple[str, ...]] = []
+    for span in span_items:
+        fact_type = _clinical_fact_type_for_label(span["label"])
+        if fact_type is None:
+            continue
+        start = int(span["start"])
+        end = int(span["end"])
+        surface = text[start:end].strip()
+        if not surface:
+            continue
+        if fact_type == "lab" and _is_numeric_fact_surface(surface):
+            continue
+        if fact_type == "lab":
+            result = lab_by_analyte.get((start, end))
+            if result is not None:
+                fact = _lab_result_fact(result)
+            else:
+                fact = ("lab", surface)
+        else:
+            fact = (fact_type, surface)
+        facts.append(fact)
+
+    return tuple(record[1] for record in _normalize_clinical_fact_records(facts))
+
+
+def summary_faithfulness_metrics(
+    source_text: str,
+    summary_text: str,
+    source_spans: Iterable[Any] | Callable[[str], Iterable[Any]],
+    summary_spans: Iterable[Any] | Callable[[str], Iterable[Any]],
+    *,
+    rouge: Mapping[str, Any] | None = None,
+    sections: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build summary-faithfulness metrics from two structured span sets.
+
+    ``rouge`` is copied into the returned metrics mapping when supplied, so a
+    caller can place lexical overlap and clinical-fact recall in one
+    :class:`~openmed.eval.report.BenchmarkReport` without comparing note text
+    directly.
+    """
+
+    source_facts = extract_clinical_facts(
+        source_text,
+        source_spans,
+        sections=sections,
+    )
+    summary_facts = extract_clinical_facts(summary_text, summary_spans)
+    metrics: dict[str, Any] = {
+        "fact_recall": fact_recall(source_facts, summary_facts).to_dict()
+    }
+    if rouge is not None:
+        metrics["rouge"] = dict(rouge)
+    return metrics
+
+
+def build_summary_faithfulness_report(
+    source_facts: Iterable[Any],
+    summary_facts: Iterable[Any],
+    *,
+    rouge: Mapping[str, Any] | None = None,
+    suite: str = "summarize-faithfulness",
+    model_name: str = "clinical-fact-recall",
+    device: str = "local",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> BenchmarkReport:
+    """Return a :class:`BenchmarkReport` containing fact recall and ROUGE.
+
+    The import is local to keep ``openmed.eval.metrics`` independent of the
+    report serializer during module initialization.
+    """
+
+    from openmed.eval.report import BenchmarkReport
+
+    metrics: dict[str, Any] = {
+        "fact_recall": fact_recall(source_facts, summary_facts).to_dict()
+    }
+    if rouge is not None:
+        metrics["rouge"] = dict(rouge)
+    return BenchmarkReport(
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        fixture_count=1,
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata=dict(metadata or {}),
+    )
+
+
+def _normalize_clinical_fact_records(
+    facts: Iterable[Any],
+) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    records: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    seen: set[tuple[str, ...]] = set()
+    for fact in facts:
+        display = _clinical_fact_tuple(fact)
+        key = _clinical_fact_key(display)
+        if key in seen:
+            continue
+        seen.add(key)
+        records.append((key, display))
+    return records
+
+
+def _clinical_fact_tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, Mapping):
+        return _clinical_fact_tuple_from_mapping(value)
+    if isinstance(value, (tuple, list)):
+        if not value:
+            raise ValueError("clinical facts must not be empty")
+        parts = tuple(_clinical_fact_component(item) for item in value)
+        return _canonicalize_clinical_fact_parts(parts)
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        payload = to_dict()
+        if isinstance(payload, Mapping):
+            return _clinical_fact_tuple_from_mapping(payload)
+    data = getattr(value, "__dict__", None)
+    if isinstance(data, Mapping):
+        return _clinical_fact_tuple_from_mapping(data)
+    if isinstance(value, str):
+        return ("fact", value.strip())
+    raise TypeError(
+        "clinical facts must be tuples, mappings, or records with to_dict()"
+    )
+
+
+def _clinical_fact_tuple_from_mapping(
+    value: Mapping[str, Any],
+) -> tuple[str, ...]:
+    raw_type = next(
+        (
+            value.get(key)
+            for key in (
+                "fact_type",
+                "kind",
+                "category",
+                "entity_type",
+                "concept_type",
+                "type",
+                "label",
+            )
+            if value.get(key) is not None
+        ),
+        "fact",
+    )
+    fact_type = _canonical_clinical_fact_type(raw_type)
+    if fact_type == "lab":
+        name = _first_mapping_value(
+            value,
+            ("analyte", "lab_name", "test", "name", "term", "text"),
+        )
+        result = _first_mapping_value(
+            value,
+            ("result", "lab_value", "measurement", "value"),
+        )
+        parts = [fact_type]
+        if name is not None:
+            parts.append(_clinical_fact_component(name))
+        elif result is not None:
+            parts.append(_clinical_fact_component(result))
+            result = None
+        if result is not None and name is not None:
+            parts.append(_clinical_fact_component(result))
+        for key in ("unit", "abnormal_flag", "flag"):
+            item = value.get(key)
+            if item is not None and str(item).strip():
+                parts.append(_clinical_fact_component(item))
+        return _canonicalize_clinical_fact_parts(tuple(parts))
+
+    surface = _first_mapping_value(value, _CLINICAL_FACT_VALUE_KEYS)
+    parts = [fact_type]
+    if surface is not None:
+        parts.append(_clinical_fact_component(surface))
+    attributes = value.get("attributes")
+    if isinstance(attributes, Mapping):
+        for key in sorted(attributes, key=str):
+            item = attributes[key]
+            if item is not None and str(item).strip():
+                parts.append(f"{key}={_clinical_fact_component(item)}")
+    for key in sorted(_CLINICAL_FACT_ATTRIBUTE_KEYS - {"value"}):
+        item = value.get(key)
+        if item is None or not str(item).strip() or key == "code":
+            continue
+        if key == "code_system" and value.get("code") is None:
+            continue
+        parts.append(f"{key}={_clinical_fact_component(item)}")
+    return _canonicalize_clinical_fact_parts(tuple(parts))
+
+
+def _first_mapping_value(
+    value: Mapping[str, Any],
+    keys: Sequence[str],
+) -> Any | None:
+    for key in keys:
+        item = value.get(key)
+        if item is None:
+            continue
+        if isinstance(item, Mapping):
+            nested = _first_mapping_value(item, _CLINICAL_FACT_VALUE_KEYS)
+            if nested is not None:
+                return nested
+        elif str(item).strip():
+            return item
+    return None
+
+
+def _canonicalize_clinical_fact_parts(
+    parts: tuple[str, ...],
+) -> tuple[str, ...]:
+    if not parts:
+        raise ValueError("clinical facts must not be empty")
+    fact_type = _canonical_clinical_fact_type(parts[0])
+    cleaned = [fact_type]
+    for part in parts[1:]:
+        item = str(part).strip()
+        if item:
+            cleaned.append(item)
+    # Attribute key/value pairs are order-independent; positional clinical
+    # tuple components such as lab name/value/unit remain positional.
+    if len(cleaned) > 2 and all("=" in part for part in cleaned[2:]):
+        cleaned[2:] = sorted(cleaned[2:], key=lambda item: item.casefold())
+    if len(cleaned) < 2:
+        raise ValueError("clinical facts require a type and value")
+    return tuple(cleaned)
+
+
+def _canonical_clinical_fact_type(value: Any) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(value).casefold()).strip("_")
+    return _CLINICAL_FACT_TYPE_ALIASES.get(normalized, normalized or "fact")
+
+
+def _clinical_fact_component(value: Any) -> str:
+    if isinstance(value, Mapping):
+        return ";".join(
+            f"{key}={_clinical_fact_component(value[key])}"
+            for key in sorted(value, key=str)
+        )
+    if isinstance(value, (tuple, list)):
+        return ";".join(_clinical_fact_component(item) for item in value)
+    return str(value).strip()
+
+
+def _clinical_fact_key(value: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_normalize_clinical_fact_component(item) for item in value)
+
+
+def _normalize_clinical_fact_component(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value)).casefold().strip()
+    if _CLINICAL_FACT_NUMERIC_RE.fullmatch(normalized):
+        try:
+            return f"{float(normalized):.15g}"
+        except ValueError:
+            pass
+    return re.sub(r"[^a-z0-9]+", "", normalized)
+
+
+def _coerce_clinical_fact_spans(
+    text: str,
+    spans: Iterable[Any],
+) -> list[dict[str, Any]]:
+    if spans is None:
+        return []
+    result: list[dict[str, Any]] = []
+    for item in spans:
+        data: Mapping[str, Any] | None
+        if isinstance(item, Mapping):
+            data = item
+        else:
+            to_dict = getattr(item, "to_dict", None)
+            payload = to_dict() if callable(to_dict) else None
+            if isinstance(payload, Mapping):
+                data = payload
+            else:
+                raw_data = getattr(item, "__dict__", None)
+                data = raw_data if isinstance(raw_data, Mapping) else None
+        if data is None:
+            continue
+        try:
+            start = int(data.get("start", data.get("start_char", -1)))
+            end = int(data.get("end", data.get("end_char", -1)))
+        except (TypeError, ValueError):
+            continue
+        if start < 0 or end <= start or end > len(text):
+            continue
+        label = data.get("label") or data.get("entity") or data.get("entity_type")
+        if label is None or not str(label).strip():
+            continue
+        result.append(
+            {
+                **dict(data),
+                "label": str(label).replace("B-", "").replace("I-", ""),
+                "start": start,
+                "end": end,
+                "text": text[start:end],
+            }
+        )
+    return sorted(
+        result,
+        key=lambda item: (item["start"], item["end"], str(item["label"])),
+    )
+
+
+def _clinical_fact_type_for_label(label: Any) -> str | None:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(label).casefold()).strip("_")
+    canonical = _canonical_clinical_fact_type(normalized)
+    if canonical in {"problem", "medication", "lab"}:
+        return canonical
+    if normalized in {"condition", "diagnosis", "disease", "problem"}:
+        return "problem"
+    if normalized in {"drug", "chemical", "medicine", "medication", "med"}:
+        return "medication"
+    if normalized in {"lab_test", "lab_value", "lab_result", "analyte", "lab"}:
+        return "lab"
+    return None
+
+
+def _relation_label_for_clinical_fact(label: Any) -> str:
+    fact_type = _clinical_fact_type_for_label(label)
+    if fact_type == "problem":
+        return "PROBLEM"
+    if fact_type == "medication":
+        return "MEDICATION"
+    if fact_type == "lab":
+        normalized = re.sub(r"[^a-z0-9]+", "_", str(label).casefold()).strip("_")
+        if normalized in {"lab_value", "lab_result", "result_value"}:
+            return "LAB_VALUE"
+        return "LAB_TEST"
+    return str(label)
+
+
+def _is_numeric_fact_surface(value: str) -> bool:
+    return bool(_CLINICAL_FACT_NUMERIC_RE.fullmatch(value.strip()))
+
+
+def _lab_result_fact(result: Any) -> tuple[str, ...]:
+    parts = ["lab", str(result.analyte.text).strip()]
+    if result.value is not None:
+        parts.append(_format_clinical_fact_number(result.value))
+    if result.unit:
+        parts.append(str(result.unit).strip())
+    if result.abnormal_flag:
+        parts.append(str(result.abnormal_flag).strip())
+    return _canonicalize_clinical_fact_parts(tuple(parts))
+
+
+def _format_clinical_fact_number(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return f"{value:.15g}"
+    return str(value).strip()
 
 
 def normalize_eval_span(
@@ -1678,6 +2457,42 @@ def compute_critical_finding_recall(
     )
 
 
+def compute_coreference_clustering_score(
+    predicted: Mapping[Any, str],
+    gold: Mapping[Any, str],
+    *,
+    metric: str = "bcubed",
+) -> CoreferenceClusteringScore:
+    """Score clusters with the documented mention-averaged B-cubed proxy.
+
+    ``predicted`` and ``gold`` must label the same mention keys. For every
+    mention, B-cubed precision is the fraction of its predicted cluster that is
+    in its gold cluster, and recall is the fraction of its gold cluster recovered
+    by the prediction. The returned F1 is the harmonic mean of the averages.
+
+    Args:
+        predicted: Mention key to predicted cluster id.
+        gold: The same mention keys mapped to gold cluster ids.
+        metric: Metric selector. Only ``"bcubed"`` is supported.
+
+    Returns:
+        Precision, recall, F1, metric name, and scored mention count.
+    """
+
+    if metric != "bcubed":
+        raise ValueError("only the documented 'bcubed' coreference proxy is supported")
+    from openmed.clinical.coref import bcubed_precision_recall_f1
+
+    score = bcubed_precision_recall_f1(predicted, gold)
+    return CoreferenceClusteringScore(
+        precision=score.precision,
+        recall=score.recall,
+        f1=score.f1,
+        metric=metric,
+        item_count=len(gold),
+    )
+
+
 def compute_exact_span_f1(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -1714,6 +2529,79 @@ def compute_exact_span_f1(
                 true_positives += 1
                 break
     return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def compute_document_level_relation_metrics(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+    *,
+    match: str = "strict",
+) -> DocumentLevelRelationMetrics:
+    """Score document relations and separate recall by sentence distance.
+
+    Relations are classified as cross-sentence when their metadata carries a
+    truthy ``cross_sentence`` value or a positive ``sentence_distance``. A
+    sentence-scoped relation is otherwise treated as intra-sentence.
+    """
+
+    from openmed.eval.relation_metrics import (
+        compute_relation_f1,
+        normalize_eval_relations,
+    )
+
+    gold = normalize_eval_relations(gold_relations)
+    predicted = normalize_eval_relations(predicted_relations)
+    overall = compute_relation_f1(gold, predicted, match=match)
+    intra_sentence = [
+        relation for relation in gold if not _relation_crosses_sentences(relation)
+    ]
+    cross_sentence = [
+        relation for relation in gold if _relation_crosses_sentences(relation)
+    ]
+    intra_score = compute_relation_f1(intra_sentence, predicted, match=match)
+    cross_score = compute_relation_f1(cross_sentence, predicted, match=match)
+    return DocumentLevelRelationMetrics(
+        overall=overall,
+        intra_sentence_recall=intra_score.recall,
+        cross_sentence_recall=cross_score.recall,
+        intra_sentence_gold=len(intra_sentence),
+        cross_sentence_gold=len(cross_sentence),
+        match=str(match).strip().lower(),
+    )
+
+
+def compute_document_relation_metrics(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+    *,
+    match: str = "strict",
+) -> DocumentLevelRelationMetrics:
+    """Compatibility alias for document-level relation metrics."""
+
+    return compute_document_level_relation_metrics(
+        gold_relations,
+        predicted_relations,
+        match=match,
+    )
+
+
+def _relation_crosses_sentences(relation: Any) -> bool:
+    metadata = getattr(relation, "metadata", {})
+    if "cross_sentence" in metadata:
+        return _truthy(metadata["cross_sentence"])
+    distance = metadata.get("sentence_distance")
+    if distance is not None:
+        try:
+            return int(distance) > 0
+        except (TypeError, ValueError):
+            return False
+    head_metadata = getattr(relation.head, "metadata", {})
+    tail_metadata = getattr(relation.tail, "metadata", {})
+    head_sentence = head_metadata.get("sentence_index")
+    tail_sentence = tail_metadata.get("sentence_index")
+    if head_sentence is None or tail_sentence is None:
+        return False
+    return head_sentence != tail_sentence
 
 
 def normalize_pipeline_fact(value: PipelineFact | Mapping[str, Any]) -> PipelineFact:
@@ -2147,37 +3035,57 @@ def bootstrap_abstention_residual_risk(
 def compute_date_shift_consistency(
     original_dates: Sequence[str],
     shifted_dates: Sequence[str],
+    *,
+    patient_ids: Sequence[str] | None = None,
 ) -> ConsistencyMetric:
-    """Score whether date replacements use one consistent day offset."""
+    """Score non-zero, patient-consistent date replacement offsets.
+
+    A patient may have a different shift from another patient, but every date
+    belonging to the same patient must use the same non-zero day offset. This
+    also preserves within-patient intervals and rejects real dates that survive
+    unchanged. Violation details contain only input positions and reason codes.
+    """
     if len(original_dates) != len(shifted_dates):
         raise ValueError("original_dates and shifted_dates must have the same length")
-    parsed: list[tuple[str, str, int]] = []
+    if patient_ids is not None and len(patient_ids) != len(original_dates):
+        raise ValueError("patient_ids and original_dates must have the same length")
+
+    groups = (
+        tuple(str(patient_id) for patient_id in patient_ids)
+        if patient_ids is not None
+        else ("default",) * len(original_dates)
+    )
+    parsed_by_patient: defaultdict[str, list[tuple[int, int]]] = defaultdict(list)
     violations: dict[str, list[str]] = {}
-    for original, shifted in zip(original_dates, shifted_dates):
+    for index, (original, shifted, patient_id) in enumerate(
+        zip(original_dates, shifted_dates, groups, strict=True)
+    ):
         original_date = _parse_date(original)
         shifted_date = _parse_date(shifted)
         if original_date is None or shifted_date is None:
-            violations.setdefault(original, []).append(shifted)
+            violations[f"date_index:{index}"] = ["unparseable_date"]
             continue
-        parsed.append((original, shifted, (shifted_date - original_date).days))
+        delta = (shifted_date - original_date).days
+        if delta == 0:
+            violations[f"date_index:{index}"] = ["unchanged_date"]
+            continue
+        parsed_by_patient[patient_id].append((index, delta))
 
     if not original_dates:
         return ConsistencyMetric(score=1.0, consistent=0, total=0, violations={})
-    if not parsed:
-        return ConsistencyMetric(
-            score=0.0,
-            consistent=0,
-            total=len(original_dates),
-            violations=violations,
-        )
 
-    expected = parsed[0][2]
     consistent = 0
-    for original, shifted, delta in parsed:
-        if delta == expected:
-            consistent += 1
-        else:
-            violations.setdefault(original, []).append(shifted)
+    for rows in parsed_by_patient.values():
+        delta_counts = Counter(delta for _, delta in rows)
+        expected = min(
+            delta_counts,
+            key=lambda delta: (-delta_counts[delta], delta),
+        )
+        for index, delta in rows:
+            if delta == expected:
+                consistent += 1
+            else:
+                violations[f"date_index:{index}"] = ["inconsistent_shift"]
     return ConsistencyMetric(
         score=_safe_rate(consistent, len(original_dates), zero_denominator=1.0),
         consistent=consistent,
@@ -2189,28 +3097,282 @@ def compute_date_shift_consistency(
 def compute_surrogate_consistency(
     originals: Sequence[str],
     surrogates: Sequence[str],
+    *,
+    document_ids: Sequence[str] | None = None,
+    checksum_valid: Sequence[bool | None] | None = None,
 ) -> ConsistencyMetric:
-    """Score whether repeated source values map to stable surrogates."""
+    """Score document-local surrogate stability and optional ID validity.
+
+    Repeated source values must map to one non-empty surrogate within a
+    document. Callers that validate checksum-bearing identifiers can provide a
+    parallel ``checksum_valid`` sequence; any explicit ``False`` verdict makes
+    that entity group inconsistent. Violation details contain no source or
+    surrogate values.
+    """
     if len(originals) != len(surrogates):
         raise ValueError("originals and surrogates must have the same length")
-    groups: defaultdict[str, list[str]] = defaultdict(list)
-    for original, surrogate in zip(originals, surrogates):
-        groups[original].append(surrogate)
+    if document_ids is not None and len(document_ids) != len(originals):
+        raise ValueError("document_ids and originals must have the same length")
+    if checksum_valid is not None and len(checksum_valid) != len(originals):
+        raise ValueError("checksum_valid and originals must have the same length")
+
+    documents = (
+        tuple(str(document_id) for document_id in document_ids)
+        if document_ids is not None
+        else ("default",) * len(originals)
+    )
+    checksum_verdicts = (
+        tuple(checksum_valid)
+        if checksum_valid is not None
+        else (None,) * len(originals)
+    )
+    groups: defaultdict[tuple[str, str], list[tuple[int, str, bool | None]]] = (
+        defaultdict(list)
+    )
+    for index, (document_id, original, surrogate, checksum_verdict) in enumerate(
+        zip(documents, originals, surrogates, checksum_verdicts, strict=True)
+    ):
+        if checksum_verdict is not None and not isinstance(checksum_verdict, bool):
+            raise ValueError("checksum_valid values must be bool or None")
+        groups[(document_id, original)].append(
+            (index, str(surrogate), checksum_verdict)
+        )
 
     violations: dict[str, list[str]] = {}
     consistent = 0
-    for original, values in groups.items():
-        unique_values = sorted(set(values))
-        if len(unique_values) == 1:
+    for values in groups.values():
+        violation_codes: list[str] = []
+        surrogates_for_group = [surrogate for _, surrogate, _ in values]
+        if any(not surrogate for surrogate in surrogates_for_group):
+            violation_codes.append("missing_surrogate")
+        if len(set(surrogates_for_group)) != 1:
+            violation_codes.append("inconsistent_surrogate")
+        if any(checksum_verdict is False for _, _, checksum_verdict in values):
+            violation_codes.append("checksum_invalid")
+        if not violation_codes:
             consistent += 1
         else:
-            violations[original] = unique_values
+            violations[f"entity_group:{values[0][0]}"] = violation_codes
     return ConsistencyMetric(
         score=_safe_rate(consistent, len(groups), zero_denominator=1.0),
         consistent=consistent,
         total=len(groups),
         violations=violations,
     )
+
+
+def normalize_temporal_edges(edges: Any) -> tuple[tuple[str, str, str], ...]:
+    """Return canonical ``(label, head, tail)`` keys for temporal edges.
+
+    ``AFTER(a, b)`` becomes ``BEFORE(b, a)`` and symmetric ``OVERLAP``
+    endpoints are ordered deterministically. Inputs may be compact triples,
+    edge mappings, temporal candidate objects, or a decoded ``SpanGraph``.
+    Duplicate relations are removed.
+
+    Args:
+        edges: Temporal edge records or a decoded graph exposing ``edge_keys``.
+
+    Returns:
+        Unique canonical temporal edge keys in deterministic order.
+
+    Raises:
+        TypeError: If ``edges`` is not an edge iterable or decoded graph.
+        ValueError: If an edge label or endpoint is invalid.
+    """
+
+    values = _temporal_edge_values(edges)
+    normalized = {_normalize_temporal_edge(value) for value in values}
+    return tuple(sorted(normalized))
+
+
+def compute_temporal_awareness_f1(
+    gold_edges: Any,
+    predicted_edges: Any,
+) -> TemporalAwarenessMetrics:
+    """Score closure-aware TLINK precision/recall over reduced graphs.
+
+    This follows temporal-awareness evaluation: reduced system relations are
+    checked against the gold closure for precision, while reduced gold
+    relations are checked against the system closure for recall. ``BEFORE``
+    and ``CONTAINS`` are transitively closed; the other supported TLINK labels
+    remain exact directed relations after inverse/symmetric normalization.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+
+    Returns:
+        Closure-aware precision, recall, F1, and reduced-graph counts.
+    """
+
+    gold_reduced = _reduce_temporal_edges(normalize_temporal_edges(gold_edges))
+    predicted_reduced = _reduce_temporal_edges(
+        normalize_temporal_edges(predicted_edges)
+    )
+    gold_closure = _temporal_labeled_closure(gold_reduced)
+    predicted_closure = _temporal_labeled_closure(predicted_reduced)
+
+    precision_matches = len(set(predicted_reduced) & gold_closure)
+    recall_matches = len(set(gold_reduced) & predicted_closure)
+    precision = _safe_rate(
+        precision_matches,
+        len(predicted_reduced),
+        zero_denominator=1.0,
+    )
+    recall = _safe_rate(
+        recall_matches,
+        len(gold_reduced),
+        zero_denominator=1.0,
+    )
+    f1 = (
+        0.0
+        if precision + recall == 0.0
+        else 2.0 * precision * recall / (precision + recall)
+    )
+    return TemporalAwarenessMetrics(
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        precision_matches=precision_matches,
+        recall_matches=recall_matches,
+        predicted_reduced_relations=len(predicted_reduced),
+        gold_reduced_relations=len(gold_reduced),
+    )
+
+
+def compute_temporal_closure_consistency(edges: Any) -> ConsistencyMetric:
+    """Score whether the partial-order transitive closure is contradiction-free.
+
+    The consistency graph mirrors temporal decoding by treating ``BEFORE`` and
+    ``CONTAINS`` as strict partial-order edges. A closure relation is a
+    violation when it reaches itself or its reverse is also reachable.
+    Violation details contain stable aggregate indexes and reason codes only,
+    never caller-provided node ids or clinical text.
+
+    Args:
+        edges: TLINK records or a decoded temporal graph.
+
+    Returns:
+        A consistency score with PHI-safe closure-violation details.
+    """
+
+    normalized = normalize_temporal_edges(edges)
+    order_pairs = {
+        (head, tail)
+        for label, head, tail in normalized
+        if label in _TEMPORAL_PARTIAL_ORDER_LABELS
+    }
+    closure = _temporal_pair_closure(order_pairs)
+    inconsistent = {
+        pair for pair in closure if pair[0] == pair[1] or (pair[1], pair[0]) in closure
+    }
+    violations: dict[str, list[str]] = {}
+    for index, (head, tail) in enumerate(sorted(inconsistent)):
+        reason = (
+            "self_reachability_in_transitive_closure"
+            if head == tail
+            else "reverse_reachability_in_transitive_closure"
+        )
+        violations[f"closure_relation:{index}"] = [reason]
+
+    total = len(closure)
+    consistent = total - len(inconsistent)
+    return ConsistencyMetric(
+        score=_safe_rate(consistent, total, zero_denominator=1.0),
+        consistent=consistent,
+        total=total,
+        violations=violations,
+    )
+
+
+def evaluate_temporal_consistency_gate(
+    gold_edges: Any,
+    predicted_edges: Any,
+    *,
+    minimum_awareness_f1: float = TEMPORAL_AWARENESS_F1_FLOOR,
+    maximum_consistency_violations: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING,
+) -> TemporalConsistencyGateResult:
+    """Evaluate the merge-blocking TLINK quality and consistency gate.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+        minimum_awareness_f1: Inclusive temporal-awareness F1 floor.
+        maximum_consistency_violations: Inclusive closure-violation ceiling.
+
+    Returns:
+        A blocking pass/fail verdict with aggregate metric evidence.
+
+    Raises:
+        ValueError: If either gate threshold is invalid.
+    """
+
+    if not isfinite(float(minimum_awareness_f1)) or not (
+        0.0 <= minimum_awareness_f1 <= 1.0
+    ):
+        raise ValueError("minimum_awareness_f1 must be finite and between 0 and 1")
+    if (
+        isinstance(maximum_consistency_violations, bool)
+        or not isinstance(maximum_consistency_violations, int)
+        or maximum_consistency_violations < 0
+    ):
+        raise ValueError("maximum_consistency_violations must be a non-negative int")
+
+    gold = normalize_temporal_edges(gold_edges)
+    predicted = normalize_temporal_edges(predicted_edges)
+    awareness = compute_temporal_awareness_f1(gold, predicted)
+    consistency = compute_temporal_closure_consistency(predicted)
+    failure_reasons: list[str] = []
+    if awareness.f1 < minimum_awareness_f1:
+        failure_reasons.append("temporal_awareness_f1_below_floor")
+    if len(consistency.violations) > maximum_consistency_violations:
+        failure_reasons.append("transitive_closure_violation")
+    return TemporalConsistencyGateResult(
+        passed=not failure_reasons,
+        blocking=True,
+        awareness=awareness,
+        consistency=consistency,
+        awareness_floor=float(minimum_awareness_f1),
+        violation_ceiling=maximum_consistency_violations,
+        failure_reasons=tuple(failure_reasons),
+    )
+
+
+def assert_temporal_consistency_gate(
+    gold_edges: Any,
+    predicted_edges: Any,
+    *,
+    minimum_awareness_f1: float = TEMPORAL_AWARENESS_F1_FLOOR,
+    maximum_consistency_violations: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING,
+) -> TemporalConsistencyGateResult:
+    """Return the gate result or raise a PHI-safe merge-blocking assertion.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+        minimum_awareness_f1: Inclusive temporal-awareness F1 floor.
+        maximum_consistency_violations: Inclusive closure-violation ceiling.
+
+    Returns:
+        The passing temporal consistency gate result.
+
+    Raises:
+        AssertionError: If awareness is below the floor or closure is invalid.
+        ValueError: If either gate threshold is invalid.
+    """
+
+    result = evaluate_temporal_consistency_gate(
+        gold_edges,
+        predicted_edges,
+        minimum_awareness_f1=minimum_awareness_f1,
+        maximum_consistency_violations=maximum_consistency_violations,
+    )
+    if not result.passed:
+        reasons = ", ".join(result.failure_reasons)
+        raise AssertionError(
+            f"merge-blocking temporal consistency gate failed: {reasons}"
+        )
+    return result
 
 
 def compute_latency_summary(latencies_ms: Sequence[int | float]) -> LatencyMetrics:
@@ -2236,6 +3398,75 @@ def compute_resource_metrics(
         peak_rss_bytes=peak_rss_bytes,
         model_size_bytes=model_size_bytes,
     )
+
+
+_SR_MATCH_FIELDS: tuple[str, ...] = (
+    "concept_name",
+    "value_type",
+    "value",
+    "unit_code",
+)
+
+
+def compute_sr_content_accuracy(
+    predicted_items: Sequence[Mapping[str, Any]],
+    gold_items: Sequence[Mapping[str, Any]],
+) -> SrContentAccuracy:
+    """Compute node-level exact-match accuracy for DICOM SR content extraction.
+
+    Items are aligned by ``node_path``. A gold node is matched only when a
+    predicted node with the same path reproduces its concept name, value type,
+    rendered value, and coded unit exactly. Accuracy is matched gold nodes over
+    total gold nodes; unmatched gold, mismatched, and unexpected extra predicted
+    node paths are reported for diagnosis.
+
+    Args:
+        predicted_items: Extracted SR content items (for example the
+            ``content_items`` list from
+            :func:`openmed.multimodal.extract_dicom_sr`).
+        gold_items: Reference SR content items for the same object.
+
+    Returns:
+        An :class:`SrContentAccuracy` summary.
+    """
+    predicted_by_path = {
+        str(item.get("node_path", "")): item for item in predicted_items
+    }
+    gold_paths = {str(item.get("node_path", "")) for item in gold_items}
+    total = len(gold_items)
+    matched = 0
+    missing: list[str] = []
+    mismatched: list[str] = []
+
+    for gold in gold_items:
+        path = str(gold.get("node_path", ""))
+        prediction = predicted_by_path.get(path)
+        if prediction is None:
+            missing.append(path)
+            continue
+        if all(
+            _sr_field_equal(prediction.get(field), gold.get(field))
+            for field in _SR_MATCH_FIELDS
+        ):
+            matched += 1
+        else:
+            mismatched.append(path)
+
+    extra = [path for path in predicted_by_path if path not in gold_paths]
+
+    accuracy = matched / total if total else 1.0
+    return SrContentAccuracy(
+        accuracy=accuracy,
+        matched=matched,
+        total=total,
+        missing_nodes=tuple(missing),
+        mismatched_nodes=tuple(mismatched),
+        extra_nodes=tuple(sorted(extra)),
+    )
+
+
+def _sr_field_equal(left: Any, right: Any) -> bool:
+    return left == right
 
 
 def reliability_bins(
@@ -2304,6 +3535,193 @@ def expected_calibration_error(
         empirical_accuracy = float(accuracy_value)
         error += (count / total) * abs(empirical_accuracy - mean_confidence)
     return error
+
+
+def relation_reliability_report(
+    predictions_with_confidence: Iterable[Any],
+    *,
+    n_bins: int = 10,
+) -> dict[str, Any]:
+    """Return pooled and per-relation-type reliability curves and ECE.
+
+    Relation types are read from ``relation_type``, ``label``, or ``type``.
+    Inputs otherwise follow :func:`reliability_bins` confidence/correctness
+    semantics. The report contains no source text or endpoint identifiers.
+    """
+
+    records = list(predictions_with_confidence)
+    pooled = reliability_bins(records, n_bins=n_bins)
+    grouped: dict[str, list[Any]] = defaultdict(list)
+    for record in records:
+        grouped[_relation_type_for_confidence_record(record)].append(record)
+
+    return {
+        "n_bins": n_bins,
+        "sample_count": len(records),
+        "expected_calibration_error": expected_calibration_error(pooled),
+        "reliability": pooled,
+        "per_type": {
+            relation_type: {
+                "sample_count": len(group_records),
+                "expected_calibration_error": expected_calibration_error(type_bins),
+                "reliability": type_bins,
+            }
+            for relation_type, group_records in sorted(grouped.items())
+            for type_bins in [reliability_bins(group_records, n_bins=n_bins)]
+        },
+    }
+
+
+def risk_coverage_curve(
+    predictions_with_confidence: Iterable[Any],
+) -> tuple[dict[str, Any], ...]:
+    """Return empirical retained-set risk at each confidence threshold.
+
+    Coverage and ``retained_count`` use raw sample counts. Accuracy and risk
+    may use positive finite sample weights, which are reported separately as
+    ``retained_weight``. Tied confidences enter the retained set together.
+    """
+
+    records = [
+        _selective_prediction_record(item) for item in predictions_with_confidence
+    ]
+    if not records:
+        return ()
+
+    total_count = len(records)
+    relation_types = sorted({record[2] for record in records})
+    thresholds = sorted({record[0] for record in records}, reverse=True)
+    rows: list[dict[str, Any]] = []
+    for threshold in thresholds:
+        retained = [record for record in records if record[0] >= threshold]
+        retained_count = len(retained)
+        retained_weight = sum(record[3] for record in retained)
+        correct_weight = sum(record[3] for record in retained if record[1])
+        accuracy = correct_weight / retained_weight if retained_weight else 0.0
+        per_type: dict[str, dict[str, int | float]] = {}
+        for relation_type in relation_types:
+            type_records = [record for record in retained if record[2] == relation_type]
+            type_weight = sum(record[3] for record in type_records)
+            type_correct_weight = sum(record[3] for record in type_records if record[1])
+            type_accuracy = type_correct_weight / type_weight if type_weight else 0.0
+            per_type[relation_type] = {
+                "retained_count": len(type_records),
+                "retained_weight": type_weight,
+                "accuracy": type_accuracy,
+                "empirical_risk": 1.0 - type_accuracy if type_records else 0.0,
+            }
+        rows.append(
+            {
+                "confidence_threshold": threshold,
+                "coverage": retained_count / total_count,
+                "abstention_rate": 1.0 - (retained_count / total_count),
+                "accuracy": accuracy,
+                "empirical_risk": 1.0 - accuracy,
+                "retained_count": retained_count,
+                "retained_weight": retained_weight,
+                "correct_weight": correct_weight,
+                "total_count": total_count,
+                "per_type": per_type,
+            }
+        )
+    return tuple(rows)
+
+
+def area_under_risk_coverage(curve: Iterable[Mapping[str, Any]]) -> float:
+    """Integrate risk over coverage using the fixed trapezoidal convention."""
+
+    points = sorted(
+        ((float(row["coverage"]), float(row["empirical_risk"])) for row in curve),
+        key=lambda point: point[0],
+    )
+    area = 0.0
+    previous_coverage = 0.0
+    previous_risk = 0.0
+    for coverage, risk in points:
+        if coverage < previous_coverage:
+            raise ValueError("risk-coverage points must have non-decreasing coverage")
+        area += 0.5 * (previous_risk + risk) * (coverage - previous_coverage)
+        previous_coverage = coverage
+        previous_risk = risk
+    return area
+
+
+def selective_prediction_report(
+    predictions_with_confidence: Iterable[Any],
+) -> dict[str, Any]:
+    """Build a deterministic risk-coverage, AURC, and E-AURC report.
+
+    This is a report emitter only. It intentionally does not claim a certified
+    risk guarantee or select a threshold using finite-sample bounds.
+    """
+
+    materialized = list(predictions_with_confidence)
+    normalized = [_selective_prediction_record(item) for item in materialized]
+    curve = risk_coverage_curve(materialized)
+    oracle_curve = risk_coverage_curve(
+        {
+            "confidence": 1.0 if correct else 0.0,
+            "correct": correct,
+            "relation_type": relation_type,
+            "weight": weight,
+        }
+        for _, correct, relation_type, weight in normalized
+    )
+    aurc = area_under_risk_coverage(curve)
+    oracle_aurc = area_under_risk_coverage(oracle_curve)
+    total_weight = sum(record[3] for record in normalized)
+    full_coverage = curve[-1] if curve else None
+    return {
+        "artifact_type": RISK_COVERAGE_ARTIFACT,
+        "schema_version": RISK_COVERAGE_SCHEMA_VERSION,
+        "note": RISK_COVERAGE_EMPIRICAL_NOTE,
+        "aurc_convention": RISK_COVERAGE_AURC_CONVENTION,
+        "aurc": aurc,
+        "oracle_aurc": oracle_aurc,
+        "excess_aurc": aurc - oracle_aurc,
+        "full_coverage_accuracy": (
+            float(full_coverage["accuracy"]) if full_coverage is not None else 0.0
+        ),
+        "full_coverage_risk": (
+            float(full_coverage["empirical_risk"]) if full_coverage is not None else 0.0
+        ),
+        "total_count": len(normalized),
+        "total_weight": total_weight,
+        "risk_coverage_table": [dict(row) for row in curve],
+    }
+
+
+def _relation_type_for_confidence_record(record: Any) -> str:
+    if isinstance(record, tuple | list):
+        return "*"
+    data = record if isinstance(record, Mapping) else vars(record)
+    metadata = _read_mapping(data, "metadata") or {}
+    for key in ("relation_type", "label", "type"):
+        value = _read_value(data, key)
+        if value is None:
+            value = metadata.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return "*"
+
+
+def _selective_prediction_record(
+    record: Any,
+) -> tuple[float, bool, str, float]:
+    confidence, correct = _confidence_correctness(record)
+    relation_type = _relation_type_for_confidence_record(record)
+    if isinstance(record, tuple | list):
+        weight_value = 1.0
+    else:
+        data = record if isinstance(record, Mapping) else vars(record)
+        metadata = _read_mapping(data, "metadata") or {}
+        weight_value = _read_value(data, "weight")
+        if weight_value is None:
+            weight_value = metadata.get("weight", 1.0)
+    weight = float(weight_value)
+    if not isfinite(weight) or weight <= 0.0:
+        raise ValueError("selective-prediction weight must be positive and finite")
+    return confidence, correct, relation_type, weight
 
 
 def weighted_coverage(
@@ -2386,6 +3804,13 @@ def compute_metrics_bundle(
     cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
     model_size_bytes: int | None = None,
+    original_dates: Sequence[str] = (),
+    shifted_dates: Sequence[str] = (),
+    date_patient_ids: Sequence[str] | None = None,
+    surrogate_originals: Sequence[str] = (),
+    surrogates: Sequence[str] = (),
+    surrogate_document_ids: Sequence[str] | None = None,
+    surrogate_checksum_valid: Sequence[bool | None] | None = None,
     abstention_thresholds: Any | None = None,
     abstention_confidence_threshold: float = 0.0,
     abstention_model_id: str | None = None,
@@ -2397,6 +3822,8 @@ def compute_metrics_bundle(
     default_language: str = "en",
     default_device: str = "cpu",
     source_text: str | None = None,
+    source_facts: Iterable[Any] | None = None,
+    summary_facts: Iterable[Any] | None = None,
 ) -> dict[str, Any]:
     """Compute the standard OM-018 benchmark metric bundle.
 
@@ -2404,6 +3831,8 @@ def compute_metrics_bundle(
     ``report.metrics['latency']['cold_start_ms']``. It is the first fixture
     call's wall-clock latency (model/tokenizer load plus first forward pass)
     and is excluded from the steady-state ``p50``/``p95``/``count`` sample.
+    When both ``source_facts`` and ``summary_facts`` are supplied, the bundle
+    also includes the structured ``fact_recall`` summary metric.
     """
     text_length = len(source_text) if source_text is not None else None
     metrics = {
@@ -2465,6 +3894,17 @@ def compute_metrics_bundle(
             peak_rss_bytes=peak_rss_bytes,
             model_size_bytes=model_size_bytes,
         ).to_dict(),
+        "date_shift_consistency": compute_date_shift_consistency(
+            original_dates,
+            shifted_dates,
+            patient_ids=date_patient_ids,
+        ).to_dict(),
+        "surrogate_consistency": compute_surrogate_consistency(
+            surrogate_originals,
+            surrogates,
+            document_ids=surrogate_document_ids,
+            checksum_valid=surrogate_checksum_valid,
+        ).to_dict(),
     }
     if extracted_facts is not None:
         if source_text is None:
@@ -2473,6 +3913,10 @@ def compute_metrics_bundle(
             extracted_facts,
             source_text=source_text,
         ).to_dict()
+    if source_facts is not None or summary_facts is not None:
+        if source_facts is None or summary_facts is None:
+            raise ValueError("source_facts and summary_facts must be provided together")
+        metrics["fact_recall"] = fact_recall(source_facts, summary_facts).to_dict()
     if extraction_outputs is not None:
         metrics["extraction_reemission_leakage"] = (
             compute_extraction_reemission_leakage(
@@ -3155,6 +4599,30 @@ def tnm_field_accuracy(
         )
         for field in fields
     }
+
+
+def oncotree_top1_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> RateMetric:
+    """Top-1 OncoTree code accuracy against gold mappings.
+
+    ``predicted`` and ``gold`` are parallel iterables of mapping rows, each
+    carrying a ``code`` field. A hit requires exact equality of predicted and
+    gold codes; ``None == None`` counts as correct so intentional unmapped rows
+    are not penalized. Mapper-agnostic: callers pass already-produced mappings.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        if predicted_row.get("code") == gold_row.get("code"):
+            correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
 
 
 def _normalize_trend_entity(value: Any) -> str:
@@ -3942,6 +5410,139 @@ def _count_map(keys: Iterable[str], counts: Mapping[str, int]) -> dict[str, int]
     return {key: int(counts.get(key, 0)) for key in keys}
 
 
+def _temporal_edge_values(edges: Any) -> tuple[Any, ...]:
+    edge_keys = getattr(edges, "edge_keys", None)
+    if callable(edge_keys):
+        return tuple(edge_keys())
+    if isinstance(edges, Mapping):
+        return (edges,)
+    if _is_temporal_edge_triple(edges):
+        return (edges,)
+    if isinstance(edges, str | bytes) or not isinstance(edges, Iterable):
+        raise TypeError("temporal edges must be an iterable or decoded graph")
+    return tuple(edges)
+
+
+def _is_temporal_edge_triple(value: Any) -> bool:
+    return (
+        isinstance(value, Sequence)
+        and not isinstance(value, str | bytes)
+        and len(value) == 3
+        and isinstance(value[0], str)
+    )
+
+
+def _normalize_temporal_edge(edge: Any) -> tuple[str, str, str]:
+    if _is_temporal_edge_triple(edge):
+        relation_type, head, tail = edge
+    else:
+        data = edge
+        nested_edge = _temporal_field(data, "edge")
+        if (
+            nested_edge is not None
+            and _temporal_field(data, "label", "type", "relation_type") is None
+        ):
+            data = nested_edge
+        relation_type = _temporal_field(data, "label", "type", "relation_type")
+        head = _temporal_field(data, "head", "source", "source_id")
+        tail = _temporal_field(data, "tail", "target", "target_id")
+
+    label = re.sub(r"[^A-Z0-9]+", "_", str(relation_type or "").upper()).strip("_")
+    if label not in TEMPORAL_RELATION_LABELS:
+        raise ValueError("unsupported temporal relation label")
+    head_id = _temporal_node_id(head)
+    tail_id = _temporal_node_id(tail)
+    if label == "AFTER":
+        label = "BEFORE"
+        head_id, tail_id = tail_id, head_id
+    elif label == "OVERLAP" and tail_id < head_id:
+        head_id, tail_id = tail_id, head_id
+    return label, head_id, tail_id
+
+
+def _temporal_field(value: Any, *names: str) -> Any:
+    if isinstance(value, Mapping):
+        for name in names:
+            if name in value:
+                return value[name]
+        return None
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    return None
+
+
+def _temporal_node_id(value: Any) -> str:
+    if isinstance(value, str):
+        node_id = value
+    else:
+        node_id = _temporal_field(value, "span_id", "node_id", "id")
+    normalized = str(node_id or "").strip()
+    if not normalized:
+        raise ValueError("temporal edge endpoints require non-empty node ids")
+    return normalized
+
+
+def _reduce_temporal_edges(
+    edges: Iterable[tuple[str, str, str]],
+) -> tuple[tuple[str, str, str], ...]:
+    kept = set(edges)
+    for label in sorted(_TEMPORAL_TRANSITIVE_LABELS):
+        for edge in sorted(item for item in kept if item[0] == label):
+            kept.remove(edge)
+            pairs = {
+                (head, tail) for edge_label, head, tail in kept if edge_label == label
+            }
+            if edge[2] not in _temporal_reachable(edge[1], pairs):
+                kept.add(edge)
+    return tuple(sorted(kept))
+
+
+def _temporal_labeled_closure(
+    edges: Iterable[tuple[str, str, str]],
+) -> set[tuple[str, str, str]]:
+    closure = set(edges)
+    for label in _TEMPORAL_TRANSITIVE_LABELS:
+        pairs = {
+            (head, tail) for edge_label, head, tail in closure if edge_label == label
+        }
+        closure.update(
+            (label, head, tail) for head, tail in _temporal_pair_closure(pairs)
+        )
+    return closure
+
+
+def _temporal_pair_closure(
+    pairs: Iterable[tuple[str, str]],
+) -> set[tuple[str, str]]:
+    materialized = set(pairs)
+    nodes = {node for pair in materialized for node in pair}
+    closure: set[tuple[str, str]] = set()
+    for source in nodes:
+        closure.update(
+            (source, target) for target in _temporal_reachable(source, materialized)
+        )
+    return closure
+
+
+def _temporal_reachable(
+    source: str,
+    pairs: Iterable[tuple[str, str]],
+) -> set[str]:
+    adjacency: defaultdict[str, set[str]] = defaultdict(set)
+    for head, tail in pairs:
+        adjacency[head].add(tail)
+    reachable: set[str] = set()
+    stack = list(adjacency.get(source, ()))
+    while stack:
+        target = stack.pop()
+        if target in reachable:
+            continue
+        reachable.add(target)
+        stack.extend(adjacency.get(target, ()))
+    return reachable
+
+
 def _parse_date(value: str) -> date | None:
     candidates = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")
     for fmt in candidates:
@@ -4218,6 +5819,9 @@ __all__ = [
     "PIPELINE_EVAL_STAGES",
     "PIPELINE_STAGE_FACT_FIELDS",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
+    "TEMPORAL_AWARENESS_F1_FLOOR",
+    "TEMPORAL_CONSISTENCY_VIOLATION_CEILING",
+    "TEMPORAL_RELATION_LABELS",
     "RADIOLOGY_ENTITY_ANATOMY",
     "RADIOLOGY_ENTITY_OBSERVATION",
     "RADIOLOGY_ENTITY_TYPES",
@@ -4225,14 +5829,23 @@ __all__ = [
     "RADIOLOGY_UNCERTAINTY_CLASSES",
     "RADIOLOGY_UNCERTAINTY_PRESENT",
     "RADIOLOGY_UNCERTAINTY_UNCERTAIN",
+    "RISK_COVERAGE_ARTIFACT",
+    "RISK_COVERAGE_SCHEMA_VERSION",
+    "RISK_COVERAGE_AURC_CONVENTION",
+    "RISK_COVERAGE_EMPIRICAL_NOTE",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
     "CriticalFindingRecallMetrics",
+    "DocumentLevelRelationMetrics",
     "EvalSpan",
     "PipelineFact",
     "RateMetric",
+    "SrContentAccuracy",
     "F1Metrics",
+    "CoreferenceClusteringScore",
+    "TemporalAwarenessMetrics",
+    "TemporalConsistencyGateResult",
     "UncertaintyAccuracyMetrics",
     "LeakageMetrics",
     "MixedScriptLeakageMetrics",
@@ -4247,12 +5860,17 @@ __all__ = [
     "FAITHFULNESS_SCHEMA_VERSION",
     "FaithfulnessFinding",
     "FaithfulnessMetrics",
+    "FactRecallResult",
     "normalize_eval_span",
     "normalize_eval_spans",
     "normalize_pipeline_fact",
     "normalize_pipeline_facts",
     "pipeline_fact_mismatch_fields",
     "compute_span_grounded_faithfulness",
+    "fact_recall",
+    "extract_clinical_facts",
+    "summary_faithfulness_metrics",
+    "build_summary_faithfulness_report",
     "merge_faithfulness_metrics",
     "normalize_radiology_entity",
     "normalize_radiology_entities",
@@ -4262,6 +5880,7 @@ __all__ = [
     "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
+    "compute_coreference_clustering_score",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_fact_level_f1",
@@ -4275,6 +5894,7 @@ __all__ = [
     "hgvs_field_accuracy",
     "TNM_FIELDS",
     "tnm_field_accuracy",
+    "oncotree_top1_accuracy",
     "trend_direction_accuracy",
     "trend_grouping_accuracy",
     "compute_relaxed_span_f1",
@@ -4282,12 +5902,24 @@ __all__ = [
     "compute_clinical_utility_loss",
     "compute_abstention_metrics",
     "compute_date_shift_consistency",
+    "compute_document_level_relation_metrics",
+    "compute_document_relation_metrics",
     "compute_surrogate_consistency",
+    "normalize_temporal_edges",
+    "compute_temporal_awareness_f1",
+    "compute_temporal_closure_consistency",
+    "evaluate_temporal_consistency_gate",
+    "assert_temporal_consistency_gate",
     "compute_latency_summary",
     "compute_resource_metrics",
+    "compute_sr_content_accuracy",
     "coverage_gaps_by_language",
     "reliability_bins",
     "expected_calibration_error",
+    "relation_reliability_report",
+    "risk_coverage_curve",
+    "area_under_risk_coverage",
+    "selective_prediction_report",
     "weighted_coverage",
     "compute_metrics_bundle",
     "bootstrap_ci",

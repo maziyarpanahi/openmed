@@ -12,6 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
       - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
@@ -38,24 +39,33 @@ nav:
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
+      - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
+      - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
       - Indic Encoder Backbones: indic-encoders.md
+      - Indic NER Checkpoint Compatibility: indic-ner-checkpoints.md
       - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
+      - Cross-format Offset Properties: structured/offset-properties.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+      - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - Terminology Snapshot Provenance: clinical/terminology-provenance.md
+      - Consent Cache Invalidation: clinical/consent-cache.md
+      - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
+      - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
-      - Detector Plugin SDK: plugin-sdk.md
+      - Extension Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
@@ -66,12 +76,14 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
+      - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - Device Tiers & SLOs: tiers.md
@@ -80,6 +92,7 @@ nav:
       - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - Service API Compatibility Gate: api/compatibility-gate.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
@@ -96,6 +109,7 @@ nav:
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
@@ -114,6 +128,11 @@ nav:
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR Reference Integrity Reports: fhir/reference-integrity.md
+      - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
+      - FHIR OperationOutcome Reports: fhir/operation-outcome.md
+      - FHIR SDC Privacy Projection: fhir/sdc-privacy.md
+      - Document Intake Quarantine: fhir/document-intake-quarantine.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
@@ -129,6 +148,7 @@ nav:
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
+      - Android Integration & Model Catalog: android-integration.md
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
@@ -143,6 +163,7 @@ nav:
       - Onboarding: onboarding.md
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
+      - Model Release Queue: model-release-queue.md
       - Nix Development: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
@@ -343,5 +364,7 @@ exclude_docs: |
   __pycache__/**
   overrides/**
   demo/web/README.md
+  demo/web/models/**
+  demo/web/vendor/**
   website/**
   brand/**

@@ -143,13 +143,94 @@ def test_input_length_guard_allows_within_limit():
     RequestBudget(max_input_chars=8).check_input_length(8)  # exactly at limit is OK
 
 
-def test_wall_time_clock_raises_after_deadline():
+def test_wall_time_clock_raises_after_deadline(monkeypatch):
+    fake_now = [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return fake_now[0]
+
+        @staticmethod
+        def perf_counter():
+            return fake_now[0]
+
+    monkeypatch.setattr("openmed.core.budget.time", FakeTime)
     clock = RequestBudget(max_wall_time=0.001).start()
-    time.sleep(0.01)
+    fake_now[0] = 0.01
     with pytest.raises(BudgetExceededError) as excinfo:
         clock.check("unit_stage")
     assert excinfo.value.kind == "wall_time"
     assert excinfo.value.checkpoint == "unit_stage"
+
+
+# The granularity of the clock backing BudgetClock.elapsed is itself a
+# correctness property, so it is pinned on every platform rather than left to
+# be discovered on Windows CI. Until CPython 3.13 (gh-88494), Windows backs
+# time.monotonic() with GetTickCount64(), whose resolution is 15.6 ms, while
+# time.perf_counter() is backed by QueryPerformanceCounter() with sub-
+# microsecond resolution. openmed supports Python >= 3.10, so the coarse clock
+# is live for 3.10-3.12 on Windows. _WindowsTickClock below reproduces that
+# platform on any host: monotonic() is quantized to a 15.6 ms tick, while
+# perf_counter() is exact.
+
+_WINDOWS_TICK = 0.015625
+
+
+class _WindowsTickClock:
+    """Stand-in for the ``time`` module as it behaves on Windows <= 3.12.
+
+    ``real`` is the true elapsed time the test advances by hand. ``monotonic``
+    quantizes it to a 15.6 ms tick (``GetTickCount64``); ``perf_counter``
+    reports it exactly (``QueryPerformanceCounter``).
+    """
+
+    def __init__(self, real: float = 0.0) -> None:
+        self.real = real
+
+    def monotonic(self) -> float:
+        return (self.real // _WINDOWS_TICK) * _WINDOWS_TICK
+
+    def perf_counter(self) -> float:
+        return self.real
+
+
+def test_wall_time_budget_is_enforced_below_the_windows_tick(monkeypatch):
+    """A budget shorter than one 15.6 ms tick must still trip.
+
+    A tick-granular clock cannot observe any overrun shorter than one tick,
+    which silently makes every sub-15.6 ms ``max_wall_time`` unenforceable.
+    """
+    # Start exactly on a tick boundary: the coarse clock reads 0 for the whole
+    # tick that follows, so it cannot see the overrun at all.
+    fake_time = _WindowsTickClock(0.0)
+    monkeypatch.setattr("openmed.core.budget.time", fake_time)
+
+    clock = RequestBudget(max_wall_time=0.002).start()
+    fake_time.real = 0.008  # 4x over budget, still inside one tick
+
+    with pytest.raises(BudgetExceededError) as excinfo:
+        clock.check("unit_stage")
+    assert excinfo.value.kind == "wall_time"
+    assert excinfo.value.observed == pytest.approx(0.008)
+
+
+def test_wall_time_budget_does_not_trip_early_on_a_tick_boundary(monkeypatch):
+    """Crossing a 15.6 ms tick must not be mistaken for 15.6 ms of work.
+
+    The converse of the missed-deadline failure: a tick-granular clock reports
+    elapsed time that jumps from 0 to 15.6 ms, tripping budgets the request is
+    nowhere near exhausting.
+    """
+    # Start just before a tick boundary so 1 ms of work crosses it.
+    fake_time = _WindowsTickClock(_WINDOWS_TICK - 0.0005)
+    monkeypatch.setattr("openmed.core.budget.time", fake_time)
+
+    clock = RequestBudget(max_wall_time=0.010).start()
+    fake_time.real += 0.001  # 1 ms of work, well inside the 10 ms budget
+
+    clock.check("unit_stage")  # must not raise
+    assert clock.elapsed == pytest.approx(0.001)
 
 
 def test_wall_time_clock_no_limit_is_noop():
@@ -512,12 +593,23 @@ def test_batch_processor_input_budget_records_clean_error(monkeypatch):
 
 def test_batch_processor_wall_time_budget_is_fresh_per_item(monkeypatch):
     processed = []
+    fake_now = [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return fake_now[0]
+
+        @staticmethod
+        def perf_counter():
+            return fake_now[0]
 
     def fake_analyze_text(text, **kwargs):
         processed.append(text)
-        time.sleep(0.02)
+        fake_now[0] += 0.02
         return _name_prediction(text, model_name=kwargs.get("model_name", "stub"))
 
+    monkeypatch.setattr("openmed.core.budget.time", FakeTime)
     monkeypatch.setattr("openmed.analyze_text", fake_analyze_text)
 
     processor = BatchProcessor(

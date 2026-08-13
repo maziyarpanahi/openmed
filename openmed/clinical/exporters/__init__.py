@@ -23,6 +23,11 @@ from .codeable_concept_check import (
     check_codeable_concept,
     codeable_concept_from_ranked_candidates,
 )
+from .codeable_concept_simple import (
+    codeable_concept_from_document_classification,
+    codeable_concept_from_document_type,
+    document_type_codeable_concept,
+)
 from .dhis2 import (
     DEFAULT_GENERALIZATION_LEVEL,
     DEFAULT_SMALL_CELL_THRESHOLD,
@@ -34,6 +39,8 @@ from .dhis2 import (
     export_dhis2,
 )
 from .fhir import (
+    COREFERENCE_EVIDENCE_EXTENSION_URL,
+    POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL,
     FHIRClinicalExchangeWorkbench,
     FHIRExchange,
     FHIRExchangeWorkbench,
@@ -47,6 +54,8 @@ from .fhir import (
     export_fhir,
     import_bundle,
     import_fhir,
+    postcoordinated_codeable_concept,
+    stamp_postcoordination_provenance,
     to_fhir,
     validate_exchange,
 )
@@ -74,6 +83,8 @@ __all__ = [
     "USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER",
     "USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL",
     "CONCEPT_NORMALIZATION_PROVENANCE_EXTENSION_URL",
+    "COREFERENCE_EVIDENCE_EXTENSION_URL",
+    "POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL",
     "CORE_OMOP_TABLES",
     "DEFAULT_GENERALIZATION_LEVEL",
     "DEFAULT_SMALL_CELL_THRESHOLD",
@@ -102,6 +113,8 @@ __all__ = [
     "build_ips_patient_summary",
     "achilles_smoke_check",
     "check_codeable_concept",
+    "codeable_concept_from_document_classification",
+    "codeable_concept_from_document_type",
     "codeable_concept_from_ranked_candidates",
     "extract_round_trip_coded_values",
     "flatten_clinical_entities",
@@ -114,9 +127,12 @@ __all__ = [
     "import_fhir",
     "import_bundle",
     "parse_operational_template",
+    "postcoordinated_codeable_concept",
     "stamp_coding_provenance",
+    "stamp_postcoordination_provenance",
     "stamp_user_supplied_terminology_provenance",
     "to_codeable_concept",
+    "document_type_codeable_concept",
     "to_csv",
     "to_dataframe",
     "to_fhir",
