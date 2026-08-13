@@ -59,6 +59,17 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
+from .minimum_necessary import (
+    MINIMUM_NECESSARY_SCHEMA_VERSION,
+    FieldPolicyProfile,
+    FieldSelection,
+    MinimumNecessarySelector,
+    PurposeMapping,
+    SelectionExplanation,
+    SelectionResult,
+    select_fields,
+    select_minimum_necessary_fields,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
@@ -125,6 +136,11 @@ __all__ = [
     "EquivalenceClass",
     "KAnonymityEngine",
     "KAnonymityReport",
+    "MINIMUM_NECESSARY_SCHEMA_VERSION",
+    "FieldPolicyProfile",
+    "FieldSelection",
+    "MinimumNecessarySelector",
+    "PurposeMapping",
     "RiskBudget",
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
@@ -134,6 +150,8 @@ __all__ = [
     "LongitudinalNote",
     "LongitudinalPatient",
     "PopulationRiskAssessment",
+    "SelectionExplanation",
+    "SelectionResult",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
@@ -153,6 +171,8 @@ __all__ = [
     "quasi_identifier_key_bytes",
     "risk_report",
     "sample_synthetic_table",
+    "select_fields",
+    "select_minimum_necessary_fields",
     "tabular_fidelity_report",
     "MemoryCeilingError",
     "StreamingKanonDecision",
