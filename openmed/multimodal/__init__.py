@@ -68,6 +68,25 @@ from .dicom_sr import (
     extract_dicom_sr,
     walk_sr_content_tree,
 )
+from .document_graph import (
+    BBox,
+    BoundingBox,
+    DocumentBlock,
+    DocumentColumn,
+    DocumentFormField,
+    DocumentGraph,
+    DocumentGraphBuilder,
+    DocumentNode,
+    DocumentPage,
+    DocumentTable,
+    DocumentTableCell,
+    SourceRegion,
+    build_document_graph,
+    extract_document_graph,
+    extract_pdf_graph,
+    graph_from_ocr,
+    ingest_document_graph,
+)
 from .documents_docx import (
     DocxRedaction,
     DocxRunRange,
@@ -78,7 +97,13 @@ from .documents_docx import (
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .epub import extract_epub
-from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .exceptions import (
+    DocumentGraphError,
+    EncryptedDocumentError,
+    MalformedDocumentError,
+    MissingDependencyError,
+    UnsupportedDocumentError,
+)
 from .image import (
     ImageMetadataReport,
     ImageRedactionVerificationError,
@@ -168,6 +193,9 @@ __all__ = [
     "is_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "DocumentGraphError",
+    "MalformedDocumentError",
+    "EncryptedDocumentError",
     "ChatLogRedactionSummary",
     "RedactedChatLog",
     "TurnRecordAdapter",
@@ -198,6 +226,23 @@ __all__ = [
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
+    "BBox",
+    "BoundingBox",
+    "SourceRegion",
+    "DocumentBlock",
+    "DocumentColumn",
+    "DocumentFormField",
+    "DocumentGraph",
+    "DocumentGraphBuilder",
+    "DocumentNode",
+    "DocumentPage",
+    "DocumentTable",
+    "DocumentTableCell",
+    "build_document_graph",
+    "graph_from_ocr",
+    "extract_document_graph",
+    "ingest_document_graph",
+    "extract_pdf_graph",
     "DocxRedaction",
     "DocxRunRange",
     "extract_docx",
