@@ -11,6 +11,9 @@ if TYPE_CHECKING:
     from openmed.clinical.context import ClinicalAssertion, ClinicalContextResult
 
 
+GROUNDING_CONFIDENCE_BANDS = frozenset(("accept", "uncertain"))
+
+
 @dataclass(frozen=True)
 class Candidate:
     """A ranked grounding candidate: a coded concept for a clinical span.
@@ -75,6 +78,8 @@ class GroundedSpan:
         end: Exclusive character offset in the source document.
         candidates: At most one selected candidate per requested system.
         calibrated_score: Optional post-calibration probability.
+        calibrated_confidence: Optional post-calibration linking confidence.
+        confidence_band: Optional ``"accept"`` or ``"uncertain"`` band.
         abstained: Whether calibrated grounding withheld the selected codes.
         provenance: Optional grounding-calibration provenance.
         canonical_label: Optional canonical clinical label such as
@@ -101,6 +106,8 @@ class GroundedSpan:
     assertion: ClinicalAssertion | ClinicalContextResult | None = None
     source_language: str = "en"
     metadata: Mapping[str, Any] = field(default_factory=dict, compare=False)
+    calibrated_confidence: float | None = None
+    confidence_band: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.text, str):
@@ -120,9 +127,44 @@ class GroundedSpan:
             raise TypeError("grounded span metadata must be a mapping")
         if not isinstance(self.provenance, Mapping):
             raise TypeError("grounded span provenance must be a mapping")
+        calibrated_score = _optional_probability(
+            self.calibrated_score,
+            "calibrated_score",
+        )
+        calibrated_confidence = _optional_probability(
+            self.calibrated_confidence,
+            "calibrated_confidence",
+        )
+        if (
+            calibrated_score is not None
+            and calibrated_confidence is not None
+            and calibrated_score != calibrated_confidence
+        ):
+            raise ValueError(
+                "calibrated_score and calibrated_confidence must agree when both "
+                "are provided"
+            )
+        if calibrated_score is None:
+            calibrated_score = calibrated_confidence
+        if calibrated_confidence is None:
+            calibrated_confidence = calibrated_score
+        confidence_band = self.confidence_band
+        if confidence_band is not None:
+            confidence_band = str(confidence_band).strip().lower()
+            if confidence_band not in GROUNDING_CONFIDENCE_BANDS:
+                raise ValueError("confidence_band must be 'accept' or 'uncertain'")
         object.__setattr__(self, "candidates", candidates)
         object.__setattr__(self, "provenance", dict(self.provenance))
         object.__setattr__(self, "metadata", dict(self.metadata))
+        object.__setattr__(self, "calibrated_score", calibrated_score)
+        object.__setattr__(self, "calibrated_confidence", calibrated_confidence)
+        object.__setattr__(self, "confidence_band", confidence_band)
+
+    @property
+    def band(self) -> str | None:
+        """Alias for the explicit calibrated linking-confidence band."""
+
+        return self.confidence_band
 
     @property
     def codes(self) -> dict[str, str]:
@@ -164,6 +206,8 @@ class GroundedSpan:
             "codes": self.codes,
             "score": self.score,
             "calibrated_score": self.calibrated_score,
+            "calibrated_confidence": self.calibrated_confidence,
+            "confidence_band": self.confidence_band,
             "abstained": self.abstained,
             "provenance": dict(self.provenance),
             "canonical_label": self.canonical_label,
@@ -172,3 +216,14 @@ class GroundedSpan:
             "candidates": [candidate.to_dict() for candidate in self.candidates],
             "metadata": dict(self.metadata),
         }
+
+
+def _optional_probability(value: Any, name: str) -> float | None:
+    """Validate an optional probability without importing calibration helpers."""
+
+    if value is None:
+        return None
+    probability = float(value)
+    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError(f"{name} must be in [0, 1]")
+    return probability
