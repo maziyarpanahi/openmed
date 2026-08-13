@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import re
 import unicodedata
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -1552,11 +1552,14 @@ def test_date_arithmetic_fixture_preserves_intervals_after_shift_dates():
         assert shifted in fixture.expected_output["text"]
 
 
-WIRED_LANGUAGES = frozenset(
+# OM-120 freezes the 12-language baseline named in issue #285. The live
+# language registry now includes later packs, so deriving this historical
+# acceptance set from SUPPORTED_LANGUAGES would silently expand the task.
+OM_120_WIRED_LANGUAGES = frozenset(
     {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"}
 )
 
-_ID_TRAP_VALIDATORS: dict[str, tuple] = {
+_ID_TRAP_VALIDATORS: dict[str, tuple[Callable[[str], bool], ...]] = {
     "en": (validate_ssn,),
     "fr": (validate_french_nir,),
     "de": (validate_german_steuer_id,),
@@ -1587,12 +1590,19 @@ def _date_trap_fixtures() -> list[GoldenFixture]:
     ]
 
 
+def _mask_gold_spans(fixture: GoldenFixture) -> str:
+    masked = fixture.text
+    for span in sorted(fixture.gold_spans, key=lambda item: item.start, reverse=True):
+        masked = masked[: span.start] + f"[{span.label}]" + masked[span.end :]
+    return masked
+
+
 def test_per_language_id_traps_cover_all_wired_languages():
     fixtures = _id_trap_fixtures()
     languages = {fixture.language for fixture in fixtures}
 
-    assert languages == WIRED_LANGUAGES
-    assert len(fixtures) == len(WIRED_LANGUAGES)
+    assert languages == OM_120_WIRED_LANGUAGES
+    assert len(fixtures) == len(OM_120_WIRED_LANGUAGES)
 
     for fixture in fixtures:
         assert fixture.category == "checksum_ids"
@@ -1611,15 +1621,15 @@ def test_per_language_id_traps_cover_all_wired_languages():
                 f"overlaps gold span [{span.start}:{span.end}]"
             )
         assert fixture.expected_output["method"] == "mask"
-        assert fixture.expected_output["text"]
+        assert fixture.expected_output["text"] == _mask_gold_spans(fixture)
 
 
 def test_per_language_date_traps_cover_all_wired_languages():
     fixtures = _date_trap_fixtures()
     languages = {fixture.language for fixture in fixtures}
 
-    assert languages == WIRED_LANGUAGES
-    assert len(fixtures) == len(WIRED_LANGUAGES)
+    assert languages == OM_120_WIRED_LANGUAGES
+    assert len(fixtures) == len(OM_120_WIRED_LANGUAGES)
 
     for fixture in fixtures:
         assert fixture.category == "multilingual"
@@ -1628,6 +1638,7 @@ def test_per_language_date_traps_cover_all_wired_languages():
         assert len(date_spans) == 3
         assert fixture.expected_output["method"] == "mask"
         assert fixture.expected_output["text"].count("[DATE]") == 3
+        assert fixture.expected_output["text"] == _mask_gold_spans(fixture)
 
 
 def test_per_language_id_traps_invalid_ids_fail_validators():
@@ -1664,27 +1675,36 @@ def test_per_language_traps_recover_through_language_patterns():
     regressions where a language pack's regex stops matching native formats.
     """
     for fixture in [*_id_trap_fixtures(), *_date_trap_fixtures()]:
-        patterns = get_patterns_for_language(fixture.language)
+        units = find_semantic_units(
+            fixture.text,
+            get_patterns_for_language(fixture.language),
+        )
+        recovered = {
+            (
+                start,
+                end,
+                normalize_label(entity_type, fixture.language),
+                fixture.text[start:end],
+            )
+            for start, end, entity_type, _score, _pattern, validated in units
+            if validated
+        }
         for span in fixture.gold_spans:
-            recovered = False
-            for pattern in patterns:
-                for match in re.finditer(pattern.pattern, fixture.text, pattern.flags):
-                    if match.start() != span.start or match.group(0) != span.text:
-                        continue
-                    if normalize_label(pattern.entity_type) != span.label:
-                        continue
-                    if pattern.validator is not None and not pattern.validator(
-                        match.group(0)
-                    ):
-                        continue
-                    recovered = True
-                    break
-                if recovered:
-                    break
-            assert recovered, (
+            assert (span.start, span.end, span.label, span.text) in recovered, (
                 f"{fixture.fixture_id}: span {span.text!r} ({span.label}) "
                 f"at [{span.start}:{span.end}] not recovered by "
                 f"{fixture.language} patterns"
+            )
+
+        for hard_negative in fixture.metadata.get("hard_negatives", []):
+            assert not any(
+                start < hard_negative["end"]
+                and end > hard_negative["start"]
+                and validated
+                for start, end, _entity_type, _score, _pattern, validated in units
+            ), (
+                f"{fixture.fixture_id}: hard negative {hard_negative['text']!r} "
+                "was accepted by a production pattern"
             )
 
 

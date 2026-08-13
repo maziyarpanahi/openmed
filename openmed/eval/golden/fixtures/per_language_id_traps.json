@@ -355,7 +355,7 @@
     {
       "id": "golden-per-language-id-trap-ja",
       "language": "ja",
-      "text": "合成メモ: マイナンバー 1234 5678 9012 有効、1234 5678 901 無効（桁数不足）テスト患者。",
+      "text": "合成メモ: マイナンバー 1234 5678 9012 有効、1234/5678/9012 無効（形式不正）テスト患者。",
       "gold_spans": [
         {
           "start": 13,
@@ -375,15 +375,15 @@
         "hard_negatives": [
           {
             "start": 31,
-            "end": 44,
-            "text": "1234 5678 901",
+            "end": 45,
+            "text": "1234/5678/9012",
             "identifier_type": "my_number",
             "reason": "format_mismatch"
           }
         ],
         "expected_output": {
           "method": "mask",
-          "text": "合成メモ: マイナンバー [ID_NUM] 有効、1234 5678 901 無効（桁数不足）テスト患者。"
+          "text": "合成メモ: マイナンバー [ID_NUM] 有効、1234/5678/9012 無効（形式不正）テスト患者。"
         }
       }
     },
