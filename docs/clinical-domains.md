@@ -364,6 +364,19 @@
 | AdministrationDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/immunization.jsonl |
 | VaccineSeries | VACCINE_SERIES | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
 
+## Allergy Intolerance
+
+**Alignment:** The display labels are shaped for the planned OM-138 FHIR AllergyIntolerance exporter: Allergen maps to code, ReactionManifestation to reaction.manifestation, ReactionSeverity to reaction.severity, Criticality to criticality, AllergyType to type, and OnsetContext to onset. This is descriptive extraction metadata only; it is not a contraindication check, drug-allergy cross-check, recommendation, or clinical decision logic.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Allergen | ALLERGEN | CLINICAL_CONCEPT | low | RxNorm, SNOMED | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| ReactionManifestation | REACTION_MANIFESTATION | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| ReactionSeverity | REACTION_SEVERITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| Criticality | ALLERGY_CRITICALITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| AllergyType | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| OnsetContext | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/allergy_intolerance.jsonl |
+
 ## Pulmonology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
