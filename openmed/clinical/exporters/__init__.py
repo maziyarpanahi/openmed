@@ -52,7 +52,13 @@ from .flat_table import (
     to_csv,
     to_dataframe,
 )
-from .omop import CORE_OMOP_TABLES, achilles_smoke_check, to_omop
+from .omop import (
+    CORE_OMOP_TABLES,
+    achilles_smoke_check,
+    to_condition_occurrence,
+    to_drug_exposure,
+    to_omop,
+)
 from .openehr import (
     DEFAULT_OPENEHR_BINDINGS,
     OpenEHRBinding,
@@ -105,8 +111,10 @@ __all__ = [
     "stamp_postcoordination_provenance",
     "stamp_user_supplied_terminology_provenance",
     "to_codeable_concept",
+    "to_condition_occurrence",
     "document_type_codeable_concept",
     "to_csv",
+    "to_drug_exposure",
     "to_dataframe",
     "to_fhir",
     "to_omop",
