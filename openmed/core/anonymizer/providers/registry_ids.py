@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_belgian_rrn,
     validate_bulgarian_egn,
     validate_chinese_passport,
     validate_chinese_resident_id,
@@ -83,6 +84,7 @@ from openmed.core.pii_i18n import (
     validate_spanish_dni,
     validate_spanish_nie,
     validate_swedish_personnummer,
+    validate_swiss_ahv,
     validate_taiwan_compatriot_permit,
     validate_tanzania_nida,
     validate_thai_national_id,
@@ -106,6 +108,7 @@ from .clinical_ids import (
     AustralianMedicareProvider,
     AustralianTFNProvider,
     BCPHNProvider,
+    BelgianRRNProvider,
     BulgarianEgnProvider,
     CanadianSINProvider,
     ChineseIdentifierProvider,
@@ -141,6 +144,7 @@ from .clinical_ids import (
     SouthAfricanIdProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
+    SwissAHVProvider,
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
@@ -416,6 +420,20 @@ def _register_builtin_specs() -> None:
         validate=validate_ethiopia_fayda,
         faker_method="ethiopia_fayda",
         faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("be", "fr_BE", "nl_BE", "de_BE"),
+        id_type="rrn",
+        validate=validate_belgian_rrn,
+        faker_method="belgian_rrn",
+        faker_provider=BelgianRRNProvider,
+    )
+    _register_aliases(
+        ("ch", "fr_CH", "de_CH", "it_CH"),
+        id_type="ahv",
+        validate=validate_swiss_ahv,
+        faker_method="swiss_ahv",
+        faker_provider=SwissAHVProvider,
     )
     _register_aliases(
         ("fr", "fr_FR"),

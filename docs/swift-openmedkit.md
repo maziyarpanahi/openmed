@@ -62,7 +62,7 @@ for selection limits and simulator validation.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.1.0"),
 ]
 ```
 
