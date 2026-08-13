@@ -29,6 +29,7 @@ nav:
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
+      - Serving Backpressure: serving/backpressure.md
       - Hardened Service Image: deploy/hardened-image.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
