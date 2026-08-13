@@ -19,6 +19,13 @@ from .dataflow_tool_processor import (
     process_record,
     script_processor,
 )
+from .executable_udf import (
+    DEFAULT_EXECUTABLE_UDF_MODEL,
+    ExecutableUDFConfig,
+    ExecutableUDFError,
+    redact_tsv_lines,
+    redact_tsv_stream,
+)
 from .lakehouse_redact import (
     LakehouseRedactionProgress,
     LakehouseRedactionResult,
@@ -63,6 +70,7 @@ from .stream_processor import (
 __all__ = [
     "ColumnarProgress",
     "ColumnarRedactionResult",
+    "DEFAULT_EXECUTABLE_UDF_MODEL",
     "DEFAULT_DATAFLOW_TOOL_MODEL",
     "DEFAULT_LOG_MESSAGE_FIELDS",
     "DEFAULT_LOG_REDACTION_MODEL",
@@ -78,6 +86,8 @@ __all__ = [
     "FIELD_COUNT_ATTRIBUTE",
     "LakehouseRedactionProgress",
     "LakehouseRedactionResult",
+    "ExecutableUDFConfig",
+    "ExecutableUDFError",
     "LogRedactorConfig",
     "LogRedactorError",
     "RECORD_COUNT_ATTRIBUTE",
@@ -104,6 +114,8 @@ __all__ = [
     "redact_ndjson_lines",
     "redact_ndjson_stream",
     "run_stream_job",
+    "redact_tsv_lines",
+    "redact_tsv_stream",
     "script_processor",
     "write_deidentified_stream",
 ]
