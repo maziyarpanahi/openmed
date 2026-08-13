@@ -59,6 +59,22 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
+from .policy_migration import (
+    ChangeClassification,
+    MigrationClassification,
+    PolicyChange,
+    PolicyMigrationAcknowledgementRequired,
+    PolicyMigrationApprovalRequired,
+    PolicyMigrationError,
+    PolicyMigrationReport,
+    acknowledgement_token_for,
+    check_policy_migration,
+    compare_policies,
+    compare_policy_versions,
+    enforce_policy_migration,
+    policy_migration_report,
+    validate_policy_migration,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
@@ -180,4 +196,18 @@ __all__ = [
     "validate_released_output",
     "write_release_assessment_dashboard",
     "write_risk_dashboard",
+    "ChangeClassification",
+    "MigrationClassification",
+    "PolicyChange",
+    "PolicyMigrationAcknowledgementRequired",
+    "PolicyMigrationApprovalRequired",
+    "PolicyMigrationError",
+    "PolicyMigrationReport",
+    "acknowledgement_token_for",
+    "check_policy_migration",
+    "compare_policies",
+    "compare_policy_versions",
+    "enforce_policy_migration",
+    "policy_migration_report",
+    "validate_policy_migration",
 ]
