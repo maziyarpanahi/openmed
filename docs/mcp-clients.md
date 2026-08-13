@@ -172,6 +172,44 @@ Hosted-assistant developer connectors use the same URL. They cannot reach a
 loopback address on your workstation; deploy through a private network or an
 authenticated HTTPS gateway instead of exposing the OpenMed process directly.
 
+## Canonical clinical agent workflow
+
+MCP clients can discover the `openmed-clinical-workflow` prompt, the
+`openmed://clinical-workflow` guidance resource, and the
+`openmed://clinical-workflow/golden-agent-run` synthetic fixture through the
+standard MCP prompt and resource listings. The `openmed://tool-registry`
+document also publishes a `workflows` entry with the prompt, resources, tool
+names, stage order, and registered artifact schema identifiers, so clients do
+not need to hardcode the workflow contract.
+
+The workflow de-identifies first, then executes the canonical pipeline order:
+`detect`, `context`, `sections`, `relations`, `ground`, `export`, and `risk`.
+Each stage produces a registered artifact:
+
+| Artifact | Contents allowed after the de-identification boundary |
+|---|---|
+| `deidentify` | De-identified text and a source-text hash |
+| `detect` | Canonical text-free spans, model identifier, and count |
+| `context` | Canonical spans with clinical context metadata |
+| `sections` | Canonical spans and surface-free section offsets |
+| `relations` | Canonical spans and surface-free relation endpoints |
+| `ground` | Terminology codes, scores, hashes, and provenance |
+| `export` | Identifier-free FHIR Bundle |
+| `risk` | Aggregate residual-risk summary |
+
+Execution is local and has zero network egress by default. Keep source text,
+direct identifiers, entity surfaces, and reversible mappings inside the
+trusted local runtime. Anything after the de-identification boundary may carry
+only de-identified text, offsets, hashes, canonical spans, terminology
+provenance, identifier-free FHIR resources, and aggregate risk values. Do not
+write source text or identifiers to logs or agent traces.
+
+External-LLM-capable stages remain disabled unless an operator explicitly opts
+in, and they must route through the OpenMed privacy gateway. Raw source text
+must never cross that boundary. Grounded codes and exported resources require
+human review and must not automatically trigger clinical, treatment, billing,
+or medical-device decisions.
+
 ## Remote authentication and protocol headers
 
 The built-in MCP server does not validate API keys or bearer tokens. Never bind

@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from openmed.clinical import (
+    EVENT_ANCHORING_ADVISORY,
     HISTORICAL,
     RECENT,
     TIMELINE_ASSISTIVE_DISCLAIMER,
+    anchor_events,
     detect_timexes,
     evaluate_timeline_gold,
+    normalize_temporal,
     resolve_temporality,
     resolve_timeline,
 )
+from openmed.core.audit import hash_text
 
 ROOT = Path(__file__).resolve().parents[3]
 GOLD_FIXTURE = ROOT / "tests" / "fixtures" / "clinical" / "timeline_gold.json"
@@ -93,6 +98,78 @@ def test_timeline_reconciles_future_absolute_date_with_context_temporality() -> 
 
     assert event.normalized_value == "2026-06-17/2026-06-17"
     assert event.temporality == RECENT
+
+
+def test_event_anchoring_date_arithmetic_fixture() -> None:
+    fixture = json.loads(GOLD_FIXTURE.read_text(encoding="utf-8"))
+
+    assert fixture["synthetic"] is True
+    for case in fixture["event_anchor_cases"]:
+        result = anchor_events(
+            case["text"],
+            [case["event_span"]],
+            case["document_creation_time"],
+            case["timex_spans"],
+        )
+        anchor = result.anchors[0]
+
+        assert anchor.anchor_source == case["expected"]["anchor_source"], case["id"]
+        assert anchor.anchor_value == case["expected"]["anchor_value"], case["id"]
+        assert anchor.dct_position == case["expected"]["dct_position"], case["id"]
+        assert anchor.event_text_hash == hash_text(
+            case["text"][anchor.event_start : anchor.event_end]
+        )
+
+
+def test_event_anchoring_autodetects_nearby_timex_without_crossing_sentences() -> None:
+    text = "On 2026-06-01 symptoms resolved. Cough worsened."
+    result = anchor_events(
+        text,
+        [
+            (text.index("resolved"), text.index("resolved") + len("resolved")),
+            (text.index("worsened"), text.index("worsened") + len("worsened")),
+        ],
+        "2026-06-15",
+    )
+
+    assert [anchor.anchor_source for anchor in result.anchors] == [
+        "timex",
+        "dct_fallback",
+    ]
+    assert result.anchors[0].anchor_value == "2026-06-01"
+    assert result.anchors[1].anchor_value == "2026-06-15"
+
+
+def test_event_anchoring_reuses_supplied_normalized_timex_value() -> None:
+    text = "Fever started 3 days ago."
+    timex = normalize_temporal(text, [(14, 24)], "2026-06-15")[0]
+
+    result = anchor_events(text, [(6, 13)], "2026-06-20", [timex])
+
+    assert result.anchors[0].anchor_value == "2026-06-12"
+    assert result.anchors[0].dct_position == "before"
+    assert result.anchors[0].timex is not None
+    assert result.anchors[0].timex.normalized_value == timex.value
+
+
+def test_event_anchoring_output_contains_offsets_and_hashes_not_note_text() -> None:
+    text = "Fever started 3 days ago."
+    result = anchor_events(text, [(6, 13)], "2026-06-15", [(14, 24)])
+    payload = result.to_dict()
+    encoded = json.dumps(payload, sort_keys=True)
+
+    assert result.disclaimer == EVENT_ANCHORING_ADVISORY
+    assert payload["anchors"][0]["event"] == {
+        "span": [6, 13],
+        "start": 6,
+        "end": 13,
+        "text_hash": hash_text("started"),
+    }
+    assert payload["anchors"][0]["timex"]["text_hash"] == hash_text("3 days ago")
+    assert "started" not in encoded
+    assert "3 days ago" not in encoded
+    assert "text" not in payload["anchors"][0]["event"]
+    assert "text" not in payload["anchors"][0]["timex"]
 
 
 def test_synthetic_gold_corpus_meets_timeline_ci_gates() -> None:

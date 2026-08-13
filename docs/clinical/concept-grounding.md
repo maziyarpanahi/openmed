@@ -42,6 +42,33 @@ offline operation, pre-stage normalized vocabulary artifacts and use
 `local_only=True`. A download is attempted only when local-only mode is off and
 a source has an expected SHA-256; checksum-free downloads are refused.
 
+## Load a local RxNorm release
+
+RxNorm is freely redistributable, but its release files are not bundled with
+OpenMed. Obtain a release from the [NLM RxNorm distribution](https://www.nlm.nih.gov/research/umls/rxnorm/),
+keep the downloaded archive or its unpacked files under the terms of that
+distribution, and pass the local path to the TTY-aware loader:
+
+```python
+from openmed.clinical.grounding import RxNormLoader
+
+rxnorm = RxNormLoader("/srv/vocab/rxnorm")
+matches = rxnorm.resolve("Tylenol 500 MG Oral Tablet", tty="SBD")
+match = matches[0]
+assert match.code == match.metadata["ingredient_rxcui"]
+print(match.metadata["tty"], match.metadata["normalized_ingredient"])
+```
+
+The path may be an unpacked release directory containing `RXNCONSO.RRF` and,
+when available, `RXNREL.RRF` and `RXNSAT.RRF`; a release archive and small
+caller-created JSONL/TSV projections are also accepted. Product and brand
+records roll up through local relationship rows to an ingredient RXCUI, while
+TTY filtering falls back in a documented deterministic order when a requested
+term type is absent (the default preference is `SBD`, `SCD`, `BN`, `IN`, `PIN`,
+then `MIN`). Dose-form relationships are exposed in
+`match.metadata["dose_form"]`. Loading is local-only and performs no network
+request; no RxNorm rows are stored in the repository.
+
 ## Restricted vocabularies
 
 UMLS and SNOMED CT content is never bundled or downloaded. Activating either
@@ -108,6 +135,100 @@ A full OHDSI ACHILLES run still requires a deployed CDM database.
 CI runs the committed synthetic round trip through the official HL7 FHIR R4
 validator and the offline OMOP smoke checks. It also builds a wheel and rejects
 restricted UMLS, SNOMED, or CPT vocabulary data paths.
+
+## Run incremental OMOP loads
+
+Use a caller-supplied Athena export and optional Usagi mapping when source spans
+still need standard-concept and domain resolution. The router's decision is
+authoritative, so an unverified `concept_id` carried by an input span cannot
+bypass the local vocabulary lookup:
+
+```python
+from openmed.interop.omop import VocabularyRouter, load_grounded_jsonl
+
+router = VocabularyRouter.from_athena(
+    "/local/athena-export",
+    "/local/usagi-mapping.csv",
+    vocabulary_version="caller-supplied-release",
+)
+tables = load_grounded_jsonl("grounded.jsonl", vocabulary_router=router)
+```
+
+Mapped target and source concepts are copied from the supplied Athena index into
+the loader-owned CONCEPT subset. Each SOURCE_TO_CONCEPT_MAP row retains its
+source code, source concept, target concept, target vocabulary, and vocabulary
+version. A missing match remains source-only with target `concept_id=0`.
+
+The OMOP writers use idempotent append mode by default. A rerun with the same
+deterministic rows does not create duplicates and does not remove data already
+in the target. Use replace-by-note mode when the incoming batch is the complete,
+authoritative extraction result for each source note hash in that batch:
+
+```python
+from openmed.interop.omop import load_grounded_jsonl, write_omop_sqlite
+
+
+def refresh_quality_profiles(event):
+    quality_queue.enqueue(event.changed_note_hashes)
+
+
+def refresh_cohort_queries(event):
+    cohort_cache.invalidate(event.changed_note_hashes)
+
+
+tables = load_grounded_jsonl("grounded.jsonl", mode="replace_by_note")
+write_omop_sqlite(
+    tables,
+    "local-cdm.sqlite",
+    mode="replace_by_note",
+    downstream_consumers=(refresh_quality_profiles, refresh_cohort_queries),
+)
+```
+
+Replace-by-note removes and reloads NOTE, NOTE_NLP, domain, and
+SOURCE_TO_CONCEPT_MAP rows for the incoming hashes. It preserves rows belonging
+to omitted note hashes and shared PERSON, VISIT_OCCURRENCE, and CONCEPT rows. An
+incoming note with fewer spans therefore removes stale derived rows without
+disturbing unrelated notes. The same behavior is available for DuckDB and
+Parquet and from the CLI with `openmed omop load --mode replace-by-note`.
+
+When note text is unchanged but extraction results are regenerated, its
+content-derived hash remains stable. If a caller supplies `source_note_hash`, it
+must be a stable, privacy-safe digest for that logical source note; do not use a
+plaintext document or patient identifier. Every downstream callback runs only
+after its writer succeeds and receives an `OmopLoadEvent` containing the mode,
+changed hashes, and incoming row counts. It receives no note text, lexical
+variants, document identifiers, or patient identifiers. Callback failures occur
+after persistence and should be retried independently by the integration.
+
+## Deploy and validate the Postgres table subset
+
+`emit_postgres_ddl()` returns one deterministic PostgreSQL script covering every
+table owned by the grounded-note loader. The script contains schema only: it
+does not bundle vocabulary rows or require a Java or OHDSI runtime. Apply it
+with the PostgreSQL deployment mechanism used by your environment before
+loading rows:
+
+```python
+from pathlib import Path
+
+from openmed.interop.omop import emit_postgres_ddl
+
+Path("openmed-omop-v5.4.sql").write_text(emit_postgres_ddl(), encoding="utf-8")
+```
+
+After loading, `validate_omop_database_report(connection)` checks concept
+references, NOTE_NLP offsets, and reciprocal NOTE_NLP-to-domain reachability.
+Its serializable form contains only a total plus counts by table and reason, so
+it is suitable for logs and deployment diagnostics without exposing note text,
+lexical variants, document identifiers, patient identifiers, or row keys:
+
+```python
+from openmed.interop.omop import validate_omop_database_report
+
+report = validate_omop_database_report(connection)
+assert report.is_valid, report.to_dict()
+```
 
 ## Linking evaluation
 

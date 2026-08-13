@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 ENTITY_CATEGORY_LABELS = ("problems", "medications", "labs", "procedures", "other")
@@ -34,6 +34,7 @@ _CATEGORY_FIELD_NAMES = (
 )
 _ENTITY_CONTAINER_NAMES = ("entities", "clinical_entities", "spans")
 _SECTION_CONTAINER_NAMES = ("sections", "clinical_sections")
+_BOILERPLATE_CONTAINER_NAMES = ("boilerplate_spans", "content_annotations")
 _CODING_CONTAINER_NAMES = (
     "coding",
     "codings",
@@ -106,6 +107,7 @@ class ClinicalSummaryCard:
     uncoded_entities: int = 0
     distinct_codes: int = 0
     section_count: int = 0
+    suppression_provenance: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -118,6 +120,11 @@ class ClinicalSummaryCard:
                 raise TypeError(f"{field_name} must be an integer count")
             if value < 0:
                 raise ValueError(f"{field_name} must be non-negative")
+        object.__setattr__(
+            self,
+            "suppression_provenance",
+            _validated_suppression_provenance(self.suppression_provenance),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, JSON-compatible card representation."""
@@ -137,6 +144,10 @@ class ClinicalSummaryCard:
             },
             "section_count": self.section_count,
         }
+        if self.suppression_provenance:
+            payload["provenance"] = {
+                "boilerplate_suppression": dict(self.suppression_provenance)
+            }
         _assert_card_payload_is_log_safe(payload)
         return payload
 
@@ -149,6 +160,9 @@ class ClinicalSummaryCard:
 def build_summary_card(
     entities: object | None = None,
     sections: object | None = None,
+    *,
+    boilerplate_spans: object | None = None,
+    suppress_boilerplate: bool = False,
 ) -> ClinicalSummaryCard:
     """Build a PHI-free summary card from clinical entities and sections.
 
@@ -158,29 +172,49 @@ def build_summary_card(
 
     Args:
         entities: Sequence of clinical entity mappings or objects. A document
-            mapping with an ``entities``, ``clinical_entities``, or ``spans``
-            field is also accepted.
+            mapping or linked ``DocumentCluster`` with an ``entities``,
+            ``clinical_entities``, or ``spans`` field is also accepted.
         sections: Optional sequence of detected sections, or a section metadata
             mapping with a ``sections`` or ``clinical_sections`` field.
+        boilerplate_spans: Optional boilerplate/copy-forward annotations with
+            half-open ``start``/``end`` offsets. A document mapping may instead
+            provide ``boilerplate_spans`` or ``content_annotations``.
+        suppress_boilerplate: Drop entities fully contained by a flagged span
+            before aggregating counts. The card then includes fixed, PHI-free
+            suppression provenance. Defaults to ``False``.
 
     Returns:
         A :class:`ClinicalSummaryCard` containing only aggregate counts.
     """
 
     entity_source = entities
-    if isinstance(entities, Mapping):
+    nested_entities = _first_field_value(entities, _ENTITY_CONTAINER_NAMES)
+    if isinstance(entities, Mapping) or nested_entities is not None:
         if sections is None:
             sections = _first_field_value(entities, _SECTION_CONTAINER_NAMES)
-        nested_entities = _first_field_value(entities, _ENTITY_CONTAINER_NAMES)
+        if boilerplate_spans is None:
+            boilerplate_spans = _first_field_value(
+                entities, _BOILERPLATE_CONTAINER_NAMES
+            )
         if nested_entities is not None:
             entity_source = nested_entities
+
+    # Keep the general processing package out of the clinical import path. The
+    # suppression helper is needed only when a card is actually built.
+    from openmed.processing.text import apply_boilerplate_suppression
+
+    suppression = apply_boilerplate_suppression(
+        tuple(_iter_items(entity_source)),
+        tuple(_iter_items(boilerplate_spans)),
+        suppress_boilerplate=suppress_boilerplate,
+    )
 
     category_counts = dict.fromkeys(ENTITY_CATEGORY_LABELS, 0)
     coded_entities = 0
     uncoded_entities = 0
     distinct_codes: set[tuple[str, str]] = set()
 
-    for entity in _iter_items(entity_source):
+    for entity in suppression.records:
         category = _category_for_entity(entity)
         category_counts[category] += 1
 
@@ -201,6 +235,7 @@ def build_summary_card(
         uncoded_entities=uncoded_entities,
         distinct_codes=len(distinct_codes),
         section_count=_count_sections(sections),
+        suppression_provenance=(suppression.provenance if suppress_boilerplate else {}),
     )
 
 
@@ -330,7 +365,10 @@ def _field_value(source: object, field_name: str) -> object | None:
 
 
 def _assert_card_payload_is_log_safe(payload: Mapping[str, Any]) -> None:
-    if tuple(payload.keys()) != _TOP_LEVEL_KEYS:
+    expected_keys = _TOP_LEVEL_KEYS + (
+        ("provenance",) if "provenance" in payload else ()
+    )
+    if tuple(payload.keys()) != expected_keys:
         raise ValueError("summary card payload keys must be fixed")
 
     entity_counts = payload["entity_counts"]
@@ -353,6 +391,45 @@ def _assert_card_payload_is_log_safe(payload: Mapping[str, Any]) -> None:
     ):
         if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError(f"summary card field {label!r} must be an integer count")
+
+    if "provenance" in payload:
+        provenance = payload["provenance"]
+        if not isinstance(provenance, Mapping) or tuple(provenance) != (
+            "boilerplate_suppression",
+        ):
+            raise ValueError("summary card provenance keys must be fixed")
+        _validated_suppression_provenance(provenance["boilerplate_suppression"])
+
+
+def _validated_suppression_provenance(value: object) -> dict[str, Any]:
+    if not value:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError("suppression_provenance must be a mapping")
+    expected_keys = (
+        "enabled",
+        "policy",
+        "input_entity_count",
+        "retained_entity_count",
+        "suppressed_entity_count",
+        "annotation_count",
+    )
+    if tuple(value) != expected_keys:
+        raise ValueError("suppression provenance keys must be fixed")
+    if not isinstance(value["enabled"], bool):
+        raise ValueError("suppression provenance enabled must be a boolean")
+    if value["policy"] != "drop_fully_contained":
+        raise ValueError("suppression provenance policy is unsupported")
+    for key in expected_keys[2:]:
+        count = value[key]
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError(f"suppression provenance {key} must be non-negative")
+    if (
+        value["input_entity_count"]
+        != value["retained_entity_count"] + value["suppressed_entity_count"]
+    ):
+        raise ValueError("suppression provenance entity counts must balance")
+    return dict(value)
 
 
 __all__ = [

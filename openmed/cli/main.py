@@ -13,6 +13,7 @@ import tempfile
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping as MappingABC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 
@@ -30,7 +31,13 @@ from ..core.config import (
     save_profile,
     set_config,
 )
-from ..core.hf_hub import get_remote_model_size_mb, list_cached_models
+from ..core.hf_hub import (
+    clear_cached_model,
+    get_remote_model_size_mb,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from ..core.manifest_diff import ManifestDiff, diff_manifests
 from ..core.model_card import render_model_card
 from ..core.model_integrity import ModelIntegrityError, verify_cached_models
@@ -55,8 +62,10 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
+from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
+from .registry import add_registry_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -342,6 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
+    _add_batch_run_command(subparsers)
     _add_deid_command(subparsers)
     _add_redact_dataset_command(subparsers)
     _add_pii_command(subparsers)
@@ -354,10 +364,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
+    _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
+    add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
     add_airgap_command(subparsers)
@@ -571,6 +583,121 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         help="Commit progress after this many items (default: 10).",
     )
     batch_parser.set_defaults(handler=_handle_batch)
+
+
+def _add_batch_run_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add start/resume/report controls for distributed batch runs."""
+
+    parser = subparsers.add_parser(
+        "batch-run",
+        help="Start, resume, and report on a distributed batch run.",
+    )
+    sub = parser.add_subparsers(dest="batch_run_command")
+
+    for name, description in (
+        ("start", "Start a distributed batch run over a directory of notes."),
+        ("resume", "Resume a distributed batch run by run id."),
+    ):
+        command = sub.add_parser(name, help=description)
+        command.add_argument(
+            "--run-dir",
+            type=Path,
+            required=True,
+            help="Directory holding this run's manifest and shard outputs.",
+        )
+        command.add_argument(
+            "--input-dir",
+            type=Path,
+            required=True,
+            help="Directory of note files to process.",
+        )
+        command.add_argument(
+            "--pattern",
+            default="*.txt",
+            help="Glob pattern for matching note files (default: *.txt).",
+        )
+        command.add_argument(
+            "--recursive",
+            action="store_true",
+            help="Search the input directory recursively.",
+        )
+        command.add_argument(
+            "--model",
+            default=None,
+            help="Model registry key or Hugging Face identifier.",
+        )
+        command.add_argument(
+            "--workers",
+            type=int,
+            default=1,
+            help="Local worker threads (default: 1).",
+        )
+        command.add_argument(
+            "--max-attempts",
+            dest="max_attempts",
+            type=int,
+            default=None,
+            help=(
+                "Attempt budget per shard. A shard that spends it makes the run "
+                "exhausted, so a resume loop terminates instead of retrying a "
+                "deterministically failing shard forever (default: unbounded)."
+            ),
+        )
+        command.add_argument(
+            "--report",
+            type=Path,
+            default=None,
+            help="Also write the run report to this path.",
+        )
+        command.add_argument(
+            "--report-format",
+            choices=["json", "markdown"],
+            default="json",
+            help="Format for --report (default: json).",
+        )
+        if name == "start":
+            command.add_argument(
+                "--run-id",
+                required=True,
+                help="Operator-supplied run id; must not embed record values.",
+            )
+            command.add_argument(
+                "--shards",
+                type=int,
+                required=True,
+                help="Number of deterministic shards to plan.",
+            )
+        command.set_defaults(
+            handler=_handle_batch_run_start
+            if name == "start"
+            else _handle_batch_run_resume
+        )
+
+    report_parser = sub.add_parser(
+        "report",
+        help="Print the report for an existing run without changing it.",
+    )
+    report_parser.add_argument(
+        "--run-dir",
+        type=Path,
+        required=True,
+        help="Directory holding this run's manifest and shard outputs.",
+    )
+    report_parser.add_argument(
+        "--format",
+        dest="report_format",
+        choices=["json", "markdown"],
+        default="json",
+        help="Rendering used for the human-readable output (default: json).",
+    )
+    report_parser.add_argument(
+        "--max-attempts",
+        dest="max_attempts",
+        type=int,
+        default=None,
+        help="Attempt budget used when classifying shards as exhausted.",
+    )
+    report_parser.set_defaults(handler=_handle_batch_run_report)
 
 
 def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1659,12 +1786,62 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         help="Optional vocabulary version recorded in SOURCE_TO_CONCEPT_MAP rows.",
     )
     load_parser.add_argument(
+        "--mode",
+        choices=("append", "replace-by-note"),
+        default="append",
+        help=(
+            "Append idempotently or replace rows for incoming note hashes "
+            "(default: append)."
+        ),
+    )
+    load_parser.add_argument(
         "--validate",
         dest="validate",
         action="store_true",
         help="Validate CDM constraints and report PHI-free violation counts.",
     )
     load_parser.set_defaults(handler=_handle_omop_load)
+
+
+def _add_cohort_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add local phenotype resolution commands."""
+
+    cohort_parser = subparsers.add_parser(
+        "cohort",
+        help="Resolve declarative phenotypes over a local OMOP store.",
+    )
+    cohort_sub = cohort_parser.add_subparsers(dest="cohort_command")
+    resolve_parser = cohort_sub.add_parser(
+        "resolve",
+        help="Resolve a phenotype against DuckDB or an OMOP Parquet directory.",
+    )
+    resolve_parser.add_argument(
+        "--definition",
+        type=Path,
+        required=True,
+        help="Phenotype-definition JSON file.",
+    )
+    source = resolve_parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--duckdb",
+        type=Path,
+        help="Existing local DuckDB file containing the OMOP tables.",
+    )
+    source.add_argument(
+        "--parquet",
+        type=Path,
+        help="Directory containing the OMOP table Parquet files.",
+    )
+    resolve_parser.add_argument(
+        "--athena",
+        type=Path,
+        default=None,
+        help=(
+            "Caller-supplied Athena directory or CONCEPT_ANCESTOR.csv used "
+            "for descendant expansion."
+        ),
+    )
+    resolve_parser.set_defaults(handler=_handle_cohort_resolve)
 
 
 def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1737,6 +1914,55 @@ def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
+
+    models_cache = models_sub.add_parser(
+        "cache",
+        help="Download, inspect, or clear cached OpenMed models.",
+    )
+    models_cache_sub = models_cache.add_subparsers(dest="models_cache_command")
+
+    models_cache_download = models_cache_sub.add_parser(
+        "download",
+        help="Download an OpenMed model into the local Hugging Face cache.",
+    )
+    models_cache_download.add_argument(
+        "repo_id",
+        help="Registry alias or Hugging Face repository id to download.",
+    )
+    models_cache_download.add_argument(
+        "--revision",
+        default=None,
+        help="Optional branch, tag, or commit to download.",
+    )
+    models_cache_download.add_argument(
+        "--allow-patterns",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Only download files matching PATTERN; repeat for multiple patterns.",
+    )
+    models_cache_download.set_defaults(handler=_handle_models_cache_download)
+
+    models_cache_list = models_cache_sub.add_parser(
+        "list",
+        help="List OpenMed models in the local Hugging Face cache.",
+    )
+    models_cache_list.set_defaults(handler=_handle_models_cache_list)
+
+    models_cache_clear = models_cache_sub.add_parser(
+        "clear",
+        help="Remove one OpenMed model from the local Hugging Face cache.",
+    )
+    models_cache_clear.add_argument(
+        "repo_id",
+        help="Registry alias or Hugging Face repository id to remove.",
+    )
+    models_cache_clear.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm deletion of the selected model cache.",
+    )
+    models_cache_clear.set_defaults(handler=_handle_models_cache_clear)
 
     models_pull = models_sub.add_parser(
         "pull",
@@ -2361,6 +2587,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Trim rendered context windows to this many characters around a span.",
     )
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
+    add_generalization_command(benchmark_sub)
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
@@ -2775,6 +3002,369 @@ def _handle_audit_chain_verify(args: argparse.Namespace) -> int:
     )
     emit(args, payload, human="\n".join(human_parts))
     return 0 if payload["verified"] else 1
+
+
+_BATCH_RUN_MANIFEST_NAME = "manifest.json"
+
+
+def _batch_run_store(run_dir: Path):
+    from ..processing.run_manifest import LocalFileRunManifestStore
+
+    return LocalFileRunManifestStore(run_dir / _BATCH_RUN_MANIFEST_NAME)
+
+
+def _validated_run_id(value: str) -> str:
+    """Reject a run id the report layer could not publish, before any work.
+
+    The manifest accepts any bounded, control-character-free string and writes
+    it verbatim, but a report may only carry a publishable token. Checking that
+    here rather than at render time is what keeps the failure recoverable: a run
+    id that survives to disk poisons the manifest, and every later ``report`` and
+    ``resume`` re-reads it and fails the same way, with no way out but editing
+    the manifest by hand.
+    """
+
+    from ..processing.run_report import is_publishable_token
+
+    if not is_publishable_token(value):
+        raise CliError(
+            "--run-id must be a single token of letters, digits, and "
+            "._:+/- characters (no spaces), at most 128 characters.",
+            code="invalid_run_id",
+            exit_code=EXIT_USAGE,
+        )
+    return value
+
+
+def _validated_max_attempts(args: argparse.Namespace) -> int | None:
+    """Return the attempt budget that makes an exhausted run reachable.
+
+    Without a budget every failing shard stays merely outstanding, so a scripted
+    ``until openmed batch-run resume`` never terminates against a shard that
+    fails deterministically.
+    """
+
+    value = getattr(args, "max_attempts", None)
+    if value is None:
+        return None
+    if value < 1:
+        raise CliError(
+            "--max-attempts must be at least 1.",
+            code="invalid_max_attempts",
+            exit_code=EXIT_USAGE,
+        )
+    return value
+
+
+def _validated_report_path(path: Path | None) -> Path | None:
+    """Reject an unwritable --report target before the run consumes a corpus."""
+
+    if path is None:
+        return None
+    if path.is_dir():
+        raise CliError(
+            "--report must name a file, not a directory.",
+            code="invalid_report_path",
+            exit_code=EXIT_USAGE,
+        )
+    return path
+
+
+def _batch_run_documents(args: argparse.Namespace) -> list[dict[str, str]]:
+    """Map note files to shardable records keyed by their file stem."""
+
+    if not args.input_dir.is_dir():
+        raise CliError(
+            "--input-dir must name a directory.",
+            code="not_a_directory",
+            exit_code=EXIT_USAGE,
+        )
+    finder = args.input_dir.rglob if args.recursive else args.input_dir.glob
+    try:
+        paths = sorted(path for path in finder(args.pattern) if path.is_file())
+    except (ValueError, NotImplementedError) as exc:
+        raise CliError(
+            f"--pattern is not a usable glob ({type(exc).__name__}).",
+            code="invalid_pattern",
+            exit_code=EXIT_USAGE,
+        )
+    if not paths:
+        raise CliError(
+            "No input files matched the pattern.",
+            code="no_input",
+            exit_code=EXIT_USAGE,
+        )
+    return [{"id": path.stem, "path": str(path)} for path in paths]
+
+
+def _batch_run_plan(documents: list[dict[str, str]], shard_count: int):
+    """Plan shards, translating sharding errors into diagnosable usage errors.
+
+    The underlying messages carry only positional indices and field names, never
+    a document id, so they are safe to surface -- and without them a stem
+    collision is undiagnosable.
+    """
+
+    from ..processing.distributed import (
+        DuplicateDocumentIDError,
+        MissingDocumentIDError,
+        plan_document_shards,
+    )
+
+    try:
+        return plan_document_shards(documents, shard_count=shard_count)
+    except DuplicateDocumentIDError as exc:
+        raise CliError(
+            f"Input files collide on their stem: {exc}. File stems are the "
+            "document ids, so they must be unique across --input-dir.",
+            code="duplicate_document_id",
+            exit_code=EXIT_USAGE,
+        )
+    except MissingDocumentIDError as exc:
+        raise CliError(
+            f"Input could not be sharded: {exc}",
+            code="missing_document_id",
+            exit_code=EXIT_USAGE,
+        )
+
+
+def _batch_run_handler(documents: list[dict[str, str]], model: str | None):
+    """Build a shard handler that de-identifies a shard's notes.
+
+    The handler receives only shard membership, so it resolves each document id
+    back to its path here.
+
+    Output lines carry the de-identified text and nothing else. An earlier
+    revision wrote a per-record ``stable_document_hash``; that is an unsalted
+    digest over a fixed namespace, so against a low-entropy id space -- medical
+    record numbers, accession numbers -- anyone holding an output file recovers
+    the source id by enumeration. It is a reversible pseudonym, not a
+    protection, and it was new exposure: the run manifest stores a set
+    fingerprint over document hashes and never the per-document values, so
+    nothing else persists a per-record token.
+
+    Records stay joinable without it. Sharding is deterministic, so replanning
+    the same corpus with the same shard count reproduces each shard's document
+    order, and line ``n`` of a shard output is document ``n`` of that shard.
+    """
+
+    import openmed
+
+    by_id = {document["id"]: document["path"] for document in documents}
+
+    def handle(shard) -> bytes:
+        lines: list[str] = []
+        for document_id in shard.document_ids:
+            text = Path(by_id[document_id]).read_text(encoding="utf-8")
+            result = openmed.deidentify(text, model_name=model)
+            lines.append(json.dumps({"text": result.deidentified_text}))
+        return ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
+
+    return handle
+
+
+def _batch_run_emit(
+    args: argparse.Namespace,
+    report,
+    *,
+    report_format: str,
+) -> int:
+    """Render a run report and map its state onto the documented exit codes."""
+
+    payload = report.to_dict()
+    rendered = report.to_markdown() if report_format == "markdown" else report.to_json()
+    if getattr(args, "report", None) is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(rendered, encoding="utf-8")
+
+    from ..processing.run_report import RUN_STATE_COMPLETE
+
+    # One envelope on stdout, then a gate-negative exit code for a run that did
+    # not finish -- the repository's established shape for a command that must
+    # report its findings *and* fail. Raising after emitting would put two JSON
+    # documents on one stream and break single-document parsing.
+    emitted = emit(args, payload, human=rendered)
+    return emitted if payload["run_state"] == RUN_STATE_COMPLETE else EXIT_ERROR
+
+
+def _load_batch_run_manifest(run_dir: Path):
+    from ..processing.run_manifest import RunManifestError
+
+    try:
+        manifest = _batch_run_store(run_dir).load()
+    except RunManifestError as exc:
+        raise CliError(
+            f"Run manifest could not be read: {type(exc).__name__}.",
+            code="manifest_unreadable",
+            exit_code=EXIT_ERROR,
+        )
+    if manifest is None:
+        raise CliError(
+            "No run manifest exists in --run-dir.",
+            code="run_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    return manifest
+
+
+def _handle_batch_run_start(args: argparse.Namespace) -> int:
+    """Plan a distributed run, execute its shards, and report the outcome."""
+
+    import time
+
+    from ..processing.run_manifest import build_run_manifest, validate_shard_outputs
+    from ..processing.run_report import build_run_report
+    from ..processing.shard_executor import LocalShardExecutor, run_shard_plan
+
+    if args.shards < 1:
+        raise CliError(
+            "--shards must be at least 1.",
+            code="invalid_shards",
+            exit_code=EXIT_USAGE,
+        )
+    if args.workers < 1:
+        raise CliError(
+            "--workers must be at least 1.",
+            code="invalid_workers",
+            exit_code=EXIT_USAGE,
+        )
+    # Before anything is written: a run id that reaches the manifest cannot be
+    # withdrawn, and every later command re-reads it.
+    run_id = _validated_run_id(args.run_id)
+    _validated_report_path(getattr(args, "report", None))
+
+    documents = _batch_run_documents(args)
+    args.run_dir.mkdir(parents=True, exist_ok=True)
+    store = _batch_run_store(args.run_dir)
+    if store.load() is not None:
+        raise CliError(
+            "A run already exists here; use `batch-run resume`.",
+            code="run_exists",
+            exit_code=EXIT_USAGE,
+        )
+
+    plan = _batch_run_plan(documents, args.shards)
+    try:
+        manifest = build_run_manifest(plan, run_id=run_id)
+        store.save(manifest)
+        result = run_shard_plan(
+            plan,
+            _batch_run_handler(documents, args.model),
+            manifest=manifest,
+            root=args.run_dir,
+            store=store,
+            executor=LocalShardExecutor(max_workers=args.workers),
+        )
+    except CliError:
+        raise
+    except Exception as exc:
+        raise CliError(
+            f"Batch run failed with {type(exc).__name__}.",
+            code="batch_run_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    report = build_run_report(
+        result.manifest,
+        generated_at=time.time(),
+        validation=validate_shard_outputs(result.manifest, root=args.run_dir),
+    )
+    return _batch_run_emit(args, report, report_format=args.report_format)
+
+
+def _handle_batch_run_resume(args: argparse.Namespace) -> int:
+    """Recompute only the shards a resume must redo, then report."""
+
+    import time
+
+    from ..processing.resume import prepare_resume, resume_plan
+    from ..processing.run_manifest import validate_shard_outputs
+    from ..processing.run_report import build_run_report
+    from ..processing.shard_executor import LocalShardExecutor, run_shard_plan
+
+    if args.workers < 1:
+        raise CliError(
+            "--workers must be at least 1.",
+            code="invalid_workers",
+            exit_code=EXIT_USAGE,
+        )
+    max_attempts = _validated_max_attempts(args)
+    _validated_report_path(getattr(args, "report", None))
+
+    manifest = _load_batch_run_manifest(args.run_dir)
+    documents = _batch_run_documents(args)
+    store = _batch_run_store(args.run_dir)
+    plan = _batch_run_plan(documents, manifest.shard_count)
+
+    try:
+        recovery = resume_plan(
+            manifest,
+            root=args.run_dir,
+            expected_plan=plan,
+            max_attempts=max_attempts,
+        )
+        manifest = prepare_resume(manifest, recovery)
+        store.save(manifest)
+        result = run_shard_plan(
+            plan,
+            _batch_run_handler(documents, args.model),
+            manifest=manifest,
+            root=args.run_dir,
+            store=store,
+            executor=LocalShardExecutor(max_workers=args.workers),
+            shard_ids=recovery.shard_ids,
+        )
+        final = resume_plan(
+            result.manifest,
+            root=args.run_dir,
+            expected_plan=plan,
+            max_attempts=max_attempts,
+        )
+    except CliError:
+        raise
+    except Exception as exc:
+        raise CliError(
+            f"Batch run resume failed with {type(exc).__name__}.",
+            code="batch_run_resume_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    report = build_run_report(
+        result.manifest,
+        generated_at=time.time(),
+        resume=final,
+        validation=validate_shard_outputs(result.manifest, root=args.run_dir),
+    )
+    return _batch_run_emit(args, report, report_format=args.report_format)
+
+
+def _handle_batch_run_report(args: argparse.Namespace) -> int:
+    """Report on an existing run without executing or mutating anything."""
+
+    import time
+
+    from ..processing.resume import resume_plan
+    from ..processing.run_manifest import validate_shard_outputs
+    from ..processing.run_report import build_run_report
+
+    max_attempts = _validated_max_attempts(args)
+    manifest = _load_batch_run_manifest(args.run_dir)
+    try:
+        report = build_run_report(
+            manifest,
+            generated_at=time.time(),
+            resume=resume_plan(manifest, root=args.run_dir, max_attempts=max_attempts),
+            validation=validate_shard_outputs(manifest, root=args.run_dir),
+        )
+    except CliError:
+        raise
+    except Exception as exc:
+        raise CliError(
+            f"Run report could not be built: {type(exc).__name__}.",
+            code="report_failed",
+            exit_code=EXIT_ERROR,
+        )
+    return _batch_run_emit(args, report, report_format=args.report_format)
 
 
 def _handle_audit_show(args: argparse.Namespace) -> int:
@@ -4324,10 +4914,12 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         write_omop_sqlite,
     )
 
+    load_mode = args.mode.replace("-", "_")
     try:
         tables = load_grounded_jsonl(
             args.input,
             vocabulary_version=args.vocabulary_version,
+            mode=load_mode,
         )
     except FileNotFoundError:
         raise CliError(
@@ -4355,7 +4947,11 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
             "parquet": write_omop_parquet,
         }
         try:
-            connection = writers[args.writer](tables, str(args.target))
+            connection = writers[args.writer](
+                tables,
+                str(args.target),
+                mode=load_mode,
+            )
             if hasattr(connection, "close"):
                 connection.close()
         except ImportError as exc:
@@ -4376,11 +4972,13 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         "input": str(args.input),
         "target": str(args.target) if args.target is not None else None,
         "writer": args.writer if args.target is not None else None,
+        "mode": tables.summary.mode,
         "vocabulary_version": args.vocabulary_version,
         "row_counts": dict(summary.row_counts),
         "rejection_counts": dict(summary.rejection_counts),
         "rejected_spans": [span.to_dict() for span in summary.rejected_spans],
         "source_note_hashes": list(summary.source_note_hashes),
+        "changed_note_hashes": list(summary.changed_note_hashes),
     }
 
     if args.validate:
@@ -4398,6 +4996,58 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     )
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
+    return emit(args, payload, human=human)
+
+
+def _handle_cohort_resolve(args: argparse.Namespace) -> int:
+    """Resolve a stable phenotype definition over a local cohort store."""
+
+    from ..structured.cohort import (
+        COHORT_ADVISORY,
+        PhenotypeDefinition,
+        PhenotypeDefinitionError,
+        load_athena_hierarchy,
+        resolve_phenotype,
+    )
+
+    try:
+        definition = PhenotypeDefinition.load(args.definition)
+        hierarchy = (
+            load_athena_hierarchy(args.athena) if args.athena is not None else None
+        )
+        result = resolve_phenotype(
+            definition,
+            duckdb_path=args.duckdb,
+            parquet_directory=args.parquet,
+            hierarchy=hierarchy,
+        )
+    except FileNotFoundError as exc:
+        raise CliError(
+            str(exc),
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except PhenotypeDefinitionError as exc:
+        raise CliError(
+            str(exc),
+            code="invalid_phenotype",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ImportError as exc:
+        raise CliError(
+            str(exc),
+            code="missing_dependency",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ValueError as exc:
+        raise CliError(
+            str(exc),
+            code="resolution_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = result.to_dict()
+    human = f"Resolved {len(result.patient_ids)} patient(s). {COHORT_ADVISORY}"
     return emit(args, payload, human=human)
 
 
@@ -5688,6 +6338,138 @@ def _format_param_count(param_count: int | None) -> str:
     if param_count is None:
         return "unknown"
     return f"{param_count:,}"
+
+
+def _format_models_cache_last_used(value: Any) -> str:
+    if (
+        value is None
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+    ):
+        return "never" if value is None else "unknown"
+
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat(
+            timespec="seconds"
+        )
+    except (OverflowError, OSError, ValueError):
+        return "unknown"
+
+
+def _models_cache_payload(cached_models: Sequence[Any]) -> dict[str, Any]:
+    models = []
+    for cached in cached_models:
+        size_on_disk = cached.size_on_disk
+        models.append(
+            {
+                "repo_id": cached.repo_id,
+                "size_bytes": size_on_disk,
+                "size_mb": round(size_on_disk / 1_000_000, 3),
+                "last_accessed": cached.last_accessed,
+                "last_used": _format_models_cache_last_used(cached.last_accessed),
+            }
+        )
+    return {"count": len(models), "models": models}
+
+
+def _format_models_cache_table(payload: Mapping[str, Any]) -> str:
+    rows = [
+        {
+            "repo_id": str(model["repo_id"]),
+            "size_mb": f"{float(model['size_mb']):.3f} MB",
+            "last_used": str(model["last_used"]),
+        }
+        for model in payload["models"]
+    ]
+    if not rows:
+        return "No cached OpenMed models.\n"
+
+    columns = (
+        ("repo_id", "repo_id"),
+        ("size_mb", "size_mb"),
+        ("last_used", "last_used"),
+    )
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+    lines = [
+        "  ".join(header.ljust(widths[key]) for key, header in columns),
+        "  ".join("-" * widths[key] for key, _header in columns),
+        *[
+            "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+            for row in rows
+        ],
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_models_cache_download(args: argparse.Namespace) -> int:
+    config = _load_and_apply_config(args)
+    try:
+        repo_id = resolve_repo_id(args.repo_id)
+        path = prefetch_model(
+            repo_id,
+            revision=args.revision,
+            allow_patterns=args.allow_patterns,
+            config=config,
+        )
+    except (ImportError, OfflineModeError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to download model {args.repo_id}: {exc}",
+            code="download_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    path_text = str(path)
+    return emit(
+        args,
+        {"repo_id": repo_id, "path": path_text},
+        human=f"Model ready: {path_text}",
+    )
+
+
+def _handle_models_cache_list(args: argparse.Namespace) -> int:
+    try:
+        cached_models = sorted(
+            list_cached_models(),
+            key=lambda cached: cached.repo_id,
+        )
+    except (ImportError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to list model cache: {exc}",
+            code="cache_list_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = _models_cache_payload(cached_models)
+    return emit(args, payload, human=_format_models_cache_table(payload))
+
+
+def _handle_models_cache_clear(args: argparse.Namespace) -> int:
+    if not args.yes:
+        raise CliError(
+            f"Refusing to clear {args.repo_id} without --yes confirmation.",
+            code="confirmation_required",
+            exit_code=EXIT_USAGE,
+        )
+
+    try:
+        repo_id = resolve_repo_id(args.repo_id)
+        removed = clear_cached_model(repo_id)
+    except (ImportError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to clear model cache {args.repo_id}: {exc}",
+            code="cache_clear_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    if removed:
+        human = f"Cleared model cache: {repo_id}"
+    else:
+        human = f"No cached model found: {repo_id}"
+    return emit(args, {"repo_id": repo_id, "removed": removed}, human=human)
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
