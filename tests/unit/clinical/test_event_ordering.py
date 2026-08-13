@@ -6,8 +6,18 @@ import json
 
 import pytest
 
-from openmed.clinical import Timeline, order_events
-from openmed.eval.metrics import compute_temporal_closure_consistency
+from openmed.clinical import (
+    TemporalCueReference,
+    TemporalRelationCandidate,
+    TemporalSpanReference,
+    Timeline,
+    order_events,
+)
+from openmed.core.audit import hash_text
+from openmed.eval.metrics import (
+    compute_temporal_awareness_f1,
+    compute_temporal_closure_consistency,
+)
 from openmed.eval.suites.temporal_tlinks import (
     assert_temporal_tlink_gate,
     load_temporal_tlink_fixtures,
@@ -106,18 +116,7 @@ def test_order_events_is_stable_and_positions_unlinked_events() -> None:
 def test_order_events_anchors_every_event_in_committed_temporal_gold() -> None:
     anchor_sources: set[str] = set()
     for fixture in load_temporal_tlink_fixtures():
-        spans = [
-            {
-                "id": span.span_id,
-                "label": span.label,
-                "role": span.role,
-                "start": span.start,
-                "end": span.end,
-                "normalized_value": span.normalized_value,
-                "is_dct": span.is_dct,
-            }
-            for span in fixture.spans
-        ]
+        spans = _fixture_spans(fixture)
         timeline = order_events(fixture.text, spans)
         dct = next(span for span in fixture.spans if span.is_dct)
         event_spans = [span for span in fixture.spans if span.role == "EVENT"]
@@ -148,6 +147,32 @@ def test_order_events_anchors_every_event_in_committed_temporal_gold() -> None:
     assert anchor_sources == {"timex", "dct_fallback"}
     assert gate.gate.awareness.f1 >= 0.75
     assert gate.gate.consistency.violations == {}
+
+
+def test_order_events_decodes_supplied_tlinks_to_committed_reduced_gold() -> None:
+    for fixture in load_temporal_tlink_fixtures():
+        timeline = order_events(
+            fixture.text,
+            _fixture_spans(fixture),
+            tlink_candidates=reversed(_fixture_candidates(fixture)),
+        )
+        metric = compute_temporal_awareness_f1(
+            fixture.reduced_graph,
+            timeline.edge_keys(),
+        )
+        pruned_candidate_ids = {
+            edge.provenance["candidate"]["candidate_id"]
+            for edge in timeline.pruned_edges
+        }
+
+        assert metric.f1 == 1.0
+        assert metric.f1 >= 0.75
+        assert timeline.is_cycle_free
+        assert compute_temporal_closure_consistency(timeline).violations == {}
+        assert set(fixture.contradictory_candidate_traps) <= pruned_candidate_ids
+        assert {event.event_id for event in timeline.events} == {
+            span.span_id for span in fixture.spans if span.role == "EVENT"
+        }
 
 
 def test_order_events_rejects_conflicting_explicit_and_span_dct() -> None:
@@ -183,3 +208,55 @@ def _event_spans(text: str, *values: str) -> list[dict[str, object]]:
             }
         )
     return spans
+
+
+def _fixture_spans(fixture) -> list[dict[str, object]]:
+    return [
+        {
+            "id": span.span_id,
+            "label": span.label,
+            "role": span.role,
+            "start": span.start,
+            "end": span.end,
+            "normalized_value": span.normalized_value,
+            "is_dct": span.is_dct,
+        }
+        for span in fixture.spans
+    ]
+
+
+def _fixture_candidates(fixture) -> tuple[TemporalRelationCandidate, ...]:
+    references = {
+        span.span_id: TemporalSpanReference(
+            span_id=span.span_id,
+            label=span.label,
+            role=span.role,
+            start=span.start,
+            end=span.end,
+            score=1.0,
+            text_hash=hash_text(fixture.text[span.start : span.end]),
+        )
+        for span in fixture.spans
+    }
+    return tuple(
+        TemporalRelationCandidate(
+            relation_type=candidate.relation_type,
+            source=references[candidate.source_id],
+            target=references[candidate.target_id],
+            confidence=candidate.confidence,
+            cue=TemporalCueReference(
+                category=candidate.relation_type,
+                start=candidate.cue_start,
+                end=candidate.cue_end,
+                text_hash=hash_text(
+                    fixture.text[candidate.cue_start : candidate.cue_end]
+                ),
+            ),
+            provenance={
+                "candidate_id": candidate.candidate_id,
+                "fixture_id": fixture.fixture_id,
+                "synthetic": True,
+            },
+        )
+        for candidate in fixture.candidates
+    )
