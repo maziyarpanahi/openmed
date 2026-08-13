@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -80,7 +81,7 @@ def test_stubbed_runner_round_trips_policy_and_anonymized_rows(monkeypatch):
         arx_command="approved-arx-runner",
     )
 
-    assert observed["command"][0] == "/opt/approved-arx-runner"
+    assert observed["command"][0] == os.path.abspath("/opt/approved-arx-runner")
     assert observed["command"][-6::2] == ["--input", "--config", "--output"]
     assert observed["kwargs"] == {
         "check": False,
@@ -88,9 +89,12 @@ def test_stubbed_runner_round_trips_policy_and_anonymized_rows(monkeypatch):
         "text": True,
         "timeout": 60.0,
     }
-    assert observed["input_mode"] == 0o600
-    assert observed["config_mode"] == 0o600
-    assert observed["output_mode"] == 0o600
+    # Windows exposes synthetic POSIX mode bits; access is governed by the
+    # current user's temporary-directory ACL instead.
+    if os.name != "nt":
+        assert observed["input_mode"] == 0o600
+        assert observed["config_mode"] == 0o600
+        assert observed["output_mode"] == 0o600
     assert observed["records"] == records
     assert observed["config"] == {
         "hierarchies": hierarchies,

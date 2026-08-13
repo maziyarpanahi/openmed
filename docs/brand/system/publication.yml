@@ -85,6 +85,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.2.0.md
     - release/v2.2-standards-matrix.md
     - release/v2.1.0.md
     - release/v2.0.0.md
@@ -278,6 +279,8 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - migration/2.1-to-2.2.md
+    - migration/2.0-to-2.1.md
     - migration/1.9-to-2.0.md
     - migration/1.8-to-1.9.md
     - release/trusted-publishing.md
@@ -301,7 +304,6 @@ classification:
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md
     - model-cards/registry/pii-latest.md
-    - migration/2.0-to-2.1.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md

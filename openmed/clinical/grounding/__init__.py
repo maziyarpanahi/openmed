@@ -189,7 +189,6 @@ from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
     RestrictedVocabularyError,
-    SnapshotManifest,
     VocabConcept,
     VocabLoader,
     VocabLoaderError,
@@ -199,6 +198,9 @@ from .vocab import (
     VocabularyNotFoundError,
     get_index,
     normalize_language,
+)
+from .vocab import (
+    SnapshotManifest as VocabularySnapshotManifest,
 )
 
 __all__ = [
@@ -321,6 +323,7 @@ __all__ = [
     "VocabLoader",
     "VocabLoaderError",
     "VocabSource",
+    "VocabularySnapshotManifest",
     "VocabularyChecksumError",
     "VocabularyIndex",
     "VocabularyLoader",
@@ -373,7 +376,6 @@ __all__ = [
     "SnapshotCache",
     "SnapshotCacheStats",
     "SnapshotIntegrityError",
-    "SnapshotManifest",
     "SnapshotPolicyError",
     "TerminologySnapshot",
     "TerminologySnapshotCache",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,43 @@ def test_coverage_matrix_rejects_missing_contract_parts() -> None:
     missing_module["entries"][0]["source_modules"] = ["openmed.eval.not_a_real_module"]
     with pytest.raises(V22CoverageMatrixError, match="source module is missing"):
         validate_coverage_matrix(ROOT, missing_module)
+
+
+def test_coverage_matrix_fixture_hashes_are_newline_stable(tmp_path: Path) -> None:
+    fixture = tmp_path / "tests" / "fixtures" / "synthetic.json"
+    test_path = tmp_path / "tests" / "test_synthetic.py"
+    source_path = tmp_path / "openmed" / "synthetic.py"
+    fixture.parent.mkdir(parents=True)
+    test_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.parent.mkdir(parents=True)
+    fixture.write_bytes(b'{\r\n  "synthetic": true\r\n}\r\n')
+    test_path.write_text("def test_synthetic():\n    pass\n", encoding="utf-8")
+    source_path.write_text("SYNTHETIC = True\n", encoding="utf-8")
+    normalized = b'{\n  "synthetic": true\n}\n'
+    digest = f"sha256:{hashlib.sha256(normalized).hexdigest()}"
+    matrix = {
+        "schema_version": "openmed.v22.coverage-matrix.v1",
+        "matrix_version": 1,
+        "release": "2.2",
+        "synthetic_only": True,
+        "test_command": V22_FOCUSED_TEST_COMMAND,
+        "entries": [
+            {
+                "id": "newline-stability",
+                "standard_profile": "synthetic",
+                "version": "1",
+                "supported_subset": ["line-ending normalization"],
+                "known_gaps": ["synthetic fixture only"],
+                "fixture_sha256": {
+                    "tests/fixtures/synthetic.json": digest,
+                },
+                "test_nodes": ["tests/test_synthetic.py::test_synthetic"],
+                "source_modules": ["openmed.synthetic"],
+            }
+        ],
+    }
+
+    assert validate_coverage_matrix(tmp_path, matrix) == matrix
 
 
 def test_standards_document_is_generated_from_matrix() -> None:

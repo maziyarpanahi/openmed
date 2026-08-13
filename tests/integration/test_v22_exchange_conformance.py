@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 from pathlib import Path
 
@@ -46,8 +47,18 @@ def test_reference_exchange_flow_is_deterministic_offline_and_phi_free(
 
     first = run_v22_reference_flow(FIXTURES, tmp_path / "first")
     second = run_v22_reference_flow(FIXTURES, tmp_path / "second")
+    crlf_fixtures = tmp_path / "crlf-fixtures"
+    shutil.copytree(FIXTURES, crlf_fixtures)
+    vocabulary_path = crlf_fixtures / "grounding_vocabulary.jsonl"
+    vocabulary_text = vocabulary_path.read_text(encoding="utf-8")
+    vocabulary_path.write_text(
+        vocabulary_text,
+        encoding="utf-8",
+        newline="\r\n",
+    )
+    crlf = run_v22_reference_flow(crlf_fixtures, tmp_path / "crlf")
 
-    assert first.hashes == second.hashes == expected
+    assert first.hashes == second.hashes == crlf.hashes == expected
     assert first.grounding_audit["code"] == "E11.9"
     assert first.grounding_audit["system_uri"] == ("http://hl7.org/fhir/sid/icd-10-cm")
     assert first.grounding_audit["end"] - first.grounding_audit["start"] == len(

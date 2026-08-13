@@ -160,6 +160,7 @@ REVIEWED_LICENSES = {
     "scispacy": "Apache-2.0",
     "spacy": "MIT",
     "sqlalchemy": "MIT",
+    "strawberry-graphql": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
     "torch": "BSD-3-Clause",

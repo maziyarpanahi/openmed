@@ -26,15 +26,15 @@ on:
       api_base_ref:
         description: Git ref used as the public API compatibility baseline.
         required: false
-        default: v2.0.0
+        default: v2.1.0
       migration_guide:
         description: Migration guide required for the release.
         required: false
-        default: docs/migration/2.0-to-2.1.md
+        default: docs/migration/2.1-to-2.2.md
       release_version:
         description: Version recorded in the readiness report.
         required: false
-        default: 2.1.0
+        default: 2.2.0
       rollback_family:
         description: Family supplied by an automated status monitor for rollback.
         required: false
@@ -73,9 +73,9 @@ jobs:
       STAGED_MANIFEST: ${{ github.event.inputs.staged_manifest || 'artifacts/staged-models.jsonl' }}
       BENCHMARK_MODEL: ${{ github.event.inputs.benchmark_model || '' }}
       BENCHMARK_DEVICE: ${{ github.event.inputs.benchmark_device || 'cpu' }}
-      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v2.0.0' }}
-      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/2.0-to-2.1.md' }}
-      RELEASE_VERSION: ${{ github.event.inputs.release_version || '2.1.0' }}
+      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v2.1.0' }}
+      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/2.1-to-2.2.md' }}
+      RELEASE_VERSION: ${{ github.event.inputs.release_version || '2.2.0' }}
       RELEASE_STAGE: ${{ github.workspace }}/release-stage
 
     steps:

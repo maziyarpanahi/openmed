@@ -869,6 +869,7 @@ test("website interactions persist and expose states", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const audit = monitorPage(page, baseURL);
   await page.goto("/", { waitUntil: "domcontentloaded" });
 

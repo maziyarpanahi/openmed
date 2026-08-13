@@ -216,7 +216,11 @@ def run_v22_reference_flow(
         )
     review_artifact = form_result.to_dict()
 
-    vocabulary_path = fixtures / "grounding_vocabulary.jsonl"
+    vocabulary_fixture = fixtures / "grounding_vocabulary.jsonl"
+    vocabulary_path = output_dir / "fixtures" / vocabulary_fixture.name
+    vocabulary_path.parent.mkdir(parents=True, exist_ok=True)
+    with vocabulary_path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(vocabulary_fixture.read_text(encoding="utf-8"))
     vocabulary_digest = _sha256_bytes(vocabulary_path.read_bytes())
     loader = VocabLoader(
         cache_dir=output_dir / "vocabulary-cache",
@@ -727,7 +731,7 @@ def _validate_fixture_hashes(root: Path, value: Any, index: int) -> None:
         path = _resolve_inside(root, relative, "fixture")
         if not path.is_file():
             raise V22CoverageMatrixError(f"declared fixture is missing: {relative}")
-        if _sha256_bytes(path.read_bytes()) != expected:
+        if _sha256_normalized_text_file(path) != expected:
             raise V22CoverageMatrixError(f"declared fixture hash drifted: {relative}")
 
 
@@ -804,6 +808,12 @@ def _write_json(path: Path, value: Any) -> None:
 
 def _sha256_text(value: str) -> str:
     return _sha256_bytes(value.encode("utf-8"))
+
+
+def _sha256_normalized_text_file(path: Path) -> str:
+    """Hash UTF-8 fixture text after normalizing platform line endings."""
+
+    return _sha256_text(path.read_text(encoding="utf-8"))
 
 
 def _sha256_bytes(value: bytes) -> str:
