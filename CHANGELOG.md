@@ -43,6 +43,9 @@ text should follow `docs/migration/2.0-to-2.1.md`.
 
 ### Added
 
+- Added dependency-free OpenDocument Text (`.odt`) extraction with paragraph
+  and list reading order, deterministic table linearization, character-offset
+  source maps, multimodal registry discovery, and usage documentation (#857).
 - Added a read-only Strawberry GraphQL endpoint for selective analysis and
   de-identification fields, canonical entity discovery, policy details, safe
   aggregate risk facets, introspection, and deterministic SDL export (#828).
