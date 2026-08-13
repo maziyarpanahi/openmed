@@ -46,6 +46,10 @@
         {
           "phrases": ["findings", "impression"],
           "confidence": 0.88
+        },
+        {
+          "phrases": ["ct", "chest", "report"],
+          "confidence": 0.92
         }
       ]
     },
@@ -79,6 +83,23 @@
         },
         {
           "phrases": ["postoperative diagnosis", "estimated blood loss"],
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "type": "history_and_physical",
+      "rules": [
+        {
+          "phrases": ["history and physical"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["chief complaint", "physical examination"],
+          "confidence": 0.9
+        },
+        {
+          "phrases": ["history of present illness", "physical exam"],
           "confidence": 0.88
         }
       ]

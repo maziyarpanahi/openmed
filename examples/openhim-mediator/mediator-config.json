@@ -1,6 +1,6 @@
 {
   "urn": "urn:openhim-mediator:openmed-deidentification",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "name": "OpenMed De-identification Mediator",
   "description": "Local-first FHIR and clinical free-text de-identification for OpenHIM",
   "defaultChannelConfig": [
