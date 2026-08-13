@@ -85,6 +85,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.1.0.md
     - release/v2.0.0.md
     - release/v1.6-v1.7-feature-coverage.md
     - getting-started.md
@@ -110,18 +111,26 @@ classification:
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
     - model-loader.md
+    - models/cache-quotas.md
     - model-registry.md
+    - ner-families.md
     - model-manifest.md
     - indic-encoders.md
     - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
+    - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/terminology-provenance.md
+    - clinical/consent-cache.md
+    - clinical/timeline-provenance.md
     - clinical/chinese-terminology-grounding.md
+    - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
@@ -139,12 +148,15 @@ classification:
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
+    - multimodal/xlsx-cell-redaction.md
+    - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - clinical/experiencer-refinement.md
+    - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/awq-grounding.md
     - tiers.md
@@ -152,6 +164,7 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - api/deidentification.md
+    - api/compatibility-gate.md
     - reidentification-risk.md
     - sms-short-text-deid.md
     - anonymization.md
@@ -168,6 +181,7 @@ classification:
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - spark-deidentification.md
     - prefect-integration.md
@@ -186,6 +200,11 @@ classification:
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
+    - fhir/reference-integrity.md
+    - fhir/bulk-checkpoints.md
+    - fhir/operation-outcome.md
+    - fhir/sdc-privacy.md
+    - fhir/document-intake-quarantine.md
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
@@ -199,6 +218,7 @@ classification:
     - runtimes/onnxruntime-web.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
+    - android-integration.md
     - export-onnx-android.md
     - android-tokenization.md
     - android-parity.md
@@ -212,6 +232,7 @@ classification:
     - onboarding.md
     - migration.md
     - contributing.md
+    - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
     - security/disclosure-policy.md
@@ -250,6 +271,7 @@ classification:
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md
     - model-cards/registry/pii-latest.md
+    - migration/2.0-to-2.1.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md
