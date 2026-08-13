@@ -7,6 +7,7 @@ import random
 
 import pytest
 
+from openmed.risk import release_dp_aggregate
 from openmed.risk.differential_privacy import (
     DifferentialPrivacy,
     PrivacyBudget,
@@ -21,6 +22,17 @@ from openmed.risk.differential_privacy import (
     release_sum,
     utility_report,
 )
+
+
+def test_package_alias_keeps_dispatch_release_available() -> None:
+    released = release_dp_aggregate(
+        4,
+        kind="count",
+        epsilon=1.0,
+        rng=_FixedRandom(0.5),
+    )
+
+    assert released == pytest.approx(4.0)
 
 
 def test_laplace_scale_and_seeded_noise_follow_sensitivity_formula() -> None:

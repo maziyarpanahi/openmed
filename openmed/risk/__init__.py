@@ -72,13 +72,15 @@ from .differential_privacy import (
     laplace_mechanism,
     laplace_noise,
     laplace_scale,
-    release_aggregate as release_dp_aggregate,
     release_count,
     release_histogram,
     release_mean,
     release_sum,
     utility_report,
     utility_vs_epsilon,
+)
+from .differential_privacy import (
+    release_aggregate as release_dp_aggregate,
 )
 from .k_anonymity import (
     EquivalenceClass,
