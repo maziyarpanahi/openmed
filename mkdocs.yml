@@ -79,6 +79,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
