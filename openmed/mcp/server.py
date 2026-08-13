@@ -507,7 +507,9 @@ def openmed_list_pii_languages() -> Dict[str, Any]:
     ``default_pii_model`` is ``env:OPENMED_INDIC_NER_MODEL`` or
     ``user-supplied`` for languages that ship no bundled weights. Those two
     values are registry placeholders, not model IDs: pass your own model for
-    those languages instead of echoing the placeholder back.
+    those languages instead of echoing the placeholder back. Named fallback
+    routes can also report zero models when they preserve routing compatibility
+    without claiming dedicated trained weights.
     """
     languages = []
     for code in sorted(REGISTERED_PII_LANGUAGES):
