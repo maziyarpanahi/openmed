@@ -2,7 +2,7 @@
 
 OpenMed 集成了精选的生物医学模型、高级去标识化、多模态输入、结构化健康数据工具以及单次调用编排，帮助你无需处理繁杂的基础设施即可交付临床自然语言处理工作流。本文档让可复制的代码片段和工作流触手可及：所有章节均以 Markdown 为基础，支持搜索，并针对快速浏览以及复制到笔记本进行了优化。
 
-OpenMed `2.0.0` 为 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署界面建立了稳定的主版本契约，并整合策略感知的去标识化、扩展的临床与结构化数据工作流、广泛的多语言 PII 覆盖以及失败即关闭的发布证据：
+OpenMed `2.1.0` 为 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署界面延续稳定的 v2 契约，并整合策略感知的去标识化、扩展的临床与结构化数据工作流、广泛的多语言 PII 覆盖以及失败即关闭的发布证据：
 
 - **策略感知的去标识化**：提供签名审计报告、可复现性哈希、审查包、脱敏预览和发布门禁。
 - **多模态与结构化输入**：覆盖 OCR、图像、PDF、DOCX、EPUB、vCard/iCalendar、DICOM、CSV/TSV、JSONL 聊天记录、HL7 v2、CDA/C-CDA、FHIR 操作以及 FHIR Bulk NDJSON。
@@ -51,7 +51,7 @@ uv run python examples/pii_model_comparison.py
 
 ## 最新版本亮点
 
-- [OpenMed 2.0.0 发布说明](/docs/release/v2.0.0/) — 主版本安装坐标、兼容性指南、平台覆盖范围和验证要求。
+- [OpenMed 2.1.0 发布说明](/docs/release/v2.1.0/) — 当前安装坐标、兼容性指南、平台覆盖范围和验证要求。
 - [OpenMed 1.9.1 发布说明](/docs/release/v1.9.1/) — 最后一个 1.9 补丁版本的历史 Swift 打包、Android 发布强化和依赖安全修复。
 - [OpenMed 1.8.0 发布说明](/docs/release/v1.8.0/) — 历史跨平台运行时与服务版本清单。
 - [OpenMed v1.6-v1.7 功能覆盖](/docs/release/v1.6-v1.7-feature-coverage/) — 示例、文档、网站和源代码模块的历史覆盖清单。
@@ -65,7 +65,7 @@ uv run python examples/pii_model_comparison.py
 
 1. [快速开始](/docs/zh/getting-started/) — 最快建立可用环境并运行可复制脚本的路径。
 2. [功能地图](/docs/feature-map/) — 查看每项能力如何映射到代码。
-3. [OpenMed 2.0.0 发布说明](/docs/release/v2.0.0/) — 查看当前安装坐标、兼容性契约和验证要求。
+3. [OpenMed 2.1.0 发布说明](/docs/release/v2.1.0/) — 查看当前安装坐标、兼容性契约和验证要求。
 4. 核心指南：
     - [文本分析辅助函数](/docs/analyze-text/)：单次调用推理。
     - [REST 服务（MVP）](/docs/rest-service/)：容器化 HTTP 端点。
