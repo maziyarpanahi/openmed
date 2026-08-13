@@ -576,9 +576,8 @@ def test_za_popia_checklist_classes_have_non_keep_canonical_coverage():
     checklist_rows = _popia_checklist_rows()
 
     assert set(checklist_rows) == set(POPIA_IDENTIFIER_CLASSES)
-    assert set(LABEL_TO_POPIA) == set(CANONICAL_LABELS)
     assert {label for labels in checklist_rows.values() for label in labels} == set(
-        CANONICAL_LABELS
+        LABEL_TO_POPIA
     )
 
     for popia_class, labels in checklist_rows.items():

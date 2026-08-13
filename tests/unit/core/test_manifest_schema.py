@@ -243,12 +243,15 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
         created_at = None
 
     class FakeApi:
+        def __init__(self, *, token):
+            assert token is False
+
         def list_models(self, *, author, full):
             assert author == "OpenMed"
             assert full is True
             return [FakeModel()]
 
-    monkeypatch.setattr(generate_manifest, "HfApi", lambda: FakeApi())
+    monkeypatch.setattr(generate_manifest, "HfApi", FakeApi)
     rows = generate_manifest.fetch_manifest_rows("OpenMed")
 
     assert rows[0]["repo_id"] == FakeModel.id
@@ -272,6 +275,19 @@ def test_manifest_generator_keeps_quantization_width_out_of_param_count(
     expected,
 ):
     assert generate_manifest._param_count(repo_id) == expected
+
+
+def test_manifest_generator_distinguishes_mlx_quantization_from_onnx() -> None:
+    assert generate_manifest._formats(
+        "OpenMed/maple-preview-4bit-mlx",
+        ["mlx", "quantized", "4-bit"],
+        ["model.safetensors"],
+    ) == ["mlx-4bit", "pytorch"]
+    assert generate_manifest._formats(
+        "OpenMed/maple-preview-4bit-onnx-android",
+        ["onnx", "android", "quantized"],
+        ["model.onnx"],
+    ) == ["onnx"]
 
 
 def test_committed_quantized_rows_do_not_claim_bit_width_as_param_count():
@@ -319,6 +335,17 @@ def test_generic_pii_repo_name_remains_a_pii_family_fallback():
     )
 
 
+def test_generative_pii_repo_name_does_not_claim_token_classifier_evidence():
+    assert (
+        generate_manifest._family(
+            "OpenMed/Ministral-3B-PII-Preview",
+            ["pii"],
+            "text-generation",
+        )
+        == "General"
+    )
+
+
 def test_manifest_generator_infers_korean_from_repo_name():
     assert generate_manifest._languages(
         "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1", []
@@ -351,9 +378,32 @@ def test_manifest_generator_preserves_script_coverage(tmp_path):
     assert rows[0]["script_coverage"] == previous["script_coverage"]
 
 
-def test_manifest_generator_preserves_model_card_release_metadata(tmp_path):
+def test_manifest_generator_inherits_audited_base_model_metadata(tmp_path):
     output = tmp_path / "models.jsonl"
     previous = _manifest_row_fixture(
+        repo_id="OpenMed/OpenMed-PII-Fixture-Tiny-65M-v1",
+        languages=["vi"],
+    )
+    generate_manifest.write_jsonl([previous], output)
+    converted = _manifest_row_fixture(
+        repo_id="OpenMed/OpenMed-PII-Fixture-Tiny-65M-v1-onnx-android",
+        base_model=previous["repo_id"],
+        formats=["onnx"],
+        languages=["en"],
+    )
+    del converted["script_coverage"]
+
+    rows = generate_manifest.preserve_existing_enrichment([converted], output)
+
+    assert rows[0]["languages"] == ["vi"]
+    assert rows[0]["script_coverage"] == previous["script_coverage"]
+
+
+def test_manifest_generator_preserves_model_card_release_metadata(tmp_path):
+    output = tmp_path / "models.jsonl"
+    benchmark = {"dataset": "synthetic", "micro_f1": 0.91, "recall": 0.95}
+    previous = _manifest_row_fixture(
+        benchmark=benchmark,
         download_mb=131.794,
         disk_mb=131.794,
         download_sizes={
@@ -376,6 +426,7 @@ def test_manifest_generator_preserves_model_card_release_metadata(tmp_path):
 
     rows = generate_manifest.preserve_existing_enrichment([refreshed], output)
 
+    assert rows[0]["benchmark"] == benchmark
     assert rows[0]["download_mb"] == 131.794
     assert rows[0]["disk_mb"] == 131.794
     assert rows[0]["download_sizes"] == previous["download_sizes"]
@@ -475,6 +526,7 @@ def test_manifest_refresh_workflow_is_manual_only():
     assert "schedule:" not in text
     assert "cron:" not in text
     assert "scripts/manifest/generate_manifest.py --output models.jsonl" in text
+    assert 'HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"' in text
     assert "peter-evans/create-pull-request@" in text
     assert "base: master" in text
     assert "draft: true" not in text

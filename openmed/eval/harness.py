@@ -67,6 +67,7 @@ _DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
 _DEFAULT_RELATION_SCORECARD_SIGNING_KEY = "openmed-relation-scorecard-local-key"
 RELATION_SCORECARD_ARTIFACT = "openmed.eval.relation_scorecard"
 RELATION_SCORECARD_SCHEMA_VERSION = 1
+DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
 DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent
     / "golden"
@@ -75,6 +76,9 @@ DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
 )
 DEFAULT_SECTION_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "section_multilingual.jsonl"
+)
+DEFAULT_SECTION_MESSY_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "section_messy.jsonl"
 )
 DEFAULT_PIPELINE_EVAL_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "pipeline_e2e_synthetic.jsonl"
@@ -304,6 +308,15 @@ class RelationGateFailure(RuntimeError):
         self.scorecard = scorecard
         reason = str(scorecard.gate_result.get("reason") or "relation gate failed")
         super().__init__(reason)
+
+
+class DUARelationPromotionGateFailure(RuntimeError):
+    """Raised when a human-run DUA relation promotion gate fails."""
+
+    def __init__(self, report: BenchmarkReport, gate: Any) -> None:
+        self.report = report
+        self.gate = gate
+        super().__init__(str(getattr(gate, "reason", "DUA relation G9 failed")))
 
 
 @dataclass
@@ -1389,6 +1402,123 @@ def run_section_multilingual_eval(
     )
 
 
+def load_section_messy_fixtures(
+    path: str | Path = DEFAULT_SECTION_MESSY_FIXTURE,
+) -> tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]:
+    """Load synthetic messy-note section fixtures without retaining raw text."""
+
+    fixture_path = Path(path)
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not rows or rows[0].get("kind") != "meta":
+        raise ValueError("messy section fixture must start with a meta row")
+    if rows[0].get("synthetic") is not True:
+        raise ValueError("messy section fixture must declare synthetic=true")
+    fixtures = tuple(row for row in rows[1:] if row.get("kind") != "meta")
+    case_ids = [str(row.get("case_id", "")) for row in fixtures]
+    if any(not case_id for case_id in case_ids) or len(case_ids) != len(set(case_ids)):
+        raise ValueError("messy section fixtures require unique case_id values")
+    for row in fixtures:
+        if row.get("synthetic") is not True:
+            raise ValueError("messy section rows must declare synthetic=true")
+        text = str(row.get("text") or "").casefold()
+        if any(marker in text for marker in ("medsecid", "i2b2")):
+            raise ValueError("messy section fixture contains a restricted marker")
+    return rows[0], fixtures
+
+
+def run_section_messy_eval(
+    path: str | Path = DEFAULT_SECTION_MESSY_FIXTURE,
+    *,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Report learned section accuracy against the rules-only baseline."""
+
+    from openmed.clinical.sections import detect_sections
+    from openmed.eval.section_recall import compute_section_detection_metrics
+
+    meta, fixtures = load_section_messy_fixtures(path)
+    baseline_boundary_f1: list[float] = []
+    learned_boundary_f1: list[float] = []
+    baseline_label_accuracy: list[float] = []
+    learned_label_accuracy: list[float] = []
+
+    for row in fixtures:
+        text = str(row.get("text") or "")
+        gold_sections = _section_fixture_gold_sections(row)
+        baseline = detect_sections(text)
+        learned = detect_sections(text, use_learned=True)
+        baseline_metrics = compute_section_detection_metrics(
+            text,
+            gold_sections,
+            baseline,
+        )
+        learned_metrics = compute_section_detection_metrics(
+            text,
+            gold_sections,
+            learned,
+        )
+        baseline_boundary_f1.append(_section_boundary_f1(gold_sections, baseline))
+        learned_boundary_f1.append(_section_boundary_f1(gold_sections, learned))
+        baseline_label_accuracy.append(baseline_metrics.label_recall)
+        learned_label_accuracy.append(learned_metrics.label_recall)
+
+    baseline_boundary = _mean(baseline_boundary_f1)
+    learned_boundary = _mean(learned_boundary_f1)
+    baseline_labels = _mean(baseline_label_accuracy)
+    learned_labels = _mean(learned_label_accuracy)
+    gate_passed = (
+        learned_boundary >= 0.80
+        and learned_labels >= 0.85
+        and learned_boundary > baseline_boundary
+        and learned_labels > baseline_labels
+    )
+    return BenchmarkReport(
+        suite="section_messy",
+        model_name="learned-section-head",
+        device="local",
+        fixture_count=len(fixtures),
+        metrics={
+            "baseline_boundary_f1": baseline_boundary,
+            "baseline_label_accuracy": baseline_labels,
+            "boundary_f1": learned_boundary,
+            "label_accuracy": learned_labels,
+            "boundary_f1_threshold": 0.80,
+            "label_accuracy_threshold": 0.85,
+            "section_gate_passed": gate_passed,
+        },
+        generated_at=generated_at,
+        metadata={
+            "fixture_ids": [str(row["case_id"]) for row in fixtures],
+            "synthetic": bool(meta.get("synthetic")),
+            "leakage_check_passed": True,
+        },
+    )
+
+
+def _section_boundary_f1(
+    gold_sections: Iterable[Mapping[str, Any]],
+    predicted_sections: Iterable[Mapping[str, Any]],
+) -> float:
+    gold = {(int(section["start"]), int(section["end"])) for section in gold_sections}
+    predicted = {
+        (int(section["start"]), int(section["end"])) for section in predicted_sections
+    }
+    true_positive = len(gold & predicted)
+    precision = _section_rate(true_positive, len(predicted))
+    recall = _section_rate(true_positive, len(gold))
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def _section_rate(numerator: int, denominator: int) -> float:
+    return 1.0 if denominator == 0 else numerator / denominator
+
+
 def _context_fixture_span(row: Mapping[str, Any]) -> dict[str, Any]:
     text = str(row.get("text", ""))
     target = row.get("target")
@@ -1692,6 +1822,7 @@ def run_benchmark(
         abstention_seed=abstention_seed,
         default_device=device,
         source_text=corpus_text,
+        **_consistency_metric_inputs(fixtures),
     )
     faithfulness_metrics = [
         compute_span_grounded_faithfulness(
@@ -1766,6 +1897,84 @@ def run_relation_benchmark(
         ci_alpha=ci_alpha,
         ci_seed=ci_seed,
     )
+    return report
+
+
+def run_dua_relation_promotion_benchmark(
+    fixtures: Sequence[Any],
+    *,
+    model_name: str,
+    runner: RelationModelRunner,
+    suite: str,
+    device: str = "cpu",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
+) -> BenchmarkReport:
+    """Run the human-triggered, promotion-blocking G9 DUA relation gate.
+
+    This entry point is deliberately separate from daily evaluation. It emits
+    aggregate relation metrics only and marks the gate as non-blocking for the
+    daily cadence, while a failed G9 result blocks this promotion run.
+    """
+
+    resolved_suite = str(suite).strip().casefold().replace("_", "-")
+    fixture_corpora = {
+        str(fixture_metadata.get("dataset") or "").strip().casefold().replace("_", "-")
+        for fixture in fixtures
+        for fixture_metadata in (
+            getattr(fixture, "metadata", {})
+            if isinstance(getattr(fixture, "metadata", {}), Mapping)
+            else {},
+        )
+        if str(fixture_metadata.get("dataset") or "").strip()
+    }
+    if resolved_suite not in DUA_RELATION_PROMOTION_CORPORA or fixture_corpora != {
+        resolved_suite
+    }:
+        allowed = ", ".join(sorted(DUA_RELATION_PROMOTION_CORPORA))
+        raise ValueError(
+            "DUA relation promotion requires suite and fixture dataset to match "
+            f"one of: {allowed}"
+        )
+    report_metadata = {
+        **dict(metadata or {}),
+        "cadence": "human-run",
+        "daily_blocking": False,
+        "dataset": resolved_suite,
+        "dua_relation_corpora": sorted(fixture_corpora),
+        "dua_relation_promotion_required": True,
+        "eval_only": True,
+        "gate_tier": "promotion",
+        "network_fetch": False,
+        "promotion_blocking": True,
+        "suite": resolved_suite,
+        "cache_corpus_rows": False,
+        "task": "relation",
+    }
+    report = run_relation_benchmark(
+        fixtures,
+        suite=resolved_suite,
+        model_name=model_name,
+        runner=runner,
+        device=device,
+        generated_at=generated_at,
+        metadata=report_metadata,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
+    )
+    from openmed.eval.release_gates import evaluate_dua_relation_promotion_gate
+
+    gate = evaluate_dua_relation_promotion_gate(report)
+    report = replace(
+        report,
+        metrics={**dict(report.metrics), "g9_dua_promotion": gate.to_dict()},
+    )
+    if not gate.passed:
+        raise DUARelationPromotionGateFailure(report, gate)
     return report
 
 
@@ -3560,6 +3769,76 @@ def _fixture_extracted_facts(fixture: BenchmarkFixture) -> list[Any]:
     return []
 
 
+def _consistency_metric_inputs(
+    fixtures: Sequence[BenchmarkFixture],
+) -> dict[str, Any]:
+    original_dates: list[str] = []
+    shifted_dates: list[str] = []
+    date_patient_ids: list[str] = []
+    surrogate_originals: list[str] = []
+    surrogates: list[str] = []
+    surrogate_document_ids: list[str] = []
+    surrogate_checksum_valid: list[bool | None] = []
+
+    for fixture in fixtures:
+        date_chain = fixture.metadata.get("date_chain")
+        if date_chain is not None:
+            if not isinstance(date_chain, Mapping):
+                raise ValueError("fixture date_chain metadata must be a mapping")
+            fixture_originals = date_chain.get("original_dates", ())
+            fixture_shifted = date_chain.get("shifted_dates", ())
+            if not _is_metadata_sequence(
+                fixture_originals
+            ) or not _is_metadata_sequence(fixture_shifted):
+                raise ValueError("fixture date_chain dates must be lists or tuples")
+            if len(fixture_originals) != len(fixture_shifted):
+                raise ValueError(
+                    "fixture date_chain original_dates and shifted_dates must align"
+                )
+            patient_id = str(
+                date_chain.get("patient_id")
+                or fixture.metadata.get("patient_id")
+                or fixture.fixture_id
+            )
+            original_dates.extend(str(value) for value in fixture_originals)
+            shifted_dates.extend(str(value) for value in fixture_shifted)
+            date_patient_ids.extend([patient_id] * len(fixture_originals))
+
+        surrogate_pairs = fixture.metadata.get("surrogate_pairs", ())
+        if not _is_metadata_sequence(surrogate_pairs):
+            raise ValueError("fixture surrogate_pairs metadata must be a list or tuple")
+        for pair in surrogate_pairs:
+            if not isinstance(pair, Mapping):
+                raise ValueError("fixture surrogate pairs must be mappings")
+            if "original" not in pair or "surrogate" not in pair:
+                raise ValueError(
+                    "fixture surrogate pairs require original and surrogate values"
+                )
+            checksum_verdict = pair.get("checksum_valid")
+            if checksum_verdict is not None and not isinstance(checksum_verdict, bool):
+                raise ValueError("surrogate checksum_valid must be bool or null")
+            surrogate_originals.append(str(pair["original"]))
+            surrogates.append(str(pair["surrogate"]))
+            surrogate_document_ids.append(
+                str(pair.get("document_id") or fixture.fixture_id)
+            )
+            surrogate_checksum_valid.append(checksum_verdict)
+
+    return {
+        "original_dates": original_dates,
+        "shifted_dates": shifted_dates,
+        "date_patient_ids": date_patient_ids,
+        "surrogate_originals": surrogate_originals,
+        "surrogates": surrogates,
+        "surrogate_document_ids": surrogate_document_ids,
+        "surrogate_checksum_valid": surrogate_checksum_valid,
+    }
+
+
+def _is_metadata_sequence(value: Any) -> bool:
+    return isinstance(value, list | tuple)
+
+
 def _relation_corpus_relations(
     fixtures: Sequence[Any],
     results: Sequence[RelationFixtureResult],
@@ -3894,9 +4173,13 @@ __all__ = [
     "BenchmarkFixture",
     "DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE",
     "DEFAULT_PIPELINE_EVAL_FIXTURE",
+    "DEFAULT_SECTION_MESSY_FIXTURE",
+    "DEFAULT_SECTION_MULTILINGUAL_FIXTURE",
     "PIPELINE_EVAL_SCHEMA_VERSION",
     "BoundaryLeakageFinding",
     "BoundaryLeakageResult",
+    "DUA_RELATION_PROMOTION_CORPORA",
+    "DUARelationPromotionGateFailure",
     "FederatedDetectorSpec",
     "FederatedEvalReport",
     "FixtureResult",
@@ -3915,12 +4198,15 @@ __all__ = [
     "load_context_multilingual_fixtures",
     "load_fixtures",
     "load_pipeline_eval_fixtures",
+    "load_section_messy_fixtures",
+    "run_section_messy_eval",
     "default_model_runner",
     "run_federated_leakage_eval",
     "run_context_multilingual_eval",
     "run_pipeline_eval",
     "run_pipeline_eval_fixture",
     "run_benchmark",
+    "run_dua_relation_promotion_benchmark",
     "run_relation_benchmark",
     "run_relation_suite",
     "run_cross_lingual_transfer",
