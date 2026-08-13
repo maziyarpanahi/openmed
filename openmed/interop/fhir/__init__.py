@@ -1,6 +1,9 @@
-"""Offline FHIR interoperability helpers."""
+"""Offline, local-first, version-aware FHIR interoperability helpers."""
 
 from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
 
 from .bulk_checkpoint import (
     BULK_CHECKPOINT_MANIFEST_VERSION,
@@ -25,6 +28,14 @@ from .bulk_checkpoint import (
     validate_resume,
     validate_resume_compatibility,
     write_checkpoint,
+)
+from .profiles import (
+    PROFILE_MATRIX,
+    PROFILE_MATRIX_PATH,
+    SUPPORTED_PROFILE_MATRIX,
+    get_profile,
+    profile_matrix,
+    validate_profile_matrix,
 )
 from .reference_integrity import (
     REFERENCE_INTEGRITY_SCHEMA_VERSION,
@@ -51,22 +62,99 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .validation import (
+    FHIRValidationResult,
+    validate,
+    validate_bundle,
+    validate_document,
+    validate_resource,
+    validation_result,
+)
+from .versions import (
+    FHIR_R4,
+    FHIR_R5,
+    SUPPORTED_RESOURCE_TYPES,
+    FHIRConversionError,
+    FHIRVersion,
+    FHIRVersionAdapter,
+    FHIRVersionError,
+    UnsupportedFHIRField,
+    UnsupportedFHIRFieldError,
+    VersionAdapter,
+    convert_bundle,
+    convert_resource,
+    parse_fhir_version,
+    r4_to_r5,
+    r5_to_r4,
+)
+
+_BULK_EXPORTS = frozenset(
+    {
+        "BULK_DATA_VERSION",
+        "DEFAULT_MAX_BUFFERED_RESOURCES",
+        "SUPPORTED_R4_RESOURCE_TYPES",
+        "BulkDataGateway",
+        "BulkExportSummary",
+        "BulkGatewayConfig",
+        "BulkJobCancelled",
+        "BulkRejection",
+        "FHIRBulkConfig",
+        "FHIRBulkGateway",
+        "FHIRBulkJobReport",
+        "FHIRNDJSONLineError",
+        "NDJSONFileSummary",
+        "NDJSONLineError",
+        "RejectionRecord",
+        "deidentify_export",
+        "deidentify_ndjson",
+        "deidentify_ndjson_async",
+        "deidentify_ndjson_stream",
+        "iter_ndjson",
+    }
+)
 
 __all__ = [
+    "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_SCHEMA_VERSION",
+    "DEFAULT_MAX_BUFFERED_RESOURCES",
+    "FHIRConversionError",
+    "FHIRBulkCheckpoint",
+    "FHIRBulkCheckpointManifest",
     "FHIRReferenceIntegrityReport",
+    "FHIRValidationResult",
+    "FHIRVersion",
+    "FHIR_R4",
+    "FHIR_R5",
+    "FHIRVersionAdapter",
+    "FHIRVersionError",
     "REFERENCE_INTEGRITY_SCHEMA_VERSION",
+    "PROFILE_MATRIX_PATH",
+    "PROFILE_MATRIX",
+    "SUPPORTED_PROFILE_MATRIX",
+    "SUPPORTED_R4_RESOURCE_TYPES",
+    "SUPPORTED_RESOURCE_TYPES",
     "AmbiguousPolicyPathError",
+    "BulkDataGateway",
     "BulkCheckpoint",
     "BulkCheckpointCompatibilityError",
     "BulkCheckpointError",
     "BulkCheckpointManifest",
     "BulkCheckpointSchemaError",
+    "BulkExportSummary",
+    "BulkGatewayConfig",
+    "BulkJobCancelled",
+    "BulkRejection",
     "FHIRBulkCheckpoint",
     "FHIRBulkCheckpointManifest",
+    "FHIRBulkConfig",
+    "FHIRBulkGateway",
+    "FHIRBulkJobReport",
+    "FHIRNDJSONLineError",
     "InvalidPolicyError",
+    "NDJSONFileSummary",
+    "NDJSONLineError",
     "PrivacyProjectionSummary",
     "QuestionnaireResponseChangeSummary",
     "QuestionnaireResponsePrivacyError",
@@ -74,26 +162,56 @@ __all__ = [
     "QuestionnaireResponseProjection",
     "ReferenceIntegrityFinding",
     "ReferenceIntegrityReport",
+    "RejectionRecord",
     "UnknownPolicyPathError",
+    "UnsupportedFHIRFieldError",
+    "UnsupportedFHIRField",
+    "VersionAdapter",
     "assert_resume_compatible",
     "build_checkpoint",
     "check_bundle_reference_integrity",
     "check_fhir_reference_integrity",
     "check_reference_integrity",
+    "convert_bundle",
+    "convert_resource",
     "create_checkpoint",
+    "deidentify_export",
+    "deidentify_ndjson",
+    "deidentify_ndjson_async",
+    "deidentify_ndjson_stream",
     "digest_page_token",
     "fhir_reference_integrity_report",
     "fingerprint_endpoint_scope",
     "fingerprint_policy",
+    "get_profile",
     "is_resume_compatible",
+    "iter_ndjson",
     "load_checkpoint",
+    "parse_fhir_version",
     "project_questionnaire_response",
     "project_questionnaire_response_result",
     "project_questionnaire_response_with_manifest",
     "project_questionnaire_response_with_summary",
+    "r4_to_r5",
+    "r5_to_r4",
+    "profile_matrix",
     "reference_integrity_report",
     "save_checkpoint",
+    "validate",
+    "validate_bundle",
+    "validate_document",
+    "validate_profile_matrix",
+    "validate_resource",
     "validate_resume",
     "validate_resume_compatibility",
+    "validation_result",
     "write_checkpoint",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve Bulk Data exports lazily to avoid exporter import cycles."""
+
+    if name in _BULK_EXPORTS:
+        return getattr(import_module(".bulk", __name__), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
