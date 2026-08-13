@@ -191,6 +191,7 @@ classification:
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
+    - integrations/distributed-sql-udf.md
     - spark-deidentification.md
     - prefect-integration.md
     - spacy-component.md
