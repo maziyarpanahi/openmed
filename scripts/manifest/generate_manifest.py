@@ -20,6 +20,11 @@ except ImportError:  # pragma: no cover - exercised in minimal test envs
 DEFAULT_ORG = "OpenMed"
 DEFAULT_OUTPUT = Path("models.jsonl")
 PRESERVED_ENRICHMENT_FIELDS = (
+    "languages",
+    "benchmark",
+    "param_count",
+    "architecture",
+    "formats",
     "disk_mb",
     "download_mb",
     "download_sizes",
@@ -29,6 +34,10 @@ PRESERVED_ENRICHMENT_FIELDS = (
     "script_coverage",
     "script_eval",
     "training_provenance",
+)
+BASE_MODEL_PRESERVED_FIELDS = (
+    "languages",
+    "script_coverage",
 )
 
 LANGUAGE_TAGS = {
@@ -199,7 +208,9 @@ def _siblings(model: Any) -> list[str]:
 
 def _family(repo_id: str, tags: list[str], task: str) -> str:
     repo_lower = _repo_name(repo_id).lower()
-    if "openmed-pii-" in repo_lower or "privacy-filter" in repo_lower:
+    if task == "token-classification" and (
+        "openmed-pii-" in repo_lower or "privacy-filter" in repo_lower
+    ):
         return "PII"
     if "zero-shot" in repo_lower or "zeroshot" in repo_lower:
         return "ZeroShot"
@@ -207,11 +218,20 @@ def _family(repo_id: str, tags: list[str], task: str) -> str:
         return "NER"
 
     lowered = " ".join([repo_id, *tags]).lower()
-    if "pii" in lowered or "privacy-filter" in lowered:
+    if task == "token-classification" and (
+        "pii" in lowered or "privacy-filter" in lowered
+    ):
         return "PII"
     if "zero-shot" in lowered or "zeroshot" in lowered:
         return "ZeroShot"
-    if "ner" in lowered or task == "token-classification":
+    if task in {"text-generation", "text2text-generation"}:
+        return "General"
+    explicit_ner_token = re.search(r"(?:^|[^a-z0-9])ner(?:$|[^a-z0-9])", lowered)
+    if (
+        "clinicalner" in repo_lower
+        or explicit_ner_token
+        or task == "token-classification"
+    ):
         return "NER"
     if task in {"image-to-text", "image-text-to-text", "visual-question-answering"}:
         return "Vision"
@@ -324,21 +344,32 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
         )
     ):
         formats.add("pytorch")
-    if (
+    is_mlx = (
         "mlx" in lowered_tags
         or "apple-silicon" in lowered_tags
         or any("mlx" in name for name in lowered_names)
         or repo_lower.endswith("-mlx")
-    ):
+    )
+    if is_mlx:
         formats.add("mlx-fp")
-    if (
+    if is_mlx and (
         "8bit" in lowered_tags
-        or "quantized" in lowered_tags
+        or "8-bit" in lowered_tags
         or "-mlx-8bit" in repo_lower
         or any("8bit" in name for name in lowered_names)
     ):
         formats.add("mlx-8bit")
         formats.discard("mlx-fp")
+    if is_mlx and (
+        "4bit" in lowered_tags
+        or "4-bit" in lowered_tags
+        or "q4" in lowered_tags
+        or "-q4-" in repo_lower
+        or any("4bit" in name or "q4" in name for name in lowered_names)
+    ):
+        formats.add("mlx-4bit")
+        formats.discard("mlx-fp")
+        formats.discard("mlx-8bit")
     if any(name.endswith(".onnx") for name in lowered_names):
         formats.add("onnx")
     if (
@@ -464,7 +495,9 @@ def fetch_manifest_rows(org: str) -> list[dict[str, Any]]:
             "Install the hf extra or run the manifest refresh workflow."
         )
 
-    api = HfApi()
+    # The committed manifest is a public catalog. Never let a cached local
+    # credential make private repositories appear in generated output.
+    api = HfApi(token=False)
     models = api.list_models(author=org, full=True)
     rows = [model_to_manifest_row(model) for model in models]
     return sorted(rows, key=lambda row: row["repo_id"].lower())
@@ -499,9 +532,14 @@ def preserve_existing_enrichment(
 
     for row in generated:
         previous = existing.get(row.get("repo_id"))
+        preserved_fields = PRESERVED_ENRICHMENT_FIELDS
         if previous is None:
+            base_model = row.get("base_model")
+            previous = existing.get(base_model) if isinstance(base_model, str) else None
+            preserved_fields = BASE_MODEL_PRESERVED_FIELDS
+        if previous is None or previous.get("family") != row.get("family"):
             continue
-        for field in PRESERVED_ENRICHMENT_FIELDS:
+        for field in preserved_fields:
             if field == "script_coverage" and row.get("family") != "PII":
                 continue
             if field in previous:

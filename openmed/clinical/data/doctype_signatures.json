@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "source": "OpenMed synthetic clinical note-type signatures",
+    "license": "Apache-2.0",
+    "restricted_data": false,
+    "synthetic": true
+  },
+  "max_tokens": 256,
+  "ambiguity_margin": 0.05,
+  "unknown_confidence": 0.0,
+  "document_types": [
+    {
+      "type": "discharge_summary",
+      "rules": [
+        {
+          "phrases": ["discharge summary"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["hospital course", "discharge diagnoses"],
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "type": "progress_note",
+      "rules": [
+        {
+          "phrases": ["progress note"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["subjective", "objective", "assessment", "plan"],
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "type": "radiology_report",
+      "rules": [
+        {
+          "phrases": ["radiology report"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["findings", "impression"],
+          "confidence": 0.88
+        },
+        {
+          "phrases": ["ct", "chest", "report"],
+          "confidence": 0.92
+        }
+      ]
+    },
+    {
+      "type": "pathology_report",
+      "rules": [
+        {
+          "phrases": ["pathology report"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["specimen", "microscopic description"],
+          "confidence": 0.9
+        },
+        {
+          "phrases": ["final diagnosis", "gross description"],
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "type": "operative_note",
+      "rules": [
+        {
+          "phrases": ["operative note"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["preoperative diagnosis", "procedure performed"],
+          "confidence": 0.92
+        },
+        {
+          "phrases": ["postoperative diagnosis", "estimated blood loss"],
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "type": "history_and_physical",
+      "rules": [
+        {
+          "phrases": ["history and physical"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["chief complaint", "physical examination"],
+          "confidence": 0.9
+        },
+        {
+          "phrases": ["history of present illness", "physical exam"],
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "type": "consult_note",
+      "rules": [
+        {
+          "phrases": ["consultation note"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["consult note"],
+          "confidence": 0.98
+        },
+        {
+          "phrases": ["reason for consultation", "recommendations"],
+          "confidence": 0.9
+        }
+      ]
+    }
+  ]
+}

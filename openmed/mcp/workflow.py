@@ -15,10 +15,24 @@ from openmed.clinical.exporters.codeable_concept_simple import (
     coding,
 )
 from openmed.clinical.exporters.fhir import to_bundle
-from openmed.mcp.tool_registry import CLINICAL_STAGE_ORDER
+from openmed.core.schemas import OpenMedSpan
+from openmed.mcp.tool_registry import (
+    CLINICAL_STAGE_ORDER,
+    CLINICAL_WORKFLOW_NAME,
+    validate_registered_tool_output,
+    validate_registered_workflow_artifact,
+)
 
 WorkflowStepExecutor = Callable[..., Any]
 StringDeidentifier = Callable[[str], str]
+ClinicalStageHandler = Callable[
+    ["ClinicalPipelineArtifact", Mapping[str, Any]],
+    Mapping[str, Any],
+]
+ClinicalExternalStageGateway = Callable[
+    [str, Mapping[str, Any]],
+    Mapping[str, Any],
+]
 
 
 class WorkflowError(ValueError):
@@ -34,8 +48,18 @@ class TransientWorkflowError(WorkflowError):
 
 
 CLINICAL_PIPELINE_SCHEMA_VERSION = "openmed.clinical_pipeline.v1"
+CLINICAL_ARTIFACT_SCHEMA_VERSION = "openmed.clinical_artifact.v1"
+EXTERNAL_LLM_CAPABLE_STAGES = frozenset({"ground"})
 _CLINICAL_STAGE_INDEX = {
     stage: index for index, stage in enumerate(CLINICAL_STAGE_ORDER)
+}
+_REGISTERED_STAGE_TOOLS = {
+    "ground": "openmed_ground",
+    "export": "openmed_export_fhir",
+    "risk": "openmed_risk_score",
+}
+_EXTERNAL_STAGE_OPTION_KEYS = {
+    "ground": frozenset({"vocabularies", "max_candidates"}),
 }
 
 
@@ -64,6 +88,82 @@ class ClinicalStageOrderError(WorkflowValidationError):
             "stage": stage,
             "details": error_details,
         }
+
+
+@dataclass(frozen=True)
+class ClinicalPipelineArtifact:
+    """Typed, process-local state passed between clinical pipeline stages.
+
+    ``text`` may contain sensitive source material and is therefore excluded
+    from the dataclass representation and every public artifact payload. The
+    serializable span handoff is always the canonical, text-free
+    :class:`~openmed.core.schemas.OpenMedSpan` contract.
+    """
+
+    text: str | None = field(default=None, repr=False)
+    spans: tuple[Mapping[str, Any], ...] = ()
+    artifacts: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    session_id: str | None = None
+    workflow_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.text is not None and not isinstance(self.text, str):
+            raise TypeError("clinical pipeline text must be a string or null")
+        normalized_spans = _canonical_span_payloads(self.spans)
+        if self.text is not None and any(
+            int(span["end"]) > len(self.text) for span in normalized_spans
+        ):
+            raise ValueError("clinical pipeline span offsets exceed the input text")
+        object.__setattr__(self, "spans", normalized_spans)
+        object.__setattr__(
+            self,
+            "artifacts",
+            {
+                str(stage): copy.deepcopy(dict(payload))
+                for stage, payload in self.artifacts.items()
+            },
+        )
+
+    def public_spans(self) -> list[dict[str, Any]]:
+        """Return deep-copied canonical spans safe for structured handoff."""
+
+        return [copy.deepcopy(dict(span)) for span in self.spans]
+
+    def external_request(
+        self,
+        stage: str,
+        options: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Return the text-free request allowed to cross the privacy gateway."""
+
+        return {
+            "schema_version": CLINICAL_ARTIFACT_SCHEMA_VERSION,
+            "stage": stage,
+            "spans": self.public_spans(),
+            "options": copy.deepcopy(dict(options)),
+        }
+
+    def advance(
+        self,
+        stage: str,
+        payload: Mapping[str, Any],
+    ) -> "ClinicalPipelineArtifact":
+        """Validate one stage output and return the next immutable artifact."""
+
+        output = copy.deepcopy(dict(payload))
+        next_spans = self.spans
+        if "spans" in output:
+            next_spans = _canonical_span_payloads(output["spans"])
+            output["spans"] = [copy.deepcopy(dict(span)) for span in next_spans]
+        next_artifacts = dict(self.artifacts)
+        next_artifacts[stage] = output
+        return ClinicalPipelineArtifact(
+            text=self.text,
+            spans=next_spans,
+            artifacts=next_artifacts,
+            session_id=self.session_id,
+            workflow_id=self.workflow_id,
+        )
 
 
 def validate_clinical_stage_order(stages: Sequence[Any]) -> tuple[str, ...]:
@@ -202,6 +302,207 @@ def plan_clinical_pipeline(
         artifacts=artifacts,
         trace=trace,
     )
+
+
+def execute_clinical_pipeline(
+    stages: Sequence[Any],
+    *,
+    text: str | None,
+    spans: Sequence[Mapping[str, Any]] | None,
+    stage_handlers: Mapping[str, ClinicalStageHandler],
+    options: Mapping[str, Any] | None = None,
+    allow_external_llm: bool = False,
+    external_stage_gateway: ClinicalExternalStageGateway | None = None,
+    session_id: str | None = None,
+    workflow_id: str | None = None,
+) -> dict[str, Any]:
+    """Execute a validate-first clinical pipeline over typed artifacts.
+
+    The full stage list, handler availability, options, canonical input spans,
+    and privacy-gateway requirement are preflighted before any stage runs.
+    External-LLM-capable stages never receive source text and cannot execute
+    directly when external routing is enabled.
+
+    Args:
+        stages: Declarative clinical stages in canonical relative order.
+        text: Optional process-local source text. It is never returned.
+        spans: Optional canonical, text-free OpenMedSpan inputs.
+        stage_handlers: Local handlers keyed by clinical stage name.
+        options: Optional per-stage option mappings.
+        allow_external_llm: Route external-capable stages through the gateway.
+        external_stage_gateway: Required gateway callback for external routing.
+        session_id: Optional process-local workflow session identifier.
+        workflow_id: Optional process-local workflow identifier.
+
+    Returns:
+        A schema-versioned completed, rejected, or failed pipeline payload.
+    """
+
+    try:
+        normalized_stages = validate_clinical_stage_order(stages)
+    except ClinicalStageOrderError as exc:
+        return _clinical_pipeline_payload(
+            status="rejected",
+            stages=exc.stages,
+            error=exc.error,
+        )
+
+    try:
+        normalized_options = _clinical_stage_options(options, normalized_stages)
+        handlers = _clinical_stage_handlers(stage_handlers, normalized_stages)
+        artifact = ClinicalPipelineArtifact(
+            text=text,
+            spans=tuple(spans or ()),
+            session_id=session_id,
+            workflow_id=workflow_id,
+        )
+        external_stages = set(normalized_stages) & EXTERNAL_LLM_CAPABLE_STAGES
+        if allow_external_llm and external_stages:
+            for stage in external_stages:
+                unknown_external_options = set(normalized_options[stage]) - set(
+                    _EXTERNAL_STAGE_OPTION_KEYS[stage]
+                )
+                if unknown_external_options:
+                    raise ValueError(
+                        "external clinical stage options contain an unsupported field"
+                    )
+            if external_stage_gateway is None:
+                return _clinical_pipeline_payload(
+                    status="failed",
+                    stages=normalized_stages,
+                    error=_clinical_execution_error(
+                        code="privacy_gateway_required",
+                        message=(
+                            "External clinical stages require privacy-gateway routing."
+                        ),
+                        details={"external_stage_count": len(external_stages)},
+                    ),
+                )
+    except Exception as exc:
+        return _clinical_pipeline_payload(
+            status="failed",
+            stages=normalized_stages,
+            error=_clinical_execution_error(
+                code="invalid_pipeline_input",
+                message="Clinical pipeline inputs are invalid.",
+                details={"error_type": exc.__class__.__name__},
+            ),
+        )
+
+    trace: list[dict[str, str]] = []
+    for stage in normalized_stages:
+        try:
+            stage_options = normalized_options[stage]
+            if allow_external_llm and stage in EXTERNAL_LLM_CAPABLE_STAGES:
+                assert external_stage_gateway is not None
+                output = external_stage_gateway(
+                    stage,
+                    artifact.external_request(stage, stage_options),
+                )
+            else:
+                output = handlers[stage](artifact, stage_options)
+            if not isinstance(output, Mapping):
+                raise TypeError("clinical stage output must be a mapping")
+            registered_tool = _REGISTERED_STAGE_TOOLS.get(stage)
+            if registered_tool is not None:
+                output = validate_registered_tool_output(registered_tool, output)
+            output = validate_registered_workflow_artifact(
+                CLINICAL_WORKFLOW_NAME,
+                stage,
+                output,
+            )
+            artifact = artifact.advance(stage, output)
+            trace.append({"stage": stage, "status": "completed"})
+        except Exception as exc:
+            return _clinical_pipeline_payload(
+                status="failed",
+                stages=normalized_stages,
+                artifacts=artifact.artifacts,
+                error=_clinical_execution_error(
+                    code="stage_execution_failed",
+                    message="A clinical pipeline stage failed.",
+                    stage=stage,
+                    details={"error_type": exc.__class__.__name__},
+                ),
+                trace=trace,
+            )
+
+    return _clinical_pipeline_payload(
+        status="completed",
+        stages=normalized_stages,
+        artifacts=artifact.artifacts,
+        trace=trace,
+    )
+
+
+def _canonical_span_payloads(
+    spans: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    if isinstance(spans, (str, bytes, bytearray)) or not isinstance(spans, Sequence):
+        raise TypeError("clinical pipeline spans must be a sequence")
+
+    normalized: list[dict[str, Any]] = []
+    for span in spans:
+        if not isinstance(span, Mapping):
+            raise TypeError("clinical pipeline spans must be mappings")
+        canonical = OpenMedSpan.from_dict(span).to_dict()
+        if set(span) != set(canonical):
+            raise ValueError("clinical pipeline spans must use the canonical schema")
+        normalized.append(canonical)
+    return tuple(normalized)
+
+
+def _clinical_stage_options(
+    options: Mapping[str, Any] | None,
+    stages: Sequence[str],
+) -> dict[str, dict[str, Any]]:
+    if options is None:
+        return {stage: {} for stage in stages}
+    if not isinstance(options, Mapping):
+        raise TypeError("clinical pipeline options must be an object")
+    unknown = set(options) - set(CLINICAL_STAGE_ORDER)
+    if unknown:
+        raise ValueError("clinical pipeline options contain an unknown stage")
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for stage in stages:
+        stage_options = options.get(stage, {})
+        if stage_options is None:
+            stage_options = {}
+        if not isinstance(stage_options, Mapping):
+            raise TypeError("clinical stage options must be objects")
+        normalized[stage] = copy.deepcopy(dict(stage_options))
+    return normalized
+
+
+def _clinical_stage_handlers(
+    handlers: Mapping[str, ClinicalStageHandler],
+    stages: Sequence[str],
+) -> dict[str, ClinicalStageHandler]:
+    if not isinstance(handlers, Mapping):
+        raise TypeError("clinical stage handlers must be a mapping")
+    normalized: dict[str, ClinicalStageHandler] = {}
+    for stage in stages:
+        handler = handlers.get(stage)
+        if not callable(handler):
+            raise ValueError("clinical pipeline stage handler is unavailable")
+        normalized[stage] = handler
+    return normalized
+
+
+def _clinical_execution_error(
+    *,
+    code: str,
+    message: str,
+    stage: str | None = None,
+    details: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "code": code,
+        "message": message,
+        "stage": stage,
+        "details": copy.deepcopy(dict(details or {})),
+    }
 
 
 def _clinical_pipeline_payload(
