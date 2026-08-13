@@ -1,0 +1,1 @@
+{"id":"golden-checksum-ch-ahv","language":"de","text":"AHV-Nummer: 756.1234.5678.97.","gold_spans":[{"start":12,"end":28,"label":"ID_NUM","text":"756.1234.5678.97","metadata":{"checksum_status":"valid","identifier_type":"ahv"}}],"metadata":{"category":"checksum_ids","locale":"de_CH","synthetic":true,"expected_output":{"method":"mask","text":"AHV-Nummer: [national_id]."}}}

@@ -48,6 +48,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "beam": AdapterSpec(
+        name="beam",
+        module="openmed.interop.beam_transform",
+        extra="beam",
+        description="Apache Beam PTransform for worker-local de-identification",
+    ),
     "cda": AdapterSpec(
         name="cda",
         module="openmed.interop.cda",
@@ -83,6 +89,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.function_tools",
         extra="",
         description="Generic function-calling and tool-use schema adapters",
+    ),
+    "graph_orchestration": AdapterSpec(
+        name="graph_orchestration",
+        module="openmed.interop.graph_orchestration",
+        extra="langgraph",
+        description="State-graph de-identification and re-identification nodes",
     ),
     "langchain": AdapterSpec(
         name="langchain",
@@ -144,11 +156,23 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="pydeid",
         description="pyDeid PHI span adapter",
     ),
+    "ray": AdapterSpec(
+        name="ray",
+        module="openmed.interop.ray_data",
+        extra="ray",
+        description="Ray Data actor operator for batch column de-identification",
+    ),
     "scrubadub": AdapterSpec(
         name="scrubadub",
         module="openmed.interop.scrubadub",
         extra="scrubadub",
         description="scrubadub Filth span adapter",
+    ),
+    "search_pipeline": AdapterSpec(
+        name="search_pipeline",
+        module="openmed.interop.search_pipeline",
+        extra="haystack",
+        description="Modular search-pipeline redaction components",
     ),
     "spark": AdapterSpec(
         name="spark",
