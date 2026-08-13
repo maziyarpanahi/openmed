@@ -171,6 +171,7 @@ classification:
     - api/deidentification.md
     - api/compatibility-gate.md
     - reidentification-risk.md
+    - privacy/structured-risk-lab.md
     - sms-short-text-deid.md
     - anonymization.md
     - chw-form-deid.md
