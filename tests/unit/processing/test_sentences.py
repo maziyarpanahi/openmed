@@ -7,7 +7,9 @@ import pytest
 
 from openmed.processing import (
     SentenceSpan,
+    parse_lists,
     segment_chinese_text,
+    segment_clinical_text,
     segment_text,
     sentences,
 )
@@ -172,6 +174,50 @@ def test_non_chinese_language_keeps_pysbd_path():
         SentenceSpan("Patient is stable. ", 0, 19),
         SentenceSpan("Follow up tomorrow.", 19, len(text)),
     ]
+
+
+def test_top_level_list_items_are_single_segmentation_units() -> None:
+    text = (
+        "- Metformin 500 mg.\n  a) Take twice daily.\n- Lisinopril 10 mg. Take daily."
+    )
+    segmenter = Mock()
+
+    spans = segment_text(text, segmenter=segmenter, list_items=parse_lists(text))
+
+    assert [span.text for span in spans] == [
+        "- Metformin 500 mg.\n  a) Take twice daily.\n",
+        "- Lisinopril 10 mg. Take daily.",
+    ]
+    segmenter.segment.assert_not_called()
+    _assert_exact_round_trip(text, spans)
+
+
+def test_clinical_segmentation_scopes_list_parsing_to_medication_section() -> None:
+    text = (
+        "HPI: Synthetic cough. It is improving.\n"
+        "MEDICATIONS:\n"
+        "Metformin 500 mg. Take twice daily.\n"
+        "Lisinopril 10 mg. Take daily.\n"
+        "PLAN: Follow up. Continue care."
+    )
+
+    class WholeRegionSegmenter:
+        def segment(self, region: str):
+            return [SimpleNamespace(sent=region, start=0, end=len(region))]
+
+    spans = segment_clinical_text(text, segmenter=WholeRegionSegmenter())
+    medication_spans = [
+        span for span in spans if "Metformin" in span.text or "Lisinopril" in span.text
+    ]
+
+    assert len(medication_spans) == 2
+    assert "Lisinopril" not in medication_spans[0].text
+    assert "Metformin" not in medication_spans[1].text
+    assert all(
+        "Take" in span.text and span.text.count("Take") == 1
+        for span in medication_spans
+    )
+    _assert_exact_round_trip(text, spans)
 
 
 def test_explicit_segmenter_override_is_preserved_for_han_text():
