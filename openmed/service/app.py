@@ -108,6 +108,7 @@ _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _MODEL_BACKED_PATHS = frozenset(
     {
+        "/graphql",
         "/analyze",
         "/pii/extract",
         "/pii/extract/stream",
@@ -1368,6 +1369,10 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
+
+    from .graphql_app import mount_graphql
+
+    mount_graphql(app, runtime_getter=_get_service_runtime)
 
     if app.state.tracing.enabled:
         app.add_middleware(

@@ -105,6 +105,7 @@ classification:
     - offline-install.md
     - serving/async-jobs.md
     - serving/grpc.md
+    - serving/graphql.md
     - serving/authentication.md
     - deploy/helm.md
     - deploy/openhim-mediator.md
