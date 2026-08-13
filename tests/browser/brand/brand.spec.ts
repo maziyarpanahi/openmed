@@ -1160,11 +1160,13 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   });
   await search.click();
   await expect(search).toBeFocused();
+  await expect(page.locator("#__search")).toBeChecked();
   await search.pressSequentially("OpenMedSpan");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
   );
+  await expect(page.locator(".md-search-result__link").first()).toBeVisible();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
