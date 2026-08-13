@@ -78,6 +78,30 @@ from .iso27701 import (
     load_control_evidence_schema,
     render_control_evidence_markdown,
 )
+from .policy_coverage import (
+    MANIFEST_FILENAME as POLICY_COVERAGE_MANIFEST_FILENAME,
+)
+from .policy_coverage import (
+    MARKDOWN_FILENAME as POLICY_COVERAGE_MARKDOWN_FILENAME,
+)
+from .policy_coverage import (
+    MATRIX_ID as POLICY_COVERAGE_MATRIX_ID,
+)
+from .policy_coverage import (
+    SCHEMA_VERSION as POLICY_COVERAGE_SCHEMA_VERSION,
+)
+from .policy_coverage import (
+    PolicyCoverageBinding,
+    PolicyCoverageError,
+    PolicyCoverageMatrix,
+    PolicyCoverageResult,
+    PolicyCoverageRow,
+    UncoveredPolicyRuleError,
+    build_policy_coverage_matrix,
+    generate_policy_coverage,
+    render_policy_coverage_markdown,
+    validate_policy_coverage,
+)
 from .release_evidence import build_release_expert_review_evidence
 from .safe_harbor import (
     SAFE_HARBOR_ATTESTATION_NOTICE,
@@ -142,6 +166,20 @@ __all__ = [
     "UtilityAggregate",
     "build_expert_review_evidence",
     "build_release_expert_review_evidence",
+    "POLICY_COVERAGE_MANIFEST_FILENAME",
+    "POLICY_COVERAGE_MARKDOWN_FILENAME",
+    "POLICY_COVERAGE_MATRIX_ID",
+    "POLICY_COVERAGE_SCHEMA_VERSION",
+    "PolicyCoverageBinding",
+    "PolicyCoverageError",
+    "PolicyCoverageMatrix",
+    "PolicyCoverageResult",
+    "PolicyCoverageRow",
+    "UncoveredPolicyRuleError",
+    "build_policy_coverage_matrix",
+    "generate_policy_coverage",
+    "render_policy_coverage_markdown",
+    "validate_policy_coverage",
     "CONTROL_STATUSES",
     "MANIFEST_FILENAME",
     "MARKDOWN_FILENAME",
