@@ -52,6 +52,7 @@ nav:
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+      - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
