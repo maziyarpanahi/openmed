@@ -10,12 +10,22 @@ __pycache__/
 .Python
 build/
 node_modules/
+
+# Flutter / Dart local state
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+js/openmedkit-flutter/android/.cxx/
+js/openmedkit-flutter/pubspec.lock
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
 lib/
+!js/openmedkit-flutter/lib/
+!js/openmedkit-flutter/lib/**
 lib64/
 parts/
 sdist/
@@ -242,6 +252,10 @@ docs/website/_build/
 docs/api/_build/
 output/playwright/
 .playwright-cli/
+
+# Local browser-demo model and runtime payloads
+/docs/demo/web/models/
+/docs/demo/web/vendor/
 
 .pypirc
 

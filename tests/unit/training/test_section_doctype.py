@@ -15,6 +15,7 @@ from openmed.training.data.section_doctype import (
     build_document_type_examples,
     build_section_doctype_examples,
     build_section_examples,
+    document_type_loinc_mapping_coverage,
     generate_synthetic_notes,
 )
 
@@ -34,6 +35,7 @@ _EXPECTED_DOCUMENT_TYPES = {
     "radiology_report",
     "pathology_report",
     "operative_note",
+    "history_and_physical",
     "consult_note",
 }
 
@@ -53,6 +55,7 @@ def test_synthetic_builder_covers_all_section_and_document_type_labels() -> None
     assert {classify_document(note.text)["type"] for note in notes} == (
         _EXPECTED_DOCUMENT_TYPES
     )
+    assert document_type_loinc_mapping_coverage(notes)["mapping_coverage"] == 1.0
 
 
 def test_section_examples_preserve_contiguous_non_overlapping_runtime_spans() -> None:
