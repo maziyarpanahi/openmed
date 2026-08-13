@@ -30,6 +30,7 @@ HEAVY_MODULES = (
     "easyocr",
     "paddleocr",
     "markdown_it",
+    "openpyxl",
 )
 
 
