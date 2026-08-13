@@ -205,6 +205,48 @@
       ]
     },
     {
+      "name": "Grounding",
+      "description": "Offline-first grounding against caller-provisioned terminology snapshots.",
+      "item": [
+        {
+          "name": "Ground Clinical Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Aspirin 81 mg daily\",\n  \"systems\": [\"rxnorm\"],\n  \"source_language\": \"en\",\n  \"top_k\": 5,\n  \"offline\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/ground",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ground"
+              ]
+            },
+            "description": "Ground synthetic clinical text using local terminology snapshots."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "PII",
       "description": "PII extraction and de-identification endpoints.",
       "item": [

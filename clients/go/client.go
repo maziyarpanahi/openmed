@@ -170,6 +170,16 @@ type AnalyzeRequest struct {
 	KeepAlive           any                  `json:"keep_alive,omitempty"`
 }
 
+// GroundRequest is the request body for POST /ground.
+type GroundRequest struct {
+	Entities       []JSONObject `json:"entities,omitempty"`
+	Offline        *bool        `json:"offline,omitempty"`
+	SourceLanguage string       `json:"source_language,omitempty"`
+	Systems        []string     `json:"systems,omitempty"`
+	Text           *string      `json:"text,omitempty"`
+	TopK           int          `json:"top_k,omitempty"`
+}
+
 // PIIExtractRequest is the request body for POST /pii/extract.
 type PIIExtractRequest struct {
 	Text                string      `json:"text"`
@@ -403,6 +413,9 @@ type PredictionResult struct {
 
 // AnalyzeResponse is returned by /analyze.
 type AnalyzeResponse = PredictionResult
+
+// GroundResponse is the open grounding result returned by /ground.
+type GroundResponse = JSONObject
 
 // PIIExtractResponse is returned by /pii/extract.
 type PIIExtractResponse = PredictionResult
@@ -995,6 +1008,15 @@ func (c *Client) BaseURL() string { return c.baseURL }
 func (c *Client) Analyze(ctx context.Context, req AnalyzeRequest) (*AnalyzeResponse, error) {
 	var out AnalyzeResponse
 	if err := c.post(ctx, "/analyze", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Ground calls POST /ground.
+func (c *Client) Ground(ctx context.Context, req GroundRequest) (*GroundResponse, error) {
+	var out GroundResponse
+	if err := c.post(ctx, "/ground", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -11,6 +11,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /models/loaded`
 - `POST /models/unload`
 - `POST /analyze`
+- `POST /ground`
 - `POST /pii/extract`
 - `POST /pii/extract/stream`
 - `POST /pii/deidentify`
@@ -485,6 +486,25 @@ Request body:
 ```
 
 Returns the same shape as OpenMed `analyze_text(..., output_format="dict")`.
+
+### `POST /ground`
+
+Ground synthetic text or pre-extracted entity objects against caller-provisioned
+local terminology snapshots:
+
+```json
+{
+  "text": "Aspirin 81 mg daily",
+  "systems": ["rxnorm"],
+  "source_language": "en",
+  "top_k": 5,
+  "offline": true
+}
+```
+
+The route is offline by default. Restricted terminologies such as UMLS and
+SNOMED CT require an explicitly configured, user-licensed terminology source;
+OpenMed never bundles those vocabularies.
 
 ### `POST /pii/extract`
 

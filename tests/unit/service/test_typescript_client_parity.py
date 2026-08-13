@@ -21,6 +21,7 @@ CLIENT_METHOD_BY_PATH = {
     "/fhir/smart-backend/ingestions": "startSmartBackendIngestion",
     "/fhir/smart-backend/ingestions/{job_id}": "smartBackendIngestionStatus",
     "/fhir/smart-backend/ingestions/{job_id}/summary": ("smartBackendIngestionSummary"),
+    "/ground": "ground",
     "/health": "health",
     "/jobs": "createJob",
     "/jobs/{job_id}": "getJob",

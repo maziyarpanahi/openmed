@@ -37,6 +37,13 @@ const analysis = await client.analyze({
   keep_alive: "5m",
 });
 
+const grounded = await client.ground({
+  text: "Aspirin 81 mg daily",
+  systems: ["rxnorm"],
+  source_language: "en",
+  offline: true,
+});
+
 const pii = await client.extractPii({
   text: "Paciente: Maria Garcia, DNI: 12345678Z",
   lang: "es",

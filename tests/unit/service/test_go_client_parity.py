@@ -29,6 +29,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
         "SMARTBackendIngestionSummary"
     ),
+    ("post", "/ground"): "Ground",
     ("get", "/health"): "Health",
     ("post", "/jobs"): "CreateJob",
     ("get", "/jobs/{job_id}"): "GetJob",
@@ -50,6 +51,7 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
+    "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",
     "OmopLoadRequest": "OMOPLoadRequest",

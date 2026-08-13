@@ -229,6 +229,7 @@ non-nil redirect policy when that forwarding behavior is deliberate.
 | Method | Endpoint |
 | --- | --- |
 | `Analyze` | `POST /analyze` |
+| `Ground` | `POST /ground` |
 | `ExtractPII` | `POST /pii/extract` |
 | `ExtractPIIStream` | `POST /pii/extract/stream` |
 | `Deidentify` | `POST /pii/deidentify` |

@@ -77,6 +77,15 @@ export interface AnalyzeRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface GroundRequest {
+  entities?: JsonObject[] | null;
+  offline?: boolean;
+  source_language?: string;
+  systems?: string[];
+  text?: string | null;
+  top_k?: number;
+}
+
 export interface PIIExtractRequest {
   text: string;
   model_name?: string;
@@ -308,6 +317,8 @@ export interface PrivacyGatewayResponse {
 
 export type AnalyzeResponse = PredictionResult;
 
+export type GroundResponse = JsonObject;
+
 export type PIIExtractResponse = PredictionResult;
 
 export type PIIExtractStreamResponse = string;
@@ -505,6 +516,10 @@ export class OpenMedClient {
 
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     return this.post("/analyze", request);
+  }
+
+  async ground(request: GroundRequest): Promise<GroundResponse> {
+    return this.post("/ground", request);
   }
 
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
