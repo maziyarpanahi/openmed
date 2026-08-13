@@ -37,3 +37,15 @@ class MissingDependencyError(MissingOptionalDependencyError):
 
 class UnsupportedDocumentError(ValueError):
     """Raised when no handler is registered for a document's file type."""
+
+
+class DocumentGraphError(ValueError):
+    """Raised when a document cannot be converted into a safe graph."""
+
+
+class MalformedDocumentError(DocumentGraphError):
+    """Raised when a document is truncated, invalid, or structurally unsafe."""
+
+
+class EncryptedDocumentError(DocumentGraphError):
+    """Raised when a document requires a password or encrypted content access."""
