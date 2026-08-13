@@ -34,6 +34,14 @@ from .log_redactor import (
     redact_ndjson_lines,
     redact_ndjson_stream,
 )
+from .ray_map_batches import (
+    DEFAULT_RAY_PII_MODEL,
+    ActorPoolConcurrency,
+    BatchFormat,
+    RayDeidentifyBatch,
+    RayMapBatchesDeidentifier,
+    map_batches_deidentify,
+)
 from .spark_streaming import (
     DEFAULT_BATCH_ID_COLUMN,
     DEFAULT_SPARK_POLICY,
@@ -59,10 +67,13 @@ __all__ = [
     "DEFAULT_LOG_MESSAGE_FIELDS",
     "DEFAULT_LOG_REDACTION_MODEL",
     "DEFAULT_BATCH_ID_COLUMN",
+    "DEFAULT_RAY_PII_MODEL",
     "DEFAULT_SPARK_POLICY",
     "DEFAULT_STREAM_BATCH_SIZE",
     "DEFAULT_STREAM_POLICY",
     "DeidentifyMapFunction",
+    "ActorPoolConcurrency",
+    "BatchFormat",
     "ENTITY_COUNT_ATTRIBUTE",
     "FIELD_COUNT_ATTRIBUTE",
     "LakehouseRedactionProgress",
@@ -79,6 +90,9 @@ __all__ = [
     "DataflowToolProcessorError",
     "clear_pipeline_cache",
     "deidentify_write_stream",
+    "RayDeidentifyBatch",
+    "RayMapBatchesDeidentifier",
+    "map_batches_deidentify",
     "process_flow_file",
     "process_json_lines",
     "process_record",

@@ -188,6 +188,7 @@ classification:
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
     - integrations/pandas-on-spark.md
+    - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - spark-deidentification.md
