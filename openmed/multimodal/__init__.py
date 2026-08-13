@@ -162,6 +162,7 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .odt import extract_odt
 from .rtf import extract_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
@@ -269,6 +270,7 @@ __all__ = [
     "extract_docx",
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
+    "extract_odt",
     "extract_epub",
     "extract_rtf",
     "MetadataFinding",

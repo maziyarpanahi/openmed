@@ -152,6 +152,7 @@ classification:
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md
+    - multimodal/odt-extraction.md
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
