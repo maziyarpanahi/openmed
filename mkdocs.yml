@@ -132,6 +132,7 @@ nav:
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md

@@ -203,6 +203,7 @@ classification:
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
     - interop/fhir-bulk-data.md
+    - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
     - fhir/bulk-checkpoints.md
     - fhir/operation-outcome.md
