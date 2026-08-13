@@ -1100,6 +1100,27 @@ class TextProcessor:
         )
         return text
 
+    def resolve_sections(
+        self,
+        text: str,
+        sections: Iterable[Mapping[str, Any]] | None = None,
+        *,
+        language: str | None = None,
+        use_learned: bool = False,
+        learned_head: Any | None = None,
+        model_path: str | None = None,
+    ) -> tuple[Mapping[str, Any], ...]:
+        """Resolve section spans while preserving caller-provided metadata."""
+
+        return resolve_sections(
+            text,
+            sections,
+            language=language,
+            use_learned=use_learned,
+            learned_head=learned_head,
+            model_path=model_path,
+        )
+
     def segment_sentences(self, text: str) -> List[str]:
         """Segment text into sentences using medical text-aware rules.
 
@@ -1379,6 +1400,40 @@ def postprocess_text(text: str, capitalize_first: bool = True) -> str:
         text = text[0].upper() + text[1:]
 
     return text
+
+
+def resolve_sections(
+    text: str,
+    sections: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    language: str | None = None,
+    use_learned: bool = False,
+    learned_head: Any | None = None,
+    model_path: str | None = None,
+) -> tuple[Mapping[str, Any], ...]:
+    """Return caller-supplied section metadata or detect it lazily.
+
+    Precomputed section spans are materialized without rewriting their
+    mappings, including their ``codes``, ``source``, and offset metadata. This
+    lets sentence, medication, and SDOH stages share one section sequence.
+    The clinical detector import is lazy so the base text-processing module
+    remains independent of optional clinical/model runtimes.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if sections is not None:
+        return tuple(sections)
+
+    from openmed.clinical.sections import detect_sections
+
+    return detect_sections(
+        text,
+        language=language,
+        use_learned=use_learned,
+        learned_head=learned_head,
+        model_path=model_path,
+    )
 
 
 # ---------------------------------------------------------------------------
