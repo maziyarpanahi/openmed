@@ -1,0 +1,116 @@
+name: Nightly Model Release
+
+on:
+  schedule:
+    - cron: '17 2 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      weekday:
+        description: 'UTC weekday override (monday through friday)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: nightly-model-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, gate, publish, and audit themed batch
+    runs-on: ubuntu-latest
+    environment:
+      name: hf-publish
+      url: https://huggingface.co/OpenMed
+
+    steps:
+      - name: Require protected release credentials
+        env:
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+          OPENMED_RELEASE_GATE_KEY: ${{ secrets.OPENMED_RELEASE_GATE_KEY }}
+        run: |
+          if [ -z "${HF_WRITE_TOKEN:-}" ] || [ -z "${OPENMED_RELEASE_GATE_KEY:-}" ]; then
+            echo "::error title=Missing release credentials::Configure the protected write token and gate signing key."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install conversion and release dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[hf,onnx]"
+
+      - name: Resolve themed UTC weekday
+        id: calendar
+        env:
+          REQUESTED_WEEKDAY: ${{ inputs.weekday }}
+        run: |
+          weekday="${REQUESTED_WEEKDAY:-}"
+          if [ -z "$weekday" ]; then
+            weekday=$(date -u +%A | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "weekday=$weekday" >> "$GITHUB_OUTPUT"
+
+      - name: Run fail-closed release batch
+        id: orchestrate
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+          OPENMED_RELEASE_GATE_KEY: ${{ secrets.OPENMED_RELEASE_GATE_KEY }}
+        run: |
+          python scripts/release/orchestrate.py run \
+            --queue gates/nightly_release_queue.json \
+            --weekday "${{ steps.calendar.outputs.weekday }}" \
+            --run-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --git-sha "${{ github.sha }}" \
+            --ledger gates/release_runs.jsonl \
+            --reports-dir gates/release_reports \
+            --manifest models.jsonl \
+            --registry-state gates/registry_state.json \
+            --baseline gates/baseline.json
+
+      - name: Upload complete local audit state
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-release-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            gates/release_runs.jsonl
+            gates/release_reports/
+            gates/registry_state.json
+            models.jsonl
+
+      - name: Commit ledger and gate reports for review
+        if: always() && !cancelled()
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: automation/nightly-release-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          base: master
+          commit-message: Record nightly release audit ${{ github.run_id }}
+          title: Record nightly model release audit ${{ github.run_id }}
+          body: |
+            Records the append-only ledger, signed gate reports, registry pointers,
+            and manifest outcome for nightly run `${{ github.run_id }}-${{ github.run_attempt }}`.
+          add-paths: |
+            gates/release_runs.jsonl
+            gates/release_reports/
+            gates/registry_state.json
+            models.jsonl
+          delete-branch: true
+
+      - name: Fail partial or invalid run
+        if: always() && steps.orchestrate.outcome != 'success'
+        run: exit 1

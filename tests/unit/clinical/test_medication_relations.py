@@ -10,6 +10,7 @@ from openmed.clinical import (
     CoreferenceChain,
     MedicationRelationScorer,
     extract_medication_relations,
+    extract_relations,
     link_medication_attributes,
     reconstruct_medication_statements,
 )
@@ -143,6 +144,29 @@ def test_extract_medication_relations_binds_canonical_regimen_attributes() -> No
     ]
     assert all(relation.head.text == "lisinopril" for relation in relations)
     assert all(0 < relation.score <= 1 for relation in relations)
+
+
+def test_extract_relations_defaults_to_medication_regimen_relations() -> None:
+    text = "lisinopril 10 mg PO daily"
+    spans = [
+        _span(text, "lisinopril", "MEDICATION"),
+        _span(text, "10 mg", "DOSAGE"),
+        _span(text, "PO", "ROUTE"),
+        _span(text, "daily", "FREQUENCY"),
+    ]
+
+    relations = extract_relations(text, spans)
+    statements = reconstruct_medication_statements(relations)
+
+    assert [(relation.type, relation.tail.text) for relation in relations] == [
+        ("dose", "10 mg"),
+        ("route", "PO"),
+        ("frequency", "daily"),
+    ]
+    assert len(statements) == 1
+    assert statements[0].record_type == "MedicationStatement"
+    assert statements[0].medication.text == "lisinopril"
+    assert set(statements[0].dosage) == {"dose", "route", "frequency"}
 
 
 def test_extract_medication_relations_supports_every_attribute_type() -> None:
