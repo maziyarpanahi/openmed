@@ -131,6 +131,8 @@ nav:
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
@@ -139,6 +141,7 @@ nav:
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
+      - FHIR Clinical Exchange Workbench: interop/fhir-profiles.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - Export Format Support Matrix: export-matrix.md

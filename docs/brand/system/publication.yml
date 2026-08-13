@@ -202,6 +202,8 @@ classification:
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
+    - interop/fhir-bulk-data.md
+    - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
     - fhir/bulk-checkpoints.md
     - fhir/operation-outcome.md
@@ -210,6 +212,7 @@ classification:
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
+    - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
     - mlx-backend.md

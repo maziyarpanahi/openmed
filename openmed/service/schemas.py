@@ -895,6 +895,45 @@ else:
             return values
 
 
+class FHIRBulkExportRequest(_StrictModel):
+    """Request schema for local or SMART-backed Bulk Data jobs.
+
+    ``input_dir``/``source_dir`` select the offline local gateway. When they
+    are omitted, the SMART backend-service fields are required by the service
+    layer. Credential fields are accepted only for the duration of a job and
+    are never returned in status payloads.
+    """
+
+    input_dir: Optional[str] = None
+    source_dir: Optional[str] = None
+    output_dir: str
+    checkpoint_path: Optional[str] = None
+    policy: str = "hipaa_safe_harbor"
+    method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+    max_buffered_resources: int = Field(default=1, ge=1)
+    max_inflight_downloads: int = Field(default=2, ge=1)
+    poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+    request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    fhir_base_url: Optional[str] = None
+    token_url: Optional[str] = None
+    client_id: Optional[str] = None
+    private_key_pem: Optional[str] = None
+    key_id: Optional[str] = None
+    scope: str = "system/*.read"
+    export_path: str = "$export"
+    model_name: str = _DEFAULT_PII_MODEL
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    use_smart_merging: bool = True
+    use_safety_sweep: bool = True
+    lang: PIILanguage = "en"
+    normalize_accents: Optional[bool] = None
+    keep_alive: Optional[KeepAliveValue] = None
+
+
+class FHIRBulkImportRequest(FHIRBulkExportRequest):
+    """Request schema for the local Bulk Data import-compatible route."""
+
+
 class ConceptAncestorRequest(_StrictModel):
     """One caller-supplied concept hierarchy edge."""
 
