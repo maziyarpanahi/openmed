@@ -34,6 +34,17 @@ from .privacy import (
 )
 from .profile_check import check_bundle
 from .provenance import to_audit_event, to_provenance
+from .reference_types import (
+    FHIR_R4_REFERENCE_TARGETS,
+    FHIR_R5_REFERENCE_TARGETS,
+    REFERENCE_TARGET_ALLOWLISTS,
+    ReferenceTargetIssue,
+    check_reference_targets,
+    find_reference_target_issues,
+    validate_fhir_reference_types,
+    validate_reference_targets,
+    validate_reference_types,
+)
 from .references import deterministic_fullurl
 
 __all__ = [
@@ -61,4 +72,13 @@ __all__ = [
     "to_bundle",
     "to_operation_outcome",
     "to_provenance",
+    "FHIR_R4_REFERENCE_TARGETS",
+    "FHIR_R5_REFERENCE_TARGETS",
+    "REFERENCE_TARGET_ALLOWLISTS",
+    "ReferenceTargetIssue",
+    "check_reference_targets",
+    "find_reference_target_issues",
+    "validate_fhir_reference_types",
+    "validate_reference_targets",
+    "validate_reference_types",
 ]
