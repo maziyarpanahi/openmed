@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Optional
 
+from openmed.core.capabilities import is_backend_available
+
 from ..exceptions import MissingDependencyError
 
-_GLINER_HINT = "Run `pip install .[gliner]` to enable GLiNER support."
+_GLINER_HINT = "Install with `pip install openmed[gliner]`."
 _PRIMARY_IMPORT = "gliner"
 _ANCILLARY_IMPORTS = ("torch", "transformers")
 
@@ -21,7 +23,7 @@ def is_gliner_available(force_refresh: bool = False) -> bool:
 
     global _availability_cache
     if force_refresh or _availability_cache is None:
-        _availability_cache = _check_dependencies()
+        _availability_cache = is_backend_available("gliner")
     return bool(_availability_cache)
 
 
@@ -34,16 +36,6 @@ def ensure_gliner_available() -> None:
     missing = _missing_dependency()
     dependency = missing or _PRIMARY_IMPORT
     raise MissingDependencyError(dependency=dependency, instruction=_GLINER_HINT)
-
-
-def _check_dependencies() -> bool:
-    primary_ok = _safe_import(_PRIMARY_IMPORT)
-    if not primary_ok:
-        return False
-
-    for module_name in _ANCILLARY_IMPORTS:
-        _safe_import(module_name)
-    return True
 
 
 def _safe_import(module_name: str) -> bool:
