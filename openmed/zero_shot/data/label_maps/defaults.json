@@ -251,6 +251,14 @@
     "AdministrationDate",
     "VaccineSeries"
   ],
+  "allergy_intolerance": [
+    "Allergen",
+    "ReactionManifestation",
+    "ReactionSeverity",
+    "Criticality",
+    "AllergyType",
+    "OnsetContext"
+  ],
   "pulmonology": [
     "SpirometryMeasure",
     "OxygenSupport",

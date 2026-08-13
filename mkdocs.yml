@@ -26,14 +26,20 @@ nav:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
+      - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
+      - Serving Backpressure: serving/backpressure.md
       - Hardened Service Image: deploy/hardened-image.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
+      - GraphQL Service: serving/graphql.md
       - REST Authentication: serving/authentication.md
+      - Service Load Testing & Latency SLOs: serving/load-testing.md
+      - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
@@ -50,10 +56,15 @@ nav:
       - Cross-format Offset Properties: structured/offset-properties.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+      - Offline Terminology Grounding: grounding.md
+      - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
+      - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - Medication Reconciliation: clinical/medication-reconciliation.md
+      - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
@@ -77,6 +88,9 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
+      - ODT/ODF Text Extraction: multimodal/odt-extraction.md
+      - PPTX Redaction: multimodal/pptx-redaction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
@@ -95,6 +109,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
+      - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
@@ -105,18 +120,25 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
+      - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
+      - HL7 v2 Narrative Extraction: interop/hl7v2-narrative-extraction.md
+      - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Compliance Posture: compliance.md
+      - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
@@ -129,6 +151,8 @@ nav:
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
@@ -137,6 +161,7 @@ nav:
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
+      - FHIR Clinical Exchange Workbench: interop/fhir-profiles.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - Export Format Support Matrix: export-matrix.md
@@ -171,6 +196,10 @@ nav:
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
+      - MCP Prompt Injection Guard: security/prompt-injection-guard.md
+      - MCP Consent Receipts: security/mcp-consent-receipts.md
+      - MCP Authorization Matrix: security/mcp-authorization-matrix.md
+      - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
