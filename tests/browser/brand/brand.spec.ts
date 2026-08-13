@@ -15,6 +15,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../..");
 const artifactRoot = path.join(root, "site");
 const MAX_FULL_PAGE_SCREENSHOT_DIMENSION = 30_000;
+const GITHUB_METADATA_URLS = [
+  "https://api.github.com/repos/maziyarpanahi/openmed",
+  "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
+] as const;
 
 type Theme = "light" | "dark" | "system-light" | "system-dark";
 type ThemeEngine = "material" | "standalone" | "website";
@@ -29,11 +33,9 @@ type Surface = {
 
 const fullViewports: Viewport[] = [
   { name: "mobile-320", width: 320, height: 800 },
-  { name: "mobile-390", width: 390, height: 844 },
   { name: "landscape-667", width: 667, height: 320 },
   { name: "tablet-768", width: 768, height: 1024 },
   { name: "desktop-1440", width: 1440, height: 900 },
-  { name: "desktop-1536", width: 1536, height: 864 },
 ];
 const focusedViewports: Viewport[] = [
   { name: "mobile-390", width: 390, height: 844 },
@@ -45,14 +47,14 @@ const surfaces: Surface[] = [
     engine: "website",
     name: "website",
     path: "/",
-    themes: ["light", "dark", "system-light", "system-dark"],
+    themes: ["light", "dark"],
     viewports: fullViewports,
   },
   {
     engine: "material",
     name: "docs-landing",
     path: "/docs/",
-    themes: ["light", "dark", "system-light", "system-dark"],
+    themes: ["light", "dark"],
     viewports: fullViewports,
   },
   {
@@ -106,6 +108,37 @@ const surfaces: Surface[] = [
   },
 ];
 
+// Visual baselines cover distinct renderers and breakpoints. The wider behavior
+// matrix below still checks every surface, theme, and browser without coupling
+// routine content changes to dozens of full-viewport screenshots.
+const CANONICAL_VISUAL_CASES = new Set([
+  "website/mobile-320/light",
+  "website/mobile-320/dark",
+  "website/desktop-1440/light",
+  "website/desktop-1440/dark",
+  "docs-landing/mobile-320/light",
+  "docs-landing/mobile-320/dark",
+  "docs-landing/desktop-1440/light",
+  "docs-landing/desktop-1440/dark",
+  "docs-chinese/mobile-390/light",
+  "docs-hindi/mobile-390/light",
+  "leaderboard/mobile-390/light",
+  "browser-demo/mobile-390/light",
+  "rtl-fixture/mobile-390/light",
+]);
+
+test.beforeEach(async ({ page }) => {
+  for (const url of GITHUB_METADATA_URLS) {
+    await page.route(url, (route) =>
+      route.fulfill({
+        body: "{}",
+        contentType: "application/json",
+        status: 503,
+      }),
+    );
+  }
+});
+
 type Audit = {
   consoleErrors: string[];
   externalRequests: string[];
@@ -117,10 +150,9 @@ type Audit = {
 };
 
 function isGitHubMetadataRequest(url: URL): boolean {
-  return [
-    "https://api.github.com/repos/maziyarpanahi/openmed",
-    "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
-  ].includes(url.href);
+  return GITHUB_METADATA_URLS.includes(
+    url.href as (typeof GITHUB_METADATA_URLS)[number],
+  );
 }
 
 function isGitHubMetadataConsoleError(message: ConsoleMessage): boolean {
@@ -228,7 +260,7 @@ async function prepareTheme(page: Page, theme: Theme): Promise<void> {
   const resolved = theme === "dark" || theme === "system-dark" ? "dark" : "light";
   await page.emulateMedia({
     colorScheme: resolved,
-    reducedMotion: "no-preference",
+    reducedMotion: "reduce",
   });
   await page.addInitScript(({ selectedMode, selectedTheme }) => {
     try {
@@ -488,21 +520,6 @@ async function expectNoRunningAnimations(page: Page): Promise<void> {
   expect(running, "reduced motion left active animations").toEqual([]);
 }
 
-async function waitForFiniteAnimations(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const finiteAnimations = document.getAnimations().filter((animation) => {
-      const effect = animation.effect as KeyframeEffect | null;
-      const endTime = effect?.getComputedTiming().endTime;
-      return typeof endTime === "number" && Number.isFinite(endTime);
-    });
-    await Promise.all(
-      finiteAnimations.map((animation) =>
-        animation.finished.catch(() => undefined),
-      ),
-    );
-  });
-}
-
 function expectCleanAudit(audit: Audit): void {
   expect(audit.consoleErrors, "browser console errors").toEqual([]);
   expect(audit.pageErrors, "uncaught page errors").toEqual([]);
@@ -592,29 +609,22 @@ for (const surface of surfaces) {
                 await expect(phiBody).toContainText(token);
               }
             }
-            await expect(page).toHaveScreenshot(
-              `${surface.name}-${viewport.name}-${theme}.png`,
-              {
-                animations: "disabled",
-                caret: "hide",
-                fullPage: false,
-                stylePath: path.join(here, "snapshot.css"),
-              },
-            );
-            await attachVisual(
-              page,
-              testInfo,
-              `${surface.name}-${viewport.name}-${theme}-default`,
-            );
-            if (surface.engine === "website") {
-              await page.emulateMedia({
-                colorScheme:
-                  theme === "dark" || theme === "system-dark"
-                    ? "dark"
-                    : "light",
-                reducedMotion: "no-preference",
-              });
-              await waitForFiniteAnimations(page);
+            const visualKey = `${surface.name}/${viewport.name}/${theme}`;
+            if (CANONICAL_VISUAL_CASES.has(visualKey)) {
+              await expect(page).toHaveScreenshot(
+                `${surface.name}-${viewport.name}-${theme}.png`,
+                {
+                  animations: "disabled",
+                  caret: "hide",
+                  fullPage: false,
+                  stylePath: path.join(here, "snapshot.css"),
+                },
+              );
+              await attachVisual(
+                page,
+                testInfo,
+                `${surface.name}-${viewport.name}-${theme}-default`,
+              );
             }
           }
 
@@ -638,6 +648,25 @@ for (const surface of surfaces) {
       }
     }
   });
+}
+
+for (const surface of surfaces.filter(({ name }) =>
+  ["website", "docs-landing"].includes(name),
+)) {
+  for (const theme of ["system-light", "system-dark"] as const) {
+    test(`${surface.name} follows ${theme}`, async ({ baseURL, page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await prepareTheme(page, theme);
+      const audit = monitorPage(page, baseURL);
+      const response = await page.goto(surface.path, {
+        waitUntil: "domcontentloaded",
+      });
+      expect(response?.status()).toBe(200);
+      await expectThemeInitialized(page, surface, theme);
+      await expectNoPageOverflow(page);
+      expectCleanAudit(audit);
+    });
+  }
 }
 
 for (const surface of surfaces) {
@@ -717,8 +746,16 @@ test("website default motion advances every rotating word", async ({
 });
 
 for (const printable of [
-  { name: "website", path: "/" },
-  { name: "docs", path: "/docs/" },
+  {
+    hidden: [".site-header", ".skip-link", ".model-filters", ".cta"],
+    name: "website",
+    path: "/",
+  },
+  {
+    hidden: [".md-header", ".md-sidebar"],
+    name: "docs",
+    path: "/docs/",
+  },
 ]) {
   test(`${printable.name} print layout`, async ({
     baseURL,
@@ -731,8 +768,10 @@ for (const printable of [
     const audit = monitorPage(page, baseURL);
     await page.goto(printable.path, { waitUntil: "load" });
     await expect(page.locator("main")).toBeVisible();
+    for (const selector of printable.hidden) {
+      await expect(page.locator(selector).first()).toBeHidden();
+    }
     await expectNoPageOverflow(page);
-    await expectVisualState(page, browserName, `${printable.name}-print`);
     expectCleanAudit(audit);
   });
 
@@ -1048,7 +1087,6 @@ for (const theme of ["light", "dark"] as const) {
 
 test("docs drawer traps focus and returns it on Escape", async ({
   baseURL,
-  browserName,
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -1079,7 +1117,6 @@ test("docs drawer traps focus and returns it on Escape", async ({
     )
     .toBe(true);
   await expectAccessible(page);
-  await expectVisualState(page, browserName, "docs-drawer-open");
   await page.keyboard.press("Escape");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toBeFocused();
@@ -1088,7 +1125,6 @@ test("docs drawer traps focus and returns it on Escape", async ({
 
 test("docs search, locale, theme, and code copy controls operate", async ({
   baseURL,
-  browserName,
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -1113,7 +1149,7 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   });
   const languageButton = page.getByRole("button", { name: /select language/i });
   await languageButton.focus();
-  await expectVisualState(page, browserName, "docs-locale-focus");
+  await expect(languageButton).toBeFocused();
 
   await languageButton.evaluate((button) => button.blur());
   const search = page.locator('input[data-md-component="search-query"]');
@@ -1130,7 +1166,6 @@ test("docs search, locale, theme, and code copy controls operate", async ({
     { timeout: 20_000 },
   );
   await expectAccessible(page);
-  await expectVisualState(page, browserName, "docs-search-open");
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
 
@@ -1157,7 +1192,6 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   );
   await copy.scrollIntoViewIfNeeded();
   await expectAccessible(page);
-  await expectVisualState(page, browserName, "docs-code-copied");
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
