@@ -35,6 +35,7 @@ from .candidate import (
     RelationCandidate,
     SpanReference,
 )
+from .multilingual import MultilingualRelation
 
 MEDICATION_LINK_ADVISORY = (
     "Medication attribute linking is deterministic assistive support, not a "
@@ -229,6 +230,65 @@ def extract_medication_relations(
         )
         for group in groups
         for relation in group.relations
+    )
+
+
+def extract_relations(
+    text: str,
+    spans: Iterable[Any],
+    sections: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    language: str | None = None,
+    min_score: float = 0.5,
+    asserted_only: bool = True,
+) -> tuple[Relation, ...] | tuple[MultilingualRelation, ...]:
+    """Extract canonical relations from existing clinical entity spans.
+
+    Medication-regimen extraction is the default. Supplying ``language``
+    preserves the multilingual relation API for Chinese and Hindi callers.
+    Both paths are deterministic, offline, and operate only on caller-provided
+    source text and spans.
+
+    Args:
+        text: Original clinical text.
+        spans: Existing NER spans with source character offsets.
+        sections: Optional contiguous section spans for medication scoping.
+            This argument is not accepted for multilingual extraction.
+        language: Optional multilingual relation registry language (``zh`` or
+            ``hi``). When omitted, medication relations are extracted.
+        min_score: Minimum multilingual candidate score. This is only valid
+            when ``language`` is provided.
+        asserted_only: Exclude refuted and conditional multilingual relations.
+            This is only valid when ``language`` is provided.
+
+    Returns:
+        Deterministically ordered medication ``Relation(head, type, tail,
+        score)`` records by default, or multilingual relation records when a
+        language is provided. The result is assistive and requires clinical
+        review; it does not make medication or causality decisions.
+
+    Raises:
+        ValueError: If options for one extraction mode are passed to the other.
+    """
+
+    if language is None:
+        if min_score != 0.5 or not asserted_only:
+            raise ValueError(
+                "min_score and asserted_only require a multilingual language"
+            )
+        return extract_medication_relations(text, spans, sections=sections)
+
+    if sections is not None:
+        raise ValueError("sections are only supported for medication relations")
+
+    from .multilingual import extract_relations as extract_multilingual_relations
+
+    return extract_multilingual_relations(
+        text,
+        spans,
+        language=language,
+        min_score=min_score,
+        asserted_only=asserted_only,
     )
 
 
@@ -918,6 +978,7 @@ __all__ = [
     "MEDICATION_LINK_ADVISORY",
     "MedicationStatementRecord",
     "MedicationRelationScorer",
+    "extract_relations",
     "extract_medication_relations",
     "link_medication_attributes",
     "reconstruct_medication_statements",
