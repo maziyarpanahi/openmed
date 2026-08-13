@@ -23,6 +23,11 @@ from .codeable_concept_check import (
     check_codeable_concept,
     codeable_concept_from_ranked_candidates,
 )
+from .codeable_concept_simple import (
+    codeable_concept_from_document_classification,
+    codeable_concept_from_document_type,
+    document_type_codeable_concept,
+)
 from .dhis2 import (
     DEFAULT_GENERALIZATION_LEVEL,
     DEFAULT_SMALL_CELL_THRESHOLD,
@@ -93,6 +98,8 @@ __all__ = [
     "build_reverse_index",
     "achilles_smoke_check",
     "check_codeable_concept",
+    "codeable_concept_from_document_classification",
+    "codeable_concept_from_document_type",
     "codeable_concept_from_ranked_candidates",
     "extract_round_trip_coded_values",
     "flatten_clinical_entities",
@@ -105,6 +112,7 @@ __all__ = [
     "stamp_user_supplied_terminology_provenance",
     "to_codeable_concept",
     "to_condition_occurrence",
+    "document_type_codeable_concept",
     "to_csv",
     "to_drug_exposure",
     "to_dataframe",
