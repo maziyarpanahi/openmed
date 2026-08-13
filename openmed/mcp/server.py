@@ -31,6 +31,7 @@ from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import OpenMedSpan
 from openmed.mcp.clinical_workflow import (
@@ -59,6 +60,15 @@ from openmed.risk.reid import risk_report
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
+
+# Every publicly registered PII language code, including the routes that carry
+# no bundled weights. Callers must pass their own model for those. This is the
+# same set that ``openmed.utils.gateway.validate_language`` accepts with
+# ``include_national_id=False``, so the tool handlers guarded by the shared
+# gateway and the discovery listing below always agree.
+REGISTERED_PII_LANGUAGES = (
+    SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+)
 
 RuntimeProvider = Callable[[], ServiceRuntime]
 PrivacyGatewayProvider = Callable[[], Any]
@@ -512,9 +522,17 @@ def openmed_list_models(
 
 
 def openmed_list_pii_languages() -> Dict[str, Any]:
-    """List supported PII languages and their default model IDs."""
+    """List supported PII languages and their default model IDs.
+
+    ``default_pii_model`` is ``env:OPENMED_INDIC_NER_MODEL`` or
+    ``user-supplied`` for languages that ship no bundled weights. Those two
+    values are registry placeholders, not model IDs: pass your own model for
+    those languages instead of echoing the placeholder back. Named fallback
+    routes can also report zero models when they preserve routing compatibility
+    without claiming dedicated trained weights.
+    """
     languages = []
-    for code in sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES):
+    for code in sorted(REGISTERED_PII_LANGUAGES):
         languages.append(
             {
                 "code": code,
