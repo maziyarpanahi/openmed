@@ -21,6 +21,7 @@ from openmed.core.labels import (
     DEVELOPMENTAL_MILESTONE,
     DIALYSIS_MODALITY,
     DYSPNEA_GRADE,
+    GENE,
     GENE_SYMBOL,
     GROWTH_PARAMETER,
     GROWTH_PERCENTILE,
@@ -93,7 +94,7 @@ class TestGenomicCanonicalLabels:
     @pytest.mark.parametrize(
         "alias,expected",
         [
-            ("gene", GENE_SYMBOL),
+            ("gene", GENE),
             ("gene symbol", GENE_SYMBOL),
             ("variant descriptor", VARIANT_DESCRIPTOR),
             ("hgvs", VARIANT_DESCRIPTOR),

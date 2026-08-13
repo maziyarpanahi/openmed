@@ -21,9 +21,21 @@ helper that higher-level builders can delegate to.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-__all__ = ["system_uri", "coding", "codeable_concept"]
+from openmed.clinical.data.doctype_loinc_ontology import (
+    get_document_type_mapping,
+)
+
+__all__ = [
+    "system_uri",
+    "coding",
+    "codeable_concept",
+    "document_type_codeable_concept",
+    "codeable_concept_from_document_type",
+    "codeable_concept_from_document_classification",
+]
 
 # Canonical HL7 FHIR R4 system URIs
 # https://www.hl7.org/fhir/terminologies-systems.html
@@ -170,3 +182,57 @@ def codeable_concept(
     if text is not None:
         result["text"] = text
     return result
+
+
+def document_type_codeable_concept(
+    document_type: str | Mapping[str, Any],
+    *,
+    text: str | None = None,
+    confidence: float | None = None,
+) -> dict[str, Any]:
+    """Build a FHIR ``DocumentReference.type`` CodeableConcept.
+
+    The mapping is resolved from the bundled document-type subset rather than
+    trusting a caller-supplied code. A classification mapping may be passed
+    directly; its confidence is honored when the explicit ``confidence``
+    argument is omitted. Unknown or low-confidence values return a valid
+    text-only CodeableConcept using the documented no-code sentinel.
+
+    Args:
+        document_type: Canonical document type, supported alias, or the mapping
+            returned by ``classify_document``.
+        text: Optional text override for the CodeableConcept. Supported mapped
+            types use their LOINC display label when omitted.
+        confidence: Optional confidence threshold input. Values below the local
+            LOINC mapping threshold abstain from emitting a Coding.
+
+    Returns:
+        A CodeableConcept directly usable as ``DocumentReference.type``.
+    """
+
+    raw_type: object = document_type
+    if isinstance(document_type, Mapping):
+        raw_type = document_type.get("type")
+        if confidence is None:
+            raw_confidence = document_type.get("confidence")
+            if isinstance(raw_confidence, (int, float)) and not isinstance(
+                raw_confidence, bool
+            ):
+                confidence = float(raw_confidence)
+
+    mapping = get_document_type_mapping(raw_type, confidence=confidence)
+    if mapping is None:
+        fallback_text = text
+        if fallback_text is None:
+            fallback_text = raw_type.strip() if isinstance(raw_type, str) else "unknown"
+        return {"text": fallback_text or "unknown"}
+
+    concept_text = text if text is not None else mapping["label"]
+    return codeable_concept(
+        [coding("loinc", mapping["code"], mapping["label"])],
+        text=concept_text,
+    )
+
+
+codeable_concept_from_document_type = document_type_codeable_concept
+codeable_concept_from_document_classification = document_type_codeable_concept
