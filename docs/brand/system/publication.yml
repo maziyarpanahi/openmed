@@ -260,6 +260,10 @@ classification:
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
+    - security/prompt-injection-guard.md
+    - security/mcp-consent-receipts.md
+    - security/mcp-authorization-matrix.md
+    - security/mcp-upstream-policy.md
     - security/hf-token-policy.md
     - security/supply-chain.md
     - supply-chain/vulnerability-scanning.md
