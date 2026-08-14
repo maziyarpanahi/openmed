@@ -7,10 +7,8 @@ recorded in model cards, manifests, and release ledgers.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal, Mapping
 
 from openmed.core.repro_hash import (
     _MODEL_CARD_REPRO_HASH_RE,
@@ -18,7 +16,6 @@ from openmed.core.repro_hash import (
     ReproducibilityVerificationError,
     _normalise_component,
     compute_reproducibility_hash,
-    resolve_git_sha,
 )
 
 CORE_PROVENANCE_KEYS = ("recipe", "data_manifest", "base_model", "git_sha")
@@ -122,6 +119,9 @@ def verify_reproducibility_inputs(
             },
         )
 
+    if not resolved_claim.startswith("sha256:"):
+        resolved_claim = f"sha256:{resolved_claim}"
+
     # Resolve candidate inputs from explicit args, with reference fallback
     candidate_inputs: dict[str, Any] = {
         "recipe": recipe,
@@ -179,16 +179,28 @@ def verify_reproducibility_inputs(
             details={"claim_source": claim_source},
         )
 
+    details: dict[str, Any] = {
+        "claim_source": claim_source,
+        "has_reference_provenance": resolved_ref is not None,
+    }
+    if not diverging_inputs:
+        if resolved_ref is not None:
+            missing_ref = [k for k in CORE_PROVENANCE_KEYS if k not in resolved_ref]
+            if missing_ref:
+                details["unlocalized_reason"] = "incomplete_reference_provenance"
+                details["missing_reference_keys"] = missing_ref
+            else:
+                details["unlocalized_reason"] = "systemic_integrity_fault"
+        else:
+            details["unlocalized_reason"] = "no_reference_provenance_to_diff"
+
     return ReproVerificationResult(
         status="MISMATCH",
         matched=False,
         recomputed_hash=recomputed,
         claimed_hash=resolved_claim,
         diverging_inputs=diverging_inputs,
-        details={
-            "claim_source": claim_source,
-            "has_reference_provenance": resolved_ref is not None,
-        },
+        details=details,
     )
 
 

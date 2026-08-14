@@ -57,8 +57,24 @@ def test_match_when_inputs_identical(
     assert result.status == "MATCH"
     assert result.matched is True
     assert result.recomputed_hash == claimed_hash
-    assert result.claimed_hash == claimed_hash
     assert result.diverging_inputs == ()
+
+
+def test_claimed_hash_without_sha256_prefix_matches(
+    reference_provenance: dict[str, Any], claimed_hash: str
+) -> None:
+    bare_hex = claimed_hash.removeprefix("sha256:")
+    result = verify_reproducibility_inputs(
+        claimed_hash=bare_hex,
+        recipe=reference_provenance["recipe"],
+        data_manifest=reference_provenance["data_manifest"],
+        base_model=reference_provenance["base_model"],
+        git_sha=reference_provenance["git_sha"],
+        reference_provenance=reference_provenance,
+    )
+    assert result.status == "MATCH"
+    assert result.matched is True
+    assert result.claimed_hash == claimed_hash
 
 
 @pytest.mark.parametrize(
@@ -145,6 +161,69 @@ def test_multi_factor_mismatch(
     assert result.status == "MISMATCH"
     assert result.matched is False
     assert set(result.diverging_inputs) == {"base_model", "git_sha"}
+
+
+def test_unlocalized_mismatch_incomplete_reference_provenance(
+    reference_provenance: dict[str, Any], claimed_hash: str
+) -> None:
+    # Reference only contains base_model; recipe, data_manifest, git_sha missing
+    partial_reference = {"base_model": reference_provenance["base_model"]}
+    result = verify_reproducibility_inputs(
+        claimed_hash=claimed_hash,
+        base_model=reference_provenance["base_model"],
+        reference_provenance=partial_reference,
+    )
+    assert result.status == "MISMATCH"
+    assert result.matched is False
+    assert result.diverging_inputs == ()
+    assert result.details["unlocalized_reason"] == "incomplete_reference_provenance"
+    assert set(result.details["missing_reference_keys"]) == {
+        "recipe",
+        "data_manifest",
+        "git_sha",
+    }
+
+
+def test_unlocalized_mismatch_no_reference_provenance(
+    reference_provenance: dict[str, Any],
+) -> None:
+    # Candidate inputs passed with a divergent claimed_hash but no reference provenance to diff against
+    synthetic_foreign_hash = (
+        "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    )
+    result = verify_reproducibility_inputs(
+        claimed_hash=synthetic_foreign_hash,
+        recipe=reference_provenance["recipe"],
+        data_manifest=reference_provenance["data_manifest"],
+        base_model=reference_provenance["base_model"],
+        git_sha=reference_provenance["git_sha"],
+        reference_provenance=None,
+    )
+    assert result.status == "MISMATCH"
+    assert result.matched is False
+    assert result.diverging_inputs == ()
+    assert result.details["unlocalized_reason"] == "no_reference_provenance_to_diff"
+
+
+def test_unlocalized_mismatch_systemic_integrity_fault(
+    reference_provenance: dict[str, Any],
+) -> None:
+    # All 4 core keys present and match between candidate and reference, but claimed hash is foreign/corrupted
+    tampered_claim = (
+        "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    )
+    result = verify_reproducibility_inputs(
+        claimed_hash=tampered_claim,
+        recipe=reference_provenance["recipe"],
+        data_manifest=reference_provenance["data_manifest"],
+        base_model=reference_provenance["base_model"],
+        git_sha=reference_provenance["git_sha"],
+        reference_provenance=reference_provenance,
+    )
+    assert result.status == "MISMATCH"
+    assert result.matched is False
+    assert result.diverging_inputs == ()
+    assert result.details["unlocalized_reason"] == "systemic_integrity_fault"
 
 
 def test_unverifiable_when_claimed_hash_missing(
@@ -317,10 +396,12 @@ def test_cli_repro_verify_json_output(
         )
     assert code == 0
     payload = json.loads(stdout.getvalue())
-    assert payload["status"] == "MATCH"
-    assert payload["matched"] is True
-    assert payload["claimed_hash"] == claimed_hash
-    assert payload["recomputed_hash"] == claimed_hash
+    assert payload["ok"] is True
+    assert payload["command"] == "repro verify"
+    assert payload["data"]["status"] == "MATCH"
+    assert payload["data"]["matched"] is True
+    assert payload["data"]["claimed_hash"] == claimed_hash
+    assert payload["data"]["recomputed_hash"] == claimed_hash
 
 
 def test_cli_repro_verify_unverifiable_for_unknown_repo(tmp_path: Path) -> None:

@@ -9,12 +9,9 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from openmed.core.model_registry import MANIFEST_PATH
-from openmed.training.repro_verify import (
-    ReproVerificationResult,
-    verify_reproducibility_inputs,
-)
+from openmed.training.repro_verify import verify_reproducibility_inputs
 
-from ._output import EXIT_ERROR, EXIT_OK, EXIT_USAGE, CliError, wants_json
+from ._output import EXIT_ERROR, EXIT_OK, EXIT_USAGE, emit
 
 
 def add_repro_command(
@@ -147,27 +144,23 @@ def _verify_handler(args: argparse.Namespace) -> int:
         model_card_text=model_card_text,
     )
 
-    if wants_json(args):
-        payload = result.to_dict()
-        sys.stdout.write(
-            json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
-        )
-    else:
-        if result.status == "MATCH":
-            sys.stdout.write("MATCH\n")
-        elif result.status == "MISMATCH":
-            if result.diverging_inputs:
-                diverged_str = ", ".join(result.diverging_inputs)
-                sys.stdout.write(f"MISMATCH: {diverged_str} diverged\n")
-            else:
-                sys.stdout.write(
-                    f"MISMATCH: recomputed {result.recomputed_hash} "
-                    f"!= claimed {result.claimed_hash}\n"
-                )
+    human: str
+    if result.status == "MATCH":
+        human = "MATCH"
+    elif result.status == "MISMATCH":
+        if result.diverging_inputs:
+            diverged_str = ", ".join(result.diverging_inputs)
+            human = f"MISMATCH: {diverged_str} diverged"
         else:
-            reason = result.details.get("reason", "unknown error")
-            sys.stdout.write(f"UNVERIFIABLE: {reason}\n")
+            human = (
+                f"MISMATCH: recomputed {result.recomputed_hash} "
+                f"!= claimed {result.claimed_hash}"
+            )
+    else:
+        reason = result.details.get("reason", "unknown error")
+        human = f"UNVERIFIABLE: {reason}"
 
+    emit(args, result.to_dict(), human=human)
     return EXIT_OK if result.status == "MATCH" else EXIT_ERROR
 
 
