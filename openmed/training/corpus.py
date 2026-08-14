@@ -48,6 +48,9 @@ class GatedCorpusAccessError(PermissionError):
     """Raised when a DUA-gated source is requested without credentialed data."""
 
 
+CORPUS_RECORD_REQUIRED_FIELDS = frozenset({"id", "text"})
+
+
 @dataclass(frozen=True)
 class Passage:
     """A raw passage supplied by a source adapter before manifest hashing."""
@@ -391,6 +394,61 @@ def assert_manifest_has_no_raw_text(
             )
 
 
+def validate_corpus_record(
+    record: Mapping[str, Any], *, context: str = "corpus record"
+) -> None:
+    """Validate the minimal local JSONL record contract.
+
+    Training records may carry task-specific fields, but every record that is
+    compatible with :class:`RecordPassageSource` must expose a non-empty
+    string ``id`` and ``text``.  This check deliberately does not inspect or
+    log the text value.
+    """
+
+    if not isinstance(record, Mapping):
+        raise CorpusManifestError(f"{context} must be a mapping")
+    missing = sorted(CORPUS_RECORD_REQUIRED_FIELDS - set(record))
+    if missing:
+        raise CorpusManifestError(
+            f"{context} missing required field(s): {', '.join(missing)}"
+        )
+    for field_name in sorted(CORPUS_RECORD_REQUIRED_FIELDS):
+        value = record[field_name]
+        if not isinstance(value, str) or not value.strip():
+            raise CorpusManifestError(
+                f"{context} {field_name} must be a non-empty string"
+            )
+
+
+def write_jsonl_records(
+    records: Iterable[Mapping[str, Any]], output_path: str | Path
+) -> tuple[Mapping[str, Any], ...]:
+    """Write validated records as deterministic newline-delimited JSON.
+
+    Unlike :func:`assemble_dapt_corpus`, this helper writes task payloads,
+    including synthetic text, and therefore is intended for local training
+    artifacts rather than hash-only DAPT manifests.
+    """
+
+    materialized_rows: list[Mapping[str, Any]] = []
+    for index, record in enumerate(records):
+        if not isinstance(record, Mapping):
+            raise CorpusManifestError(f"JSONL record {index} must be a mapping")
+        materialized_rows.append(dict(record))
+    materialized = tuple(materialized_rows)
+    encoded = _canonical_jsonl_bytes(materialized)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(encoded)
+    return materialized
+
+
+def jsonl_records_hash(records: Iterable[Mapping[str, Any]]) -> str:
+    """Return a deterministic SHA-256 hash for ordered JSONL records."""
+
+    return _sha256_bytes(_canonical_jsonl_bytes(records))
+
+
 def normalize_passage_text(text: str) -> str:
     """Normalize passage text for duplicate detection."""
 
@@ -450,6 +508,27 @@ def _row_sort_key(row: Mapping[str, Any]) -> tuple[str, str, str]:
     return (str(row["source"]), str(row["source_id"]), str(row["sha256"]))
 
 
+def _canonical_jsonl_bytes(records: Iterable[Mapping[str, Any]]) -> bytes:
+    lines: list[str] = []
+    for index, record in enumerate(records):
+        validate_corpus_record(record, context=f"JSONL record {index}")
+        try:
+            lines.append(
+                json.dumps(
+                    dict(record),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            raise CorpusManifestError(
+                f"JSONL record {index} must be JSON-serializable"
+            ) from exc
+    return ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
+
+
 def _record_string(
     record: Mapping[str, Any], field_name: str, source: str, index: int
 ) -> str:
@@ -481,3 +560,7 @@ def _require_non_empty(value: str, field_name: str) -> None:
 
 def _sha256(text: str) -> str:
     return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return f"sha256:{hashlib.sha256(value).hexdigest()}"

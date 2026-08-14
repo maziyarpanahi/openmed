@@ -1,5 +1,6 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.util.sha256Hex
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -18,17 +19,24 @@ class EntityPredictionTest {
     }
 
     @Test
-    fun descriptionMatchesSwiftFormat() {
+    fun descriptionContainsHashInsteadOfRawSpanText() {
         val prediction = EntityPrediction("PERSON", "Alice", 0.98f, 0, 5)
 
-        assertEquals("[PERSON] \"Alice\" (0:5) conf=0.98", prediction.toString())
+        assertEquals(
+            "[PERSON] sha256=${sha256Hex("Alice")} (0:5) conf=0.98",
+            prediction.toString(),
+        )
+        assertTrue(!prediction.toString().contains("Alice"))
     }
 
     @Test
     fun descriptionRendersTwoDecimalConfidence() {
         val prediction = EntityPrediction("SSN", "123-45-6789", 0.5f, 10, 21)
 
-        assertEquals("[SSN] \"123-45-6789\" (10:21) conf=0.50", prediction.toString())
+        assertEquals(
+            "[SSN] sha256=${sha256Hex("123-45-6789")} (10:21) conf=0.50",
+            prediction.toString(),
+        )
     }
 
     @Test
@@ -36,11 +44,11 @@ class EntityPredictionTest {
         // Exactly-representable binary halves: Swift's C printf %.2f rounds
         // ties to even, so 0.125 -> 0.12 and 0.625 -> 0.62 (not 0.13 / 0.63).
         assertEquals(
-            "[X] \"x\" (0:1) conf=0.12",
+            "[X] sha256=${sha256Hex("x")} (0:1) conf=0.12",
             EntityPrediction("X", "x", 0.125f, 0, 1).toString(),
         )
         assertEquals(
-            "[X] \"x\" (0:1) conf=0.62",
+            "[X] sha256=${sha256Hex("x")} (0:1) conf=0.62",
             EntityPrediction("X", "x", 0.625f, 0, 1).toString(),
         )
     }
@@ -48,11 +56,11 @@ class EntityPredictionTest {
     @Test
     fun descriptionRendersBoundaryConfidences() {
         assertEquals(
-            "[X] \"x\" (0:1) conf=0.00",
+            "[X] sha256=${sha256Hex("x")} (0:1) conf=0.00",
             EntityPrediction("X", "x", 0.0f, 0, 1).toString(),
         )
         assertEquals(
-            "[X] \"x\" (0:1) conf=1.00",
+            "[X] sha256=${sha256Hex("x")} (0:1) conf=1.00",
             EntityPrediction("X", "x", 1.0f, 0, 1).toString(),
         )
     }

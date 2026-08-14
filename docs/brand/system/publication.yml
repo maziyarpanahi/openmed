@@ -85,6 +85,9 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.2.0.md
+    - release/v2.2-standards-matrix.md
+    - release/v2.1.0.md
     - release/v2.0.0.md
     - release/v1.6-v1.7-feature-coverage.md
     - getting-started.md
@@ -97,19 +100,26 @@ classification:
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md
+    - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
     - serving/resilience.md
+    - serving/backpressure.md
     - deploy/hardened-image.md
     - offline-install.md
     - serving/async-jobs.md
+    - serving/request-signing.md
     - serving/grpc.md
+    - serving/graphql.md
     - serving/authentication.md
+    - serving/load-testing.md
+    - serving/mtls.md
     - deploy/helm.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
     - model-loader.md
+    - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
     - model-manifest.md
@@ -117,11 +127,21 @@ classification:
     - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
+    - structured/offset-properties.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - grounding.md
+    - interop/snomed-terminology-bridge.md
+    - clinical/code-crosswalk.md
+    - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/medication-reconciliation.md
+    - clinical/event-timeline.md
+    - clinical/terminology-provenance.md
+    - clinical/consent-cache.md
+    - clinical/timeline-provenance.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
@@ -132,6 +152,7 @@ classification:
     - profiles.md
     - plugin-sdk.md
     - batch-processing.md
+    - batch-howto.md
     - legacy-indic-encoding.md
     - profiling.md
     - benchmarks/low-resource.md
@@ -141,6 +162,9 @@ classification:
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
+    - multimodal/xlsx-cell-redaction.md
+    - multimodal/odt-extraction.md
+    - multimodal/pptx-redaction.md
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
@@ -148,6 +172,7 @@ classification:
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - clinical/experiencer-refinement.md
+    - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/awq-grounding.md
     - tiers.md
@@ -155,7 +180,9 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - api/deidentification.md
+    - api/compatibility-gate.md
     - reidentification-risk.md
+    - privacy/structured-risk-lab.md
     - sms-short-text-deid.md
     - anonymization.md
     - chw-form-deid.md
@@ -166,17 +193,25 @@ classification:
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
     - integrations-langchain.md
+    - integrations/arrow-flight.md
     - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/pandas-on-spark.md
+    - integrations/ray-map-batches.md
+    - integrations/sqlalchemy.md
     - duckdb-deidentification.md
+    - integrations/distributed-sql-udf.md
     - spark-deidentification.md
     - prefect-integration.md
     - spacy-component.md
     - hl7v2-deidentification.md
+    - interop/hl7v2-narrative-extraction.md
+    - interop/x12-837-redaction.md
     - compliance.md
+    - compliance/21-cfr-part-11-audit-trail.md
     - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md
     - compliance/north-africa-pdpl-0908-checklist.md
@@ -189,9 +224,17 @@ classification:
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - fhir-interop.md
+    - interop/fhir-bulk-data.md
+    - interop/fhir-omop-matrix.md
+    - fhir/reference-integrity.md
+    - fhir/bulk-checkpoints.md
+    - fhir/operation-outcome.md
+    - fhir/sdc-privacy.md
+    - fhir/document-intake-quarantine.md
     - dhis2-export.md
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
+    - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
     - mlx-backend.md
@@ -202,6 +245,7 @@ classification:
     - runtimes/onnxruntime-web.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
+    - android-integration.md
     - export-onnx-android.md
     - android-tokenization.md
     - android-parity.md
@@ -223,6 +267,10 @@ classification:
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
+    - security/prompt-injection-guard.md
+    - security/mcp-consent-receipts.md
+    - security/mcp-authorization-matrix.md
+    - security/mcp-upstream-policy.md
     - security/hf-token-policy.md
     - security/supply-chain.md
     - supply-chain/vulnerability-scanning.md
@@ -231,6 +279,8 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - migration/2.1-to-2.2.md
+    - migration/2.0-to-2.1.md
     - migration/1.9-to-2.0.md
     - migration/1.8-to-1.9.md
     - release/trusted-publishing.md
