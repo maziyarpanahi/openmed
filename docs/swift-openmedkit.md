@@ -19,6 +19,8 @@ Swift MLX supports the first OpenMed artifact families used by the public Apple 
 - `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
 - `openai-privacy-filter`
 - `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
+- `cohere-compass` for native-resolution text-and-image generation with North
+  Micro Vision
 
 ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families are still part of the broader rollout work.
 
@@ -111,6 +113,58 @@ The same converted MLX artifact is now intended to work in both:
 - Swift via OpenMedKit
 
 OpenMedKit prefers the new self-contained artifact layout above. For older MLX repos that were uploaded before `openmed-mlx.json` and tokenizer asset bundling, it also keeps backward compatibility by falling back to `config.json` plus the source Hugging Face tokenizer reference when available.
+
+## Quick Start: North Micro Vision
+
+`OpenMedVisionLanguageModel` is the native OpenMedKit Cohere Compass runtime.
+It loads the same 4-bit, 5-bit, 6-bit, 8-bit, and bf16 repositories as the
+Python OpenMed runtime and performs prompt formatting, native-resolution image
+processing, vision encoding, and autoregressive generation on the device:
+
+```swift
+import OpenMedKit
+
+let model = try await OpenMedVisionLanguageModel.load(
+    modelID: "OpenMed/North-Micro-Vision-Instruct-6bit-mlx"
+)
+
+let result = try await model.generate(
+    "List the visible medication and dose.",
+    imageURL: clinicalDocumentURL,
+    maxTokens: 128
+)
+
+print(result.text)
+```
+
+Text-only generation uses the same loaded model:
+
+```swift
+let explanation = try await model.generate(
+    "Explain why local processing can improve clinical-document privacy.",
+    maxTokens: 96
+)
+```
+
+For an app-managed or air-gapped artifact, bypass Hub download entirely:
+
+```swift
+let model = try await OpenMedVisionLanguageModel.load(
+    modelDirectory: bundledOrCachedModelDirectory
+)
+```
+
+The directory must include `config.json`, `preprocessor_config.json`, tokenizer
+and chat-template assets, and the model safetensors payload. OpenMedKit does not
+send prompts, images, or generated text to a service and does not provide a
+cloud fallback. The initial Hub download is a separate network boundary; cache
+or bundle the artifact before processing PHI.
+
+North Micro Vision is useful for document OCR, chart questions, visual
+grounding, and structured extraction, but its output is generative. Validate
+every consequential field against the source document, apply OpenMedKit privacy
+policies before an authorized export, and never auto-trigger diagnosis or
+treatment from the result.
 
 ## Quick Start: CoreML
 
@@ -238,6 +292,33 @@ public enum OpenMedModelStore {
 }
 ```
 
+### `OpenMedVisionLanguageModel`
+
+```swift
+public final class OpenMedVisionLanguageModel: Sendable {
+    public static func load(
+        modelID: String = "OpenMed/North-Micro-Vision-Instruct-4bit-mlx",
+        revision: String = "main",
+        progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
+    ) async throws -> OpenMedVisionLanguageModel
+
+    public static func load(
+        modelDirectory: URL
+    ) async throws -> OpenMedVisionLanguageModel
+
+    public func generate(
+        _ prompt: String,
+        imageURL: URL,
+        maxTokens: Int = 256,
+        temperature: Float = 0
+    ) async throws -> OpenMedVisionLanguageGeneration
+}
+```
+
+The generation result includes decoded text, generated token IDs, prompt and
+generation token counts, and prefill/generation timing. Overloads accept
+text-only prompts, `CIImage`, or multiple `UserInput.Image` values.
+
 ## Supported Swift MLX Families
 
 The current Swift MLX runtime is the BERT-family token-classification path shared across:
@@ -249,6 +330,10 @@ The current Swift MLX runtime is the BERT-family token-classification path share
 - ELECTRA
 
 This is the same first-phase scope as the current public Python MLX BERT-family implementation.
+
+The separate vision-language surface supports Cohere Compass artifacts with
+`model_type: cohere_compass`, currently the five OpenMed North Micro Vision
+precision variants listed in the Python MLX guide.
 
 ## Demo App
 
@@ -280,3 +365,10 @@ The Swift MLX runtime is intended for:
 - real iPhone/iPad hardware
 
 Command-line `swift test` may skip the MLX execution tests if the local test environment does not package MLX runtime Metal resources. That does not change the supported app runtime targets above.
+
+The Compass integration suite therefore runs through an Xcode test bundle with
+Metal resources. It strictly loads every precision and covers deterministic
+text extraction, a synthetic clinical-document image, and a synthetic chart.
+The ordinary Swift package suite keeps offline processor/configuration tests and
+skips multi-gigabyte model execution unless the local artifact environment
+variables are explicitly supplied.

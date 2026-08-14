@@ -15,7 +15,7 @@ pip install -e ".[mlx]"
 ```
 
 This installs `mlx`, `mlx-lm`, `huggingface-hub`, `transformers`,
-`tokenizers`, and `safetensors`.
+`tokenizers`, `safetensors`, and `Pillow`.
 
 ## Quick Start
 
@@ -69,6 +69,44 @@ from openmed.mlx import OpenMedMLXLanguageModel
 runner = OpenMedMLXLanguageModel("OpenMed/laneformer-2b-it-q4-mlx")
 print(runner.generate("Define delayed tensor parallelism.", max_tokens=128))
 ```
+
+### Python Vision-Language Quick Start
+
+OpenMed includes a native Cohere Compass runtime for the North Micro Vision
+MLX family. It does not import or execute model-repository Python code and does
+not require `mlx-vlm`:
+
+```python
+from openmed.mlx import OpenMedMLXVisionLanguageModel
+
+model = OpenMedMLXVisionLanguageModel(
+    "OpenMed/North-Micro-Vision-Instruct-6bit-mlx"
+)
+
+text = model.generate(
+    "Explain why local processing can improve clinical-document privacy.",
+    max_tokens=96,
+)
+document = model.generate(
+    "List the visible medication and dose.",
+    image="synthetic-clinical-note.png",
+    max_tokens=128,
+)
+```
+
+The first load downloads the selected artifact from Hugging Face. Pass a local
+model directory instead for an air-gapped deployment. Images and prompts are
+processed locally; OpenMed does not add telemetry or a cloud inference
+fallback. Treat generated text as sensitive and validate it against the source
+image before consequential use.
+
+The compatible repositories use one naming family:
+
+- `OpenMed/North-Micro-Vision-Instruct-4bit-mlx`
+- `OpenMed/North-Micro-Vision-Instruct-5bit-mlx`
+- `OpenMed/North-Micro-Vision-Instruct-6bit-mlx`
+- `OpenMed/North-Micro-Vision-Instruct-8bit-mlx`
+- `OpenMed/North-Micro-Vision-Instruct-bf16-mlx`
 
 ### Paged KV Cache for Long Notes
 
@@ -155,13 +193,17 @@ As of May 4, 2026, the current public MLX path covers these families:
 - `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
 - `openai-privacy-filter`
 - `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
+- `cohere-compass` for native-resolution text-and-image generation through
+  `OpenMedMLXVisionLanguageModel`
 
 Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family tasks. The Arabic/Japanese/Turkish PII rollout adds 28 supported `-mlx` repos now; unsupported ModernBERT, Qwen3, and Longformer PII checkpoints remain deferred until those architectures land in the converter.
 
-MLX-LM text generation is a separate Python-only artifact contract. It uses
-MLX-LM files such as `model.safetensors`, tokenizer assets, `config.json`, and
-custom `model_file` implementations when needed. Laneformer support is
-available through `OpenMed/laneformer-2b-it-q4-mlx`.
+MLX-LM causal text generation is a separate Python-only artifact contract. It
+uses MLX-LM files such as `model.safetensors`, tokenizer assets, `config.json`,
+and custom `model_file` implementations when needed. Laneformer support is
+available through `OpenMed/laneformer-2b-it-q4-mlx`. Cohere Compass
+vision-language generation instead uses the shared OpenMed Python/OpenMedKit
+contract described above.
 
 Architectures still in active rollout:
 
@@ -177,7 +219,8 @@ That rollout is about making the converter universal and repeatable across the w
 If MLX is not available (non-Apple hardware, or `mlx` not installed), OpenMed automatically falls back to the HuggingFace/PyTorch backend. No code changes required.
 
 That automatic fallback applies to the token-classification backend. MLX-LM
-text generation requires `mlx-lm` and a supported MLX runtime.
+text generation and the Compass vision-language runtime require Apple Silicon,
+the `openmed[mlx]` dependencies, and a supported OpenMed MLX artifact.
 
 ## MLX and Swift Apps
 

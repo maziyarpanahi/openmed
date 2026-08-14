@@ -35,6 +35,17 @@ from openmed.mlx.lm import (
     resolve_mlx_language_model,
     tokenizers_are_aligned,
 )
+from openmed.mlx.vlm import (
+    DEFAULT_NORTH_MICRO_VISION_MODEL,
+    CohereCompassProcessor,
+    OpenMedMLXVisionLanguageModel,
+    OpenMedMLXVLMArtifactError,
+    OpenMedMLXVLMError,
+    VisionLanguageGeneration,
+    generate_vision_text,
+    resolve_mlx_vlm_model,
+    smart_resize,
+)
 
 
 def is_mlx_available() -> bool:
@@ -75,4 +86,13 @@ __all__ = [
     "resolve_mlx_draft_language_model",
     "resolve_mlx_language_model",
     "tokenizers_are_aligned",
+    "CohereCompassProcessor",
+    "DEFAULT_NORTH_MICRO_VISION_MODEL",
+    "OpenMedMLXVLMArtifactError",
+    "OpenMedMLXVLMError",
+    "OpenMedMLXVisionLanguageModel",
+    "VisionLanguageGeneration",
+    "generate_vision_text",
+    "resolve_mlx_vlm_model",
+    "smart_resize",
 ]

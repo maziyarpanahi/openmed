@@ -298,6 +298,7 @@ mlx = [
   "mlx>=0.22",
   "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
+  "Pillow>=10.0",
   "transformers>=4.50",
   "tokenizers>=0.15",
   "safetensors>=0.4",

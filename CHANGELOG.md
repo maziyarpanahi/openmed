@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added first-class Cohere Compass vision-language inference for the five
+  OpenMed North Micro Vision MLX precision variants: a native Python runtime,
+  a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
+  native-resolution image processing, and deterministic text/image parity
+  tests without a runtime dependency on `mlx-vlm`.
+
 ## [2.2.0] - 2026-08-13
 
 OpenMed 2.2 completes the trustworthy clinical-data-exchange milestone across
@@ -82,7 +90,6 @@ internal logging PHI-safe by default.
   The gate retains 10% headroom with a 4,483,996-byte maximum; the payload
   contains source, synthetic metadata, and the committed model manifest rather
   than an unexpected binary or restricted vocabulary asset.
-
 ### Fixed
 
 - Fixed production builds to emit Core Metadata 2.4 for compatibility with the
