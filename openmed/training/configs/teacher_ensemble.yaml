@@ -1,0 +1,60 @@
+schema_version: "openmed.training.teacher_ensemble.v1"
+families:
+  ClinicalPrivacy:
+    family: "ClinicalPrivacy"
+    description: "Teacher ensemble for general clinical privacy entities and narrative PHI spans."
+    agreement_threshold: 0.60
+    members:
+      - id: "OpenMed/OpenMed-PII-BigMed-Large-560M-v1"
+        type: "model"
+        weight: 1.0
+        target_entities: ["NAME", "DATE", "LOCATION", "AGE", "ID"]
+        description: "Primary transformer token classifier for broad clinical text de-identification."
+      - id: "OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1"
+        type: "model"
+        weight: 0.9
+        target_entities: ["NAME", "DATE", "LOCATION", "AGE", "ID"]
+        description: "BioClinicalBERT token classifier optimized for clinical privacy entities."
+      - id: "privacy-filter-heuristics-v1"
+        type: "filter"
+        weight: 0.8
+        target_entities: ["NAME", "DATE", "LOCATION"]
+        description: "Contextual privacy filter heuristics and pattern engine."
+      - id: "clinical-regex-pii-v1"
+        type: "filter"
+        weight: 0.7
+        target_entities: ["SSN", "PHONE", "MRN"]
+        description: "Deterministic regular expression detector for structured PII."
+    validators:
+      - "validate_ssn"
+      - "validate_phone_us"
+      - "validate_mrn"
+
+  DirectID:
+    family: "DirectID"
+    description: "High-precision ensemble for explicit identifiers requiring algorithmic checksum validation."
+    agreement_threshold: 0.66
+    members:
+      - id: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1"
+        type: "model"
+        weight: 1.0
+        target_entities: ["SSN", "PHONE", "NPI", "IBAN", "NHS_NUMBER"]
+        description: "Transformer NER model specialized for structured direct identifiers."
+      - id: "direct-id-regex-v1"
+        type: "filter"
+        weight: 0.9
+        target_entities: ["SSN", "PHONE", "NPI", "LUHN", "IBAN", "NHS_NUMBER"]
+        description: "Strict expression matching detector for direct identifiers."
+      - id: "privacy-filter-direct-v1"
+        type: "filter"
+        weight: 0.8
+        target_entities: ["SSN", "NPI"]
+        description: "Contextual rule filter for explicit identity numbers."
+    validators:
+      - "validate_ssn"
+      - "validate_phone_us"
+      - "validate_npi"
+      - "validate_mrn"
+      - "validate_luhn"
+      - "validate_iban"
+      - "validate_uk_nhs_number"
