@@ -9,11 +9,41 @@ and must never be bundled with OpenMed or loaded by this runtime module.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
+from importlib import resources
 from typing import Any, Protocol, runtime_checkable
 
+import yaml
+
+from .context import (
+    HISTORICAL,
+    HYPOTHETICAL,
+    NEGATED,
+    resolve_negation,
+    resolve_temporality,
+)
+from .status_vocab import normalize_substance_status
+
 SOCIAL_HISTORY_SECTION = "social_history"
+
+SDOH_SUBSTANCE_CUES_RESOURCE = "data/sdoh_substance_cues.yaml"
+_SUBSTANCE_CUES_PACKAGE = "openmed.clinical"
+_SUBSTANCE_CATEGORIES = (
+    "tobacco",
+    "alcohol",
+    "drug",
+)
+
+_SDOH_SUBSTANCE_STATUS = {
+    "current": "current",
+    "former": "past",
+    "never": "none",
+    "unknown": "unknown",
+}
+
 SHAC_DATA_POLICY = (
     "Real SHAC data is DUA-gated and eval-only; runtime extraction uses only "
     "synthetic or public data."
@@ -232,6 +262,304 @@ def extract_sdoh(
     return findings
 
 
+def _extract_tobacco(
+    text: str,
+    spans: Sequence[Any],
+) -> list[SDOHFinding]:
+    del spans
+    return _extract_substance_category(
+        text,
+        "tobacco",
+    )
+
+
+# tobacoo helper
+def _parse_tobacco_extent(text: str) -> str | None:
+    match = re.search(
+        r"\b(?P<amount>\d+(?:\.\d+)?)\s*pack(?:-|\s+)years?\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match is None:
+        return None
+
+    amount = match.group("amount")
+    return f"{amount} pack-years"
+
+
+def _extract_alcohol(
+    text: str,
+    spans: Sequence[Any],
+) -> list[SDOHFinding]:
+    del spans
+    return _extract_substance_category(
+        text,
+        "alcohol",
+    )
+
+
+def _parse_alcohol_extent(text: str) -> str | None:
+    match = re.search(
+        r"\b(?P<amount>\d+(?:\.\d+)?)\s+drinks?"
+        r"\s*(?:/|per\s+|a\s+)week\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match is None:
+        return None
+
+    amount = match.group("amount")
+    return f"{amount} drinks/week"
+
+
+def _extract_drug(
+    text: str,
+    spans: Sequence[Any],
+) -> list[SDOHFinding]:
+    del spans
+    return _extract_substance_category(
+        text,
+        "drug",
+    )
+
+
+def _parse_drug_extent(text: str) -> str | None:
+    match = re.search(
+        r"\b(?:occasional(?:ly)?|daily|weekly|monthly|rarely)\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match is None:
+        return None
+
+    value = match.group(0).lower()
+
+    if value == "occasionally":
+        return "occasional"
+
+    return value
+
+
+def _parse_substance_extent(
+    category: str,
+    text: str,
+) -> str | None:
+    if category == "tobacco":
+        return _parse_tobacco_extent(text)
+
+    if category == "alcohol":
+        return _parse_alcohol_extent(text)
+
+    if category == "drug":
+        return _parse_drug_extent(text)
+
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_substance_cues() -> dict[str, tuple[str, ...]]:
+    resource = resources.files(_SUBSTANCE_CUES_PACKAGE).joinpath(
+        SDOH_SUBSTANCE_CUES_RESOURCE
+    )
+
+    payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+
+    if not isinstance(payload, Mapping):
+        raise ValueError("substance cue resource must be a mapping")
+
+    if payload.get("schema_version") != 1:
+        raise ValueError("substance cue resource requires schema_version 1")
+
+    determinants = payload.get("determinants")
+
+    if not isinstance(determinants, Mapping):
+        raise ValueError("substance cue resource requires determinants")
+
+    result: dict[str, tuple[str, ...]] = {}
+
+    for category in _SUBSTANCE_CATEGORIES:
+        entry = determinants.get(category)
+
+        if not isinstance(entry, Mapping):
+            raise ValueError(
+                f"substance cue resource requires determinant {category!r}"
+            )
+
+        triggers = entry.get("triggers")
+
+        if (
+            not isinstance(triggers, Sequence)
+            or isinstance(triggers, str | bytes)
+            or not triggers
+        ):
+            raise ValueError(f"substance determinant {category!r} requires triggers")
+
+        cleaned: list[str] = []
+
+        for cue in triggers:
+            if not isinstance(cue, str) or not cue.strip():
+                raise ValueError(
+                    f"substance determinant {category!r} contains an invalid trigger"
+                )
+
+            normalized = " ".join(cue.split())
+
+            if normalized not in cleaned:
+                cleaned.append(normalized)
+
+        result[category] = tuple(cleaned)
+
+    return result
+
+
+def _substance_status_window(
+    text: str,
+    start: int,
+    end: int,
+) -> str:
+    window_start, window_end = _substance_context_bounds(
+        text,
+        start,
+        end,
+    )
+
+    return text[window_start:window_end].strip()
+
+
+def _substance_context_bounds(
+    text: str,
+    start: int,
+    end: int,
+) -> SpanOffset:
+    boundaries = ".;\n!?"
+
+    left = max(text.rfind(boundary, 0, start) for boundary in boundaries)
+
+    right_positions = [text.find(boundary, end) for boundary in boundaries]
+
+    right_positions = [position for position in right_positions if position != -1]
+
+    right = min(right_positions) if right_positions else len(text)
+
+    return left + 1, right
+
+
+def _extract_substance_category(
+    text: str,
+    category: str,
+) -> list[SDOHFinding]:
+    pattern = _substance_trigger_pattern(category)
+
+    findings: list[SDOHFinding] = []
+    seen_windows: set[SpanOffset] = set()
+
+    for match in pattern.finditer(text):
+        window = _substance_context_bounds(
+            text,
+            match.start(),
+            match.end(),
+        )
+        if window in seen_windows:
+            continue
+        seen_windows.add(window)
+
+        target = {
+            "text": match.group(0),
+            "document_text": text,
+            "start": match.start(),
+            "end": match.end(),
+        }
+
+        negation = resolve_negation(target)
+        temporality = resolve_temporality(target)
+
+        status_text = _substance_status_window(
+            text,
+            match.start(),
+            match.end(),
+        )
+        extent = _parse_substance_extent(
+            category,
+            status_text,
+        )
+
+        normalized_status = normalize_substance_status(
+            status_text,
+            negated=negation,
+            temporality=temporality,
+        )
+
+        status = _SDOH_SUBSTANCE_STATUS[normalized_status]
+        if status == "past":
+            temporality = HISTORICAL
+
+        if temporality == HYPOTHETICAL:
+            status = "unknown"
+
+        if (
+            status == "unknown"
+            and negation != NEGATED
+            and temporality != HYPOTHETICAL
+            and re.search(
+                r"\b(?:occasional|occasionally)\b",
+                status_text,
+                re.IGNORECASE,
+            )
+        ):
+            status = "current"
+        if (
+            status == "unknown"
+            and extent is not None
+            and negation != NEGATED
+            and temporality != HYPOTHETICAL
+        ):
+            if temporality == HISTORICAL:
+                status = "past"
+            else:
+                status = "current"
+
+        if status == "none":
+            extent = None
+
+        findings.append(
+            SDOHFinding(
+                category=category,
+                value=match.group(0),
+                status=status,
+                extent=extent,
+                temporality=temporality,
+                span=(match.start(), match.end()),
+                score=1.0,
+            )
+        )
+    return findings
+
+
+@lru_cache(maxsize=None)
+def _substance_trigger_pattern(category: str) -> re.Pattern[str]:
+    cues = _load_substance_cues()[category]
+
+    alternatives: list[str] = []
+
+    for cue in sorted(cues, key=len, reverse=True):
+        parts = cue.split()
+
+        escaped = r"\s+".join(re.escape(part) for part in parts)
+
+        prefix = r"(?<!\w)" if cue[0].isalnum() else ""
+        suffix = r"(?!\w)" if cue[-1].isalnum() else ""
+
+        alternatives.append(f"{prefix}(?:{escaped}){suffix}")
+
+    return re.compile(
+        "|".join(alternatives),
+        re.IGNORECASE,
+    )
+
+
 def _required_text(value: object, field_name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a string")
@@ -316,6 +644,20 @@ def _offset_within_ranges(
     )
 
 
+register_determinant_extractor(
+    "tobacco",
+    _extract_tobacco,
+)
+
+register_determinant_extractor(
+    "alcohol",
+    _extract_alcohol,
+)
+
+register_determinant_extractor(
+    "drug",
+    _extract_drug,
+)
 __all__ = [
     "SHAC_DATA_POLICY",
     "SOCIAL_HISTORY_SECTION",
