@@ -1,0 +1,47 @@
+name: Example Notebooks Execution & Output Check
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - "examples/notebooks/**"
+      - "tests/unit/test_notebook_gallery.py"
+      - ".github/workflows/notebooks-execute.yml"
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - "examples/notebooks/**"
+      - "tests/unit/test_notebook_gallery.py"
+      - ".github/workflows/notebooks-execute.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  notebooks-offline-execute:
+    name: Execute Gallery Notebooks (Offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev --python 3.11
+
+      - name: Execute gallery notebooks and check output freshness
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: .venv/bin/python -m pytest tests/unit/test_notebook_gallery.py -v
