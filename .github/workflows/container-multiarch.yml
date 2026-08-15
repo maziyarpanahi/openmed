@@ -187,18 +187,25 @@ jobs:
         id: tags
         shell: bash
         run: |
+          IMAGE_NAME="${IMAGE_NAME,,}"
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+
           {
             echo "tags<<EOF"
             echo "${IMAGE_NAME}:sha-${GITHUB_SHA::12}"
+
             if [ "${GITHUB_REF_TYPE}" = "branch" ] && [ "${GITHUB_REF_NAME}" = "master" ]; then
               echo "${IMAGE_NAME}:latest"
             fi
+
             if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
               echo "${IMAGE_NAME}:${GITHUB_REF_NAME}"
             fi
+
             if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
               echo "${IMAGE_NAME}:manual-${GITHUB_RUN_NUMBER}"
             fi
+
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -254,6 +261,7 @@ jobs:
             --source-digest "$GITHUB_SHA" \
             --source-ref "$GITHUB_REF" \
             --format json > image-provenance-verification.json
+
           python3 - image-provenance-verification.json <<'PY'
           import json
           import os
@@ -261,14 +269,19 @@ jobs:
 
           payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
           blob = json.dumps(payload, sort_keys=True)
+
           required = [
               "https://slsa.dev/provenance/v1",
               os.environ["GITHUB_SHA"],
               ".github/workflows/container-multiarch.yml",
           ]
+
           missing = [value for value in required if value not in blob]
+
           if missing:
-              raise SystemExit(f"image provenance verification output missing: {missing}")
+              raise SystemExit(
+                  f"image provenance verification output missing: {missing}"
+              )
           PY
 
       - name: Upload image provenance evidence
