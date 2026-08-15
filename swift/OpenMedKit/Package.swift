@@ -54,6 +54,11 @@ let package = Package(
                     condition: .when(platforms: [.iOS, .macOS])
                 ),
                 .product(
+                    name: "MLXLLM",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
                     name: "ZIPFoundation",
                     package: "ZIPFoundation",
                     condition: .when(platforms: [.iOS, .macOS])

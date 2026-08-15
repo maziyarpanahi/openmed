@@ -107,6 +107,35 @@ The compatible repositories use one naming family:
 - `OpenMed/North-Micro-Vision-Instruct-8bit-mlx`
 - `OpenMed/North-Micro-Vision-Instruct-bf16-mlx`
 
+### Maple Preview: structured clinical tasks
+
+OpenMed resolves `maple`, `maple-preview`, and the original
+`deepgrove/maple-preview` id to the pinned
+`deepgrove/maple-preview-2bit-mlx` artifact. The wrapper supports validated PII
+spans and redaction, clinical entities, directed relations, and note-grounded
+answers:
+
+```python
+from openmed import MapleClinicalAssistant, MapleTask
+
+assistant = MapleClinicalAssistant("maple")
+note = "Synthetic patient Alex Doe takes metformin 500 mg daily."
+
+masked = assistant.complete_task(MapleTask.PII, note)
+relations = assistant.complete_task(MapleTask.RELATIONS, note)
+answer = assistant.complete_task(
+    MapleTask.REASONING,
+    masked.redacted_text or "",
+    question="Which medication and dose are documented?",
+)
+```
+
+The model is loaded lazily. Custom executable model code is pinned to an
+immutable Hub revision, and the task parser rejects out-of-bounds spans,
+unknown relation endpoints, extra schema keys, and malformed JSON. See
+[Maple Preview on device](maple-on-device.md) for native iOS, Android, browser,
+and mixed-bit export workflows.
+
 ### Paged KV Cache for Long Notes
 
 Long clinical-note prompts can opt into OpenMed's paged KV-cache planning for
@@ -200,9 +229,11 @@ Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, P
 MLX-LM causal text generation is a separate Python-only artifact contract. It
 uses MLX-LM files such as `model.safetensors`, tokenizer assets, `config.json`,
 and custom `model_file` implementations when needed. Laneformer support is
-available through `OpenMed/laneformer-2b-it-q4-mlx`. Cohere Compass
-vision-language generation instead uses the shared OpenMed Python/OpenMedKit
-contract described above.
+available through `OpenMed/laneformer-2b-it-q4-mlx`. Maple Preview support uses
+the pinned `deepgrove/maple-preview-2bit-mlx` custom MLX-LM artifact and a
+native OpenMedKit implementation for Swift. Cohere Compass vision-language
+generation instead uses the shared OpenMed Python/OpenMedKit contract described
+above.
 
 Architectures still in active rollout:
 

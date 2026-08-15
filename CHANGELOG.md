@@ -35,6 +35,13 @@ internal logging PHI-safe by default.
 
 ### Added
 
+- Added pinned DeepGrove Maple Preview support through Python MLX-LM and a
+  native OpenMedKit MLX architecture, with privacy-bounded PII removal,
+  clinical entities, directed relations, and note-grounded reasoning/chat.
+  Added polished iOS scanning, Android Compose, and browser WebGPU demos plus
+  reproducible 4-bit/8-bit MLX planning and checksum-verified ONNX/ORT bundle
+  tooling. Model weights remain external and every clinical or disclosure
+  result requires human review.
 - Added a local-first terminology workbench with checksum-pinned vocabulary
   snapshots, exact and ranked grounding, calibration, section context,
   caller-supplied Athena and crosswalk support, value-free provenance, and
