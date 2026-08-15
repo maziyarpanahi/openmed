@@ -179,7 +179,7 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
     assert callable(udf)
     series_annotation = captured_annotations["texts"]
     assert series_annotation is captured_annotations["return"]
-    assert getattr(series_annotation, "__module__", None) == "pandas.core.series"
+    assert getattr(series_annotation, "__module__", None) == "pandas"
     assert getattr(series_annotation, "__qualname__", None) == "Series"
 
 
