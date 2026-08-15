@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
-    from .core import ModelLoader, OpenMedConfig
+    from .core import ModelCachePolicy, ModelLoader, OpenMedConfig
     from .core.capabilities import (
         BackendSpec,
         BackendStatus,
@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 _LAZY_IMPORTS = {
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
+    "ModelCachePolicy": ".core",
     "load_model": ".core",
     "BackendSpec": ".core.capabilities",
     "BackendStatus": ".core.capabilities",
@@ -85,6 +86,7 @@ _LAZY_IMPORTS = {
     "get_model_suggestions": ".core.model_registry",
     "get_models_by_category": ".core.model_registry",
     "get_pii_models_by_language": ".core.model_registry",
+    "ground": ".clinical.grounding",
     "list_model_categories": ".core.model_registry",
     "ModelQuery": ".core.model_search",
     "ModelSearchResult": ".core.model_search",
@@ -836,6 +838,7 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "ModelCachePolicy",
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",

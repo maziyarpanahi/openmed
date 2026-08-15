@@ -41,6 +41,12 @@ __all__ = [
     "ANDROID_ONNX_FORMAT",
     "ANDROID_ONNX_OPSET",
     "ANDROID_PROFILE_NAME",
+    "BioSpan",
+    "CpuFastPathBenchmarkRecord",
+    "CpuFastPathResult",
+    "CpuFastPathVerification",
+    "CpuFastPathVerificationError",
+    "CpuFeatures",
     "OPENVINO_FORMAT",
     "OPENVINO_INT8_FORMAT",
     "OPENVINO_PROFILE_NAME",
@@ -92,6 +98,7 @@ __all__ = [
     "OpenVinoQuantizationResult",
     "OpenVinoTokenClassificationSession",
     "OpenVinoVerificationError",
+    "benchmark_cpu_fastpath",
     "build_openvino_benchmark_report",
     "certify_openvino_reference",
     "apply_int8_recall_certification",
@@ -100,6 +107,7 @@ __all__ = [
     "PeakRamReport",
     "ORT_ANDROID_FORMAT",
     "OrtMobileConversionResult",
+    "QuantizedClassificationHead",
     "ShapeBucketConfig",
     "RamBudget",
     "RamBudgetExceeded",
@@ -113,6 +121,8 @@ __all__ = [
     "create_maple_onnx_bundle_manifest",
     "convert",
     "convert_android_onnx_to_ort",
+    "decode_bio_spans",
+    "detect_cpu_features",
     "export_android_fp16",
     "export_onnx",
     "export_openvino_ir",
@@ -122,7 +132,10 @@ __all__ = [
     "measure_openvino_latency",
     "quantize_openvino_int8",
     "resolve_openvino_device",
+    "run_cpu_fastpath",
     "run_onnx_reference_logits",
+    "run_reference_classification_head",
+    "select_cpu_kernel",
     "token_spans_from_logits",
     "int8_artifact_metadata",
     "load_onnx_model",
@@ -132,6 +145,7 @@ __all__ = [
     "maple_onnx_export_requirements",
     "optimize_onnx_graph",
     "quantize_android_int8",
+    "quantize_classification_head",
     "quantize_dynamic_int8",
     "plan_maple_onnx_export",
     "repack_maple_onnx_qmoe_2bit",
@@ -143,6 +157,7 @@ __all__ = [
     "validate_optimized_onnx_export",
     "validate_transformersjs_bundle",
     "validate_transformersjs_contract",
+    "verify_cpu_fastpath",
     "write_openvino_benchmark_report",
     "write_int8_recall_delta_report",
     "write_maple_qmoe_smoke_model",
@@ -155,6 +170,25 @@ def __getattr__(name: str) -> Any:
     """Load conversion helpers lazily so ``python -m`` stays warning-free."""
 
     if name in __all__:
+        if name in {"CpuFeatures", "detect_cpu_features", "select_cpu_kernel"}:
+            module = import_module("openmed.onnx.cpu_features")
+            return getattr(module, name)
+        if name in {
+            "BioSpan",
+            "CpuFastPathBenchmarkRecord",
+            "CpuFastPathResult",
+            "CpuFastPathVerification",
+            "CpuFastPathVerificationError",
+            "QuantizedClassificationHead",
+            "benchmark_cpu_fastpath",
+            "decode_bio_spans",
+            "quantize_classification_head",
+            "run_cpu_fastpath",
+            "run_reference_classification_head",
+            "verify_cpu_fastpath",
+        }:
+            module = import_module("openmed.onnx.cpu_fastpath")
+            return getattr(module, name)
         if name in {
             "MAPLE_ARCHITECTURE",
             "MAPLE_BUNDLE_FILENAME",

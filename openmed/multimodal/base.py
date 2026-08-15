@@ -2,10 +2,10 @@
 
 This module is the stable foundation every document/image/DICOM ingester builds
 on. It deliberately avoids importing heavy ingestion dependencies
-(pdfplumber/python-docx/Pillow) at module load time so that ``import openmed``
-and ``import openmed.multimodal`` stay lightweight; ingesters import their own
-dependencies lazily and surface a clear error when the ``multimodal`` extra is
-absent.
+(pdfplumber/python-docx/python-pptx/Pillow) at module load time so that
+``import openmed`` and ``import openmed.multimodal`` stay lightweight; ingesters
+import their own dependencies lazily and surface a clear error when the
+``multimodal`` extra is absent.
 """
 
 from __future__ import annotations
@@ -22,11 +22,13 @@ from .exceptions import MissingDependencyError, UnsupportedDocumentError
 _MULTIMODAL_DEPENDENCIES: tuple[tuple[str, str], ...] = (
     ("pdfplumber", "pdfplumber"),
     ("docx", "python-docx"),
+    ("pptx", "python-pptx"),
     ("PIL", "Pillow"),
     ("markdown_it", "markdown-it-py"),
     ("piexif", "piexif"),
     ("pikepdf", "pikepdf"),
     ("pydicom", "pydicom"),
+    ("openpyxl", "openpyxl"),
 )
 
 _MULTIMODAL_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
