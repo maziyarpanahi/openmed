@@ -20,8 +20,13 @@ let package = Package(
     dependencies: [
         // swift-transformers for HuggingFace-compatible tokenization
         .package(url: "https://github.com/huggingface/swift-transformers.git", from: "0.1.12"),
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.4"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.31.4"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
+        // Includes upstream #419, which preserves multimodal RoPE state from
+        // prefill into autoregressive decode. Pin until the next tagged release.
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm.git",
+            revision: "42f08a872075fd07f9f1f40ec1a5e191e6aad86e"
+        ),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
     ],
     targets: [

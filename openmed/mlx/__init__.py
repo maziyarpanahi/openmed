@@ -56,6 +56,17 @@ from openmed.mlx.maple import (
     redact_maple_spans,
     visible_maple_response,
 )
+from openmed.mlx.vlm import (
+    DEFAULT_NORTH_MICRO_VISION_MODEL,
+    CohereCompassProcessor,
+    OpenMedMLXVisionLanguageModel,
+    OpenMedVisionLanguageArtifactError,
+    OpenMedVisionLanguageError,
+    VisionLanguageGeneration,
+    generate_vision_text,
+    resolve_mlx_vision_language_model,
+    smart_resize,
+)
 
 _MAPLE_EXPORT_NAMES = frozenset(
     {
@@ -140,4 +151,13 @@ __all__ = [
     "resolve_mlx_language_model",
     "tokenizers_are_aligned",
     "visible_maple_response",
+    "CohereCompassProcessor",
+    "DEFAULT_NORTH_MICRO_VISION_MODEL",
+    "OpenMedVisionLanguageArtifactError",
+    "OpenMedVisionLanguageError",
+    "OpenMedMLXVisionLanguageModel",
+    "VisionLanguageGeneration",
+    "generate_vision_text",
+    "resolve_mlx_vision_language_model",
+    "smart_resize",
 ]
