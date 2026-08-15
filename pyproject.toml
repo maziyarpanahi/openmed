@@ -184,6 +184,10 @@ multimodal = [
   "easyocr>=1.7",
 ]
 
+notebook = [
+  "nbformat>=5.9.0",
+]
+
 # PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
 # it is opt-in rather than bundled into the general multimodal extra.
 ocr-paddle = [
