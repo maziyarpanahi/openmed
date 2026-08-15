@@ -1,10 +1,9 @@
-#if canImport(MLXVLM) && canImport(MLXLMCommon) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+#if canImport(MLXLMCommon) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
     import CoreImage
     import Foundation
     import Hub
     import MLX
     import MLXLMCommon
-    import MLXVLM
     import Tokenizers
 
     /// Generation result returned by ``OpenMedVisionLanguageModel``.
@@ -54,17 +53,15 @@
             revision: String = "main",
             progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
         ) async throws -> OpenMedVisionLanguageModel {
-            await OpenMedCompassRegistration.register()
-            let configuration = ModelConfiguration(
+            let modelDirectory = try await OpenMedHubDownloader().download(
                 id: modelID,
                 revision: revision,
-                defaultPrompt: "Describe the image accurately and concisely."
-            )
-            let container = try await VLMModelFactory.shared.loadContainer(
-                from: OpenMedHubDownloader(),
-                using: OpenMedTokenizerLoader(),
-                configuration: configuration,
+                matching: ["*.json", "*.jinja", "*.safetensors"],
+                useLatest: false,
                 progressHandler: progressHandler
+            )
+            let container = try await OpenMedCompassLoader.loadContainer(
+                from: modelDirectory
             )
             return OpenMedVisionLanguageModel(container: container)
         }
@@ -73,10 +70,8 @@
         public static func load(
             modelDirectory: URL
         ) async throws -> OpenMedVisionLanguageModel {
-            await OpenMedCompassRegistration.register()
-            let container = try await VLMModelFactory.shared.loadContainer(
-                from: modelDirectory,
-                using: OpenMedTokenizerLoader()
+            let container = try await OpenMedCompassLoader.loadContainer(
+                from: modelDirectory
             )
             return OpenMedVisionLanguageModel(container: container)
         }
@@ -354,7 +349,7 @@
             processing: UserInput.Processing
         ) throws -> (MLXArray, THW) {
             var ciImage = try image.asCIImage()
-            ciImage = MediaProcessing.apply(ciImage, processing: processing)
+            ciImage = OpenMedImageProcessing.apply(ciImage, processing: processing)
             let factor = configuration.patchSize * configuration.mergeSize
             let size = ciImage.extent.size
             let (height, width) = try Self.targetSize(
@@ -364,8 +359,8 @@
                 minPixels: processing.minPixels ?? configuration.minPixels,
                 maxPixels: processing.maxPixels ?? configuration.maxPixels
             )
-            ciImage = MediaProcessing.inSRGBToneCurveSpace(ciImage)
-            ciImage = MediaProcessing.resampleBicubic(
+            ciImage = OpenMedImageProcessing.inSRGBToneCurveSpace(ciImage)
+            ciImage = OpenMedImageProcessing.resampleBicubic(
                 ciImage,
                 to: CGSize(width: width, height: height)
             )
@@ -379,12 +374,12 @@
                     "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
                 ]
             )
-            ciImage = MediaProcessing.normalize(
+            ciImage = OpenMedImageProcessing.normalize(
                 ciImage,
                 mean: mean,
                 std: standardDeviation
             )
-            return patchify(MediaProcessing.asMLXArray(ciImage))
+            return patchify(OpenMedImageProcessing.asMLXArray(ciImage))
         }
 
         private func messages(for input: UserInput) -> [MLXLMCommon.Message] {
@@ -452,6 +447,166 @@
                     frames: processed.map(\.1)
                 )
             )
+        }
+    }
+
+    private enum OpenMedImageProcessing {
+        static func apply(
+            _ image: CIImage,
+            processing: UserInput.Processing
+        ) -> CIImage {
+            guard let target = processing.resize else { return image }
+            let scale = min(
+                target.width / image.extent.width,
+                target.height / image.extent.height
+            )
+            return image.transformed(
+                by: CGAffineTransform(scaleX: scale, y: scale)
+            )
+        }
+
+        static func inSRGBToneCurveSpace(_ image: CIImage) -> CIImage {
+            image.applyingFilter("CILinearToSRGBToneCurve")
+        }
+
+        static func resampleBicubic(_ image: CIImage, to size: CGSize) -> CIImage {
+            let verticalScale = size.height / image.extent.height
+            let horizontalScale = size.width / image.extent.width
+            return image.applyingFilter(
+                "CIBicubicScaleTransform",
+                parameters: [
+                    "inputScale": verticalScale,
+                    "inputAspectRatio": horizontalScale / verticalScale,
+                ]
+            ).cropped(
+                to: CGRect(origin: .zero, size: size)
+            )
+        }
+
+        static func normalize(
+            _ image: CIImage,
+            mean: (CGFloat, CGFloat, CGFloat),
+            std: (CGFloat, CGFloat, CGFloat)
+        ) -> CIImage {
+            image.applyingFilter(
+                "CIColorMatrix",
+                parameters: [
+                    "inputRVector": CIVector(x: 1 / std.0, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: 1 / std.1, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 1 / std.2, w: 0),
+                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                    "inputBiasVector": CIVector(
+                        x: -mean.0 / std.0,
+                        y: -mean.1 / std.1,
+                        z: -mean.2 / std.2,
+                        w: 0
+                    ),
+                ]
+            )
+        }
+
+        static func asMLXArray(_ image: CIImage) -> MLXArray {
+            let width = Int(image.extent.width.rounded())
+            let height = Int(image.extent.height.rounded())
+            let components = 4
+            let bytesPerComponent = MemoryLayout<Float32>.size
+            let bytesPerRow = width * components * bytesPerComponent
+            var data = Data(count: height * bytesPerRow)
+            let context = CIContext(options: [.cacheIntermediates: false])
+            data.withUnsafeMutableBytes { bytes in
+                guard let address = bytes.baseAddress else { return }
+                context.render(
+                    image,
+                    toBitmap: address,
+                    rowBytes: bytesPerRow,
+                    bounds: image.extent,
+                    format: .RGBAf,
+                    colorSpace: nil
+                )
+            }
+            var array = MLXArray(data, [height, width, components], type: Float32.self)
+            array = array[0..., 0..., ..<3]
+            return array.reshaped(1, height, width, 3).transposed(0, 3, 1, 2)
+        }
+    }
+
+    private enum OpenMedCompassLoader {
+        private static let defaultPrompt =
+            "Describe the image accurately and concisely."
+
+        static func loadContainer(from directory: URL) async throws -> ModelContainer {
+            let configurationData = try Data(
+                contentsOf: directory.appending(path: "config.json")
+            )
+            let baseConfiguration = try JSONDecoder().decode(
+                BaseConfiguration.self,
+                from: configurationData
+            )
+            let compassConfiguration = try JSONDecoder().decode(
+                OpenMedCompassConfiguration.self,
+                from: configurationData
+            )
+            try compassConfiguration.validate()
+
+            let model = OpenMedCompassModel(compassConfiguration)
+            try loadWeights(
+                modelDirectory: directory,
+                model: model,
+                perLayerQuantization: baseConfiguration.perLayerQuantization
+            )
+
+            let tokenizer = try await OpenMedTokenizerLoader().load(from: directory)
+            let processorURL = processorConfigurationURL(in: directory)
+            let processorConfiguration = try JSONDecoder().decode(
+                OpenMedCompassProcessorConfiguration.self,
+                from: Data(contentsOf: processorURL)
+            )
+            guard processorConfiguration.processorClass == "CohereCompassProcessor" else {
+                throw ModelFactoryError.invalidConfiguration(
+                    "unsupported processor \(processorConfiguration.processorClass)"
+                )
+            }
+            let processor = OpenMedCompassProcessor(
+                processorConfiguration,
+                tokenizer: tokenizer
+            )
+
+            var endTokenIDs = Set(baseConfiguration.eosTokenIds?.values ?? [])
+            var stopStrings = Set<String>()
+            let generationURL = directory.appending(path: "generation_config.json")
+            if let data = try? Data(contentsOf: generationURL),
+                let generation = try? JSONDecoder().decode(
+                    GenerationConfigFile.self,
+                    from: data
+                )
+            {
+                if let values = generation.eosTokenIds?.values {
+                    endTokenIDs = Set(values)
+                }
+                stopStrings.formUnion(generation.stopStrings)
+            }
+            let modelConfiguration = ModelConfiguration(
+                directory: directory,
+                defaultPrompt: defaultPrompt,
+                stopStrings: stopStrings,
+                eosTokenIds: endTokenIDs
+            )
+            return ModelContainer(
+                context: ModelContext(
+                    configuration: modelConfiguration,
+                    model: model,
+                    processor: processor,
+                    tokenizer: tokenizer
+                )
+            )
+        }
+
+        private static func processorConfigurationURL(in directory: URL) -> URL {
+            let preferred = directory.appending(path: "preprocessor_config.json")
+            if FileManager.default.fileExists(atPath: preferred.path) {
+                return preferred
+            }
+            return directory.appending(path: "processor_config.json")
         }
     }
 
@@ -549,30 +704,4 @@
         }
     }
 
-    private enum OpenMedCompassRegistration {
-        static func register() async {
-            await VLMTypeRegistry.shared.registerModelType(
-                "cohere_compass"
-            ) { data in
-                let configuration = try JSONDecoder().decode(
-                    OpenMedCompassConfiguration.self,
-                    from: data
-                )
-                try configuration.validate()
-                return OpenMedCompassModel(configuration)
-            }
-            await VLMProcessorTypeRegistry.shared.registerProcessorType(
-                "CohereCompassProcessor"
-            ) { data, tokenizer in
-                let configuration = try JSONDecoder().decode(
-                    OpenMedCompassProcessorConfiguration.self,
-                    from: data
-                )
-                return OpenMedCompassProcessor(
-                    configuration,
-                    tokenizer: tokenizer
-                )
-            }
-        }
-    }
 #endif

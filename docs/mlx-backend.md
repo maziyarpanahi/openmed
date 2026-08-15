@@ -73,8 +73,7 @@ print(runner.generate("Define delayed tensor parallelism.", max_tokens=128))
 ### Python Vision-Language Quick Start
 
 OpenMed includes a native Cohere Compass runtime for the North Micro Vision
-MLX family. It does not import or execute model-repository Python code and does
-not require `mlx-vlm`:
+MLX family. It consumes data-only model artifacts directly:
 
 ```python
 from openmed.mlx import OpenMedMLXVisionLanguageModel

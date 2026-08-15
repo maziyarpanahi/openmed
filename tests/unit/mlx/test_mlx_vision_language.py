@@ -11,8 +11,8 @@ import pytest
 
 from openmed.mlx.vlm import (
     CohereCompassProcessor,
-    OpenMedMLXVLMArtifactError,
-    resolve_mlx_vlm_model,
+    OpenMedVisionLanguageArtifactError,
+    resolve_mlx_vision_language_model,
     smart_resize,
 )
 
@@ -69,14 +69,14 @@ def test_smart_resize_rejects_pathological_aspect_ratio():
 def test_resolve_local_compass_artifact(tmp_path):
     artifact = _artifact(tmp_path / "model")
 
-    assert resolve_mlx_vlm_model(artifact) == artifact.resolve()
+    assert resolve_mlx_vision_language_model(artifact) == artifact.resolve()
 
 
 def test_resolve_rejects_wrong_architecture(tmp_path):
     artifact = _artifact(tmp_path / "model", model_type="qwen2_vl")
 
-    with pytest.raises(OpenMedMLXVLMArtifactError, match="model_type"):
-        resolve_mlx_vlm_model(artifact)
+    with pytest.raises(OpenMedVisionLanguageArtifactError, match="model_type"):
+        resolve_mlx_vision_language_model(artifact)
 
 
 def test_resolve_downloads_only_data_artifacts(monkeypatch, tmp_path):
@@ -93,7 +93,7 @@ def test_resolve_downloads_only_data_artifacts(monkeypatch, tmp_path):
         SimpleNamespace(snapshot_download=fake_snapshot_download),
     )
 
-    resolved = resolve_mlx_vlm_model(
+    resolved = resolve_mlx_vision_language_model(
         "OpenMed/North-Micro-Vision-Instruct-4bit-mlx",
         revision="012345",
     )

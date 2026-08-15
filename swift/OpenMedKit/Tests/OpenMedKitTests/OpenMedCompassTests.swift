@@ -1,4 +1,4 @@
-#if canImport(MLXVLM) && canImport(MLXLMCommon) && !os(watchOS) && !os(visionOS)
+#if canImport(MLXLMCommon) && !os(watchOS) && !os(visionOS)
     import Foundation
     import XCTest
 

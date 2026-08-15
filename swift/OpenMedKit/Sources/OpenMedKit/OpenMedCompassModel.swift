@@ -1,9 +1,8 @@
-#if canImport(MLXVLM) && canImport(MLXLMCommon) && !os(watchOS) && !os(visionOS)
+#if canImport(MLXLMCommon) && !os(watchOS) && !os(visionOS)
     import Foundation
     import MLX
     import MLXLMCommon
     import MLXNN
-    import MLXVLM
 
     private let compassPositionIDsKey = LMOutput.Key<MLXArray>(
         "openmed.compass.positionIDs"
@@ -994,7 +993,7 @@
         }
     }
 
-    final class OpenMedCompassModel: Module, VLMModel {
+    final class OpenMedCompassModel: Module, LanguageModel, LoRAModel {
         let configuration: OpenMedCompassConfiguration
         @ModuleInfo(key: "language_model") private var languageModel: CompassLanguageModel
         @ModuleInfo(key: "vision_tower") private var visionTower: CompassVisionTower

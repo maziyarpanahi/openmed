@@ -1,4 +1,4 @@
-"""Real-model parity tests for the OpenMed Cohere Compass MLX runtime."""
+"""Real-model parity tests for OpenMed's Cohere Compass runtime."""
 
 from __future__ import annotations
 

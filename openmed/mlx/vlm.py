@@ -17,12 +17,12 @@ DEFAULT_NORTH_MICRO_VISION_MODEL = "OpenMed/North-Micro-Vision-Instruct-4bit-mlx
 SUPPORTED_COMPASS_MODEL_TYPE = "cohere_compass"
 
 
-class OpenMedMLXVLMError(RuntimeError):
+class OpenMedVisionLanguageError(RuntimeError):
     """Base error raised by the OpenMed MLX multimodal runtime."""
 
 
-class OpenMedMLXVLMArtifactError(OpenMedMLXVLMError):
-    """Raised when an MLX VLM artifact violates the runtime contract."""
+class OpenMedVisionLanguageArtifactError(OpenMedVisionLanguageError):
+    """Raised when a vision-language artifact violates the runtime contract."""
 
 
 @dataclass(frozen=True)
@@ -99,13 +99,13 @@ def smart_resize(
     return resized_height, resized_width
 
 
-def resolve_mlx_vlm_model(
+def resolve_mlx_vision_language_model(
     model: str | Path,
     *,
     revision: str | None = None,
     cache_dir: str | Path | None = None,
 ) -> Path:
-    """Resolve an OpenMed MLX VLM from disk or Hugging Face Hub.
+    """Resolve an OpenMed vision-language model from disk or Hugging Face Hub.
 
     Args:
         model: Local artifact directory or Hugging Face repository ID.
@@ -120,8 +120,8 @@ def resolve_mlx_vlm_model(
     if candidate.is_dir():
         return _validate_compass_artifact(candidate.resolve())
     if candidate.exists():
-        raise OpenMedMLXVLMArtifactError(
-            f"MLX VLM artifact must be a directory: {candidate}"
+        raise OpenMedVisionLanguageArtifactError(
+            f"Vision-language artifact must be a directory: {candidate}"
         )
 
     from huggingface_hub import snapshot_download
@@ -152,19 +152,19 @@ def _validate_compass_artifact(directory: Path) -> Path:
     if not list(directory.glob("model*.safetensors")):
         missing.append("model*.safetensors")
     if missing:
-        raise OpenMedMLXVLMArtifactError(
+        raise OpenMedVisionLanguageArtifactError(
             f"Compass artifact is incomplete ({', '.join(missing)}): {directory}"
         )
     try:
         config = json.loads((directory / "config.json").read_text())
     except (OSError, json.JSONDecodeError) as error:
-        raise OpenMedMLXVLMArtifactError(
+        raise OpenMedVisionLanguageArtifactError(
             f"Invalid Compass config.json in {directory}: {error}"
         ) from error
     model_type = config.get("model_type")
     if model_type != SUPPORTED_COMPASS_MODEL_TYPE:
-        raise OpenMedMLXVLMArtifactError(
-            f"Unsupported MLX VLM model_type {model_type!r}; expected "
+        raise OpenMedVisionLanguageArtifactError(
+            f"Unsupported vision-language model_type {model_type!r}; expected "
             f"{SUPPORTED_COMPASS_MODEL_TYPE!r}"
         )
     manifest_path = directory / "openmed-mlx.json"
@@ -172,17 +172,17 @@ def _validate_compass_artifact(directory: Path) -> Path:
         try:
             manifest = json.loads(manifest_path.read_text())
         except (OSError, json.JSONDecodeError) as error:
-            raise OpenMedMLXVLMArtifactError(
+            raise OpenMedVisionLanguageArtifactError(
                 f"Invalid openmed-mlx.json in {directory}: {error}"
             ) from error
         family = str(manifest.get("family", "")).replace("_", "-")
         if family and family != "cohere-compass":
-            raise OpenMedMLXVLMArtifactError(
+            raise OpenMedVisionLanguageArtifactError(
                 f"Manifest family {family!r} does not match cohere-compass"
             )
         task = manifest.get("task")
         if task and task != "image-text-to-text":
-            raise OpenMedMLXVLMArtifactError(
+            raise OpenMedVisionLanguageArtifactError(
                 f"Manifest task {task!r} is not image-text-to-text"
             )
     return directory
@@ -435,7 +435,7 @@ class OpenMedMLXVisionLanguageModel:
         lazy: bool = False,
         strict: bool = True,
     ) -> None:
-        self.model_path = resolve_mlx_vlm_model(
+        self.model_path = resolve_mlx_vision_language_model(
             model, revision=revision, cache_dir=cache_dir
         )
         self.strict = strict
@@ -605,7 +605,7 @@ def generate_vision_text(
     max_tokens: int = 256,
     **kwargs: Any,
 ) -> str:
-    """Load an OpenMed MLX VLM and generate one text or image response."""
+    """Load an OpenMed vision-language model and generate one response."""
 
     runner = OpenMedMLXVisionLanguageModel(model)
     return runner.generate(prompt, image=image, max_tokens=max_tokens, **kwargs)
@@ -616,11 +616,11 @@ __all__ = [
     "CompassImageBatch",
     "CompassPreparedInput",
     "DEFAULT_NORTH_MICRO_VISION_MODEL",
-    "OpenMedMLXVLMArtifactError",
-    "OpenMedMLXVLMError",
+    "OpenMedVisionLanguageArtifactError",
+    "OpenMedVisionLanguageError",
     "OpenMedMLXVisionLanguageModel",
     "VisionLanguageGeneration",
     "generate_vision_text",
-    "resolve_mlx_vlm_model",
+    "resolve_mlx_vision_language_model",
     "smart_resize",
 ]

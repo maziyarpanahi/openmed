@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OpenMed North Micro Vision MLX precision variants: a native Python runtime,
   a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
   native-resolution image processing, and deterministic text/image parity
-  tests without a runtime dependency on `mlx-vlm`.
+  tests across Python and Swift.
 
 ## [2.2.0] - 2026-08-13
 
