@@ -54,6 +54,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Normalize image name
+        shell: bash
+        run: |
+          IMAGE_NAME="${IMAGE_NAME,,}"
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+
       - name: Resolve published image digest
         id: image
         shell: bash
@@ -72,6 +78,7 @@ jobs:
           fi
 
           digest="$(docker buildx imagetools inspect "$image_ref" --format '{{ .Manifest.Digest }}')"
+
           if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error title=Image digest lookup failed::Could not resolve a sha256 digest for $image_ref"
             exit 1
@@ -104,6 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           digest_hex="${IMAGE_DIGEST#sha256:}"
+
           jq -n \
             --arg build_type "https://github.com/Attestations/GitHubActionsWorkflow@v1" \
             --arg image "$IMAGE_DIGEST_REF" \
@@ -166,11 +174,14 @@ jobs:
           IMAGE_DIGEST_REF: ${{ steps.image.outputs.image_digest_ref }}
         run: |
           set -euo pipefail
+
           cosign sign --yes "$IMAGE_DIGEST_REF"
+
           cosign attest --yes \
             --predicate sbom.cdx.json \
             --type https://cyclonedx.org/bom \
             "$IMAGE_DIGEST_REF"
+
           cosign attest --yes \
             --predicate provenance.json \
             --type https://slsa.dev/provenance/v1 \
@@ -182,13 +193,16 @@ jobs:
           IMAGE_DIGEST_REF: ${{ steps.image.outputs.image_digest_ref }}
         run: |
           set -euo pipefail
+
           cosign verify "$IMAGE_DIGEST_REF" \
             --certificate-identity-regexp "$SIGNER_IDENTITY_RE" \
             --certificate-oidc-issuer "$OIDC_ISSUER" > signature.json
+
           cosign verify-attestation "$IMAGE_DIGEST_REF" \
             --type https://cyclonedx.org/bom \
             --certificate-identity-regexp "$SIGNER_IDENTITY_RE" \
             --certificate-oidc-issuer "$OIDC_ISSUER" > sbom-attestation.jsonl
+
           cosign verify-attestation "$IMAGE_DIGEST_REF" \
             --type https://slsa.dev/provenance/v1 \
             --certificate-identity-regexp "$SIGNER_IDENTITY_RE" \
