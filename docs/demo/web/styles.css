@@ -860,7 +860,7 @@ body {
   border: 1px solid var(--om-accent);
   border-radius: 50%;
   background: var(--om-wash);
-  color: var(--om-accent);
+  color: var(--om-accent-strong);
   font-family: var(--om-font-mono);
   font-size: 0.62rem;
   font-weight: 700;
