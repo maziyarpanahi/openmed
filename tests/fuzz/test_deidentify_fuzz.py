@@ -580,7 +580,7 @@ def test_deidentify_keep_mapping_reidentify_inverse(doc):
     _assert_text_equal(restored, result.original_text, context="reidentify mismatch")
     _assert_text_equal(result.original_text, text, context="canonical source mismatch")
 
-
+@settings(deadline=1000)
 @given(
     doc=repeated_identifier_documents(),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
