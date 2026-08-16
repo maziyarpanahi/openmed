@@ -161,8 +161,11 @@
               huggingface-hub
               httpx
               hypothesis
+              ipykernel
               jsonschema
               mypy
+              nbclient
+              nbformat
               numpy
               opencc
               openpyxl

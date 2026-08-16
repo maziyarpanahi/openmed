@@ -160,6 +160,7 @@ classification:
     - zero-shot-howto.md
     - zero-shot-ner.md
     - examples.md
+    - examples/notebook-gallery.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md
