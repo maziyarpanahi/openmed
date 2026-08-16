@@ -33,12 +33,12 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS_DIR = REPO_ROOT / "examples" / "notebooks"
 
-GALLERY = [
-    "Quickstart_Redaction.ipynb",
-    "Batch_Dataset_Redaction.ipynb",
-    "FHIR_Export_Tour.ipynb",
-    "Eval_Walkthrough.ipynb",
-]
+GALLERY = (
+    "01_quickstart_redaction.ipynb",
+    "02_batch_dataset.ipynb",
+    "03_fhir_export.ipynb",
+    "04_eval_walkthrough.ipynb",
+)
 
 _EXPR_SENTINEL = "__openmed_last_expr__"
 
@@ -66,10 +66,14 @@ def _committed_outputs(cell: dict[str, Any]) -> list[tuple[str, str]]:
             normalized.append(("stream", text))
         elif kind in {"execute_result", "display_data"}:
             data = output.get("data") or {}
-            text = data.get("text/plain", "")
-            if isinstance(text, list):
-                text = "".join(text)
-            normalized.append(("text/plain", text))
+            for mime_type, value in sorted(data.items()):
+                if isinstance(value, list):
+                    text = "".join(str(part) for part in value)
+                elif isinstance(value, str):
+                    text = value
+                else:
+                    text = json.dumps(value, sort_keys=True, separators=(",", ":"))
+                normalized.append((mime_type, text))
         else:
             normalized.append((kind, ""))
     return normalized

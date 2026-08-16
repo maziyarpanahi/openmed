@@ -36,7 +36,7 @@ Demonstrates scalable batch processing across directories of clinical files:
 
 - Initializes `BatchProcessor` with structured de-identification parameters and chunk sizes.
 - Streams text files through the offline detector.
-- Collects detailed item-level processing telemetry and writes redacted output files to a target directory.
+- Collects detailed item-level processing results for inspection and downstream writing.
 
 ---
 
@@ -46,7 +46,7 @@ Illustrates the end-to-end pipeline from unstructured clinical notes to standard
 
 1. **Intake Redaction**: Redacts direct patient identifiers from intake narratives.
 2. **Clinical Entity Extraction**: Extracts condition mentions, vital signs, and medication dosages with `TextProcessor`.
-3. **FHIR Resource Construction**: Maps extracted concepts to standard `Patient`, `Encounter`, `Observation`, and `MedicationStatement` resources.
+3. **FHIR Resource Construction**: Maps extracted concepts to standard `Patient`, `Condition`, `Observation`, and `MedicationStatement` resources.
 4. **Transaction Bundle Assembly**: Uses `openmed.clinical.exporters.fhir.to_bundle()` with deterministic document seeds to build a byte-stable R4 transaction Bundle.
 
 ---
@@ -80,7 +80,10 @@ jupyter notebook examples/notebooks/
 All gallery notebooks in `examples/notebooks/` are continuously executed in CI via `.github/workflows/notebooks-execute.yml` and tested locally via:
 
 ```bash
+python scripts/check_notebooks.py
 pytest tests/unit/test_notebook_gallery.py -v
 ```
 
-CI fails automatically if any notebook fails to execute offline or if its committed outputs diverge from the executed state.
+CI checks the committed outputs with the lightweight runner, then executes every
+notebook in a real Jupyter kernel. It fails if either execution errors or the
+fresh outputs diverge from the committed state.

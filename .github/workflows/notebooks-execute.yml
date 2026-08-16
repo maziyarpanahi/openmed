@@ -5,13 +5,19 @@ on:
     branches: [main, master, develop]
     paths:
       - "examples/notebooks/**"
+      - "scripts/check_notebooks.py"
       - "tests/unit/test_notebook_gallery.py"
+      - "pyproject.toml"
+      - "uv.lock"
       - ".github/workflows/notebooks-execute.yml"
   pull_request:
     branches: [main, master, develop]
     paths:
       - "examples/notebooks/**"
+      - "scripts/check_notebooks.py"
       - "tests/unit/test_notebook_gallery.py"
+      - "pyproject.toml"
+      - "uv.lock"
       - ".github/workflows/notebooks-execute.yml"
 
 permissions:
@@ -40,7 +46,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev --python 3.11
 
-      - name: Execute gallery notebooks and check output freshness
+      - name: Run lightweight notebook output check
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: .venv/bin/python scripts/check_notebooks.py
+
+      - name: Execute gallery notebooks in a real kernel
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
