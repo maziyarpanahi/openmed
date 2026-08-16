@@ -168,6 +168,7 @@ nav:
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - Export Format Support Matrix: export-matrix.md
+      - Maple Preview on Device: maple-on-device.md
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md

@@ -183,6 +183,28 @@ def test_manifest_schema_accepts_mlx_4bit_format():
     assert validate_manifest_row(row, line_number=1) == []
 
 
+def test_manifest_schema_and_generator_accept_mlx_2bit_format():
+    row = _manifest_row_fixture(
+        repo_id="OpenMed/maple-preview-2bit-mlx",
+        family="General",
+        task="text-generation",
+        tier=None,
+        param_count=20_214_030_336,
+        architecture="maple",
+        base_model="deepgrove/maple-preview",
+        formats=["mlx-2bit"],
+        canonical_labels=[],
+        license="other",
+    )
+
+    assert validate_manifest_row(row, line_number=1) == []
+    assert generate_manifest._formats(
+        "OpenMed/maple-preview-2bit-mlx",
+        ["mlx", "2-bit", "quantized"],
+        ["model-00001-of-00003.safetensors"],
+    ) == ["mlx-2bit", "pytorch"]
+
+
 def test_manifest_schema_accepts_complete_training_provenance():
     reproducibility_hash = "sha256:" + "1" * 64
     row = _manifest_row_fixture(
@@ -286,6 +308,11 @@ def test_manifest_generator_distinguishes_mlx_quantization_from_onnx() -> None:
     assert generate_manifest._formats(
         "OpenMed/maple-preview-4bit-onnx-android",
         ["onnx", "android", "quantized"],
+        ["model.onnx"],
+    ) == ["onnx"]
+    assert generate_manifest._formats(
+        "OpenMed/maple-preview-2bit-onnx-webgpu",
+        ["onnx", "webgpu", "2-bit", "quantized"],
         ["model.onnx"],
     ) == ["onnx"]
 
