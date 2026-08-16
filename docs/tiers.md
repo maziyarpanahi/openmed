@@ -31,6 +31,24 @@ harnesses. It exposes four named rows: `Tiny`, `Base`, `Large`, and
 The `Large` and `Accurate-XLarge` RAM values are represented as 4096 MB and
 8192 MB in code.
 
+### Nano admission check
+
+Nano is the Tiny tier's distilled 10–30M parameter floor, not a parallel
+device-tier scheme. A checkpoint declares it with `tier: Nano` in the
+benchmark report metadata. `openmed.eval.tiers.check_tier_fit` then evaluates
+the report against the Nano row:
+
+| Measurement | Report field | Nano maximum |
+|---|---|---:|
+| Resident RAM | `resources.peak_rss_bytes` (or `peak_rss_mib`) | 150 MB |
+| Steady-state p50 latency | `latency.p50_ms` (or `p50`) | 25 ms |
+| Steady-state p95 latency | `latency.p95_ms` (or `p95`) | 60 ms |
+
+The check is inclusive at each boundary and fails closed when a required
+measurement is missing or invalid. If `param_count` is present in the report,
+it must remain within the 10–30M Nano range. Artifact `size_bytes` is retained
+as report evidence; it does not introduce a second size budget.
+
 ## Notes
 
 - **Tier ≠ tier word across families** ("Large" = 434M for token-class NER but
