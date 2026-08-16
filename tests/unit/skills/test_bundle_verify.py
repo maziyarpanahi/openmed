@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from openmed.skills.bundle_verify import (
     HASH_PREFIX_LENGTH,
@@ -18,6 +19,7 @@ from openmed.skills.bundle_verify import (
     REASON_MANIFEST_MALFORMED,
     REASON_MANIFEST_VERSION_UNSUPPORTED,
     REASON_SIGNATURE_INVALID,
+    REASON_SIGNATURE_PUBLIC_KEY_REQUIRED,
     REASON_SIGNATURE_REQUIRED,
     SUPPORTED_MANIFEST_VERSIONS,
     BundleFileResult,
@@ -37,12 +39,14 @@ def _make_bundle(
     files_content,
     manifest_extra=None,
     signature_key=None,
+    signature_ed25519_private_key=None,
 ):
     """Create a bundle dir with manifest.json and files.
 
     Computes correct SHA-256 hashes. If signature_key is provided, computes
     HMAC-SHA256 over canonical manifest bytes (sorted keys, no whitespace,
-    excluding the signature field).
+    excluding the signature field). If signature_ed25519_private_key is
+    provided, computes an Ed25519 signature over the same canonical bytes.
     Returns (bundle_dir, manifest_dict).
     """
 
@@ -80,6 +84,20 @@ def _make_bundle(
         manifest["signature"] = hmac.new(
             signature_key, canonical, hashlib.sha256
         ).hexdigest()
+    if signature_ed25519_private_key is not None:
+        manifest["signature_scheme"] = "ed25519"
+        canonical_payload = {
+            "manifest_version": manifest["manifest_version"],
+            "bundle_id": manifest["bundle_id"],
+            "entry_points": list(manifest["entry_points"]),
+            "files": dict(manifest["files"]),
+            "signature_scheme": manifest["signature_scheme"],
+        }
+        canonical = json.dumps(
+            canonical_payload, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        sig = signature_ed25519_private_key.sign(canonical)
+        manifest["signature"] = sig.hex()
 
     (bundle_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     return bundle_dir, manifest
@@ -449,3 +467,104 @@ def test_bundle_id_preserved_in_result(tmp_path):
     _write_manifest(bad_dir, manifest)
     bad_result = verify_bundle(bad_dir)
     assert bad_result.bundle_id == _BUNDLE_ID
+
+
+def test_valid_bundle_with_ed25519_signature(tmp_path):
+    private_key = Ed25519PrivateKey.generate()
+    public_bytes = private_key.public_key().public_bytes_raw()
+    bundle_dir, manifest = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+        signature_ed25519_private_key=private_key,
+    )
+    result = verify_bundle(bundle_dir, signature_public_key=public_bytes)
+    assert result.valid is True
+    assert result.reason == ""
+    assert result.signature_verified is True
+    assert result.bundle_id == _BUNDLE_ID
+    assert result.entry_points_checked == ("main.py",)
+
+
+def test_ed25519_signature_public_key_required(tmp_path):
+    private_key = Ed25519PrivateKey.generate()
+    bundle_dir, manifest = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+        signature_ed25519_private_key=private_key,
+    )
+    result = verify_bundle(bundle_dir)
+    assert result.valid is False
+    assert result.reason == REASON_SIGNATURE_PUBLIC_KEY_REQUIRED
+    assert result.signature_verified is False
+
+
+def test_ed25519_signature_invalid(tmp_path):
+    private_key = Ed25519PrivateKey.generate()
+    other_key = Ed25519PrivateKey.generate()
+    public_bytes = other_key.public_key().public_bytes_raw()
+    bundle_dir, manifest = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+        signature_ed25519_private_key=private_key,
+    )
+    result = verify_bundle(bundle_dir, signature_public_key=public_bytes)
+    assert result.valid is False
+    assert result.reason == REASON_SIGNATURE_INVALID
+    assert result.signature_verified is False
+
+
+def test_ed25519_signature_tampered_manifest(tmp_path):
+    private_key = Ed25519PrivateKey.generate()
+    public_bytes = private_key.public_key().public_bytes_raw()
+    bundle_dir, manifest = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+        signature_ed25519_private_key=private_key,
+    )
+    manifest["bundle_id"] = "com.evil.tampered"
+    _write_manifest(bundle_dir, manifest)
+    result = verify_bundle(bundle_dir, signature_public_key=public_bytes)
+    assert result.valid is False
+    assert result.reason == REASON_SIGNATURE_INVALID
+    assert result.signature_verified is False
+
+
+def test_ed25519_with_hmac_key_ignored(tmp_path):
+    private_key = Ed25519PrivateKey.generate()
+    public_bytes = private_key.public_key().public_bytes_raw()
+    bundle_dir, manifest = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+        signature_ed25519_private_key=private_key,
+    )
+    result = verify_bundle(
+        bundle_dir,
+        signature_key=b"wrong-hmac-key",
+        signature_public_key=public_bytes,
+    )
+    assert result.valid is True
+    assert result.signature_verified is True
+
+
+def test_hmac_with_ed25519_key_ignored(tmp_path):
+    key = b"super-secret-key"
+    bundle_dir, manifest = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+        signature_key=key,
+    )
+    private_key = Ed25519PrivateKey.generate()
+    public_bytes = private_key.public_key().public_bytes_raw()
+    result = verify_bundle(
+        bundle_dir,
+        signature_key=key,
+        signature_public_key=public_bytes,
+    )
+    assert result.valid is True
+    assert result.signature_verified is True

@@ -32,10 +32,12 @@ REASON_ENTRY_POINT_NOT_DECLARED = "entry_point_not_declared"
 REASON_SIGNATURE_REQUIRED = "signature_required"
 REASON_SIGNATURE_INVALID = "signature_invalid"
 REASON_SIGNATURE_SCHEME_UNSUPPORTED = "signature_scheme_unsupported"
+REASON_SIGNATURE_PUBLIC_KEY_REQUIRED = "signature_public_key_required"
+REASON_SIGNATURE_DEPENDENCY_MISSING = "signature_dependency_missing"
 
 _LOGGER = logging.getLogger(__name__)
 _HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
-_SIGNATURE_SCHEMES = frozenset({"none", "hmac-sha256"})
+_SIGNATURE_SCHEMES = frozenset({"none", "hmac-sha256", "ed25519"})
 
 
 def _hash_prefix(digest: str) -> str:
@@ -90,7 +92,9 @@ class SkillBundleManifest:
             files[path] = digest.lower()
 
         if self.signature_scheme not in _SIGNATURE_SCHEMES:
-            raise ValueError("signature_scheme must be 'none' or 'hmac-sha256'")
+            raise ValueError(
+                "signature_scheme must be 'none', 'hmac-sha256', or 'ed25519'"
+            )
         if not isinstance(self.signature, str):
             raise ValueError("signature must be a string")
 
@@ -266,6 +270,7 @@ class BundleVerifier:
         bundle_dir: str | Path,
         *,
         signature_key: bytes | None = None,
+        signature_public_key: bytes | None = None,
     ) -> BundleVerificationResult:
         """Verify a skill bundle directory against its manifest.
 
@@ -273,7 +278,10 @@ class BundleVerifier:
             bundle_dir: Path to the bundle directory containing ``manifest.json``.
             signature_key: Optional HMAC-SHA256 key. Required when the manifest
                 declares signature_scheme ``"hmac-sha256"``. Ignored when
-                ``"none"``.
+                ``"none"`` or ``"ed25519"``.
+            signature_public_key: Optional Ed25519 public key (raw 32 bytes).
+                Required when the manifest declares signature_scheme
+                ``"ed25519"``. Ignored when ``"none"`` or ``"hmac-sha256"``.
 
         Returns:
             Deterministic verification result. Failures are represented in the
@@ -452,6 +460,58 @@ class BundleVerifier:
                     entry_points_checked=tuple(entry_points_checked),
                 )
             signature_verified = True
+        elif manifest.signature_scheme == "ed25519":
+            if signature_public_key is None:
+                _LOGGER.info(
+                    "bundle=%s verification failed: category=%s",
+                    manifest.bundle_id,
+                    REASON_SIGNATURE_PUBLIC_KEY_REQUIRED,
+                )
+                return _build_failure(
+                    manifest.bundle_id,
+                    manifest.manifest_version,
+                    REASON_SIGNATURE_PUBLIC_KEY_REQUIRED,
+                    "public key required for ed25519 scheme",
+                    files=tuple(file_results),
+                    entry_points_checked=tuple(entry_points_checked),
+                )
+            try:
+                from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+                    Ed25519PublicKey,
+                )
+            except ImportError:
+                _LOGGER.info(
+                    "bundle=%s verification failed: category=%s",
+                    manifest.bundle_id,
+                    REASON_SIGNATURE_DEPENDENCY_MISSING,
+                )
+                return _build_failure(
+                    manifest.bundle_id,
+                    manifest.manifest_version,
+                    REASON_SIGNATURE_DEPENDENCY_MISSING,
+                    "cryptography package is required for ed25519 verification",
+                    files=tuple(file_results),
+                    entry_points_checked=tuple(entry_points_checked),
+                )
+            canonical = self._canonical_manifest_bytes(manifest)
+            try:
+                public_key = Ed25519PublicKey.from_public_bytes(signature_public_key)
+                public_key.verify(bytes.fromhex(manifest.signature), canonical)
+            except Exception:
+                _LOGGER.info(
+                    "bundle=%s verification failed: category=%s",
+                    manifest.bundle_id,
+                    REASON_SIGNATURE_INVALID,
+                )
+                return _build_failure(
+                    manifest.bundle_id,
+                    manifest.manifest_version,
+                    REASON_SIGNATURE_INVALID,
+                    "ed25519 signature did not match canonical manifest",
+                    files=tuple(file_results),
+                    entry_points_checked=tuple(entry_points_checked),
+                )
+            signature_verified = True
         else:  # pragma: no cover - validated by SkillBundleManifest.from_mapping
             _LOGGER.info(
                 "bundle=%s verification failed: category=%s",
@@ -529,6 +589,7 @@ def verify_bundle(
     bundle_dir: str | Path,
     *,
     signature_key: bytes | None = None,
+    signature_public_key: bytes | None = None,
     supported_versions: frozenset[str] = SUPPORTED_MANIFEST_VERSIONS,
 ) -> BundleVerificationResult:
     """Verify a skill bundle and return a deterministic result.
@@ -539,6 +600,8 @@ def verify_bundle(
     Args:
         bundle_dir: Path to the bundle directory containing ``manifest.json``.
         signature_key: Optional HMAC-SHA256 key for signed bundles.
+        signature_public_key: Optional Ed25519 public key (raw 32 bytes) for
+            Ed25519-signed bundles.
         supported_versions: Override the set of accepted manifest versions.
 
     Returns:
@@ -548,6 +611,7 @@ def verify_bundle(
     return BundleVerifier(supported_versions=supported_versions).verify(
         bundle_dir,
         signature_key=signature_key,
+        signature_public_key=signature_public_key,
     )
 
 
@@ -560,7 +624,9 @@ __all__ = [
     "REASON_HASH_MISMATCH",
     "REASON_MANIFEST_MALFORMED",
     "REASON_MANIFEST_VERSION_UNSUPPORTED",
+    "REASON_SIGNATURE_DEPENDENCY_MISSING",
     "REASON_SIGNATURE_INVALID",
+    "REASON_SIGNATURE_PUBLIC_KEY_REQUIRED",
     "REASON_SIGNATURE_REQUIRED",
     "REASON_SIGNATURE_SCHEME_UNSUPPORTED",
     "SUPPORTED_MANIFEST_VERSIONS",

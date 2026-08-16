@@ -3,11 +3,11 @@
 OpenMed's skill bundle verifier performs a deterministic, pre-install integrity
 check for portable skill bundles. A skill bundle is a directory containing a
 `manifest.json` that declares the bundle identifier, entry points, per-file
-SHA-256 digests, and an optional signature over the canonical manifest. One
-signature scheme is supported: HMAC-SHA256 (shared-secret model). Verification
-is purely local: it performs no network calls
-and never logs raw file contents, full hashes, manifest JSON, signature bytes,
-or signature keys.
+SHA-256 digests, and an optional signature over the canonical manifest. Two
+signature schemes are supported: HMAC-SHA256 (shared-secret model) and
+Ed25519 (public-key model). Verification is purely local: it performs no
+network calls and never logs raw file contents, full hashes, manifest JSON,
+signature bytes, or signature keys.
 
 ## Manifest format
 
@@ -19,7 +19,7 @@ The bundle directory must contain a `manifest.json` file. The schema is:
 | `bundle_id` | Stable, non-empty bundle identifier. |
 | `entry_points` | List of relative paths of executable entry points in the bundle. |
 | `files` | Mapping of relative file path to declared SHA-256 hex digest. |
-| `signature_scheme` | Signature scheme; `"none"` or `"hmac-sha256"`. |
+| `signature_scheme` | Signature scheme; `"none"`, `"hmac-sha256"`, or `"ed25519"`. |
 | `signature` | Hex-encoded signature tag; empty when scheme is `"none"`. |
 
 A minimal manifest:
@@ -50,12 +50,14 @@ the result with a stable failure category:
 5. Every declared entry point file exists in the bundle directory.
 6. Every entry point is listed in the manifest `files` map.
 7. When `signature_scheme` is `hmac-sha256`, the supplied key produces a
-   matching HMAC-SHA256 over the canonical manifest.
+   matching HMAC-SHA256 over the canonical manifest. When `signature_scheme`
+   is `ed25519`, the supplied public key verifies the Ed25519 signature over
+   the canonical manifest.
 
 ## Failure categories
 
 All failures are represented in the result and never raised, except filesystem
-errors reading `manifest.json` itself. The nine stable `REASON_*` categories:
+errors reading `manifest.json` itself. The eleven stable `REASON_*` categories:
 
 | Category | Description |
 |---|---|
@@ -66,7 +68,9 @@ errors reading `manifest.json` itself. The nine stable `REASON_*` categories:
 | `entry_point_missing` | A declared entry point file does not exist. |
 | `entry_point_not_declared` | An entry point is not listed in the manifest files map. |
 | `signature_required` | Signature scheme is `hmac-sha256` but no key was supplied. |
-| `signature_invalid` | The supplied HMAC-SHA256 signature does not match. |
+| `signature_invalid` | The supplied signature does not match the canonical manifest. |
+| `signature_public_key_required` | Signature scheme is `ed25519` but no public key was supplied. |
+| `signature_dependency_missing` | The `cryptography` package is required for `ed25519` verification but is not installed. |
 | `signature_scheme_unsupported` | The declared signature scheme is not recognized. |
 
 ## Usage example
@@ -87,6 +91,21 @@ Verify a signed bundle by supplying the HMAC-SHA256 key:
 result = verify_bundle("/path/to/bundle", signature_key=b"my-secret-key")
 ```
 
+Verify an Ed25519-signed bundle by supplying the raw 32-byte public key:
+
+```python
+result = verify_bundle("/path/to/bundle", signature_public_key=public_key_bytes)
+```
+
+### Trust models
+
+HMAC-SHA256 uses a shared-secret model: both the signer and the verifier must
+possess the same secret key. Ed25519 uses a public-key model: the signer holds
+a private key and distributes only the public key to verifiers, so the
+verification secret never needs to be shared. Ed25519 verification requires
+the `cryptography` package, available via the `dev` extra
+(`uv pip install -e ".[dev]"`).
+
 For repeated verification with a custom accepted-versions set, use the verifier
 class directly:
 
@@ -95,6 +114,8 @@ from openmed.skills.bundle_verify import BundleVerifier
 
 verifier = BundleVerifier(supported_versions=frozenset({"1.0"}))
 result = verifier.verify("/path/to/bundle", signature_key=b"my-secret-key")
+# or for Ed25519:
+# result = verifier.verify("/path/to/bundle", signature_public_key=public_key_bytes)
 ```
 
 ## Privacy and logging
@@ -112,8 +133,8 @@ Public surface in `openmed.skills.bundle_verify`:
 
 | Symbol | Description |
 |---|---|
-| `verify_bundle(bundle_dir, *, signature_key=None, supported_versions=...)` | Convenience function wrapping `BundleVerifier.verify`. |
-| `BundleVerifier(*, supported_versions=...)` | Verifier class with `.verify(bundle_dir, *, signature_key=None)`. |
+| `verify_bundle(bundle_dir, *, signature_key=None, signature_public_key=None, supported_versions=...)` | Convenience function wrapping `BundleVerifier.verify`. |
+| `BundleVerifier(*, supported_versions=...)` | Verifier class with `.verify(bundle_dir, *, signature_key=None, signature_public_key=None)`. |
 | `SkillBundleManifest` | Frozen dataclass for manifest metadata; `from_mapping()` and `to_dict()`. |
 | `BundleVerificationResult` | Frozen dataclass with `.valid`, `.failure_category`, `.to_dict()`. |
 | `BundleFileResult` | Per-file result; `.to_dict()` exposes hash prefixes only. |
