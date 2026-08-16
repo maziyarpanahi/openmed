@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
+  batch processing, FHIR export, and multilingual evaluation, with offline
+  execution and committed-output freshness checks in CI.
 - Added first-class Cohere Compass vision-language inference for the five
   OpenMed North Micro Vision MLX precision variants: a native Python runtime,
   a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
