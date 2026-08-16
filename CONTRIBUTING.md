@@ -44,6 +44,9 @@ runs both gates. Do not run Black, isort, or flake8. For Swift changes under
 
 - Keep each PR focused on a single feature or fix; avoid unrelated formatting
   churn.
+- Name branches `<type>/issue-<number>-<short-kebab-slug>`, using a suitable type
+  such as `feat`, `fix`, `docs`, `test`, `chore`, or `refactor`; for example,
+  `docs/issue-280-maintainers`.
 - Write clear, imperative commit messages (the project uses concise prefixes
   such as `fix:`, `feat:`, and `docs:`).
 - Reference the issue you are closing and complete the
