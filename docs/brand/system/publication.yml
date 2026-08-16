@@ -170,6 +170,7 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/crosslingual-scorecard.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
