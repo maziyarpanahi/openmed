@@ -114,6 +114,7 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "numpy": "BSD-3-Clause",
     "onnx": "Apache-2.0",
