@@ -122,7 +122,7 @@ jobs:
         java-version: "17"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -160,7 +160,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -186,7 +186,7 @@ jobs:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -236,7 +236,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -279,7 +279,7 @@ jobs:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -327,7 +327,7 @@ jobs:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -393,7 +393,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -474,7 +474,7 @@ jobs:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
         cache-dependency-glob: |

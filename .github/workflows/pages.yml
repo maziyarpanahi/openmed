@@ -48,7 +48,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Setup uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
       - name: Install locked documentation tooling
