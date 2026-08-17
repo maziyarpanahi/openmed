@@ -77,9 +77,17 @@ class SkillBundleManifest:
         ):
             raise ValueError("entry_points must be a sequence of strings")
         entry_points = tuple(self.entry_points)
-        if any(not isinstance(item, str) or not item.strip() for item in entry_points):
-            raise ValueError("entry_points must contain only non-empty strings")
-        entry_points = tuple(item.strip() for item in entry_points if item.strip())
+        for item in entry_points:
+            if not isinstance(item, str) or not item:
+                raise ValueError("entry_points must contain only non-empty strings")
+            if item != item.strip():
+                raise ValueError(
+                    "entry_points must not contain whitespace-padded strings"
+                )
+            if Path(item).is_absolute() or ".." in Path(item).parts:
+                raise ValueError(
+                    "entry_points must not contain absolute or traversal paths"
+                )
 
         if not isinstance(self.files, Mapping):
             raise ValueError("files must be a mapping")
@@ -87,6 +95,10 @@ class SkillBundleManifest:
         for path, digest in self.files.items():
             if not isinstance(path, str) or not path:
                 raise ValueError("files must have non-empty string paths")
+            if path != path.strip():
+                raise ValueError("files must not contain whitespace-padded paths")
+            if Path(path).is_absolute() or ".." in Path(path).parts:
+                raise ValueError("files must not contain absolute or traversal paths")
             if not isinstance(digest, str) or _HEX64_RE.fullmatch(digest) is None:
                 raise ValueError("files must map to 64-character hex digests")
             files[path] = digest.lower()
@@ -340,7 +352,21 @@ class BundleVerifier:
 
         file_results: list[BundleFileResult] = []
         for rel_path, declared_hash in manifest.files.items():
-            file_path = bundle_path / rel_path
+            file_path = (bundle_path / rel_path).resolve()
+            try:
+                file_path.relative_to(bundle_path.resolve())
+            except ValueError:
+                _LOGGER.info(
+                    "bundle=%s verification failed: category=%s",
+                    manifest.bundle_id,
+                    REASON_MANIFEST_MALFORMED,
+                )
+                return _build_failure(
+                    manifest.bundle_id,
+                    manifest.manifest_version,
+                    REASON_MANIFEST_MALFORMED,
+                    f"file path escapes bundle directory: {rel_path}",
+                )
             if not file_path.is_file():
                 _LOGGER.info(
                     "bundle=%s verification failed: category=%s file_count=%d",
@@ -393,7 +419,23 @@ class BundleVerifier:
         entry_points_checked: list[str] = []
         for entry_point in manifest.entry_points:
             entry_points_checked.append(entry_point)
-            entry_path = bundle_path / entry_point
+            entry_path = (bundle_path / entry_point).resolve()
+            try:
+                entry_path.relative_to(bundle_path.resolve())
+            except ValueError:
+                _LOGGER.info(
+                    "bundle=%s verification failed: category=%s",
+                    manifest.bundle_id,
+                    REASON_MANIFEST_MALFORMED,
+                )
+                return _build_failure(
+                    manifest.bundle_id,
+                    manifest.manifest_version,
+                    REASON_MANIFEST_MALFORMED,
+                    f"entry point path escapes bundle directory: {entry_point}",
+                    files=tuple(file_results),
+                    entry_points_checked=tuple(entry_points_checked),
+                )
             if not entry_path.is_file():
                 _LOGGER.info(
                     "bundle=%s verification failed: category=%s entry_point_count=%d",

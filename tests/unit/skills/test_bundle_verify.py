@@ -568,3 +568,150 @@ def test_hmac_with_ed25519_key_ignored(tmp_path):
     )
     assert result.valid is True
     assert result.signature_verified is True
+
+
+# --- Finding A: Path traversal containment tests ---
+
+
+def test_path_traversal_in_files_rejected(tmp_path):
+    """Manifest declaring a traversal path in files is rejected at construction."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": [],
+        "files": {"../../etc/passwd": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_path_traversal_in_entry_points_rejected(tmp_path):
+    """Manifest declaring a traversal path in entry_points is rejected at construction."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": ["../../etc/shadow"],
+        "files": {"main.py": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+    (tmp_path / "main.py").write_text("print('hi')\n", encoding="utf-8")
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_absolute_path_in_files_rejected(tmp_path):
+    """Manifest declaring an absolute path in files is rejected at construction."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": [],
+        "files": {"/etc/passwd": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_absolute_path_in_entry_points_rejected(tmp_path):
+    """Manifest declaring an absolute path in entry_points is rejected at construction."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": ["/bin/sh"],
+        "files": {"main.py": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+    (tmp_path / "main.py").write_text("print('hi')\n", encoding="utf-8")
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_nested_subdirectory_path_accepted(tmp_path):
+    """Paths into subdirectories within the bundle are valid (no false positives)."""
+    bundle_dir, _ = _make_bundle(
+        tmp_path,
+        {"src/main.py": "print('hi')\n", "src/utils.py": "def f():\n    pass\n"},
+        manifest_extra={"entry_points": ["src/main.py"]},
+    )
+
+    result = verify_bundle(bundle_dir)
+
+    assert result.valid is True
+    assert result.entry_points_checked == ("src/main.py",)
+
+
+# --- Finding B: Whitespace-padded string rejection tests ---
+
+
+def test_padded_entry_point_rejected(tmp_path):
+    """Whitespace-padded entry point strings are rejected at construction."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": ["  main.py  "],
+        "files": {"main.py": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+    (tmp_path / "main.py").write_text("print('hi')\n", encoding="utf-8")
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_padded_files_key_rejected(tmp_path):
+    """Whitespace-padded file path keys are rejected at construction."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": [],
+        "files": {"  main.py  ": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+    (tmp_path / "main.py").write_text("print('hi')\n", encoding="utf-8")
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_unpadded_matching_strings_still_pass(tmp_path):
+    """Unpadded entry_points and files keys continue to work (no regression)."""
+    bundle_dir, _ = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hello')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+    )
+
+    result = verify_bundle(bundle_dir)
+
+    assert result.valid is True
+    assert result.entry_points_checked == ("main.py",)
+    assert result.files[0].path == "main.py"
