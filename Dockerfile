@@ -5,6 +5,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENMED_PROFILE=prod \
     OPENMED_SERVICE_KEEP_ALIVE=10m
 
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade \
+        bsdutils \
+        libblkid1 \
+        liblastlog2-2 \
+        libmount1 \
+        libsmartcols1 \
+        libuuid1 \
+        login \
+        mount \
+        util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY . /app
