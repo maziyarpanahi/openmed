@@ -47,7 +47,7 @@ dev = [
   "pytest-timeout>=2.3",
   "huggingface-hub>=0.30",
   "jsonschema>=4.0",
-  "mcp>=1.27,<2",
+  "mcp>=1.27,<3",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
   "Pillow==12.3.0",
@@ -65,11 +65,11 @@ dev = [
   "python-dateutil>=2.8",
   "hypothesis>=6.100",
   "fsspec>=2025.9.0",
-  "fonttools[woff]==4.61.1",
+  "fonttools[woff]==4.63.0",
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
-  "protobuf>=5.26,<7",
-  "ruff==0.15.22",
+  "protobuf>=5.26,<8",
+  "ruff==0.16.3",
   "strawberry-graphql[fastapi]>=0.316,<1",
   "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
@@ -88,7 +88,7 @@ integrity = [
 ]
 
 mcp = [
-  "mcp>=1.27,<2",
+  "mcp>=1.27,<3",
 ]
 
 lid = [
@@ -203,7 +203,7 @@ zh-hanlp = [
 
 awq = [
   "autoawq==0.2.9; sys_platform == 'linux'",
-  "transformers==5.5.0; sys_platform == 'linux'",
+  "transformers==5.15.0; sys_platform == 'linux'",
 ]
 
 gptq = [
@@ -225,7 +225,7 @@ langgraph = [
 ]
 
 haystack = [
-  "haystack-ai>=2,<3",
+  "haystack-ai>=2,<4",
 ]
 
 llamaindex = [
@@ -267,7 +267,7 @@ ray = [
 ]
 
 spark = [
-  "pyspark>=3.5,<4",
+  "pyspark>=3.5,<5",
   "pandas>=2.0",
   "pyarrow>=16",
 ]
@@ -287,7 +287,7 @@ service = [
   "opentelemetry-api>=1.26,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
-  "protobuf>=5.26,<7",
+  "protobuf>=5.26,<8",
   "strawberry-graphql[fastapi]>=0.316,<1",
   "uvicorn[standard]>=0.29",
 ]
@@ -351,7 +351,7 @@ docs = [
 ]
 
 yasbd = [
-  "yasbd-lib>=0.13.1,<0.14",
+  "yasbd-lib>=0.13.1,<0.16",
 ]
 
 [project.scripts]
