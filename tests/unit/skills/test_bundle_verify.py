@@ -648,6 +648,24 @@ def test_absolute_path_in_entry_points_rejected(tmp_path):
     assert result.reason == REASON_MANIFEST_MALFORMED
 
 
+def test_windows_style_absolute_path_rejected(tmp_path):
+    """Windows-style absolute paths (C:\\...) are rejected on all platforms."""
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": _BUNDLE_ID,
+        "entry_points": [],
+        "files": {"C:\\Windows\\System32\\config\\SAM": "a" * 64},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    _write_manifest(tmp_path, manifest)
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
 def test_nested_subdirectory_path_accepted(tmp_path):
     """Paths into subdirectories within the bundle are valid (no false positives)."""
     bundle_dir, _ = _make_bundle(

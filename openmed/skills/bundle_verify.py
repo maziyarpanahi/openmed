@@ -45,6 +45,26 @@ def _hash_prefix(digest: str) -> str:
     return digest[:HASH_PREFIX_LENGTH]
 
 
+def _is_absolute_or_traversal(path: str) -> bool:
+    """Check if a path is absolute or contains traversal components.
+
+    Uses both :meth:`pathlib.Path.is_absolute` (which catches Windows
+    drive-letter paths like ``C:\\foo`` on Windows) and a manual check
+    for a leading ``/`` or ``\\`` (which catches POSIX-style absolute
+    paths that :meth:`Path.is_absolute` does not recognize on Windows).
+    Also checks for Windows drive-letter patterns (``C:\\...``) on all
+    platforms so that manifests crafted on one OS are rejected on another.
+    """
+
+    p = Path(path)
+    return (
+        p.is_absolute()
+        or path.startswith(("/", "\\"))
+        or bool(re.match(r"^[A-Za-z]:[\\/]", path))
+        or ".." in p.parts
+    )
+
+
 @dataclass(frozen=True)
 class SkillBundleManifest:
     """Declared metadata for a portable skill bundle.
@@ -83,7 +103,7 @@ class SkillBundleManifest:
                 raise ValueError(
                     "entry_points must not contain whitespace-padded strings"
                 )
-            if Path(item).is_absolute() or ".." in Path(item).parts:
+            if _is_absolute_or_traversal(item):
                 raise ValueError(
                     "entry_points must not contain absolute or traversal paths"
                 )
@@ -96,7 +116,7 @@ class SkillBundleManifest:
                 raise ValueError("files must have non-empty string paths")
             if path != path.strip():
                 raise ValueError("files must not contain whitespace-padded paths")
-            if Path(path).is_absolute() or ".." in Path(path).parts:
+            if _is_absolute_or_traversal(path):
                 raise ValueError("files must not contain absolute or traversal paths")
             if not isinstance(digest, str) or _HEX64_RE.fullmatch(digest) is None:
                 raise ValueError("files must map to 64-character hex digests")
