@@ -57,7 +57,7 @@ the result with a stable failure category:
 ## Failure categories
 
 All failures are represented in the result and never raised, except filesystem
-errors reading `manifest.json` itself. The eleven stable `REASON_*` categories:
+errors reading `manifest.json` itself. The ten stable `REASON_*` categories:
 
 | Category | Description |
 |---|---|
@@ -71,7 +71,6 @@ errors reading `manifest.json` itself. The eleven stable `REASON_*` categories:
 | `signature_invalid` | The supplied signature does not match the canonical manifest. |
 | `signature_public_key_required` | Signature scheme is `ed25519` but no public key was supplied. |
 | `signature_dependency_missing` | The `cryptography` package is required for `ed25519` verification but is not installed. |
-| `signature_scheme_unsupported` | The declared signature scheme is not recognized. |
 
 ## Usage example
 

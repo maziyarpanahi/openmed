@@ -31,7 +31,6 @@ REASON_ENTRY_POINT_MISSING = "entry_point_missing"
 REASON_ENTRY_POINT_NOT_DECLARED = "entry_point_not_declared"
 REASON_SIGNATURE_REQUIRED = "signature_required"
 REASON_SIGNATURE_INVALID = "signature_invalid"
-REASON_SIGNATURE_SCHEME_UNSUPPORTED = "signature_scheme_unsupported"
 REASON_SIGNATURE_PUBLIC_KEY_REQUIRED = "signature_public_key_required"
 REASON_SIGNATURE_DEPENDENCY_MISSING = "signature_dependency_missing"
 
@@ -554,20 +553,6 @@ class BundleVerifier:
                     entry_points_checked=tuple(entry_points_checked),
                 )
             signature_verified = True
-        else:  # pragma: no cover - validated by SkillBundleManifest.from_mapping
-            _LOGGER.info(
-                "bundle=%s verification failed: category=%s",
-                manifest.bundle_id,
-                REASON_SIGNATURE_SCHEME_UNSUPPORTED,
-            )
-            return _build_failure(
-                manifest.bundle_id,
-                manifest.manifest_version,
-                REASON_SIGNATURE_SCHEME_UNSUPPORTED,
-                f"signature scheme {manifest.signature_scheme!r} is not supported",
-                files=tuple(file_results),
-                entry_points_checked=tuple(entry_points_checked),
-            )
 
         _LOGGER.info(
             "bundle=%s verified: valid=True file_count=%d entry_point_count=%d",
@@ -670,7 +655,6 @@ __all__ = [
     "REASON_SIGNATURE_INVALID",
     "REASON_SIGNATURE_PUBLIC_KEY_REQUIRED",
     "REASON_SIGNATURE_REQUIRED",
-    "REASON_SIGNATURE_SCHEME_UNSUPPORTED",
     "SUPPORTED_MANIFEST_VERSIONS",
     "BundleFileResult",
     "BundleVerificationResult",

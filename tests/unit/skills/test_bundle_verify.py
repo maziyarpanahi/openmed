@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 from pathlib import Path
 
@@ -715,3 +716,40 @@ def test_unpadded_matching_strings_still_pass(tmp_path):
     assert result.valid is True
     assert result.entry_points_checked == ("main.py",)
     assert result.files[0].path == "main.py"
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "symlink"), reason="platform does not support os.symlink"
+)
+def test_symlink_escaping_bundle_directory_rejected(tmp_path):
+    """A symlink inside the bundle pointing outside is rejected at runtime."""
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    external_dir = tmp_path / "outside"
+    external_dir.mkdir()
+
+    secret_file = external_dir / "secret.txt"
+    secret_file.write_text("TOP SECRET DATA")
+    secret_hash = hashlib.sha256(secret_file.read_bytes()).hexdigest()
+
+    symlink_path = bundle_dir / "linked.txt"
+    symlink_path.symlink_to(secret_file)
+
+    manifest = {
+        "manifest_version": "1.0",
+        "bundle_id": "symlink-escape-test",
+        "entry_points": [],
+        "files": {"linked.txt": secret_hash},
+        "signature_scheme": "none",
+        "signature": "",
+    }
+    (bundle_dir / "manifest.json").write_text(json.dumps(manifest))
+
+    result = verify_bundle(bundle_dir)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+    assert "linked.txt" in result.message
+    # The external target path must never appear in the failure message.
+    assert str(secret_file) not in result.message
+    assert "outside" not in result.message
