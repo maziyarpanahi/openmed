@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local EML header, plain-text, HTML, and attachment PHI redaction with
+  decoded source-offset maps, deterministic safety sweeps, image-only PDF
+  attachment output, and an explicit isolated `extract-msg` bridge extra for
+  optional Outlook MSG input.
 - Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
   batch processing, FHIR export, and multilingual evaluation, with offline
   execution and committed-output freshness checks in CI.

@@ -12,11 +12,12 @@ import hashlib
 import importlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .base import ExtractedDocument, SourceSpan, register_handler
-from .exceptions import MissingDependencyError
+from .exceptions import MissingDependencyError, UnsupportedDocumentError
 
 _PDFPLUMBER_HINT = 'Install with: pip install "openmed[multimodal]".'
 _PDF_WORD_FIELDS = ("x0", "top", "x1", "bottom")
@@ -333,17 +334,19 @@ def _iter_entities(result: Any) -> tuple[Any, ...]:
 
 
 def _pdf_handler(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     *,
     policy: Any = None,
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
+    _rewind(path)
     document = extract_pdf(path)
     # Keep the OM-060 flat extraction as the canonical text/offset map while
     # adding structured boxes for table cells and caption lines.
     from .documents_pdf_tables import extract_pdf_regions, project_structured_spans
 
+    _rewind(path)
     regions = extract_pdf_regions(path, document=document)
     entities = _iter_entities(_detect_entities(document, models, lang))
     rectangles = project_structured_spans(document, regions, entities)
@@ -367,6 +370,24 @@ def _pdf_handler(
                 ],
             }
         )
+    output_path = _policy_value(
+        policy,
+        "output_path",
+        "redacted_path",
+        "destination_path",
+    )
+    if output_path is not None or bool(_policy_value(policy, "return_bytes")):
+        redacted_pdf = _render_redacted_pdf(path, rectangles)
+        if output_path is not None:
+            _write_pdf_output(output_path, redacted_pdf)
+        metadata.update(
+            {
+                "detected_span_count": len(entities),
+                "pdf_rasterized": True,
+                "redacted_pdf_sha256": hashlib.sha256(redacted_pdf).hexdigest(),
+                "redacted_pdf_bytes": redacted_pdf,
+            }
+        )
     if policy is not None:
         metadata["policy"] = policy
     if metadata == document.metadata:
@@ -376,6 +397,109 @@ def _pdf_handler(
         spans=document.spans,
         metadata=metadata,
     )
+
+
+def _render_redacted_pdf(
+    source: Any,
+    rectangles: Sequence[ProjectedRectangle],
+    *,
+    resolution: int = 150,
+) -> bytes:
+    """Rasterize a PDF and burn opaque boxes into a fresh image-only PDF."""
+    pdfplumber = _import_pdfplumber()
+    try:
+        image_draw = importlib.import_module("PIL.ImageDraw")
+    except ImportError as exc:  # pragma: no cover - covered by extra checks.
+        raise MissingDependencyError(
+            dependency="Pillow", instruction=_PDFPLUMBER_HINT
+        ) from exc
+
+    by_page: dict[int, list[ProjectedRectangle]] = {}
+    for rectangle in rectangles:
+        by_page.setdefault(rectangle.page, []).append(rectangle)
+
+    images: list[Any] = []
+    _rewind(source)
+    with pdfplumber.open(source) as pdf:
+        for page_index, page in enumerate(getattr(pdf, "pages", ())):
+            rendered = page.to_image(
+                resolution=resolution,
+                antialias=True,
+            ).original.convert("RGB")
+            width = max(float(getattr(page, "width", rendered.width)), 1.0)
+            height = max(float(getattr(page, "height", rendered.height)), 1.0)
+            x_scale = rendered.width / width
+            y_scale = rendered.height / height
+            drawer = image_draw.Draw(rendered)
+            for rectangle in by_page.get(page_index, ()):
+                x0, top, x1, bottom = rectangle.bbox
+                drawer.rectangle(
+                    (
+                        int(x0 * x_scale),
+                        int(top * y_scale),
+                        int(x1 * x_scale) + 1,
+                        int(bottom * y_scale) + 1,
+                    ),
+                    fill="black",
+                )
+            images.append(rendered)
+
+    if not images:
+        raise UnsupportedDocumentError("Cannot emit a clean PDF with no pages.")
+    output = BytesIO()
+    first, *remaining = images
+    try:
+        first.save(
+            output,
+            format="PDF",
+            save_all=bool(remaining),
+            append_images=remaining,
+            resolution=resolution,
+        )
+        return output.getvalue()
+    finally:
+        for image in images:
+            image.close()
+
+
+def _write_pdf_output(output: Any, payload: bytes) -> None:
+    if hasattr(output, "write"):
+        try:
+            output.seek(0)
+            output.truncate()
+        except (AttributeError, OSError):
+            pass
+        output.write(payload)
+        try:
+            output.seek(0)
+        except (AttributeError, OSError):
+            pass
+        return
+    path = Path(output)
+    if path.suffix.lower() != ".pdf":
+        raise ValueError("redacted PDF output must use the .pdf extension")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+
+
+def _policy_value(policy: Any, *names: str) -> Any:
+    if isinstance(policy, Mapping):
+        for name in names:
+            if name in policy:
+                return policy[name]
+        return None
+    for name in names:
+        value = getattr(policy, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _rewind(source: Any) -> None:
+    try:
+        source.seek(0)
+    except (AttributeError, OSError):
+        pass
 
 
 register_handler(".pdf", _pdf_handler)

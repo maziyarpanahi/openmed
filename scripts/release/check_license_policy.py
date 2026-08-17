@@ -68,6 +68,7 @@ DISALLOWED_LICENSE_MARKERS = (
 )
 
 GPL_BRIDGE_EXCEPTIONS = {
+    "extract-msg": "GPL-3.0-only; optional out-of-process Outlook MSG bridge",
     "sdcmicro": "GPL-2.0-only; optional out-of-process disclosure-control bridge",
 }
 
@@ -85,6 +86,7 @@ REVIEWED_LICENSES = {
     "dask": "BSD-3-Clause",
     "duckdb": "MIT",
     "easyocr": "Apache-2.0",
+    "extract-msg": "GPL-3.0-only",
     "faker": "MIT",
     "fastapi": "MIT",
     "fsspec": "BSD-3-Clause",
