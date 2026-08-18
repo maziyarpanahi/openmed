@@ -656,6 +656,7 @@ def test_model_loader_selects_remote_backend_from_config() -> None:
     )
     sentinel = object()
     with (
+        patch("openmed.core.models.HF_AVAILABLE", False),
         patch(
             "openmed.core.backends.RemoteInferenceBackend.is_available",
             return_value=True,
