@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import re
 import zipfile
-import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -362,8 +361,6 @@ def _read_required(archive: zipfile.ZipFile, path: str) -> bytes:
         return archive.read(path)
     except KeyError as exc:
         raise UnsupportedDocumentError(f"ODT archive is missing {path}") from exc
-    except (NotImplementedError, zlib.error) as exc:
-        raise UnsupportedDocumentError("ODT must be a valid ZIP archive") from exc
 
 
 def _parse_content_xml(data: bytes) -> ET.Element:

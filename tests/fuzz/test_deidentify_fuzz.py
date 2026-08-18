@@ -461,7 +461,6 @@ def test_extract_pii_span_invariants(doc):
     _assert_planted_spans_covered(result.entities, result.text, planted)
 
 
-@settings(deadline=1000)
 @given(doc=planted_documents())
 def test_deidentify_mask_idempotent(doc):
     """Model-detection masking is a fixed point on already-masked output.
@@ -582,7 +581,6 @@ def test_deidentify_keep_mapping_reidentify_inverse(doc):
     _assert_text_equal(result.original_text, text, context="canonical source mismatch")
 
 
-@settings(deadline=1000)
 @given(
     doc=repeated_identifier_documents(),
     seed=st.integers(min_value=0, max_value=2**32 - 1),

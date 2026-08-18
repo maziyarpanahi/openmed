@@ -466,19 +466,6 @@ def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
     if bash is None:
         pytest.skip("bash is not available on this platform")
 
-    probe = subprocess.run(
-        [bash, "-n"],
-        capture_output=True,
-        input="",
-        text=True,
-    )
-
-    if probe.returncode != 0:
-        pytest.skip(
-            "bash is available but not executable on this platform: "
-            + probe.stderr.strip()
-        )
-
     markdown = _LOW_BANDWIDTH_DOC.read_text(encoding="utf-8")
     blocks = re.findall(r"```bash\n(.*?)```", markdown, flags=re.DOTALL)
 

@@ -36,6 +36,10 @@ _SUBSTANCE_CATEGORIES = (
     "alcohol",
     "drug",
 )
+_SUBSTANCE_CLAUSE_BOUNDARY_RE = re.compile(
+    r"(?<!\w)(?:but|however|although|whereas)(?!\w)",
+    re.IGNORECASE,
+)
 
 _SDOH_SUBSTANCE_STATUS = {
     "current": "current",
@@ -273,7 +277,6 @@ def _extract_tobacco(
     )
 
 
-# tobacoo helper
 def _parse_tobacco_extent(text: str) -> str | None:
     match = re.search(
         r"\b(?P<amount>\d+(?:\.\d+)?)\s*pack(?:-|\s+)years?\b",
@@ -444,7 +447,16 @@ def _substance_context_bounds(
 
     right = min(right_positions) if right_positions else len(text)
 
-    return left + 1, right
+    left += 1
+
+    for boundary in _SUBSTANCE_CLAUSE_BOUNDARY_RE.finditer(text, left, right):
+        if boundary.end() <= start:
+            left = boundary.end()
+        elif boundary.start() >= end:
+            right = boundary.start()
+            break
+
+    return left, right
 
 
 def _extract_substance_category(
