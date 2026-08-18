@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Kopf-based Kubernetes model operator with the namespaced
+  `OpenMedModel` CRD, manifest-pointer warm-pool rollouts, lifecycle conditions
+  and Events, retained-version rollback, least-privilege RBAC, hardened
+  deployment assets, operator documentation, and a synthetic fake-API reconcile
+  suite.
 - Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
   batch processing, FHIR export, and multilingual evaluation, with offline
   execution and committed-output freshness checks in CI.
