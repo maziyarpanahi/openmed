@@ -753,7 +753,10 @@ def test_direct_transport_is_disabled_by_offline_environment(
 
 
 def test_triton_extra_contains_clients_but_no_server_distribution() -> None:
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover - exercised on Python 3.10 CI
+        import tomli as tomllib
 
     project_root = Path(__file__).resolve().parents[3]
     pyproject = tomllib.loads(
