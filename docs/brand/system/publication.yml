@@ -106,6 +106,7 @@ classification:
     - serving/tracing.md
     - serving/resilience.md
     - serving/backpressure.md
+    - serving/kserve-triton.md
     - deploy/hardened-image.md
     - offline-install.md
     - serving/async-jobs.md

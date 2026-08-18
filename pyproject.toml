@@ -292,6 +292,15 @@ service = [
   "uvicorn[standard]>=0.29",
 ]
 
+# Client libraries only. OpenMed never installs Triton or KServe servers.
+triton = [
+  "grpcio>=1.64",
+  "httpx>=0.27",
+  "numpy>=1.26",
+  "protobuf>=5.26,<7",
+  "transformers>=4.50",
+]
+
 gliner = [
   "gliner[tokenizers]>=0.2.0",
   "torch>=2.0"
