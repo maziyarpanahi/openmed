@@ -2,8 +2,9 @@
 
 The PDF ingester uses pdfplumber lazily so importing :mod:`openmed.multimodal`
 does not pull optional dependencies into the base install. It extracts words in
-page reading order, records one :class:`~openmed.multimodal.base.SourceSpan` per
-word, and can project detected PHI character spans back to page rectangles.
+source or automatically reconstructed column-major reading order, records one
+:class:`~openmed.multimodal.base.SourceSpan` per word, and can project detected
+PHI character spans back to page rectangles.
 """
 
 from __future__ import annotations
@@ -16,6 +17,12 @@ from pathlib import Path
 from typing import Any
 
 from .base import ExtractedDocument, SourceSpan, register_handler
+from .documents_pdf_layout import (
+    PdfPageLayout,
+    PdfReadingOrder,
+    detect_pdf_columns,
+    validate_pdf_reading_order,
+)
 from .exceptions import MissingDependencyError
 
 _PDFPLUMBER_HINT = 'Install with: pip install "openmed[multimodal]".'
@@ -60,16 +67,34 @@ def _import_pdfplumber() -> Any:
         ) from exc
 
 
-def extract_pdf(path: str | Path) -> ExtractedDocument:
-    """Extract normalized PDF word text plus char-offset source spans.
+def extract_pdf(
+    path: str | Path, *, reading_order: PdfReadingOrder = "auto"
+) -> ExtractedDocument:
+    """Extract normalized PDF text plus char-offset source spans.
 
     Each pdfplumber word is joined with a single space on its page; pages are
-    joined with newlines. Source spans carry 0-based page indexes and pdfplumber
-    bounding boxes in PDF coordinate units.
+    joined with newlines. ``reading_order="auto"`` reconstructs only pages with
+    confidently repeated column gutters. ``reading_order="source"`` preserves
+    the original OM-060 word sequence. Single-column auto output is exactly the
+    source-order output. Source spans always retain the original 0-based page
+    indexes and pdfplumber bounding boxes in PDF coordinate units.
+
+    Args:
+        path: Local PDF path. Document bytes are never sent elsewhere.
+        reading_order: ``"auto"`` for conservative multi-column reconstruction
+            or ``"source"`` for the original pdfplumber text-flow order.
+
+    Returns:
+        Extracted text with one bbox-preserving source span per word.
+
+    Raises:
+        ValueError: If ``reading_order`` is unsupported.
     """
+    reading_order = validate_pdf_reading_order(reading_order)
     pdfplumber = _import_pdfplumber()
     parts: list[str] = []
     spans: list[SourceSpan] = []
+    reconstructed_layouts: list[tuple[int, PdfPageLayout]] = []
     cursor = 0
     page_count = 0
     word_count = 0
@@ -81,10 +106,17 @@ def extract_pdf(path: str | Path) -> ExtractedDocument:
             words = _extract_page_words(page)
             if not words:
                 continue
+            layout = _page_layout(page, words, reading_order=reading_order)
+            if layout is not None and layout.is_multicolumn:
+                reconstructed_layouts.append((page_index, layout))
+                word_indexes = layout.reading_order
+            else:
+                word_indexes = tuple(range(len(words)))
             if parts:
                 parts.append("\n")
                 cursor += 1
-            for word_index, word in enumerate(words):
+            for word_index, source_word_index in enumerate(word_indexes):
+                word = words[source_word_index]
                 if word_index > 0:
                     parts.append(" ")
                     cursor += 1
@@ -93,26 +125,55 @@ def extract_pdf(path: str | Path) -> ExtractedDocument:
                 parts.append(text)
                 cursor += len(text)
                 bbox = _word_bbox(word)
+                span_metadata: dict[str, Any] = {
+                    "format": "pdf",
+                    "block_type": "word",
+                    "page_word_index": word_index,
+                    "document_word_index": word_count,
+                }
+                if layout is not None and layout.is_multicolumn:
+                    span_metadata["source_page_word_index"] = source_word_index
+                    column_index = layout.word_columns[source_word_index]
+                    if column_index is None:
+                        span_metadata["spans_columns"] = True
+                    else:
+                        span_metadata["column_index"] = column_index
                 spans.append(
                     SourceSpan(
                         start=start,
                         end=cursor,
                         page=page_index,
                         bbox=bbox,
-                        metadata={
-                            "format": "pdf",
-                            "block_type": "word",
-                            "page_word_index": word_index,
-                            "document_word_index": word_count,
-                        },
+                        metadata=span_metadata,
                     )
                 )
                 word_count += 1
 
+    metadata: dict[str, Any] = {
+        "format": "pdf",
+        "page_count": page_count,
+        "word_count": word_count,
+    }
+    if reconstructed_layouts:
+        metadata.update(
+            {
+                "reading_order": "column-major",
+                "reading_order_reconstructed": True,
+                "reconstructed_page_count": len(reconstructed_layouts),
+                "page_layouts": tuple(
+                    {
+                        "page": page_index,
+                        "column_count": layout.column_count,
+                        "column_boundaries": layout.column_boundaries,
+                    }
+                    for page_index, layout in reconstructed_layouts
+                ),
+            }
+        )
     return ExtractedDocument(
         text="".join(parts),
         spans=tuple(spans),
-        metadata={"format": "pdf", "page_count": page_count, "word_count": word_count},
+        metadata=metadata,
     )
 
 
@@ -166,6 +227,27 @@ def _extract_page_words(page: Any) -> tuple[Mapping[str, Any], ...]:
         use_text_flow=True,
     )
     return tuple(word for word in words if str(word.get("text", "")).strip())
+
+
+def _page_layout(
+    page: Any,
+    words: Sequence[Mapping[str, Any]],
+    *,
+    reading_order: PdfReadingOrder,
+) -> PdfPageLayout | None:
+    if reading_order == "source":
+        return None
+    raw_width = getattr(page, "width", None)
+    try:
+        page_width = float(raw_width) if raw_width is not None else None
+        if page_width is not None and page_width <= 0:
+            page_width = None
+        return detect_pdf_columns(words, page_width=page_width)
+    except ValueError:
+        # Auto layout is deliberately fail-soft. The legacy extractor still
+        # validates and projects every source bbox below, so an uncertain page
+        # never gains a new failure mode merely because reconstruction is on.
+        return None
 
 
 def _word_bbox(word: Mapping[str, Any]) -> tuple[float, float, float, float]:
@@ -340,8 +422,8 @@ def _pdf_handler(
     lang: str | None = None,
 ) -> ExtractedDocument:
     document = extract_pdf(path)
-    # Keep the OM-060 flat extraction as the canonical text/offset map while
-    # adding structured boxes for table cells and caption lines.
+    # Keep this bbox-preserving extraction as the canonical text/offset map
+    # while adding structured boxes for table cells and caption lines.
     from .documents_pdf_tables import extract_pdf_regions, project_structured_spans
 
     regions = extract_pdf_regions(path, document=document)
