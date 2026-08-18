@@ -100,6 +100,7 @@ nav:
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
+      - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
