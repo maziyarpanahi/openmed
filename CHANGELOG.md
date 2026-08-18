@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a BigQuery-compatible warehouse remote-function handler that validates
+  batched row envelopes, groups policy-specific calls through `process_batch`,
+  emits PHI-safe error replies, and ships synthetic tests, container deployment
+  guidance, and registration DDL (#839).
 - Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
   batch processing, FHIR export, and multilingual evaluation, with offline
   execution and committed-output freshness checks in CI.
