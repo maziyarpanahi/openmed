@@ -172,6 +172,17 @@ from .pptx import (
     map_text_spans_to_pptx_runs,
     write_redacted_pptx,
 )
+from .render_pdf import (
+    PdfLayoutFidelityError,
+    PdfLayoutFidelityReport,
+    PdfPageFidelity,
+    PdfRedactionRegion,
+    PdfRedactionResult,
+    PdfRenderVerificationError,
+    measure_pdf_layout_fidelity,
+    render_redacted_pdf,
+    write_redacted_pdf,
+)
 from .rtf import extract_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
@@ -200,9 +211,14 @@ from .tabular_csv import (
 )
 from .verify_pdf import (
     PdfFidelityReport,
+    PdfTextRemovalReport,
+    RedactedTextRemovalError,
     RedactionFidelityError,
     RegionFidelity,
+    TextRemovalRegion,
+    assert_redacted_text_removed,
     verify_redacted_pdf,
+    verify_redacted_text_removed,
 )
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
@@ -345,9 +361,23 @@ __all__ = [
     "extract_asciidoc",
     "redact_source_text",
     "PdfFidelityReport",
+    "PdfTextRemovalReport",
     "RegionFidelity",
+    "TextRemovalRegion",
     "RedactionFidelityError",
+    "RedactedTextRemovalError",
+    "assert_redacted_text_removed",
     "verify_redacted_pdf",
+    "verify_redacted_text_removed",
+    "PdfLayoutFidelityError",
+    "PdfLayoutFidelityReport",
+    "PdfPageFidelity",
+    "PdfRedactionRegion",
+    "PdfRedactionResult",
+    "PdfRenderVerificationError",
+    "measure_pdf_layout_fidelity",
+    "render_redacted_pdf",
+    "write_redacted_pdf",
     "XlsxCellRedaction",
     "XlsxRedactionResult",
     "redact_xlsx",
