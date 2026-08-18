@@ -323,9 +323,16 @@ def test_yasbd_chinese_semicolon_boundary_has_no_global_rule_mutation(
     instance = detector_cls.return_value
 
     def detect(source):
-        context = {"text": source, "lang": "zh", "boundaries": [len(source)]}
+        semicolon_end = source.index("；") + 1
+        context = {
+            "text": source,
+            "lang": "zh",
+            # Model BoundaryDetector's required sentinels and prove the hook
+            # does not duplicate a boundary added by an upstream rule.
+            "boundaries": [0, semicolon_end, len(source)],
+        }
         detector_cls.call_args.kwargs["hook"](context)
-        return sorted(set(context["boundaries"]))
+        return sorted(context["boundaries"])[1:]
 
     instance.detect.side_effect = detect
 

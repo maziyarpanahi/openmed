@@ -118,8 +118,12 @@ def _yasbd_boundary_hook(context: Mapping[str, Any]) -> None:
     language = context["lang"]
     if not _uses_chinese_segmenter(paragraph, language):
         return
-    context["boundaries"].extend(
-        index + 1 for index, char in enumerate(paragraph) if char == "；"
+    boundaries = context["boundaries"]
+    existing = set(boundaries)
+    boundaries.extend(
+        index + 1
+        for index, char in enumerate(paragraph)
+        if char == "；" and index + 1 not in existing
     )
 
 
