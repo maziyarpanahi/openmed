@@ -2,6 +2,16 @@
 
 This directory contains the Gradle build for the `:openmedkit` Android library.
 
+## Demos
+
+- `OpenMedScanDemo` demonstrates CameraX capture, on-device OCR, and highlighted
+  identifier redaction.
+- [`OpenMedMapleDemo`](OpenMedMapleDemo/README.md) is the offline Maple Clinical
+  Studio for PII redaction, entity extraction, relation extraction, and
+  source-grounded reasoning/chat. It runs without model weights in synthetic
+  preview mode and accepts a pinned, checksummed ONNX Runtime Mobile bundle for
+  real on-device generation.
+
 ## Install OpenMedKit 2.2.0
 
 OpenMedKit Android is published from immutable OpenMed release tags through JitPack.

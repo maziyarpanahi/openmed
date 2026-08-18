@@ -73,6 +73,9 @@ dev = [
   "strawberry-graphql[fastapi]>=0.316,<1",
   "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
+  "nbclient>=0.8.0",
+  "nbformat>=5.9.0",
+  "ipykernel>=6.0",
 ]
 
 cli = [
@@ -298,6 +301,7 @@ mlx = [
   "mlx>=0.22",
   "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
+  "Pillow>=10.0",
   "transformers>=4.50",
   "tokenizers>=0.15",
   "safetensors>=0.4",
