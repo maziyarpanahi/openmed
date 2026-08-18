@@ -510,8 +510,8 @@ pip install "openmed[cli]"
 python -m openmed.cli.typer_app --help
 ```
 
-Use `openmed --help` for the standard CLI (`analyze`, `batch`, `deid`, `pii`, `audit`, `risk`, `models`,
-`config`, `doctor`, and more).
+Use `openmed --help` for the standard CLI (`init`, `analyze`, `batch`, `deid`,
+`pii`, `audit`, `risk`, `models`, `config`, `doctor`, and more).
 
 ---
 

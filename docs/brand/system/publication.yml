@@ -95,6 +95,7 @@ classification:
     - africa-onboarding.md
     - low-bandwidth-install.md
     - quickstarts.md
+    - cli/openmed-init.md
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md

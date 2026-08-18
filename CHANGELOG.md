@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic, fully offline `openmed init` project scaffold with
+  researcher, app-developer, and data-engineer presets, bundled OpenMedConfig
+  schema validation, synthetic starter pipelines, and collision-safe reruns.
 - Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
   batch processing, FHIR export, and multilingual evaluation, with offline
   execution and committed-output freshness checks in CI.

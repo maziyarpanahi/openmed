@@ -66,6 +66,12 @@ from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
 from .registry import add_registry_command
+from .scaffold import (
+    PERSONA_PRESETS,
+    ScaffoldConflictError,
+    ScaffoldError,
+    scaffold_project,
+)
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -374,6 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
+    _add_init_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
     _add_doctor_command(subparsers)
@@ -2453,6 +2460,34 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     )
     profile_delete.add_argument("profile_name", help="Name of the profile to delete.")
     profile_delete.set_defaults(handler=_handle_profile_delete)
+
+
+def _add_init_command(subparsers: argparse._SubParsersAction) -> None:
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Create an offline-ready OpenMed project scaffold.",
+    )
+    init_parser.add_argument(
+        "directory",
+        nargs="?",
+        type=Path,
+        default=Path("."),
+        help="Project directory to create or populate (default: current directory).",
+    )
+    init_parser.add_argument(
+        "--preset",
+        "--persona",
+        choices=PERSONA_PRESETS,
+        default="researcher",
+        dest="preset",
+        help="Persona-specific starter template (default: researcher).",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace only differing scaffold-managed files.",
+    )
+    init_parser.set_defaults(handler=_handle_init)
 
 
 def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
@@ -7398,6 +7433,40 @@ def _coerce_value(key: str, value: str) -> Any:
         except ValueError:
             raise ValueError("timeout must be an integer") from None
     return value
+
+
+def _handle_init(args: argparse.Namespace) -> int:
+    try:
+        result = scaffold_project(
+            args.directory,
+            preset=args.preset,
+            force=args.force,
+        )
+    except ScaffoldConflictError as exc:
+        raise CliError(
+            str(exc),
+            code="scaffold_conflict",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ScaffoldError as exc:
+        raise CliError(
+            str(exc),
+            code="invalid_scaffold",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+    lines = [
+        f"OpenMed {result.preset} scaffold ready at {result.destination}",
+    ]
+    for status, paths in (
+        ("created", result.created),
+        ("overwritten", result.overwritten),
+        ("unchanged", result.unchanged),
+    ):
+        if paths:
+            lines.append(f"{status.capitalize()}: {', '.join(paths)}")
+    lines.append("Next: run `python pipeline.py --check` inside the project directory.")
+    return emit(args, result.to_dict(), human="\n".join(lines))
 
 
 # ---------------------------------------------------------------------------
