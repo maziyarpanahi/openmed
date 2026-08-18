@@ -12,6 +12,7 @@ from openmed.eval.data_license_gate import (
     data_license_gate_errors,
     evaluate_data_license_gate,
 )
+from openmed.eval.release_gates import _manifest_coherence_check
 
 _REPO_ID = "OpenMed/clinical-ner-v1"
 
@@ -118,6 +119,70 @@ def test_fully_public_training_data_passes(tmp_path: Path) -> None:
 
     assert check.passed is True
     assert data_license_gate_errors(manifest) == []
+
+
+def test_manifest_coherence_path_enforces_data_license_gate(tmp_path: Path) -> None:
+    row = _base_row(
+        training_data_licenses=[
+            {
+                "name": "UMLS Metathesaurus",
+                "license": "UMLS-Metathesaurus-License",
+                "redistributable": False,
+                "role": "train",
+            }
+        ]
+    )
+    manifest = _write_manifest(tmp_path, [row])
+    identity = {
+        "repo_id": _REPO_ID,
+        "family": "NER",
+        "tier": "Small",
+        "param_count": 44_000_000,
+        "format": "pytorch",
+        "eval_set_hash": "sha256:" + "b" * 64,
+        "leakage_fixture_hash": "sha256:" + "c" * 64,
+    }
+
+    check = _manifest_coherence_check(
+        identity,
+        {"manifest_path": str(manifest), "require_manifest_row": True},
+    )
+
+    assert check.passed is False
+    mismatch = check.details["mismatches"]["training_data_licenses"]
+    assert mismatch["details"]["violations"][0]["repo_id"] == _REPO_ID
+
+
+def test_manifest_coherence_path_allows_eval_only_restricted_data(
+    tmp_path: Path,
+) -> None:
+    row = _base_row(
+        training_data_licenses=[
+            {
+                "name": "UMLS Metathesaurus",
+                "license": "UMLS-Metathesaurus-License",
+                "redistributable": False,
+                "role": "eval",
+            }
+        ]
+    )
+    manifest = _write_manifest(tmp_path, [row])
+    identity = {
+        "repo_id": _REPO_ID,
+        "family": "NER",
+        "tier": "Small",
+        "param_count": 44_000_000,
+        "format": "pytorch",
+        "eval_set_hash": "sha256:" + "b" * 64,
+        "leakage_fixture_hash": "sha256:" + "c" * 64,
+    }
+
+    check = _manifest_coherence_check(
+        identity,
+        {"manifest_path": str(manifest), "require_manifest_row": True},
+    )
+
+    assert check.passed is True
 
 
 def test_unpublished_checkpoint_is_not_gated(tmp_path: Path) -> None:
