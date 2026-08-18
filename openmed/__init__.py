@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
-    from .core import ModelLoader, OpenMedConfig
+    from .core import ModelCachePolicy, ModelLoader, OpenMedConfig
     from .core.capabilities import (
         BackendSpec,
         BackendStatus,
@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 _LAZY_IMPORTS = {
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
+    "ModelCachePolicy": ".core",
     "load_model": ".core",
     "BackendSpec": ".core.capabilities",
     "BackendStatus": ".core.capabilities",
@@ -85,6 +86,7 @@ _LAZY_IMPORTS = {
     "get_model_suggestions": ".core.model_registry",
     "get_models_by_category": ".core.model_registry",
     "get_pii_models_by_language": ".core.model_registry",
+    "ground": ".clinical.grounding",
     "list_model_categories": ".core.model_registry",
     "ModelQuery": ".core.model_search",
     "ModelSearchResult": ".core.model_search",
@@ -142,6 +144,15 @@ _LAZY_IMPORTS = {
     "PagedKVCacheStats": ".mlx.lm",
     "TokenRange": ".mlx.lm",
     "generate_text": ".mlx.lm",
+    "MapleClinicalAssistant": ".mlx.maple",
+    "MapleRelation": ".mlx.maple",
+    "MapleResponseError": ".mlx.maple",
+    "MapleSpan": ".mlx.maple",
+    "MapleTask": ".mlx.maple",
+    "MapleTaskResult": ".mlx.maple",
+    "build_maple_task_messages": ".mlx.maple",
+    "parse_maple_task_response": ".mlx.maple",
+    "redact_maple_spans": ".mlx.maple",
     "OnnxEntity": ".onnx.inference",
     "OnnxModel": ".onnx.inference",
     "load_onnx_model": ".onnx.inference",
@@ -827,6 +838,7 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "ModelCachePolicy",
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",
@@ -894,6 +906,15 @@ __all__ = [
     "PagedKVCachePlan",
     "PagedKVCacheStats",
     "TokenRange",
+    "MapleClinicalAssistant",
+    "MapleRelation",
+    "MapleResponseError",
+    "MapleSpan",
+    "MapleTask",
+    "MapleTaskResult",
+    "build_maple_task_messages",
+    "parse_maple_task_response",
+    "redact_maple_spans",
     # Profiling utilities
     "Profiler",
     "ProfileReport",

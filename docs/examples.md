@@ -4,10 +4,18 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+## Curated Notebook Gallery
+
+For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |
 | --- | --- |
+| [`01_quickstart_redaction.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/01_quickstart_redaction.ipynb) | Quickstart redaction: masking, reversible replacement, and cryptographic hashing. |
+| [`02_batch_dataset.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/02_batch_dataset.ipynb) | Batch dataset de-identification with `BatchProcessor` and directory processing. |
+| [`03_fhir_export.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/03_fhir_export.ipynb) | Redacting clinical text, extracting medical entities, and assembling a deterministic FHIR R4 Bundle. |
+| [`04_eval_walkthrough.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/04_eval_walkthrough.ipynb) | Offline evaluation across bundled synthetic multilingual golden fixtures. |
 | `getting_started.ipynb` | Mirrors the Quick Start guide with step-by-step installation, registry exploration, and a first call to `analyze_text`. |
 | `Sentence_Detection_Batching.ipynb` | Demonstrates pySBD-based segmentation, batching, and how to align predictions back to the original paragraphs. |
 | `ZeroShot_NER_Tour.ipynb` | Walks through GLiNER indexing, domain defaults, inference API usage, and the adapter that converts spans into BIO/BILOU schemes. |
@@ -154,7 +162,7 @@ python examples/datasets_walkthrough.py
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `2.0.0` includes release-critical Apple, Android, browser, and service entry points:
+OpenMed `2.2.0` includes release-critical Apple, Android, browser, and service entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

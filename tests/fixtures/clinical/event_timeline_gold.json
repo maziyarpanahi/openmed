@@ -1,0 +1,105 @@
+{
+  "synthetic": true,
+  "text": "Synthetic note: Fever began on 2026-01-03. Fever recurred on 2026-01-03. Fever was absent on 2026-01-05. Family history lists fever on 2026-01-07. Pain is mentioned without a date.",
+  "entities": [
+    {
+      "id": "fever-a",
+      "entity": "fever-concept-a",
+      "label": "SYMPTOM",
+      "event_kind": "onset",
+      "start": 16,
+      "end": 21
+    },
+    {
+      "id": "fever-b",
+      "entity": "fever-concept-b",
+      "label": "SYMPTOM",
+      "event_kind": "observation",
+      "start": 43,
+      "end": 48
+    },
+    {
+      "id": "fever-c",
+      "entity": "fever-concept-c",
+      "label": "SYMPTOM",
+      "event_kind": "resolution",
+      "start": 73,
+      "end": 78
+    },
+    {
+      "id": "family-fever",
+      "entity": "fever-family",
+      "label": "SYMPTOM",
+      "event_kind": "observation",
+      "section": "family_history",
+      "start": 126,
+      "end": 131
+    },
+    {
+      "id": "pain-unanchored",
+      "entity": "pain-concept",
+      "label": "SYMPTOM",
+      "event_kind": "observation",
+      "section": "assessment",
+      "start": 147,
+      "end": 151
+    }
+  ],
+  "normalized_times": {
+    "fever-a": {"value": "2026-01-03"},
+    "fever-b": {"value": "2026-01-03"},
+    "fever-c": {"value": "2026-01-05"},
+    "family-fever": {"value": "2026-01-07"}
+  },
+  "assertions": {
+    "fever-a": {
+      "temporality": "recent",
+      "certainty": "certain",
+      "negation": "affirmed",
+      "experiencer": "patient"
+    },
+    "fever-b": {
+      "temporality": "recent",
+      "certainty": "certain",
+      "negation": "affirmed",
+      "experiencer": "patient"
+    },
+    "fever-c": {
+      "temporality": "recent",
+      "certainty": "certain",
+      "negation": "negated",
+      "experiencer": "patient"
+    },
+    "family-fever": {
+      "temporality": "historical",
+      "certainty": "certain",
+      "negation": "affirmed",
+      "experiencer": "family"
+    },
+    "pain-unanchored": {
+      "temporality": "recent",
+      "certainty": "uncertain",
+      "negation": "affirmed",
+      "experiencer": "patient"
+    }
+  },
+  "chains": {
+    "chain-fever": ["fever-a", "fever-b"]
+  },
+  "expected": {
+    "entity_order": [
+      "chain-fever",
+      "fever-concept-c",
+      "fever-family",
+      "pain-concept"
+    ],
+    "normalized_times": [
+      "2026-01-03",
+      "2026-01-05",
+      "2026-01-07",
+      null
+    ],
+    "merged_count": 1,
+    "unanchored_count": 1
+  }
+}
