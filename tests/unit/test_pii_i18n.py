@@ -359,6 +359,30 @@ class TestBengaliValidators:
     def test_bangladesh_nid_rejects_unsupported_structures(self, value):
         assert not validate_bangladesh_nid(value)
 
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "১২৩৪৫৬৭৮৯",
+            "১২৩৪৫৬৭৮৯০১",
+            "১২৩৪৫৬৭৮৯০১২৩৪",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭৮",
+        ),
+    )
+    def test_unsupported_nid_lengths_do_not_match_any_bengali_id_pattern(self, value):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == "national_id"
+        ]
+
+        assert not any(
+            match is not None
+            and (pattern.validator is None or pattern.validator(match.group(0)))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, value, pattern.flags)) is not None
+        )
+
     def test_bengali_aadhaar_accepts_ascii_and_native_digits(self):
         assert validate_bengali_aadhaar("2467 7832 5484")
         assert validate_bengali_aadhaar("২৪৬৭ ৭৮৩২ ৫৪৮৪")
