@@ -1,0 +1,122 @@
+name: Edge SBC benchmark
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/edge-benchmark.yml"
+      - "openmed/eval/budgets/edge_sbc.json"
+      - "openmed/eval/edge_benchmark.py"
+      - "openmed/eval/fixtures/edge_identity.onnx.b64"
+      - "openmed/eval/fixtures/mobile_one_page_notes.jsonl"
+      - "openmed/eval/footprint_gate.py"
+      - "openmed/onnx/inference.py"
+      - "pyproject.toml"
+      - "tests/unit/eval/test_edge_benchmark.py"
+      - "tests/unit/eval/test_footprint_gate.py"
+      - "uv.lock"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/edge-benchmark.yml"
+      - "openmed/eval/budgets/edge_sbc.json"
+      - "openmed/eval/edge_benchmark.py"
+      - "openmed/eval/fixtures/edge_identity.onnx.b64"
+      - "openmed/eval/fixtures/mobile_one_page_notes.jsonl"
+      - "openmed/eval/footprint_gate.py"
+      - "openmed/onnx/inference.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Edge SBC (${{ matrix.profile }})
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - jetson-nano
+          - raspberry-pi-5
+    env:
+      UV_PROJECT_ENVIRONMENT: /tmp/openmed-edge
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Verify native aarch64 runner
+        shell: bash
+        run: test "$(uname -m)" = "aarch64"
+
+      - name: Install frozen minimal edge profile
+        run: >-
+          uv sync --frozen --extra edge-sbc --no-dev --no-editable
+          --python 3.11
+
+      - name: Resolve isolated install path
+        shell: bash
+        run: |
+          site_packages="$($UV_PROJECT_ENVIRONMENT/bin/python -c \
+            'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          echo "EDGE_SITE_PACKAGES=$site_packages" >> "$GITHUB_ENV"
+
+      - name: Verify CPU-only ONNX Runtime
+        shell: bash
+        run: |
+          "$UV_PROJECT_ENVIRONMENT/bin/python" - <<'PY'
+          import sys
+
+          import onnxruntime as ort
+
+          assert "CPUExecutionProvider" in ort.get_available_providers()
+          assert "torch" not in sys.modules
+          assert "transformers" not in sys.modules
+          PY
+
+      - name: Run socket-blocked synthetic benchmark
+        env:
+          OPENMED_OFFLINE: "1"
+        shell: bash
+        run: |
+          "$UV_PROJECT_ENVIRONMENT/bin/python" \
+            -m openmed.eval.edge_benchmark \
+            --profile "${{ matrix.profile }}" \
+            --repeat 20 \
+            --install-path "$EDGE_SITE_PACKAGES" \
+            --require-aarch64 \
+            --output "edge-${{ matrix.profile }}.json"
+
+      - name: Enforce install-size and peak-RSS budgets
+        shell: bash
+        run: |
+          "$UV_PROJECT_ENVIRONMENT/bin/python" \
+            -m openmed.eval.footprint_gate \
+            --profile "${{ matrix.profile }}" \
+            --report "edge-${{ matrix.profile }}.json" \
+            --output "footprint-${{ matrix.profile }}.json"
+
+      - name: Upload aggregate edge evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edge-${{ matrix.profile }}
+          path: |
+            edge-${{ matrix.profile }}.json
+            footprint-${{ matrix.profile }}.json
+          if-no-files-found: error
+          retention-days: 90
