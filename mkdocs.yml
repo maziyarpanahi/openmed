@@ -21,6 +21,7 @@ nav:
       - African Developer Onboarding: africa-onboarding.md
       - Low-Bandwidth & Proxy Install: low-bandwidth-install.md
       - Persona Quickstarts: quickstarts.md
+      - Project Scaffold CLI: cli/openmed-init.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:

@@ -71,7 +71,7 @@ For the model families available by clinical specialty, use the
 | Core pipeline observability | Optional, no-PHI spans and aggregate histograms for all ten de-identification pipeline stages, with lazy OpenTelemetry loading and no exporter by default. | `openmed/core/telemetry.py`, `openmed/core/pipeline.py`, [Core Pipeline Observability](./core-observability.md) |
 | Typed clients | Python service client and TypeScript REST client parity. | `openmed/service/client.py`, `clients/typescript/`, `clients/typescript/README.md` |
 | Streaming and connectors | Core incremental de-identification, Kafka/Pulsar streaming, Spark structured streaming, object storage, Dask, DuckDB, lakehouse, columnar redaction, warehouse remote functions, and transformation packages. | `openmed/processing/`, `openmed/integrations/`, `openmed/interop/duckdb_udf.py`, [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Warehouse Remote-Function Handler](./integrations/warehouse-remote-function.md), [Dask DataFrame De-identification](./integrations/dask.md) |
-| CLI | `openmed deid`, FHIR bundle, model recommendation/diff/card, policy diff/lint, doctor, gates preview/bundle, audit/risk, active learning, benchmark, and calibration commands. | `openmed/cli/`, [Contributing & Releases](./contributing.md) |
+| CLI | `openmed init`, `openmed deid`, FHIR bundle, model recommendation/diff/card, policy diff/lint, doctor, gates preview/bundle, audit/risk, active learning, benchmark, and calibration commands. | `openmed/cli/`, [Project Scaffold](./cli/openmed-init.md), [Contributing & Releases](./contributing.md) |
 
 ## Evaluation, Risk, And Release Evidence
 
