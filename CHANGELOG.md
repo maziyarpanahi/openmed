@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a Triton ONNX model-repository generator and configuration-selected
   KServe V2 HTTP/gRPC inference backend with local tokenization and decoding,
   mocked local/remote span-parity coverage, and no bundled serving runtime.
+- Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
+  core privacy-pipeline stages, with lazy optional imports, no exporter by
+  default, shared `Timer` measurements, synthetic leakage regression tests, and
+  an `otel` installation extra.
 - Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
   batch processing, FHIR export, and multilingual evaluation, with offline
   execution and committed-output freshness checks in CI.
