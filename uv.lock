@@ -3951,6 +3951,15 @@ wheels = [
 ]
 
 [[package]]
+name = "iso8601"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/f3/ef59cee614d5e0accf6fd0cbba025b93b272e626ca89fb70a3e9187c5d15/iso8601-2.1.0.tar.gz", hash = "sha256:6b1d3829ee8921c4301998c909f7829fa9ed3cbdac0d3b16af2d743aed1ba8df", size = 6522, upload-time = "2023-10-03T00:25:39.317Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/0c/f37b6a241f0759b7653ffa7213889d89ad49a2b76eb2ddf3b57b2738c347/iso8601-2.1.0-py3-none-any.whl", hash = "sha256:aac4145c4dcb66ad8b648a02830f5e2ff6c24af20f4f482689be402db2429242", size = 7545, upload-time = "2023-10-03T00:25:32.304Z" },
+]
+
+[[package]]
 name = "isodate"
 version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -4219,6 +4228,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/02/49/9d1284d0dc65e2c757b74c6687b6d319b02f822ad039e5c512df9194d9dd/jupyter_core-5.9.1.tar.gz", hash = "sha256:4d09aaff303b9566c3ce657f580bd089ff5c91f5f89cf7d8846c3cdf465b5508", size = 89814, upload-time = "2025-10-16T19:19:18.444Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/e7/80988e32bf6f73919a113473a604f5a8f09094de312b9d52b79c2df7612b/jupyter_core-5.9.1-py3-none-any.whl", hash = "sha256:ebf87fdc6073d142e114c72c9e29a9d7ca03fad818c5d300ce2adc1fb0743407", size = 29032, upload-time = "2025-10-16T19:19:16.783Z" },
+]
+
+[[package]]
+name = "kopf"
+version = "1.44.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "click" },
+    { name = "iso8601" },
+    { name = "jsonpatch" },
+    { name = "python-json-logger" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/21/9cf76b5946186f8c5075794daf535031c0e3a15494e7aad62daa71a12992/kopf-1.44.6.tar.gz", hash = "sha256:39c32d172394f0a891c19bfa2382c0e4bab783a63fdd1f0d9209aa043856127a", size = 1255087, upload-time = "2026-06-03T13:01:50.706Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/77/3ec5f44d6dc73aa9b709d261a9b6849f1cc5eb2e65ca26db43e4efc02125/kopf-1.44.6-py3-none-any.whl", hash = "sha256:793b6a403be5fe389365172b117a8e1385a5d18eb80fdb1dfe0f50e9c7d7862d", size = 222717, upload-time = "2026-06-03T13:01:49.15Z" },
 ]
 
 [[package]]
@@ -6689,6 +6715,9 @@ openvino = [
     { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'darwin' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform == 'darwin' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
 ]
+operator = [
+    { name = "kopf" },
+]
 otel = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-sdk" },
@@ -6824,6 +6853,7 @@ requires-dist = [
     { name = "jieba", specifier = ">=0.42.1,<0.43" },
     { name = "jieba", marker = "extra == 'zh'", specifier = ">=0.42" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "kopf", marker = "extra == 'operator'", specifier = ">=1.44.6,<2" },
     { name = "langchain-core", marker = "extra == 'agents'", specifier = ">=0.2,<2" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.2,<2" },
     { name = "langgraph", marker = "extra == 'agents'", specifier = ">=0.2,<2" },
@@ -6947,7 +6977,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"
