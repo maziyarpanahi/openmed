@@ -125,6 +125,38 @@ def test_result_record_excludes_synthetic_text_ids_and_local_paths(
     assert str(tmp_path) not in serialized
 
 
+def test_custom_corpus_filename_is_not_copied_into_report(tmp_path: Path) -> None:
+    corpus_path = tmp_path / "Alice Patient private notes.jsonl"
+    corpus_path.write_text(
+        json.dumps(
+            {
+                "id": "synthetic-note",
+                "language": "en",
+                "text": "Synthetic note for an invented person.",
+                "metadata": {"source": "synthetic"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_edge_benchmark(
+        profile="jetson-nano",
+        corpus_path=corpus_path,
+        runtime_loader=_runtime,
+        repeat=1,
+        install_size_bytes=1,
+        clock=_sequence([0.0, 0.1, 0.1, 0.1, 0.2, 0.2]),
+        rss_sampler=lambda: 10,
+        generated_at="2026-08-18T00:00:00Z",
+    )
+
+    serialized = report.to_json()
+    assert report.workload_name == "caller-supplied-synthetic"
+    assert corpus_path.name not in serialized
+    assert "Alice Patient" not in serialized
+
+
 def test_benchmark_socket_guard_blocks_loader_network_calls() -> None:
     def network_loader() -> EdgeRuntime:
         socket.create_connection(("example.invalid", 443), timeout=0.01)
