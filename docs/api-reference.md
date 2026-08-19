@@ -41,3 +41,10 @@
 ::: openmed.multimodal.verify_redacted_text_removed
 
 ::: openmed.multimodal.measure_pdf_layout_fidelity
+## PipelineTelemetry
+
+::: openmed.core.telemetry.PipelineTelemetry
+
+## StageTelemetry
+
+::: openmed.core.telemetry.StageTelemetry
