@@ -344,6 +344,15 @@ onnx-runtime = [
   "tokenizers>=0.15",
 ]
 
+# Minimal, local-artifact ONNX Runtime profile for aarch64 SBCs. It excludes
+# graph-building, Torch, and Transformers dependencies; use onnx-runtime when
+# the application also needs OpenMed's Hub download path.
+edge-sbc = [
+  "numpy>=1.26",
+  "onnxruntime>=1.16",
+  "tokenizers>=0.15",
+]
+
 openvino = [
   "openvino>=2024.0",
   "nncf>=2.10",

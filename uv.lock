@@ -6572,6 +6572,12 @@ duckdb = [
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
+edge-sbc = [
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "onnxruntime" },
+    { name = "tokenizers" },
+]
 email-msg-gpl = [
     { name = "extract-msg" },
 ]
@@ -6831,11 +6837,13 @@ requires-dist = [
     { name = "nncf", marker = "extra == 'openvino'", specifier = ">=2.10" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'duckdb'", specifier = ">=1.26" },
+    { name = "numpy", marker = "extra == 'edge-sbc'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'grounding'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'multimodal'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'onnx-runtime'", specifier = ">=1.26" },
     { name = "onnx", marker = "extra == 'multimodal'", specifier = ">=1.21" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.21" },
+    { name = "onnxruntime", marker = "extra == 'edge-sbc'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'onnx'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'onnx-runtime'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'openvino'", specifier = ">=1.16" },
@@ -6906,6 +6914,7 @@ requires-dist = [
     { name = "strawberry-graphql", extras = ["fastapi"], marker = "extra == 'dev'", specifier = ">=0.316,<1" },
     { name = "strawberry-graphql", extras = ["fastapi"], marker = "extra == 'service'", specifier = ">=0.316,<1" },
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.7" },
+    { name = "tokenizers", marker = "extra == 'edge-sbc'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'hf'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'mlx'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'onnx-runtime'", specifier = ">=0.15" },
@@ -6924,7 +6933,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"
