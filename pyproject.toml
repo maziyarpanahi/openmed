@@ -170,6 +170,13 @@ quickumls = [
 # opts into the subprocess-only bridge without adding GPL code or dependencies.
 interop-gpl = []
 
+# extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
+# stdin/stdout subprocess bridge. This explicit extra keeps GPL code out of the
+# base and general multimodal environments.
+email-msg-gpl = [
+  "extract-msg>=0.56,<0.57",
+]
+
 multimodal = [
   "numpy>=1.26",
   "openpyxl>=3.1,<4",

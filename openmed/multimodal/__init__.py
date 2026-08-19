@@ -117,6 +117,7 @@ from .documents_pdf_tables import (
     project_region_spans,
     project_structured_spans,
 )
+from .email import EmailAttachmentReport, RedactedEmail, extract_email, redact_email
 from .epub import extract_epub
 from .exceptions import (
     DocumentGraphError,
@@ -316,6 +317,10 @@ __all__ = [
     "map_text_spans_to_pptx_runs",
     "write_redacted_pptx",
     "extract_epub",
+    "EmailAttachmentReport",
+    "RedactedEmail",
+    "extract_email",
+    "redact_email",
     "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",

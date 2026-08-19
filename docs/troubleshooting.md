@@ -104,6 +104,7 @@ published OpenMed installation.
 | Feature | Extra | Install command |
 |---|---|---|
 | Document / image intake + OCR (`pdfplumber`, `python-docx`, `python-pptx`, `Pillow`, DICOM, docTR/Tesseract/EasyOCR) | `multimodal` | `pip install "openmed[multimodal]"` |
+| Outlook MSG ingestion through the isolated GPL-3.0 parser bridge | `email-msg-gpl` | `pip install "openmed[email-msg-gpl]"` |
 | Heavier PaddleOCR backend | `ocr-paddle` | `pip install "openmed[ocr-paddle]"` |
 | Zero-shot GLiNER NER | `gliner` | `pip install "openmed[gliner]"` |
 | REST service | `service` | `pip install "openmed[service]"` |
