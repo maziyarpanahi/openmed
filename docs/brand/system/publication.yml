@@ -157,6 +157,7 @@ classification:
     - batch-howto.md
     - legacy-indic-encoding.md
     - profiling.md
+    - core-observability.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
     - zero-shot-howto.md

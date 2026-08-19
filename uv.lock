@@ -6607,6 +6607,10 @@ openvino = [
 operator = [
     { name = "kopf" },
 ]
+otel = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+]
 pandas = [
     { name = "pandas" },
 ]
@@ -6765,10 +6769,12 @@ requires-dist = [
     { name = "openpyxl", marker = "extra == 'dev'", specifier = ">=3.1,<4" },
     { name = "openpyxl", marker = "extra == 'multimodal'", specifier = ">=3.1,<4" },
     { name = "opentelemetry-api", marker = "extra == 'dev'", specifier = ">=1.26,<2" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-api", marker = "extra == 'service'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'dev'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'service'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-sdk", marker = "extra == 'dev'", specifier = ">=1.26,<2" },
+    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-sdk", marker = "extra == 'service'", specifier = ">=1.26,<2" },
     { name = "openvino", marker = "extra == 'openvino'", specifier = ">=2024.0" },
     { name = "paddleocr", marker = "extra == 'ocr-paddle'", specifier = ">=2.7" },
@@ -6840,9 +6846,9 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
-    { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.13.1,<0.14" },
+    { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"
@@ -12651,7 +12657,7 @@ wheels = [
 
 [[package]]
 name = "yasbd-lib"
-version = "0.13.1"
+version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beartype" },
@@ -12662,9 +12668,9 @@ dependencies = [
     { name = "regex" },
     { name = "retrie" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/92/33afac91267252505c6e8c0c3eaec73184cc194b5d914f1d74291fe5a890/yasbd_lib-0.13.1.tar.gz", hash = "sha256:117bf30364a4c0bed182ba9d4a8022f007607f8f4ec770daf7eea61276c2c849", size = 90416, upload-time = "2026-07-25T22:32:24.955Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/29/9117382087c596782e2be3fdc0ee66b4bcf34fe505c0f572d2629f253bad/yasbd_lib-0.14.0.tar.gz", hash = "sha256:6dcda9f6800bdbafa378da25dbffccfa58a6bd3985608de9d60fc4d7bb14b670", size = 92480, upload-time = "2026-08-09T13:58:01.486Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/a9/8d0dc213bd3ef804afec711ce74d31941f82b69b3e3108c9c06442efa2bf/yasbd_lib-0.13.1-py3-none-any.whl", hash = "sha256:83fd619ae06fdf9adecb2f8daa22c4d3cd974dd12b314e5e56adfc0ba160ad73", size = 94645, upload-time = "2026-07-25T22:32:23.221Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/07/f3b4689b9227a7f94c400f5cf3ca1a4b465a5494ef10c99f16c819e8fd7b/yasbd_lib-0.14.0-py3-none-any.whl", hash = "sha256:ca2396800f1922c59cbc41aea9722c30da52afca54d1fb1a51c69993365a1d4b", size = 96382, upload-time = "2026-08-09T13:58:00.075Z" },
 ]
 
 [[package]]
