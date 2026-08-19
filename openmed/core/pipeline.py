@@ -9,7 +9,6 @@ import logging
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from time import perf_counter
 from typing import (
     Any,
     Callable,
@@ -22,6 +21,7 @@ from typing import (
 )
 
 from openmed.compliance.data_use import DataUseAction, DataUsePolicy, DataUseTag
+from openmed.utils.profiling import Timer
 
 from .budget import RequestBudget, coerce_budget
 from .custom_recognizer import (
@@ -33,6 +33,7 @@ from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
+from .telemetry import PIPELINE_STAGE_NAMES, PipelineTelemetry, StageTelemetry
 
 # Keep this runtime alias aligned with ``pii.DeidentificationMethod``. Importing
 # ``pii`` here would eagerly load the heavier public de-identification module,
@@ -47,18 +48,7 @@ DeidentificationMethod = Literal[
     "format_preserve",
 ]
 
-STAGE_NAMES: tuple[str, ...] = (
-    "normalize",
-    "language_script",
-    "doc_type_section",
-    "deterministic_detectors",
-    "fast_pii_model",
-    "clinical_phi_model",
-    "span_arbitration",
-    "policy_actions",
-    "safety_sweep",
-    "emit",
-)
+STAGE_NAMES: tuple[str, ...] = PIPELINE_STAGE_NAMES
 
 DEFAULT_HASH_SECRET = b"openmed-pipeline-v1"
 
@@ -292,6 +282,8 @@ class Pipeline:
         lid_model: Any = None,
         transliterated_name_config: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
+        telemetry: PipelineTelemetry | None = None,
+        telemetry_enabled: bool | None = None,
     ) -> None:
         from . import pii
         from .policy import load_policy
@@ -361,6 +353,17 @@ class Pipeline:
             else None
         )
         self.hmac_secret = hmac_secret
+        if telemetry is not None and telemetry_enabled is not None:
+            raise ValueError("Pass either telemetry or telemetry_enabled, not both")
+        if telemetry is not None and not isinstance(telemetry, PipelineTelemetry):
+            raise TypeError("telemetry must be a PipelineTelemetry instance")
+        if telemetry is None:
+            telemetry = (
+                PipelineTelemetry.from_env()
+                if telemetry_enabled is None
+                else PipelineTelemetry(enabled=telemetry_enabled)
+            )
+        self.telemetry = telemetry
         from .clinical_protect import protection_options_from_config
 
         self.clinical_protect_options = protection_options_from_config(config)
@@ -431,11 +434,23 @@ class Pipeline:
         }
         cascade_duration_ms: float | None = None
         original_text = text if self.preserve_whitespace else text.strip()
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[0],
+            telemetry=self.telemetry,
+            stage_index=1,
+        ) as stage_telemetry:
             normalized = self.stage1_normalize(original_text)
+            if stage_telemetry.active:
+                stage_telemetry.set_input_length(len(original_text))
         if budget_clock is not None:
             budget_clock.check("pipeline.stage1_normalize")
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[1],
+            telemetry=self.telemetry,
+            stage_index=2,
+        ):
             route = self.stage2_language_script(normalized.normalized_text)
         token_language_tags = self._normalize_code_mixed_tags(normalized)
         if budget_clock is not None:
@@ -444,7 +459,12 @@ class Pipeline:
             normalized.normalized_text,
             self.hmac_secret,
         )
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[2]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[2],
+            telemetry=self.telemetry,
+            stage_index=3,
+        ):
             section_metadata = _remap_section_metadata_to_normalized(
                 self.stage3_doc_type_section(
                     normalized.original_text,
@@ -509,7 +529,7 @@ class Pipeline:
 
         cascade_driven = self.cascade_router is not None
         if cascade_driven:
-            cascade_started = perf_counter()
+            cascade_timer = Timer().start()
             cascade_result = self.cascade_router.run(
                 normalized.normalized_text,
                 context=context,
@@ -517,11 +537,16 @@ class Pipeline:
                 language=route.lang,
                 policy_profile=self.policy_profile,
             )
-            cascade_duration_ms = (perf_counter() - cascade_started) * 1000.0
+            cascade_duration_ms = cascade_timer.stop()
             if budget_clock is not None:
                 budget_clock.check("pipeline.cascade_router")
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[3],
+                telemetry=self.telemetry,
+                stage_index=4,
+            ) as stage_telemetry:
                 deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
                 deterministic_spans = (
                     *deterministic_spans,
@@ -559,10 +584,16 @@ class Pipeline:
                         metadata=cascade_metadata,
                     )
                 )
+                _record_telemetry_spans(stage_telemetry, deterministic_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage4_deterministic_detectors")
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[4],
+                telemetry=self.telemetry,
+                stage_index=5,
+            ) as stage_telemetry:
                 model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
                 model_spans = (
                     *model_spans,
@@ -589,10 +620,16 @@ class Pipeline:
                         },
                     )
                 )
+                _record_telemetry_spans(stage_telemetry, model_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage5_fast_pii_model")
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[5],
+                telemetry=self.telemetry,
+                stage_index=6,
+            ) as stage_telemetry:
                 clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
                 clinical_spans = (
                     *clinical_spans,
@@ -619,6 +656,7 @@ class Pipeline:
                         },
                     )
                 )
+                _record_telemetry_spans(stage_telemetry, clinical_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage6_clinical_phi_model")
 
@@ -628,11 +666,17 @@ class Pipeline:
                 model_name="cascade",
             )
         else:
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[3],
+                telemetry=self.telemetry,
+                stage_index=4,
+            ) as stage_telemetry:
                 deterministic_spans = self.stage4_deterministic_detectors(
                     normalized.normalized_text,
                     context,
                 )
+                _record_telemetry_spans(stage_telemetry, deterministic_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage4_deterministic_detectors")
             deterministic_spans = _stamp_span_sections(
@@ -643,7 +687,12 @@ class Pipeline:
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[4],
+                telemetry=self.telemetry,
+                stage_index=5,
+            ) as stage_telemetry:
                 pii_result = self.stage5_fast_pii_model(
                     normalized.normalized_text,
                     route,
@@ -668,6 +717,7 @@ class Pipeline:
                         pipeline_stage=STAGE_NAMES[4],
                     ),
                 )
+                _record_telemetry_spans(stage_telemetry, model_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage5_fast_pii_model")
             model_spans = _stamp_span_sections(model_spans, context.section_metadata)
@@ -675,11 +725,17 @@ class Pipeline:
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[5],
+                telemetry=self.telemetry,
+                stage_index=6,
+            ) as stage_telemetry:
                 clinical_spans = self.stage6_clinical_phi_model(
                     normalized.normalized_text,
                     context,
                 )
+                _record_telemetry_spans(stage_telemetry, clinical_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage6_clinical_phi_model")
             clinical_spans = _stamp_span_sections(
@@ -691,11 +747,17 @@ class Pipeline:
             )
 
         arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[6]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[6],
+            telemetry=self.telemetry,
+            stage_index=7,
+        ) as stage_telemetry:
             merged_spans = self.stage7_arbitration(
                 arbitration_candidates,
                 context,
             )
+            _record_telemetry_spans(stage_telemetry, merged_spans)
         arbitration_trace_metadata = (
             _arbitration_trace_metadata(
                 arbitration_candidates,
@@ -751,12 +813,18 @@ class Pipeline:
             )
         )
 
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[7]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[7],
+            telemetry=self.telemetry,
+            stage_index=8,
+        ) as stage_telemetry:
             policy_spans = self.stage8_policy_actions(
                 merged_spans,
                 context,
                 explain=explain,
             )
+            _record_telemetry_spans(stage_telemetry, policy_spans)
         policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
@@ -800,12 +868,18 @@ class Pipeline:
         if budget_clock is not None:
             budget_clock.check("pipeline.stage8_policy_actions")
 
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[8]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[8],
+            telemetry=self.telemetry,
+            stage_index=9,
+        ) as stage_telemetry:
             sweep_spans, sweep_metadata = self.stage9_safety_sweep(
                 normalized.normalized_text,
                 pii_result,
                 context,
             )
+            _record_telemetry_spans(stage_telemetry, sweep_spans)
         if budget_clock is not None:
             budget_clock.check("pipeline.stage9_safety_sweep")
         stage_results.append(
@@ -846,7 +920,16 @@ class Pipeline:
             )
         if budget_clock is not None:
             budget_clock.check("pipeline.stage10_emit")
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
+        final_spans = (
+            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
+        )
+        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[9],
+            telemetry=self.telemetry,
+            stage_index=10,
+        ) as stage_telemetry:
             deidentified = self.stage10_emit(
                 normalized.original_text,
                 emission_pii_result,
@@ -877,12 +960,11 @@ class Pipeline:
                 audit=audit,
                 config=self.config,
             )
+            _record_telemetry_spans(stage_telemetry, final_spans)
+            if stage_telemetry.active:
+                stage_telemetry.set_redacted_length(len(deidentified.deidentified_text))
         if budget_clock is not None:
             budget_clock.check("pipeline.stage10_emit_complete")
-        final_spans = (
-            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
-        )
-        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
         emission_spans = _remap_spans_to_original(
             final_spans,
             normalized,
@@ -1852,19 +1934,43 @@ class Pipeline:
 def _stage_timer(
     durations_ms: dict[str, float],
     stage_name: str,
-) -> Iterator[None]:
+    *,
+    telemetry: PipelineTelemetry,
+    stage_index: int,
+) -> Iterator[StageTelemetry]:
     """Record the wall-clock duration of a pipeline stage in milliseconds.
 
     The recorded value is a latency measurement only; it carries no document
     text and may be used for transient metrics or logs. It is deliberately not
-    persisted in the reproducible pipeline audit record.
+    persisted in the reproducible pipeline audit record. The shared
+    :class:`~openmed.utils.profiling.Timer` measurement also finishes the
+    optional telemetry span and histogram, avoiding a duplicate timing clock.
     """
-    start = perf_counter()
-    try:
-        yield
-    finally:
-        elapsed_ms = (perf_counter() - start) * 1000.0
-        durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
+    timer = Timer().start()
+    with telemetry.stage_span(stage_index, stage_name) as recorder:
+        try:
+            yield recorder
+        finally:
+            elapsed_ms = timer.stop()
+            durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
+            recorder.finish(elapsed_ms)
+
+
+def _record_telemetry_spans(
+    recorder: StageTelemetry,
+    spans: Sequence[OpenMedSpan],
+) -> None:
+    """Attach aggregate, canonical output signals to one stage recorder."""
+    if not recorder.active:
+        return
+    recorder.set_span_count(len(spans))
+    recorder.set_entity_count(len(spans))
+    recorder.set_labels(tuple(span.canonical_label for span in spans))
+    if spans:
+        recorder.set_offset_range(
+            min(span.start for span in spans),
+            max(span.end for span in spans),
+        )
 
 
 def _iter_normalization_segments(text: str):

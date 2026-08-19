@@ -279,6 +279,13 @@ hf = [
   "tokenizers>=0.15"
 ]
 
+# Core pipeline observability. The SDK enables caller-owned in-process
+# providers and test exporters; no network exporter is included or configured.
+otel = [
+  "opentelemetry-api>=1.26,<2",
+  "opentelemetry-sdk>=1.26,<2",
+]
+
 service = [
   "cryptography>=50,<51",
   "fastapi>=0.110",
