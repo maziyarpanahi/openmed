@@ -380,7 +380,10 @@ def run_edge_benchmark(
     token_count = tokens_per_pass * repeat
     tokens_per_second = token_count / total_seconds if total_seconds > 0.0 else 0.0
     workload_name = (
-        Path(corpus_path).name if documents is None else "caller-supplied-synthetic"
+        DEFAULT_EDGE_WORKLOAD.name
+        if documents is None
+        and Path(corpus_path).resolve() == DEFAULT_EDGE_WORKLOAD.resolve()
+        else "caller-supplied-synthetic"
     )
     return EdgeBenchmarkReport(
         profile=profile,
