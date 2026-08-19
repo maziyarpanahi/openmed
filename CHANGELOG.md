@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   optional Outlook MSG input.
 - Added committed Android OpenMedKit release-AAR and offline cold-start budgets,
   with blocking Gradle/CI gates and measured values in the Android job summary.
+- Added a Triton ONNX model-repository generator and configuration-selected
+  KServe V2 HTTP/gRPC inference backend with local tokenization and decoding,
+  mocked local/remote span-parity coverage, and no bundled serving runtime.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and

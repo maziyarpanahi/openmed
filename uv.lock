@@ -6747,6 +6747,15 @@ spark = [
 sqlalchemy = [
     { name = "sqlalchemy" },
 ]
+triton = [
+    { name = "grpcio" },
+    { name = "httpx" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "protobuf" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'darwin' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform == 'darwin' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+]
 yasbd = [
     { name = "yasbd-lib" },
 ]
@@ -6794,6 +6803,7 @@ requires-dist = [
     { name = "griffe", marker = "extra == 'docs'" },
     { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.64" },
     { name = "grpcio", marker = "extra == 'service'", specifier = ">=1.64" },
+    { name = "grpcio", marker = "extra == 'triton'", specifier = ">=1.64" },
     { name = "grpcio-tools", marker = "extra == 'dev'", specifier = ">=1.64" },
     { name = "hanlp", marker = "extra == 'zh-hanlp'", specifier = ">=2.1,<3" },
     { name = "haystack-ai", marker = "extra == 'haystack'", specifier = ">=2,<3" },
@@ -6802,6 +6812,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'fhir'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'openmrs'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'service'", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'triton'", specifier = ">=0.27" },
     { name = "huggingface-hub", marker = "extra == 'coreml'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'dev'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=0.30" },
@@ -6841,6 +6852,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'grounding'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'multimodal'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'onnx-runtime'", specifier = ">=1.26" },
+    { name = "numpy", marker = "extra == 'triton'", specifier = ">=1.26" },
     { name = "onnx", marker = "extra == 'multimodal'", specifier = ">=1.21" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.21" },
     { name = "onnxruntime", marker = "extra == 'edge-sbc'", specifier = ">=1.16" },
@@ -6880,6 +6892,7 @@ requires-dist = [
     { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.354,<3" },
     { name = "protobuf", marker = "extra == 'dev'", specifier = ">=5.26,<7" },
     { name = "protobuf", marker = "extra == 'service'", specifier = ">=5.26,<7" },
+    { name = "protobuf", marker = "extra == 'triton'", specifier = ">=5.26,<7" },
     { name = "pyarrow", marker = "extra == 'columnar'", specifier = ">=16" },
     { name = "pyarrow", marker = "extra == 'spark'", specifier = ">=16" },
     { name = "pycld2", marker = "extra == 'lid'", specifier = ">=0.41,<1" },
@@ -6928,12 +6941,13 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'mlx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'openvino'", specifier = ">=4.50" },
+    { name = "transformers", marker = "extra == 'triton'", specifier = ">=4.50" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"

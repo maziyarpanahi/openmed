@@ -51,6 +51,12 @@ export HF_TOKEN=hf_xxx
 export OPENMED_TORCH_DEVICE=cuda:1
 ```
 
+An explicitly selected `backend="remote"` adds KServe V2 endpoint, model,
+protocol, timeout, TLS, and local-tokenizer settings. It is never selected
+automatically and is incompatible with `local_only` or `OPENMED_OFFLINE`.
+See [KServe and Triton model repositories](serving/kserve-triton.md) for the
+full configuration and deployment boundary.
+
 For Indic personal-name pseudonymization, enable
 `transliteration_aware_name_matching` and reuse the same setting when reopening
 a file-backed surrogate vault. The collision threshold and optional local

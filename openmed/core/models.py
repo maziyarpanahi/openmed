@@ -120,7 +120,8 @@ class ModelLoader:
             config: OpenMed configuration. If None, uses global config.
         """
         self.config = config or get_config()
-        if not HF_AVAILABLE and getattr(self.config, "backend", None) != "onnx":
+        backend = getattr(self.config, "backend", None)
+        if not HF_AVAILABLE and backend not in {"onnx", "remote"}:
             raise MissingExtraError(
                 "HuggingFace transformers is required. Install it with "
                 "`pip install openmed[hf]` or `pip install transformers`.",
