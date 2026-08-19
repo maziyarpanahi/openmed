@@ -17,7 +17,9 @@ on:
       - "scripts/brand/**"
       - "scripts/docs/**"
       - "scripts/i18n/**"
+      - "js/openmedkit-web/**"
       - "tests/browser/brand/**"
+      - "tests/web/**"
       - "tests/unit/test_brand_system.py"
       - "tests/unit/test_docs_publication.py"
       - "tests/unit/test_pages_manifest.py"
@@ -26,6 +28,7 @@ on:
       - "tests/unit/test_web_demo_layout.py"
       - "tests/unit/eval/test_leaderboard.py"
       - "uv.lock"
+      - "web/runtime/**"
   workflow_dispatch:
 
 permissions:
@@ -88,7 +91,13 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: tests/browser/brand/package-lock.json
+          cache-dependency-path: |
+            js/openmedkit-web/package-lock.json
+            tests/browser/brand/package-lock.json
+      - name: Build and validate the browser runtime
+        run: |
+          npm ci --prefix js/openmedkit-web
+          npm --prefix js/openmedkit-web test
       - name: Install pinned browser test dependencies
         run: npm ci --prefix tests/browser/brand
       - name: Validate browser behavior, accessibility, and representative visuals

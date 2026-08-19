@@ -179,6 +179,7 @@ classification:
     - clinical/experiencer-refinement.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
+    - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - tiers.md
     - export-awq.md
