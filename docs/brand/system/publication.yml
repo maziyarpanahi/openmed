@@ -215,6 +215,7 @@ classification:
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
+    - integrations/warehouse-remote-function.md
     - spark-deidentification.md
     - prefect-integration.md
     - spacy-component.md
