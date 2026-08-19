@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a rooted, backward-compatible public error taxonomy with stable
   machine-readable codes, actionable PHI-safe diagnostics, REST/MCP mappings,
   synthetic contract fixtures, and API documentation.
+- Added a production browser token-classification runtime with typed batched
+  WebGPU inference, deterministic local WASM fallback, an audited WGSL
+  classification head, Python-reference parity and recall gates, per-device
+  warm/cold benchmark records, and real headless-browser coverage.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
