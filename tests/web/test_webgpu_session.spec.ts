@@ -307,7 +307,8 @@ test("emits warm and cold timing in the shared per-device benchmark schema", asy
 
 test("the shipped WGSL file is the exact batched kernel embedded in the runtime", async () => {
   const fileSource = await readFile(shaderPath, "utf8");
-  assert.equal(fileSource.trim(), CLASSIFY_WGSL_SOURCE.trim());
+  const normalizedFileSource = fileSource.replace(/\r\n/g, "\n");
+  assert.equal(normalizedFileSource.trim(), CLASSIFY_WGSL_SOURCE.trim());
   assert.match(fileSource, /@workgroup_size\(8, 8, 1\)/);
   assert.match(fileSource, /batch = id\.z/);
   assert.match(fileSource, /weights\[weight_index\]/);
