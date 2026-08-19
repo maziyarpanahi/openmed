@@ -177,6 +177,7 @@ classification:
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
+    - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md

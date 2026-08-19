@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
   native-resolution image processing, and deterministic text/image parity
   tests across Python and Swift.
+- Added a minimal local-artifact `edge-sbc` ONNX Runtime profile, native ARM64
+  Raspberry Pi and Jetson synthetic benchmark workflow, aggregate cold-start,
+  token-throughput, install-size, and peak-RSS records, plus fail-closed
+  footprint budgets and archived ARM64 proxy evidence.
 
 ## [2.2.0] - 2026-08-13
 
