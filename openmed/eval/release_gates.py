@@ -92,6 +92,9 @@ G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+G9_DUA_PROMOTION_CADENCE = "human-run"
+G9_DUA_PROMOTION_TIER = "promotion"
+_DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
 RELATION_GOLDEN_REGRESSION_GATE = "relation_golden_regression"
 RELATION_GOLDEN_TRAP_KINDS = ("assertion", "temporal")
 G13_STRICT_ENTITY_F1_FLOOR = 0.900
@@ -114,6 +117,7 @@ PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "mr": 0.0,
     "or": 0.0,
     "ta": 0.0,
+    "vi": 0.0,
 }
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
@@ -1249,7 +1253,18 @@ def _manifest_coherence_check(
                     "error": "candidate repo_id is absent from manifest",
                 }
 
-    if manifest_rows:
+    if manifest_path is not None and manifest_rows:
+        # Import lazily because data_license_gate returns this module's GateCheck.
+        # The release path must enforce the same read-only license decision as
+        # registry_ctl without creating an import cycle at module load time.
+        from openmed.eval.data_license_gate import evaluate_data_license_gate
+
+        data_license_check = evaluate_data_license_gate(manifest_path)
+        if not data_license_check.passed:
+            mismatches["training_data_licenses"] = {
+                "reason": data_license_check.reason,
+                "details": dict(data_license_check.details),
+            }
         mismatches.update(
             _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
         )
@@ -3267,6 +3282,8 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
 def _g9_relation_extraction_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
+    *,
+    require_relaxed: bool = True,
 ) -> GateCheck:
     evidence = _relation_extraction_evidence(metrics, metadata)
     required = bool(
@@ -3301,13 +3318,14 @@ def _g9_relation_extraction_check(
             "lower": strict_lower,
             "floor": G9_STRICT_RE_F1_FLOOR,
         }
-    if relaxed_lower is None:
-        violations["relaxed_confidence_interval"] = "missing lower bound"
-    elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
-        violations["relaxed_relation_f1"] = {
-            "lower": relaxed_lower,
-            "floor": G9_RELAXED_RE_F1_FLOOR,
-        }
+    if require_relaxed:
+        if relaxed_lower is None:
+            violations["relaxed_confidence_interval"] = "missing lower bound"
+        elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
+            violations["relaxed_relation_f1"] = {
+                "lower": relaxed_lower,
+                "floor": G9_RELAXED_RE_F1_FLOOR,
+            }
 
     passed = not violations
     return GateCheck(
@@ -3323,11 +3341,105 @@ def _g9_relation_extraction_check(
             ),
             "relaxed": _relation_metric_summary(relaxed),
             "relaxed_floor": G9_RELAXED_RE_F1_FLOOR,
+            "relaxed_lower_ci_required": require_relaxed,
             "strict": _relation_metric_summary(strict),
             "strict_floor": G9_STRICT_RE_F1_FLOOR,
             "violations": violations,
         },
     )
+
+
+def evaluate_dua_relation_promotion_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+) -> GateCheck:
+    """Evaluate promotion-only G9 evidence for credentialed DUA corpora.
+
+    The strict confidence-bound check is promotion blocking, while the
+    serialized cadence contract explicitly excludes this expensive,
+    human-triggered corpus run from daily blocking evaluation.
+    """
+
+    payload = _report_payload(report)
+    metrics = _mapping(payload.get("metrics"))
+    raw_metadata = _mapping(payload.get("metadata"))
+    contract_violations = _dua_relation_promotion_contract_violations(raw_metadata)
+    metadata = {
+        **raw_metadata,
+        "relation_extraction_required": True,
+        "task": "relation",
+    }
+    base = _g9_relation_extraction_check(
+        metrics,
+        metadata,
+        require_relaxed=False,
+    )
+    violations = dict(_mapping(base.details.get("violations")))
+    if contract_violations:
+        violations["promotion_contract"] = contract_violations
+    details = {
+        **dict(base.details),
+        "cadence": G9_DUA_PROMOTION_CADENCE,
+        "daily_blocking": False,
+        "gate_tier": G9_DUA_PROMOTION_TIER,
+        "promotion_blocking": True,
+        "strict_lower_ci_required": True,
+        "relaxed_lower_ci_required": False,
+        "violations": violations,
+    }
+    passed = base.passed and not contract_violations
+    reason = base.reason
+    if contract_violations:
+        reason = "DUA relation promotion metadata contract is invalid"
+    return GateCheck(
+        gate=base.gate,
+        passed=passed,
+        reason=reason,
+        details=details,
+        blocking_format=base.blocking_format,
+    )
+
+
+def _dua_relation_promotion_contract_violations(
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return violations in the serialized DUA promotion-run contract."""
+
+    violations: dict[str, Any] = {}
+    expected_values = {
+        "cadence": G9_DUA_PROMOTION_CADENCE,
+        "daily_blocking": False,
+        "dua_relation_promotion_required": True,
+        "gate_tier": G9_DUA_PROMOTION_TIER,
+        "promotion_blocking": True,
+        "task": "relation",
+    }
+    for key, expected in expected_values.items():
+        if metadata.get(key) != expected:
+            violations[key] = {
+                "expected": expected,
+                "observed": metadata.get(key),
+            }
+
+    raw_corpora = metadata.get("dua_relation_corpora")
+    if raw_corpora is None:
+        raw_corpora = metadata.get("dataset")
+    if isinstance(raw_corpora, str):
+        values = (raw_corpora,)
+    elif isinstance(raw_corpora, (list, tuple, set, frozenset)):
+        values = tuple(raw_corpora)
+    else:
+        values = ()
+    corpora = {
+        str(value).strip().casefold().replace("_", "-")
+        for value in values
+        if str(value).strip()
+    }
+    if not corpora or not corpora <= _DUA_RELATION_PROMOTION_CORPORA:
+        violations["dua_relation_corpora"] = {
+            "expected": sorted(_DUA_RELATION_PROMOTION_CORPORA),
+            "observed": sorted(corpora),
+        }
+    return violations
 
 
 def _relation_extraction_evidence(
@@ -6216,6 +6328,8 @@ __all__ = [
     "G15_E2E_FACT_F1_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
+    "G9_DUA_PROMOTION_CADENCE",
+    "G9_DUA_PROMOTION_TIER",
     "RELATION_GOLDEN_REGRESSION_GATE",
     "RELATION_GOLDEN_TRAP_KINDS",
     "FLAKINESS_GATE",
@@ -6244,6 +6358,7 @@ __all__ = [
     "evaluate_reid_risk_gate",
     "evaluate_reidentification_risk_gate",
     "evaluate_relation_golden_regression_gate",
+    "evaluate_dua_relation_promotion_gate",
     "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",

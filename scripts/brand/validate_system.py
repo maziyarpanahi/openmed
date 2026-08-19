@@ -1058,20 +1058,21 @@ def _validate_claims(errors: list[str]) -> None:
             f"claims registry lacks required contract fields {sorted(missing_claims)}"
         )
     expected_values = {
-        "package_version": "2.0.0",
-        "repository_model_snapshot": 1520,
-        "hugging_face_openmed_owned_snapshot": 1520,
-        "supported_pii_languages": 34,
+        "package_version": "2.2.0",
+        "repository_model_snapshot": 2266,
+        "hugging_face_openmed_owned_snapshot": 2266,
+        "supported_pii_languages": 35,
         "model_backed_pii_languages": 33,
-        "placeholder_pii_languages": ["ru"],
+        "placeholder_pii_languages": ["ru", "ta"],
         "user_supplied_model_languages": ["gu", "kn", "ml", "ne", "pa", "ur"],
-        "pii_family_manifest_entries": 655,
-        "mlx_manifest_entries": 662,
+        "pii_family_manifest_entries": 1018,
+        "mlx_manifest_entries": 661,
         "pii_entity_types": 50,
         "model_license_population": {
-            "apache-2.0": 1511,
-            "other": 5,
-            "unknown": 4,
+            "apache-2.0": 2255,
+            "mit": 4,
+            "other": 4,
+            "unknown": 3,
         },
         "sdk_license": "Apache-2.0",
         "runtime_locality": "local-first",
@@ -1108,8 +1109,8 @@ def _validate_claims(errors: list[str]) -> None:
                 f"claim {claim_name} is {claims[claim_name]['value']!r}, "
                 f"expected {value!r}"
             )
-    if len(claims["national_id_only_languages"]["value"]) != 18:
-        errors.append("national-ID-only language claim must contain 18 codes")
+    if len(claims["national_id_only_languages"]["value"]) != 17:
+        errors.append("national-ID-only language claim must contain 17 codes")
 
     try:
         generated_at = dt.date.fromisoformat(registry["generated_at"])

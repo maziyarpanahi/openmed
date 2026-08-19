@@ -102,7 +102,7 @@ En hardware Apple compatible, OpenMed puede usar **MLX** y **[OpenMedKit](swift/
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ En hosts que no son Apple Silicon, los nombres de modelo MLX se sustituyen autom
 
 ---
 
-## PII multilingüe (34 rutas admitidas; 33 respaldadas por modelos)
+## PII multilingüe (35 rutas admitidas; 33 respaldadas por modelos)
 
 Extracción y des-identificación en `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` y `tr`: **el catálogo registrado de modelos PII** en total.
 

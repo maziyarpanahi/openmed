@@ -102,7 +102,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTo
 
 ---
 
-## 多言語 PII（対応ルート 34、モデル対応 33）
+## 多言語 PII（対応ルート 35、モデル対応 33）
 
 `en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化：合計 **登録済み PII モデルカタログ**。
 

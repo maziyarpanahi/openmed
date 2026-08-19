@@ -179,6 +179,17 @@ def test_publication_classifies_every_default_markdown_page_exactly_once() -> No
     ]
 
 
+def test_docs_build_excludes_local_demo_payloads() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    excluded = {
+        pattern.strip()
+        for pattern in config["exclude_docs"].splitlines()
+        if pattern.strip()
+    }
+
+    assert {"demo/web/models/**", "demo/web/vendor/**"} <= excluded
+
+
 def test_every_link_only_page_is_reachable_from_the_documentation_nav() -> None:
     publication = _load_yaml(PUBLICATION)
     classification = publication["classification"]
@@ -348,10 +359,10 @@ def test_website_preserves_every_approved_landing_view_and_interaction() -> None
     script = (DOCS / "website" / "assets" / "script.js").read_text(encoding="utf-8")
 
     approved_copy = (
-        "shipped this week",
+        "current release",
         "Your data. Your model. Your",
         "pii.detect() · on-device",
-        "Live PHI detection · 33 model-backed languages",
+        "Live PHI detection · 34 model-backed languages",
         "Model downloads · all-time",
         "340<span>M</span>",
         "30<span>M</span>",
@@ -413,7 +424,7 @@ def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() ->
     assert 'name="robots" content="noindex,nofollow"' in rtl
     assert "SYNTH-AR-0042" in rtl
     assert "https://" not in demo_app
-    assert "import(runtimeUrl.href)" in demo_app
+    assert "import(configuration.runtimeUrl.href)" in demo_app
     assert "resolved.origin !== window.location.origin" in demo_app
     assert publication["fixtures"] == [
         {

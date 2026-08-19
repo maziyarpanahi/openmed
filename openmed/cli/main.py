@@ -13,6 +13,7 @@ import tempfile
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping as MappingABC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 
@@ -30,7 +31,13 @@ from ..core.config import (
     save_profile,
     set_config,
 )
-from ..core.hf_hub import get_remote_model_size_mb, list_cached_models
+from ..core.hf_hub import (
+    clear_cached_model,
+    get_remote_model_size_mb,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from ..core.manifest_diff import ManifestDiff, diff_manifests
 from ..core.model_card import render_model_card
 from ..core.model_integrity import ModelIntegrityError, verify_cached_models
@@ -55,6 +62,7 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
+from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
 from .registry import add_registry_command
@@ -187,6 +195,13 @@ def _non_negative_float(value: str) -> float:
         raise argparse.ArgumentTypeError(
             "value must be a finite number greater than or equal to 0"
         )
+    return parsed
+
+
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than 0")
     return parsed
 
 
@@ -336,6 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
+    _add_batch_run_command(subparsers)
     _add_deid_command(subparsers)
     _add_redact_dataset_command(subparsers)
     _add_pii_command(subparsers)
@@ -348,6 +364,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
+    _add_ground_command(subparsers)
+    _add_grounding_snapshot_command(subparsers)
+    _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
@@ -566,6 +585,121 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         help="Commit progress after this many items (default: 10).",
     )
     batch_parser.set_defaults(handler=_handle_batch)
+
+
+def _add_batch_run_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add start/resume/report controls for distributed batch runs."""
+
+    parser = subparsers.add_parser(
+        "batch-run",
+        help="Start, resume, and report on a distributed batch run.",
+    )
+    sub = parser.add_subparsers(dest="batch_run_command")
+
+    for name, description in (
+        ("start", "Start a distributed batch run over a directory of notes."),
+        ("resume", "Resume a distributed batch run by run id."),
+    ):
+        command = sub.add_parser(name, help=description)
+        command.add_argument(
+            "--run-dir",
+            type=Path,
+            required=True,
+            help="Directory holding this run's manifest and shard outputs.",
+        )
+        command.add_argument(
+            "--input-dir",
+            type=Path,
+            required=True,
+            help="Directory of note files to process.",
+        )
+        command.add_argument(
+            "--pattern",
+            default="*.txt",
+            help="Glob pattern for matching note files (default: *.txt).",
+        )
+        command.add_argument(
+            "--recursive",
+            action="store_true",
+            help="Search the input directory recursively.",
+        )
+        command.add_argument(
+            "--model",
+            default=None,
+            help="Model registry key or Hugging Face identifier.",
+        )
+        command.add_argument(
+            "--workers",
+            type=int,
+            default=1,
+            help="Local worker threads (default: 1).",
+        )
+        command.add_argument(
+            "--max-attempts",
+            dest="max_attempts",
+            type=int,
+            default=None,
+            help=(
+                "Attempt budget per shard. A shard that spends it makes the run "
+                "exhausted, so a resume loop terminates instead of retrying a "
+                "deterministically failing shard forever (default: unbounded)."
+            ),
+        )
+        command.add_argument(
+            "--report",
+            type=Path,
+            default=None,
+            help="Also write the run report to this path.",
+        )
+        command.add_argument(
+            "--report-format",
+            choices=["json", "markdown"],
+            default="json",
+            help="Format for --report (default: json).",
+        )
+        if name == "start":
+            command.add_argument(
+                "--run-id",
+                required=True,
+                help="Operator-supplied run id; must not embed record values.",
+            )
+            command.add_argument(
+                "--shards",
+                type=int,
+                required=True,
+                help="Number of deterministic shards to plan.",
+            )
+        command.set_defaults(
+            handler=_handle_batch_run_start
+            if name == "start"
+            else _handle_batch_run_resume
+        )
+
+    report_parser = sub.add_parser(
+        "report",
+        help="Print the report for an existing run without changing it.",
+    )
+    report_parser.add_argument(
+        "--run-dir",
+        type=Path,
+        required=True,
+        help="Directory holding this run's manifest and shard outputs.",
+    )
+    report_parser.add_argument(
+        "--format",
+        dest="report_format",
+        choices=["json", "markdown"],
+        default="json",
+        help="Rendering used for the human-readable output (default: json).",
+    )
+    report_parser.add_argument(
+        "--max-attempts",
+        dest="max_attempts",
+        type=int,
+        default=None,
+        help="Attempt budget used when classifying shards as exhausted.",
+    )
+    report_parser.set_defaults(handler=_handle_batch_run_report)
 
 
 def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
@@ -951,6 +1085,24 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     safe_harbor_parser.set_defaults(handler=_handle_compliance_safe_harbor)
 
+    part11_export_parser = compliance_sub.add_parser(
+        "part11-export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(part11_export_parser)
+
+    # Keep a discoverable noun/verb spelling alongside the flat command name.
+    part11_parser = compliance_sub.add_parser(
+        "part11",
+        help="21 CFR Part 11 audit-trail utilities.",
+    )
+    part11_sub = part11_parser.add_subparsers(dest="part11_command")
+    nested_export_parser = part11_sub.add_parser(
+        "export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(nested_export_parser)
+
     expert_verify_parser = compliance_sub.add_parser(
         "expert-review-verify",
         help="Verify a PHI-safe de-identification expert-review evidence bundle.",
@@ -1002,6 +1154,32 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     attestation_verify_parser.set_defaults(handler=_handle_expert_attestation_verify)
+
+
+def _add_part11_export_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the input/output arguments shared by Part 11 export aliases."""
+
+    parser.add_argument(
+        "input",
+        type=Path,
+        help=(
+            "JSON file containing safe event objects, an events array, or an "
+            "existing Part 11 trail."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        required=True,
+        help="Path for the local Part 11 audit-trail JSON file.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing output file atomically.",
+    )
+    parser.set_defaults(handler=_handle_compliance_part11_export)
 
 
 def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1100,6 +1278,144 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     )
     discover_parser.add_argument("--overwrite", action="store_true")
     discover_parser.set_defaults(handler=_handle_risk_discover)
+
+    lab_parser = risk_sub.add_parser(
+        "lab",
+        help=(
+            "Profile, transform, and report structured privacy risk with "
+            "explicit offline policy choices."
+        ),
+    )
+    lab_parser.add_argument("input", type=Path)
+    lab_parser.add_argument(
+        "--evidence",
+        "-e",
+        type=Path,
+        required=True,
+        help="PHI-safe JSON method/evidence report.",
+    )
+    lab_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help="Optional transformed release table; written only when policy passes.",
+    )
+    lab_parser.add_argument(
+        "--qi",
+        type=_column_list_arg,
+        required=True,
+        help="Comma-separated quasi-identifier columns; no automatic selection.",
+    )
+    lab_parser.add_argument(
+        "--qi-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal quasi-identifier column name.",
+    )
+    lab_parser.add_argument(
+        "--sensitive",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated sensitive attributes; omit only after review.",
+    )
+    lab_parser.add_argument(
+        "--sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal sensitive-attribute column name.",
+    )
+    lab_parser.add_argument("--direct-id", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--direct-id-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--non-sensitive", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--non-sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--exclude", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--exclude-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--privacy-unit", default=None)
+    lab_parser.add_argument("--k", type=_positive_int, required=True)
+    lab_parser.add_argument("--l", type=_positive_int, default=1)
+    lab_parser.add_argument("--t", type=_unit_interval_float, default=1.0)
+    suppression_group = lab_parser.add_mutually_exclusive_group()
+    suppression_group.add_argument(
+        "--suppression-limit",
+        "--max-suppressed-units",
+        dest="suppression_limit",
+        type=_non_negative_int,
+        default=None,
+    )
+    suppression_group.add_argument(
+        "--suppression-rate",
+        "--max-suppression-rate",
+        dest="suppression_rate",
+        type=_unit_interval_float,
+        default=0.0,
+    )
+    lab_parser.add_argument(
+        "--membership-candidates",
+        type=Path,
+        default=None,
+        help="Optional local candidate population for the bounded self-test.",
+    )
+    lab_parser.add_argument(
+        "--membership-max-inference-rate",
+        type=_unit_interval_float,
+        default=None,
+    )
+    lab_parser.add_argument(
+        "--membership-max-candidates",
+        type=_positive_int,
+        default=10_000,
+    )
+    lab_parser.add_argument(
+        "--hierarchies",
+        type=Path,
+        default=None,
+        help="Optional local JSON generalization hierarchy configuration.",
+    )
+    lab_parser.add_argument(
+        "--population-scope",
+        default="release_cohort",
+        help="Coded user-declared population assumption.",
+    )
+    lab_parser.add_argument("--overwrite", action="store_true")
+    lab_parser.set_defaults(handler=_handle_risk_lab)
+
+    dp_parser = risk_sub.add_parser(
+        "dp-aggregate",
+        help="Release named numeric aggregates under an explicit DP ledger.",
+    )
+    dp_parser.add_argument(
+        "input",
+        type=Path,
+        help="Local JSON object mapping aggregate names to numeric values.",
+    )
+    dp_parser.add_argument("--output", "-o", type=Path, required=True)
+    dp_parser.add_argument("--epsilon", type=_positive_float, required=True)
+    dp_parser.add_argument("--delta", type=_unit_interval_float, default=0.0)
+    dp_parser.add_argument("--budget-epsilon", type=_positive_float, required=True)
+    dp_parser.add_argument("--budget-delta", type=_unit_interval_float, default=0.0)
+    dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
+    dp_parser.add_argument("--label", default="aggregate_query")
+    dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument("--overwrite", action="store_true")
+    dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
     assess_parser = risk_sub.add_parser(
         "assess",
@@ -1430,6 +1746,37 @@ def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
     )
     bundle_parser.set_defaults(handler=_handle_fhir_bundle)
 
+    validate_parser = fhir_sub.add_parser(
+        "validate",
+        help="Run the offline supported-profile checks over a FHIR JSON payload.",
+    )
+    validate_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="FHIR resource or Bundle JSON file to validate.",
+    )
+    validate_parser.add_argument(
+        "--version",
+        choices=("R4", "R5"),
+        default="R4",
+        help="Explicit FHIR release of the input (default: R4).",
+    )
+    validate_parser.add_argument(
+        "--profile",
+        choices=("fhir-r4-core", "fhir-r5-core", "ips", "ipa", "clinical-document"),
+        default=None,
+        help="Optional profile from the checked-in local profile matrix.",
+    )
+    validate_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the OperationOutcome JSON.",
+    )
+    add_json_flag(validate_parser)
+    validate_parser.set_defaults(handler=_handle_fhir_validate)
+
 
 def _add_icd11_command(subparsers: argparse._SubParsersAction) -> None:
     """Add offline ICD-11 snapshot management commands."""
@@ -1532,6 +1879,148 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
     load_parser.set_defaults(handler=_handle_omop_load)
 
 
+def _add_ground_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add the shared offline grounding command."""
+
+    ground_parser = subparsers.add_parser(
+        "ground",
+        help="Ground text or pre-extracted entities against local snapshots.",
+    )
+    input_group = ground_parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
+        "--text",
+        help="Synthetic or caller-owned text to treat as one span.",
+    )
+    input_group.add_argument(
+        "--input",
+        type=Path,
+        help="JSON/JSONL file containing text or pre-extracted entities.",
+    )
+    ground_parser.add_argument(
+        "--system",
+        dest="systems",
+        action="append",
+        help="Vocabulary system to search; repeat for multiple systems.",
+    )
+    ground_parser.add_argument(
+        "--source-language",
+        default="en",
+        help="Source language tag used for multilingual aliases.",
+    )
+    ground_parser.add_argument(
+        "--top-k",
+        type=_positive_int,
+        default=5,
+        help="Maximum ranked candidates per retrieval channel (default: 5).",
+    )
+    ground_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Local grounding snapshot cache directory.",
+    )
+    ground_parser.add_argument(
+        "--offline",
+        dest="offline",
+        action="store_true",
+        default=True,
+        help="Disable network access during grounding (default).",
+    )
+    ground_parser.add_argument(
+        "--online",
+        dest="offline",
+        action="store_false",
+        help="Allow configured snapshot downloads during grounding.",
+    )
+    ground_parser.set_defaults(handler=_handle_ground)
+
+
+def _add_grounding_snapshot_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add explicit import/download lifecycle commands for snapshots."""
+
+    grounding_parser = subparsers.add_parser(
+        "grounding",
+        help="Manage checksum-verified terminology snapshots.",
+    )
+    grounding_sub = grounding_parser.add_subparsers(dest="grounding_command")
+
+    import_parser = grounding_sub.add_parser(
+        "import",
+        help="Import a local permissive vocabulary snapshot into the cache.",
+    )
+    import_parser.add_argument("--system", required=True)
+    import_parser.add_argument("--input", type=Path, required=True)
+    import_parser.add_argument("--version", required=True)
+    import_parser.add_argument("--sha256", default=None)
+    import_parser.add_argument("--cache-dir", type=Path, default=None)
+    import_parser.add_argument("--license-note", default="")
+    import_parser.add_argument("--replace", action="store_true")
+    import_parser.set_defaults(handler=_handle_grounding_snapshot_import)
+
+    download_parser = grounding_sub.add_parser(
+        "download",
+        help="Download and checksum-verify one configured public snapshot.",
+    )
+    download_parser.add_argument("--system", required=True)
+    download_parser.add_argument("--url", required=True)
+    download_parser.add_argument("--sha256", required=True)
+    download_parser.add_argument("--version", default=None)
+    download_parser.add_argument("--checksum-url", default=None)
+    download_parser.add_argument("--artifact-name", default="concepts.tsv")
+    download_parser.add_argument("--archive-member", default=None)
+    download_parser.add_argument("--cache-dir", type=Path, default=None)
+    download_parser.add_argument("--timeout", type=float, default=60.0)
+    download_parser.set_defaults(handler=_handle_grounding_snapshot_download)
+
+    list_parser = grounding_sub.add_parser(
+        "list",
+        help="List locally imported terminology snapshots.",
+    )
+    list_parser.add_argument("--cache-dir", type=Path, default=None)
+    list_parser.set_defaults(handler=_handle_grounding_snapshot_list)
+
+
+def _add_cohort_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add local phenotype resolution commands."""
+
+    cohort_parser = subparsers.add_parser(
+        "cohort",
+        help="Resolve declarative phenotypes over a local OMOP store.",
+    )
+    cohort_sub = cohort_parser.add_subparsers(dest="cohort_command")
+    resolve_parser = cohort_sub.add_parser(
+        "resolve",
+        help="Resolve a phenotype against DuckDB or an OMOP Parquet directory.",
+    )
+    resolve_parser.add_argument(
+        "--definition",
+        type=Path,
+        required=True,
+        help="Phenotype-definition JSON file.",
+    )
+    source = resolve_parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--duckdb",
+        type=Path,
+        help="Existing local DuckDB file containing the OMOP tables.",
+    )
+    source.add_argument(
+        "--parquet",
+        type=Path,
+        help="Directory containing the OMOP table Parquet files.",
+    )
+    resolve_parser.add_argument(
+        "--athena",
+        type=Path,
+        default=None,
+        help=(
+            "Caller-supplied Athena directory or CONCEPT_ANCESTOR.csv used "
+            "for descendant expansion."
+        ),
+    )
+    resolve_parser.set_defaults(handler=_handle_cohort_resolve)
+
+
 def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
     """Add clinical export commands."""
 
@@ -1602,6 +2091,55 @@ def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
+
+    models_cache = models_sub.add_parser(
+        "cache",
+        help="Download, inspect, or clear cached OpenMed models.",
+    )
+    models_cache_sub = models_cache.add_subparsers(dest="models_cache_command")
+
+    models_cache_download = models_cache_sub.add_parser(
+        "download",
+        help="Download an OpenMed model into the local Hugging Face cache.",
+    )
+    models_cache_download.add_argument(
+        "repo_id",
+        help="Registry alias or Hugging Face repository id to download.",
+    )
+    models_cache_download.add_argument(
+        "--revision",
+        default=None,
+        help="Optional branch, tag, or commit to download.",
+    )
+    models_cache_download.add_argument(
+        "--allow-patterns",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Only download files matching PATTERN; repeat for multiple patterns.",
+    )
+    models_cache_download.set_defaults(handler=_handle_models_cache_download)
+
+    models_cache_list = models_cache_sub.add_parser(
+        "list",
+        help="List OpenMed models in the local Hugging Face cache.",
+    )
+    models_cache_list.set_defaults(handler=_handle_models_cache_list)
+
+    models_cache_clear = models_cache_sub.add_parser(
+        "clear",
+        help="Remove one OpenMed model from the local Hugging Face cache.",
+    )
+    models_cache_clear.add_argument(
+        "repo_id",
+        help="Registry alias or Hugging Face repository id to remove.",
+    )
+    models_cache_clear.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm deletion of the selected model cache.",
+    )
+    models_cache_clear.set_defaults(handler=_handle_models_cache_clear)
 
     models_pull = models_sub.add_parser(
         "pull",
@@ -2099,6 +2637,43 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
 
+    domain_coverage_parser = benchmark_sub.add_parser(
+        "domain-coverage",
+        help="Gate shipped clinical label maps against synthetic span fixtures.",
+    )
+    domain_coverage_parser.add_argument(
+        "--domain",
+        action="append",
+        dest="domains",
+        default=None,
+        help="Inspect one domain; repeat for a selected offline coverage scope.",
+    )
+    domain_coverage_parser.add_argument(
+        "--label-map",
+        type=Path,
+        default=None,
+        help="Optional local JSON label map override.",
+    )
+    domain_coverage_parser.add_argument(
+        "--fixture-dir",
+        type=Path,
+        default=None,
+        help="Optional directory containing synthetic clinical JSONL fixtures.",
+    )
+    domain_coverage_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the machine-readable coverage summary.",
+    )
+    domain_coverage_parser.add_argument(
+        "--markdown-output",
+        type=Path,
+        default=None,
+        help="Optional path for the aggregate Markdown coverage report.",
+    )
+    domain_coverage_parser.set_defaults(handler=_handle_benchmark_domain_coverage)
+
     mobile_parser = benchmark_sub.add_parser(
         "mobile",
         help="Parse mobile benchmark options.",
@@ -2226,6 +2801,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Trim rendered context windows to this many characters around a span.",
     )
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
+    add_generalization_command(benchmark_sub)
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
@@ -2642,6 +3218,369 @@ def _handle_audit_chain_verify(args: argparse.Namespace) -> int:
     return 0 if payload["verified"] else 1
 
 
+_BATCH_RUN_MANIFEST_NAME = "manifest.json"
+
+
+def _batch_run_store(run_dir: Path):
+    from ..processing.run_manifest import LocalFileRunManifestStore
+
+    return LocalFileRunManifestStore(run_dir / _BATCH_RUN_MANIFEST_NAME)
+
+
+def _validated_run_id(value: str) -> str:
+    """Reject a run id the report layer could not publish, before any work.
+
+    The manifest accepts any bounded, control-character-free string and writes
+    it verbatim, but a report may only carry a publishable token. Checking that
+    here rather than at render time is what keeps the failure recoverable: a run
+    id that survives to disk poisons the manifest, and every later ``report`` and
+    ``resume`` re-reads it and fails the same way, with no way out but editing
+    the manifest by hand.
+    """
+
+    from ..processing.run_report import is_publishable_token
+
+    if not is_publishable_token(value):
+        raise CliError(
+            "--run-id must be a single token of letters, digits, and "
+            "._:+/- characters (no spaces), at most 128 characters.",
+            code="invalid_run_id",
+            exit_code=EXIT_USAGE,
+        )
+    return value
+
+
+def _validated_max_attempts(args: argparse.Namespace) -> int | None:
+    """Return the attempt budget that makes an exhausted run reachable.
+
+    Without a budget every failing shard stays merely outstanding, so a scripted
+    ``until openmed batch-run resume`` never terminates against a shard that
+    fails deterministically.
+    """
+
+    value = getattr(args, "max_attempts", None)
+    if value is None:
+        return None
+    if value < 1:
+        raise CliError(
+            "--max-attempts must be at least 1.",
+            code="invalid_max_attempts",
+            exit_code=EXIT_USAGE,
+        )
+    return value
+
+
+def _validated_report_path(path: Path | None) -> Path | None:
+    """Reject an unwritable --report target before the run consumes a corpus."""
+
+    if path is None:
+        return None
+    if path.is_dir():
+        raise CliError(
+            "--report must name a file, not a directory.",
+            code="invalid_report_path",
+            exit_code=EXIT_USAGE,
+        )
+    return path
+
+
+def _batch_run_documents(args: argparse.Namespace) -> list[dict[str, str]]:
+    """Map note files to shardable records keyed by their file stem."""
+
+    if not args.input_dir.is_dir():
+        raise CliError(
+            "--input-dir must name a directory.",
+            code="not_a_directory",
+            exit_code=EXIT_USAGE,
+        )
+    finder = args.input_dir.rglob if args.recursive else args.input_dir.glob
+    try:
+        paths = sorted(path for path in finder(args.pattern) if path.is_file())
+    except (ValueError, NotImplementedError) as exc:
+        raise CliError(
+            f"--pattern is not a usable glob ({type(exc).__name__}).",
+            code="invalid_pattern",
+            exit_code=EXIT_USAGE,
+        )
+    if not paths:
+        raise CliError(
+            "No input files matched the pattern.",
+            code="no_input",
+            exit_code=EXIT_USAGE,
+        )
+    return [{"id": path.stem, "path": str(path)} for path in paths]
+
+
+def _batch_run_plan(documents: list[dict[str, str]], shard_count: int):
+    """Plan shards, translating sharding errors into diagnosable usage errors.
+
+    The underlying messages carry only positional indices and field names, never
+    a document id, so they are safe to surface -- and without them a stem
+    collision is undiagnosable.
+    """
+
+    from ..processing.distributed import (
+        DuplicateDocumentIDError,
+        MissingDocumentIDError,
+        plan_document_shards,
+    )
+
+    try:
+        return plan_document_shards(documents, shard_count=shard_count)
+    except DuplicateDocumentIDError as exc:
+        raise CliError(
+            f"Input files collide on their stem: {exc}. File stems are the "
+            "document ids, so they must be unique across --input-dir.",
+            code="duplicate_document_id",
+            exit_code=EXIT_USAGE,
+        )
+    except MissingDocumentIDError as exc:
+        raise CliError(
+            f"Input could not be sharded: {exc}",
+            code="missing_document_id",
+            exit_code=EXIT_USAGE,
+        )
+
+
+def _batch_run_handler(documents: list[dict[str, str]], model: str | None):
+    """Build a shard handler that de-identifies a shard's notes.
+
+    The handler receives only shard membership, so it resolves each document id
+    back to its path here.
+
+    Output lines carry the de-identified text and nothing else. An earlier
+    revision wrote a per-record ``stable_document_hash``; that is an unsalted
+    digest over a fixed namespace, so against a low-entropy id space -- medical
+    record numbers, accession numbers -- anyone holding an output file recovers
+    the source id by enumeration. It is a reversible pseudonym, not a
+    protection, and it was new exposure: the run manifest stores a set
+    fingerprint over document hashes and never the per-document values, so
+    nothing else persists a per-record token.
+
+    Records stay joinable without it. Sharding is deterministic, so replanning
+    the same corpus with the same shard count reproduces each shard's document
+    order, and line ``n`` of a shard output is document ``n`` of that shard.
+    """
+
+    import openmed
+
+    by_id = {document["id"]: document["path"] for document in documents}
+
+    def handle(shard) -> bytes:
+        lines: list[str] = []
+        for document_id in shard.document_ids:
+            text = Path(by_id[document_id]).read_text(encoding="utf-8")
+            result = openmed.deidentify(text, model_name=model)
+            lines.append(json.dumps({"text": result.deidentified_text}))
+        return ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
+
+    return handle
+
+
+def _batch_run_emit(
+    args: argparse.Namespace,
+    report,
+    *,
+    report_format: str,
+) -> int:
+    """Render a run report and map its state onto the documented exit codes."""
+
+    payload = report.to_dict()
+    rendered = report.to_markdown() if report_format == "markdown" else report.to_json()
+    if getattr(args, "report", None) is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(rendered, encoding="utf-8")
+
+    from ..processing.run_report import RUN_STATE_COMPLETE
+
+    # One envelope on stdout, then a gate-negative exit code for a run that did
+    # not finish -- the repository's established shape for a command that must
+    # report its findings *and* fail. Raising after emitting would put two JSON
+    # documents on one stream and break single-document parsing.
+    emitted = emit(args, payload, human=rendered)
+    return emitted if payload["run_state"] == RUN_STATE_COMPLETE else EXIT_ERROR
+
+
+def _load_batch_run_manifest(run_dir: Path):
+    from ..processing.run_manifest import RunManifestError
+
+    try:
+        manifest = _batch_run_store(run_dir).load()
+    except RunManifestError as exc:
+        raise CliError(
+            f"Run manifest could not be read: {type(exc).__name__}.",
+            code="manifest_unreadable",
+            exit_code=EXIT_ERROR,
+        )
+    if manifest is None:
+        raise CliError(
+            "No run manifest exists in --run-dir.",
+            code="run_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    return manifest
+
+
+def _handle_batch_run_start(args: argparse.Namespace) -> int:
+    """Plan a distributed run, execute its shards, and report the outcome."""
+
+    import time
+
+    from ..processing.run_manifest import build_run_manifest, validate_shard_outputs
+    from ..processing.run_report import build_run_report
+    from ..processing.shard_executor import LocalShardExecutor, run_shard_plan
+
+    if args.shards < 1:
+        raise CliError(
+            "--shards must be at least 1.",
+            code="invalid_shards",
+            exit_code=EXIT_USAGE,
+        )
+    if args.workers < 1:
+        raise CliError(
+            "--workers must be at least 1.",
+            code="invalid_workers",
+            exit_code=EXIT_USAGE,
+        )
+    # Before anything is written: a run id that reaches the manifest cannot be
+    # withdrawn, and every later command re-reads it.
+    run_id = _validated_run_id(args.run_id)
+    _validated_report_path(getattr(args, "report", None))
+
+    documents = _batch_run_documents(args)
+    args.run_dir.mkdir(parents=True, exist_ok=True)
+    store = _batch_run_store(args.run_dir)
+    if store.load() is not None:
+        raise CliError(
+            "A run already exists here; use `batch-run resume`.",
+            code="run_exists",
+            exit_code=EXIT_USAGE,
+        )
+
+    plan = _batch_run_plan(documents, args.shards)
+    try:
+        manifest = build_run_manifest(plan, run_id=run_id)
+        store.save(manifest)
+        result = run_shard_plan(
+            plan,
+            _batch_run_handler(documents, args.model),
+            manifest=manifest,
+            root=args.run_dir,
+            store=store,
+            executor=LocalShardExecutor(max_workers=args.workers),
+        )
+    except CliError:
+        raise
+    except Exception as exc:
+        raise CliError(
+            f"Batch run failed with {type(exc).__name__}.",
+            code="batch_run_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    report = build_run_report(
+        result.manifest,
+        generated_at=time.time(),
+        validation=validate_shard_outputs(result.manifest, root=args.run_dir),
+    )
+    return _batch_run_emit(args, report, report_format=args.report_format)
+
+
+def _handle_batch_run_resume(args: argparse.Namespace) -> int:
+    """Recompute only the shards a resume must redo, then report."""
+
+    import time
+
+    from ..processing.resume import prepare_resume, resume_plan
+    from ..processing.run_manifest import validate_shard_outputs
+    from ..processing.run_report import build_run_report
+    from ..processing.shard_executor import LocalShardExecutor, run_shard_plan
+
+    if args.workers < 1:
+        raise CliError(
+            "--workers must be at least 1.",
+            code="invalid_workers",
+            exit_code=EXIT_USAGE,
+        )
+    max_attempts = _validated_max_attempts(args)
+    _validated_report_path(getattr(args, "report", None))
+
+    manifest = _load_batch_run_manifest(args.run_dir)
+    documents = _batch_run_documents(args)
+    store = _batch_run_store(args.run_dir)
+    plan = _batch_run_plan(documents, manifest.shard_count)
+
+    try:
+        recovery = resume_plan(
+            manifest,
+            root=args.run_dir,
+            expected_plan=plan,
+            max_attempts=max_attempts,
+        )
+        manifest = prepare_resume(manifest, recovery)
+        store.save(manifest)
+        result = run_shard_plan(
+            plan,
+            _batch_run_handler(documents, args.model),
+            manifest=manifest,
+            root=args.run_dir,
+            store=store,
+            executor=LocalShardExecutor(max_workers=args.workers),
+            shard_ids=recovery.shard_ids,
+        )
+        final = resume_plan(
+            result.manifest,
+            root=args.run_dir,
+            expected_plan=plan,
+            max_attempts=max_attempts,
+        )
+    except CliError:
+        raise
+    except Exception as exc:
+        raise CliError(
+            f"Batch run resume failed with {type(exc).__name__}.",
+            code="batch_run_resume_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    report = build_run_report(
+        result.manifest,
+        generated_at=time.time(),
+        resume=final,
+        validation=validate_shard_outputs(result.manifest, root=args.run_dir),
+    )
+    return _batch_run_emit(args, report, report_format=args.report_format)
+
+
+def _handle_batch_run_report(args: argparse.Namespace) -> int:
+    """Report on an existing run without executing or mutating anything."""
+
+    import time
+
+    from ..processing.resume import resume_plan
+    from ..processing.run_manifest import validate_shard_outputs
+    from ..processing.run_report import build_run_report
+
+    max_attempts = _validated_max_attempts(args)
+    manifest = _load_batch_run_manifest(args.run_dir)
+    try:
+        report = build_run_report(
+            manifest,
+            generated_at=time.time(),
+            resume=resume_plan(manifest, root=args.run_dir, max_attempts=max_attempts),
+            validation=validate_shard_outputs(manifest, root=args.run_dir),
+        )
+    except CliError:
+        raise
+    except Exception as exc:
+        raise CliError(
+            f"Run report could not be built: {type(exc).__name__}.",
+            code="report_failed",
+            exit_code=EXIT_ERROR,
+        )
+    return _batch_run_emit(args, report, report_format=args.report_format)
+
+
 def _handle_audit_show(args: argparse.Namespace) -> int:
     try:
         report = _load_audit_report(args.report)
@@ -2708,6 +3647,83 @@ def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
             "attestation_hash": attestation.attestation_hash,
         },
         human=f"Safe Harbor attestation written to: {args.output}",
+    )
+
+
+def _handle_compliance_part11_export(args: argparse.Namespace) -> int:
+    """Export safe event mappings to a verified Part 11 audit trail."""
+
+    from ..compliance.part11 import (
+        PART11_FORMAT,
+        Part11AuditTrail,
+        build_part11_audit_trail,
+    )
+
+    try:
+        source = args.input.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to read the Part 11 input file.",
+            code="input_read_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        parsed = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in Part 11 input at line {exc.lineno} column {exc.colno}.",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        if isinstance(parsed, MappingABC) and parsed.get("format") == PART11_FORMAT:
+            trail = Part11AuditTrail.from_dict(parsed)
+        else:
+            if isinstance(parsed, MappingABC):
+                events = parsed.get("events", parsed.get("records"))
+                if events is None:
+                    events = [parsed]
+            else:
+                events = parsed
+            if not isinstance(events, Sequence) or isinstance(events, (str, bytes)):
+                raise TypeError("Part 11 input must contain an event list")
+            trail = build_part11_audit_trail(events)
+        if not trail.verify():
+            raise ValueError("Part 11 audit trail integrity verification failed")
+        serialized = trail.to_json() + "\n"
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to build the Part 11 audit trail: {exc}",
+            code="part11_export_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        _write_safe_text(args.output, serialized, overwrite=args.overwrite)
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to write the Part 11 audit-trail file.",
+            code="output_write_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "output": str(args.output),
+        "record_count": len(trail.records),
+        "head_hash": trail.head_hash,
+        "trail_hash": trail.trail_hash,
+        "verified": True,
+    }
+    return emit(
+        args,
+        payload,
+        human=(
+            f"Part 11 audit trail written to: {args.output}\n"
+            f"Records: {len(trail.records)}\n"
+            "Verification: PASS"
+        ),
     )
 
 
@@ -2974,6 +3990,209 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
         f"Manifest: {args.output}\n"
     )
     return emit(args, payload, human=human)
+
+
+def _handle_risk_lab(args: argparse.Namespace) -> int:
+    from ..structured import (
+        SUPPORTED_TABLE_SUFFIXES,
+        StructuredPrivacyPolicy,
+        read_table,
+        run_structured_privacy_lab,
+        write_table,
+    )
+
+    quasi_identifiers = _merged_column_args(args.qi, args.qi_column)
+    sensitive_attributes = _merged_column_args(
+        args.sensitive,
+        args.sensitive_column,
+    )
+    direct_identifiers = _merged_column_args(
+        args.direct_id,
+        args.direct_id_column,
+    )
+    non_sensitive_attributes = _merged_column_args(
+        args.non_sensitive,
+        args.non_sensitive_column,
+    )
+    excluded_attributes = _merged_column_args(
+        args.exclude,
+        args.exclude_column,
+    )
+    input_paths = [(args.input, "Structured lab input", SUPPORTED_TABLE_SUFFIXES)]
+    if args.membership_candidates is not None:
+        input_paths.append(
+            (
+                args.membership_candidates,
+                "Membership candidate input",
+                SUPPORTED_TABLE_SUFFIXES,
+            )
+        )
+    if args.hierarchies is not None:
+        input_paths.append(
+            (args.hierarchies, "Hierarchy configuration", frozenset({".json"}))
+        )
+    output_paths = [(args.evidence, "Privacy lab evidence", frozenset({".json"}))]
+    if args.output is not None:
+        output_paths.append(
+            (args.output, "Structured lab release", SUPPORTED_TABLE_SUFFIXES)
+        )
+    _preflight_structured_paths(
+        inputs=tuple(input_paths),
+        outputs=tuple(output_paths),
+        overwrite=args.overwrite,
+    )
+    try:
+        records = read_table(args.input)
+        candidates = (
+            read_table(args.membership_candidates)
+            if args.membership_candidates is not None
+            else None
+        )
+        hierarchies = _load_lab_hierarchies(args.hierarchies)
+    except (ImportError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise CliError(
+            "Failed to read a structured privacy lab input.",
+            code="privacy_lab_input_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    try:
+        policy = StructuredPrivacyPolicy(
+            quasi_identifiers=quasi_identifiers,
+            target_k=args.k,
+            sensitive_attributes=sensitive_attributes,
+            direct_identifiers=direct_identifiers,
+            non_sensitive_attributes=non_sensitive_attributes,
+            excluded_attributes=excluded_attributes,
+            privacy_unit=args.privacy_unit,
+            target_l=args.l,
+            target_t=args.t,
+            suppression_limit=args.suppression_limit,
+            suppression_rate=args.suppression_rate,
+            membership_max_inference_rate=args.membership_max_inference_rate,
+            membership_max_candidates=args.membership_max_candidates,
+        )
+        result = run_structured_privacy_lab(
+            records,
+            policy,
+            population_assumptions={"scope": args.population_scope},
+            membership_candidates=candidates,
+            hierarchies=hierarchies,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The structured privacy lab configuration or input is invalid.",
+            code="invalid_privacy_lab_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+    try:
+        _write_safe_text(
+            args.evidence,
+            result.evidence.to_json() + "\n",
+            overwrite=args.overwrite,
+        )
+        if args.output is not None and result.meets_policy:
+            if result.anonymization is None:
+                raise ValueError("no transformed release is available")
+            write_table(
+                args.output,
+                result.records,
+                overwrite=args.overwrite,
+            )
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to write structured privacy lab outputs.",
+            code="privacy_lab_output_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "evidence": str(args.evidence),
+        "output": str(args.output) if args.output is not None else None,
+        "transformation_status": result.transformation_status,
+        "meets_policy": result.meets_policy,
+        "source_dataset_digest": result.profile.dataset_digest,
+        "evidence_integrity_digest": result.evidence.to_dict()["integrity_digest"],
+    }
+    human = (
+        "Structured privacy risk lab\n"
+        f"Meets configured policy: {_pass_fail(result.meets_policy)}\n"
+        f"Transformation: {result.transformation_status}\n"
+        f"Evidence: {args.evidence}\n"
+        "The evidence is aggregate-only and requires qualified expert review.\n"
+    )
+    emitted = emit(args, payload, human=human)
+    return emitted if result.meets_policy else EXIT_ERROR
+
+
+def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
+    from ..risk import (
+        AggregateDPBudgetLedger,
+        DPAggregateBudgetExceeded,
+        release_aggregate,
+    )
+
+    _preflight_structured_paths(
+        inputs=((args.input, "Aggregate input", frozenset({".json"})),),
+        outputs=((args.output, "Aggregate output", frozenset({".json"})),),
+        overwrite=args.overwrite,
+    )
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        ledger = AggregateDPBudgetLedger(
+            max_epsilon=args.budget_epsilon,
+            max_delta=args.budget_delta,
+        )
+        release = release_aggregate(
+            payload,
+            ledger=ledger,
+            epsilon=args.epsilon,
+            delta=args.delta,
+            sensitivity=args.sensitivity,
+            label=args.label,
+            seed=args.seed,
+        )
+        _write_safe_text(
+            args.output,
+            json.dumps(
+                release.to_dict(),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            overwrite=args.overwrite,
+        )
+    except (DPAggregateBudgetExceeded, ImportError, OSError, TypeError, ValueError):
+        raise CliError(
+            "The aggregate differential-privacy release failed safely.",
+            code="dp_aggregate_failed",
+            exit_code=EXIT_ERROR,
+        ) from None
+    result = {
+        "output": str(args.output),
+        "scope": "aggregate_only",
+        "row_level_anonymization": False,
+        "ledger": ledger.to_dict(),
+    }
+    return emit(
+        args,
+        result,
+        human=(
+            "Aggregate differential-privacy release complete\n"
+            f"Output: {args.output}\n"
+            "This output is aggregate-only and is not row-level anonymization.\n"
+        ),
+    )
+
+
+def _load_lab_hierarchies(path: Path | None) -> Mapping[str, Any] | None:
+    if path is None:
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError("hierarchy configuration must be an object")
+    return payload
 
 
 def _handle_risk_assess(args: argparse.Namespace) -> int:
@@ -3926,6 +5145,58 @@ def _handle_fhir_bundle(args: argparse.Namespace) -> int:
     return emit(args, payload, human=f"FHIR Bundle written to: {args.output}")
 
 
+def _handle_fhir_validate(args: argparse.Namespace) -> int:
+    try:
+        source = json.loads(args.input.read_text(encoding="utf-8"))
+        from ..clinical.exporters.fhir import validate_exchange
+
+        outcome = validate_exchange(
+            source,
+            version=args.version,
+            profile=args.profile,
+        )
+        if args.output is not None:
+            args.output.write_text(
+                json.dumps(outcome, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+    except FileNotFoundError:
+        raise CliError(
+            f"Input file not found: {args.input}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"FHIR validation failed: {exc}",
+            code="validation_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    blocking = sum(
+        issue.get("severity") in {"fatal", "error"}
+        for issue in outcome.get("issue", [])
+        if isinstance(issue, MappingABC)
+    )
+    payload = {
+        "input": str(args.input),
+        "version": args.version,
+        "profile": args.profile,
+        "valid": blocking == 0,
+        "outcome": outcome,
+    }
+    human = json.dumps(outcome, indent=2, sort_keys=True)
+    return_code = emit(args, payload, human=human)
+    return 1 if blocking else return_code
+
+
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
     """Build one local ICD-11 snapshot using environment-held credentials."""
     from ..interop.icd11_api import (
@@ -4068,6 +5339,222 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     )
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
+    return emit(args, payload, human=human)
+
+
+def _handle_ground(args: argparse.Namespace) -> int:
+    """Run the canonical offline grounding facade."""
+
+    from ..clinical.grounding import RankingConfig, VocabLoader, ground_payload
+    from ..clinical.grounding.vocab import RestrictedVocabularyError, VocabLoaderError
+    from ..core.offline import OfflineModeError
+
+    systems = tuple(args.systems or ("rxnorm", "icd10cm", "loinc", "hpo"))
+    inputs: Any
+    if args.text is not None:
+        inputs = args.text
+    else:
+        try:
+            raw = args.input.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise CliError(
+                "Grounding input file was not found.",
+                code="input_not_found",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        except OSError as exc:
+            raise CliError(
+                "Grounding input file could not be read.",
+                code="input_read_failed",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        try:
+            if args.input.suffix.casefold() == ".jsonl":
+                inputs = [json.loads(line) for line in raw.splitlines() if line.strip()]
+            else:
+                inputs = json.loads(raw)
+        except json.JSONDecodeError:
+            inputs = raw
+        if isinstance(inputs, MappingABC) and "entities" in inputs:
+            inputs = inputs["entities"]
+        elif isinstance(inputs, MappingABC) and "text" in inputs:
+            inputs = inputs["text"]
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=args.offline)
+    try:
+        payload = ground_payload(
+            inputs,
+            systems=systems,
+            loader=loader,
+            config=RankingConfig(k=args.top_k),
+            source_language=args.source_language,
+            offline=args.offline,
+        )
+    except RestrictedVocabularyError as exc:
+        raise CliError(
+            "Restricted terminology requires a configured user-supplied "
+            "out-of-process endpoint.",
+            code="restricted_terminology_unconfigured",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except OfflineModeError as exc:
+        raise CliError(
+            "The requested vocabulary snapshot is unavailable offline.",
+            code="offline_snapshot_unavailable",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except VocabLoaderError as exc:
+        raise CliError(
+            "The requested vocabulary snapshot could not be verified.",
+            code="snapshot_invalid",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The grounding request is invalid.",
+            code="grounding_invalid_request",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    human = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
+    return emit(args, payload, human=human)
+
+
+def _handle_grounding_snapshot_import(args: argparse.Namespace) -> int:
+    """Import one local snapshot and emit its manifest."""
+
+    from ..clinical.grounding import VocabLoader
+    from ..clinical.grounding.vocab import VocabLoaderError
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=True)
+    try:
+        manifest = loader.import_snapshot(
+            args.system,
+            args.input,
+            version=args.version,
+            sha256=args.sha256,
+            license_note=args.license_note,
+            replace=args.replace,
+        )
+    except (OSError, TypeError, ValueError, VocabLoaderError) as exc:
+        raise CliError(
+            "The vocabulary snapshot could not be imported.",
+            code="snapshot_import_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = manifest.to_dict()
+    return emit(
+        args,
+        payload,
+        human=f"Imported {manifest.system} snapshot {manifest.version}.",
+    )
+
+
+def _handle_grounding_snapshot_download(args: argparse.Namespace) -> int:
+    """Download one explicitly configured and checksum-pinned snapshot."""
+
+    from ..clinical.grounding import VocabLoader, VocabSource
+    from ..clinical.grounding.vocab import VocabLoaderError
+    from ..core.offline import OfflineModeError
+
+    source = VocabSource(
+        system=args.system,
+        url=args.url,
+        sha256=args.sha256,
+        checksum_url=args.checksum_url,
+        artifact_name=args.artifact_name,
+        archive_member=args.archive_member,
+        version=args.version,
+    )
+    loader = VocabLoader(
+        cache_dir=args.cache_dir,
+        local_only=False,
+        registry={args.system: source},
+        timeout=args.timeout,
+    )
+    try:
+        manifest = loader.download_snapshot(args.system)
+    except OfflineModeError as exc:
+        raise CliError(
+            "Snapshot download is blocked by offline mode.",
+            code="offline_download_blocked",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (OSError, TypeError, ValueError, VocabLoaderError) as exc:
+        raise CliError(
+            "The vocabulary snapshot could not be downloaded and verified.",
+            code="snapshot_download_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = manifest.to_dict()
+    return emit(
+        args,
+        payload,
+        human=f"Downloaded {manifest.system} snapshot {manifest.version}.",
+    )
+
+
+def _handle_grounding_snapshot_list(args: argparse.Namespace) -> int:
+    """List checksum-pinned snapshots without touching the network."""
+
+    from ..clinical.grounding import VocabLoader
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=True)
+    payload = {
+        "snapshots": [manifest.to_dict() for manifest in loader.list_snapshots()]
+    }
+    return emit(args, payload, human=json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _handle_cohort_resolve(args: argparse.Namespace) -> int:
+    """Resolve a stable phenotype definition over a local cohort store."""
+
+    from ..structured.cohort import (
+        COHORT_ADVISORY,
+        PhenotypeDefinition,
+        PhenotypeDefinitionError,
+        load_athena_hierarchy,
+        resolve_phenotype,
+    )
+
+    try:
+        definition = PhenotypeDefinition.load(args.definition)
+        hierarchy = (
+            load_athena_hierarchy(args.athena) if args.athena is not None else None
+        )
+        result = resolve_phenotype(
+            definition,
+            duckdb_path=args.duckdb,
+            parquet_directory=args.parquet,
+            hierarchy=hierarchy,
+        )
+    except FileNotFoundError as exc:
+        raise CliError(
+            str(exc),
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except PhenotypeDefinitionError as exc:
+        raise CliError(
+            str(exc),
+            code="invalid_phenotype",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ImportError as exc:
+        raise CliError(
+            str(exc),
+            code="missing_dependency",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ValueError as exc:
+        raise CliError(
+            str(exc),
+            code="resolution_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = result.to_dict()
+    human = f"Resolved {len(result.patient_ids)} patient(s). {COHORT_ADVISORY}"
     return emit(args, payload, human=human)
 
 
@@ -4529,6 +6016,31 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
         )
 
     return _write_json_payload(args, payload, args.output)
+
+
+def _handle_benchmark_domain_coverage(args: argparse.Namespace) -> int:
+    """Run the offline clinical-domain label-map coverage gate."""
+    from openmed.eval.domain_coverage import run_domain_coverage
+
+    try:
+        report = run_domain_coverage(
+            label_map_path=args.label_map,
+            fixture_dir=args.fixture_dir,
+            domains=args.domains,
+        )
+        if args.output is not None:
+            report.write_json(args.output)
+        if args.markdown_output is not None:
+            report.write_markdown(args.markdown_output)
+    except (OSError, ValueError) as exc:
+        raise CliError(
+            f"Clinical domain coverage could not run: {exc}",
+            code="domain_coverage_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    result = emit(args, report.to_dict(), human=report.to_markdown())
+    return result if report.passed else EXIT_ERROR
 
 
 def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
@@ -5358,6 +6870,138 @@ def _format_param_count(param_count: int | None) -> str:
     if param_count is None:
         return "unknown"
     return f"{param_count:,}"
+
+
+def _format_models_cache_last_used(value: Any) -> str:
+    if (
+        value is None
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+    ):
+        return "never" if value is None else "unknown"
+
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat(
+            timespec="seconds"
+        )
+    except (OverflowError, OSError, ValueError):
+        return "unknown"
+
+
+def _models_cache_payload(cached_models: Sequence[Any]) -> dict[str, Any]:
+    models = []
+    for cached in cached_models:
+        size_on_disk = cached.size_on_disk
+        models.append(
+            {
+                "repo_id": cached.repo_id,
+                "size_bytes": size_on_disk,
+                "size_mb": round(size_on_disk / 1_000_000, 3),
+                "last_accessed": cached.last_accessed,
+                "last_used": _format_models_cache_last_used(cached.last_accessed),
+            }
+        )
+    return {"count": len(models), "models": models}
+
+
+def _format_models_cache_table(payload: Mapping[str, Any]) -> str:
+    rows = [
+        {
+            "repo_id": str(model["repo_id"]),
+            "size_mb": f"{float(model['size_mb']):.3f} MB",
+            "last_used": str(model["last_used"]),
+        }
+        for model in payload["models"]
+    ]
+    if not rows:
+        return "No cached OpenMed models.\n"
+
+    columns = (
+        ("repo_id", "repo_id"),
+        ("size_mb", "size_mb"),
+        ("last_used", "last_used"),
+    )
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+    lines = [
+        "  ".join(header.ljust(widths[key]) for key, header in columns),
+        "  ".join("-" * widths[key] for key, _header in columns),
+        *[
+            "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+            for row in rows
+        ],
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_models_cache_download(args: argparse.Namespace) -> int:
+    config = _load_and_apply_config(args)
+    try:
+        repo_id = resolve_repo_id(args.repo_id)
+        path = prefetch_model(
+            repo_id,
+            revision=args.revision,
+            allow_patterns=args.allow_patterns,
+            config=config,
+        )
+    except (ImportError, OfflineModeError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to download model {args.repo_id}: {exc}",
+            code="download_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    path_text = str(path)
+    return emit(
+        args,
+        {"repo_id": repo_id, "path": path_text},
+        human=f"Model ready: {path_text}",
+    )
+
+
+def _handle_models_cache_list(args: argparse.Namespace) -> int:
+    try:
+        cached_models = sorted(
+            list_cached_models(),
+            key=lambda cached: cached.repo_id,
+        )
+    except (ImportError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to list model cache: {exc}",
+            code="cache_list_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = _models_cache_payload(cached_models)
+    return emit(args, payload, human=_format_models_cache_table(payload))
+
+
+def _handle_models_cache_clear(args: argparse.Namespace) -> int:
+    if not args.yes:
+        raise CliError(
+            f"Refusing to clear {args.repo_id} without --yes confirmation.",
+            code="confirmation_required",
+            exit_code=EXIT_USAGE,
+        )
+
+    try:
+        repo_id = resolve_repo_id(args.repo_id)
+        removed = clear_cached_model(repo_id)
+    except (ImportError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to clear model cache {args.repo_id}: {exc}",
+            code="cache_clear_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    if removed:
+        human = f"Cleared model cache: {repo_id}"
+    else:
+        human = f"No cached model found: {repo_id}"
+    return emit(args, {"repo_id": repo_id, "removed": removed}, human=human)
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:

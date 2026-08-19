@@ -9,6 +9,7 @@ from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_bangladesh_nid,
     validate_chinese_resident_id,
     validate_czech_rodne_cislo,
     validate_danish_cpr,
@@ -33,6 +34,7 @@ from openmed.core.pii_i18n import (
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_ukrainian_rnokpp,
+    validate_vietnamese_cccd,
     validate_za_id_number,
 )
 from openmed.training.synthetic import (
@@ -51,6 +53,7 @@ _ID_VALIDATORS = {
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
     "as": validate_aadhaar,
+    "bn": validate_bangladesh_nid,
     "hi": validate_aadhaar,
     "mr": validate_marathi_aadhaar,
     "or": validate_aadhaar,
@@ -74,6 +77,7 @@ _ID_VALIDATORS = {
     "uk": validate_ukrainian_rnokpp,
     "cs": validate_czech_rodne_cislo,
     "el": validate_greek_amka,
+    "vi": validate_vietnamese_cccd,
 }
 
 _SCRIPT_RANGES = {

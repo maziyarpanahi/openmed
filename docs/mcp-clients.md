@@ -238,6 +238,29 @@ forward `MCP-Protocol-Version`, `Mcp-Session-Id`, `Content-Type`, `Accept`, and
 `Authorization`; do not replace the negotiated protocol version with a fixed
 value at the proxy.
 
+## Structured tool errors
+
+Expected OpenMed failures return structured content with `is_error: true` and
+the same stable code exposed by the Python API and REST service:
+
+```json
+{
+  "error": {
+    "code": "input_error",
+    "message": "The request input is malformed. Correct the documented field and retry.",
+    "details": {"argument": "text"}
+  },
+  "is_error": true
+}
+```
+
+Branch on `error.code`, not the human-readable message. Error payloads never
+echo tool arguments, clinical text, mappings, credentials, or upstream
+exception text. Security, authorization, consent, and tool-schema errors retain
+their existing specialized codes. See
+[Structured public errors](api/errors.md) for the complete Python/REST/MCP
+mapping.
+
 ## Environment-variable defaults
 
 The command-line flags can also be configured with environment variables:

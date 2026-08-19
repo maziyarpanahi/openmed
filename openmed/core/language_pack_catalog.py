@@ -21,10 +21,10 @@ UNROUTED_SCRIPT = "Unrouted"
 
 REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 
-# These built-in routes intentionally use a named fallback until a dedicated
-# PII model is published. They must not be represented as trained/model-backed
-# languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
+# These built-in routes intentionally use a named fallback until dedicated
+# public PII weights are available. They must not be represented as
+# trained/model-backed languages in release claims.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -145,6 +145,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "bn_BD",
         ("Bengali",),
+        national_id_provider=("bn_BD", "bangladesh_nid"),
     ),
     _pack(
         "te",
@@ -155,7 +156,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
     ),
     _pack(
         "ta",
-        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+        "OpenMed/privacy-filter-multilingual",
         "ta_IN",
         ("Tamil",),
         national_id_provider=("ta_IN", "aadhaar"),
@@ -308,6 +309,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("no_NO", "ssn"),
     ),
+    _pack(
+        "vi",
+        "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1",
+        "vi_VN",
+        ("Latin",),
+        national_id_provider=("vi_VN", "vietnamese_cccd"),
+    ),
 )
 
 
@@ -335,7 +343,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "hr": NationalIdOnlyCapability("hr_HR", ("hr_HR", "ssn")),
     "bg": NationalIdOnlyCapability("bg_BG", ("bg_BG", "egn")),
     "fi": NationalIdOnlyCapability("fi_FI", ("fi_FI", "ssn")),
-    "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
     "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
     "rw": NationalIdOnlyCapability("rw_RW", ("rw_RW", "rwanda_id")),
 }
@@ -345,6 +352,9 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
+    # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
+    # approximation entry and no conceptual backend mapping.
+    "ne": "ne_NP",
     "pa": "pa_IN",
 }
 
@@ -428,6 +438,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "mr",
+    "ne",
     "or",
     "as",
     "bn",

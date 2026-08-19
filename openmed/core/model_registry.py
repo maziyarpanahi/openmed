@@ -41,6 +41,10 @@ class ModelInfo:
     architecture: Optional[str] = None
     base_model: Optional[str] = None
     formats: List[str] = field(default_factory=list)
+    nnapi_compatible: Optional[bool] = None
+    min_sdk: Optional[int] = None
+    execution_providers: List[str] = field(default_factory=list)
+    tokenizer_assets: List[str] = field(default_factory=list)
     benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
@@ -305,6 +309,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
+    "vietnamese": "vi",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
     code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"
@@ -577,6 +582,10 @@ _LEGACY_MODEL_ALIASES = {
     ],
     "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+    # The former dedicated Tamil checkpoint is no longer in the public Hub
+    # catalog. Keep its registry key as a compatibility alias for the explicit
+    # multilingual placeholder while callers migrate to qualified weights.
+    "OpenMed/privacy-filter-multilingual": ["pii_ta_msuperclinical_large"],
 }
 
 
@@ -766,6 +775,12 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         architecture=row.get("architecture"),
         base_model=row.get("base_model"),
         formats=list(row.get("formats") or []),
+        nnapi_compatible=row.get("nnapi_compatible")
+        if isinstance(row.get("nnapi_compatible"), bool)
+        else None,
+        min_sdk=_positive_int_from_row(row, "min_sdk"),
+        execution_providers=_string_list_from_row(row, "execution_providers"),
+        tokenizer_assets=_string_list_from_row(row, "tokenizer_assets"),
         benchmark=_benchmark_from_row(row),
         latency_ms=_number_map_from_row(row, "latency_ms"),
         peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
@@ -846,7 +861,9 @@ def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
         return None
 
     formats = set(row.get("formats") or ())
-    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+    if "mlx-2bit" in formats:
+        bytes_per_parameter = 0.30
+    elif formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
         bytes_per_parameter = 0.55
     elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
         bytes_per_parameter = 1.05
@@ -921,6 +938,20 @@ def _rounded_mb(value: Optional[float]) -> Optional[float]:
     if value is None:
         return None
     return round(value, 3)
+
+
+def _positive_int_from_row(row: Dict[str, Any], field_name: str) -> Optional[int]:
+    value = row.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _string_list_from_row(row: Dict[str, Any], field_name: str) -> List[str]:
+    value = row.get(field_name)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -1628,9 +1659,16 @@ def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
 
 def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language."""
-    from .pii_i18n import DEFAULT_PII_MODELS, OPTIONAL_PII_MODEL
+    from .pii_i18n import (
+        DEFAULT_PII_MODELS,
+        OPTIONAL_PII_MODEL,
+        USER_SUPPLIED_PII_MODEL,
+    )
 
     model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id == USER_SUPPLIED_PII_MODEL:
+        # Publicly registered but ships no weights; the caller must supply one.
+        return None
     if model_id != OPTIONAL_PII_MODEL:
         return model_id
     from ..ner.families.indic import configured_indic_ner_model

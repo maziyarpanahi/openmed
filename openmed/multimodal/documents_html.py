@@ -74,7 +74,7 @@ def extract_html(source: str | os.PathLike[str] | Any) -> ExtractedDocument:
     """Extract visible HTML text with raw-source character offsets.
 
     Args:
-        source: A UTF-8 path, raw HTML string, or text file-like object.
+        source: A UTF-8 path-like object, raw HTML string, or file-like object.
 
     Returns:
         Visible normalized text and a complete source-offset map. Raw HTML is
@@ -133,23 +133,23 @@ def _parse_source(source: str | os.PathLike[str] | Any) -> _ParsedHtml:
 
 def _read_source(source: str | os.PathLike[str] | Any) -> tuple[str, str | None]:
     if hasattr(source, "read"):
-        return str(source.read()), None
+        try:
+            source.seek(0)
+        except (AttributeError, OSError):
+            pass
+        data = source.read()
+        if isinstance(data, str):
+            return data, None
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data).decode("utf-8"), None
+        raise TypeError("HTML stream must return bytes or text")
     if isinstance(source, os.PathLike):
         path = Path(source)
         with path.open("r", encoding="utf-8", newline="") as handle:
             return handle.read(), str(path)
     if isinstance(source, str):
-        if "\n" not in source and "\r" not in source:
-            path = Path(source)
-            try:
-                exists = path.exists()
-            except OSError:
-                exists = False
-            if exists and path.is_file():
-                with path.open("r", encoding="utf-8", newline="") as handle:
-                    return handle.read(), str(path)
         return source, None
-    raise TypeError("source must be a path, HTML text, or text file-like object")
+    raise TypeError("source must be a path, HTML text, or file-like object")
 
 
 class _HtmlTextParser(HTMLParser):
@@ -409,6 +409,19 @@ def _validate_distinct_paths(source: Path, output: Path) -> None:
         raise ValueError("source and output paths must be distinct")
 
 
+def _validate_stream_output(source: Any, output: Path) -> None:
+    source_name = getattr(source, "name", None)
+    if isinstance(source_name, (str, os.PathLike)):
+        _validate_distinct_paths(Path(source_name), output)
+    try:
+        source_stat = os.fstat(source.fileno())
+        output_stat = output.stat()
+    except (AttributeError, OSError, TypeError, ValueError):
+        return
+    if os.path.samestat(source_stat, output_stat):
+        raise ValueError("source and output paths must be distinct")
+
+
 def _validate_logical_replacements(
     document: ExtractedDocument,
     replacements: Iterable[tuple[int, int, str]],
@@ -509,11 +522,18 @@ def _detect_entities(document: ExtractedDocument, models: Any, lang: str | None)
     if detector is None:
         return ()
     call_shape = _select_detector_call_shape(detector, document.text, lang)
-    if call_shape == "keyword_lang":
-        return detector(document.text, lang=lang)
-    if call_shape == "positional_lang":
-        return detector(document.text, lang)
-    return detector(document.text)
+    try:
+        if call_shape == "keyword_lang":
+            result = detector(document.text, lang=lang)
+        elif call_shape == "positional_lang":
+            result = detector(document.text, lang)
+        else:
+            result = detector(document.text)
+    except Exception:
+        pass
+    else:
+        return result
+    raise RuntimeError("HTML detector failed")
 
 
 def _select_detector_call_shape(
@@ -690,7 +710,8 @@ def _html_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
-    parsed = _parse_source(path)
+    source = Path(path) if isinstance(path, str) else path
+    parsed = _parse_source(source)
     entity_inputs = _iter_entity_inputs(_detect_entities(parsed.document, models, lang))
     default_replacement = _policy_value(policy, "replacement")
     replacements = tuple(
@@ -708,7 +729,10 @@ def _html_handler(
     )
     if replacements and output_path is not None:
         output = Path(output_path)
-        _validate_distinct_paths(Path(path), output)
+        if hasattr(source, "read"):
+            _validate_stream_output(source, output)
+        else:
+            _validate_distinct_paths(Path(source), output)
         _write_parsed_html(parsed, output, replacements)
     metadata = {
         "format": "html",

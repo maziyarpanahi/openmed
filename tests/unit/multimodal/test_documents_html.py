@@ -223,8 +223,10 @@ def test_nested_heads_remain_suppressed_until_body_resets_depth() -> None:
     assert "Still Hidden Roe" not in document.text
 
 
-def test_nested_head_handler_passes_only_body_text_to_detector() -> None:
+def test_nested_head_handler_passes_only_body_text_to_detector(tmp_path: Path) -> None:
     source = "<head><head>Hidden Jane</head>Still Hidden Roe<body>Visible Pat</body>"
+    path = tmp_path / "nested-head.html"
+    path.write_text(source, encoding="utf-8")
     observed: list[tuple[str, str | None]] = []
 
     def detector(text: str, *, lang: str | None = None):
@@ -232,7 +234,7 @@ def test_nested_head_handler_passes_only_body_text_to_detector() -> None:
         return []
 
     document = base._HANDLERS[".html"][-1].handler(
-        source,
+        path,
         models=detector,
         lang="en",
     )
@@ -248,7 +250,7 @@ def test_entities_use_callback_bounded_atomic_and_linear_ranges() -> None:
     )
     document = extract_html(source)
 
-    assert document.text == "&copycat & copy ©cat &ersand &boguscat; & & ≂̸ José 李"
+    assert document.text == ("&copycat & copy ©cat &ersand &boguscat; & & ≂̸ José 李")
 
     first_amp = document.text.index("&")
     start, end = _source_range(document, first_amp)
@@ -336,6 +338,16 @@ def test_path_raw_and_file_like_inputs_match_and_preserve_newline_offsets(
         start, end = _source_range(path_document, index)
         if path_document.location_at(index).metadata["source_map_mode"] == "linear":
             assert source[start:end] == character
+
+
+def test_raw_string_matching_existing_path_stays_literal(tmp_path: Path) -> None:
+    path = tmp_path / "patient.html"
+    path.write_text("<p>Private Jane</p>", encoding="utf-8")
+
+    document = extract_html(str(path))
+
+    assert document.text == str(path)
+    assert document.metadata == {"format": "html"}
 
 
 def test_writer_redacts_exact_fixture_and_preserves_surrounding_source(
@@ -474,17 +486,7 @@ def test_many_span_projection_advances_through_source_spans_once() -> None:
         metadata=document.metadata,
     )
     logical = tuple((index, index + 1, "x") for index in range(count))
-    projector = getattr(documents_html, "_project_replacements", None)
-    if projector is None:
-        projected = tuple(
-            (
-                documents_html._project_replacement(counted_document, start, end),
-                replacement,
-            )
-            for start, end, replacement in logical
-        )
-    else:
-        projected = projector(counted_document, logical)
+    projected = documents_html._project_replacements(counted_document, logical)
 
     assert len(projected) == count
     assert spans.visits == len(document.spans) == count
@@ -746,14 +748,15 @@ def test_handler_callable_shapes_pass_lang_once() -> None:
     ]
 
 
-def test_handler_propagates_detector_internal_type_error_without_retry() -> None:
+def test_handler_sanitizes_detector_failure_without_retry() -> None:
     observed: list[tuple[str, str | None]] = []
+    sentinel = "SENTINEL_PHI_PATIENT_JANE_<p>raw</p>"
 
     def detector(text: str, *, lang: str | None = None):
         observed.append((text, lang))
-        raise TypeError("detector body failed")
+        raise TypeError(f"detector body failed for {sentinel}")
 
-    with pytest.raises(TypeError, match="detector body failed"):
+    with pytest.raises(RuntimeError, match="HTML detector failed") as caught:
         base._HANDLERS[".html"][-1].handler(
             FIXTURE,
             models=detector,
@@ -761,6 +764,12 @@ def test_handler_propagates_detector_internal_type_error_without_retry() -> None
         )
 
     assert observed == [("Patient Jane & Roe", "en")]
+    exposed = "".join(traceback.format_exception(caught.value))
+    assert sentinel not in str(caught.value)
+    assert sentinel not in repr(caught.value)
+    assert sentinel not in exposed
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 @pytest.mark.parametrize(
@@ -851,7 +860,7 @@ def test_real_dispatcher_redacts_both_extensions(tmp_path: Path, suffix: str) ->
         return [(8, 18, "PERSON")]
 
     document = multimodal.redact_document(
-        source,
+        str(source),
         models=detector,
         lang="en",
         policy={"output_path": output, "replacement": "[REDACTED]"},
@@ -859,3 +868,76 @@ def test_real_dispatcher_redacts_both_extensions(tmp_path: Path, suffix: str) ->
 
     assert document.metadata["detected_span_count"] == 1
     assert "<p>Patient [REDACTED]</p>" in output.read_text(encoding="utf-8")
+
+
+def test_real_dispatcher_decodes_binary_html_stream(tmp_path: Path) -> None:
+    output = tmp_path / "redacted.html"
+    source = io.BytesIO(b"<p>Patient Jane &amp; Roe</p>")
+    source.name = "synthetic.html"
+    source.read(3)
+
+    def detector(text: str, *, lang: str | None = None):
+        assert text == "Patient Jane & Roe"
+        return [(8, 18, "PERSON")]
+
+    document = multimodal.redact_document(
+        source,
+        models=detector,
+        policy={"output_path": output, "replacement": "[REDACTED]"},
+    )
+
+    assert document.text == "Patient Jane & Roe"
+    assert output.read_text(encoding="utf-8") == "<p>Patient [REDACTED]</p>"
+
+
+def test_real_dispatcher_rejects_named_stream_output_alias(tmp_path: Path) -> None:
+    source = tmp_path / "patient.html"
+    raw = b"<p>Patient Jane</p>"
+    source.write_bytes(raw)
+
+    with (
+        source.open("rb") as stream,
+        pytest.raises(ValueError, match="source and output paths must be distinct"),
+    ):
+        multimodal.redact_document(
+            stream,
+            models=lambda text: [(8, 12, "PERSON")],
+            policy={"output_path": source, "replacement": "[REDACTED]"},
+        )
+
+    assert source.read_bytes() == raw
+
+
+def test_real_dispatcher_rejects_descriptor_alias_with_routing_only_name(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "patient.html"
+    raw = b"<p>Patient Jane</p>"
+    source.write_bytes(raw)
+
+    class RoutingNamedStream:
+        name = "routing-only.html"
+
+        def __init__(self, stream):
+            self.stream = stream
+
+        def read(self):
+            return self.stream.read()
+
+        def seek(self, offset: int):
+            return self.stream.seek(offset)
+
+        def fileno(self):
+            return self.stream.fileno()
+
+    with (
+        source.open("rb") as backing,
+        pytest.raises(ValueError, match="source and output paths must be distinct"),
+    ):
+        multimodal.redact_document(
+            RoutingNamedStream(backing),
+            models=lambda text: [(8, 12, "PERSON")],
+            policy={"output_path": source, "replacement": "[REDACTED]"},
+        )
+
+    assert source.read_bytes() == raw

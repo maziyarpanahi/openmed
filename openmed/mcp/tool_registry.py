@@ -17,6 +17,7 @@ from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
 
@@ -637,6 +638,22 @@ def validate_registered_tool_output(name: str, payload: Any) -> JsonObject:
     return validate_tool_output(TOOL_REGISTRY.get(name), payload)
 
 
+def validate_registered_tool_input(name: str, payload: Any) -> JsonObject:
+    """Validate an input payload against the latest registered spec for *name*."""
+
+    spec = TOOL_REGISTRY.get(name)
+    errors: list[str] = []
+    _validate_schema(payload, spec.input_schema, "$", errors)
+    if errors:
+        preview = "; ".join(errors[:4])
+        raise ToolSchemaValidationError(
+            f"{spec.name} input failed schema {spec.version}: {preview}"
+        )
+    if not isinstance(payload, Mapping):
+        raise ToolSchemaValidationError(f"{spec.name} input must be an object")
+    return dict(payload)
+
+
 def validate_registered_workflow_artifact(
     workflow_name: str,
     artifact_name: str,
@@ -1061,7 +1078,12 @@ _KEEP_ALIVE_PARAMETER = _parameter(
 )
 _LANG_PARAMETER = _parameter(
     "lang",
-    _schema("string", enum=sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)),
+    _schema(
+        "string",
+        enum=sorted(
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+        ),
+    ),
     str,
     "en",
     "PII language code.",
@@ -2087,6 +2109,7 @@ __all__ = [
     "render_search_pipeline_tool_definitions",
     "render_tool_registry_document",
     "register_plugin_tools",
+    "validate_registered_tool_input",
     "validate_registered_tool_output",
     "validate_registered_workflow_artifact",
     "validate_tool_output",

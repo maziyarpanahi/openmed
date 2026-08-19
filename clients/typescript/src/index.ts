@@ -24,10 +24,12 @@ export type PIILanguage =
   | "kn"
   | "ml"
   | "mr"
+  | "ne"
   | "or"
   | "pa"
   | "ta"
   | "te"
+  | "ur"
   | "pt"
   | "ar"
   | "he"
@@ -47,7 +49,8 @@ export type PIILanguage =
   | "zh"
   | "uk"
   | "cs"
-  | "el";
+  | "el"
+  | "vi";
 
 export type DeidentificationMethod =
   | "mask"
@@ -72,6 +75,15 @@ export interface AnalyzeRequest {
   sentence_clean?: boolean;
   use_fast_tokenizer?: boolean;
   keep_alive?: KeepAliveValue | null;
+}
+
+export interface GroundRequest {
+  entities?: JsonObject[] | null;
+  offline?: boolean;
+  source_language?: string;
+  systems?: string[];
+  text?: string | null;
+  top_k?: number;
 }
 
 export interface PIIExtractRequest {
@@ -107,6 +119,10 @@ export interface PIIDeidentifyRequest {
   lang?: PIILanguage;
   normalize_accents?: boolean | null;
   keep_alive?: KeepAliveValue | null;
+}
+
+export interface PIIDeidentifyStreamRequest extends PIIDeidentifyRequest {
+  chunk_size?: number;
 }
 
 export interface PrivacyGatewayRequest {
@@ -208,6 +224,42 @@ export interface OMOPLoadResponse {
   constraint_violations?: OMOPConstraintViolations;
 }
 
+export interface ConceptAncestorRequest {
+  ancestor_concept_id: number;
+  descendant_concept_id: number;
+}
+
+export interface CohortResolveRequest {
+  phenotype: JsonObject;
+  records_jsonl: string;
+  concept_ancestors?: ConceptAncestorRequest[];
+}
+
+export interface CohortEvidencePointer {
+  criterion_id: string;
+  concept_set_id: string;
+  concept_id: number;
+  vocabulary: string;
+  domain_table: string;
+  event_id: number;
+  note_id: number;
+  note_nlp_id: number;
+  source_note_hash: string;
+  start: number;
+  end: number;
+}
+
+export interface CohortResolveResponse {
+  schema_version: string;
+  advisory: string;
+  patient_ids: number[];
+  evidence: Array<{
+    patient_id: number;
+    matches: CohortEvidencePointer[];
+  }>;
+  provenance: JsonObject;
+}
+
 export interface EntityPrediction {
   text: string;
   label: string;
@@ -265,9 +317,13 @@ export interface PrivacyGatewayResponse {
 
 export type AnalyzeResponse = PredictionResult;
 
+export type GroundResponse = JsonObject;
+
 export type PIIExtractResponse = PredictionResult;
 
 export type PIIExtractStreamResponse = string;
+
+export type PIIDeidentifyStreamResponse = string;
 
 export interface HealthResponse {
   status: string;
@@ -462,6 +518,10 @@ export class OpenMedClient {
     return this.post("/analyze", request);
   }
 
+  async ground(request: GroundRequest): Promise<GroundResponse> {
+    return this.post("/ground", request);
+  }
+
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
     return this.post("/pii/extract", request);
   }
@@ -469,13 +529,19 @@ export class OpenMedClient {
   async extractPiiStream(
     request: PIIExtractStreamRequest,
   ): Promise<PIIExtractStreamResponse> {
-    return this.post("/pii/extract/stream", request);
+    return this.postNDJSON("/pii/extract/stream", request);
   }
 
   async deidentify(
     request: PIIDeidentifyRequest,
   ): Promise<PIIDeidentifyResponse> {
     return this.post("/pii/deidentify", request);
+  }
+
+  async deidentifyStream(
+    request: PIIDeidentifyStreamRequest,
+  ): Promise<PIIDeidentifyStreamResponse> {
+    return this.postNDJSON("/pii/deidentify/stream", request);
   }
 
   async privacyGateway(
@@ -508,6 +574,12 @@ export class OpenMedClient {
 
   async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
     return this.post("/omop/load", request);
+  }
+
+  async resolveCohort(
+    request: CohortResolveRequest,
+  ): Promise<CohortResolveResponse> {
+    return this.post("/cohort/resolve", request);
   }
 
   async startSmartBackendIngestion(
@@ -554,6 +626,29 @@ export class OpenMedClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  private async postNDJSON(path: string, body: unknown): Promise<string> {
+    const response = await this.fetchImpl(this.url(path), {
+      method: "POST",
+      headers: {
+        accept: "application/x-ndjson",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new OpenMedApiError(
+        response.status,
+        toOpenMedErrorEnvelope(parsePayloadText(text), response.status),
+      );
+    }
+    if (!isNDJSONContentType(response.headers.get("content-type"))) {
+      throw new Error(`OpenMed stream ${path} returned a non-NDJSON response.`);
+    }
+    return text;
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
@@ -607,6 +702,10 @@ function smartBackendJobPath(template: string, jobId: string): string {
 
 async function readPayload(response: Response): Promise<unknown> {
   const text = await response.text();
+  return parsePayloadText(text);
+}
+
+function parsePayloadText(text: string): unknown {
   if (!text) {
     return null;
   }
@@ -616,6 +715,17 @@ async function readPayload(response: Response): Promise<unknown> {
   } catch {
     return text;
   }
+}
+
+function isNDJSONContentType(contentType: string | null): boolean {
+  if (!contentType) {
+    return false;
+  }
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === "application/x-ndjson" ||
+    mediaType === "application/ndjson"
+  );
 }
 
 function toOpenMedErrorEnvelope(
