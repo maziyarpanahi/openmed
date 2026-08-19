@@ -48,7 +48,18 @@ def validate_input(
         text,
         (str, bytes, bytearray, memoryview),
     ):
-        text = str(text)
+        try:
+            text = str(text)
+        except Exception as exc:
+            raise gateway.InputValidationError(
+                "Input text cannot be converted to a string. Pass text or a "
+                "strict UTF-8 bytes-like value.",
+                code="text_type",
+                metadata={
+                    "type": type(text).__name__,
+                    "error_type": type(exc).__name__,
+                },
+            ) from exc
     text = gateway.normalize_text(
         text,
         limits=limits,

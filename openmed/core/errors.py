@@ -43,7 +43,11 @@ def redact_detail(value: Any) -> str:
         A descriptor containing only the UTF-8 byte length and SHA-256 digest.
     """
 
-    text = value if isinstance(value, str) else str(value)
+    try:
+        text = value if isinstance(value, str) else str(value)
+    except Exception:
+        value_type = type(value)
+        text = f"<unprintable:{value_type.__module__}.{value_type.__qualname__}>"
     encoded = text.encode("utf-8", errors="replace")
     digest = hashlib.sha256(encoded).hexdigest()
     return f"<redacted bytes={len(encoded)} sha256={digest}>"

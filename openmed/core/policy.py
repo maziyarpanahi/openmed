@@ -14,7 +14,7 @@ from typing import Any, Mapping, Sequence
 from .africa_context import profile_defaults_for
 from .arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION
 from .detector_plugins import DetectorCapability, default_detector_capabilities
-from .errors import PolicyError
+from .errors import PolicyError, redact_detail
 from .labels import CANONICAL_LABELS, POLICY_LABELS, normalize_label, policy_label_for
 from .schemas.span import ACTION_VALUES
 
@@ -461,8 +461,12 @@ def canonical_policy_name(name: str | PolicyName) -> str:
     if normalized not in CANONICAL_POLICY_NAMES:
         allowed = ", ".join((*CANONICAL_POLICY_NAMES, *sorted(POLICY_ALIASES)))
         raise PolicyError(
-            f"unknown policy {name!r}; expected one of: {allowed}. Pass a "
-            "documented policy name from list_policies()."
+            f"unknown policy profile; expected one of: {allowed}. Pass a "
+            "documented policy name from list_policies().",
+            details={
+                "argument": "policy",
+                "policy": redact_detail(name),
+            },
         )
     return normalized
 

@@ -29,11 +29,12 @@ from openmed.core.errors import (
     redact_detail,
 )
 from openmed.core.pii import _resolve_deidentification_method
+from openmed.core.policy import canonical_policy_name
 from openmed.multimodal.exceptions import MissingDependencyError as MultimediaMissing
 from openmed.ner.exceptions import MissingDependencyError as NERMissing
 from openmed.processing.text import InputError as ProcessingInputError
 from openmed.utils.gateway import InputValidationError, validate_language
-from openmed.utils.validation import validate_output_format
+from openmed.utils.validation import validate_input, validate_output_format
 
 _ROOT = Path(__file__).resolve().parents[3]
 _FIXTURE = _ROOT / "tests" / "fixtures" / "error_taxonomy.json"
@@ -178,6 +179,24 @@ def test_redact_detail_is_stable_and_never_echoes_raw_text() -> None:
     assert re.fullmatch(r"<redacted bytes=31 sha256=[0-9a-f]{64}>", first)
 
 
+def test_unprintable_values_still_produce_safe_typed_input_errors() -> None:
+    class Unprintable:
+        def __str__(self) -> str:
+            raise RuntimeError("SYNTHETIC_RAW_PHI_SENTINEL_1354")
+
+    value = Unprintable()
+
+    descriptor = redact_detail(value)
+    assert "SYNTHETIC_RAW_PHI_SENTINEL_1354" not in descriptor
+    assert re.fullmatch(r"<redacted bytes=\d+ sha256=[0-9a-f]{64}>", descriptor)
+
+    with pytest.raises(InputError) as raised:
+        validate_input(value)
+
+    serialized = json.dumps(raised.value.to_dict(), sort_keys=True)
+    assert "SYNTHETIC_RAW_PHI_SENTINEL_1354" not in serialized
+
+
 @pytest.mark.parametrize(
     "call",
     [
@@ -212,6 +231,16 @@ def test_invalid_selectors_do_not_echo_untrusted_values(
     raw_phi = "SYNTHETIC_RAW_PHI_SENTINEL_1354"
     with pytest.raises(InputError) as raised:
         call(raw_phi)
+
+    serialized = json.dumps(raised.value.to_dict(), sort_keys=True)
+    assert raw_phi not in serialized
+
+
+def test_invalid_policy_name_does_not_echo_untrusted_value() -> None:
+    raw_phi = "SYNTHETIC_RAW_PHI_SENTINEL_1354"
+
+    with pytest.raises(PolicyError) as raised:
+        canonical_policy_name(raw_phi)
 
     serialized = json.dumps(raised.value.to_dict(), sort_keys=True)
     assert raw_phi not in serialized
