@@ -116,7 +116,7 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   if (trimmed.length === 0) {
     throw new Error(`ONNX Runtime Web ${label} must not be empty.`);
   }
-  if (trimmed.startsWith("//")) {
+  if (trimmed.startsWith("//") || trimmed.startsWith("\\\\")) {
     throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
   }
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
@@ -124,6 +124,22 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   }
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)) {
     if (!trimmed.startsWith("file://")) {
+      throw new Error(
+        `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+      );
+    }
+    let fileUrl: URL;
+    try {
+      fileUrl = new URL(trimmed);
+    } catch {
+      throw new Error(
+        `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+      );
+    }
+    if (
+      (fileUrl.hostname !== "" && fileUrl.hostname !== "localhost") ||
+      fileUrl.pathname.startsWith("//")
+    ) {
       throw new Error(
         `ONNX Runtime Web ${label} must be local/offline, not remote.`,
       );
