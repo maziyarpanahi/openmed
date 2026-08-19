@@ -72,6 +72,9 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
+    "service/backends/remote_inference.py": (
+        "opt-in user-configured KServe V2 remote inference"
+    ),
     "service/openhim_mediator.py": (
         "opt-in OpenHIM mediator registration/heartbeat (user-configured)"
     ),

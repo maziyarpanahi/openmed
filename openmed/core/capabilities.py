@@ -2,7 +2,8 @@
 
 OpenMed ships many optional integrations behind ``pip install openmed[...]``
 extras (``mlx``, ``coreml``, ``onnx``, ``gliner``, ``spacy``, ``presidio``,
-``hf``, ``multimodal``, ``service``, ``mcp``, ...). Historically each seam
+``hf``, ``multimodal``, ``service``, ``triton``, ``mcp``, ...). Historically
+each seam
 guarded its optional imports differently: some raised a bare :class:`ImportError`
 with an ad-hoc message, others raised one of several ``MissingDependencyError``
 variants, and there was no single, importless way to probe which backends are
@@ -196,6 +197,13 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
         modules=("fastapi", "uvicorn"),
         description="FastAPI REST service surface",
         install="fastapi",
+    ),
+    "triton": BackendSpec(
+        name="triton",
+        extra="triton",
+        modules=("grpc", "httpx", "numpy", "transformers", "google"),
+        description="KServe V2 HTTP/gRPC remote inference clients",
+        install="grpcio",
     ),
     "mcp": BackendSpec(
         name="mcp",
