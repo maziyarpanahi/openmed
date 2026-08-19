@@ -25,15 +25,29 @@ class MissingDependencyError(MissingOptionalDependencyError):
             f"Optional dependency '{dependency}' is required for this operation. "
             f"{instruction}"
         )
-        # Bypass the parent's keyword-only constructor to preserve the legacy
-        # message/attributes while remaining part of the shared error family.
-        ImportError.__init__(self, message)
+        super().__init__(
+            package=dependency,
+            feature="This operation",
+        )
+        # Preserve the historical sentence exactly while retaining the shared
+        # taxonomy fields initialized by the parent.
+        self.args = (message,)
+        self.message = message
         self.dependency = dependency
         self.instruction = instruction
-        self.package = dependency
-        self.feature = "This operation"
-        self.extra = None
 
 
 class UnsupportedDocumentError(ValueError):
     """Raised when no handler is registered for a document's file type."""
+
+
+class DocumentGraphError(ValueError):
+    """Raised when a document cannot be converted into a safe graph."""
+
+
+class MalformedDocumentError(DocumentGraphError):
+    """Raised when a document is truncated, invalid, or structurally unsafe."""
+
+
+class EncryptedDocumentError(DocumentGraphError):
+    """Raised when a document requires a password or encrypted content access."""
