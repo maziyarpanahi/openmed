@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decoded source-offset maps, deterministic safety sweeps, image-only PDF
   attachment output, and an explicit isolated `extract-msg` bridge extra for
   optional Outlook MSG input.
+- Added committed Android OpenMedKit release-AAR and offline cold-start budgets,
+  with blocking Gradle/CI gates and measured values in the Android job summary.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
