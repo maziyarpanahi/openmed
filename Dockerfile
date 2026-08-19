@@ -1,22 +1,9 @@
-FROM python:3.11-slim@sha256:9c900dea9e8fb7e16277c179b555cc72d29a352dbc33cff48ad5a0412fd5bfc7
+FROM python:3.11-slim@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
     OPENMED_SERVICE_KEEP_ALIVE=10m
-
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends --only-upgrade \
-        bsdutils \
-        libblkid1 \
-        liblastlog2-2 \
-        libmount1 \
-        libsmartcols1 \
-        libuuid1 \
-        login \
-        mount \
-        util-linux \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
