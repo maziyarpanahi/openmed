@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   WebGPU inference, deterministic local WASM fallback, an audited WGSL
   classification head, Python-reference parity and recall gates, per-device
   warm/cold benchmark records, and real headless-browser coverage.
+- Added local EML header, plain-text, HTML, and attachment PHI redaction with
+  decoded source-offset maps, deterministic safety sweeps, image-only PDF
+  attachment output, and an explicit isolated `extract-msg` bridge extra for
+  optional Outlook MSG input.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
