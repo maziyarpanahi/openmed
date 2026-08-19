@@ -24,6 +24,10 @@ stores = discover_trace_stores(
 )
 ```
 
+Store types are report metadata, so use short, lower-case, PHI-free identifiers
+containing only letters, numbers, dots, underscores, or hyphens. Discovery
+normalizes an invalid caller-supplied label to `custom` instead of returning it.
+
 Discovery is local-only and metadata-only. It uses directory enumeration and
 file metadata, does not open or parse payloads, does not follow symlinks, and
 silently skips missing or unreadable roots and descendants. Results are

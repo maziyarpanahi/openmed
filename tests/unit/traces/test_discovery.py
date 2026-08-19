@@ -135,3 +135,16 @@ def test_trace_store_serialization_has_no_root_or_payload() -> None:
         "file_count": 4,
         "byte_size": 12,
     }
+
+
+def test_sensitive_or_invalid_store_labels_are_not_reported(tmp_path: Path) -> None:
+    root = tmp_path / "traces"
+    root.mkdir()
+    (root / "payload").write_bytes(b"synthetic")
+
+    result = discover_trace_stores({"Synthetic Patient 123": root}, environ={})
+
+    assert result == (TraceStore("custom", 1, 9),)
+    assert "Synthetic Patient 123" not in str(result[0].to_dict())
+    with pytest.raises(ValueError, match="PHI-free identifier"):
+        TraceStore("Synthetic Patient 123", 1, 9)

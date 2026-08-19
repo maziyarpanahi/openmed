@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,7 @@ TRACE_ROOTS_ENV_VAR = "OPENMED_TRACE_ROOTS"
 
 _ALL_PLATFORMS = frozenset({"Darwin", "Linux", "Windows"})
 _DISABLED_VALUES = frozenset({"0", "false", "no", "off", "disabled"})
+_STORE_TYPE_PATTERN = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +104,10 @@ class TraceStore:
     store_type: str
     file_count: int
     byte_size: int
+
+    def __post_init__(self) -> None:
+        if _STORE_TYPE_PATTERN.fullmatch(self.store_type) is None:
+            raise ValueError("store_type must be a PHI-free identifier")
 
     @property
     def size_bytes(self) -> int:
@@ -321,7 +327,9 @@ def _coerce_root_specs(roots: _RootInput) -> Iterable[tuple[str, Path]]:
 
 def _normalize_store_type(store_type: object) -> str:
     normalized = str(store_type).strip().lower()
-    return normalized or "custom"
+    if _STORE_TYPE_PATTERN.fullmatch(normalized) is None:
+        return "custom"
+    return normalized
 
 
 def _measure_root(root: Path) -> tuple[int, int] | None:

@@ -26,6 +26,7 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Local Trace-Store Discovery: guides/trace-discovery.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
