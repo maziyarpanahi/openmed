@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added standard-library HTML/HTM visible-text extraction with source character
+  offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
   audit-key rotation, retired-key verification, surrogate-vault re-keying,
   environment isolation, and file-permission hygiene without serializing keys.
