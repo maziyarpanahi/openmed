@@ -270,6 +270,24 @@ def test_entities_use_callback_bounded_atomic_and_linear_ranges() -> None:
     assert source[start:end] == "&NotEqualTilde;"
 
 
+def test_terminated_partial_entities_use_html5_prefixes_and_exact_offsets() -> None:
+    source = "<p>&ampersand; &copycat; &notit; &boguscat;</p>"
+
+    document = extract_html(source)
+
+    assert document.text == "&ersand; ©cat; ¬it; &boguscat;"
+    for decoded, raw in (("&", "&amp"), ("©", "&copy"), ("¬", "&not")):
+        offset = document.text.index(decoded)
+        start, end = _source_range(document, offset)
+        assert source[start:end] == raw
+    for suffix in ("ersand;", "cat;", "it;"):
+        offset = document.text.index(suffix)
+        assert all(
+            source[slice(*_source_range(document, index))] == document.text[index]
+            for index in range(offset, offset + len(suffix))
+        )
+
+
 def test_long_semicolonless_entity_prefix_work_is_bounded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

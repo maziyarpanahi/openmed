@@ -233,50 +233,41 @@ class _HtmlTextParser(HTMLParser):
         terminated = (
             callback_end < len(self._source) and self._source[callback_end] == ";"
         )
-        if terminated:
-            token = f"&{name};"
-            if f"{name};" in html5:
-                self._append(
-                    html_lib.unescape(token),
-                    start,
-                    callback_end + 1,
-                    kind="reference",
-                    mode="atomic",
-                )
-            else:
-                self._append(
-                    token,
-                    start,
-                    callback_end + 1,
-                    kind="literal_reference",
-                    mode="linear",
-                )
+        token_end = callback_end + int(terminated)
+        if terminated and f"{name};" in html5:
+            self._append(
+                html_lib.unescape(self._source[start:token_end]),
+                start,
+                token_end,
+                kind="reference",
+                mode="atomic",
+            )
             return
 
         prefix = _longest_legacy_entity_prefix(name)
         if prefix is None:
             self._append(
-                f"&{name}",
+                self._source[start:token_end],
                 start,
-                callback_end,
+                token_end,
                 kind="literal_reference",
                 mode="linear",
             )
             return
         atomic_end = start + 1 + len(prefix)
         self._append(
-            html_lib.unescape(f"&{prefix}"),
+            html_lib.unescape(self._source[start:atomic_end]),
             start,
             atomic_end,
             kind="reference",
             mode="atomic",
         )
-        suffix = name[len(prefix) :]
+        suffix = self._source[atomic_end:token_end]
         if suffix:
             self._append(
                 suffix,
                 atomic_end,
-                callback_end,
+                token_end,
                 kind="literal_reference",
                 mode="linear",
             )
