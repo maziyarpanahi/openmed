@@ -110,6 +110,7 @@ nav:
       - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md

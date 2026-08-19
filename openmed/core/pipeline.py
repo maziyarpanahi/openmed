@@ -29,6 +29,7 @@ from .custom_recognizer import (
     build_transliterated_name_recognizer,
     coerce_custom_recognizer,
 )
+from .errors import ConfigurationError, InputError, InternalError
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
@@ -191,7 +192,11 @@ class PipelineResult:
         for result in self.stage_results:
             if result.name == name:
                 return result
-        raise KeyError(name)
+        raise ConfigurationError(
+            "The requested pipeline stage is unavailable. Pass a name from "
+            "Pipeline.stage_names.",
+            details={"supported_stages": list(STAGE_NAMES)},
+        )
 
     def stage_duration_ms(self, name: str) -> float:
         """Return the measured wall-clock duration of ``name`` in milliseconds.
@@ -207,7 +212,11 @@ class PipelineResult:
         it is not charged to any one stage.
         """
         if name not in self.stage_durations_ms:
-            raise KeyError(name)
+            raise ConfigurationError(
+                "No duration was recorded for the requested pipeline stage. "
+                "Pass a completed stage name from stage_durations_ms.",
+                details={"recorded_stages": sorted(self.stage_durations_ms)},
+            )
         return self.stage_durations_ms[name]
 
     def explain(self) -> Any:
@@ -348,9 +357,17 @@ class Pipeline:
         self.indian_multi_id = indian_multi_id
         self.code_mixed = bool(code_mixed)
         if not self.code_mixed and token_language_tags is not None:
-            raise ValueError("token_language_tags requires code_mixed=True")
+            raise ConfigurationError(
+                "token_language_tags requires code_mixed=True. Enable code-mixed "
+                "processing or omit token_language_tags.",
+                details={"argument": "token_language_tags"},
+            )
         if not self.code_mixed and lid_model is not None:
-            raise ValueError("lid_model requires code_mixed=True")
+            raise ConfigurationError(
+                "lid_model requires code_mixed=True. Enable code-mixed processing "
+                "or omit lid_model.",
+                details={"argument": "lid_model"},
+            )
         self.token_language_tags = (
             tuple(token_language_tags) if token_language_tags is not None else None
         )
@@ -405,7 +422,11 @@ class Pipeline:
 
         resolved_data_use_policy = self.data_use_policy or DEFAULT_DATA_USE_POLICY
         if not isinstance(resolved_data_use_policy, DataUsePolicy):
-            raise TypeError("data_use_policy must be a DataUsePolicy")
+            raise ConfigurationError(
+                "data_use_policy must be a DataUsePolicy. Pass a configured "
+                "DataUsePolicy instance or omit the option.",
+                details={"argument": "data_use_policy"},
+            )
         attempted_data_use_actions: list[DataUseAction | str] = [data_use_action]
         if surrogate_vault is not None:
             attempted_data_use_actions.append(DataUseAction.SURROGATE_VAULT)
@@ -963,7 +984,11 @@ class Pipeline:
                 tag.end,
             )
             if start >= end:
-                raise ValueError("token language tag normalized to an empty span")
+                raise InputError(
+                    "A token language tag normalized to an empty span. Check the "
+                    "tag offsets against the original text before retrying.",
+                    details={"start": tag.start, "end": tag.end},
+                )
             normalized_tags.append(CodeMixedTokenTag(start, end, tag.label))
         return tuple(normalized_tags)
 
@@ -1099,9 +1124,10 @@ class Pipeline:
             | USER_SUPPLIED_MODEL_LANGUAGES
         )
         if lang not in accepted_languages:
-            raise ValueError(
-                f"Unsupported language '{lang}'. "
-                f"Supported: {sorted(accepted_languages)}"
+            raise InputError(
+                "The requested language is unsupported. Pass a registered "
+                "language code or register a user-supplied model.",
+                details={"supported_languages": sorted(accepted_languages)},
             )
         model_name = pii._resolve_effective_pii_model(self.model_name, lang)
         return LanguageRoute(
@@ -1444,7 +1470,11 @@ class Pipeline:
             )
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
-            raise RuntimeError("safety sweep must not reduce redacted character count")
+            raise InternalError(
+                "The safety sweep reduced the redacted character count. Stop "
+                "processing and report this invariant failure.",
+                details={"before": before, "after": after},
+            )
         if self.custom_recognizer is not None:
             from . import pii
 

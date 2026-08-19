@@ -40,8 +40,10 @@ import warnings
 from dataclasses import dataclass
 from typing import Final, NoReturn
 
+from .errors import MissingExtraError
 
-class MissingOptionalDependencyError(ImportError):
+
+class MissingOptionalDependencyError(MissingExtraError):
     """Raised when a requested optional capability needs an unavailable package.
 
     This is the canonical, shared "missing extra" error for the whole package.
@@ -59,8 +61,14 @@ class MissingOptionalDependencyError(ImportError):
     ) -> None:
         instruction = install_hint(package, extra)
         super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
+            f"{feature} requires optional dependency '{package}'. {instruction}",
+            package=package,
+            feature=feature,
+            extra=extra,
         )
+        # Keep these assignments local as well as inherited. The static public
+        # API compatibility extractor records constructor-owned attributes and
+        # older releases exposed all three on this concrete class.
         self.package = package
         self.feature = feature
         self.extra = extra

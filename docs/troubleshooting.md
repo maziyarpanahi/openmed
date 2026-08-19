@@ -474,7 +474,7 @@ authentication, TLS at the ingress or reverse proxy, and an exact trusted-host a
 **Symptom.** Launching the MCP server raises:
 
 ```text
-RuntimeError: The MCP SDK is not installed. Install OpenMed with the MCP extra: pip install "openmed[mcp]"
+MissingExtraError: The MCP SDK is not installed. Install OpenMed with the MCP extra: pip install "openmed[mcp]".
 ```
 
 **Cause.** The Model Context Protocol SDK lives in the `mcp` extra.
