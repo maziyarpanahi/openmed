@@ -44,6 +44,7 @@ nav:
       - Service Load Testing & Latency SLOs: serving/load-testing.md
       - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
+      - Kubernetes Model Operator: deploy/operator.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md

@@ -117,6 +117,7 @@ classification:
     - serving/load-testing.md
     - serving/mtls.md
     - deploy/helm.md
+    - deploy/operator.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
