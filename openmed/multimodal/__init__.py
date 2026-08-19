@@ -98,6 +98,14 @@ from .documents_docx import (
 )
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
+from .documents_pdf_layout import (
+    PdfBBox,
+    PdfColumn,
+    PdfPageLayout,
+    PdfReadingOrder,
+    detect_pdf_columns,
+    reconstruct_pdf_reading_order,
+)
 from .documents_pdf_tables import (
     CaptionRegion,
     PdfRegions,
@@ -262,6 +270,12 @@ __all__ = [
     "extract_dicom_sr",
     "walk_sr_content_tree",
     "ProjectedRectangle",
+    "PdfBBox",
+    "PdfColumn",
+    "PdfPageLayout",
+    "PdfReadingOrder",
+    "detect_pdf_columns",
+    "reconstruct_pdf_reading_order",
     "extract_pdf",
     "project_text_spans",
     "BBox",

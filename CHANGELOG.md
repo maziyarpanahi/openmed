@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added conservative two- and three-column PDF reading-order reconstruction,
+  preserving source word bboxes and character-span projection while leaving
+  single-column extraction byte-for-byte compatible with the source-order path.
 - Added deterministic, local redacted-PDF rendering with burned-in opaque
   rectangles, clean non-PHI text-layer reconstruction, global source-text
   removal verification, masked page-layout fidelity reports, synthetic fixtures,
