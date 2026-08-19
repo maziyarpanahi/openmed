@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   batched row envelopes, groups policy-specific calls through `process_batch`,
   emits PHI-safe error replies, and ships synthetic tests, container deployment
   guidance, and registration DDL (#839).
+- Added a deterministic, fully offline `openmed init` project scaffold with
+  researcher, app-developer, and data-engineer presets, bundled OpenMedConfig
+  schema validation, synthetic starter pipelines, and collision-safe reruns.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
