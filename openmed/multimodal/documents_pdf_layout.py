@@ -27,6 +27,7 @@ _MAX_COLUMNS = 3
 _MIN_COLUMN_WORDS = 2
 _MIN_PARALLEL_LINES = 2
 _MIN_COLUMN_FRACTION = 0.20
+_MIN_PAGE_CONTENT_FRACTION = 0.40
 
 
 @dataclass(frozen=True)
@@ -220,6 +221,11 @@ def detect_pdf_columns(
         return _single_column_layout(records, line_count=len(lines))
 
     content_width = max(word.x1 for word in records) - min(word.x0 for word in records)
+    if (
+        page_width is not None
+        and content_width / float(page_width) < _MIN_PAGE_CONTENT_FRACTION
+    ):
+        return _single_column_layout(records, line_count=len(lines))
     scale_width = max(content_width, float(page_width or 0.0), 1.0)
     gap_threshold = _gutter_threshold(records, lines, scale_width)
     gaps = _wide_line_gaps(lines, gap_threshold)
