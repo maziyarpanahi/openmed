@@ -259,6 +259,31 @@ def test_auto_mode_does_not_treat_a_small_two_column_table_as_page_columns(
     assert extract_pdf("table.pdf") == extract_pdf("table.pdf", reading_order="source")
 
 
+def test_auto_mode_does_not_reorder_a_balanced_narrow_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    words = tuple(
+        word
+        for row, top in enumerate((20.0, 40.0, 60.0, 80.0))
+        for word in (
+            _word(f"key-{row}", 15, top, 55),
+            _word(f"value-{row}", 100, top, 145),
+        )
+    )
+    page = _FakePage(words)
+    monkeypatch.setitem(
+        sys.modules,
+        "pdfplumber",
+        SimpleNamespace(open=lambda _path: _FakePdf((page,))),
+    )
+
+    automatic = extract_pdf("balanced-table.pdf")
+    source = extract_pdf("balanced-table.pdf", reading_order="source")
+
+    assert automatic == source
+    assert automatic.text == ("key-0 value-0 key-1 value-1 key-2 value-2 key-3 value-3")
+
+
 def test_real_synthetic_fixture_preserves_column_geometry() -> None:
     pytest.importorskip("pdfplumber")
     fixture = Path(__file__).with_name("fixtures") / "synthetic_phi_twocol.pdf"
