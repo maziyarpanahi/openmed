@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added committed Android OpenMedKit release-AAR and offline cold-start budgets,
   with blocking Gradle/CI gates and measured values in the Android job summary.
+- Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
+  core privacy-pipeline stages, with lazy optional imports, no exporter by
+  default, shared `Timer` measurements, synthetic leakage regression tests, and
+  an `otel` installation extra.
 - Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
   batch processing, FHIR export, and multilingual evaluation, with offline
   execution and committed-output freshness checks in CI.
