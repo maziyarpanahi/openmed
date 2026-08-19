@@ -95,6 +95,7 @@ classification:
     - africa-onboarding.md
     - low-bandwidth-install.md
     - quickstarts.md
+    - cli/openmed-init.md
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
@@ -117,6 +118,7 @@ classification:
     - serving/load-testing.md
     - serving/mtls.md
     - deploy/helm.md
+    - deploy/operator.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
@@ -202,6 +204,7 @@ classification:
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
+    - security/key-management.md
     - integrations-langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
@@ -214,6 +217,7 @@ classification:
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
+    - integrations/warehouse-remote-function.md
     - spark-deidentification.md
     - prefect-integration.md
     - spacy-component.md

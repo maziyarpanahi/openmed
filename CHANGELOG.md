@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
+- Added an offline, versioned key-lifecycle helper and operator guide for
+  audit-key rotation, retired-key verification, surrogate-vault re-keying,
+  environment isolation, and file-permission hygiene without serializing keys.
 - Added conservative two- and three-column PDF reading-order reconstruction,
   preserving source word bboxes and character-span projection while leaving
   single-column extraction byte-for-byte compatible with the source-order path.
@@ -35,6 +38,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a Triton ONNX model-repository generator and configuration-selected
   KServe V2 HTTP/gRPC inference backend with local tokenization and decoding,
   mocked local/remote span-parity coverage, and no bundled serving runtime.
+- Added a Kopf-based Kubernetes model operator with the namespaced
+  `OpenMedModel` CRD, manifest-pointer warm-pool rollouts, lifecycle conditions
+  and Events, retained-version rollback, least-privilege RBAC, hardened
+  deployment assets, operator documentation, and a synthetic fake-API reconcile
+  suite.
+- Added a BigQuery-compatible warehouse remote-function handler that validates
+  batched row envelopes, groups policy-specific calls through `process_batch`,
+  emits PHI-safe error replies, and ships synthetic tests, container deployment
+  guidance, and registration DDL (#839).
+- Added a deterministic, fully offline `openmed init` project scaffold with
+  researcher, app-developer, and data-engineer presets, bundled OpenMedConfig
+  schema validation, synthetic starter pipelines, and collision-safe reruns.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
