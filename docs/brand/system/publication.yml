@@ -165,6 +165,7 @@ classification:
     - examples/notebook-gallery.md
     - document-adapter-provenance.md
     - multimodal/pdf-reading-order.md
+    - multimodal/pdf-redaction-fidelity.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md
     - multimodal/odt-extraction.md

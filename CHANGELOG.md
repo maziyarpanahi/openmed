@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added conservative two- and three-column PDF reading-order reconstruction,
   preserving source word bboxes and character-span projection while leaving
   single-column extraction byte-for-byte compatible with the source-order path.
+- Added deterministic, local redacted-PDF rendering with burned-in opaque
+  rectangles, clean non-PHI text-layer reconstruction, global source-text
+  removal verification, masked page-layout fidelity reports, synthetic fixtures,
+  enforceable regression gates, bounded raster budgets, Type 3 font rejection,
+  and plaintext-free serialized evidence with sanitized render errors.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
