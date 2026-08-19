@@ -127,6 +127,11 @@ from openmed.eval.coverage import (
     grounding_coverage_report,
     update_manifest_script_coverage,
 )
+from openmed.eval.data_license_gate import (
+    DATA_LICENSE_GATE,
+    data_license_gate_errors,
+    evaluate_data_license_gate,
+)
 from openmed.eval.data_provenance import (
     DATASET_PROVENANCE_SCHEMA_VERSION,
     TRAINING_DATA_MANIFEST_SCHEMA_VERSION,
@@ -1623,4 +1628,8 @@ __all__ = [
     "risk_coverage_curve",
     "selective_prediction_report",
     "temperature_scale_probability",
+    # Training-data license gate (OM-095).
+    "DATA_LICENSE_GATE",
+    "data_license_gate_errors",
+    "evaluate_data_license_gate",
 ]
