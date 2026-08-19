@@ -79,6 +79,8 @@ def _extract_cell_output_text(cell: nbformat.NotebookNode) -> str:
             text = out.get("text", "")
             if isinstance(text, list):
                 text = "".join(text)
+            if not _normalize_output_text(text):
+                continue
             text_parts.append(f"stream:{out.get('name', '')}:{text}")
         elif out_type in {"execute_result", "display_data"}:
             data = out.get("data", {})
@@ -116,6 +118,18 @@ def test_extract_cell_output_text_includes_every_mime_payload() -> None:
     assert 'application/json:{"value":3}' in canonical
     assert "text/html:<strong>three</strong>" in canonical
     assert "text/plain:three" in canonical
+
+
+def test_extract_cell_output_text_ignores_empty_stream_records() -> None:
+    """Kernel-specific empty stream records have no visible output semantics."""
+    cell = nbformat.v4.new_code_cell(
+        outputs=[
+            nbformat.v4.new_output("stream", name="stdout", text="ready\n"),
+            nbformat.v4.new_output("stream", name="stdout", text=""),
+            nbformat.v4.new_output("stream", name="stderr", text=" \n"),
+        ]
+    )
+    assert _extract_cell_output_text(cell) == "stream:stdout:ready"
 
 
 def _scan_for_leaks(text: str, filename: str) -> None:

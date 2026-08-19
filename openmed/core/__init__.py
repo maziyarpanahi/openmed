@@ -147,6 +147,13 @@ from .surrogate_vault import (
     VaultConsistencyReport,
     VaultRotationResult,
 )
+from .telemetry import (
+    PipelineTelemetry,
+    StageTelemetry,
+    otel_available,
+    safe_stage_attributes,
+    telemetry_enabled_from_env,
+)
 
 __all__ = [
     "ModelLoader",
@@ -279,4 +286,9 @@ __all__ = [
     "InternalError",
     "InferenceError",
     "redact_detail",
+    "PipelineTelemetry",
+    "StageTelemetry",
+    "otel_available",
+    "safe_stage_attributes",
+    "telemetry_enabled_from_env",
 ]

@@ -80,3 +80,11 @@ documented in [Structured public errors](api/errors.md).
 ## DeidentificationResult
 
 ::: openmed.DeidentificationResult
+
+## PipelineTelemetry
+
+::: openmed.core.telemetry.PipelineTelemetry
+
+## StageTelemetry
+
+::: openmed.core.telemetry.StageTelemetry
