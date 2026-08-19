@@ -9,6 +9,9 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("pdfplumber")
+pytest.importorskip("pikepdf")
+
 from openmed.multimodal import (
     PdfLayoutFidelityError,
     PdfRedactionRegion,
