@@ -15,6 +15,15 @@ SYNTHETIC_NAME = "Synthetic Rowan"
 SYNTHETIC_PHONE = "555-0107"
 
 
+@pytest.mark.parametrize("method", ["aadhaar_mask", "format_preserve"])
+def test_current_deidentification_methods_are_accepted(method: str) -> None:
+    args = main_module.build_parser().parse_args(
+        ["redact-files", "input.txt", "output.txt", "--method", method]
+    )
+
+    assert args.method == method
+
+
 def test_text_file_redaction_reports_phi_free_offsets_and_options(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -11,7 +11,7 @@ import tempfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from openmed.core.config import get_config
 from openmed.core.offline import network_blocked_if_offline
@@ -21,7 +21,24 @@ from openmed.core.policy import canonical_policy_name
 from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit
 
 DEFAULT_PII_MODEL = DEFAULT_PII_MODELS["en"]
-REDACTION_METHODS = ("mask", "remove", "replace", "hash", "shift_dates")
+_FileRedactionMethod = Literal[
+    "mask",
+    "aadhaar_mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
+REDACTION_METHODS: tuple[_FileRedactionMethod, ...] = (
+    "mask",
+    "aadhaar_mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+)
 _FORMAT_ALIASES = {
     "auto": "auto",
     "text": "text",
@@ -295,7 +312,7 @@ def redact_file(
     encoding: str = "utf-8",
     policy: str = "hipaa_safe_harbor",
     lang: str = "en",
-    method: str = "mask",
+    method: _FileRedactionMethod = "mask",
     model_name: str = DEFAULT_PII_MODEL,
     confidence_threshold: float = 0.7,
     keep_year: bool = False,
@@ -398,7 +415,7 @@ def redact_file(
 def _redact_lines(
     source_text: str,
     *,
-    method: str,
+    method: _FileRedactionMethod,
     model_name: str,
     confidence_threshold: float,
     keep_year: bool,
@@ -453,7 +470,7 @@ def _redact_unit(
     *,
     document: int,
     line: int | None,
-    method: str,
+    method: _FileRedactionMethod,
     model_name: str,
     confidence_threshold: float,
     keep_year: bool,
