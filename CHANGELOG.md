@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removal verification, masked page-layout fidelity reports, synthetic fixtures,
   enforceable regression gates, bounded raster budgets, Type 3 font rejection,
   and plaintext-free serialized evidence with sanitized render errors.
+- Added a rooted, backward-compatible public error taxonomy with stable
+  machine-readable codes, actionable PHI-safe diagnostics, REST/MCP mappings,
+  synthetic contract fixtures, and API documentation.
 - Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and

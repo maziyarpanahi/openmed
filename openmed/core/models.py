@@ -76,6 +76,7 @@ if TYPE_CHECKING:
 
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
+from .errors import MissingExtraError, ModelLoadError
 from .model_integrity import prepare_model_reference
 from .model_registry import (
     ModelInfo as RegistryModelInfo,
@@ -120,9 +121,12 @@ class ModelLoader:
         """
         self.config = config or get_config()
         if not HF_AVAILABLE and getattr(self.config, "backend", None) != "onnx":
-            raise ImportError(
-                "HuggingFace transformers is required. "
-                "Install with: pip install transformers"
+            raise MissingExtraError(
+                "HuggingFace transformers is required. Install it with "
+                "`pip install openmed[hf]` or `pip install transformers`.",
+                package="transformers",
+                feature="HuggingFace Transformers inference",
+                extra="hf",
             )
 
         configure_offline_mode(self.config)
@@ -283,9 +287,18 @@ class ModelLoader:
                 "config": config,
             }
 
-        except Exception as e:
-            logger.error("Failed to load model %s: %s", full_model_name, e)
-            raise ValueError(f"Could not load model {full_model_name}: {e}") from e
+        except Exception as exc:
+            logger.error(
+                "Failed to load model %s: error_type=%s",
+                full_model_name,
+                type(exc).__name__,
+            )
+            raise ModelLoadError(
+                f"Could not load model {full_model_name}. Verify the model ID or "
+                "local path, ensure required files are available, and retry.",
+                model_name=full_model_name,
+                details={"error_type": type(exc).__name__},
+            ) from exc
 
     def create_pipeline(
         self,

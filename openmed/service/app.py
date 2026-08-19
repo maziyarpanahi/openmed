@@ -19,6 +19,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 import openmed
+from openmed.core.errors import (
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    OpenMedError,
+    PolicyError,
+)
 from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
@@ -156,12 +166,18 @@ def _result_to_dict(result: Any) -> Dict[str, Any]:
         payload = result.to_dict()
         if isinstance(payload, Mapping):
             return dict(payload)
-        raise TypeError("Result to_dict() must return a mapping.")
+        raise InternalError(
+            "An OpenMed result returned a non-mapping payload. Stop processing "
+            "and report this serialization invariant failure."
+        )
 
     if isinstance(result, Mapping):
         return dict(result)
 
-    raise TypeError("Unsupported result payload type.")
+    raise InternalError(
+        "An OpenMed operation returned an unsupported result type. Stop "
+        "processing and report this serialization invariant failure."
+    )
 
 
 def _parse_grounded_jsonl_text(text: str) -> list[Mapping[str, Any]]:
@@ -178,14 +194,27 @@ def _parse_grounded_jsonl_text(text: str) -> list[Mapping[str, Any]]:
         try:
             payload = json.loads(stripped)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"records_jsonl line {line_number} is not valid JSON"
+            raise InputError(
+                f"records_jsonl line {line_number} is not valid JSON. Correct "
+                "that synthetic record before retrying.",
+                code="bad_request",
+                details={"argument": "records_jsonl", "line": line_number},
             ) from exc
         if not isinstance(payload, Mapping):
-            raise ValueError(f"records_jsonl line {line_number} must be a JSON object")
+            raise InputError(
+                f"records_jsonl line {line_number} must be a JSON object. Replace "
+                "the record with a key-value mapping before retrying.",
+                code="bad_request",
+                details={"argument": "records_jsonl", "line": line_number},
+            )
         records.append(payload)
     if not records:
-        raise ValueError("records_jsonl must contain at least one record")
+        raise InputError(
+            "records_jsonl must contain at least one record. Add a JSON object "
+            "on its own line before retrying.",
+            code="bad_request",
+            details={"argument": "records_jsonl"},
+        )
     return records
 
 
@@ -305,6 +334,35 @@ def _error_response(
         headers=headers,
         content={"error": error},
     )
+
+
+_TAXONOMY_HTTP_STATUS: Dict[type[OpenMedError], int] = {
+    InputError: 400,
+    ConfigurationError: 400,
+    PolicyError: 400,
+    CapabilityError: 503,
+    BudgetExceededError: 503,
+    InternalError: 500,
+    OpenMedError: 500,
+}
+
+
+def _taxonomy_http_status(exc: OpenMedError) -> int:
+    """Return the documented HTTP status for a taxonomy exception."""
+
+    for error_class in type(exc).__mro__:
+        status = _TAXONOMY_HTTP_STATUS.get(error_class)
+        if status is not None:
+            return status
+    return 500
+
+
+def _openmed_error_response(exc: OpenMedError) -> JSONResponse:
+    """Return a stable, PHI-safe service envelope for a public API error."""
+
+    status = _taxonomy_http_status(exc)
+    details = dict(exc.details) if status < 500 else None
+    return _error_response(status, exc.code, exc.message, details=details)
 
 
 def _format_error_field(location: Any) -> str:
@@ -432,14 +490,20 @@ async def _await_with_timeout(
 def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
     batcher = getattr(request.app.state, "analyze_batcher", None)
     if batcher is None:
-        raise RuntimeError("Analyze batcher is not initialized")
+        raise InternalError(
+            "The analyze batcher is not initialized. Restart the service and "
+            "report the startup invariant if it recurs."
+        )
     return batcher
 
 
 def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     batcher = getattr(request.app.state, "pii_extract_batcher", None)
     if batcher is None:
-        raise RuntimeError("PII extract batcher is not initialized")
+        raise InternalError(
+            "The PII extraction batcher is not initialized. Restart the service "
+            "and report the startup invariant if it recurs."
+        )
     return batcher
 
 
@@ -800,14 +864,21 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.exception_handler(OpenMedError)
+    async def _openmed_error_handler(
+        _: Request,
+        exc: OpenMedError,
+    ) -> JSONResponse:
+        return _openmed_error_response(exc)
+
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
-        reason = str(exc)
+        del exc
         return _error_response(
             400,
             "bad_request",
-            reason,
-            details={"reason": reason},
+            "Request arguments are invalid. Correct the request and retry.",
+            details={"reason": "invalid_arguments"},
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -1457,9 +1528,14 @@ def _dispatch_analyze_group(
                 ):
                     batch_results = _analyze_payload_batch(payloads, runtime)
                 if len(batch_results) != len(active_indexes):
-                    raise ValueError(
+                    raise InferenceError(
                         "Analyze batch returned "
-                        f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                        f"{len(batch_results)} results for {len(active_indexes)} "
+                        "jobs. Retry without batching or inspect the model backend.",
+                        details={
+                            "expected_count": len(active_indexes),
+                            "actual_count": len(batch_results),
+                        },
                     )
             except Exception:
                 for index in active_indexes:
@@ -1540,9 +1616,14 @@ def _dispatch_pii_extract_group(
             ):
                 batch_results = _pii_extract_payload_batch(payloads, runtime)
             if len(batch_results) != len(active_indexes):
-                raise ValueError(
+                raise InferenceError(
                     "PII extract batch returned "
-                    f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                    f"{len(batch_results)} results for {len(active_indexes)} "
+                    "jobs. Retry without batching or inspect the model backend.",
+                    details={
+                        "expected_count": len(active_indexes),
+                        "actual_count": len(batch_results),
+                    },
                 )
         except Exception:
             for index in active_indexes:
@@ -1582,7 +1663,12 @@ def _completed_batch_results(
     completed: list[BatchResult[_ServicePayload]] = []
     for result in results:
         if result is None:
-            completed.append(RuntimeError("Batch job did not produce a result"))
+            completed.append(
+                InternalError(
+                    "A batch job produced no result. Retry the request and report "
+                    "this batch invariant if it recurs."
+                )
+            )
         else:
             completed.append(result)
     return completed
@@ -1626,11 +1712,19 @@ def _normalize_batch_predictions(
         return [raw_predictions]
 
     if not isinstance(raw_predictions, list):
-        raise ValueError("Analyze backend returned a non-list batch result")
+        raise InferenceError(
+            "The analyze backend returned a non-list batch result. Retry without "
+            "batching or inspect the model backend."
+        )
     if len(raw_predictions) != expected_count:
-        raise ValueError(
+        raise InferenceError(
             "Analyze backend returned "
-            f"{len(raw_predictions)} results for {expected_count} inputs"
+            f"{len(raw_predictions)} results for {expected_count} inputs. Retry "
+            "without batching or inspect the model backend.",
+            details={
+                "expected_count": expected_count,
+                "actual_count": len(raw_predictions),
+            },
         )
     return list(raw_predictions)
 
@@ -1660,7 +1754,7 @@ def _analyze_payload_batch(
     if tokenizer is not None and effective_max_length is not None:
         try:
             tokenizer.model_max_length = int(effective_max_length)
-        except Exception:
+        except (AttributeError, OverflowError, TypeError, ValueError):
             pass
 
     import time

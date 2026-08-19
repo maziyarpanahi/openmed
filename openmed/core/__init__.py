@@ -9,7 +9,7 @@ from .audit_chain import (
     append_to_chain_file,
     verify_chain,
 )
-from .budget import BudgetExceededError, RequestBudget, coerce_budget
+from .budget import RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
     OpenMedConfig,
@@ -20,6 +20,20 @@ from .config import (
     save_profile,
 )
 from .custom_recognizer import CustomRecognizer
+from .errors import (
+    ERROR_CODES,
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    ModelLoadError,
+    OpenMedError,
+    PolicyError,
+    redact_detail,
+)
 from .hf_hub import (
     CachedModel,
     clear_cached_model,
@@ -236,7 +250,6 @@ __all__ = [
     "segment_by_script",
     "OfflineModeError",
     "RequestBudget",
-    "BudgetExceededError",
     "coerce_budget",
     "prefetch_model",
     "list_cached_models",
@@ -261,6 +274,18 @@ __all__ = [
     "DocumentLanguageDecision",
     "LanguageRouter",
     "PyCLD2LanguageIdentifier",
+    "ERROR_CODES",
+    "OpenMedError",
+    "InputError",
+    "ConfigurationError",
+    "CapabilityError",
+    "MissingExtraError",
+    "ModelLoadError",
+    "PolicyError",
+    "BudgetExceededError",
+    "InternalError",
+    "InferenceError",
+    "redact_detail",
     "PipelineTelemetry",
     "StageTelemetry",
     "otel_available",
