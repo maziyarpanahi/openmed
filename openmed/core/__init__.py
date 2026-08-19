@@ -49,6 +49,7 @@ from .indic_name_match import (
     detect_name_script,
     indic_names_match,
 )
+from .key_lifecycle import KeyLifecycle, KeyMetadata
 from .language_pack import (
     LANGUAGE_PACK_REGISTRY,
     LanguagePack,
@@ -180,6 +181,8 @@ __all__ = [
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "KeyLifecycle",
+    "KeyMetadata",
     "AuditChain",
     "AuditChainEntry",
     "AuditChainSpan",

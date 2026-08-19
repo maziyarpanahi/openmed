@@ -204,6 +204,7 @@ classification:
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
+    - security/key-management.md
     - integrations-langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
