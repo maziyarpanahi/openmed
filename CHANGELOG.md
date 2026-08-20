@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
+- Added deterministic spawn-backed parallel trace-file sharding with fresh
+  per-file stores, stable input-order merging, safe sequential fallback, and
+  PHI-minimized aggregate failure metadata (#2285).
 - Added a streaming, schema-preserving JSONL agent-trace content walker and
   rewriter with explicit string paths, value-free errors, duplicate-key
   rejection, same-file overwrite protection, and caller-supplied local
