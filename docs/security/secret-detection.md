@@ -36,6 +36,8 @@ string passed to the scan.
 - JWT-like values and recognizable GitHub, Slack, Hugging Face, npm, PyPI,
   Google, Stripe, and cloud access-key prefixes;
 - PEM and PGP private-key blocks, including an unmatched private-key header;
+- parameterized AWS Signature Version 4, Digest, and Signature authorization
+  values;
 - secret-looking values assigned to names such as `API_KEY`, `ACCESS_TOKEN`,
   `PASSWORD`, `DATABASE_URL`, `PRIVATE_KEY`, and `CLIENT_SECRET`.
 
@@ -43,6 +45,11 @@ Explicit placeholders such as `<TOKEN>`, `your-api-key`, `replace-me`, and
 runtime references such as `${TOKEN}` are ignored to keep documentation and
 configuration examples from becoming findings. High-entropy text without a
 recognized shape or secret-name context is also ignored deliberately.
+
+Private-key boundaries are scanned in a single pass, and overlap resolution is
+kept ordered without comparing every finding to every other finding. This keeps
+malformed or adversarial trace input from triggering regex backtracking or
+quadratic candidate selection.
 
 ## Safe handling
 

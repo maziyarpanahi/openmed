@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Final
 
@@ -42,7 +43,18 @@ PRIVATE_KEY: Final = "private_key"
 ENVIRONMENT_SECRET: Final = "environment_secret"
 """Category for secret-looking values assigned to configuration names."""
 
+_SECRET_CATEGORIES = frozenset(
+    {
+        ACCESS_KEY,
+        ACCESS_TOKEN,
+        API_KEY,
+        AUTHORIZATION_HEADER,
+        ENVIRONMENT_SECRET,
+        PRIVATE_KEY,
+    }
+)
 _FINGERPRINT_PREFIX = "sha256:"
+_FINGERPRINT_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _MIN_SECRET_VALUE_LENGTH = 8
 _MAX_ENVIRONMENT_VALUE_LENGTH = 4096
 
@@ -80,10 +92,11 @@ class SecretFinding:
             or end <= start
         ):
             raise ValueError("offset must contain a non-empty, non-negative span")
-        if not isinstance(self.category, str) or not self.category:
-            raise ValueError("category must be a non-empty string")
-        if not isinstance(self.fingerprint, str) or not self.fingerprint.startswith(
-            _FINGERPRINT_PREFIX
+        if self.category not in _SECRET_CATEGORIES:
+            raise ValueError("category must be a supported secret category")
+        if (
+            not isinstance(self.fingerprint, str)
+            or _FINGERPRINT_PATTERN.fullmatch(self.fingerprint) is None
         ):
             raise ValueError("fingerprint must use the sha256 format")
         object.__setattr__(self, "offset", (start, end))
@@ -203,16 +216,9 @@ _TOKEN_PATTERNS: tuple[_TokenPattern, ...] = (
     ),
 )
 
-_PRIVATE_KEY_BLOCK_PATTERN = re.compile(
-    r"-----BEGIN (?P<kind>(?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY)-----"
-    r"[\s\S]*?-----END (?P=kind)-----"
-)
-_PGP_PRIVATE_KEY_BLOCK_PATTERN = re.compile(
-    r"-----BEGIN PGP PRIVATE KEY BLOCK-----[\s\S]*?"
-    r"-----END PGP PRIVATE KEY BLOCK-----"
-)
-_PRIVATE_KEY_HEADER_PATTERN = re.compile(
-    r"-----BEGIN (?:(?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY|"
+_PRIVATE_KEY_BOUNDARY_PATTERN = re.compile(
+    r"-----(?P<action>BEGIN|END) "
+    r"(?P<kind>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY|"
     r"PGP PRIVATE KEY BLOCK)-----"
 )
 
@@ -225,13 +231,20 @@ _AUTHORIZATION_HEADER_PATTERN = re.compile(
     r"(?:(?:bearer|basic|token)\s+)?"
     r"(?:\"[^\r\n\"]*\"|'[^\r\n']*'|[^\s,;\]}#]+)"
 )
+_PARAMETERIZED_AUTHORIZATION_HEADER_PATTERN = re.compile(
+    r"(?imx)"
+    r"(?<![A-Za-z0-9_-])"
+    r"(?:authorization|proxy-authorization)"
+    r"\s*:\s*"
+    r"(?P<value>(?:aws4-hmac-sha256|digest|signature)\s+[^\r\n]+)"
+)
 
 _ENVIRONMENT_ASSIGNMENT_PATTERN = re.compile(
     r"(?ix)"
     r"(?<![A-Za-z0-9_-])"
     r"[A-Za-z][A-Za-z0-9_-]{0,95}"
     r"\s*[:=]\s*"
-    r"(?:\"[^\r\n\"]*\"|'[^\r\n']*'|[^\s,;\]}#]+)"
+    r"(?:\"[^\r\n\"]*\"|'[^\r\n']*'|\[[^\r\n\]]*\]|[^\s,;\]}#]+)"
 )
 
 _SECRET_NAME_PARTS = frozenset(
@@ -286,6 +299,13 @@ _EXACT_PLACEHOLDERS = frozenset(
         "<value>",
         "<api-key>",
         "<api_key>",
+        "[api-key]",
+        "[api_key]",
+        "[masked]",
+        "[redacted]",
+        "[secret]",
+        "[token]",
+        "[value]",
     }
 )
 _PLACEHOLDER_PREFIXES = (
@@ -317,8 +337,6 @@ def _is_placeholder(value: str) -> bool:
         return True
     compact = re.sub(r"[\s_-]", "", normalized)
     if compact and len(compact) >= 4 and set(compact) <= {"x", "*", "#"}:
-        return True
-    if normalized.startswith(("<", "[")) and normalized.endswith((">", "]")):
         return True
     return False
 
@@ -473,6 +491,51 @@ def _environment_candidate(text: str, match: re.Match[str]) -> _Candidate | None
     )
 
 
+def _parameterized_header_candidate(
+    text: str,
+    match: re.Match[str],
+) -> _Candidate | None:
+    """Extract a complete parameterized Authorization value."""
+    start, end = match.span("value")
+    start, end = _trim_value_bounds(text, start, end)
+    return _candidate(
+        text,
+        start,
+        end,
+        AUTHORIZATION_HEADER,
+        94,
+    )
+
+
+def _private_key_candidates(text: str) -> list[_Candidate]:
+    """Find private-key blocks and unmatched headers in one linear pass."""
+    candidates: list[_Candidate] = []
+    pending: dict[str, list[tuple[int, int]]] = {}
+
+    for match in _PRIVATE_KEY_BOUNDARY_PATTERN.finditer(text):
+        kind = match.group("kind")
+        if match.group("action") == "BEGIN":
+            pending.setdefault(kind, []).append(match.span())
+            continue
+
+        begins = pending.pop(kind, ())
+        if begins:
+            candidates.append(
+                _Candidate(
+                    start=begins[0][0],
+                    end=match.end(),
+                    category=PRIVATE_KEY,
+                    priority=100,
+                )
+            )
+
+    for spans in pending.values():
+        candidates.extend(
+            _Candidate(start, end, PRIVATE_KEY, 99) for start, end in spans
+        )
+    return candidates
+
+
 def _collect_candidates(text: str) -> list[_Candidate]:
     """Collect deterministic candidates without retaining matched surfaces."""
     candidates: list[_Candidate] = []
@@ -488,31 +551,15 @@ def _collect_candidates(text: str) -> list[_Candidate]:
             if candidate is not None:
                 candidates.append(candidate)
 
-    for pattern in (_PRIVATE_KEY_BLOCK_PATTERN, _PGP_PRIVATE_KEY_BLOCK_PATTERN):
-        for match in pattern.finditer(text):
-            candidate = _candidate(
-                text,
-                *match.span(),
-                PRIVATE_KEY,
-                100,
-                allow_short=True,
-            )
-            if candidate is not None:
-                candidates.append(candidate)
-
-    for match in _PRIVATE_KEY_HEADER_PATTERN.finditer(text):
-        candidate = _candidate(
-            text,
-            *match.span(),
-            PRIVATE_KEY,
-            99,
-            allow_short=True,
-        )
-        if candidate is not None:
-            candidates.append(candidate)
+    candidates.extend(_private_key_candidates(text))
 
     for match in _AUTHORIZATION_HEADER_PATTERN.finditer(text):
         candidate = _header_candidate(text, match)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    for match in _PARAMETERIZED_AUTHORIZATION_HEADER_PATTERN.finditer(text):
+        candidate = _parameterized_header_candidate(text, match)
         if candidate is not None:
             candidates.append(candidate)
 
@@ -522,13 +569,6 @@ def _collect_candidates(text: str) -> list[_Candidate]:
             candidates.append(candidate)
 
     return candidates
-
-
-def _overlaps(candidate: _Candidate, selected: list[_Candidate]) -> bool:
-    return any(
-        candidate.start < other.end and candidate.end > other.start
-        for other in selected
-    )
 
 
 def _select_candidates(candidates: list[_Candidate]) -> list[_Candidate]:
@@ -543,13 +583,21 @@ def _select_candidates(candidates: list[_Candidate]) -> list[_Candidate]:
         ),
     )
     selected: list[_Candidate] = []
+    selected_starts: list[int] = []
     for candidate in ranked:
-        if not _overlaps(candidate, selected):
-            selected.append(candidate)
-    return sorted(
-        selected,
-        key=lambda item: (item.start, item.end, item.category),
-    )
+        insertion_index = bisect_left(selected_starts, candidate.start)
+        overlaps_previous = (
+            insertion_index > 0 and selected[insertion_index - 1].end > candidate.start
+        )
+        overlaps_next = (
+            insertion_index < len(selected)
+            and selected[insertion_index].start < candidate.end
+        )
+        if overlaps_previous or overlaps_next:
+            continue
+        selected.insert(insertion_index, candidate)
+        selected_starts.insert(insertion_index, candidate.start)
+    return selected
 
 
 def _fingerprint(surface: str) -> str:

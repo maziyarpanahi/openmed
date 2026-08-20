@@ -15,6 +15,7 @@ from openmed.core.secrets import (
     ENVIRONMENT_SECRET,
     PRIVATE_KEY,
     SecretDetector,
+    SecretFinding,
     detect_secrets,
 )
 
@@ -84,6 +85,31 @@ def test_detects_private_key_material_as_one_span():
     assert private_key not in json.dumps(finding.to_dict())
 
 
+def test_unmatched_private_key_headers_scale_without_backtracking():
+    header = "-----BEGIN PRIVATE KEY-----\n"
+    findings = detect_secrets(header * 2_000)
+
+    assert len(findings) == 2_000
+    assert all(finding.category == PRIVATE_KEY for finding in findings)
+
+
+def test_detects_parameterized_authorization_value_as_one_span():
+    access_key = "A" + "KIA" + "B" * 16
+    signature = "C" * 64
+    value = (
+        f"AWS4-HMAC-SHA256 Credential={access_key}/20260819/eu/test, "
+        f"SignedHeaders=host, Signature={signature}"
+    )
+    text = f"Authorization: {value}\nnext: safe"
+
+    (finding,) = detect_secrets(text)
+
+    assert finding.category == AUTHORIZATION_HEADER
+    assert finding.offset == (text.index(value), text.index(value) + len(value))
+    assert access_key not in repr(finding)
+    assert signature not in json.dumps(finding.to_dict())
+
+
 def test_detects_environment_secret_without_exposing_assignment_name_or_value():
     value = "synthetic-config-value-" + "Q" * 16
     text = f'OPENMED_API_KEY = "{value}"'
@@ -94,6 +120,15 @@ def test_detects_environment_secret_without_exposing_assignment_name_or_value():
     assert finding.category == ENVIRONMENT_SECRET
     assert finding.offset == (start, start + len(value))
     assert value not in repr(finding.to_dict())
+
+
+def test_bracket_wrapping_does_not_hide_real_environment_secrets():
+    value = "[synthetic-config-value-" + "Q" * 16 + "]"
+    text = f"PASSWORD={value}; FALLBACK_PASSWORD=[REDACTED]"
+
+    (finding,) = detect_secrets(text)
+
+    assert finding.offset == (text.index(value), text.index(value) + len(value))
 
 
 def test_near_miss_placeholders_are_not_reported():
@@ -122,3 +157,11 @@ def test_scan_is_deterministic_and_repeated_values_share_fingerprints():
 def test_rejects_non_text_input_without_echoing_the_value():
     with pytest.raises(TypeError, match="text must be a string"):
         detect_secrets(object())
+
+
+def test_safe_finding_constructor_rejects_untrusted_report_fields():
+    with pytest.raises(ValueError, match="supported secret category"):
+        SecretFinding("synthetic-secret-value", (0, 1), "sha256:" + "a" * 64)
+
+    with pytest.raises(ValueError, match="sha256 format"):
+        SecretFinding(API_KEY, (0, 1), "sha256:synthetic-secret-value")
