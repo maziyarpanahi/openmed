@@ -25,14 +25,20 @@ result = transactional_redact(
 print(result.to_dict())
 ```
 
-The source is read before the redactor runs. The replacement is encoded,
-validated, written to a sibling temporary file, flushed, and synced before
-`os.replace` atomically swaps the directory entry. The temporary file remains
-bound to the descriptor returned by its exclusive creation while it is
-written, avoiding a close-and-reopen pathname window. If redaction, validation,
-source-change detection, temporary-file writing, backup creation, or the
-exchange fails, the source remains unchanged and temporary artifacts are
-removed. A caller interruption follows the same cleanup path.
+The target is bound to an absolute path before callbacks run. The source is
+then read through an audited descriptor; a final symlink is rejected, and both
+the opened descriptor and path entry must identify the same unchanged regular
+file before any source text reaches the redactor. The replacement is normalized
+to a base string, encoded, validated, written to a sibling temporary file,
+flushed, and synced before `os.replace` atomically swaps the directory entry.
+The temporary file remains bound to the descriptor returned by its exclusive
+creation while it is written, avoiding a close-and-reopen pathname window.
+
+If redaction, validation, source-change detection, temporary-file writing,
+backup creation, or the exchange fails before the commit boundary, the source
+remains unchanged and temporary artifacts are removed. If an interruption is
+delivered immediately after the atomic replace has completed, the committed
+replacement is detected and its recovery backup is retained.
 
 Backups are enabled by default. The first backup is named
 `<trace>.bak`; if that path already exists, exclusive creation selects
