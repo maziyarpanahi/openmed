@@ -18,6 +18,10 @@ bytes on every supported platform. It contains package metadata only; source
 text, document identifiers, credentials, and model weights do not belong in
 this file.
 
+The manifest version, Python requirement, license, and required dependency set
+are regression-checked against the package metadata in the same source
+revision. A release or dependency change must update both surfaces together.
+
 ## Default boundary
 
 The component plus the `dependencies.required` list form the complete default
@@ -38,13 +42,16 @@ offline run.
 interoperability adapters. These entries are metadata only and are never
 returned by the default dependency view. Selecting one is an explicit caller
 choice; the Hugging Face client is marked as potentially network-capable and is
-not part of the offline default.
+not part of the offline default. Transformers is marked the same way because a
+model identifier can trigger Hub access unless the caller selects cache-only
+loading.
 
 `dependencies.restricted` and `restricted_assets` document material that the
 standalone bundle must not install or ship. GPL bridges remain subprocess-only,
-and restricted terminology or evaluation corpora remain user-supplied and
-outside the repository. The manifest records their exclusion without copying,
-embedding, or resolving them.
+including both `sdcMicro` and `extract-msg`, and restricted terminology or
+evaluation corpora remain user-supplied and outside the repository. The
+manifest records their exclusion without copying, embedding, or resolving
+them.
 
 ## Privacy-safe diagnostics
 

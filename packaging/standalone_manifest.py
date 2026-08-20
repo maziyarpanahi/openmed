@@ -20,14 +20,16 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol, TypeVar
 
 MANIFEST_FORMAT: Final = "openmed-standalone-redactor"
 MANIFEST_SCHEMA_VERSION: Final = "1.0"
 STANDALONE_PACKAGE_NAME: Final = "openmed-redactor-standalone"
-STANDALONE_PACKAGE_VERSION: Final = "2.0.0"
+STANDALONE_PACKAGE_VERSION: Final = "2.2.0"
 STANDALONE_LICENSE: Final = "Apache-2.0"
 PLATFORM_ANY: Final = "any"
+_MAX_TEXT_LENGTH: Final = 512
+_MAX_PLATFORMS: Final = 16
 
 # These are the only licenses admitted to the default bundle.  The list is
 # deliberately explicit: an unknown license must not silently become part of a
@@ -43,30 +45,42 @@ PERMISSIVE_LICENSES: Final = frozenset(
 RESTRICTED_LICENSES: Final = frozenset(
     {
         "DUA-restricted",
-        "GPL-2.0-only",
+        "GPL-2.0-or-later",
         "GPL-3.0-only",
         "Proprietary",
         "source-available",
     }
 )
+_REQUIRED_REQUIREMENTS: Final = {
+    "faker": "faker>=22.0",
+    "jieba": "jieba>=0.42.1,<0.43",
+    "pysbd": "pysbd>=0.3.4,<0.4",
+    "pyyaml": "pyyaml>=6.0",
+}
 
 
 def _text(value: object, field_name: str) -> str:
     """Normalize required metadata without echoing the supplied value."""
 
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError(f"{field_name} must be a string")
     normalized = value.strip()
-    if not normalized:
-        raise ValueError(f"{field_name} must not be blank")
+    if (
+        not normalized
+        or len(normalized) > _MAX_TEXT_LENGTH
+        or not normalized.isprintable()
+    ):
+        raise ValueError(f"{field_name} must contain safe printable text")
     return normalized
 
 
 def _platforms(value: Sequence[str]) -> tuple[str, ...]:
     """Return a stable, detached tuple of normalized platform tags."""
 
-    if isinstance(value, (str, bytes)):
-        raise TypeError("platforms must be a sequence of strings")
+    if type(value) is not tuple:
+        raise TypeError("platforms must be a tuple of strings")
+    if len(value) > _MAX_PLATFORMS:
+        raise ValueError("platforms contains too many entries")
     normalized = tuple(_text(item, "platform") for item in value)
     if not normalized:
         raise ValueError("platforms must not be empty")
@@ -90,7 +104,7 @@ class ComponentSpec:
         object.__setattr__(self, "license", _text(self.license, "component license"))
         object.__setattr__(self, "purpose", _text(self.purpose, "component purpose"))
         object.__setattr__(self, "platforms", _platforms(self.platforms))
-        if not isinstance(self.network_egress, bool):
+        if type(self.network_egress) is not bool:
             raise TypeError("component network_egress must be a boolean")
 
     def to_dict(self) -> dict[str, object]:
@@ -127,7 +141,7 @@ class DependencySpec:
         object.__setattr__(self, "license", _text(self.license, "dependency license"))
         object.__setattr__(self, "purpose", _text(self.purpose, "dependency purpose"))
         object.__setattr__(self, "platforms", _platforms(self.platforms))
-        if not isinstance(self.network_egress, bool):
+        if type(self.network_egress) is not bool:
             raise TypeError("dependency network_egress must be a boolean")
 
     def to_dict(self) -> dict[str, object]:
@@ -160,7 +174,7 @@ class RestrictedAssetSpec:
         object.__setattr__(self, "purpose", _text(self.purpose, "asset purpose"))
         object.__setattr__(self, "source", _text(self.source, "asset source"))
         object.__setattr__(self, "platforms", _platforms(self.platforms))
-        if not isinstance(self.bundled, bool):
+        if type(self.bundled) is not bool:
             raise TypeError("asset bundled must be a boolean")
 
     def to_dict(self) -> dict[str, object]:
@@ -238,18 +252,27 @@ class StandalonePackageManifest:
         object.__setattr__(
             self, "schema_version", _text(self.schema_version, "schema version")
         )
-        if not isinstance(self.network_egress, bool):
+        if type(self.network_egress) is not bool:
             raise TypeError("manifest network_egress must be a boolean")
 
-        for field_name in (
-            "components",
-            "required_dependencies",
-            "optional_dependencies",
-            "restricted_dependencies",
-            "restricted_assets",
-        ):
-            values = tuple(getattr(self, field_name))
-            object.__setattr__(self, field_name, tuple(sorted(values, key=_entry_name)))
+        collection_types = {
+            "components": ComponentSpec,
+            "required_dependencies": DependencySpec,
+            "optional_dependencies": DependencySpec,
+            "restricted_dependencies": DependencySpec,
+            "restricted_assets": RestrictedAssetSpec,
+        }
+        for field_name, expected_type in collection_types.items():
+            values = getattr(self, field_name)
+            if type(values) is not tuple:
+                raise TypeError(f"{field_name} must be a tuple")
+            if any(type(entry) is not expected_type for entry in values):
+                raise TypeError(f"{field_name} contains an unsupported entry")
+            object.__setattr__(
+                self,
+                field_name,
+                tuple(sorted(values, key=_entry_name)),
+            )
 
     def default_dependencies(self) -> tuple[DependencySpec, ...]:
         """Return exactly the dependencies permitted in the default bundle."""
@@ -310,10 +333,12 @@ class StandalonePackageManifest:
         )
 
 
-def _entry_name(entry: object) -> str:
+def _entry_name(
+    entry: ComponentSpec | DependencySpec | RestrictedAssetSpec,
+) -> str:
     """Return a stable sort key for one known manifest entry."""
 
-    return str(getattr(entry, "name", ""))
+    return entry.name.casefold()
 
 
 def _issue(path: str, reason: str) -> ManifestIssue:
@@ -338,11 +363,30 @@ def _validate_license(
     issues.append(_issue(path, "license is not in the approved manifest policy"))
 
 
+class _NamedPlatformEntry(Protocol):
+    """Structural fields shared by manifest entry records."""
+
+    @property
+    def name(self) -> str:
+        """Return the entry's normalized distribution name."""
+
+        ...
+
+    @property
+    def platforms(self) -> tuple[str, ...]:
+        """Return the entry's normalized platform tags."""
+
+        ...
+
+
+_EntryT = TypeVar("_EntryT", bound=_NamedPlatformEntry)
+
+
 def _validate_entry_collection(
     entries: Sequence[object],
     path: str,
     issues: list[ManifestIssue],
-    expected_type: type[object],
+    expected_type: type[_EntryT],
 ) -> set[str]:
     """Validate entry types and return normalized names for overlap checks."""
 
@@ -370,12 +414,20 @@ def validate_manifest(
     performs no package discovery, filesystem access, or network operation.
     """
 
-    if not isinstance(manifest, StandalonePackageManifest):
+    if type(manifest) is not StandalonePackageManifest:
         return (_issue("manifest", "value has an unsupported type"),)
 
     issues: list[ManifestIssue] = []
     if manifest.schema_version != MANIFEST_SCHEMA_VERSION:
         issues.append(_issue("schema_version", "unsupported schema version"))
+    if manifest.name != STANDALONE_PACKAGE_NAME:
+        issues.append(_issue("name", "unsupported package name"))
+    if manifest.version != STANDALONE_PACKAGE_VERSION:
+        issues.append(_issue("version", "package version is out of sync"))
+    if manifest.license != STANDALONE_LICENSE:
+        issues.append(_issue("license", "package license is out of sync"))
+    if manifest.python_requires != ">=3.10":
+        issues.append(_issue("python_requires", "Python requirement is out of sync"))
     if manifest.platforms != (PLATFORM_ANY,):
         issues.append(_issue("platforms", "manifest must be platform-neutral"))
     if manifest.network_egress:
@@ -404,6 +456,13 @@ def validate_manifest(
                 f"components[{index}].license",
                 issues,
             )
+            if component.version != manifest.version:
+                issues.append(
+                    _issue(
+                        f"components[{index}].version",
+                        "component version differs from package version",
+                    )
+                )
 
     required_names = _validate_entry_collection(
         manifest.required_dependencies,
@@ -428,6 +487,19 @@ def validate_manifest(
         issues.append(_issue("dependencies", "default and opt-in entries overlap"))
     if optional_names & restricted_names:
         issues.append(_issue("dependencies", "optional and restricted entries overlap"))
+
+    required_requirements = {
+        dependency.name.casefold(): dependency.requirement
+        for dependency in manifest.required_dependencies
+        if type(dependency) is DependencySpec
+    }
+    if required_requirements != _REQUIRED_REQUIREMENTS:
+        issues.append(
+            _issue(
+                "dependencies.required",
+                "default requirements differ from the approved project boundary",
+            )
+        )
 
     for index, dependency in enumerate(manifest.required_dependencies):
         if not isinstance(dependency, DependencySpec):
@@ -497,31 +569,39 @@ def get_standalone_manifest() -> StandalonePackageManifest:
 def render_manifest(manifest: StandalonePackageManifest | None = None) -> str:
     """Return canonical JSON for *manifest*, defaulting to the local manifest."""
 
-    return (manifest or STANDALONE_MANIFEST).to_json()
+    if manifest is None:
+        target = STANDALONE_MANIFEST
+    elif type(manifest) is StandalonePackageManifest:
+        target = manifest
+    else:
+        raise ManifestValidationError(
+            (_issue("manifest", "value has an unsupported type"),)
+        )
+    return target.to_json()
 
 
 _REQUIRED_DEPENDENCIES: Final = (
     DependencySpec(
         name="faker",
-        requirement="faker>=22.0",
+        requirement=_REQUIRED_REQUIREMENTS["faker"],
         license="MIT",
         purpose="Deterministic local surrogate generation when explicitly selected.",
     ),
     DependencySpec(
         name="jieba",
-        requirement="jieba>=0.42.1,<0.43",
+        requirement=_REQUIRED_REQUIREMENTS["jieba"],
         license="MIT",
         purpose="Local sentence and token handling for supported Chinese text.",
     ),
     DependencySpec(
         name="pysbd",
-        requirement="pysbd>=0.3.4,<0.4",
+        requirement=_REQUIRED_REQUIREMENTS["pysbd"],
         license="MIT",
         purpose="Local sentence boundary detection.",
     ),
     DependencySpec(
         name="pyyaml",
-        requirement="pyyaml>=6.0",
+        requirement=_REQUIRED_REQUIREMENTS["pyyaml"],
         license="MIT",
         purpose="Reading local policy configuration.",
     ),
@@ -558,14 +638,21 @@ _OPTIONAL_DEPENDENCIES: Final = (
         requirement="transformers>=4.50",
         license="Apache-2.0",
         purpose="Optional local model runtime; never installed by the default bundle.",
+        network_egress=True,
     ),
 )
 
 _RESTRICTED_DEPENDENCIES: Final = (
     DependencySpec(
+        name="extract-msg",
+        requirement="extract-msg>=0.56,<0.57",
+        license="GPL-3.0-only",
+        purpose="Subprocess-only Outlook parser requiring explicit installation.",
+    ),
+    DependencySpec(
         name="sdcMicro",
         requirement="external R package, not a Python dependency",
-        license="GPL-2.0-only",
+        license="GPL-2.0-or-later",
         purpose="Subprocess-only bridge requiring an explicit user installation.",
     ),
 )

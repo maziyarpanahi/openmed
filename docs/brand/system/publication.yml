@@ -116,6 +116,7 @@ classification:
     - serving/kserve-triton.md
     - deploy/hardened-image.md
     - offline-install.md
+    - install/standalone.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
