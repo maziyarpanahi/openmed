@@ -1,5 +1,14 @@
-"""Local-first trace processing utilities."""
+"""Local-first helpers for privacy-safe agent traces."""
 
+from .discovery import (
+    SUPPORTED_TRACE_ROOT_RULES,
+    TRACE_DISCOVERY_ENV_VAR,
+    TRACE_ROOTS_ENV_VAR,
+    TraceRootRule,
+    TraceStore,
+    TraceStoreSummary,
+    discover_trace_stores,
+)
 from .parallel import (
     DEFAULT_TRACE_SHARD_SIZE,
     DEFAULT_TRACE_START_METHOD,
@@ -19,6 +28,9 @@ from .parallel import (
 )
 
 __all__ = [
+    "SUPPORTED_TRACE_ROOT_RULES",
+    "TRACE_DISCOVERY_ENV_VAR",
+    "TRACE_ROOTS_ENV_VAR",
     "DEFAULT_TRACE_SHARD_SIZE",
     "DEFAULT_TRACE_START_METHOD",
     "TraceExecutionError",
@@ -27,9 +39,13 @@ __all__ = [
     "TraceInputError",
     "TracePath",
     "TraceProcessingError",
+    "TraceRootRule",
     "TraceRunResult",
     "TraceShard",
+    "TraceStore",
     "TraceStoreFactory",
+    "TraceStoreSummary",
+    "discover_trace_stores",
     "partition_trace_files",
     "process_trace_files",
     "run_trace_files",
