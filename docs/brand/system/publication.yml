@@ -108,6 +108,7 @@ classification:
     - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
+    - guides/parallel-traces.md
     - guides/streaming-traces.md
     - guides/trace-audit.md
     - reference/trace-fidelity.md

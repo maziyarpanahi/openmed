@@ -35,6 +35,7 @@ nav:
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
+      - Parallel Trace Shards: guides/parallel-traces.md
       - Streaming Trace Redaction: guides/streaming-traces.md
       - Read-only Trace Scan Report: guides/trace-audit.md
       - Trace Replay Fidelity: reference/trace-fidelity.md
