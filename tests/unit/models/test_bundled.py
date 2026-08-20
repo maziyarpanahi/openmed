@@ -5,10 +5,12 @@ from __future__ import annotations
 import socket
 from dataclasses import replace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
 from openmed.core.config import OpenMedConfig
+from openmed.core.models import ModelLoader
 from openmed.core.offline import OfflineModeError
 from openmed.models.bundled import (
     BUNDLED_MODEL_MANIFEST,
@@ -94,6 +96,71 @@ def test_load_uses_registry_key_and_forces_local_only() -> None:
             {"local_files_only": True, "require_integrity": True},
         )
     ]
+
+
+def test_integrity_required_load_does_not_reuse_unverified_memory_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("openmed.core.models.HF_AVAILABLE", True)
+    loader = ModelLoader(OpenMedConfig())
+    full_model_name = BUNDLED_MODEL_MANIFEST.model_id
+    cached_model = Mock(config=Mock())
+    cached_tokenizer = Mock()
+    loader._models[full_model_name] = cached_model
+    loader._tokenizers[full_model_name] = cached_tokenizer
+    local_loading = Mock(return_value={"local_files_only": True})
+    monkeypatch.setattr(loader, "_local_loading_kwargs", local_loading)
+    monkeypatch.setattr(
+        loader,
+        "_prepare_model_reference",
+        Mock(return_value="/verified/synthetic-model"),
+    )
+    monkeypatch.setattr(loader, "_resolve_torch_device", Mock(return_value="cpu"))
+    monkeypatch.setattr(loader, "_resolve_attn_implementation", Mock(return_value=None))
+    monkeypatch.setattr(
+        loader,
+        "_build_load_quantization_config",
+        Mock(return_value=None),
+    )
+
+    verified_config = Mock(
+        num_labels=2,
+        problem_type="token_classification",
+        architectures=["BertForTokenClassification"],
+    )
+    verified_model = Mock(config=verified_config)
+    verified_tokenizer = Mock()
+    auto_config = Mock()
+    auto_config.from_pretrained.return_value = verified_config
+    auto_tokenizer = Mock()
+    auto_model = Mock()
+    auto_model.from_pretrained.return_value = verified_model
+    tokenizer_loader = Mock(return_value=verified_tokenizer)
+    monkeypatch.setattr("openmed.core.models.AutoConfig", auto_config)
+    monkeypatch.setattr("openmed.core.models.AutoTokenizer", auto_tokenizer)
+    monkeypatch.setattr(
+        "openmed.core.models.AutoModelForTokenClassification", auto_model
+    )
+    monkeypatch.setattr("openmed.core.models._ensure_hf_auto_config", Mock())
+    monkeypatch.setattr("openmed.core.models._ensure_hf_auto_tokenizer", Mock())
+    monkeypatch.setattr("openmed.core.models._ensure_hf_auto_model", Mock())
+    monkeypatch.setattr(
+        "openmed.core.models.get_tokenizer_with_loader",
+        tokenizer_loader,
+    )
+
+    result = loader.load_model(
+        BUNDLED_MODEL_MANIFEST.model_key,
+        local_files_only=True,
+        require_integrity=True,
+    )
+
+    assert result["model"] is verified_model
+    assert result["tokenizer"] is verified_tokenizer
+    assert result["model"] is not cached_model
+    assert result["tokenizer"] is not cached_tokenizer
+    assert local_loading.call_count == 2
+    assert tokenizer_loader.call_args.kwargs["refresh_cache"] is True
 
 
 def test_load_rejects_an_explicit_network_fallback() -> None:

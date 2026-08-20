@@ -165,6 +165,13 @@ def prepare_model_reference(
         return str(local_path)
 
     if registry_info is None:
+        if require_integrity:
+            raise ModelIntegrityError(
+                model_reference,
+                expected_sha256="sha256:<required>",
+                actual_sha256="sha256:<unregistered>",
+                reason="the model is not backed by registry integrity metadata",
+            )
         return model_reference
 
     model_id = str(registry_info.model_id)

@@ -169,6 +169,17 @@ def test_required_integrity_rejects_missing_or_skipped_proof(
         )
 
 
+def test_required_integrity_rejects_unregistered_reference(tmp_path: Path) -> None:
+    with pytest.raises(ModelIntegrityError, match="registry integrity metadata"):
+        prepare_model_reference(
+            "OpenMed/unregistered-integrity-fixture",
+            registry_info=None,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+
 def test_strict_mode_rejects_registry_model_without_hash(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

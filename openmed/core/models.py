@@ -204,10 +204,15 @@ class ModelLoader:
                 require_integrity=True,
             )
 
-        # Verify an integrity-required reference before trusting an existing
-        # in-memory cache entry. A model loaded earlier under the permissive
-        # policy must not silently satisfy a strict bundled-model request.
-        if not force_reload and full_model_name in self._models:
+        # A model loaded earlier under the permissive policy must not silently
+        # satisfy a strict bundled-model request. Integrity-required loads are
+        # rebuilt from the just-verified local reference so the in-memory
+        # objects are bound to the verified artifact set.
+        if (
+            not force_reload
+            and not require_integrity
+            and full_model_name in self._models
+        ):
             logger.info("Using cached model: %s", full_model_name)
             return {
                 "model": self._models[full_model_name],
@@ -277,7 +282,7 @@ class ModelLoader:
             tokenizer = get_tokenizer_with_loader(
                 pretrained_reference,
                 AutoTokenizer.from_pretrained,
-                refresh_cache=force_reload,
+                refresh_cache=force_reload or require_integrity,
                 cache_dir=self.config.cache_dir,
                 **pretrained_kwargs,
             )
