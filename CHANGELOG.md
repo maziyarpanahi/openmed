@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publishing, a hardened non-root runtime, persistent cache and read-only model
   mounts, an internal network, bounded logs and processes, a readiness probe,
   and opt-in-only remote integrations (#2372).
+- Added a deterministic synthetic-only de-identification comparator harness
+  with explicit fail-closed fixture provenance, enforced offline execution,
+  bounded inputs, aggregate privacy metrics, resource budgets, and source-safe
+  reports (#2379).
 - Added an opt-in bundled-model manifest and offline bootstrap for the small
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent
