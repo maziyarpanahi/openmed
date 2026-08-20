@@ -26,13 +26,30 @@ from .parallel import (
     run_trace_files,
     run_trace_shards,
 )
+from .tool_calls import (
+    DEFAULT_CONTENT_PATHS,
+    ContentPath,
+    TextRedactor,
+    ToolCallRedactionError,
+    ToolCallRedactionReport,
+    ToolCallRedactionResult,
+    redact_tool_call,
+    redact_tool_call_with_report,
+    redact_tool_calls,
+)
 
 __all__ = [
+    "ContentPath",
+    "DEFAULT_CONTENT_PATHS",
+    "DEFAULT_TRACE_SHARD_SIZE",
+    "DEFAULT_TRACE_START_METHOD",
     "SUPPORTED_TRACE_ROOT_RULES",
     "TRACE_DISCOVERY_ENV_VAR",
     "TRACE_ROOTS_ENV_VAR",
-    "DEFAULT_TRACE_SHARD_SIZE",
-    "DEFAULT_TRACE_START_METHOD",
+    "TextRedactor",
+    "ToolCallRedactionError",
+    "ToolCallRedactionReport",
+    "ToolCallRedactionResult",
     "TraceExecutionError",
     "TraceFileResult",
     "TraceHandler",
@@ -48,6 +65,9 @@ __all__ = [
     "discover_trace_stores",
     "partition_trace_files",
     "process_trace_files",
+    "redact_tool_call",
+    "redact_tool_call_with_report",
+    "redact_tool_calls",
     "run_trace_files",
     "run_trace_shards",
 ]
