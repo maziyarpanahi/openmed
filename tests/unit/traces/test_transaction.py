@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -207,6 +208,82 @@ def test_source_bytes_are_read_from_the_audited_descriptor(
     assert result.changed is True
     assert seen == [SYNTHETIC_VALUE]
     assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+
+
+def test_path_and_descriptor_identity_representations_may_differ(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    original_stat = os.stat
+
+    def stat_with_wide_path_identity(
+        path: str | os.PathLike[str],
+        *,
+        follow_symlinks: bool = True,
+    ) -> os.stat_result:
+        result = original_stat(path, follow_symlinks=follow_symlinks)
+        if Path(path) != target:
+            return result
+        return SimpleNamespace(
+            st_atime_ns=result.st_atime_ns,
+            st_ctime_ns=result.st_ctime_ns,
+            st_dev=result.st_dev + (1 << 64),
+            st_ino=result.st_ino + (1 << 96),
+            st_mode=result.st_mode,
+            st_mtime_ns=result.st_mtime_ns,
+            st_size=result.st_size,
+        )  # type: ignore[return-value]
+
+    monkeypatch.setattr(transaction_module.os, "stat", stat_with_wide_path_identity)
+
+    result = transactional_redact(
+        target,
+        lambda _text: SYNTHETIC_REPLACEMENT,
+        backup=False,
+    )
+
+    assert result.changed is True
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+
+
+def test_descriptor_identity_verification_rejects_a_swapped_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    decoy = tmp_path / "decoy.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    decoy.write_text("SYNTHETIC_DECOY_VALUE", encoding="utf-8")
+    original_open = os.open
+    target_open_count = 0
+    seen: list[str] = []
+
+    def open_decoy_for_verification(
+        path: str | os.PathLike[str],
+        flags: int,
+        mode: int = 0o777,
+    ) -> int:
+        nonlocal target_open_count
+        if Path(path) == target:
+            target_open_count += 1
+            if target_open_count == 2:
+                return original_open(decoy, flags, mode)
+        return original_open(path, flags, mode)
+
+    monkeypatch.setattr(transaction_module.os, "open", open_decoy_for_verification)
+
+    with pytest.raises(TransactionConflictError):
+        transactional_redact(
+            target,
+            lambda text: seen.append(text) or SYNTHETIC_REPLACEMENT,
+            backup=False,
+        )
+
+    assert seen == []
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+    assert decoy.read_text(encoding="utf-8") == "SYNTHETIC_DECOY_VALUE"
 
 
 def test_final_symlink_is_rejected_before_source_text_reaches_redactor(

@@ -405,6 +405,7 @@ def _read_source(path: Path) -> tuple[_FileState, bytes]:
     """Read a regular source through the descriptor whose state is audited."""
 
     descriptor: int | None = None
+    verification_descriptor: int | None = None
     flags = (
         os.O_RDONLY
         | getattr(os, "O_BINARY", 0)
@@ -418,10 +419,24 @@ def _read_source(path: Path) -> tuple[_FileState, bytes]:
         if not stat.S_ISREG(opened_stat.st_mode) or not stat.S_ISREG(path_stat.st_mode):
             raise TransactionReadError("source must be a regular file")
         opened_state = _state_from_stat(opened_stat)
-        if _state_without_atime(_state_from_stat(path_stat)) != _state_without_atime(
-            opened_state
+        source_state = _state_from_stat(path_stat)
+
+        # Python 3.12's path-based stat implementation on Windows can expose a
+        # wider file identity than fstat.  Verify identity through a second
+        # descriptor, where both results use the same representation, and use
+        # only portable fields to bind that descriptor pair to the path stat.
+        verification_descriptor = os.open(os.fspath(path), flags)
+        verification_stat = os.fstat(verification_descriptor)
+        if (
+            not stat.S_ISREG(verification_stat.st_mode)
+            or not os.path.samestat(opened_stat, verification_stat)
+            or _state_without_atime(_state_from_stat(verification_stat))
+            != _state_without_atime(opened_state)
+            or _portable_stat_state(path_stat) != _portable_stat_state(opened_stat)
         ):
             raise TransactionConflictError("source changed during transaction")
+        os.close(verification_descriptor)
+        verification_descriptor = None
 
         with os.fdopen(descriptor, "rb") as handle:
             descriptor = None
@@ -431,8 +446,8 @@ def _read_source(path: Path) -> tuple[_FileState, bytes]:
             opened_state
         ):
             raise TransactionConflictError("source changed during transaction")
-        _assert_source_unchanged(path, opened_state)
-        return opened_state, payload
+        _assert_source_unchanged(path, source_state)
+        return source_state, payload
     except TransactionError:
         raise
     except (KeyboardInterrupt, SystemExit):
@@ -440,6 +455,11 @@ def _read_source(path: Path) -> tuple[_FileState, bytes]:
     except OSError:
         raise TransactionReadError("source could not be read") from None
     finally:
+        if verification_descriptor is not None:
+            try:
+                os.close(verification_descriptor)
+            except OSError:
+                pass
         if descriptor is not None:
             try:
                 os.close(descriptor)
@@ -456,6 +476,16 @@ def _state_from_stat(source_stat: os.stat_result) -> _FileState:
         source_stat.st_ctime_ns,
         source_stat.st_mode,
         source_stat.st_atime_ns,
+    )
+
+
+def _portable_stat_state(source_stat: os.stat_result) -> tuple[int, int, int]:
+    """Return fields consistent across path and descriptor stats."""
+
+    return (
+        stat.S_IFMT(source_stat.st_mode),
+        source_stat.st_size,
+        source_stat.st_mtime_ns,
     )
 
 
