@@ -32,6 +32,22 @@ def _skill_links(path: Path) -> list[tuple[str, Path]]:
     return links
 
 
+def _router_rows() -> list[tuple[list[str], str]]:
+    """Return normalized cue alternatives and their linked skill identifier."""
+    rows: list[tuple[list[str], str]] = []
+    for line in ROUTER.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("|") or "](../" not in line:
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        assert len(cells) == 3, f"unexpected router row: {line}"
+        target = LINK_RE.search(cells[1])
+        assert target is not None, f"router row has no skill link: {line}"
+        skill_id = Path(target.group(1)).parent.name
+        cues = [cue.strip().casefold() for cue in cells[0].split(",")]
+        rows.append((cues, skill_id))
+    return rows
+
+
 def test_router_links_resolve_to_existing_skill_identifiers() -> None:
     """Every local router link must target a shipped ``SKILL.md``."""
     for source in (ROUTER, DOC):
@@ -57,12 +73,35 @@ def test_router_has_all_goal_sections_and_a_privacy_override() -> None:
 
     assert "privacy override" in body.lower()
     lowered = body.lower()
+    normalized = " ".join(body.split())
     assert "no mandatory" in lowered and "network call" in lowered
     assert "case-insensitive substring" in lowered
-    assert "stage order and row order break every tie" in lowered
+    assert "stage order and row order break every tie" in normalized.lower()
     assert "Do not inspect or copy the data payload" in body
     assert "Never echo the request" in body
     assert "matched rule index" in body
+
+
+def test_router_cues_are_explicit_and_unambiguous() -> None:
+    """Cue parsing must not depend on interpreting natural-language conjunctions."""
+    rows = _router_rows()
+    assert rows
+    cues = [cue for row_cues, _skill_id in rows for cue in row_cues]
+
+    assert all(cue and " or " not in cue for cue in cues)
+    assert len(cues) == len(set(cues))
+
+    lab_row = next(
+        index
+        for index, (row_cues, skill_id) in enumerate(rows)
+        if skill_id == "extracting-lab-tables" and "lab table" in row_cues
+    )
+    generic_table_row = next(
+        index
+        for index, (row_cues, skill_id) in enumerate(rows)
+        if skill_id == "ingesting-clinical-documents" and "table" in row_cues
+    )
+    assert lab_row < generic_table_row
 
 
 def test_router_examples_escalate_ambiguous_sensitive_work() -> None:
@@ -73,6 +112,25 @@ def test_router_examples_escalate_ambiguous_sensitive_work() -> None:
         "[deidentifying-clinical-text](../deidentifying-clinical-text/SKILL.md)" in body
     )
     assert "explicitly" in body and "synthetic" in body
+    assert "it is not de-identified" in body
+    assert "negated" in body and "does not count as a safe marker" in body
+
+
+def test_router_safety_markers_fail_closed_on_negation() -> None:
+    """Only fixed positive markers may bypass the privacy override."""
+    body = ROUTER.read_text(encoding="utf-8")
+    normalized = " ".join(body.split())
+    for marker in (
+        "`synthetic input`",
+        "`synthetic note`",
+        "`already de-identified`",
+        "`already deidentified`",
+    ):
+        assert marker in body
+    for negation in ("`no`", "`not`", "`never`", "`unknown`", "`uncertain`"):
+        assert negation in body
+    assert "four normalized words before it" in normalized
+    assert "Treat every ambiguous safety statement as sensitive" in normalized
 
 
 def test_router_applies_intake_before_the_privacy_gate() -> None:

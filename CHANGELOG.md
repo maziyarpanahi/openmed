@@ -55,9 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   membership and size-budget validation, canonical relative links,
   selection-only output, and fail-closed output preflight (#2303).
 - Added the deterministic `ask-openmed` workflow router skill, with a
-  privacy-first override for ambiguous clinical-content requests, fixed
-  intake-to-verification handoff ordering, canonical links to existing skills,
-  and PHI-free route diagnostics (#2304).
+  fail-closed privacy override for ambiguous or negated safety statements,
+  fixed intake-to-verification handoff ordering, canonical links to existing
+  skills, and PHI-free route diagnostics (#2304).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
