@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a role-message training schema adapter with recursive content-path
   redaction, deterministic structure preservation, hashed path diagnostics, and
   fail-closed handling for cycles and unknown parts (#2287).
+- Added a preference-pair training schema adapter with structure-preserving
+  redaction, bounded span reconciliation, validated schema-version reports, and
+  privacy-safe labels and diagnostics (#2288).
 - Added a streaming, schema-preserving JSONL agent-trace content walker and
   rewriter with explicit string paths, value-free errors, duplicate-key
   rejection, same-file overwrite protection, and caller-supplied local
