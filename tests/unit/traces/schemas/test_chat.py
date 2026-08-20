@@ -17,6 +17,10 @@ from openmed.traces.schemas.chat import (
     redact_chat_record,
     redact_chat_record_with_report,
 )
+from openmed.traces.schemas.registry import (
+    AmbiguousSchemaError,
+    TrainingSchemaRegistry,
+)
 
 REPLACEMENTS = {
     "synthetic person": "[PERSON]",
@@ -352,3 +356,18 @@ def test_replacement_iterator_failures_are_value_free() -> None:
         adapter.reconstruct(record, FailingReplacements())
 
     assert sensitive not in str(error.value)
+
+
+def test_role_message_adapter_registers_without_alias_collision() -> None:
+    record = {"messages": [{"role": "user", "content": "synthetic value"}]}
+    adapter = RoleMessageSchemaAdapter()
+    registry = TrainingSchemaRegistry()
+
+    registry.register(adapter)
+
+    assert registry.get("role_messages") is adapter
+    assert registry.walk(record, schema="role_messages") == (
+        (("messages", 0, "content"), "synthetic value"),
+    )
+    with pytest.raises(AmbiguousSchemaError):
+        registry.resolve(record)
