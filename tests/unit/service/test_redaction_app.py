@@ -13,6 +13,7 @@ SYNTHETIC_TEXT = (
     "Patient Synthetic Person, MRN DEMO-001, DOB 02/03/1979, "
     "phone 425-555-0199, email synthetic@example.test."
 )
+SYNTHETIC_SECRET = "synthetic-sensitive-label-0042"
 
 
 def test_text_redaction_is_deterministic_and_reports_aggregate_counts_only() -> None:
@@ -142,3 +143,109 @@ def test_injected_result_keeps_only_redacted_text_and_label_counts() -> None:
         "total_entities": 1,
         "by_label": {"NAME": 1},
     }
+
+
+def test_unknown_injected_labels_are_collapsed_without_exposing_values() -> None:
+    def fake_redactor(_text: str, **_kwargs):
+        return {
+            "redacted_text": "Patient [UNKNOWN]",
+            "entity_counts": {SYNTHETIC_SECRET: 2},
+        }
+
+    with TestClient(create_app(redactor=fake_redactor)) as client:
+        response = client.post("/redact/text", json={"text": SYNTHETIC_TEXT})
+        review = client.get("/review")
+        status = client.get("/status")
+
+    assert response.status_code == 200
+    assert response.json()["summary"]["counts"] == {
+        "total_entities": 2,
+        "by_label": {"UNKNOWN": 2},
+    }
+    assert SYNTHETIC_SECRET not in response.text
+    assert SYNTHETIC_SECRET not in review.text
+    assert SYNTHETIC_SECRET not in status.text
+
+
+def test_result_repr_and_hostile_count_mappings_are_content_free() -> None:
+    class FailingCounts(dict):
+        def items(self):
+            raise RuntimeError(SYNTHETIC_SECRET)
+
+    result = RedactionResult(
+        redacted_text=SYNTHETIC_SECRET,
+        entity_counts=FailingCounts({"NAME": 1}),
+        input_characters=len(SYNTHETIC_SECRET),
+    )
+
+    assert result.entity_counts == {}
+    assert SYNTHETIC_SECRET not in repr(result)
+    assert "output_characters" in repr(result)
+
+
+def test_falsey_callable_redactor_is_not_replaced_by_the_default() -> None:
+    class FalseyRedactor:
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, text: str, **_kwargs) -> RedactionResult:
+            return RedactionResult(
+                redacted_text=text.replace("Synthetic Person", "[CUSTOM]"),
+                entity_counts={"NAME": 1},
+            )
+
+    with TestClient(create_app(redactor=FalseyRedactor())) as client:
+        response = client.post(
+            "/redact/text",
+            json={"text": "Patient Synthetic Person"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["redacted_text"] == "Patient [CUSTOM]"
+
+
+def test_string_subclass_hooks_are_not_used_at_result_boundaries() -> None:
+    class HostileText(str):
+        def __str__(self) -> str:
+            raise AssertionError(SYNTHETIC_SECRET)
+
+        def strip(self, *_args, **_kwargs):
+            raise AssertionError(SYNTHETIC_SECRET)
+
+        def upper(self):
+            raise AssertionError(SYNTHETIC_SECRET)
+
+        def encode(self, *_args, **_kwargs):
+            raise AssertionError(SYNTHETIC_SECRET)
+
+    def fake_redactor(_text: str, **_kwargs) -> RedactionResult:
+        return RedactionResult(
+            redacted_text=HostileText("Patient [NAME]"),
+            entity_counts={HostileText("NAME"): 1},
+        )
+
+    with TestClient(create_app(redactor=fake_redactor)) as client:
+        response = client.post("/redact/text", json={"text": SYNTHETIC_TEXT})
+
+    assert response.status_code == 200
+    assert response.json()["redacted_text"] == "Patient [NAME]"
+    assert response.json()["summary"]["counts"]["by_label"] == {"NAME": 1}
+
+
+def test_file_reads_are_bounded_before_decoding(tmp_path: Path) -> None:
+    input_path = tmp_path / "oversized.txt"
+    output_path = tmp_path / "redacted.txt"
+    input_path.write_bytes(b"x" * 17)
+
+    with TestClient(create_app(max_input_characters=4)) as client:
+        response = client.post(
+            "/redact/file",
+            json={
+                "input_path": str(input_path),
+                "output_path": str(output_path),
+            },
+        )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "input_too_large"
+    assert not output_path.exists()

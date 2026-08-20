@@ -22,11 +22,13 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
+
+from openmed.core.labels import CANONICAL_LABELS
 
 try:
     from pydantic import BaseModel, ConfigDict, Field
@@ -40,13 +42,20 @@ except ImportError:  # pragma: no cover - retained for older service installs
 
 
 DEFAULT_POLICY = "strict_no_leak"
-DEFAULT_METHOD = "mask"
+RedactionMethod = Literal[
+    "mask", "remove", "replace", "hash", "shift_dates", "format_preserve"
+]
+
+DEFAULT_METHOD: RedactionMethod = "mask"
 MAX_TEXT_CHARS = 4_000_000
 MAX_PATH_CHARS = 4_096
-SUPPORTED_METHODS = frozenset(
+SUPPORTED_METHODS: frozenset[RedactionMethod] = frozenset(
     {"mask", "remove", "replace", "hash", "shift_dates", "format_preserve"}
 )
 _SAFE_POLICY = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
+_SAFE_COUNTER_LABELS = frozenset(CANONICAL_LABELS) | frozenset(
+    {"ID", "NAME", "UNKNOWN"}
+)
 
 
 class RedactionServiceError(Exception):
@@ -99,7 +108,7 @@ class RedactionRequest(_RequestModel):
     seed: int = 0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class RedactionResult:
     """Content-free result metadata plus the redacted artifact text."""
 
@@ -108,8 +117,12 @@ class RedactionResult:
     input_characters: int = 0
 
     def __post_init__(self) -> None:
-        if not isinstance(self.redacted_text, str):
+        redacted_text = _plain_text(self.redacted_text)
+        if redacted_text is None:
             raise RedactionServiceError("redaction_failed")
+        if type(self.input_characters) is not int or self.input_characters < 0:
+            raise RedactionServiceError("redaction_failed")
+        object.__setattr__(self, "redacted_text", redacted_text)
         object.__setattr__(self, "entity_counts", _normalize_counts(self.entity_counts))
 
     @property
@@ -117,6 +130,14 @@ class RedactionResult:
         """Return the aggregate number of redacted entities."""
 
         return sum(self.entity_counts.values())
+
+    def __repr__(self) -> str:
+        return (
+            "RedactionResult("
+            f"total_entities={self.total_entities}, "
+            f"input_characters={self.input_characters}, "
+            f"output_characters={len(self.redacted_text)})"
+        )
 
 
 @dataclass(frozen=True)
@@ -149,7 +170,7 @@ class _ReviewState:
         }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class _ArtifactResult:
     """Operation result returned by the service layer."""
 
@@ -191,12 +212,28 @@ _ID_CONTEXT_PATTERN = re.compile(
 )
 
 
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without invoking subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
+
+
 def _normalize_label(value: Any) -> str:
     """Convert a detector label to a bounded, content-free counter key."""
 
-    normalized = re.sub(r"[^A-Z0-9_]+", "_", str(value).strip().upper())
+    plain = _plain_text(value)
+    if plain is None:
+        return "UNKNOWN"
+    normalized = re.sub(r"[^A-Z0-9_]+", "_", plain.strip().upper())
     normalized = normalized.strip("_")[:64]
-    return normalized or "UNKNOWN"
+    if normalized in _SAFE_COUNTER_LABELS:
+        return normalized
+    return "UNKNOWN"
 
 
 def _normalize_counts(value: Any) -> dict[str, int]:
@@ -205,12 +242,20 @@ def _normalize_counts(value: Any) -> dict[str, int]:
     if not isinstance(value, Mapping):
         return {}
     counts: Counter[str] = Counter()
-    for label, count in value.items():
-        if isinstance(count, bool) or not isinstance(count, (int, float)):
+    try:
+        entries = tuple(value.items())
+    except Exception:
+        return {}
+    for entry in entries:
+        try:
+            label, count = entry
+        except Exception:
+            continue
+        if type(count) is not int:
             continue
         if count <= 0:
             continue
-        counts[_normalize_label(label)] += int(count)
+        counts[_normalize_label(label)] += count
     return dict(sorted(counts.items()))
 
 
@@ -226,8 +271,15 @@ def _counts_from_entities(entities: Any) -> dict[str, int]:
     ):
         return {}
     counts: Counter[str] = Counter()
-    for entity in entities:
-        label = _entity_label(entity)
+    try:
+        entries = tuple(entities)
+    except Exception:
+        return {}
+    for entity in entries:
+        try:
+            label = _entity_label(entity)
+        except Exception:
+            continue
         if label is not None:
             counts[_normalize_label(label)] += 1
     return dict(sorted(counts.items()))
@@ -339,7 +391,14 @@ def local_redactor(
     :func:`local_model_redactor` when broader detection is required.
     """
 
-    del policy  # Policy is recorded by the service and passed to model hooks.
+    normalized_text = _plain_text(text)
+    if normalized_text is None:
+        raise RedactionServiceError("invalid_input")
+    _validate_policy(policy)
+    normalized_method = _validate_method(method)
+    if type(seed) is not int:
+        raise RedactionServiceError("redaction_failed")
+    text = normalized_text
     spans = _find_local_spans(text)
     pieces: list[str] = []
     counts: Counter[str] = Counter()
@@ -348,7 +407,7 @@ def local_redactor(
         pieces.append(text[cursor : span.start])
         source = text[span.start : span.end]
         label = _normalize_label(span.label)
-        pieces.append(_replacement_for(label, source, method, seed))
+        pieces.append(_replacement_for(label, source, normalized_method, seed))
         counts[label] += 1
         cursor = span.end
     pieces.append(text[cursor:])
@@ -384,7 +443,7 @@ def local_model_redactor(model_path: str | Path) -> Callable[..., Any]:
 
         return deidentify(
             text,
-            method=method,
+            method=cast(RedactionMethod, method),
             model_name=str(resolved_path),
             confidence_threshold=0.7,
             policy=policy,
@@ -397,26 +456,49 @@ def local_model_redactor(model_path: str | Path) -> Callable[..., Any]:
 
 
 def _validate_policy(value: str) -> str:
-    normalized = value.strip().lower() if isinstance(value, str) else ""
+    plain = _plain_text(value)
+    normalized = plain.strip().lower() if plain is not None else ""
     if not _SAFE_POLICY.fullmatch(normalized):
         raise RedactionServiceError("invalid_policy")
     return normalized
 
 
-def _validate_method(value: str) -> str:
-    normalized = value.strip().lower() if isinstance(value, str) else ""
+def _validate_method(value: str) -> RedactionMethod:
+    plain = _plain_text(value)
+    normalized = plain.strip().lower() if plain is not None else ""
     if normalized not in SUPPORTED_METHODS:
         raise RedactionServiceError("invalid_method")
-    return normalized
+    return cast(RedactionMethod, normalized)
 
 
 def _resolve_path(value: str) -> Path:
-    if not isinstance(value, str) or not value.strip() or "\x00" in value:
+    plain = _plain_text(value)
+    if plain is None or not plain.strip() or "\x00" in plain:
         raise RedactionServiceError("invalid_path")
     try:
-        return Path(value).expanduser().resolve(strict=False)
+        return Path(plain).expanduser().resolve(strict=False)
     except (OSError, RuntimeError, TypeError, ValueError):
         raise RedactionServiceError("invalid_path") from None
+
+
+def _read_utf8_bounded(path: Path, max_characters: int) -> str:
+    """Read at most one UTF-8 character budget without loading an unbounded file."""
+
+    max_bytes = max_characters * 4
+    try:
+        with path.open("rb") as handle:
+            payload = handle.read(max_bytes + 1)
+    except OSError:
+        raise RedactionServiceError("input_unavailable") from None
+    if len(payload) > max_bytes:
+        raise RedactionServiceError("input_too_large")
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeError:
+        raise RedactionServiceError("input_unavailable") from None
+    if len(text) > max_characters:
+        raise RedactionServiceError("input_too_large")
+    return text
 
 
 def _write_artifact(path: Path, text: str) -> str:
@@ -458,8 +540,10 @@ class RedactionService:
         *,
         max_input_characters: int = MAX_TEXT_CHARS,
     ) -> None:
-        if max_input_characters < 1:
+        if type(max_input_characters) is not int or max_input_characters < 1:
             raise ValueError("max_input_characters must be positive")
+        if not callable(redactor):
+            raise ValueError("redactor must be callable")
         self._redactor = redactor
         self._max_input_characters = max_input_characters
         self._lock = threading.Lock()
@@ -505,11 +589,13 @@ class RedactionService:
                 output_characters=len(result.redacted_text),
             )
 
-    def _validate_text(self, text: str) -> None:
-        if not isinstance(text, str) or not text.strip() or "\x00" in text:
+    def _validate_text(self, text: str) -> str:
+        normalized = _plain_text(text)
+        if normalized is None or not normalized.strip() or "\x00" in normalized:
             raise RedactionServiceError("invalid_input")
-        if len(text) > self._max_input_characters:
+        if len(normalized) > self._max_input_characters:
             raise RedactionServiceError("input_too_large")
+        return normalized
 
     def _run_redactor(
         self,
@@ -559,7 +645,7 @@ class RedactionService:
         normalized_method = _validate_method(method)
         self._set_processing(normalized_policy, normalized_method, "text")
         try:
-            self._validate_text(text)
+            text = self._validate_text(text)
             result = self._run_redactor(
                 text,
                 policy=normalized_policy,
@@ -607,11 +693,8 @@ class RedactionService:
                 raise RedactionServiceError("input_output_same")
             if not source.is_file():
                 raise RedactionServiceError("input_unavailable")
-            try:
-                text = source.read_text(encoding="utf-8")
-            except (OSError, UnicodeError):
-                raise RedactionServiceError("input_unavailable") from None
-            self._validate_text(text)
+            text = _read_utf8_bounded(source, self._max_input_characters)
+            text = self._validate_text(text)
             result = self._run_redactor(
                 text,
                 policy=normalized_policy,
@@ -817,8 +900,10 @@ def create_app(
     selected_redactor = redactor
     if local_model_path is not None:
         selected_redactor = local_model_redactor(local_model_path)
+    if selected_redactor is None:
+        selected_redactor = local_redactor
     service = RedactionService(
-        selected_redactor or local_redactor,
+        selected_redactor,
         max_input_characters=max_input_characters,
     )
     app = FastAPI(
