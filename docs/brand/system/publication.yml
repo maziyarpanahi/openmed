@@ -100,6 +100,8 @@ classification:
     - onboarding-india.md
     - agent-usage.md
     - guides/trace-discovery.md
+    - reference/trace-jsonl.md
+    - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md
