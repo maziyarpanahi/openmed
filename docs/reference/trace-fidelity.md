@@ -58,7 +58,10 @@ one spelling per call.
 
 `TraceFidelityReport.to_dict()`, `to_json()`, and `summary()` contain issue
 codes, safe paths, coarse type names, and counts. They never include the input
-or output field values. Useful checks include:
+or output field values. Common structural keys remain readable; nonstandard
+caller-controlled keys are represented by deterministic `key_sha256_...`
+segments so a key containing patient data cannot leak through a failing path
+or configured-path summary. Useful checks include:
 
 ```python
 report.message_order_valid

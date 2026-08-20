@@ -14,9 +14,11 @@ exceptions contain paths, safe type names, and issue codes only.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections import Counter
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
@@ -79,7 +81,68 @@ _LABEL_FIELDS = frozenset(
     }
 )
 _MESSAGE_SEQUENCE_NAMES = frozenset({"messages", "turns"})
-_SAFE_PATH_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,80}$")
+_SAFE_PATH_KEYS = frozenset(
+    {
+        "arguments",
+        "assistant",
+        "calls",
+        "content",
+        "function",
+        "function_call",
+        "function_calls",
+        "input",
+        "items",
+        "message",
+        "messages",
+        "name",
+        "output",
+        "parts",
+        "role",
+        "system",
+        "text",
+        "tool",
+        "tool_call",
+        "tool_calls",
+        "turns",
+        "type",
+        "user",
+        "value",
+    }
+    | _IDENTIFIER_FIELDS
+    | _CALL_REFERENCE_FIELDS
+    | _TIMESTAMP_FIELDS
+    | _LABEL_FIELDS
+)
+_HASHED_PATH_KEY = re.compile(r"^key_sha256_[0-9a-f]{12}$")
+_ISSUE_CODES = frozenset(
+    {
+        "call_linkage",
+        "container_type",
+        "identifier",
+        "message_order",
+        "scalar_type",
+        "scalar_value",
+        "sequence_length",
+        "structure",
+        "timestamp",
+        "training_label",
+    }
+)
+_TYPE_NAMES = frozenset(
+    {
+        "array",
+        "boolean",
+        "integer",
+        "list",
+        "missing",
+        "null",
+        "number",
+        "object",
+        "other",
+        "string",
+        "tuple",
+    }
+)
 
 
 class TraceFidelityError(ValueError):
@@ -103,6 +166,24 @@ class TraceFidelityIssue:
     code: str
     expected_type: str | None = None
     actual_type: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "path", _sanitize_report_path(self.path))
+        object.__setattr__(
+            self,
+            "code",
+            self.code if self.code in _ISSUE_CODES else "structure",
+        )
+        object.__setattr__(
+            self,
+            "expected_type",
+            _sanitize_type_name(self.expected_type),
+        )
+        object.__setattr__(
+            self,
+            "actual_type",
+            _sanitize_type_name(self.actual_type),
+        )
 
     @property
     def kind(self) -> str:
@@ -137,14 +218,24 @@ class TraceFidelityReport:
     schema_version: int = FIDELITY_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        normalized = tuple(sorted(self.issues))
+        try:
+            normalized = tuple(sorted(self.issues))
+            if not all(isinstance(issue, TraceFidelityIssue) for issue in normalized):
+                raise TypeError
+            allowed_paths = tuple(
+                _sanitize_report_path(path) for path in self.allowed_content_paths
+            )
+            checked_scalar_count = _report_count(self.checked_scalar_count)
+            content_field_count = _report_count(self.content_field_count)
+            if type(self.schema_version) is not int or self.schema_version < 1:
+                raise ValueError
+        except Exception:  # noqa: BLE001 - report inputs may contain PHI
+            raise ValueError("trace fidelity report is invalid") from None
         object.__setattr__(self, "issues", normalized)
         object.__setattr__(self, "passed", not normalized)
-        object.__setattr__(
-            self,
-            "allowed_content_paths",
-            tuple(self.allowed_content_paths),
-        )
+        object.__setattr__(self, "allowed_content_paths", allowed_paths)
+        object.__setattr__(self, "checked_scalar_count", checked_scalar_count)
+        object.__setattr__(self, "content_field_count", content_field_count)
 
     def __bool__(self) -> bool:
         """Allow a report to be used directly in a boolean check."""
@@ -410,7 +501,10 @@ def _compare_traces(
     patterns: tuple[TracePath, ...],
 ) -> TraceFidelityReport:
     state = _ComparisonState(patterns=patterns)
-    _compare_value(original, output, (), state, content_mode=False)
+    try:
+        _compare_value(original, output, (), state, content_mode=False)
+    except Exception:  # noqa: BLE001 - trace errors may contain sensitive values
+        state.issue((), "structure")
     issues = tuple(sorted(set(state.issues)))
     return TraceFidelityReport(
         passed=not issues,
@@ -589,12 +683,17 @@ def _fingerprint(
     patterns: tuple[TracePath, ...],
     *,
     content_mode: bool = False,
+    active_ids: frozenset[int] = frozenset(),
 ) -> Any:
     """Build an internal-only shape fingerprint for message order checks."""
 
     content_mode = content_mode or _path_matches(path, patterns)
     kind = _json_kind(value)
     if kind == "object":
+        identity = id(value)
+        if identity in active_ids:
+            return ("cycle",)
+        nested_active_ids = active_ids | {identity}
         return (
             "object",
             tuple(
@@ -605,12 +704,17 @@ def _fingerprint(
                         path + (_path_key(key),),
                         patterns,
                         content_mode=content_mode,
+                        active_ids=nested_active_ids,
                     ),
                 )
                 for key in _stable_keys(value)
             ),
         )
     if kind == "array":
+        identity = id(value)
+        if identity in active_ids:
+            return ("cycle",)
+        nested_active_ids = active_ids | {identity}
         return (
             "array",
             tuple(
@@ -619,6 +723,7 @@ def _fingerprint(
                     path + (index,),
                     patterns,
                     content_mode=content_mode,
+                    active_ids=nested_active_ids,
                 )
                 for index, item in enumerate(value)
             ),
@@ -629,15 +734,7 @@ def _fingerprint(
 
 
 def _same_multiset(left: Sequence[Any], right: Sequence[Any]) -> bool:
-    remaining = list(right)
-    for item in left:
-        for index, candidate in enumerate(remaining):
-            if item == candidate:
-                del remaining[index]
-                break
-        else:
-            return False
-    return not remaining
+    return Counter(left) == Counter(right)
 
 
 def _is_message_sequence(
@@ -665,14 +762,21 @@ def _normalize_content_paths(spec: ContentPathSpec) -> tuple[TracePath, ...]:
         candidates: Iterable[ContentPath] = DEFAULT_CONTENT_FIELDS
     elif isinstance(spec, str):
         candidates = (spec,)
-    elif isinstance(spec, Sequence) and not isinstance(spec, (bytes, bytearray)):
-        items = tuple(spec)
+    elif isinstance(spec, (bytes, bytearray)):
+        raise TypeError("content paths must be strings or path sequences")
+    elif isinstance(spec, Sequence):
+        try:
+            items = tuple(spec)
+        except Exception:  # noqa: BLE001 - configuration may contain PHI
+            raise ValueError("content paths could not be consumed") from None
         if len(items) > 1 and _looks_like_one_path(items):
             candidates = (items,)
         else:
             candidates = items
+    elif isinstance(spec, Iterable):
+        candidates = _safe_content_candidates(spec)
     else:
-        candidates = spec
+        raise TypeError("content paths must be strings or path sequences")
 
     compiled: list[TracePath] = []
     seen: set[TracePath] = set()
@@ -682,6 +786,24 @@ def _normalize_content_paths(spec: ContentPathSpec) -> tuple[TracePath, ...]:
             compiled.append(path)
             seen.add(path)
     return tuple(sorted(compiled, key=_path_sort_key))
+
+
+def _safe_content_candidates(
+    candidates: Iterable[ContentPath],
+) -> Iterator[ContentPath]:
+    """Consume path configuration without exposing iterator exceptions."""
+
+    try:
+        items = iter(candidates)
+    except Exception:  # noqa: BLE001 - configuration may contain PHI
+        raise TypeError("content paths could not be consumed") from None
+    while True:
+        try:
+            yield next(items)
+        except StopIteration:
+            return
+        except Exception:  # noqa: BLE001 - configuration may contain PHI
+            raise ValueError("content paths could not be consumed") from None
 
 
 def _looks_like_one_path(items: Sequence[Any]) -> bool:
@@ -851,13 +973,17 @@ def _contains_key(value: Mapping[Any, Any], key: Any) -> bool:
 
 
 def _safe_key(value: Any) -> str:
-    if isinstance(value, str) and _SAFE_PATH_KEY.fullmatch(value):
+    if isinstance(value, str) and value in _SAFE_PATH_KEYS:
         return value
-    return "<key>"
+    if isinstance(value, str) and _HASHED_PATH_KEY.fullmatch(value):
+        return value
+    internal_value = _safe_internal_value(value)
+    digest = hashlib.sha256(repr(internal_value).encode("utf-8")).hexdigest()[:12]
+    return f"key_sha256_{digest}"
 
 
 def _path_key(value: Any) -> str:
-    return _safe_key(value)
+    return value if isinstance(value, str) else _safe_key(value)
 
 
 def _path_sort_key(path: TracePath) -> tuple[tuple[int, str], ...]:
@@ -878,11 +1004,34 @@ def _format_path(path: Sequence[TracePathPart]) -> str:
             rendered += ".*"
         elif part == "**":
             rendered += ".**"
-        elif _SAFE_PATH_KEY.fullmatch(part):
+        elif part in _SAFE_PATH_KEYS or _HASHED_PATH_KEY.fullmatch(part):
             rendered += f".{part}"
         else:
-            rendered += '["<key>"]'
+            rendered += f".{_safe_key(part)}"
     return rendered
+
+
+def _sanitize_report_path(value: object) -> str:
+    if value == "$":
+        return "$"
+    if not isinstance(value, str):
+        return "$"
+    try:
+        return _format_path(_compile_content_path(value))
+    except Exception:  # noqa: BLE001 - direct report input may contain PHI
+        return "$"
+
+
+def _sanitize_type_name(value: object) -> str | None:
+    if value is None:
+        return None
+    return value if isinstance(value, str) and value in _TYPE_NAMES else "other"
+
+
+def _report_count(value: object) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError("trace fidelity report counts must be non-negative integers")
+    return value
 
 
 # Common descriptive spellings all use the same deterministic implementation.
