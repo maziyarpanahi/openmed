@@ -166,7 +166,11 @@ class ModelLoader:
         return sorted(set(models))
 
     def load_model(
-        self, model_name: str, force_reload: bool = False, **kwargs
+        self,
+        model_name: str,
+        force_reload: bool = False,
+        require_integrity: bool = False,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Load a TokenClassification model and tokenizer.
 
@@ -174,6 +178,8 @@ class ModelLoader:
             model_name: Name of the model to load. Can be just the model name
                        (will prepend org) or full model path.
             force_reload: Whether to force reload even if cached.
+            require_integrity: Fail when the exact cached artifact integrity
+                proof is absent, skipped, or invalid.
             **kwargs: Additional arguments to pass to model loading.
 
         Returns:
@@ -184,8 +190,29 @@ class ModelLoader:
         """
         full_model_name = self._resolve_model_name(model_name)
 
-        # Check cache
-        if not force_reload and full_model_name in self._models:
+        requested_local_loading: Dict[str, Any] | None = None
+        pretrained_reference: str | None = None
+        if require_integrity:
+            requested_local_loading = self._local_loading_kwargs(
+                full_model_name,
+                kwargs,
+            )
+            pretrained_reference = self._prepare_model_reference(
+                model_name,
+                full_model_name,
+                local_only=bool(requested_local_loading.get("local_files_only")),
+                require_integrity=True,
+            )
+
+        # A model loaded earlier under the permissive policy must not silently
+        # satisfy a strict bundled-model request. Integrity-required loads are
+        # rebuilt from the just-verified local reference so the in-memory
+        # objects are bound to the verified artifact set.
+        if (
+            not force_reload
+            and not require_integrity
+            and full_model_name in self._models
+        ):
             logger.info("Using cached model: %s", full_model_name)
             return {
                 "model": self._models[full_model_name],
@@ -193,12 +220,17 @@ class ModelLoader:
                 "config": self._models[full_model_name].config,
             }
 
-        requested_local_loading = self._local_loading_kwargs(full_model_name, kwargs)
-        pretrained_reference = self._prepare_model_reference(
-            model_name,
-            full_model_name,
-            local_only=bool(requested_local_loading.get("local_files_only")),
-        )
+        if requested_local_loading is None:
+            requested_local_loading = self._local_loading_kwargs(
+                full_model_name,
+                kwargs,
+            )
+        if pretrained_reference is None:
+            pretrained_reference = self._prepare_model_reference(
+                model_name,
+                full_model_name,
+                local_only=bool(requested_local_loading.get("local_files_only")),
+            )
 
         try:
             logger.info("Loading model: %s", full_model_name)
@@ -250,7 +282,7 @@ class ModelLoader:
             tokenizer = get_tokenizer_with_loader(
                 pretrained_reference,
                 AutoTokenizer.from_pretrained,
-                refresh_cache=force_reload,
+                refresh_cache=force_reload or require_integrity,
                 cache_dir=self.config.cache_dir,
                 **pretrained_kwargs,
             )
@@ -730,6 +762,7 @@ class ModelLoader:
         resolved_model_name: str,
         *,
         local_only: bool,
+        require_integrity: bool = False,
     ) -> str:
         """Resolve and verify cached artifacts before model construction."""
         registry_info = get_model_info(requested_model_name) or get_model_info(
@@ -741,6 +774,7 @@ class ModelLoader:
             cache_dir=str(self.config.cache_dir),
             local_only=local_only,
             token=getattr(self.config, "hf_token", None),
+            require_integrity=require_integrity,
         )
 
     def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
