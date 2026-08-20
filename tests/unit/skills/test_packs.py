@@ -189,3 +189,98 @@ def test_selection_only_writes_metadata_without_copying_skill_content(
     metadata = json.loads((output_dir / "privacy" / "pack.json").read_text())
     assert metadata["skills"] == ["privacy-skill"]
     assert not (output_dir / "privacy" / "skills").exists()
+
+
+def test_output_inside_skill_sources_is_rejected_before_writing(
+    tmp_path: Path,
+) -> None:
+    builder = _load_builder()
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _write_skill(skills_dir, "privacy-skill")
+    manifest_path = tmp_path / "manifest.json"
+    _write_manifest(manifest_path, [_pack("privacy", ["privacy-skill"])])
+
+    with pytest.raises(builder.PackBuildError, match="outside the skills"):
+        builder.build_from_files(
+            manifest_path,
+            skills_dir,
+            skills_dir / "generated-packs",
+        )
+
+    assert not (skills_dir / "generated-packs").exists()
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="directory symlink behavior differs without Windows developer mode",
+)
+def test_existing_links_must_be_exact_relative_generated_targets(
+    tmp_path: Path,
+) -> None:
+    builder = _load_builder()
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _write_skill(skills_dir, "privacy-skill")
+    manifest_path = tmp_path / "manifest.json"
+    _write_manifest(manifest_path, [_pack("privacy", ["privacy-skill"])])
+    output_dir = tmp_path / "output"
+    links_dir = output_dir / "privacy" / "skills"
+    links_dir.mkdir(parents=True)
+    destination = links_dir / "privacy-skill"
+    destination.symlink_to(
+        (skills_dir / "privacy-skill").resolve(),
+        target_is_directory=True,
+    )
+
+    with pytest.raises(builder.PackBuildError, match="unexpected skill link"):
+        builder.build_from_files(manifest_path, skills_dir, output_dir)
+
+    assert not (output_dir / "privacy" / "pack.json").exists()
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="directory symlink behavior differs without Windows developer mode",
+)
+def test_rebuild_rejects_stale_skill_links_before_rewriting_metadata(
+    tmp_path: Path,
+) -> None:
+    builder = _load_builder()
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _write_skill(skills_dir, "alpha-skill")
+    _write_skill(skills_dir, "zeta-skill")
+    manifest_path = tmp_path / "manifest.json"
+    output_dir = tmp_path / "output"
+    _write_manifest(
+        manifest_path,
+        [_pack("privacy", ["alpha-skill", "zeta-skill"])],
+    )
+    builder.build_from_files(manifest_path, skills_dir, output_dir)
+    metadata_path = output_dir / "privacy" / "pack.json"
+    metadata_before = metadata_path.read_bytes()
+
+    _write_manifest(manifest_path, [_pack("privacy", ["alpha-skill"])])
+    with pytest.raises(builder.PackBuildError, match="stale skill output"):
+        builder.build_from_files(manifest_path, skills_dir, output_dir)
+
+    assert metadata_path.read_bytes() == metadata_before
+
+
+def test_foreign_pack_metadata_is_not_overwritten(tmp_path: Path) -> None:
+    builder = _load_builder()
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _write_skill(skills_dir, "privacy-skill")
+    manifest_path = tmp_path / "manifest.json"
+    _write_manifest(manifest_path, [_pack("privacy", ["privacy-skill"])])
+    pack_dir = tmp_path / "output" / "privacy"
+    pack_dir.mkdir(parents=True)
+    metadata_path = pack_dir / "pack.json"
+    metadata_path.write_text("synthetic foreign content\n", encoding="utf-8")
+
+    with pytest.raises(builder.PackBuildError, match="metadata is not safe"):
+        builder.build_from_files(manifest_path, skills_dir, tmp_path / "output")
+
+    assert metadata_path.read_text(encoding="utf-8") == "synthetic foreign content\n"

@@ -335,6 +335,95 @@ def _ensure_directory(path: Path, label: str) -> None:
         raise PackBuildError(f"could not create {label}") from exc
 
 
+def _resolved_path(path: Path, label: str) -> Path:
+    """Resolve ``path`` for containment checks without exposing it in errors."""
+
+    try:
+        return path.resolve(strict=False)
+    except OSError as exc:
+        raise PackBuildError(f"{label} is not a safe directory") from exc
+
+
+def _expected_link_target(source: Path, destination: Path) -> str:
+    return os.path.relpath(source, destination.parent)
+
+
+def _validate_existing_skill_link(
+    source: Path, destination: Path, pack_id: str
+) -> None:
+    expected_target = _expected_link_target(source, destination)
+    try:
+        actual_target = os.readlink(destination)
+        resolves_to_source = destination.resolve(strict=False) == source.resolve()
+    except OSError as exc:
+        raise PackBuildError(f"pack '{pack_id}' contains an unsafe skill link") from exc
+    if actual_target != expected_target or not resolves_to_source:
+        raise PackBuildError(f"pack '{pack_id}' contains an unexpected skill link")
+
+
+def _validate_existing_metadata(metadata_path: Path, pack_id: str) -> None:
+    if metadata_path.is_symlink() or (
+        metadata_path.exists() and not metadata_path.is_file()
+    ):
+        raise PackBuildError(f"pack '{pack_id}' metadata is not safe")
+    if not metadata_path.exists():
+        return
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PackBuildError(f"pack '{pack_id}' metadata is not safe") from exc
+    if not isinstance(payload, dict) or payload.get("pack_id") != pack_id:
+        raise PackBuildError(f"pack '{pack_id}' metadata is not owned by this pack")
+
+
+def _preflight_pack_directory(
+    pack_dir: Path,
+    report: PackReport,
+    skills: dict[str, Path],
+    *,
+    selection_only: bool,
+) -> None:
+    """Reject foreign or stale output before any pack metadata is rewritten."""
+
+    pack_id = report.pack.identifier
+    if pack_dir.is_symlink() or (pack_dir.exists() and not pack_dir.is_dir()):
+        raise PackBuildError(f"pack '{pack_id}' is not a safe directory")
+    if not pack_dir.exists():
+        return
+
+    try:
+        entries = {entry.name: entry for entry in pack_dir.iterdir()}
+    except OSError as exc:
+        raise PackBuildError(f"could not inspect pack '{pack_id}'") from exc
+
+    allowed_entries = {"pack.json"}
+    if not selection_only:
+        allowed_entries.add("skills")
+    if set(entries) - allowed_entries:
+        raise PackBuildError(f"pack '{pack_id}' contains unexpected output")
+
+    _validate_existing_metadata(pack_dir / "pack.json", pack_id)
+    links_dir = pack_dir / "skills"
+    if selection_only:
+        return
+    if links_dir.is_symlink():
+        raise PackBuildError(f"pack '{pack_id}' skills are not a safe directory")
+    if not links_dir.exists():
+        return
+    if not links_dir.is_dir():
+        raise PackBuildError(f"pack '{pack_id}' skills are not a safe directory")
+
+    expected_skills = set(report.pack.skills)
+    try:
+        links = tuple(links_dir.iterdir())
+    except OSError as exc:
+        raise PackBuildError(f"could not inspect pack '{pack_id}' skills") from exc
+    for destination in links:
+        if destination.name not in expected_skills or not destination.is_symlink():
+            raise PackBuildError(f"pack '{pack_id}' contains stale skill output")
+        _validate_existing_skill_link(skills[destination.name], destination, pack_id)
+
+
 def _write_pack_metadata(
     output_dir: Path, manifest: PackManifest, report: PackReport
 ) -> None:
@@ -369,18 +458,12 @@ def _write_pack_metadata(
 
 def _link_skill(source: Path, destination: Path, pack_id: str) -> None:
     if destination.is_symlink():
-        try:
-            if destination.resolve(strict=False) == source.resolve():
-                return
-        except OSError as exc:
-            raise PackBuildError(
-                f"pack '{pack_id}' contains an unsafe skill link"
-            ) from exc
-        raise PackBuildError(f"pack '{pack_id}' contains an unexpected skill link")
+        _validate_existing_skill_link(source, destination, pack_id)
+        return
     if destination.exists():
         raise PackBuildError(f"pack '{pack_id}' would overwrite an existing skill")
 
-    target = os.path.relpath(source, destination.parent)
+    target = _expected_link_target(source, destination)
     try:
         destination.symlink_to(target, target_is_directory=True)
     except OSError as exc:
@@ -409,13 +492,31 @@ def build_packs(
         raise PackBuildError("unknown pack selection")
 
     skills = discover_skills(skills_dir)
-    _ensure_directory(output_dir, "pack output")
-    built: list[PackReport] = []
+    resolved_skills_dir = _resolved_path(skills_dir, "skills directory")
+    resolved_output_dir = _resolved_path(output_dir, "pack output")
+    if (
+        resolved_output_dir == resolved_skills_dir
+        or resolved_skills_dir in resolved_output_dir.parents
+    ):
+        raise PackBuildError("pack output must be outside the skills directory")
 
-    for report in reports:
+    _ensure_directory(output_dir, "pack output")
+    selected_reports = tuple(
+        report
+        for report in reports
+        if not selected or report.pack.identifier in selected
+    )
+    for report in selected_reports:
+        _preflight_pack_directory(
+            output_dir / report.pack.identifier,
+            report,
+            skills,
+            selection_only=selection_only,
+        )
+
+    built: list[PackReport] = []
+    for report in selected_reports:
         pack_id = report.pack.identifier
-        if selected and pack_id not in selected:
-            continue
         pack_dir = output_dir / pack_id
         _ensure_directory(pack_dir, f"pack '{pack_id}'")
         _write_pack_metadata(output_dir, manifest, report)
