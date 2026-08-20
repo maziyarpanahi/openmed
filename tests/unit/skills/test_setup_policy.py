@@ -89,6 +89,7 @@ def test_setup_skill_has_valid_frontmatter_and_bounded_contract() -> None:
 
 def test_skill_links_to_local_template_and_requires_safe_writing() -> None:
     body = _read(SKILL)
+    normalized = " ".join(body.split())
 
     assert "(assets/DEID-POLICY.template.md)" in body
     assert "DEID-POLICY.md" in body
@@ -101,6 +102,14 @@ def test_skill_links_to_local_template_and_requires_safe_writing() -> None:
     assert "direct child" in body
     assert "Refuse a symlink" in body
     assert "existing non-regular target" in body
+    assert "exactly one occurrence" in body
+    assert "no other" in body and "placeholder" in body
+    assert "sibling temporary file" in body
+    assert "flush and sync" in body
+    assert "atomically" in body and "replace the target" in body
+    assert "recheck the" in body and "immediately before replacement" in body
+    assert "Clean up the temporary file on every failure" in normalized
+    assert "Never print the absolute or parent" in normalized
 
     linked = (SKILL.parent / "assets/DEID-POLICY.template.md").resolve()
     assert linked == TEMPLATE.resolve()
@@ -109,11 +118,15 @@ def test_skill_links_to_local_template_and_requires_safe_writing() -> None:
 
 def test_template_is_versioned_and_contains_only_decision_placeholders() -> None:
     template = _read(TEMPLATE)
-    placeholders = set(PLACEHOLDER_RE.findall(template))
+    placeholder_list = PLACEHOLDER_RE.findall(template)
+    placeholders = set(placeholder_list)
 
     assert "Template version: 1.0" in template
     assert "Policy schema: 1" in template
     assert placeholders == set(DECISION_VALUES)
+    assert len(placeholder_list) == len(DECISION_VALUES)
+    assert template.count("{{") == len(DECISION_VALUES)
+    assert template.count("}}") == len(DECISION_VALUES)
     assert "DRAFT — HUMAN APPROVAL REQUIRED" in template
     assert "Human approval:** `PENDING`" in template
     assert "not a compliance certification" in template

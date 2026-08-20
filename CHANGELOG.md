@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added the local-first `setup-openmed` skill and versioned de-identification
   policy template for collecting five bounded privacy decisions, producing a
-  deterministic review draft, and stopping at an explicit human approval gate
-  before the policy can control a run (#2305).
+  deterministic atomically written review draft with path-free status output,
+  and stopping at an explicit human approval gate before the policy can control
+  a run (#2305).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).

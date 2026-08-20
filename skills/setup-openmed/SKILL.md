@@ -80,17 +80,27 @@ Follow this order exactly:
    - `{{ model_policy }}`
    - `{{ audit_location }}`
 
-   Preserve the template version, section order, checkboxes, and line endings.
-   Do not add a timestamp, random identifier, machine path, user identity,
-   source text, detected span, model output, or free-form rationale.
+   Before substitution, require `Template version: 1.0`, `Policy schema: 1`,
+   and exactly one occurrence of each listed placeholder with no other
+   placeholder. If that contract differs, stop before writing and report only
+   that the template contract is invalid. Preserve the template version,
+   section order, checkboxes, and line endings. Do not add a timestamp, random
+   identifier, machine path, user identity, source text, detected span, model
+   output, or free-form rationale.
 5. Resolve the user-requested project directory and require it to be an
    existing local directory. The output target is exactly its direct child
    `DEID-POLICY.md`; do not accept a different filename or derive one from an
    answer. Refuse a symlink or any existing non-regular target. If a regular
    file already exists, ask for explicit permission before replacing it; never
-   overwrite it implicitly or write through a symlink.
-6. Report only that the draft path was written and that review is pending.
-   Do not print the collected answers or any source payload.
+   overwrite it implicitly or write through a symlink. Render to a uniquely
+   created sibling temporary file, flush and sync its bytes, recheck the
+   resolved parent and target immediately before replacement, and atomically
+   replace the target. If the target appeared after the first check and no
+   replacement was approved, stop. Clean up the temporary file on every
+   failure.
+6. Report only that `DEID-POLICY.md` was written in the requested project
+   directory and that review is pending. Never print the absolute or parent
+   directory path, the collected answers, a source payload, or exception text.
 
 The same five canonical choices and the same template version must produce
 byte-for-byte identical output. Do not use the current time, environment
