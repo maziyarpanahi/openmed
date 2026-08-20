@@ -305,6 +305,10 @@ def _reconstruct_record(
             raise SchemaReconstructionError(
                 "replacement path is not a discovered content path"
             )
+        if path in normalized:
+            raise SchemaReconstructionError(
+                "replacement paths must be unique after normalization"
+            )
         if not isinstance(replacement, str):
             raise SchemaReconstructionError("replacement content must be text")
         normalized[path] = replacement
@@ -884,6 +888,10 @@ def _validated_replacements(
         if path not in known_paths:
             raise SchemaReconstructionError(
                 "replacement path is not a discovered content path"
+            )
+        if path in normalized:
+            raise SchemaReconstructionError(
+                "replacement paths must be unique after normalization"
             )
         if not isinstance(replacement, str):
             raise SchemaReconstructionError("replacement content must be text")

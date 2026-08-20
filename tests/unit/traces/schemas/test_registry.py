@@ -9,6 +9,7 @@ from openmed.traces.schemas.registry import (
     InvalidSchemaError,
     MessagesSchema,
     SchemaMismatchError,
+    SchemaReconstructionError,
     SchemaRegistryError,
     ShareGPTSchema,
     TrainingSchemaRegistry,
@@ -47,6 +48,23 @@ def test_messages_schema_walks_and_reconstructs_without_flattening() -> None:
         "metadata": {"split": "train"},
     }
     assert record["messages"][1]["content"] == "Synthetic user value"
+
+
+def test_reconstruction_rejects_paths_that_collide_after_normalization() -> None:
+    record = {"messages": [{"role": "user", "content": "Synthetic private value"}]}
+    replacements = {
+        ("messages", 0, "content"): "[REDACTED-A]",
+        "messages.0.content": "[REDACTED-B]",
+    }
+
+    with pytest.raises(SchemaReconstructionError, match="must be unique"):
+        TrainingSchemaRegistry().reconstruct(
+            record,
+            replacements,
+            schema="messages",
+        )
+
+    assert record["messages"][0]["content"] == "Synthetic private value"
 
 
 def test_preference_schema_supports_nested_message_and_response_layouts() -> None:
