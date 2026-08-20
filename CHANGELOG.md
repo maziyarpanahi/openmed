@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added bounded-memory streaming redaction for structured trace records and
   NDJSON, with independent record and byte limits, deterministic pseudonyms,
   aggregate-only progress, and local cancellation (#2284).
+- Added a deterministic, read-only local trace privacy inventory with
+  counts-only store, category, and file aggregates; byte ranges; file-status
+  totals; hashed caller-supplied labels; and value-free renderers (#2290).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
