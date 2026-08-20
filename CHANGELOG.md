@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added structure-aware tool-call trace redaction for JSON objects and encoded
   payloads, with caller-controlled content paths, deterministic serialization,
   hashed path-only reports, and a local-only default de-identifier (#2281).
+- Added local credential and secret-token detection for authorization headers,
+  environment values, provider tokens, and private keys, with bounded scanning
+  and value-free, hashed diagnostics (#2283).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
