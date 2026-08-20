@@ -1,5 +1,14 @@
-"""Trace and training-record schema helpers."""
+"""Local-first helpers for privacy-safe agent traces."""
 
+from .discovery import (
+    SUPPORTED_TRACE_ROOT_RULES,
+    TRACE_DISCOVERY_ENV_VAR,
+    TRACE_ROOTS_ENV_VAR,
+    TraceRootRule,
+    TraceStore,
+    TraceStoreSummary,
+    discover_trace_stores,
+)
 from .schemas.preference import (
     CONTENT_FIELDS,
     PREFERENCE_SCHEMA_VERSION,
@@ -20,6 +29,9 @@ from .schemas.preference import (
 __all__ = [
     "CONTENT_FIELDS",
     "PREFERENCE_SCHEMA_VERSION",
+    "SUPPORTED_TRACE_ROOT_RULES",
+    "TRACE_DISCOVERY_ENV_VAR",
+    "TRACE_ROOTS_ENV_VAR",
     "PreferencePair",
     "PreferencePairAdapter",
     "PreferenceRedactionError",
@@ -29,7 +41,11 @@ __all__ = [
     "PreferenceSchemaError",
     "PreferenceSpan",
     "SensitiveSpan",
+    "TraceRootRule",
+    "TraceStore",
+    "TraceStoreSummary",
     "adapt_preference_pair",
+    "discover_trace_stores",
     "redact_preference_dataset",
     "redact_preference_pair",
 ]
