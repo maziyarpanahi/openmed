@@ -37,6 +37,7 @@ nav:
       - REST Tracing: serving/tracing.md
       - Parallel Trace Shards: guides/parallel-traces.md
       - Streaming Trace Redaction: guides/streaming-traces.md
+      - Read-only Trace Scan Report: guides/trace-audit.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
@@ -100,7 +101,9 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Example Notebooks Gallery: examples/notebook-gallery.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
+      - Preference Pair Schema: reference/preference-schema.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
@@ -147,6 +150,7 @@ nav:
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
