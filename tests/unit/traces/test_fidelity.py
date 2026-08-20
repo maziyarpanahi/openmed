@@ -140,6 +140,31 @@ def test_semantic_changes_are_classified_without_values(
     assert SYNTHETIC_CONTENT not in report.to_json()
 
 
+@pytest.mark.parametrize(
+    ("field", "original_value", "replacement", "code"),
+    [
+        ("ids", ["synthetic-id-1"], ["synthetic-id-2"], "identifier"),
+        ("call_ids", ["call-1"], ["call-2"], "call_linkage"),
+        ("timestamp_ms", 1_700_000_000_000, 1_700_000_000_001, "timestamp"),
+        ("score", 1.0, 0.0, "training_label"),
+        ("role", "user", "assistant", "structure"),
+    ],
+)
+def test_broad_content_paths_cannot_mask_semantic_fields(
+    field: str,
+    original_value: object,
+    replacement: object,
+    code: str,
+) -> None:
+    original = {"content": {field: original_value}}
+    output = {"content": {field: replacement}}
+
+    report = verify_trace_fidelity(original, output)
+
+    assert report.passed is False
+    assert report.has_code(code)
+
+
 def test_scalar_type_changes_fail_even_when_the_field_is_declared_content() -> None:
     original = _trace()
     output = copy.deepcopy(original)
@@ -170,6 +195,35 @@ def test_explicit_content_paths_can_be_strict_and_verifier_is_reusable() -> None
     assert first == second
     assert first.passed
     assert configured.allowed_content_fields == ("$.**.content",)
+
+
+def test_segment_tuple_is_one_narrow_path_not_multiple_broad_allow_rules() -> None:
+    original = {"payload": {"prompt": "SYNTHETIC_INPUT", "role": "user"}}
+    output = {"payload": {"prompt": "SYNTHETIC_OUTPUT", "role": "assistant"}}
+
+    report = verify_trace_fidelity(
+        original,
+        output,
+        content_paths=("payload", "prompt"),
+    )
+
+    assert report.passed is False
+    assert report.failing_paths == ("$.payload.role",)
+    assert report.allowed_content_paths == ("$.payload.prompt",)
+
+
+def test_content_path_strings_are_not_whitespace_coerced() -> None:
+    original = {"prompt": "SYNTHETIC_INPUT"}
+    output = {"prompt": "SYNTHETIC_OUTPUT"}
+
+    report = verify_trace_fidelity(
+        original,
+        output,
+        content_paths=" prompt ",
+    )
+
+    assert report.passed is False
+    assert report.failing_paths == ("$.prompt",)
 
 
 def test_assertion_error_contains_no_source_or_output_values() -> None:
@@ -234,17 +288,21 @@ def test_content_path_iteration_errors_are_value_free() -> None:
     assert sensitive not in str(caught.value)
 
 
-def test_content_path_parsing_errors_are_value_free() -> None:
+def test_content_path_string_subclass_hooks_are_not_used() -> None:
     sensitive = "PatientJaneDoe"
 
     class FailingPath(str):
         def strip(self, *args: object) -> str:
             raise RuntimeError(sensitive)
 
-    with pytest.raises(ValueError) as caught:
-        verify_trace_fidelity({}, {}, content_paths=FailingPath("content"))
+    report = verify_trace_fidelity(
+        {"content": "SYNTHETIC_INPUT"},
+        {"content": "SYNTHETIC_OUTPUT"},
+        content_paths=FailingPath("content"),
+    )
 
-    assert sensitive not in str(caught.value)
+    assert report.passed
+    assert sensitive not in report.to_json()
 
 
 def test_direct_issue_path_errors_fail_closed() -> None:
@@ -260,6 +318,29 @@ def test_direct_issue_path_errors_fail_closed() -> None:
     )
 
     assert issue.path == "$"
+
+
+def test_direct_issue_string_subclass_hooks_are_not_used() -> None:
+    sensitive = "PatientJaneDoe"
+
+    class HostileString(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(sensitive)
+
+        def strip(self, *args: object) -> str:
+            del args
+            raise RuntimeError(sensitive)
+
+    issue = TraceFidelityIssue(
+        path=HostileString("$.messages"),
+        code=HostileString("identifier"),
+        expected_type=HostileString("string"),
+        actual_type=HostileString("string"),
+    )
+
+    assert issue.path == "$.messages"
+    assert issue.code == "identifier"
+    assert issue.expected_type == "string"
 
 
 def test_cyclic_inputs_fail_closed_without_recursion_errors() -> None:
