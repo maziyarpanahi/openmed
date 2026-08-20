@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a deterministic, read-only local trace privacy inventory with
   counts-only store, category, and file aggregates; byte ranges; file-status
   totals; hashed caller-supplied labels; and value-free renderers (#2290).
+- Added local-only transactional in-place trace redaction with sibling
+  temporary files, source-consistency checks, exclusive backups, metadata
+  preservation, atomic replacement, cleanup, and value-free errors (#2291).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
