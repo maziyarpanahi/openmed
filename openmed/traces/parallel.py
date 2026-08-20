@@ -360,7 +360,17 @@ def partition_trace_files(
         except TypeError:
             raise TraceInputError("files must be an iterable of paths") from None
 
-    normalized = tuple(_coerce_trace_path(path) for path in raw_files)
+    iterator = iter(raw_files)
+    normalized_items: list[Path] = []
+    while True:
+        try:
+            raw_path = next(iterator)
+        except StopIteration:
+            break
+        except Exception:
+            raise TraceInputError("trace inputs could not be read") from None
+        normalized_items.append(_coerce_trace_path(raw_path))
+    normalized = tuple(normalized_items)
     shards: list[TraceShard] = []
     for shard_id, start in enumerate(range(0, len(normalized), shard_size)):
         end = min(start + shard_size, len(normalized))

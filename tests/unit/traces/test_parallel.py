@@ -61,6 +61,17 @@ def test_partition_preserves_order_and_bounds_shards() -> None:
     assert "files" not in json.dumps(shards[0].to_dict())
 
 
+def test_partition_sanitizes_input_iterator_failures() -> None:
+    def failing_paths():
+        yield Path("synthetic-000.jsonl")
+        raise RuntimeError(SYNTHETIC_SECRET)
+
+    with pytest.raises(parallel.TraceInputError) as raised:
+        partition_trace_files(failing_paths())
+
+    assert SYNTHETIC_SECRET not in str(raised.value)
+
+
 def test_sequential_execution_uses_a_fresh_store_and_input_order(
     tmp_path: Path,
 ) -> None:
