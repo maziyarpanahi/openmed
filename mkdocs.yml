@@ -36,6 +36,7 @@ nav:
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Parallel Trace Shards: guides/parallel-traces.md
+      - Streaming Trace Redaction: guides/streaming-traces.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md

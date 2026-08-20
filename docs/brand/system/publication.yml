@@ -109,6 +109,7 @@ classification:
     - rest-recipes.md
     - serving/tracing.md
     - guides/parallel-traces.md
+    - guides/streaming-traces.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md

@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added local credential and secret-token detection for authorization headers,
   environment values, provider tokens, and private keys, with bounded scanning
   and value-free, hashed diagnostics (#2283).
+- Added bounded-memory streaming redaction for structured trace records and
+  NDJSON, with independent record and byte limits, deterministic pseudonyms,
+  aggregate-only progress, and local cancellation (#2284).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
