@@ -30,7 +30,9 @@ Each pack declares two budgets:
   directories. Symlink targets are not followed while measuring the budget.
 
 The builder rejects missing skill directories, duplicate membership, invalid
-identifiers, and budget overruns before it writes output.
+identifiers, and budget overruns before it writes output. It revalidates both
+file-loaded and in-memory manifests at the write boundary, so a caller cannot
+bypass the identifier and containment rules with precomputed metadata.
 
 ## Validate and build locally
 
@@ -76,7 +78,9 @@ python scripts/skills/build_packs.py \
 
 `pack.json` contains the pack identifier and version, selected stable skill
 identifiers, declared budgets, and the measured byte size. It contains no
-skill body, raw clinical text, or machine-specific absolute path.
+skill body, raw clinical text, or machine-specific absolute path. Metadata is
+written to a sibling temporary file, synced, and atomically replaced so a
+failed rebuild preserves the previous valid selection record.
 
 The existing `install-skills.sh` command continues to install the complete
 catalog. Packs are an opt-in context and installation selection; they do not

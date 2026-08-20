@@ -36,9 +36,10 @@ if not report.passed:
 
 Content values may change, but their shape and scalar types must remain stable.
 Identifiers, timestamps, message order, tool-call identifiers and references,
-and training labels are always compared, including when nested below a broad
-content path. For a nonstandard content field, pass a dotted path or a path
-pattern:
+message roles, and training labels or scores are always compared, including
+when nested below a broad content path. Common plural identifier and call-link
+fields and millisecond/nanosecond timestamp fields receive the same protection.
+For a nonstandard content field, pass a dotted path or a path pattern:
 
 ```python
 report = verify_trace_fidelity(
@@ -50,9 +51,11 @@ report = verify_trace_fidelity(
 
 `*` matches one object key or array item. `**` matches zero or more levels, so
 `**.content` covers nested content fields. An empty list makes the comparison
-strict. The aliases `content_fields`, `allowed_content_fields`, and
-`allowed_paths` are available for callers that use those terms; provide only
-one spelling per call.
+strict. A tuple of path segments, such as `("messages", "*", "prompt")`, is
+one path; use a list when configuring multiple paths. Path segments are matched
+exactly and are not whitespace-normalized. The aliases `content_fields`,
+`allowed_content_fields`, and `allowed_paths` are available for callers that
+use those terms; provide only one spelling per call.
 
 ## Value-free reports
 

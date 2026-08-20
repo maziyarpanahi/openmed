@@ -589,12 +589,8 @@ def _validate_paths(
     normalized = _normalize_field_paths(selections)
     resolved: list[FieldPath] = []
     for path in normalized:
-        joined = ".".join(path)
         safe_path = _safe_path_label(path)
-        if schema.get_field_index(joined) >= 0:
-            actual_path: FieldPath = (joined,)
-        else:
-            actual_path = path
+        actual_path = path
         field_index = schema.get_field_index(actual_path[0])
         if field_index < 0:
             raise ColumnarTraceAdapterError(
@@ -698,7 +694,7 @@ def _normalize_field_paths(
             normalized_part = _plain_text(part)
             if normalized_part is None:
                 raise TypeError("Each text column path must contain only strings")
-            clean_parts.append(normalized_part.strip())
+            clean_parts.append(normalized_part)
         clean = tuple(clean_parts)
         if not clean or any(not part for part in clean):
             raise ValueError("Text column paths must not contain empty fields")

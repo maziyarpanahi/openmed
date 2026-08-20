@@ -39,9 +39,13 @@ _IDENTIFIER_FIELDS = frozenset(
         "request_id",
         "message_id",
         "example_id",
+        "ids",
         "record_id",
         "parent_id",
         "source_id",
+        "uid",
+        "uuid",
+        "uuids",
     }
 )
 _CALL_REFERENCE_FIELDS = frozenset(
@@ -52,11 +56,17 @@ _CALL_REFERENCE_FIELDS = frozenset(
         "parent_call_id",
         "parent_tool_call_id",
         "function_call_id",
+        "call_ids",
+        "tool_call_ids",
+        "tool_use_ids",
+        "function_call_ids",
     }
 )
 _TIMESTAMP_FIELDS = frozenset(
     {
         "timestamp",
+        "timestamp_ms",
+        "timestamp_ns",
         "timestamps",
         "created_at",
         "updated_at",
@@ -76,6 +86,10 @@ _LABEL_FIELDS = frozenset(
         "training_label",
         "training_labels",
         "reward",
+        "score",
+        "scores",
+        "weight",
+        "weights",
         "preference",
         "target_label",
     }
@@ -97,6 +111,9 @@ _SAFE_PATH_KEYS = frozenset(
         "name",
         "output",
         "parts",
+        "payload",
+        "prompt",
+        "response",
         "role",
         "system",
         "text",
@@ -168,11 +185,12 @@ class TraceFidelityIssue:
     actual_type: str | None = None
 
     def __post_init__(self) -> None:
+        normalized_code = _plain_text(self.code)
         object.__setattr__(self, "path", _sanitize_report_path(self.path))
         object.__setattr__(
             self,
             "code",
-            self.code if self.code in _ISSUE_CODES else "structure",
+            normalized_code if normalized_code in _ISSUE_CODES else "structure",
         )
         object.__setattr__(
             self,
@@ -791,7 +809,14 @@ def _normalize_content_paths(spec: ContentPathSpec) -> tuple[TracePath, ...]:
             items = tuple(spec)
         except Exception:  # noqa: BLE001 - configuration may contain PHI
             raise ValueError("content paths could not be consumed") from None
-        if len(items) > 1 and _looks_like_one_path(items):
+        if (
+            isinstance(spec, tuple)
+            and items
+            and _is_path_segment_sequence(items)
+            and not any(_looks_like_path_expression(item) for item in items)
+        ):
+            candidates = (items,)
+        elif len(items) > 1 and _looks_like_one_path(items):
             candidates = (items,)
         else:
             candidates = items
@@ -832,14 +857,31 @@ def _safe_content_candidates(
 
 
 def _looks_like_one_path(items: Sequence[Any]) -> bool:
-    if not items or not all(isinstance(item, (str, int)) for item in items):
+    if not _is_path_segment_sequence(items):
         return False
-    return any(isinstance(item, int) or item in {"*", "**"} for item in items)
+    return any(
+        isinstance(item, int) or _plain_text(item) in {"*", "**"} for item in items
+    )
+
+
+def _is_path_segment_sequence(items: Sequence[Any]) -> bool:
+    return bool(items) and all(
+        not isinstance(item, bool) and isinstance(item, (str, int)) for item in items
+    )
+
+
+def _looks_like_path_expression(value: object) -> bool:
+    text = _plain_text(value)
+    if text is None or text in {"*", "**"}:
+        return False
+    return text.startswith(("$", "/")) or "." in text or "[" in text
 
 
 def _compile_content_path(candidate: ContentPath) -> TracePath:
     if isinstance(candidate, str):
-        text = candidate.strip()
+        text = _plain_text(candidate)
+        if text is None:
+            raise ValueError("content path is invalid")
         if text.startswith("$"):
             text = text[1:]
         if text.startswith("/"):
@@ -873,9 +915,10 @@ def _compile_content_path(candidate: ContentPath) -> TracePath:
                 raise ValueError("content path indexes must be non-negative")
             result.append(part)
             continue
-        if not part:
+        normalized_part = _plain_text(part)
+        if not normalized_part:
             raise ValueError("content path segments must not be empty")
-        result.append(part)
+        result.append(normalized_part)
     return tuple(result)
 
 
@@ -921,10 +964,18 @@ def _semantic_code(path: TracePath) -> str | None:
         for part in fields
     ):
         return "identifier"
-    if any(part in _TIMESTAMP_FIELDS or part.endswith("_at") for part in fields):
+    if any(
+        part in _TIMESTAMP_FIELDS
+        or part.endswith("_at")
+        or part.endswith("_timestamp")
+        or part.startswith("timestamp_")
+        for part in fields
+    ):
         return "timestamp"
     if any(part in _LABEL_FIELDS for part in fields):
         return "training_label"
+    if field == "role":
+        return "structure"
     return None
 
 
@@ -998,17 +1049,22 @@ def _contains_key(value: Mapping[Any, Any], key: Any) -> bool:
 
 
 def _safe_key(value: Any) -> str:
-    if isinstance(value, str) and value in _SAFE_PATH_KEYS:
-        return value
-    if isinstance(value, str) and _HASHED_PATH_KEY.fullmatch(value):
-        return value
-    internal_value = _safe_internal_value(value)
+    normalized_value = _plain_text(value)
+    if normalized_value is not None and normalized_value in _SAFE_PATH_KEYS:
+        return normalized_value
+    if normalized_value is not None and _HASHED_PATH_KEY.fullmatch(normalized_value):
+        return normalized_value
+    internal_value = (
+        normalized_value
+        if normalized_value is not None
+        else _safe_internal_value(value)
+    )
     digest = hashlib.sha256(repr(internal_value).encode("utf-8")).hexdigest()[:12]
     return f"key_sha256_{digest}"
 
 
 def _path_key(value: Any) -> str:
-    return value if isinstance(value, str) else _safe_key(value)
+    return _plain_text(value) or _safe_key(value)
 
 
 def _path_sort_key(path: TracePath) -> tuple[tuple[int, str], ...]:
@@ -1038,11 +1094,12 @@ def _format_path(path: Sequence[TracePathPart]) -> str:
 
 def _sanitize_report_path(value: object) -> str:
     try:
-        if value == "$":
+        normalized_value = _plain_text(value)
+        if normalized_value == "$":
             return "$"
-        if not isinstance(value, str):
+        if normalized_value is None:
             return "$"
-        return _format_path(_compile_content_path(value))
+        return _format_path(_compile_content_path(normalized_value))
     except Exception:  # noqa: BLE001 - direct report input may contain PHI
         return "$"
 
@@ -1050,7 +1107,19 @@ def _sanitize_report_path(value: object) -> str:
 def _sanitize_type_name(value: object) -> str | None:
     if value is None:
         return None
-    return value if isinstance(value, str) and value in _TYPE_NAMES else "other"
+    normalized_value = _plain_text(value)
+    return normalized_value if normalized_value in _TYPE_NAMES else "other"
+
+
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:  # noqa: BLE001 - trace metadata may contain PHI
+        return None
 
 
 def _report_count(value: object) -> int:
