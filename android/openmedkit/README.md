@@ -4,7 +4,7 @@
 It is a Gradle `com.android.library` module under the top-level `android/`
 build and uses the Android namespace `org.openmed.openmedkit`.
 
-Public applications consume the immutable `v2.0.0` release through JitPack. See the
+Public applications consume the immutable `v2.2.0` release through JitPack. See the
 [Android installation guide](../README.md#install-openmedkit-200) for the
 repository and dependency declarations.
 
@@ -29,6 +29,18 @@ OpenMedKit Android is intended for local-first, on-device processing. Library
 code must not send protected health information to network services by default,
 must not require telemetry, and must not write raw PHI to logs, caches,
 temporary files, analytics events, or audit artifacts.
+
+The `analyzeText`, `extractPii`, and `deidentify` inference paths operate only on
+caller-supplied on-device model assets and do not open sockets or invoke HTTP.
+The optional model downloader is a separate, explicit pre-inference operation;
+it is never called by inference. The library manifest intentionally requests no
+`android.permission.INTERNET` permission.
+
+Internal inference diagnostics are disabled by default. Library code may emit
+diagnostics only through the typed `SafeLog` boundary, which accepts labels,
+Unicode offsets, and SHA-256 span hashes—not arbitrary messages or detected
+surface text. De-identification action records likewise retain provenance and
+replacement metadata without retaining the original identifier.
 
 This module is on-device only by design. It is not a medical device and does not
 provide diagnosis, treatment decisions, or emergency clinical guidance. Any
