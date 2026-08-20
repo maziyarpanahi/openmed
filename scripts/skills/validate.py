@@ -44,9 +44,6 @@ HELP_ENV_PASSTHROUGH = frozenset(
         "PATHEXT",
         "SYSTEMDRIVE",
         "SYSTEMROOT",
-        "TEMP",
-        "TMP",
-        "TMPDIR",
         "WINDIR",
     }
 )
@@ -57,8 +54,10 @@ REFERENCE_LINK_RE = re.compile(
     r"(?m)^\s{0,3}\[[^\]\n]+\]:\s*(?P<target><[^>\n]*>|[^ \t\n]+)"
 )
 ALLOWED_PAIRS = {"before", "after", "adjacent"}
+ALLOWED_EXTERNAL_SCHEMES = frozenset({"http", "https", "mailto"})
 MAX_DESCRIPTION_LENGTH = 1024
 MAX_BODY_LINES = 500
+MAX_SKILL_BYTES = 256 * 1024
 HELP_TIMEOUT_SECONDS = 10
 _YAML_UNAVAILABLE = object()
 
@@ -82,12 +81,14 @@ class ValidationReport:
 def _display_path(repo_root: Path, path: Path) -> str:
     """Return a stable repository-relative path without exposing file text."""
 
-    root = repo_root.resolve()
-    candidate = path.resolve(strict=False)
     try:
-        return candidate.relative_to(root).as_posix()
-    except ValueError:
-        return path.as_posix()
+        root = Path(os.path.abspath(os.fspath(repo_root)))
+        candidate = path if path.is_absolute() else root / path
+        candidate = Path(os.path.abspath(os.fspath(candidate)))
+        relative = candidate.relative_to(root)
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return "<outside-repository>"
+    return relative.as_posix() or "."
 
 
 def _add_error(
@@ -110,8 +111,17 @@ def _read_text(path: Path, report: ValidationReport, repo_root: Path) -> str | N
     """Read a UTF-8 file, converting all read failures to safe diagnostics."""
 
     try:
-        return path.read_text(encoding="utf-8")
+        with path.open("rb") as handle:
+            payload = handle.read(MAX_SKILL_BYTES + 1)
     except (OSError, UnicodeError):
+        _add_error(report, repo_root, path, "file cannot be read as UTF-8")
+        return None
+    if len(payload) > MAX_SKILL_BYTES:
+        _add_error(report, repo_root, path, "skill file exceeds size limit")
+        return None
+    try:
+        return payload.decode("utf-8")
+    except UnicodeError:
         _add_error(report, repo_root, path, "file cannot be read as UTF-8")
         return None
 
@@ -302,10 +312,18 @@ def _local_target(raw_target: str) -> str | None:
     if not target:
         return None
     parsed = urlsplit(target)
-    if parsed.scheme or parsed.netloc or target.startswith("//"):
+    if target.startswith("//"):
+        return None
+    if parsed.scheme:
+        if parsed.scheme.casefold() in ALLOWED_EXTERNAL_SCHEMES:
+            return None
+        raise ValueError("unsupported link scheme")
+    if parsed.netloc:
         return None
     if not parsed.path:
         return None
+    if "\\" in parsed.path:
+        raise ValueError("backslashes are not valid local link separators")
     return parsed.path
 
 
@@ -384,6 +402,17 @@ def _pack_skill_name(entry: object) -> str | None:
     return name
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build a JSON object while rejecting duplicate keys."""
+
+    mapping: dict[str, object] = {}
+    for key, value in pairs:
+        if key in mapping:
+            raise ValueError("duplicate JSON key")
+        mapping[key] = value
+    return mapping
+
+
 def _validate_pack_membership(
     repo_root: Path,
     skill_names: set[str],
@@ -402,8 +431,11 @@ def _validate_pack_membership(
         return
 
     try:
-        payload = json.loads(marketplace.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        payload = json.loads(
+            marketplace.read_text(encoding="utf-8"),
+            object_pairs_hook=_unique_json_object,
+        )
+    except (OSError, UnicodeError, ValueError):
         _add_error(
             report, repo_root, marketplace, "skill pack manifest is invalid JSON"
         )
@@ -474,11 +506,36 @@ def _executable_helpers(
     helpers: list[Path] = []
     for relative_root in HELPER_ROOTS:
         root = repo_root / relative_root
+        if root.is_symlink():
+            if report:
+                _add_error(
+                    report,
+                    repo_root,
+                    root,
+                    "executable helper root must not be a symlink",
+                )
+            continue
         if not root.is_dir():
             continue
-        for path in sorted(root.rglob("*")):
+        try:
+            candidates = sorted(root.rglob("*"))
+        except OSError:
+            if report:
+                _add_error(
+                    report,
+                    repo_root,
+                    root,
+                    "executable helper root cannot be inspected",
+                )
+            continue
+        for path in candidates:
             if path.is_symlink():
-                if path.suffix.lower() in INTERPRETER_HELPER_SUFFIXES and report:
+                is_helper_link = (
+                    path.is_dir()
+                    or path.suffix.lower() in INTERPRETER_HELPER_SUFFIXES
+                    or os.access(path, os.X_OK)
+                )
+                if is_helper_link and report:
                     _add_error(
                         report,
                         repo_root,
@@ -527,6 +584,9 @@ def _helper_environment(scratch_home: Path) -> dict[str, str]:
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONHASHSEED": "0",
             "PYTHONNOUSERSITE": "1",
+            "TEMP": str(scratch_home),
+            "TMP": str(scratch_home),
+            "TMPDIR": str(scratch_home),
             "TRANSFORMERS_OFFLINE": "1",
             "USERPROFILE": str(scratch_home),
             "UV_OFFLINE": "1",
@@ -588,18 +648,42 @@ def _validate_helper_test(
         return
 
     try:
-        tree = ast.parse(test_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, SyntaxError):
+        test_source = test_path.read_text(encoding="utf-8")
+        tree = ast.parse(test_source)
+    except (OSError, RecursionError, UnicodeError, SyntaxError, ValueError):
         _add_error(report, repo_root, test_path, "focused helper test is invalid")
         return
 
-    has_test = any(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name.startswith("test_")
+    test_functions = [
+        node
         for node in ast.walk(tree)
-    )
-    if not has_test:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name.startswith("test_")
+        )
+    ]
+    if not test_functions:
         _add_error(report, repo_root, test_path, "focused helper test is empty")
+        return
+    has_assertion = any(
+        isinstance(descendant, ast.Assert)
+        for test_function in test_functions
+        for descendant in ast.walk(test_function)
+    )
+    if not has_assertion:
+        _add_error(
+            report,
+            repo_root,
+            test_path,
+            "focused helper test has no assertion",
+        )
+    if helper.stem not in test_source:
+        _add_error(
+            report,
+            repo_root,
+            test_path,
+            "focused helper test does not reference helper",
+        )
 
 
 def validate_repository(
@@ -615,21 +699,32 @@ def validate_repository(
             malformed synthetic repositories can disable subprocess probes.
     """
 
-    root = (repo_root or REPO_ROOT).resolve()
     report = ValidationReport()
+    requested_root = repo_root or REPO_ROOT
+    try:
+        root = requested_root.resolve()
+    except (OSError, RuntimeError):
+        root = Path(os.path.abspath(os.fspath(requested_root)))
+        _add_error(report, root, root, "repository root cannot be resolved")
+        return report
     skills_root = root / SKILLS_ROOT_NAME
     skill_names: set[str] = set()
     seen_names: set[str] = set()
 
-    if not skills_root.is_dir():
+    if skills_root.is_symlink():
+        _add_error(report, root, skills_root, "skills directory must not be a symlink")
+    elif not skills_root.is_dir():
         _add_error(report, root, skills_root, "skills directory is missing")
     else:
+        try:
+            candidates = tuple(skills_root.iterdir())
+        except OSError:
+            _add_error(
+                report, root, skills_root, "skills directory cannot be inspected"
+            )
+            candidates = ()
         children = sorted(
-            (
-                path
-                for path in skills_root.iterdir()
-                if path.is_dir() or path.is_symlink()
-            ),
+            (path for path in candidates if path.is_dir() or path.is_symlink()),
             key=lambda path: path.name,
         )
         for child in children:
@@ -645,6 +740,14 @@ def validate_repository(
                 continue
             skill_names.add(child.name)
             skill_path = child / "SKILL.md"
+            if skill_path.is_symlink():
+                _add_error(
+                    report,
+                    root,
+                    skill_path,
+                    "SKILL.md must not be a symlink",
+                )
+                continue
             if not skill_path.is_file():
                 _add_error(report, root, skill_path, "SKILL.md is missing")
                 continue

@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a deterministic offline Agent Skills validation gate for frontmatter,
   identifiers, local references, pack membership, and executable-helper help
-  and test contracts, with path-only diagnostics and a dedicated CI workflow
-  (#2306).
+  and test contracts, with symlink and local-path containment, path-only
+  diagnostics, scratch-isolated helper probes, and a dedicated CI workflow
+  that runs every focused skill test (#2306).
 - Added the local-first `setup-openmed` skill and versioned de-identification
   policy template for collecting five bounded privacy decisions, producing a
   deterministic review draft, and stopping at an explicit human approval gate
