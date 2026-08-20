@@ -35,10 +35,12 @@ Attach the probe after page and stylesheet setup when the test is proving an
 application action. If the action loads a local model, list the narrowest
 directory prefix or exact asset URL it is expected to request. Do not use a
 host-only allowlist; the checker rejects host-wide entries and wildcard
-patterns. Directory prefixes permit query-free `GET` requests only. If a
-model host requires a fixed cache query, allowlist that complete asset URL
-instead. A request to an API, analytics endpoint, CDN, websocket, or other
-remote data service will raise `NetworkEgressViolation`.
+patterns. Exact URLs provide the strongest proof. Directory prefixes trust all
+query-free `GET` paths below that directory, while rejecting dot segments,
+encoded separators, and other path-reinterpretation forms. If a model host
+requires a fixed cache query, allowlist that complete asset URL instead. A
+request to an API, analytics endpoint, CDN, websocket, or other remote data
+service will raise `NetworkEgressViolation`.
 
 The same flow can be used with a synthetic event source in an offline unit
 test:

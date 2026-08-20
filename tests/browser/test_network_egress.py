@@ -98,8 +98,13 @@ def test_allowlist_is_explicit_and_does_not_match_a_sibling_path() -> None:
 
     report = check_network_egress(
         [
-            {"url": f"{MODEL_ROOT}config.json", "resource_type": "fetch"},
             {
+                "method": "GET",
+                "url": f"{MODEL_ROOT}config.json",
+                "resource_type": "fetch",
+            },
+            {
+                "method": "GET",
                 "url": "http://127.0.0.1:8000/models/synthetic-redactor-copy/model.onnx",
                 "resource_type": "fetch",
             },
@@ -130,6 +135,37 @@ def test_model_asset_prefix_rejects_queries_and_non_get_requests() -> None:
 
     assert report.allowed_model_asset_count == 0
     assert report.unexpected_request_count == 2
+
+
+def test_model_asset_prefix_rejects_path_reinterpretation() -> None:
+    """Dot segments and encoded separators cannot escape an allowed prefix."""
+
+    report = check_network_egress(
+        [
+            {"method": "GET", "url": f"{MODEL_ROOT}../submit"},
+            {"method": "GET", "url": f"{MODEL_ROOT}%2e%2e/submit"},
+            {"method": "GET", "url": f"{MODEL_ROOT}%252e%252e/submit"},
+            {"method": "GET", "url": f"{MODEL_ROOT}safe%2f..%2fsubmit"},
+            {"method": "GET", "url": f"{MODEL_ROOT}safe\\..\\submit"},
+        ],
+        allowed_model_assets=(MODEL_ROOT,),
+    )
+
+    assert report.allowed_model_asset_count == 0
+    assert report.unexpected_request_count == 5
+
+
+def test_model_asset_request_requires_an_explicit_get_method() -> None:
+    """Incomplete request records cannot silently default to an allowed GET."""
+
+    report = check_network_egress(
+        [{"url": f"{MODEL_ROOT}model.onnx"}],
+        allowed_model_assets=(MODEL_ROOT,),
+    )
+
+    assert report.allowed_model_asset_count == 0
+    assert report.requests[0].method == "UNKNOWN"
+    assert report.unexpected_request_count == 1
 
 
 def test_internal_browser_schemes_are_not_network_egress() -> None:
@@ -169,7 +205,7 @@ def test_probe_can_attach_to_and_detach_from_a_browser_page() -> None:
     page = _SyntheticPage()
     probe = NetworkEgressProbe(allowed_model_assets=MODEL_ROOT)
     probe.attach(page)
-    page.emit("request", {"url": f"{MODEL_ROOT}tokenizer.json"})
+    page.emit("request", {"method": "GET", "url": f"{MODEL_ROOT}tokenizer.json"})
     probe.detach()
     page.emit("request", {"url": "https://unexpected.example.invalid/data"})
 
@@ -213,6 +249,69 @@ def test_callable_request_attributes_are_never_executed() -> None:
     assert report.requests[0].classification == "invalid-url"
 
 
+def test_request_attribute_errors_are_converted_to_a_safe_invalid_event() -> None:
+    """A hostile request property cannot place its exception value in output."""
+
+    marker = "synthetic-property-value-772"
+
+    class _FailingRequest:
+        @property
+        def url(self) -> str:
+            raise RuntimeError(marker)
+
+    report = check_network_egress([_FailingRequest()])
+
+    assert report.requests[0].classification == "invalid-url"
+    assert marker not in report.to_json()
+
+
+def test_custom_method_values_are_not_retained_in_reports() -> None:
+    """Only a bounded standard method label can enter the proof artifact."""
+
+    synthetic_secret = "PATIENTJANE"
+    report = check_network_egress(
+        [
+            {
+                "method": synthetic_secret,
+                "url": "https://unexpected.example.invalid/submit",
+            }
+        ]
+    )
+
+    assert report.requests[0].method == "UNKNOWN"
+    assert synthetic_secret not in report.to_json()
+
+
+def test_string_subclass_hooks_cannot_run_during_classification() -> None:
+    """URL and method normalization copies strings without invoking hooks."""
+
+    class _HookedText(str):
+        called = False
+
+        def strip(self, *args: object, **kwargs: object) -> str:
+            del args, kwargs
+            type(self).called = True
+            raise RuntimeError("synthetic hook value")
+
+        def encode(self, *args: object, **kwargs: object) -> bytes:
+            del args, kwargs
+            type(self).called = True
+            raise RuntimeError("synthetic hook value")
+
+    report = check_network_egress(
+        [
+            {
+                "method": _HookedText("GET"),
+                "url": _HookedText(f"{MODEL_ROOT}model.onnx"),
+            }
+        ],
+        allowed_model_assets=(_HookedText(MODEL_ROOT),),
+    )
+
+    assert report.passed
+    assert _HookedText.called is False
+
+
 @pytest.mark.parametrize(
     "entry",
     [
@@ -224,6 +323,21 @@ def test_callable_request_attributes_are_never_executed() -> None:
 )
 def test_model_allowlist_rejects_host_wide_and_wildcard_entries(entry: str) -> None:
     """Only exact assets and explicitly bounded directory paths are accepted."""
+
+    with pytest.raises(ValueError, match="model asset"):
+        NetworkEgressProbe(allowed_model_assets=(entry,))
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "https://models.example.invalid/?asset=model.onnx",
+        "https://models.example.invalid/models/?asset=/",
+        "https://models.example.invalid/models/%2e%2e/private/",
+    ],
+)
+def test_model_allowlist_rejects_ambiguous_roots_and_prefixes(entry: str) -> None:
+    """Allowlist roots and prefixes cannot be reinterpreted as data routes."""
 
     with pytest.raises(ValueError, match="model asset"):
         NetworkEgressProbe(allowed_model_assets=(entry,))
@@ -265,7 +379,7 @@ def test_capture_context_manager_is_offline_and_assertable() -> None:
 
     page = _SyntheticPage()
     with capture_browser_requests(page, allowed_model_assets=(MODEL_ROOT,)) as probe:
-        page.emit("request", {"url": f"{MODEL_ROOT}vocab.json"})
+        page.emit("request", {"method": "GET", "url": f"{MODEL_ROOT}vocab.json"})
 
     assert probe.assert_clean().passed
     assert page._listeners["request"] == []
@@ -285,6 +399,22 @@ def test_report_is_deterministic_for_the_same_request_sequence() -> None:
     ).to_json()
 
     assert first == second
+
+
+def test_request_iterable_failures_are_value_free() -> None:
+    """An input iterator cannot leak its exception value through the API."""
+
+    marker = "synthetic-iterator-value-991"
+
+    def failing_requests() -> object:
+        yield {"url": "data:text/plain,synthetic"}
+        raise RuntimeError(marker)
+
+    with pytest.raises(ValueError, match="could not be read") as raised:
+        check_network_egress(failing_requests())
+
+    assert raised.value.__cause__ is None
+    assert marker not in str(raised.value)
 
 
 def test_cli_reads_local_trace_and_writes_only_the_safe_report(tmp_path: Path) -> None:
@@ -335,11 +465,24 @@ def test_cli_rejects_an_oversized_trace_with_a_safe_error(
     )
 
 
+def test_trace_read_errors_do_not_retain_sensitive_paths(tmp_path: Path) -> None:
+    """The trace reader suppresses OS exceptions that contain raw paths."""
+
+    synthetic_secret = "SyntheticPatientPath882"
+    missing = tmp_path / synthetic_secret / "trace.json"
+
+    with pytest.raises(ValueError, match="could not read") as raised:
+        egress_module._load_trace(missing)
+
+    assert raised.value.__cause__ is None
+    assert synthetic_secret not in str(raised.value)
+
+
 def test_assert_helper_returns_a_passing_report() -> None:
     """The assertion helper is convenient for a focused browser test."""
 
     report = assert_no_unexpected_requests(
-        [{"url": f"{MODEL_ROOT}config.json"}],
+        [{"method": "GET", "url": f"{MODEL_ROOT}config.json"}],
         allowed_model_assets=(MODEL_ROOT,),
     )
 

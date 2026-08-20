@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Sequence
-from urllib.parse import SplitResult, urlsplit, urlunsplit
+from urllib.parse import SplitResult, unquote, urlsplit, urlunsplit
 
 NETWORK_SCHEMES = frozenset({"ftp", "http", "https", "ws", "wss"})
 NON_NETWORK_SCHEMES = frozenset({"about", "blob", "data"})
@@ -26,6 +26,9 @@ _MAX_MODEL_ASSET_PATTERNS = 256
 _MAX_REQUESTS = 10_000
 _MAX_TRACE_BYTES = 8 * 1024 * 1024
 _MAX_URL_LENGTH = 8_192
+_HTTP_METHODS = frozenset(
+    {"CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"}
+)
 _RESOURCE_TYPES = frozenset(
     {
         "document",
@@ -51,6 +54,8 @@ class _ParsedNetworkURL:
 
     canonical: str
     origin: str
+    path: str
+    query: str
     scheme: str
 
 
@@ -287,7 +292,21 @@ def check_network_egress(
     """Check supplied browser requests without making any network call."""
 
     probe = NetworkEgressProbe(allowed_model_assets=allowed_model_assets)
-    for request in requests:
+    try:
+        iterator = iter(requests)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("request trace could not be read") from None
+    while True:
+        try:
+            request = next(iterator)
+        except StopIteration:
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("request trace could not be read") from None
         probe.record(request)
     return probe.report()
 
@@ -315,7 +334,8 @@ def _coerce_request(request: Any) -> _ObservedRequest:
         method = _request_value(request, "method")
         resource_type = _request_value(request, "resource_type")
 
-    candidate = url.strip() if isinstance(url, str) else ""
+    plain_url = _plain_text(url)
+    candidate = plain_url.strip() if plain_url is not None else ""
     if len(candidate) > _MAX_URL_LENGTH:
         candidate = ""
 
@@ -327,57 +347,81 @@ def _coerce_request(request: Any) -> _ObservedRequest:
 
 
 def _request_value(request: Any, name: str) -> Any:
-    if isinstance(request, Mapping):
-        value = request.get(name)
-    else:
-        value = getattr(request, name, None)
+    try:
+        if isinstance(request, Mapping):
+            value = request.get(name)
+        else:
+            value = getattr(request, name, None)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return None
     return None if callable(value) else value
 
 
 def _normalise_method(value: Any) -> str:
     if value is None:
-        return "GET"
-    if not isinstance(value, str):
         return "UNKNOWN"
-    candidate = value.strip().upper()
-    if (
-        not candidate
-        or len(candidate) > 16
-        or not candidate.isascii()
-        or not candidate.replace("-", "").isalnum()
-    ):
+    plain_value = _plain_text(value)
+    if plain_value is None:
         return "UNKNOWN"
-    return candidate
+    candidate = plain_value.strip().upper()
+    return candidate if candidate in _HTTP_METHODS else "UNKNOWN"
 
 
 def _normalise_resource_type(value: Any) -> str:
-    if not isinstance(value, str):
+    plain_value = _plain_text(value)
+    if plain_value is None:
         return "other"
-    candidate = value.strip().casefold()
+    candidate = plain_value.strip().casefold()
     return candidate if candidate in _RESOURCE_TYPES else "other"
+
+
+def _plain_text(value: Any) -> str | None:
+    """Copy a string without executing hooks on a string subclass."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return None
 
 
 def _normalise_model_asset_patterns(
     patterns: Iterable[str] | str,
 ) -> tuple[str, ...]:
     if isinstance(patterns, str):
-        values: Iterable[object] = (patterns,)
+        values: Iterator[object] = iter((patterns,))
     else:
         try:
             values = iter(patterns)
-        except TypeError as exc:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             raise ValueError(
                 "model asset allowlist must be an iterable of URLs"
-            ) from exc
+            ) from None
 
     normalised: list[str] = []
     seen: set[str] = set()
-    for index, pattern in enumerate(values):
-        if index >= _MAX_MODEL_ASSET_PATTERNS:
+    for index in range(_MAX_MODEL_ASSET_PATTERNS + 1):
+        try:
+            pattern = next(values)
+        except StopIteration:
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("model asset allowlist could not be read") from None
+        if index == _MAX_MODEL_ASSET_PATTERNS:
             raise ValueError("model asset allowlist exceeds the supported entry count")
-        if not isinstance(pattern, str) or not pattern.strip():
+        plain_pattern = _plain_text(pattern)
+        if plain_pattern is None or not plain_pattern.strip():
             raise ValueError("model asset allowlist entries must be non-empty URLs")
-        candidate = pattern.strip()
+        candidate = plain_pattern.strip()
         if len(candidate) > _MAX_URL_LENGTH:
             raise ValueError("model asset allowlist entries exceed the URL size limit")
         if "*" in candidate:
@@ -387,8 +431,10 @@ def _normalise_model_asset_patterns(
             raise ValueError(
                 "model asset allowlist entries must be absolute HTTP(S) URLs"
             )
-        if parsed.canonical.endswith("/") and parsed.canonical == f"{parsed.origin}/":
+        if parsed.path == "/":
             raise ValueError("model asset directory prefixes must include a path")
+        if parsed.path.endswith("/") and parsed.query:
+            raise ValueError("model asset directory prefixes cannot include a query")
         if parsed.canonical not in seen:
             seen.add(parsed.canonical)
             normalised.append(parsed.canonical)
@@ -424,9 +470,45 @@ def _parse_network_url(
         netloc = f"{netloc}:{port}"
 
     path = parsed.path or "/"
+    if not _is_safe_url_path(path):
+        return None
     canonical = urlunsplit((scheme, netloc, path, parsed.query, ""))
     origin = urlunsplit((scheme, netloc, "", "", ""))
-    return _ParsedNetworkURL(canonical=canonical, origin=origin, scheme=scheme)
+    return _ParsedNetworkURL(
+        canonical=canonical,
+        origin=origin,
+        path=path,
+        query=parsed.query,
+        scheme=scheme,
+    )
+
+
+def _is_safe_url_path(path: str) -> bool:
+    """Reject path forms that a browser, proxy, or server may reinterpret."""
+
+    candidate = path
+    for _ in range(4):
+        lowered = candidate.casefold()
+        if (
+            any(ord(character) < 32 or ord(character) == 127 for character in candidate)
+            or "\\" in candidate
+            or "%2e" in lowered
+            or "%2f" in lowered
+            or "%5c" in lowered
+            or any(part in {".", ".."} for part in candidate.split("/"))
+        ):
+            return False
+        try:
+            decoded = unquote(candidate, errors="strict")
+        except UnicodeError:
+            return False
+        if decoded == candidate:
+            return True
+        candidate = decoded
+    try:
+        return unquote(candidate, errors="strict") == candidate
+    except UnicodeError:
+        return False
 
 
 def _summarise_request(
@@ -506,8 +588,8 @@ def _load_trace(path: Path) -> list[Any]:
         if len(raw_trace) > _MAX_TRACE_BYTES:
             raise ValueError("request trace exceeds the supported file size")
         payload = json.loads(raw_trace.decode("utf-8"))
-    except (OSError, RecursionError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError("could not read the request trace") from exc
+    except (OSError, RecursionError, UnicodeError, json.JSONDecodeError):
+        raise ValueError("could not read the request trace") from None
 
     if isinstance(payload, list):
         return payload
