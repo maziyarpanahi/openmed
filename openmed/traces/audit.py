@@ -64,7 +64,11 @@ def _metadata_text(value: object, *, fallback: str) -> str:
     if not isinstance(value, str):
         return fallback
 
-    text = value.strip().replace("\\", "/")
+    try:
+        text = str.encode(value, "utf-8").decode("utf-8")
+    except Exception:  # noqa: BLE001 - untrusted metadata must fail closed
+        return fallback
+    text = text.strip().replace("\\", "/")
     if not text:
         return fallback
     # A report is safe to print as one terminal row even when a caller's
@@ -162,7 +166,10 @@ def _nonnegative_count(value: object) -> int:
 def _status(value: object) -> TraceAuditStatus:
     if not isinstance(value, str):
         raise ValueError("trace scan status is unsupported")
-    normalized = value.strip().lower()
+    try:
+        normalized = str.encode(value, "utf-8").decode("utf-8").strip().lower()
+    except Exception:  # noqa: BLE001 - untrusted metadata must fail closed
+        raise ValueError("trace scan status is unsupported") from None
     if normalized not in TRACE_STATUSES:
         raise ValueError("trace scan status is unsupported")
     return normalized  # type: ignore[return-value]
@@ -299,8 +306,15 @@ class TraceFinding:
                 default=end,
                 error="trace finding byte range could not be read",
             )
-        elif isinstance(byte_range, (list, tuple)) and len(byte_range) == 2:
-            start, end = byte_range
+        elif isinstance(byte_range, (list, tuple)):
+            range_items = tuple(
+                _safe_items(
+                    byte_range,
+                    error="trace finding byte range could not be read",
+                )
+            )
+            if len(range_items) == 2:
+                start, end = range_items
         if start is None or end is None:
             raise ValueError("trace finding requires a byte range")
 

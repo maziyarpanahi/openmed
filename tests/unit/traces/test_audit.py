@@ -197,6 +197,42 @@ def test_mapping_lookup_errors_do_not_expose_values() -> None:
     assert _SENSITIVE_VALUE not in str(caught.value)
 
 
+def test_hostile_metadata_strings_are_normalized_without_running_overrides() -> None:
+    class HostileString(str):
+        def encode(self, *args: object, **kwargs: object) -> bytes:
+            del args, kwargs
+            raise RuntimeError(_SENSITIVE_VALUE)
+
+        def strip(self, *args: object) -> str:
+            del args
+            raise RuntimeError(_SENSITIVE_VALUE)
+
+    finding = TraceFinding(
+        HostileString("codex"),
+        HostileString("message"),
+        HostileString("trace.jsonl"),
+        0,
+        4,
+    )
+    scan = TraceScan(status=HostileString("scanned"))
+
+    assert finding.store == "codex"
+    assert finding.category == "message"
+    assert finding.file.startswith("file_sha256_")
+    assert scan.status == "scanned"
+
+
+def test_hostile_byte_range_iteration_error_is_sanitized() -> None:
+    class HostileRange(list[int]):
+        def __iter__(self):
+            raise RuntimeError(_SENSITIVE_VALUE)
+
+    with pytest.raises(TypeError) as caught:
+        build_trace_audit([{"category": "message", "byte_range": HostileRange([0, 4])}])
+
+    assert _SENSITIVE_VALUE not in str(caught.value)
+
+
 def test_direct_scan_iteration_errors_do_not_expose_values() -> None:
     def failing_findings():
         raise RuntimeError(_SENSITIVE_VALUE)
