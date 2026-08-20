@@ -15,6 +15,7 @@
       "strict": false,
       "skills": [
         "./skills/annotating-variants",
+        "./skills/ask-openmed",
         "./skills/assembling-fhir-bundles",
         "./skills/auditing-deid-leakage",
         "./skills/auditing-deidentification-runs",

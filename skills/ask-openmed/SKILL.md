@@ -28,15 +28,16 @@ Apply these rules in order:
    gate**: [deidentifying-clinical-text](../deidentifying-clinical-text/SKILL.md).
    An intake-only goal may start with its format parser, but the gate must run
    before the parsed content reaches a downstream stage.
-3. Otherwise match the first row in the relevant table below. When several
-   rows match, use the first row in that table and do not guess between
-   alternatives.
+3. Otherwise inspect the tables in the fixed handoff order shown below. Treat
+   each comma-separated cue as a case-insensitive substring of the normalized
+   goal, and select the first matching row. Do not add synonyms or infer cues
+   from the payload. This stage order and row order break every tie.
 4. If no row matches, use [building-with-openmed](../building-with-openmed/SKILL.md)
    as the orientation fallback.
 
-Route output should contain only the selected category, skill identifier, and
-the next handoff. Never echo the request, input values, exception text, or
-detected spans into a log or report.
+Route output should contain only the selected category, skill identifier,
+matched rule index, and next handoff. Never echo the request, input values,
+exception text, or detected spans into a log or report.
 
 For a multi-stage request, route one stage at a time in this fixed handoff
 order: **intake → privacy → extraction → exchange → verification**. A later

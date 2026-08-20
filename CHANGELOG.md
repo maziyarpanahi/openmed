@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the deterministic `ask-openmed` workflow router skill, with a
+  privacy-first override for ambiguous clinical-content requests, fixed
+  intake-to-verification handoff ordering, canonical links to existing skills,
+  and PHI-free route diagnostics (#2304).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
