@@ -73,7 +73,12 @@ The report contains aggregate values only:
 
 Pass a fixed `clock`, `memory_sampler`, and `generated_at` value in tests or
 reproducibility jobs when byte-identical measurements are required. The report
-also contains a stable input/configuration reproducibility hash.
+also contains a stable input/configuration reproducibility hash. Fixture IDs,
+adapter model/device settings, availability declarations, and JSON-compatible
+string-keyed provenance metadata are folded into that hash without being
+reported as raw values. Overlapping in-process runs are serialized while the
+seeded standard-library random state and outbound-socket guard are active, so
+one run cannot restore process-global state underneath another.
 
 ## Privacy-safe output
 

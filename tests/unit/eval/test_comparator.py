@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import random
 import socket
+import threading
+from dataclasses import replace
 
 import pytest
 
@@ -88,6 +91,48 @@ def test_comparator_report_is_deterministic_and_source_safe() -> None:
     payload = json.loads(first_json)
     assert payload["fixture_digests"]
     assert payload["results"][0]["metrics"]["memory"]["peak_bytes"] == 75
+
+
+def test_reproducibility_hash_covers_fixture_and_adapter_configuration() -> None:
+    fixture = _fixture()
+    renamed_fixture = replace(fixture, fixture_id="synthetic-002")
+
+    def run_once(*, model_name: str, metadata: dict[str, int]):
+        return run_comparator_benchmark(
+            [fixture],
+            [
+                ComparatorAdapter(
+                    name="exact",
+                    runner=_exact_runner,
+                    model_name=model_name,
+                )
+            ],
+            metadata=metadata,
+        )
+
+    baseline = run_once(model_name="local-a", metadata={"revision": 1})
+    changed_model = run_once(model_name="local-b", metadata={"revision": 1})
+    changed_metadata = run_once(model_name="local-a", metadata={"revision": 2})
+
+    assert fixture.digest != renamed_fixture.digest
+    assert baseline.reproducibility_hash != changed_model.reproducibility_hash
+    assert baseline.reproducibility_hash != changed_metadata.reproducibility_hash
+
+
+def test_report_rejects_forged_hash_and_duplicate_adapter_rows() -> None:
+    report = run_comparator_benchmark(
+        [_fixture()],
+        [ComparatorAdapter(name="exact", runner=_exact_runner)],
+    )
+
+    with pytest.raises(ValueError, match="invalid comparator report"):
+        replace(report, reproducibility_hash="sha256:" + "0" * 64)
+    with pytest.raises(ValueError, match="invalid comparator report"):
+        replace(
+            report,
+            results=(report.results[0], report.results[0]),
+            reproducibility_hash="",
+        )
 
 
 def test_missing_or_network_adapters_are_reported_without_running() -> None:
@@ -376,11 +421,92 @@ def test_legacy_runner_cannot_read_gold_spans_or_arbitrary_metadata() -> None:
     }
 
 
+def test_modern_varargs_runner_receives_text_and_language() -> None:
+    observed = {}
+
+    def modern_runner(text, language, *extra):
+        observed["text"] = text
+        observed["language"] = language
+        observed["extra"] = extra
+        return _exact_runner(text, language)
+
+    fixture = _fixture()
+    report = run_comparator_benchmark(
+        [fixture],
+        [ComparatorAdapter(name="modern", runner=modern_runner)],
+    )
+
+    assert report.result("modern").status == STATUS_SCORED
+    assert observed == {
+        "text": fixture.text,
+        "language": fixture.language,
+        "extra": (),
+    }
+
+
 def test_resource_budget_rejects_ambiguous_runtime_values() -> None:
     with pytest.raises(ValueError):
         ComparatorBudget(max_latency_ms=True)
     with pytest.raises(ValueError):
         ComparatorBudget(max_memory_bytes="100")
+
+
+def test_critical_labels_and_metadata_fail_closed_when_ambiguous(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(comparator_module, "_MAX_CRITICAL_LABEL_COUNT", 1)
+    adapter = ComparatorAdapter(name="exact", runner=_exact_runner)
+
+    with pytest.raises(ValueError, match="invalid critical label configuration"):
+        run_comparator_benchmark(
+            [_fixture()],
+            [adapter],
+            critical_labels=("SSN", "ID_NUM"),
+        )
+    with pytest.raises(ValueError, match="invalid critical label configuration"):
+        run_comparator_benchmark(
+            [_fixture()],
+            [adapter],
+            critical_labels="SSN",
+        )
+    with pytest.raises(ValueError, match="invalid comparator metadata"):
+        run_comparator_benchmark(
+            [_fixture()],
+            [adapter],
+            critical_labels=("SSN",),
+            metadata={1: "integer", "1": "string"},  # type: ignore[dict-item]
+        )
+
+
+def test_random_context_restores_state_and_serializes_threads() -> None:
+    original_state = random.getstate()
+    expected = random.Random(17)
+
+    with comparator_module._random_context(17):
+        first = random.random()
+        with comparator_module._random_context(29):
+            random.random()
+        second = random.random()
+
+    assert [first, second] == [expected.random(), expected.random()]
+    assert random.getstate() == original_state
+
+    started = threading.Event()
+    entered = threading.Event()
+
+    def enter_context() -> None:
+        started.set()
+        with comparator_module._random_context(31):
+            entered.set()
+
+    thread = threading.Thread(target=enter_context, daemon=True)
+    with comparator_module._RANDOM_CONTEXT_LOCK:
+        thread.start()
+        assert started.wait(1.0)
+        assert not entered.wait(0.05)
+    assert entered.wait(1.0)
+    thread.join(timeout=1.0)
+    assert not thread.is_alive()
 
 
 def _fixture() -> ComparatorFixture:
