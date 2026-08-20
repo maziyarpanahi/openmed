@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
+- Added deterministic spawn-backed parallel trace-file sharding with fresh
+  per-file stores, stable input-order merging, safe sequential fallback, and
+  PHI-minimized aggregate failure metadata (#2285).
 - Added a local registry for training-conversation schemas with collision-safe
   aliases, recursive format detection, fail-closed validation, and hashed
   value-free diagnostics (#2286).
