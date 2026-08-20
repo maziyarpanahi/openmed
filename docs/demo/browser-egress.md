@@ -8,8 +8,9 @@ session.
 The probe only observes request events supplied by the browser test. It does
 not create an HTTP client, resolve hosts, download assets, or inspect request
 headers and bodies. Every HTTP(S) request fails unless its URL is explicitly
-configured as a model asset. `data:`, `blob:`, `about:`, and `file:` resources
-are treated as browser-internal and do not require a network allowlist.
+configured as a model asset. `data:`, `blob:`, and `about:` resources are
+treated as browser-internal and do not require a network allowlist. `file:`
+requests fail closed because remote file shares can cross a machine boundary.
 
 ## Capture a browser action
 
@@ -33,9 +34,11 @@ egress.assert_clean()
 Attach the probe after page and stylesheet setup when the test is proving an
 application action. If the action loads a local model, list the narrowest
 directory prefix or exact asset URL it is expected to request. Do not use a
-host-only allowlist when a model directory can be named instead. A request to
-an API, analytics endpoint, CDN, websocket, or other remote data service will
-raise `NetworkEgressViolation`.
+host-only allowlist; the checker rejects host-wide entries and wildcard
+patterns. Directory prefixes permit query-free `GET` requests only. If a
+model host requires a fixed cache query, allowlist that complete asset URL
+instead. A request to an API, analytics endpoint, CDN, websocket, or other
+remote data service will raise `NetworkEgressViolation`.
 
 The same flow can be used with a synthetic event source in an offline unit
 test:
@@ -58,9 +61,10 @@ assert_no_unexpected_requests(
 Only method, resource type, a classification, and SHA-256 digests of the URL
 and origin are retained in `EgressReport`. Paths, query strings, fragments,
 headers, bodies, and browser request objects are not included in the report or
-exception text. This keeps the proof artifact useful for correlating repeated
-events without placing synthetic note text or raw identifiers in logs and
-test output.
+exception text. Each raw URL is summarized during the request callback and is
+not retained in probe memory. This keeps the proof artifact useful for
+correlating repeated events without placing synthetic note text or raw
+identifiers in logs and test output.
 
 ## Inspect a saved request trace
 
@@ -77,5 +81,7 @@ the same safe report. It performs no network operation:
 Use one `--allow-model-asset` option per expected model URL or prefix. Exit
 status `0` means no unexpected request was observed; `1` means the trace
 contains unexpected egress; `2` means the local trace or policy was invalid.
-The checker does not evaluate de-identification quality and is not a
-compliance certification or clinical decision guarantee.
+Traces, URLs, allowlist entries, and event counts have fixed safety budgets;
+inputs outside those budgets fail closed with a source-safe error. The checker
+does not evaluate de-identification quality and is not a compliance
+certification or clinical decision guarantee.

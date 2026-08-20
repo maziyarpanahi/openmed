@@ -10,7 +10,6 @@ their URL is explicitly configured by the caller.
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import hashlib
 import json
 import sys
@@ -21,8 +20,12 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 NETWORK_SCHEMES = frozenset({"ftp", "http", "https", "ws", "wss"})
-NON_NETWORK_SCHEMES = frozenset({"about", "blob", "data", "file"})
+NON_NETWORK_SCHEMES = frozenset({"about", "blob", "data"})
 _MODEL_ASSET_SCHEMES = frozenset({"http", "https"})
+_MAX_MODEL_ASSET_PATTERNS = 256
+_MAX_REQUESTS = 10_000
+_MAX_TRACE_BYTES = 8 * 1024 * 1024
+_MAX_URL_LENGTH = 8_192
 _RESOURCE_TYPES = frozenset(
     {
         "document",
@@ -194,7 +197,7 @@ class NetworkEgressProbe:
         self._allowed_model_assets = _normalise_model_asset_patterns(
             allowed_model_assets
         )
-        self._requests: list[_ObservedRequest] = []
+        self._requests: list[RequestSummary] = []
         self._page: Any | None = None
         self._listener = self.record
 
@@ -212,17 +215,21 @@ class NetworkEgressProbe:
         ignored so a trace cannot accidentally collect sensitive data.
         """
 
-        self._requests.append(_coerce_request(request))
+        if len(self._requests) >= _MAX_REQUESTS:
+            raise ValueError("request trace exceeds the supported event count")
+        observed = _coerce_request(request)
+        self._requests.append(
+            _summarise_request(
+                len(self._requests),
+                observed,
+                self._allowed_model_assets,
+            )
+        )
 
     def report(self) -> EgressReport:
         """Classify all recorded events into a deterministic safe report."""
 
-        return EgressReport(
-            requests=tuple(
-                _summarise_request(index, request, self._allowed_model_assets)
-                for index, request in enumerate(self._requests)
-            )
-        )
+        return EgressReport(requests=tuple(self._requests))
 
     def assert_clean(self) -> EgressReport:
         """Assert that recorded requests contain no unexpected network call."""
@@ -247,13 +254,13 @@ class NetworkEgressProbe:
         page = self._page
         if page is None:
             return
-        self._page = None
         remove_listener = getattr(page, "remove_listener", None)
         if not callable(remove_listener):
             remove_listener = getattr(page, "off", None)
         if not callable(remove_listener):
             raise TypeError("browser page does not expose an event removal API")
         remove_listener("request", self._listener)
+        self._page = None
 
 
 @contextmanager
@@ -308,10 +315,14 @@ def _coerce_request(request: Any) -> _ObservedRequest:
         method = _request_value(request, "method")
         resource_type = _request_value(request, "resource_type")
 
+    candidate = url.strip() if isinstance(url, str) else ""
+    if len(candidate) > _MAX_URL_LENGTH:
+        candidate = ""
+
     return _ObservedRequest(
         method=_normalise_method(method),
         resource_type=_normalise_resource_type(resource_type),
-        url=url.strip() if isinstance(url, str) else "",
+        url=candidate,
     )
 
 
@@ -320,12 +331,7 @@ def _request_value(request: Any, name: str) -> Any:
         value = request.get(name)
     else:
         value = getattr(request, name, None)
-    if callable(value):
-        try:
-            return value()
-        except Exception:
-            return None
-    return value
+    return None if callable(value) else value
 
 
 def _normalise_method(value: Any) -> str:
@@ -355,21 +361,36 @@ def _normalise_model_asset_patterns(
     patterns: Iterable[str] | str,
 ) -> tuple[str, ...]:
     if isinstance(patterns, str):
-        values = (patterns,)
+        values: Iterable[object] = (patterns,)
     else:
-        values = tuple(patterns)
+        try:
+            values = iter(patterns)
+        except TypeError as exc:
+            raise ValueError(
+                "model asset allowlist must be an iterable of URLs"
+            ) from exc
 
     normalised: list[str] = []
-    for pattern in values:
+    seen: set[str] = set()
+    for index, pattern in enumerate(values):
+        if index >= _MAX_MODEL_ASSET_PATTERNS:
+            raise ValueError("model asset allowlist exceeds the supported entry count")
         if not isinstance(pattern, str) or not pattern.strip():
             raise ValueError("model asset allowlist entries must be non-empty URLs")
         candidate = pattern.strip()
+        if len(candidate) > _MAX_URL_LENGTH:
+            raise ValueError("model asset allowlist entries exceed the URL size limit")
+        if "*" in candidate:
+            raise ValueError("model asset allowlist entries cannot use wildcards")
         parsed = _parse_network_url(candidate, model_asset=True)
         if parsed is None or "#" in candidate:
             raise ValueError(
                 "model asset allowlist entries must be absolute HTTP(S) URLs"
             )
-        if parsed.canonical not in normalised:
+        if parsed.canonical.endswith("/") and parsed.canonical == f"{parsed.origin}/":
+            raise ValueError("model asset directory prefixes must include a path")
+        if parsed.canonical not in seen:
+            seen.add(parsed.canonical)
             normalised.append(parsed.canonical)
     return tuple(normalised)
 
@@ -439,7 +460,10 @@ def _summarise_request(
         elif network_url.scheme not in NETWORK_SCHEMES:
             classification = "unexpected-network"
             origin_digest = _digest(network_url.origin)
-        elif _matches_model_asset(network_url.canonical, allowed_model_assets):
+        elif request.method == "GET" and _matches_model_asset(
+            network_url.canonical,
+            allowed_model_assets,
+        ):
             classification = "model-asset"
             origin_digest = _digest(network_url.origin)
         else:
@@ -459,10 +483,13 @@ def _summarise_request(
 
 def _matches_model_asset(url: str, patterns: tuple[str, ...]) -> bool:
     for pattern in patterns:
-        if "*" in pattern and fnmatch.fnmatchcase(url, pattern):
-            return True
-        if pattern.endswith("/") and url.startswith(pattern):
-            return True
+        if pattern.endswith("/"):
+            try:
+                request_query = urlsplit(url).query
+            except ValueError:
+                continue
+            if not request_query and url.startswith(pattern):
+                return True
         if url == pattern:
             return True
     return False
@@ -474,8 +501,12 @@ def _digest(value: str) -> str:
 
 def _load_trace(path: Path) -> list[Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        with path.open("rb") as trace_file:
+            raw_trace = trace_file.read(_MAX_TRACE_BYTES + 1)
+        if len(raw_trace) > _MAX_TRACE_BYTES:
+            raise ValueError("request trace exceeds the supported file size")
+        payload = json.loads(raw_trace.decode("utf-8"))
+    except (OSError, RecursionError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError("could not read the request trace") from exc
 
     if isinstance(payload, list):
