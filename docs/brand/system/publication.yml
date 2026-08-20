@@ -110,6 +110,7 @@ classification:
     - serving/tracing.md
     - guides/parallel-traces.md
     - guides/streaming-traces.md
+    - guides/trace-audit.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
@@ -172,7 +173,9 @@ classification:
     - examples.md
     - examples/notebook-gallery.md
     - document-adapter-provenance.md
+    - reference/chat-schema.md
     - reference/training-schemas.md
+    - reference/preference-schema.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/email-ingestion.md
@@ -219,6 +222,7 @@ classification:
     - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
+    - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
     - integrations/pandas-on-spark.md

@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a local registry for training-conversation schemas with collision-safe
   aliases, recursive format detection, fail-closed validation, and hashed
   value-free diagnostics (#2286).
+- Added a role-message training schema adapter with recursive content-path
+  redaction, deterministic structure preservation, hashed path diagnostics, and
+  fail-closed handling for cycles and unknown parts (#2287).
+- Added a preference-pair training schema adapter with structure-preserving
+  redaction, bounded span reconciliation, validated schema-version reports, and
+  privacy-safe labels and diagnostics (#2288).
+- Added a local-first, schema-preserving columnar trace-batch adapter with
+  bounded iteration, nested text-path redaction, deterministic defaults,
+  unchanged labels and metadata, and hashed value-free diagnostics (#2289).
 - Added a streaming, schema-preserving JSONL agent-trace content walker and
   rewriter with explicit string paths, value-free errors, duplicate-key
   rejection, same-file overwrite protection, and caller-supplied local
@@ -35,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added bounded-memory streaming redaction for structured trace records and
   NDJSON, with independent record and byte limits, deterministic pseudonyms,
   aggregate-only progress, and local cancellation (#2284).
+- Added a deterministic, read-only local trace privacy inventory with
+  counts-only store, category, and file aggregates; byte ranges; file-status
+  totals; hashed caller-supplied labels; and value-free renderers (#2290).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
