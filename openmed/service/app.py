@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -18,6 +19,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 import openmed
+from openmed.core.errors import (
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    OpenMedError,
+    PolicyError,
+)
 from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
@@ -29,6 +40,7 @@ from .batcher import (
     DynamicBatcher,
     normalize_priority,
 )
+from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .logging import (
@@ -42,6 +54,7 @@ from .metrics import (
     PrometheusMetricsRegistry,
     metrics_enabled_from_env,
 )
+from .mtls import ServiceMTLS, parse_service_mtls_config
 from .openhim_mediator import (
     OPENHIM_HEARTBEAT_PATH,
     OPENHIM_MEDIA_TYPE,
@@ -69,6 +82,9 @@ from .schemas import (
     AnalyzeRequest,
     CohortResolveRequest,
     DeidentifyJobRequest,
+    FHIRBulkExportRequest,
+    FHIRBulkImportRequest,
+    GroundRequest,
     ModelUnloadRequest,
     OmopLoadRequest,
     PIIDeidentifyRequest,
@@ -84,6 +100,7 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
+from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
@@ -98,15 +115,21 @@ SERVICE_NAME = "openmed-rest"
 REQUEST_PRIORITY_HEADER = "x-openmed-priority"
 _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
+_FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
+_FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _MODEL_BACKED_PATHS = frozenset(
     {
+        "/graphql",
         "/analyze",
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
+        "/pii/deidentify/stream",
         "/jobs",
         _PRIVACY_GATEWAY_PATH,
         _SMART_BACKEND_START_PATH,
+        _FHIR_BULK_EXPORT_PATH,
+        _FHIR_BULK_IMPORT_PATH,
         OPENHIM_MEDIATOR_PATH,
     }
 )
@@ -114,6 +137,7 @@ _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
+_GROUNDING_CACHE_ENV_VAR = "OPENMED_GROUNDING_CACHE_DIR"
 
 
 @dataclass(frozen=True)
@@ -142,12 +166,18 @@ def _result_to_dict(result: Any) -> Dict[str, Any]:
         payload = result.to_dict()
         if isinstance(payload, Mapping):
             return dict(payload)
-        raise TypeError("Result to_dict() must return a mapping.")
+        raise InternalError(
+            "An OpenMed result returned a non-mapping payload. Stop processing "
+            "and report this serialization invariant failure."
+        )
 
     if isinstance(result, Mapping):
         return dict(result)
 
-    raise TypeError("Unsupported result payload type.")
+    raise InternalError(
+        "An OpenMed operation returned an unsupported result type. Stop "
+        "processing and report this serialization invariant failure."
+    )
 
 
 def _parse_grounded_jsonl_text(text: str) -> list[Mapping[str, Any]]:
@@ -164,14 +194,27 @@ def _parse_grounded_jsonl_text(text: str) -> list[Mapping[str, Any]]:
         try:
             payload = json.loads(stripped)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"records_jsonl line {line_number} is not valid JSON"
+            raise InputError(
+                f"records_jsonl line {line_number} is not valid JSON. Correct "
+                "that synthetic record before retrying.",
+                code="bad_request",
+                details={"argument": "records_jsonl", "line": line_number},
             ) from exc
         if not isinstance(payload, Mapping):
-            raise ValueError(f"records_jsonl line {line_number} must be a JSON object")
+            raise InputError(
+                f"records_jsonl line {line_number} must be a JSON object. Replace "
+                "the record with a key-value mapping before retrying.",
+                code="bad_request",
+                details={"argument": "records_jsonl", "line": line_number},
+            )
         records.append(payload)
     if not records:
-        raise ValueError("records_jsonl must contain at least one record")
+        raise InputError(
+            "records_jsonl must contain at least one record. Add a JSON object "
+            "on its own line before retrying.",
+            code="bad_request",
+            details={"argument": "records_jsonl"},
+        )
     return records
 
 
@@ -201,6 +244,30 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
             "by_reason": by_reason,
         }
     return response
+
+
+def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
+    """Build the shared offline grounding response without logging inputs."""
+
+    from openmed.clinical.grounding import (
+        RankingConfig,
+        VocabLoader,
+        ground_payload,
+    )
+
+    loader = VocabLoader(
+        cache_dir=os.getenv(_GROUNDING_CACHE_ENV_VAR),
+        local_only=payload.offline,
+    )
+    spans: Any = payload.entities if payload.entities is not None else payload.text
+    return ground_payload(
+        spans,
+        systems=payload.systems,
+        loader=loader,
+        config=RankingConfig(k=payload.top_k),
+        source_language=payload.source_language,
+        offline=payload.offline,
+    )
 
 
 def _cohort_resolve_summary(payload: CohortResolveRequest) -> Dict[str, Any]:
@@ -269,6 +336,35 @@ def _error_response(
     )
 
 
+_TAXONOMY_HTTP_STATUS: Dict[type[OpenMedError], int] = {
+    InputError: 400,
+    ConfigurationError: 400,
+    PolicyError: 400,
+    CapabilityError: 503,
+    BudgetExceededError: 503,
+    InternalError: 500,
+    OpenMedError: 500,
+}
+
+
+def _taxonomy_http_status(exc: OpenMedError) -> int:
+    """Return the documented HTTP status for a taxonomy exception."""
+
+    for error_class in type(exc).__mro__:
+        status = _TAXONOMY_HTTP_STATUS.get(error_class)
+        if status is not None:
+            return status
+    return 500
+
+
+def _openmed_error_response(exc: OpenMedError) -> JSONResponse:
+    """Return a stable, PHI-safe service envelope for a public API error."""
+
+    status = _taxonomy_http_status(exc)
+    details = dict(exc.details) if status < 500 else None
+    return _error_response(status, exc.code, exc.message, details=details)
+
+
 def _format_error_field(location: Any) -> str:
     if not isinstance(location, (list, tuple)):
         return str(location)
@@ -320,6 +416,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
+            high_watermark=runtime.batching.high_watermark,
+            low_watermark=runtime.batching.low_watermark,
+            max_queue_wait_ms=runtime.batching.max_queue_wait_ms,
+            queue_name="analyze",
             metrics=runtime.metrics,
         )
         app.state.pii_extract_batcher = DynamicBatcher(
@@ -327,6 +427,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
+            high_watermark=runtime.batching.high_watermark,
+            low_watermark=runtime.batching.low_watermark,
+            max_queue_wait_ms=runtime.batching.max_queue_wait_ms,
+            queue_name="pii_extract",
             metrics=runtime.metrics,
         )
     app.state.throttle = ServiceThrottle(
@@ -386,14 +490,20 @@ async def _await_with_timeout(
 def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
     batcher = getattr(request.app.state, "analyze_batcher", None)
     if batcher is None:
-        raise RuntimeError("Analyze batcher is not initialized")
+        raise InternalError(
+            "The analyze batcher is not initialized. Restart the service and "
+            "report the startup invariant if it recurs."
+        )
     return batcher
 
 
 def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     batcher = getattr(request.app.state, "pii_extract_batcher", None)
     if batcher is None:
-        raise RuntimeError("PII extract batcher is not initialized")
+        raise InternalError(
+            "The PII extraction batcher is not initialized. Restart the service "
+            "and report the startup invariant if it recurs."
+        )
     return batcher
 
 
@@ -402,6 +512,14 @@ def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
     if manager is None:
         manager = SMARTBackendJobManager()
         request.app.state.smart_backend_jobs = manager
+    return manager
+
+
+def _get_fhir_bulk_manager(request: Request) -> FHIRBulkJobManager:
+    manager = getattr(request.app.state, "fhir_bulk_jobs", None)
+    if manager is None:
+        manager = FHIRBulkJobManager()
+        request.app.state.fhir_bulk_jobs = manager
     return manager
 
 
@@ -492,6 +610,8 @@ def create_app() -> FastAPI:
         _attach_runtime(fastapi_app, runtime)
         if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
             fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
+        if getattr(fastapi_app.state, "fhir_bulk_jobs", None) is None:
+            fastapi_app.state.fhir_bulk_jobs = FHIRBulkJobManager()
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
@@ -533,6 +653,9 @@ def create_app() -> FastAPI:
             manager = getattr(fastapi_app.state, "smart_backend_jobs", None)
             if manager is not None:
                 await manager.cancel_all()
+            bulk_manager = getattr(fastapi_app.state, "fhir_bulk_jobs", None)
+            if bulk_manager is not None:
+                await bulk_manager.cancel_all()
             job_queue = getattr(fastapi_app.state, "job_queue", None)
             if job_queue is not None:
                 job_queue.shutdown()
@@ -559,6 +682,10 @@ def create_app() -> FastAPI:
     )
     app.state.auth = ServiceAuth(
         parse_service_auth_config(),
+        error_response=_error_response,
+    )
+    app.state.mtls = ServiceMTLS(
+        parse_service_mtls_config(),
         error_response=_error_response,
     )
     app.state.metrics = (
@@ -631,9 +758,16 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def _auth_middleware(request: Request, call_next):
         auth = getattr(request.app.state, "auth", None)
-        if auth is None:
-            return await call_next(request)
-        return await auth.dispatch(request, call_next)
+        mtls = getattr(request.app.state, "mtls", None)
+
+        async def dispatch_auth(auth_request: Request) -> Response:
+            if auth is None:
+                return await call_next(auth_request)
+            return await auth.dispatch(auth_request, call_next)
+
+        if mtls is None:
+            return await dispatch_auth(request)
+        return await mtls.dispatch(request, dispatch_auth)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
@@ -730,14 +864,21 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.exception_handler(OpenMedError)
+    async def _openmed_error_handler(
+        _: Request,
+        exc: OpenMedError,
+    ) -> JSONResponse:
+        return _openmed_error_response(exc)
+
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
-        reason = str(exc)
+        del exc
         return _error_response(
             400,
             "bad_request",
-            reason,
-            details={"reason": reason},
+            "Request arguments are invalid. Correct the request and retry.",
+            details={"reason": "invalid_arguments"},
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -1030,6 +1171,16 @@ def create_app() -> FastAPI:
             priority=priority,
         )
 
+    @app.post("/pii/deidentify/stream")
+    async def pii_deidentify_stream(
+        payload: PIIDeidentifyStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
+        set_access_log_model_name(request, payload.model_name)
+        runtime = _get_service_runtime(request)
+        events = deidentify_ndjson_stream(payload, runtime)
+        return StreamingResponse(events, media_type="application/x-ndjson")
+
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
         payload: PrivacyGatewayRequest,
@@ -1063,6 +1214,153 @@ def create_app() -> FastAPI:
             },
         ):
             return await run_in_threadpool(_omop_load_summary, payload)
+
+    @app.post("/ground")
+    async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
+        """Ground text or pre-extracted entities against local snapshots."""
+
+        try:
+            return await run_in_threadpool(_ground_summary, payload)
+        except Exception as exc:
+            from openmed.clinical.grounding import (
+                RestrictedVocabularyError,
+                VocabLoaderError,
+            )
+            from openmed.core.offline import OfflineModeError
+
+            if isinstance(exc, RestrictedVocabularyError):
+                return _error_response(
+                    400,
+                    "restricted_terminology_unconfigured",
+                    "Restricted terminology requires a configured user-supplied "
+                    "out-of-process endpoint.",
+                )
+            if isinstance(exc, OfflineModeError):
+                return _error_response(
+                    503,
+                    "offline_snapshot_unavailable",
+                    "The requested vocabulary snapshot is unavailable offline.",
+                )
+            if isinstance(exc, VocabLoaderError):
+                return _error_response(
+                    400,
+                    "snapshot_invalid",
+                    "The requested vocabulary snapshot could not be verified.",
+                )
+            if isinstance(exc, (TypeError, ValueError)):
+                return _error_response(
+                    400,
+                    "grounding_invalid_request",
+                    "The grounding request is invalid.",
+                )
+            raise
+
+    @app.post(_FHIR_BULK_EXPORT_PATH, status_code=202, include_in_schema=False)
+    async def start_fhir_bulk_export(
+        payload: FHIRBulkExportRequest,
+        request: Request,
+        response: Response,
+    ) -> Dict[str, Any]:
+        status = _start_fhir_bulk_job(payload, request)
+        status_url = f"{request.url.path}/{status.job_id}"
+        response.headers["Content-Location"] = status_url
+        payload = status.to_dict()
+        payload["status_url"] = status_url
+        return payload
+
+    @app.post(_FHIR_BULK_IMPORT_PATH, status_code=202, include_in_schema=False)
+    async def start_fhir_bulk_import(
+        payload: FHIRBulkImportRequest,
+        request: Request,
+        response: Response,
+    ) -> Dict[str, Any]:
+        status = _start_fhir_bulk_job(payload, request)
+        status_url = f"{request.url.path}/{status.job_id}"
+        response.headers["Content-Location"] = status_url
+        payload = status.to_dict()
+        payload["status_url"] = status_url
+        return payload
+
+    @app.get(f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}", include_in_schema=False)
+    @app.get(f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}", include_in_schema=False)
+    async def fhir_bulk_job_status(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_fhir_bulk_manager(request).get(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="bulk job not found",
+            ) from exc
+
+    @app.get(
+        f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}/manifest",
+        include_in_schema=False,
+    )
+    @app.get(
+        f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}/manifest",
+        include_in_schema=False,
+    )
+    async def fhir_bulk_job_manifest(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_fhir_bulk_manager(request).manifest(job_id)
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="bulk job not found",
+            ) from exc
+        except ValueError as exc:
+            raise StarletteHTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.get(
+        f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}/report",
+        include_in_schema=False,
+    )
+    @app.get(
+        f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}/report",
+        include_in_schema=False,
+    )
+    async def fhir_bulk_job_report(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_fhir_bulk_manager(request).report(job_id)
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="bulk job not found",
+            ) from exc
+        except ValueError as exc:
+            raise StarletteHTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.delete(
+        f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}",
+        status_code=202,
+        include_in_schema=False,
+    )
+    @app.delete(
+        f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}",
+        status_code=202,
+        include_in_schema=False,
+    )
+    async def cancel_fhir_bulk_job(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            status = await _get_fhir_bulk_manager(request).cancel(job_id)
+            return status.to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="bulk job not found",
+            ) from exc
 
     @app.post("/cohort/resolve")
     async def cohort_resolve(
@@ -1120,6 +1418,23 @@ def create_app() -> FastAPI:
                 detail=str(exc),
             ) from exc
 
+    @app.delete(
+        "/fhir/smart-backend/ingestions/{job_id}",
+        status_code=202,
+        include_in_schema=False,
+    )
+    async def cancel_smart_backend_ingestion(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return (await _get_smart_backend_manager(request).cancel(job_id)).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+
     @app.post("/jobs", status_code=202)
     async def create_job(
         payload: DeidentifyJobRequest,
@@ -1137,6 +1452,10 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
+
+    from .graphql_app import mount_graphql
+
+    mount_graphql(app, runtime_getter=_get_service_runtime)
 
     if app.state.tracing.enabled:
         app.add_middleware(
@@ -1209,9 +1528,14 @@ def _dispatch_analyze_group(
                 ):
                     batch_results = _analyze_payload_batch(payloads, runtime)
                 if len(batch_results) != len(active_indexes):
-                    raise ValueError(
+                    raise InferenceError(
                         "Analyze batch returned "
-                        f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                        f"{len(batch_results)} results for {len(active_indexes)} "
+                        "jobs. Retry without batching or inspect the model backend.",
+                        details={
+                            "expected_count": len(active_indexes),
+                            "actual_count": len(batch_results),
+                        },
                     )
             except Exception:
                 for index in active_indexes:
@@ -1292,9 +1616,14 @@ def _dispatch_pii_extract_group(
             ):
                 batch_results = _pii_extract_payload_batch(payloads, runtime)
             if len(batch_results) != len(active_indexes):
-                raise ValueError(
+                raise InferenceError(
                     "PII extract batch returned "
-                    f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                    f"{len(batch_results)} results for {len(active_indexes)} "
+                    "jobs. Retry without batching or inspect the model backend.",
+                    details={
+                        "expected_count": len(active_indexes),
+                        "actual_count": len(batch_results),
+                    },
                 )
         except Exception:
             for index in active_indexes:
@@ -1334,7 +1663,12 @@ def _completed_batch_results(
     completed: list[BatchResult[_ServicePayload]] = []
     for result in results:
         if result is None:
-            completed.append(RuntimeError("Batch job did not produce a result"))
+            completed.append(
+                InternalError(
+                    "A batch job produced no result. Retry the request and report "
+                    "this batch invariant if it recurs."
+                )
+            )
         else:
             completed.append(result)
     return completed
@@ -1378,11 +1712,19 @@ def _normalize_batch_predictions(
         return [raw_predictions]
 
     if not isinstance(raw_predictions, list):
-        raise ValueError("Analyze backend returned a non-list batch result")
+        raise InferenceError(
+            "The analyze backend returned a non-list batch result. Retry without "
+            "batching or inspect the model backend."
+        )
     if len(raw_predictions) != expected_count:
-        raise ValueError(
+        raise InferenceError(
             "Analyze backend returned "
-            f"{len(raw_predictions)} results for {expected_count} inputs"
+            f"{len(raw_predictions)} results for {expected_count} inputs. Retry "
+            "without batching or inspect the model backend.",
+            details={
+                "expected_count": expected_count,
+                "actual_count": len(raw_predictions),
+            },
         )
     return list(raw_predictions)
 
@@ -1412,7 +1754,7 @@ def _analyze_payload_batch(
     if tokenizer is not None and effective_max_length is not None:
         try:
             tokenizer.model_max_length = int(effective_max_length)
-        except Exception:
+        except (AttributeError, OverflowError, TypeError, ValueError):
             pass
 
     import time
@@ -1668,11 +2010,84 @@ def _smart_backend_config_from_payload(
         scope=payload.scope,
         export_path=payload.export_path,
         max_inflight_downloads=payload.max_inflight_downloads,
+        max_buffered_resources=getattr(payload, "max_buffered_resources", 1),
         poll_interval_seconds=payload.poll_interval_seconds,
         request_timeout_seconds=payload.request_timeout_seconds,
         policy=payload.policy or "hipaa_safe_harbor",
         method=payload.method,
     )
+
+
+def _fhir_bulk_config_from_payload(
+    payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
+) -> FHIRBulkJobConfig:
+    """Convert a validated route payload without retaining request metadata."""
+
+    input_dir = payload.input_dir or payload.source_dir
+    return FHIRBulkJobConfig(
+        input_dir=input_dir,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        policy=payload.policy,
+        method=payload.method,
+        max_buffered_resources=payload.max_buffered_resources,
+        max_inflight_downloads=payload.max_inflight_downloads,
+        poll_interval_seconds=payload.poll_interval_seconds,
+        request_timeout_seconds=payload.request_timeout_seconds,
+        fhir_base_url=payload.fhir_base_url,
+        token_url=payload.token_url,
+        client_id=payload.client_id,
+        private_key_pem=payload.private_key_pem,
+        key_id=payload.key_id,
+        scope=payload.scope,
+        export_path=payload.export_path,
+    )
+
+
+def _start_fhir_bulk_job(
+    payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
+    request: Request,
+):
+    runtime = _get_service_runtime(request)
+    manager = _get_fhir_bulk_manager(request)
+    config = _fhir_bulk_config_from_payload(payload)
+    configured_deidentifier = getattr(request.app.state, "fhir_bulk_deidentifier", None)
+    deidentifier = configured_deidentifier or _fhir_bulk_deidentifier(payload, runtime)
+    return manager.start(config, deidentifier=deidentifier)
+
+
+def _fhir_bulk_deidentifier(
+    payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
+    runtime: ServiceRuntime,
+):
+    def _deidentifier(text: str, **kwargs: Any) -> Any:
+        method = str(kwargs.get("method", payload.method))
+        policy = kwargs.get("policy") or payload.policy
+        consistent = bool(kwargs.get("consistent", False))
+
+        def _operation() -> Any:
+            return openmed.deidentify(
+                text,
+                method=method,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                config=runtime.config,
+                use_smart_merging=payload.use_smart_merging,
+                use_safety_sweep=payload.use_safety_sweep,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                loader=runtime.get_loader(),
+                policy=policy,
+                consistent=consistent,
+            )
+
+        return runtime.run_model_request(
+            payload.model_name,
+            payload.keep_alive,
+            _operation,
+        )
+
+    return _deidentifier
 
 
 def _smart_backend_deidentifier(

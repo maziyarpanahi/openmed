@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.OpenMedMapleDemo" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:statusBarColor">#071A1C</item>
+        <item name="android:navigationBarColor">#071A1C</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#47E3C2</item>
+    </style>
+</resources>

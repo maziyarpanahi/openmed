@@ -1,4 +1,4 @@
-FROM python:3.11-slim@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3
+FROM python:3.11-slim@sha256:9c900dea9e8fb7e16277c179b555cc72d29a352dbc33cff48ad5a0412fd5bfc7
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,6 +6,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENMED_SERVICE_KEEP_ALIVE=10m
 
 WORKDIR /app
+
+# Keep the immutable base's OS security fixes explicit and reproducible.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        "bsdutils=1:2.41.5-0+deb13u1" \
+        "libblkid1=2.41.5-0+deb13u1" \
+        "liblastlog2-2=2.41.5-0+deb13u1" \
+        "libmount1=2.41.5-0+deb13u1" \
+        "libsmartcols1=2.41.5-0+deb13u1" \
+        "libuuid1=2.41.5-0+deb13u1" \
+        "login=1:4.16.0-2+really2.41.5-0+deb13u1" \
+        "mount=2.41.5-0+deb13u1" \
+        "util-linux=2.41.5-0+deb13u1" \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
 

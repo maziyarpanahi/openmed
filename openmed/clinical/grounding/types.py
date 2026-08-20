@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .systems import system_uri
+
 if TYPE_CHECKING:
     from openmed.clinical.context import ClinicalAssertion, ClinicalContextResult
 
@@ -44,14 +46,22 @@ class Candidate:
 
         return self.code
 
+    @property
+    def system_uri(self) -> str | None:
+        """Return the canonical FHIR system URI for this candidate."""
+
+        return system_uri(self.system)
+
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-ready candidate record including source language."""
 
         return {
             "system": self.system,
+            "system_uri": self.system_uri,
             "code": self.code,
             "display": self.display,
             "score": self.score,
+            "confidence": self.score,
             "source_language": self.source_language,
             "source": self.source,
             "matched_alias": self.matched_alias,
@@ -101,6 +111,8 @@ class GroundedSpan:
     assertion: ClinicalAssertion | ClinicalContextResult | None = None
     source_language: str = "en"
     metadata: Mapping[str, Any] = field(default_factory=dict, compare=False)
+    alternatives: tuple[Candidate, ...] = ()
+    section: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.text, str):
@@ -112,6 +124,9 @@ class GroundedSpan:
         candidates = tuple(self.candidates)
         if any(not isinstance(candidate, Candidate) for candidate in candidates):
             raise TypeError("grounded span candidates must be Candidate objects")
+        alternatives = tuple(self.alternatives)
+        if any(not isinstance(candidate, Candidate) for candidate in alternatives):
+            raise TypeError("grounded span alternatives must be Candidate objects")
         if self.canonical_label is not None and not self.canonical_label.strip():
             raise ValueError("canonical_label must be non-empty when provided")
         if not isinstance(self.source_language, str) or not self.source_language:
@@ -121,6 +136,7 @@ class GroundedSpan:
         if not isinstance(self.provenance, Mapping):
             raise TypeError("grounded span provenance must be a mapping")
         object.__setattr__(self, "candidates", candidates)
+        object.__setattr__(self, "alternatives", alternatives)
         object.__setattr__(self, "provenance", dict(self.provenance))
         object.__setattr__(self, "metadata", dict(self.metadata))
 
@@ -153,13 +169,48 @@ class GroundedSpan:
             raise ValueError("grounded span score must be finite")
         return score
 
+    @property
+    def confidence(self) -> float:
+        """Alias for :attr:`score` used by the shared wire contract."""
+
+        return self.score
+
+    @property
+    def system_uri(self) -> str | None:
+        """Return the URI of the highest-ranked selected candidate."""
+
+        return self.candidates[0].system_uri if self.candidates else None
+
+    @property
+    def code(self) -> str | None:
+        """Return the highest-ranked selected code, if any."""
+
+        return self.candidates[0].code if self.candidates else None
+
+    @property
+    def display(self) -> str | None:
+        """Return the highest-ranked selected display, if any."""
+
+        return self.candidates[0].display if self.candidates else None
+
+    @property
+    def ranked_alternatives(self) -> tuple[Candidate, ...]:
+        """Return candidates ranked below the selected system representatives."""
+
+        return self.alternatives
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready grounding record with offsets and provenance."""
 
-        return {
+        snapshot_provenance = self.provenance.get("snapshot_provenance", {})
+        result = {
             "text": self.text,
             "start": self.start,
             "end": self.end,
+            "system_uri": self.system_uri,
+            "code": self.code,
+            "display": self.display,
+            "confidence": self.score,
             "cui": self.cui,
             "codes": self.codes,
             "score": self.score,
@@ -170,5 +221,54 @@ class GroundedSpan:
             "assertion": self.assertion.to_dict() if self.assertion else None,
             "source_language": self.source_language,
             "candidates": [candidate.to_dict() for candidate in self.candidates],
+            "alternatives": [candidate.to_dict() for candidate in self.alternatives],
+            "ranked_alternatives": [
+                candidate.to_dict() for candidate in self.alternatives
+            ],
+            "section": self.section,
+            "section_context": self.section,
+            "snapshot_provenance": dict(snapshot_provenance)
+            if isinstance(snapshot_provenance, Mapping)
+            else {},
             "metadata": dict(self.metadata),
         }
+        return result
+
+    def to_audit_dict(self) -> dict[str, Any]:
+        """Return offsets, hashes, and codes without note-derived surfaces."""
+
+        grounding = dict(self.provenance)
+        grounding.pop("text", None)
+        grounding.pop("surface", None)
+        grounding.pop("tokens", None)
+        return {
+            "start": self.start,
+            "end": self.end,
+            "text_hash": _hash_surface(self.text),
+            "system_uri": self.system_uri,
+            "code": self.code,
+            "display": self.display,
+            "confidence": self.score,
+            "abstained": self.abstained or not bool(self.candidates),
+            "candidates": [
+                {
+                    "system_uri": candidate.system_uri,
+                    "code": candidate.code,
+                    "display": candidate.display,
+                    "confidence": candidate.score,
+                    "source": candidate.source,
+                    "match_kind": candidate.match_kind,
+                    "vocab_version": candidate.vocab_version,
+                }
+                for candidate in (*self.candidates, *self.alternatives)
+            ],
+            "provenance": grounding,
+        }
+
+
+def _hash_surface(value: str) -> str:
+    """Hash a source surface for the PHI-free audit representation."""
+
+    import hashlib
+
+    return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
