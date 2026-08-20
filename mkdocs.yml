@@ -100,7 +100,9 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Example Notebooks Gallery: examples/notebook-gallery.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
+      - Preference Pair Schema: reference/preference-schema.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
@@ -147,6 +149,7 @@ nav:
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
