@@ -183,3 +183,21 @@ def test_failures_publish_only_type_names_and_safe_reports(tmp_path: Path) -> No
     assert SYNTHETIC_SECRET not in str(raised.value)
     assert raised.value.input_index == 0
     assert raised.value.error_type == "RuntimeError"
+
+
+def test_dynamic_exception_type_cannot_leak_sensitive_content(tmp_path: Path) -> None:
+    sensitive_error = type(SYNTHETIC_SECRET.replace("-", "_"), (RuntimeError,), {})
+
+    def raising_handler(path: Path, store: dict[str, int]) -> None:
+        del path, store
+        raise sensitive_error()
+
+    result = run_trace_files(
+        _write_inputs(tmp_path, count=1),
+        raising_handler,
+        use_processes=False,
+    )
+
+    assert result.items[0].error_type == parallel.UNKNOWN_ERROR_TYPE
+    assert SYNTHETIC_SECRET.replace("-", "_") not in json.dumps(result.to_dict())
+    assert SYNTHETIC_SECRET.replace("-", "_") not in repr(result.items[0])

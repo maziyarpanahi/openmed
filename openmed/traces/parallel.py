@@ -19,7 +19,6 @@ import math
 import multiprocessing
 import os
 import pickle
-import re
 import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -31,8 +30,31 @@ DEFAULT_TRACE_SHARD_SIZE = 1
 DEFAULT_TRACE_START_METHOD = "spawn"
 UNKNOWN_ERROR_TYPE = "UnknownError"
 
-_ERROR_TYPE_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_MAX_ERROR_TYPE_LENGTH = 128
+_SAFE_ERROR_TYPES = frozenset(
+    {
+        "ArithmeticError",
+        "AssertionError",
+        "AttributeError",
+        "EOFError",
+        "FileExistsError",
+        "FileNotFoundError",
+        "ImportError",
+        "IndexError",
+        "IsADirectoryError",
+        "KeyError",
+        "LookupError",
+        "MemoryError",
+        "NotADirectoryError",
+        "OSError",
+        "OverflowError",
+        "PermissionError",
+        "RuntimeError",
+        "TimeoutError",
+        "TypeError",
+        "UnicodeError",
+        "ValueError",
+    }
+)
 _EXECUTION_MODES = frozenset({"processes", "sequential"})
 _FALLBACK_REASONS = frozenset({"unsafe", "unavailable", "startup_failed"})
 
@@ -62,12 +84,8 @@ class TraceProcessingError(TraceExecutionError):
 
 
 def _safe_error_type_name(value: Any) -> str:
-    """Return a bounded exception type name suitable for operator output."""
-    if (
-        isinstance(value, str)
-        and len(value) <= _MAX_ERROR_TYPE_LENGTH
-        and _ERROR_TYPE_PATTERN.fullmatch(value)
-    ):
+    """Return an allowlisted exception type suitable for operator output."""
+    if isinstance(value, str) and value in _SAFE_ERROR_TYPES:
         return value
     return UNKNOWN_ERROR_TYPE
 
@@ -584,7 +602,7 @@ def run_trace_files(
     )
 
     if not shards:
-        result = TraceRunResult(
+        result: TraceRunResult[ResultT] = TraceRunResult(
             items=(),
             shard_count=0,
             worker_count=0,
