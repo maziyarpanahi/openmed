@@ -10,9 +10,11 @@ model or make a network request.
 from __future__ import annotations
 
 import copy
+import hashlib
+import re
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypeGuard
 
 PathPart: TypeAlias = str | int
 ContentPath: TypeAlias = tuple[PathPart, ...]
@@ -35,6 +37,17 @@ _TEXT_PART_TYPES = frozenset(
     }
 )
 _TOOL_RESULT_PART_TYPES = frozenset({"tool_result", "tool_response"})
+_SAFE_PATH_KEYS = frozenset(
+    {
+        DEFAULT_MESSAGES_KEY,
+        DEFAULT_CONTENT_KEY,
+        "items",
+        "parts",
+        "text",
+        "value",
+    }
+)
+_HASHED_PATH_KEY = re.compile(r"^key_sha256_[0-9a-f]{12}$")
 
 
 class ChatSchemaError(ValueError):
@@ -59,6 +72,22 @@ class ChatRedactionReport:
     redacted_text_count: int = 0
     structured_part_count: int = 0
     content_paths: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        try:
+            for name in (
+                "message_count",
+                "text_value_count",
+                "redacted_text_count",
+                "structured_part_count",
+            ):
+                value = getattr(self, name)
+                if type(value) is not int or value < 0:
+                    raise ValueError
+            safe_paths = tuple(_safe_report_path(path) for path in self.content_paths)
+        except Exception:  # noqa: BLE001 - report input may contain PHI
+            raise ChatSchemaError("chat redaction report is invalid") from None
+        object.__setattr__(self, "content_paths", safe_paths)
 
     @property
     def redacted_fields(self) -> int:
@@ -158,7 +187,7 @@ class _RedactionState:
         )
 
 
-def _is_sequence(value: Any) -> bool:
+def _is_sequence(value: Any) -> TypeGuard[Sequence[Any]]:
     return isinstance(value, Sequence) and not isinstance(
         value, (str, bytes, bytearray)
     )
@@ -188,7 +217,7 @@ def _walk_content(
     visited = active if active is not None else set()
     identifier = id(value)
     if identifier in visited:
-        return ()
+        raise ChatSchemaError("cyclic message content is not supported")
     visited.add(identifier)
     try:
         if isinstance(value, Mapping):
@@ -229,16 +258,19 @@ def _walk_content(
                     )
                 )
 
-            for key in ("parts", "items"):
-                if key in value and _is_sequence(value[key]):
-                    items.extend(
-                        _walk_content(
-                            value[key],
-                            path + (key,),
-                            structured=True,
-                            active=visited,
+            if part_type is None or part_type in (
+                _TEXT_PART_TYPES | _TOOL_RESULT_PART_TYPES
+            ):
+                for key in ("parts", "items"):
+                    if key in value and _is_sequence(value[key]):
+                        items.extend(
+                            _walk_content(
+                                value[key],
+                                path + (key,),
+                                structured=True,
+                                active=visited,
+                            )
                         )
-                    )
             return tuple(items)
 
         items = []
@@ -479,11 +511,26 @@ def _format_path(path: Sequence[PathPart]) -> str:
     for part in path:
         if isinstance(part, int):
             rendered += f"[{part}]"
-        elif part.isidentifier():
+        elif part in _SAFE_PATH_KEYS:
             rendered += f".{part}"
         else:
-            rendered += f"[{part!r}]"
+            digest = hashlib.sha256(part.encode("utf-8")).hexdigest()[:12]
+            rendered += f".key_sha256_{digest}"
     return rendered
+
+
+def _safe_report_path(value: object) -> str:
+    if isinstance(value, str) and value.startswith("$"):
+        without_indexes = re.sub(r"\[\d+\]", "", value)
+        parts = tuple(part for part in without_indexes[1:].split(".") if part)
+        if without_indexes == "$" or all(
+            part in _SAFE_PATH_KEYS or _HASHED_PATH_KEY.fullmatch(part)
+            for part in parts
+        ):
+            return value
+    raw = value if isinstance(value, str) else type(value).__qualname__
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return f"$.key_sha256_{digest}"
 
 
 def _transform_walked(
@@ -523,8 +570,8 @@ class RoleMessageSchemaAdapter:
             raise ChatSchemaError("messages_key must be a non-empty string")
         if not isinstance(content_key, str) or not content_key.strip():
             raise ChatSchemaError("content_key must be a non-empty string")
-        self.messages_key = messages_key
-        self.content_key = content_key
+        self.messages_key = messages_key.strip()
+        self.content_key = content_key.strip()
         self._text_redactor = (
             _resolve_redactor(
                 text_redactor,

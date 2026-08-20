@@ -59,7 +59,9 @@ redacted_messages = redact_chat_messages(messages, text_redactor=local_redactor)
 
 For counters and safe content paths, use the corresponding
 `*_with_report` function. Reports contain counts and structural paths only;
-they never include source text or replacement text.
+they never include source text or replacement text. Nonstandard
+caller-controlled path keys are represented by deterministic
+`key_sha256_...` segments, including when a report is constructed directly.
 
 The `RoleMessageSchemaAdapter` also exposes `detect`, `walk`, `reconstruct`,
 and `transform` for callers that use a training-schema registry. All

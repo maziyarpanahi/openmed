@@ -9,7 +9,9 @@ import pytest
 
 from openmed.traces.schemas.chat import (
     ChatMessageRedactionError,
+    ChatRedactionReport,
     ChatRedactionResult,
+    ChatSchemaError,
     RoleMessageSchemaAdapter,
     redact_chat_messages,
     redact_chat_record,
@@ -145,6 +147,24 @@ def test_structured_content_redacts_text_parts_only() -> None:
     assert redacted[0]["content"][5]["value"] == "[VALUE]"
 
 
+def test_unknown_part_containers_remain_untouched() -> None:
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "custom",
+                    "parts": [{"text": "synthetic value"}],
+                }
+            ],
+        }
+    ]
+
+    redacted = redact_chat_messages(messages, text_redactor=_redact)
+
+    assert redacted == messages
+
+
 def test_adapter_walk_and_reconstruct_use_stable_content_paths() -> None:
     record = {
         "messages": [
@@ -199,6 +219,39 @@ def test_report_and_result_are_value_free_and_deterministic() -> None:
     serialized_report = json.dumps(first.report.to_dict(), sort_keys=True)
     assert "synthetic" not in serialized_report
     assert "[PERSON]" not in serialized_report
+
+
+def test_custom_schema_keys_are_hashed_in_report_paths() -> None:
+    sensitive_key = "PatientJaneDoe"
+    result = redact_chat_record_with_report(
+        {sensitive_key: [{"content": "synthetic value"}]},
+        text_redactor=_redact,
+        messages_key=sensitive_key,
+    )
+
+    serialized_report = json.dumps(result.report.to_dict(), sort_keys=True)
+    assert sensitive_key not in serialized_report
+    assert "key_sha256_" in serialized_report
+
+
+def test_direct_report_construction_sanitizes_content_paths() -> None:
+    sensitive_key = "PatientJaneDoe"
+    report = ChatRedactionReport(content_paths=(f"$.{sensitive_key}",))
+
+    serialized_report = json.dumps(report.to_dict(), sort_keys=True)
+    assert sensitive_key not in serialized_report
+    assert report.content_paths[0].startswith("$.key_sha256_")
+
+
+def test_cyclic_structured_content_fails_closed() -> None:
+    content: list[object] = []
+    content.append({"type": "text", "items": content})
+
+    with pytest.raises(ChatSchemaError, match="cyclic"):
+        redact_chat_messages(
+            [{"role": "user", "content": content}],
+            text_redactor=_redact,
+        )
 
 
 def test_redactor_failures_do_not_expose_source_text() -> None:
