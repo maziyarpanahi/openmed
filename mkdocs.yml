@@ -35,6 +35,7 @@ nav:
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
+      - Streaming Trace Redaction: guides/streaming-traces.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
