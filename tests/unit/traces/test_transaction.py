@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -110,16 +111,12 @@ def test_callback_result_failures_are_value_free(tmp_path: Path) -> None:
     target = tmp_path / "trace.jsonl"
     target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
 
-    class FailingText(str):
-        def encode(self, *args: object, **kwargs: object) -> bytes:
-            raise RuntimeError(SYNTHETIC_VALUE)
-
     class FailingDecision:
         def __bool__(self) -> bool:
             raise RuntimeError(SYNTHETIC_VALUE)
 
     with pytest.raises(TransactionRedactionError) as encoding_error:
-        transactional_redact(target, lambda _text: FailingText(SYNTHETIC_REPLACEMENT))
+        transactional_redact(target, lambda _text: "\ud800")
     assert SYNTHETIC_VALUE not in str(encoding_error.value)
 
     with pytest.raises(TransactionValidationError) as validation_error:
@@ -130,6 +127,185 @@ def test_callback_result_failures_are_value_free(tmp_path: Path) -> None:
         )
     assert SYNTHETIC_VALUE not in str(validation_error.value)
     assert target.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+
+
+def test_string_subclass_hooks_cannot_change_validated_replacement_bytes(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+
+    class DeceptiveText(str):
+        def encode(self, *args: object, **kwargs: object) -> bytes:
+            del args, kwargs
+            return SYNTHETIC_VALUE.encode("utf-8")
+
+    result = transactional_redact(
+        target,
+        lambda _text: DeceptiveText(SYNTHETIC_REPLACEMENT),
+        validator=lambda candidate: candidate == SYNTHETIC_REPLACEMENT,
+        backup=False,
+    )
+
+    assert result.changed is True
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+
+
+def test_relative_target_is_bound_before_callback_changes_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_directory = tmp_path / "source"
+    other_directory = tmp_path / "other"
+    source_directory.mkdir()
+    other_directory.mkdir()
+    target = source_directory / "trace.jsonl"
+    other_target = other_directory / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    other_target.write_text("unrelated local trace", encoding="utf-8")
+    monkeypatch.chdir(source_directory)
+
+    def change_directory(_text: str) -> str:
+        os.chdir(other_directory)
+        return SYNTHETIC_REPLACEMENT
+
+    result = transactional_redact(
+        Path("trace.jsonl"),
+        change_directory,
+        backup=False,
+    )
+
+    assert result.path == target
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+    assert other_target.read_text(encoding="utf-8") == "unrelated local trace"
+
+
+def test_source_bytes_are_read_from_the_audited_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    decoy = tmp_path / "decoy.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    decoy.write_text("SYNTHETIC_DECOY_VALUE", encoding="utf-8")
+    original_read_bytes = Path.read_bytes
+    seen: list[str] = []
+
+    def swap_before_path_read(path: Path) -> bytes:
+        if path == target:
+            target.unlink()
+            target.symlink_to(decoy)
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", swap_before_path_read)
+
+    result = transactional_redact(
+        target,
+        lambda text: seen.append(text) or SYNTHETIC_REPLACEMENT,
+        backup=False,
+    )
+
+    assert result.changed is True
+    assert seen == [SYNTHETIC_VALUE]
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+
+
+def test_path_and_descriptor_identity_representations_may_differ(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    original_stat = os.stat
+
+    def stat_with_wide_path_identity(
+        path: str | os.PathLike[str],
+        *,
+        follow_symlinks: bool = True,
+    ) -> os.stat_result:
+        result = original_stat(path, follow_symlinks=follow_symlinks)
+        if Path(path) != target:
+            return result
+        return SimpleNamespace(
+            st_atime_ns=result.st_atime_ns,
+            st_ctime_ns=result.st_ctime_ns,
+            st_dev=result.st_dev + (1 << 64),
+            st_ino=result.st_ino + (1 << 96),
+            st_mode=result.st_mode,
+            st_mtime_ns=result.st_mtime_ns,
+            st_size=result.st_size,
+        )  # type: ignore[return-value]
+
+    monkeypatch.setattr(transaction_module.os, "stat", stat_with_wide_path_identity)
+
+    result = transactional_redact(
+        target,
+        lambda _text: SYNTHETIC_REPLACEMENT,
+        backup=False,
+    )
+
+    assert result.changed is True
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+
+
+def test_descriptor_identity_verification_rejects_a_swapped_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    decoy = tmp_path / "decoy.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    decoy.write_text("SYNTHETIC_DECOY_VALUE", encoding="utf-8")
+    original_open = os.open
+    target_open_count = 0
+    seen: list[str] = []
+
+    def open_decoy_for_verification(
+        path: str | os.PathLike[str],
+        flags: int,
+        mode: int = 0o777,
+    ) -> int:
+        nonlocal target_open_count
+        if Path(path) == target:
+            target_open_count += 1
+            if target_open_count == 2:
+                return original_open(decoy, flags, mode)
+        return original_open(path, flags, mode)
+
+    monkeypatch.setattr(transaction_module.os, "open", open_decoy_for_verification)
+
+    with pytest.raises(TransactionConflictError):
+        transactional_redact(
+            target,
+            lambda text: seen.append(text) or SYNTHETIC_REPLACEMENT,
+            backup=False,
+        )
+
+    assert seen == []
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+    assert decoy.read_text(encoding="utf-8") == "SYNTHETIC_DECOY_VALUE"
+
+
+def test_final_symlink_is_rejected_before_source_text_reaches_redactor(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jsonl"
+    target = tmp_path / "trace.jsonl"
+    source.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    try:
+        target.symlink_to(source)
+    except OSError:
+        pytest.skip("symlink creation is unavailable on this platform")
+    seen: list[str] = []
+
+    with pytest.raises(TransactionReadError):
+        transactional_redact(
+            target,
+            lambda text: seen.append(text) or SYNTHETIC_REPLACEMENT,
+        )
+
+    assert seen == []
+    assert source.read_text(encoding="utf-8") == SYNTHETIC_VALUE
 
 
 def test_source_change_is_detected_before_atomic_exchange(tmp_path: Path) -> None:
@@ -178,6 +354,32 @@ def test_interruption_cleans_transaction_artifacts(tmp_path: Path) -> None:
         transactional_redact(target, interrupt)
 
     assert target.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+    assert list(tmp_path.glob(".openmed-transaction-*.tmp")) == []
+
+
+def test_interruption_after_atomic_replace_keeps_the_recovery_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    original_replace = os.replace
+
+    def replace_then_interrupt(
+        source: str | os.PathLike[str],
+        destination: str | os.PathLike[str],
+    ) -> None:
+        original_replace(source, destination)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("openmed.traces.transaction.os.replace", replace_then_interrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        transactional_redact(target, lambda _text: SYNTHETIC_REPLACEMENT)
+
+    backup = target.with_name(target.name + ".bak")
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_REPLACEMENT
+    assert backup.read_text(encoding="utf-8") == SYNTHETIC_VALUE
     assert list(tmp_path.glob(".openmed-transaction-*.tmp")) == []
 
 

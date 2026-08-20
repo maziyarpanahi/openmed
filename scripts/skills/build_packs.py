@@ -12,7 +12,9 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -93,15 +95,126 @@ def _read_json(path: Path) -> object:
 
 
 def _valid_identifier(value: object) -> bool:
-    return isinstance(value, str) and bool(IDENTIFIER_RE.fullmatch(value))
+    text = _plain_text(value)
+    return text is not None and bool(IDENTIFIER_RE.fullmatch(text))
 
 
 def _valid_version(value: object) -> bool:
-    return isinstance(value, str) and bool(SEMVER_RE.fullmatch(value))
+    text = _plain_text(value)
+    return text is not None and bool(SEMVER_RE.fullmatch(text))
 
 
 def _positive_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
+
+
+def _canonical_manifest(manifest: PackManifest) -> PackManifest:
+    """Validate and canonicalize an in-memory manifest before filesystem use."""
+
+    if not isinstance(manifest, PackManifest):
+        raise PackValidationError(("pack manifest is invalid",))
+    if (
+        type(manifest.manifest_version) is not int
+        or manifest.manifest_version != MANIFEST_VERSION
+    ):
+        raise PackValidationError(("manifest_version must be the supported version",))
+    try:
+        raw_packs = tuple(manifest.packs)
+    except Exception:
+        raise PackValidationError(("packs could not be consumed safely",)) from None
+    if not raw_packs:
+        raise PackValidationError(("packs must be a non-empty list",))
+
+    errors: list[str] = []
+    canonical: list[PackSpec] = []
+    seen_pack_ids: set[str] = set()
+    membership: dict[str, str] = {}
+    for index, pack in enumerate(raw_packs):
+        prefix = f"packs[{index}]"
+        if not isinstance(pack, PackSpec) or not isinstance(pack.budget, PackBudget):
+            errors.append(f"{prefix} is invalid")
+            continue
+        identifier = _plain_text(pack.identifier)
+        version = _plain_text(pack.version)
+        description = _plain_text(pack.description)
+        if identifier is None or not _valid_identifier(identifier):
+            errors.append(f"{prefix}.id is invalid")
+            continue
+        if identifier in seen_pack_ids:
+            errors.append(f"pack id '{identifier}' is duplicated")
+            continue
+        seen_pack_ids.add(identifier)
+        if version is None or not _valid_version(version):
+            errors.append(f"{prefix}.version is invalid")
+            continue
+        if description is None or not description.strip():
+            errors.append(f"{prefix}.description is invalid")
+            continue
+        if not _positive_int(pack.budget.max_skills) or not _positive_int(
+            pack.budget.max_bytes
+        ):
+            errors.append(f"{prefix}.budget is invalid")
+            continue
+        try:
+            raw_skills = tuple(pack.skills)
+        except Exception:
+            errors.append(f"{prefix}.skills could not be consumed safely")
+            continue
+        if not raw_skills:
+            errors.append(f"{prefix}.skills must be a non-empty list")
+            continue
+
+        skills: list[str] = []
+        seen_skills: set[str] = set()
+        for skill_index, raw_skill in enumerate(raw_skills):
+            skill_id = _plain_text(raw_skill)
+            if skill_id is None or not _valid_identifier(skill_id):
+                errors.append(f"{prefix}.skills[{skill_index}] is invalid")
+                continue
+            if skill_id in seen_skills:
+                errors.append(f"{prefix}.skills lists '{skill_id}' more than once")
+                continue
+            seen_skills.add(skill_id)
+            previous = membership.get(skill_id)
+            if previous is not None and previous != identifier:
+                errors.append(
+                    f"skill '{skill_id}' is assigned to both '{previous}' and "
+                    f"'{identifier}'"
+                )
+            else:
+                membership[skill_id] = identifier
+            skills.append(skill_id)
+
+        canonical.append(
+            PackSpec(
+                identifier=identifier,
+                version=version,
+                description=description.strip(),
+                skills=tuple(sorted(skills)),
+                budget=PackBudget(
+                    max_skills=pack.budget.max_skills,
+                    max_bytes=pack.budget.max_bytes,
+                ),
+            )
+        )
+
+    if errors:
+        raise PackValidationError(tuple(errors))
+    return PackManifest(
+        manifest_version=MANIFEST_VERSION,
+        packs=tuple(sorted(canonical, key=lambda pack: pack.identifier)),
+    )
 
 
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> PackManifest:
@@ -117,7 +230,11 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> PackManifest:
         raise PackValidationError(("pack manifest must be a JSON object",))
 
     errors: list[str] = []
-    if payload.get("manifest_version") != MANIFEST_VERSION:
+    raw_manifest_version = payload.get("manifest_version")
+    if (
+        type(raw_manifest_version) is not int
+        or raw_manifest_version != MANIFEST_VERSION
+    ):
         errors.append("manifest_version must be the supported version")
 
     raw_packs = payload.get("packs")
@@ -215,9 +332,11 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> PackManifest:
     if errors:
         raise PackValidationError(tuple(errors))
 
-    return PackManifest(
-        manifest_version=MANIFEST_VERSION,
-        packs=tuple(sorted(packs, key=lambda pack: pack.identifier)),
+    return _canonical_manifest(
+        PackManifest(
+            manifest_version=MANIFEST_VERSION,
+            packs=tuple(sorted(packs, key=lambda pack: pack.identifier)),
+        )
     )
 
 
@@ -265,11 +384,13 @@ def skill_size_bytes(skill_dir: Path) -> int:
             if file_path.is_symlink():
                 continue
             try:
-                total += file_path.stat().st_size
+                file_stat = file_path.stat(follow_symlinks=False)
             except OSError:
                 raise PackValidationError(
                     ("unable to measure a skill directory",)
                 ) from None
+            if stat.S_ISREG(file_stat.st_mode):
+                total += file_stat.st_size
     return total
 
 
@@ -278,6 +399,7 @@ def validate_manifest(
 ) -> tuple[PackReport, ...]:
     """Validate skill membership, duplicate assignments, and pack budgets."""
 
+    manifest = _canonical_manifest(manifest)
     skills = discover_skills(skills_dir)
     sizes = {skill_id: skill_size_bytes(path) for skill_id, path in skills.items()}
     errors: list[str] = []
@@ -454,15 +576,41 @@ def _write_pack_metadata(
         metadata_path.exists() and not metadata_path.is_file()
     ):
         raise PackBuildError(f"pack '{report.pack.identifier}' metadata is not safe")
+    payload = (json.dumps(metadata, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    temporary_path: Path | None = None
+    descriptor: int | None = None
     try:
-        metadata_path.write_text(
-            json.dumps(metadata, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".pack-json-",
+            suffix=".tmp",
+            dir=os.fspath(pack_dir),
         )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = None
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _validate_existing_metadata(metadata_path, report.pack.identifier)
+        os.replace(os.fspath(temporary_path), os.fspath(metadata_path))
+        temporary_path = None
+    except PackBuildError:
+        raise
     except OSError:
         raise PackBuildError(
             f"could not write pack '{report.pack.identifier}'"
         ) from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
 
 
 def _link_skill(source: Path, destination: Path, pack_id: str) -> None:
@@ -489,11 +637,11 @@ def build_packs(
     *,
     pack_ids: Sequence[str] | None = None,
     selection_only: bool = False,
-    reports: tuple[PackReport, ...] | None = None,
 ) -> tuple[PackReport, ...]:
     """Build selected packs and return their validated reports."""
 
-    reports = reports or validate_manifest(manifest, skills_dir)
+    manifest = _canonical_manifest(manifest)
+    reports = validate_manifest(manifest, skills_dir)
     selected = set(pack_ids or ())
     available = {report.pack.identifier for report in reports}
     unknown = sorted(selected - available)
@@ -550,14 +698,12 @@ def build_from_files(
     """Load, validate, and build packs from repository paths."""
 
     manifest = load_manifest(manifest_path)
-    reports = validate_manifest(manifest, skills_dir)
     return build_packs(
         manifest,
         skills_dir,
         output_dir,
         pack_ids=pack_ids,
         selection_only=selection_only,
-        reports=reports,
     )
 
 
@@ -607,8 +753,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         manifest = load_manifest(args.manifest)
-        reports = validate_manifest(manifest, args.skills_dir)
         if args.check:
+            reports = validate_manifest(manifest, args.skills_dir)
             print(f"Validated {len(reports)} topical packs.")
             return 0
         built = build_packs(
@@ -617,7 +763,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.output,
             pack_ids=args.pack_ids,
             selection_only=args.selection_only,
-            reports=reports,
         )
     except PackValidationError as exc:
         print("Pack validation failed:", file=sys.stderr)
