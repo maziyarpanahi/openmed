@@ -23,7 +23,7 @@ def _service(compose: dict) -> dict:
     return service
 
 
-def test_bundle_builds_the_hardened_service_image():
+def test_bundle_builds_the_hardened_service_image() -> None:
     service = _service(_load_compose())
 
     assert service["image"] == "${OPENMED_IMAGE:-openmed:distroless}"
@@ -35,11 +35,17 @@ def test_bundle_builds_the_hardened_service_image():
     assert service["user"] == "65532:65532"
 
 
-def test_bundle_is_local_only_and_keeps_model_inputs_read_only():
+def test_bundle_is_local_only_and_keeps_model_inputs_read_only() -> None:
     compose = _load_compose()
     service = _service(compose)
     environment = service["environment"]
 
+    assert service["ports"] == [
+        "${OPENMED_BIND_ADDRESS:-127.0.0.1}:${OPENMED_PORT:-8080}:8080"
+    ]
+    assert environment["OPENMED_SERVICE_TRUSTED_HOSTS"] == (
+        "${OPENMED_SERVICE_TRUSTED_HOSTS:-localhost,127.0.0.1}"
+    )
     assert environment["OPENMED_OFFLINE"] == "1"
     assert environment["HF_HUB_OFFLINE"] == "1"
     assert environment["TRANSFORMERS_OFFLINE"] == "1"
@@ -53,7 +59,7 @@ def test_bundle_is_local_only_and_keeps_model_inputs_read_only():
     )
 
 
-def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults():
+def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults() -> None:
     service = _service(_load_compose())
     environment = service["environment"]
 
@@ -62,13 +68,14 @@ def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults():
     assert environment["OPENMED_SERVICE_TRACING_ENABLED"] == "false"
     assert environment["OPENMED_SERVICE_OTLP_ENDPOINT"] == ""
     assert environment["OPENMED_OPENHIM_MEDIATOR_ENABLED"] == "false"
+    assert "HF_TOKEN" not in environment
     assert service["read_only"] is True
     assert service["cap_drop"] == ["ALL"]
     assert service["security_opt"] == ["no-new-privileges:true"]
     assert "/tmp:rw,noexec,nosuid,nodev,size=128m" in service["tmpfs"]
 
 
-def test_bundle_healthcheck_probes_readiness_with_bounded_timeout():
+def test_bundle_healthcheck_probes_readiness_with_bounded_timeout() -> None:
     healthcheck = _service(_load_compose())["healthcheck"]
     command = " ".join(healthcheck["test"])
 
@@ -80,7 +87,7 @@ def test_bundle_healthcheck_probes_readiness_with_bounded_timeout():
     assert healthcheck["retries"] == 3
 
 
-def test_bundle_docs_cover_offline_startup_permissions_and_integrations():
+def test_bundle_docs_cover_offline_startup_permissions_and_integrations() -> None:
     docs = DOCS_FILE.read_text(encoding="utf-8")
 
     for required_text in (
@@ -92,6 +99,8 @@ def test_bundle_docs_cover_offline_startup_permissions_and_integrations():
         "OpenHIM",
         "privacy gateway",
         "HF_TOKEN",
+        "127.0.0.1:8080:8080",
+        "authentication, TLS",
         "synthetic",
     ):
         assert required_text in docs

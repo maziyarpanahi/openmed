@@ -1,6 +1,8 @@
 package com.openmed.openmedkit
 
 import com.openmed.openmedkit.segmentation.IcuTextSegmenter
+import com.openmed.openmedkit.util.phiSafeLabel
+import com.openmed.openmedkit.util.sha256Hex
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -57,8 +59,8 @@ data class EntityPrediction(
     }
 
     /**
-     * Human-readable description matching the Swift `EntityPrediction`
-     * format `[label] "text" (start:end) conf=0.00`.
+     * PHI-safe diagnostic description containing a label, offsets, confidence,
+     * and the SHA-256 digest of [text], but never the detected surface text.
      *
      * The confidence is rendered with two decimals using half-even
      * ("banker's") rounding on a period decimal separator, matching Swift's
@@ -76,6 +78,7 @@ data class EntityPrediction(
             } else {
                 confidence.toString()
             }
-        return "[$label] \"$text\" ($start:$end) conf=$conf"
+        return "[${phiSafeLabel(label)}] sha256=${sha256Hex(text)} " +
+            "($start:$end) conf=$conf"
     }
 }
