@@ -99,6 +99,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - guides/trace-discovery.md
     - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
@@ -194,6 +195,7 @@ classification:
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
+    - guides/file-redaction.md
     - reidentification-risk.md
     - privacy/structured-risk-lab.md
     - sms-short-text-deid.md

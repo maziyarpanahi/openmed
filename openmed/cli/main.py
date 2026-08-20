@@ -65,6 +65,7 @@ from .airgap import add_airgap_command
 from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
+from .redact_files import add_redact_files_command
 from .registry import add_registry_command
 from .scaffold import (
     PERSONA_PRESETS,
@@ -360,6 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_batch_run_command(subparsers)
     _add_deid_command(subparsers)
     _add_redact_dataset_command(subparsers)
+    add_redact_files_command(subparsers)
     _add_pii_command(subparsers)
     _add_tui_command(subparsers)
     _add_audit_command(subparsers)
