@@ -104,6 +104,7 @@ classification:
     - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
+    - service/self-hosted-redaction.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
@@ -116,6 +117,7 @@ classification:
     - serving/backpressure.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
+    - deploy/self-hosted-compose.md
     - offline-install.md
     - serving/async-jobs.md
     - serving/request-signing.md
