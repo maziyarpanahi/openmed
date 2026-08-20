@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added lazy async wrappers for PII extraction, de-identification, and text
+  analysis, plus ordered batch execution with an optional hard concurrency
+  bound that keeps synchronous work off the event-loop thread (#2338).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).

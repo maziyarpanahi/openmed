@@ -21,6 +21,7 @@ from typing import (
     Sequence,
     TypeVar,
     Union,
+    cast,
 )
 
 if TYPE_CHECKING:
@@ -45,13 +46,15 @@ def _resolve_sync_export(name: str) -> Callable[..., Any]:
     return getattr(openmed, name)
 
 
+def _call_sync(name: str, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+    """Resolve and invoke a synchronous export entirely in a worker thread."""
+
+    return _resolve_sync_export(name)(*args, **kwargs)
+
+
 async def _run_sync(name: str, *args: Any, **kwargs: Any) -> Any:
     """Run a top-level synchronous export in a worker thread."""
-    return await asyncio.to_thread(
-        _resolve_sync_export(name),
-        *args,
-        **kwargs,
-    )
+    return await asyncio.to_thread(_call_sync, name, args, kwargs)
 
 
 async def aextract_pii(
@@ -247,28 +250,61 @@ async def abatch(
     makes this helper useful with the original sync APIs. ``kwargs`` are
     passed to every item, and ``max_concurrency`` can bound simultaneous work.
     """
-    if max_concurrency is not None and max_concurrency < 1:
+    if not callable(operation):
+        raise TypeError("operation must be callable")
+    if max_concurrency is not None and (
+        not isinstance(max_concurrency, int)
+        or isinstance(max_concurrency, bool)
+        or max_concurrency < 1
+    ):
         raise ValueError("max_concurrency must be positive")
 
-    semaphore = (
-        asyncio.Semaphore(max_concurrency) if max_concurrency is not None else None
-    )
+    try:
+        values = tuple(items)
+    except Exception:
+        raise ValueError("items could not be read") from None
 
     async def run_item(item: Any) -> _ResultT:
-        async def invoke() -> _ResultT:
-            if asyncio.iscoroutinefunction(operation):
-                return await operation(item, **kwargs)
-            result = await asyncio.to_thread(operation, item, **kwargs)
-            if inspect.isawaitable(result):
-                return await result
-            return result
+        if asyncio.iscoroutinefunction(operation):
+            return await operation(item, **kwargs)
+        result = await asyncio.to_thread(operation, item, **kwargs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
-        if semaphore is None:
-            return await invoke()
-        async with semaphore:
-            return await invoke()
+    async def gather_tasks(tasks: list[asyncio.Task[Any]]) -> list[Any]:
+        try:
+            return list(await asyncio.gather(*tasks))
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
-    return list(await asyncio.gather(*(run_item(item) for item in items)))
+    if not values:
+        return []
+    if max_concurrency is None or max_concurrency >= len(values):
+        tasks = [asyncio.create_task(run_item(item)) for item in values]
+        return cast(list[_ResultT], await gather_tasks(tasks))
+
+    missing = object()
+    results: list[_ResultT | object] = [missing] * len(values)
+    next_index = 0
+
+    async def worker() -> None:
+        nonlocal next_index
+        while next_index < len(values):
+            index = next_index
+            next_index += 1
+            results[index] = await run_item(values[index])
+
+    workers = [
+        asyncio.create_task(worker()) for _ in range(min(max_concurrency, len(values)))
+    ]
+    await gather_tasks(workers)
+    if any(result is missing for result in results):
+        raise RuntimeError("async batch did not produce every result")
+    return cast(list[_ResultT], results)
 
 
 __all__ = ["aextract_pii", "adeidentify", "aanalyze_text", "abatch"]

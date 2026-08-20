@@ -103,6 +103,7 @@ classification:
     - reference/trace-jsonl.md
     - reference/trace-tool-calls.md
     - analyze-text.md
+    - async-api.md
     - rest-service.md
     - mcp-clients.md
     - security/mcp-threat-model.md

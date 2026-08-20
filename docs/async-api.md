@@ -55,5 +55,17 @@ from openmed import abatch, aextract_pii
 results = await abatch(aextract_pii, ["Synthetic note one", "Synthetic note two"])
 ```
 
+Pass `max_concurrency` to place a hard bound on simultaneously scheduled
+operations. This is recommended when model sessions or input collections are
+large:
+
+```python
+results = await abatch(
+    aextract_pii,
+    ["Synthetic note one", "Synthetic note two"],
+    max_concurrency=2,
+)
+```
+
 These helpers only offload work; they do not make clinical decisions. Use the
 same local model and privacy configuration as the synchronous APIs.

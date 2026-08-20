@@ -6,9 +6,13 @@ import asyncio
 import inspect
 import subprocess
 import sys
+import threading
 from unittest.mock import Mock, patch
 
+import pytest
+
 import openmed
+import openmed.aio as aio_module
 from openmed.processing.outputs import PredictionResult
 
 
@@ -57,6 +61,24 @@ def test_aextract_pii_returns_sync_result_type_without_blocking_call_site():
     assert sync_extract.call_args.args[1] == "fixture-pii-model"
 
 
+def test_lazy_sync_resolution_also_runs_in_the_worker_thread():
+    """Resolving a lazy sync export must not block the event-loop thread."""
+    caller_thread = threading.get_ident()
+    worker_threads: list[int] = []
+    expected = object()
+
+    def resolve(_name: str):
+        worker_threads.append(threading.get_ident())
+        return lambda *_args, **_kwargs: expected
+
+    with patch.object(aio_module, "_resolve_sync_export", resolve):
+        result = asyncio.run(openmed.aextract_pii("Synthetic note"))
+
+    assert result is expected
+    assert worker_threads
+    assert all(thread != caller_thread for thread in worker_threads)
+
+
 def test_other_async_wrappers_delegate_to_their_sync_exports():
     """De-identification and analysis wrappers preserve delegated results."""
     expected_deidentify = object()
@@ -87,3 +109,41 @@ def test_abatch_preserves_order_and_supports_async_operations():
     )
 
     assert result == [12, 11, 13]
+
+
+def test_abatch_concurrency_limit_bounds_scheduled_tasks():
+    """A bounded batch does not enqueue one event-loop task per input."""
+    peak_tasks = 0
+
+    async def operation(value: int) -> int:
+        nonlocal peak_tasks
+        peak_tasks = max(peak_tasks, len(asyncio.all_tasks()))
+        await asyncio.sleep(0)
+        return value
+
+    values = list(range(50))
+    result = asyncio.run(openmed.abatch(operation, values, max_concurrency=3))
+
+    assert result == values
+    assert peak_tasks <= 4
+
+
+@pytest.mark.parametrize("limit", [False, 0, -1, 1.5, "2"])
+def test_abatch_rejects_invalid_concurrency_limits(limit: object):
+    """Only positive, non-boolean integer limits are accepted."""
+    with pytest.raises(ValueError, match="must be positive"):
+        asyncio.run(openmed.abatch(lambda value: value, [1], max_concurrency=limit))
+
+
+def test_abatch_hides_values_from_iterator_failures():
+    """Input iteration failures do not echo potentially sensitive values."""
+    secret_marker = "synthetic-sensitive-value"
+
+    def failing_items():
+        yield 1
+        raise RuntimeError(secret_marker)
+
+    with pytest.raises(ValueError) as captured:
+        asyncio.run(openmed.abatch(lambda value: value, failing_items()))
+
+    assert secret_marker not in str(captured.value)
