@@ -240,3 +240,83 @@ def test_label_normalization_failure_does_not_echo_the_label(
 
     assert sensitive_label.casefold() not in pseudonym.casefold()
     assert pseudonym.startswith("[other-")
+
+
+def test_text_subclass_hooks_are_not_used_by_state_or_redactors() -> None:
+    sensitive = "synthetic private preference string hook"
+
+    class HostileText(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(sensitive)
+
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(sensitive)
+
+        def strip(self, chars: str | None = None) -> str:
+            del chars
+            raise RuntimeError(sensitive)
+
+    class SafeAnonymizer:
+        def surrogate(
+            self,
+            value: str,
+            label: str,
+            **kwargs: object,
+        ) -> str:
+            assert type(value) is str
+            assert type(label) is str
+            assert type(kwargs["lang"]) is str
+            assert type(kwargs["locale"]) is str
+            return HostileText("[PERSON]")
+
+    state = PreferenceRedactionState(
+        lang=HostileText("en"),
+        locale=HostileText("US"),
+        anonymizer=SafeAnonymizer(),
+    )
+    span = SensitiveSpan(0, 7, HostileText("PERSON"))
+    redacted = state.redact_spans(HostileText("private"), (span,))
+
+    assert type(span.label) is str
+    assert type(redacted) is str
+    assert str.encode(redacted, "utf-8") == b"[PERSON]"
+
+    adapter = PreferencePairAdapter(
+        text_redactor=lambda text: HostileText("[REDACTED]")
+    )
+    result = adapter.redact(
+        {
+            "prompt": HostileText("private prompt"),
+            "chosen": HostileText("private chosen"),
+            "rejected": HostileText("private rejected"),
+        }
+    )
+    assert all(type(result[field]) is str for field in CONTENT_FIELDS)
+
+
+def test_mapping_failures_do_not_echo_preference_values() -> None:
+    sensitive = "synthetic private preference mapping"
+
+    class FailingValues(dict[object, object]):
+        def items(self):
+            yield ("private", "PERSON")
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(PreferenceSchemaError) as values_error:
+        PreferencePairAdapter(sensitive_values=FailingValues())
+    assert sensitive not in str(values_error.value)
+
+    class FailingRecord(dict[str, object]):
+        def __contains__(self, key: object) -> bool:
+            del key
+            raise RuntimeError(sensitive)
+
+    record = FailingRecord(
+        prompt="safe",
+        chosen="safe",
+        rejected="safe",
+    )
+    with pytest.raises(PreferenceSchemaError) as record_error:
+        PreferencePairAdapter().redact(record)
+    assert sensitive not in str(record_error.value)

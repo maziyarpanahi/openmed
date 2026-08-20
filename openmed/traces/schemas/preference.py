@@ -85,6 +85,36 @@ class PreferenceRedactionError(PreferenceSchemaError):
     """Raised when a local detector or redactor cannot process a record."""
 
 
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
+
+
+def _mapping_entries(value: Mapping[Any, Any]) -> tuple[tuple[Any, Any], ...]:
+    """Materialize mapping entries without exposing custom iterator errors."""
+
+    try:
+        raw_entries = tuple(value.items())
+    except Exception:
+        raise PreferenceSchemaError("preference mapping could not be read") from None
+    entries: list[tuple[Any, Any]] = []
+    for raw_entry in raw_entries:
+        try:
+            key, item = raw_entry
+        except Exception:
+            raise PreferenceSchemaError(
+                "preference mapping could not be read"
+            ) from None
+        entries.append((key, item))
+    return tuple(entries)
+
+
 @dataclass(frozen=True, slots=True)
 class SensitiveSpan:
     """A PHI span supplied to a preference text redactor.
@@ -98,15 +128,16 @@ class SensitiveSpan:
     label: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        if isinstance(self.start, bool) or not isinstance(self.start, int):
+        if type(self.start) is not int:
             raise ValueError("span.start must be an integer")
-        if isinstance(self.end, bool) or not isinstance(self.end, int):
+        if type(self.end) is not int:
             raise ValueError("span.end must be an integer")
         if self.start < 0 or self.end <= self.start:
             raise ValueError("span offsets must be non-empty and ordered")
-        if not isinstance(self.label, str) or not self.label.strip():
+        normalized_label = _plain_text(self.label)
+        if normalized_label is None or not normalized_label.strip():
             raise ValueError("span.label must be a non-empty string")
-        object.__setattr__(self, "label", self.label.strip())
+        object.__setattr__(self, "label", normalized_label.strip())
 
 
 PreferenceSpan = SensitiveSpan
@@ -136,15 +167,17 @@ class PreferenceRedactionState:
     _replacement_count: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        if isinstance(self.seed, bool) or not isinstance(self.seed, int):
+        if type(self.seed) is not int:
             raise TypeError("seed must be an integer")
-        if not isinstance(self.lang, str) or not self.lang.strip():
+        normalized_lang = _plain_text(self.lang)
+        if normalized_lang is None or not normalized_lang.strip():
             raise ValueError("lang must be a non-empty string")
-        self.lang = self.lang.strip()
-        if self.locale is not None and (
-            not isinstance(self.locale, str) or not self.locale.strip()
-        ):
-            raise ValueError("locale must be a non-empty string when provided")
+        self.lang = normalized_lang.strip()
+        if self.locale is not None:
+            normalized_locale = _plain_text(self.locale)
+            if normalized_locale is None or not normalized_locale.strip():
+                raise ValueError("locale must be a non-empty string when provided")
+            self.locale = normalized_locale.strip()
         if self.anonymizer is None:
             from openmed.core.anonymizer import Anonymizer
 
@@ -166,12 +199,13 @@ class PreferenceRedactionState:
     def pseudonym(self, value: str, label: str) -> str:
         """Return a deterministic, non-leaking surrogate for ``value``."""
 
-        if not isinstance(value, str):
+        source_value = _plain_text(value)
+        if source_value is None:
             raise TypeError("pseudonym values must be strings")
-        if not value:
-            return value
+        if not source_value:
+            return source_value
         canonical_label = _canonical_label(label, lang=self.lang)
-        key = (canonical_label, value)
+        key = (canonical_label, source_value)
         existing = self._pseudonyms.get(key)
         if existing is not None:
             return existing
@@ -181,7 +215,7 @@ class PreferenceRedactionState:
             raise PreferenceRedactionError("local pseudonym generation failed")
         try:
             candidate = anonymizer.surrogate(
-                value,
+                source_value,
                 canonical_label,
                 lang=self.lang,
                 locale=self.locale,
@@ -191,38 +225,50 @@ class PreferenceRedactionState:
                 "local pseudonym generation failed"
             ) from None
 
-        if not isinstance(candidate, str) or not candidate:
+        normalized_candidate = _plain_text(candidate)
+        if normalized_candidate is None or not normalized_candidate:
             raise PreferenceRedactionError("local pseudonym generation failed")
-        if candidate == value or _contains_source_fragment(value, candidate):
-            candidate = _digest_surrogate(
-                value,
+        if normalized_candidate == source_value or _contains_source_fragment(
+            source_value, normalized_candidate
+        ):
+            normalized_candidate = _digest_surrogate(
+                source_value,
                 canonical_label,
                 seed=self.seed,
             )
-        self._pseudonyms[key] = candidate
-        return candidate
+        self._pseudonyms[key] = normalized_candidate
+        return normalized_candidate
 
     def redact_spans(self, text: str, spans: Iterable[Any]) -> str:
         """Replace validated spans in ``text`` while preserving offsets."""
 
-        normalized = _normalize_spans(spans, text)
+        source_text = _plain_text(text)
+        if source_text is None:
+            raise PreferenceRedactionError("text input must be a string")
+        normalized = _normalize_spans(spans, source_text)
         if not normalized:
-            return text
+            return source_text
         pieces: list[str] = []
         cursor = 0
         for span in normalized:
-            pieces.append(text[cursor : span.start])
-            pieces.append(self.pseudonym(text[span.start : span.end], span.label))
+            pieces.append(source_text[cursor : span.start])
+            pieces.append(
+                self.pseudonym(source_text[span.start : span.end], span.label)
+            )
             cursor = span.end
             self._replacement_count += 1
-        pieces.append(text[cursor:])
+        pieces.append(source_text[cursor:])
         return "".join(pieces)
 
     def note_text_result(self, original: str, redacted: str) -> None:
         """Record PHI-safe counters for one visited string leaf."""
 
+        source_text = _plain_text(original)
+        redacted_text = _plain_text(redacted)
+        if source_text is None or redacted_text is None:
+            raise PreferenceRedactionError("text redaction result is invalid")
         self._text_nodes_seen += 1
-        if original != redacted:
+        if source_text != redacted_text:
             self._text_nodes_changed += 1
 
     def _snapshot(self) -> tuple[int, int, int]:
@@ -265,10 +311,12 @@ class PreferenceRedactionReport:
                 raise PreferenceSchemaError(
                     "preference redaction report counts must be non-negative integers"
                 )
-        if self.schema_version != PREFERENCE_SCHEMA_VERSION:
+        schema_version = _plain_text(self.schema_version)
+        if schema_version != PREFERENCE_SCHEMA_VERSION:
             raise PreferenceSchemaError(
                 "preference redaction report version is invalid"
             )
+        object.__setattr__(self, "schema_version", schema_version)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready report containing no source surfaces."""
@@ -317,11 +365,13 @@ class PreferencePair:
         """Build a pair view and retain every non-content source field."""
 
         _validate_record(record)
-        extras = {
-            key: _copy_value(value)
-            for key, value in record.items()
-            if key not in CONTENT_FIELDS
-        }
+        extras: dict[str, Any] = {}
+        for raw_key, value in _mapping_entries(record):
+            key = _plain_text(raw_key)
+            if key is None:
+                raise PreferenceSchemaError("preference keys must be strings")
+            if key not in CONTENT_FIELDS:
+                extras[key] = _copy_value(value)
         return cls(
             prompt=_copy_value(record["prompt"]),
             chosen=_copy_value(record["chosen"]),
@@ -409,10 +459,12 @@ class PreferencePairAdapter:
             raise TypeError("sensitive_values must be a mapping")
         else:
             self.sensitive_values = {}
-            for value, label in sensitive_values.items():
-                if not isinstance(value, str) or not value:
+            for raw_value, raw_label in _mapping_entries(sensitive_values):
+                value = _plain_text(raw_value)
+                if value is None or not value:
                     raise ValueError("sensitive_values keys must be non-empty strings")
-                if not isinstance(label, str) or not label.strip():
+                label = _plain_text(raw_label)
+                if label is None or not label.strip():
                     raise ValueError(
                         "sensitive_values labels must be non-empty strings"
                     )
@@ -521,7 +573,10 @@ class PreferencePairAdapter:
         state: PreferenceRedactionState,
     ) -> Any:
         if isinstance(value, str):
-            return self._redact_text(value, state)
+            text = _plain_text(value)
+            if text is None:
+                raise PreferenceRedactionError("preference text is invalid")
+            return self._redact_text(text, state)
         if isinstance(value, Mapping):
             return self._redact_mapping(value, state)
         if isinstance(value, list):
@@ -535,13 +590,19 @@ class PreferencePairAdapter:
         value: Mapping[Any, Any],
         state: PreferenceRedactionState,
     ) -> dict[Any, Any]:
+        entries = _mapping_entries(value)
         has_content_node = any(
-            isinstance(key, str) and key.casefold() in _CONTENT_NODE_FIELDS
-            for key in value
+            (_plain_text(key) or "").casefold() in _CONTENT_NODE_FIELDS
+            for key, _item in entries
         )
         result: dict[Any, Any] = {}
-        for key, item in value.items():
-            key_name = key.casefold() if isinstance(key, str) else ""
+        for raw_key, item in entries:
+            key = _plain_text(raw_key)
+            if key is None:
+                raise PreferenceSchemaError("preference mapping keys must be strings")
+            key_name = key.casefold()
+            if key in result:
+                raise PreferenceSchemaError("preference mapping keys must be unique")
             if key_name in _CONTENT_NODE_FIELDS:
                 result[key] = self._redact_content(item, state)
             elif key_name in _NON_CONTENT_FIELDS:
@@ -555,6 +616,9 @@ class PreferencePairAdapter:
         return result
 
     def _redact_text(self, text: str, state: PreferenceRedactionState) -> str:
+        source_text = _plain_text(text)
+        if source_text is None:
+            raise PreferenceRedactionError("preference text is invalid")
         if self.text_redactor is None:
             detector = (
                 self.span_detector
@@ -562,26 +626,30 @@ class PreferencePairAdapter:
                 else self._default_detector
             )
             try:
-                spans = detector(text)
+                spans = detector(source_text)
             except Exception:
                 raise PreferenceRedactionError(
                     "local sensitive-value detection failed"
                 ) from None
             try:
-                redacted = state.redact_spans(text, spans)
+                redacted = state.redact_spans(source_text, spans)
             except PreferenceRedactionError:
                 raise
             except Exception:
                 raise PreferenceRedactionError("local text redaction failed") from None
         else:
             replacements_before = state._replacement_count
-            redacted = _call_text_redactor(self.text_redactor, text, state)
-            if state._replacement_count == replacements_before and redacted != text:
+            redacted = _call_text_redactor(self.text_redactor, source_text, state)
+            if (
+                state._replacement_count == replacements_before
+                and redacted != source_text
+            ):
                 state._replacement_count += 1
-        if not isinstance(redacted, str):
+        redacted_text = _plain_text(redacted)
+        if redacted_text is None:
             raise PreferenceRedactionError("text redactor must return a string")
-        state.note_text_result(text, redacted)
-        return redacted
+        state.note_text_result(source_text, redacted_text)
+        return redacted_text
 
     def _default_detector(self, text: str) -> tuple[SensitiveSpan, ...]:
         return _detect_sensitive_spans(text, self.sensitive_values)
@@ -632,17 +700,24 @@ def redact_preference_dataset(
 def _validate_record(record: Any) -> None:
     if not isinstance(record, Mapping):
         raise PreferenceSchemaError("preference pair must be a mapping")
-    missing = [field_name for field_name in CONTENT_FIELDS if field_name not in record]
-    if missing:
-        joined = ", ".join(missing)
-        raise PreferenceSchemaError(
-            f"preference pair missing required field(s): {joined}"
-        )
-    for field_name in CONTENT_FIELDS:
-        if not _is_content_value(record[field_name]):
+    try:
+        missing = [
+            field_name for field_name in CONTENT_FIELDS if field_name not in record
+        ]
+        if missing:
+            joined = ", ".join(missing)
             raise PreferenceSchemaError(
-                f"preference field {field_name!r} has an unsupported value type"
+                f"preference pair missing required field(s): {joined}"
             )
+        for field_name in CONTENT_FIELDS:
+            if not _is_content_value(record[field_name]):
+                raise PreferenceSchemaError(
+                    f"preference field {field_name!r} has an unsupported value type"
+                )
+    except PreferenceSchemaError:
+        raise
+    except Exception:
+        raise PreferenceSchemaError("preference pair could not be read") from None
 
 
 def _is_content_value(value: Any) -> bool:
@@ -672,14 +747,20 @@ def _copy_value(value: Any) -> Any:
 
 
 def _canonical_label(label: str, *, lang: str) -> str:
-    if not isinstance(label, str) or not label.strip():
+    normalized_label = _plain_text(label)
+    normalized_lang = _plain_text(lang)
+    if normalized_label is None or not normalized_label.strip():
         raise PreferenceRedactionError("sensitive span label must be non-empty")
+    if normalized_lang is None or not normalized_lang.strip():
+        raise PreferenceRedactionError("sensitive span language must be non-empty")
     try:
         from openmed.core.labels import normalize_label
 
-        return normalize_label(label, lang)
+        result = normalize_label(normalized_label, normalized_lang)
     except Exception:
         return "OTHER"
+    normalized_result = _plain_text(result)
+    return normalized_result if normalized_result is not None else "OTHER"
 
 
 def _normalize_spans(spans: Iterable[Any], text: str) -> tuple[SensitiveSpan, ...]:
@@ -774,9 +855,10 @@ def _call_text_redactor(
         raise
     except Exception:
         raise PreferenceRedactionError("text redactor failed") from None
-    if not isinstance(result, str):
+    normalized_result = _plain_text(result)
+    if normalized_result is None:
         raise PreferenceRedactionError("text redactor must return a string")
-    return result
+    return normalized_result
 
 
 def _contains_source_fragment(source: str, candidate: str) -> bool:
