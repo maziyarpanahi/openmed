@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a local-only self-hosted redaction service with explicit text and UTF-8
+  file workflows, deterministic offline defaults, counts-only review state,
+  loopback Host and request-size guards, content-free errors, and an accessible
+  aggregate-status page (#2371).
 - Added a deterministic synthetic-only de-identification comparator harness
   with explicit fail-closed fixture provenance, enforced offline execution,
   bounded inputs, aggregate privacy metrics, resource budgets, and source-safe
