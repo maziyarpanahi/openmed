@@ -37,6 +37,7 @@ nav:
       - REST Tracing: serving/tracing.md
       - Parallel Trace Shards: guides/parallel-traces.md
       - Streaming Trace Redaction: guides/streaming-traces.md
+      - Read-only Trace Scan Report: guides/trace-audit.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
@@ -56,6 +57,7 @@ nav:
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
+      - Bundled Offline Model Bootstrap: models/bundled-offline.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
@@ -142,6 +144,7 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Secret Token Detection: security/secret-detection.md
+      - In-place Trace Redaction: guides/in-place-redaction.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
