@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+import openmed.traces.schemas.registry as registry_module
 from openmed.traces.schemas.registry import (
     AmbiguousSchemaError,
     InvalidSchemaError,
@@ -224,6 +225,110 @@ def test_hostile_schema_introspection_errors_are_sanitized() -> None:
     with pytest.raises(InvalidSchemaError) as method_error:
         registry.register(HostileMethodSchema())
     assert sensitive not in str(method_error.value)
+
+
+def test_schema_name_subclass_hooks_are_never_called() -> None:
+    sensitive = "Synthetic private adapter name"
+
+    class HostileName(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(sensitive)
+
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(sensitive)
+
+        def strip(self, chars: str | None = None) -> str:
+            del chars
+            raise RuntimeError(sensitive)
+
+    class SafeSchema:
+        name = HostileName("safe-schema")
+
+        def detect(self, record: object) -> bool:
+            return isinstance(record, dict)
+
+        def walk(self, record: object):
+            del record
+            return ()
+
+        def reconstruct(self, record: object, replacements: object) -> object:
+            del replacements
+            return record
+
+    registry = TrainingSchemaRegistry(include_defaults=False)
+    registry.register(SafeSchema(), aliases=(HostileName("safe-alias"),))
+
+    assert registry.available() == ("safe-schema",)
+    assert isinstance(registry.get(HostileName("safe-alias")), SafeSchema)
+    assert HostileName("safe-schema") in registry
+
+
+def test_text_subclass_hooks_are_sanitized_at_content_boundaries() -> None:
+    sensitive = "Synthetic private content hook"
+
+    class HostileText(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(sensitive)
+
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(sensitive)
+
+        def split(self, separator: str | None = None, maxsplit: int = -1):
+            del separator, maxsplit
+            raise RuntimeError(sensitive)
+
+    path = registry_module._normalize_path(HostileText("messages.0.content"))
+    assert path == ("messages", 0, "content")
+
+    registry = TrainingSchemaRegistry()
+    rebuilt = registry.transform(
+        {"messages": [{"role": "user", "content": "Synthetic value"}]},
+        lambda text: HostileText("[REDACTED]"),
+        schema="messages",
+    )
+
+    replacement = rebuilt["messages"][0]["content"]
+    assert type(replacement) is str
+    assert str.encode(replacement, "utf-8") == b"[REDACTED]"
+
+
+def test_registry_sanitizes_configured_iterator_failures() -> None:
+    sensitive = "Synthetic private iterator value"
+
+    class FailingReplacements(dict[object, object]):
+        def items(self):
+            yield (("messages", 0, "content"), "[REDACTED]")
+            raise RuntimeError(sensitive)
+
+    registry = TrainingSchemaRegistry()
+    record = {"messages": [{"role": "user", "content": "Synthetic value"}]}
+    with pytest.raises(SchemaReconstructionError) as replacement_error:
+        registry.reconstruct(
+            record,
+            FailingReplacements(),
+            schema="messages",
+        )
+    assert sensitive not in str(replacement_error.value)
+
+    def failing_aliases():
+        yield "safe-alias"
+        raise RuntimeError(sensitive)
+
+    empty_registry = TrainingSchemaRegistry(include_defaults=False)
+    with pytest.raises(InvalidSchemaError) as alias_error:
+        empty_registry.register(MessagesSchema(), aliases=failing_aliases())
+    assert sensitive not in str(alias_error.value)
+    assert len(empty_registry) == 0
+
+    def failing_schemas():
+        yield MessagesSchema()
+        raise RuntimeError(sensitive)
+
+    with pytest.raises(InvalidSchemaError) as schemas_error:
+        TrainingSchemaRegistry(failing_schemas(), include_defaults=False)
+    assert sensitive not in str(schemas_error.value)
 
 
 def test_registry_rejects_a_canonical_name_that_collides_with_an_alias() -> None:

@@ -63,6 +63,17 @@ SchemaAmbiguityError = AmbiguousSchemaError
 SchemaNotFoundError = UnknownSchemaError
 
 
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
+
+
 @runtime_checkable
 class TrainingConversationSchema(Protocol):
     """Protocol implemented by one training-conversation schema.
@@ -299,7 +310,7 @@ def _reconstruct_record(
         raise SchemaReconstructionError("replacements must be a mapping")
     known_paths = {path for path, _ in walked}
     normalized: dict[ContentPath, str] = {}
-    for raw_path, replacement in replacements.items():
+    for raw_path, replacement in _replacement_entries(replacements):
         path = _normalize_path(raw_path)
         if path not in known_paths:
             raise SchemaReconstructionError(
@@ -309,21 +320,30 @@ def _reconstruct_record(
             raise SchemaReconstructionError(
                 "replacement paths must be unique after normalization"
             )
-        if not isinstance(replacement, str):
+        replacement_text = _plain_text(replacement)
+        if replacement_text is None:
             raise SchemaReconstructionError("replacement content must be text")
-        normalized[path] = replacement
+        normalized[path] = replacement_text
 
-    result = copy.deepcopy(record)
-    for path in sorted(normalized, key=_path_sort_key):
-        result = _replace_at_path(result, path, normalized[path])
-    return result
+    try:
+        result = copy.deepcopy(record)
+        for path in sorted(normalized, key=_path_sort_key):
+            result = _replace_at_path(result, path, normalized[path])
+        return result
+    except SchemaRegistryError:
+        raise
+    except Exception:
+        raise SchemaReconstructionError("record reconstruction failed") from None
 
 
 def _normalize_path(raw_path: ContentPath | str | Sequence[PathPart]) -> ContentPath:
     if isinstance(raw_path, str):
+        path_text = _plain_text(raw_path)
+        if path_text is None:
+            raise SchemaReconstructionError("content paths must be text")
         string_parts: tuple[PathPart, ...] = tuple(
             int(part) if part.isdecimal() else part
-            for part in raw_path.split(".")
+            for part in path_text.split(".")
             if part
         )
         if not string_parts:
@@ -333,15 +353,24 @@ def _normalize_path(raw_path: ContentPath | str | Sequence[PathPart]) -> Content
     if not isinstance(raw_path, Sequence) or isinstance(raw_path, (bytes, bytearray)):
         raise SchemaReconstructionError("content paths must be sequences")
 
+    try:
+        raw_parts = tuple(raw_path)
+    except Exception:
+        raise SchemaReconstructionError("content paths could not be read") from None
+
     normalized_parts: list[PathPart] = []
-    for part in raw_path:
-        if isinstance(part, bool) or not isinstance(part, (str, int)):
+    for part in raw_parts:
+        if isinstance(part, str):
+            normalized_part = _plain_text(part)
+            if normalized_part is None or not normalized_part:
+                raise SchemaReconstructionError("content path keys must not be empty")
+            normalized_parts.append(normalized_part)
+            continue
+        if type(part) is not int:
             raise SchemaReconstructionError(
                 "content paths may contain only string keys and indexes"
             )
-        if isinstance(part, str) and not part:
-            raise SchemaReconstructionError("content path keys must not be empty")
-        if isinstance(part, int) and part < 0:
+        if part < 0:
             raise SchemaReconstructionError("content path indexes must be positive")
         normalized_parts.append(part)
     if not normalized_parts:
@@ -353,6 +382,25 @@ def _path_sort_key(path: ContentPath) -> tuple[tuple[int, str], ...]:
     return tuple(
         (0, str(part)) if isinstance(part, int) else (1, part) for part in path
     )
+
+
+def _replacement_entries(
+    replacements: Mapping[Any, Any],
+) -> tuple[tuple[Any, Any], ...]:
+    """Materialize mapping entries without exposing custom iterator errors."""
+
+    try:
+        raw_entries = tuple(replacements.items())
+    except Exception:
+        raise SchemaReconstructionError("replacements could not be read") from None
+    entries: list[tuple[Any, Any]] = []
+    for raw_entry in raw_entries:
+        try:
+            raw_path, replacement = raw_entry
+        except Exception:
+            raise SchemaReconstructionError("replacements could not be read") from None
+        entries.append((raw_path, replacement))
+    return tuple(entries)
 
 
 def _replace_at_path(value: Any, path: ContentPath, replacement: str) -> Any:
@@ -427,9 +475,10 @@ def _schema_name(schema: object) -> str:
         raise InvalidSchemaError(
             "training schema name could not be inspected safely"
         ) from None
-    if not isinstance(name, str) or not name.strip():
+    normalized = _plain_text(name)
+    if normalized is None or not normalized.strip():
         raise InvalidSchemaError("training schemas must declare a non-empty name")
-    return name.strip()
+    return normalized.strip()
 
 
 def _safe_schema_label(name: str) -> str:
@@ -455,8 +504,8 @@ def _normalize_walk_items(
                     "content item"
                 )
             path = _normalize_path(raw_item[0])
-            text = raw_item[1]
-            if not isinstance(text, str):
+            text = _plain_text(raw_item[1])
+            if text is None:
                 raise SchemaDetectionError(
                     f"training schema {_safe_schema_label(_schema_name(schema))} "
                     "returned non-text "
@@ -658,7 +707,11 @@ class TrainingSchemaRegistry:
                 PreferenceSchema(), aliases=("dpo", "preference_pair", "preferences")
             )
         if schemas is not None:
-            for schema in schemas:
+            try:
+                configured_schemas = tuple(schemas)
+            except Exception:
+                raise InvalidSchemaError("training schemas could not be read") from None
+            for schema in configured_schemas:
                 self.register(schema)
 
     def register(
@@ -691,8 +744,12 @@ class TrainingSchemaRegistry:
             raise SchemaRegistryError(
                 f"training schema {_safe_schema_label(name)} is already registered"
             )
+        try:
+            raw_aliases = tuple(aliases)
+        except Exception:
+            raise InvalidSchemaError("schema aliases could not be read") from None
         normalized_aliases: list[str] = []
-        for raw_alias in aliases:
+        for raw_alias in raw_aliases:
             alias = _schema_name_value(raw_alias, "schema aliases")
             if alias == name:
                 continue
@@ -833,17 +890,19 @@ class TrainingSchemaRegistry:
                 raise SchemaTransformError(
                     "content transform failed for a discovered path"
                 ) from None
-            if not isinstance(replacement, str):
+            replacement_text = _plain_text(replacement)
+            if replacement_text is None:
                 raise SchemaTransformError("content transform must return text")
-            replacements[path] = replacement
+            replacements[path] = replacement_text
         return self._reconstruct_selected(record, selected, replacements)
 
     map_content = transform
     redact = transform
 
     def __contains__(self, name: object) -> bool:
-        return isinstance(name, str) and (
-            name in self._schemas or name in self._aliases
+        normalized = _plain_text(name)
+        return normalized is not None and (
+            normalized in self._schemas or normalized in self._aliases
         )
 
     def __len__(self) -> int:
@@ -874,9 +933,10 @@ class TrainingSchemaRegistry:
 
 
 def _schema_name_value(value: Any, description: str) -> str:
-    if not isinstance(value, str) or not value.strip():
+    text = _plain_text(value)
+    if text is None or not text.strip():
         raise InvalidSchemaError(f"{description} must be non-empty strings")
-    normalized = value.strip()
+    normalized = text.strip()
     if any(character.isspace() for character in normalized):
         raise InvalidSchemaError(f"{description} must not contain whitespace")
     return normalized
@@ -890,7 +950,7 @@ def _validated_replacements(
         raise SchemaReconstructionError("replacements must be a mapping")
     known_paths = {path for path, _ in walked}
     normalized: dict[ContentPath, str] = {}
-    for raw_path, replacement in replacements.items():
+    for raw_path, replacement in _replacement_entries(replacements):
         path = _normalize_path(raw_path)
         if path not in known_paths:
             raise SchemaReconstructionError(
@@ -900,9 +960,10 @@ def _validated_replacements(
             raise SchemaReconstructionError(
                 "replacement paths must be unique after normalization"
             )
-        if not isinstance(replacement, str):
+        replacement_text = _plain_text(replacement)
+        if replacement_text is None:
             raise SchemaReconstructionError("replacement content must be text")
-        normalized[path] = replacement
+        normalized[path] = replacement_text
     return normalized
 
 
