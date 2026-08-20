@@ -154,6 +154,7 @@ def test_tar_gz_output_has_the_same_manifest_contract(tmp_path: Path) -> None:
         skills_root=skills_root,
         compatibility_path=compatibility,
         source_revision="synthetic-revision",
+        hosts=["codex"],
     )
 
     with tarfile.open(result.archive_path, mode="r:gz") as archive:
@@ -330,6 +331,7 @@ def test_archive_suffix_cannot_disagree_with_format(tmp_path: Path) -> None:
         skills_root=skills_root,
         compatibility_path=compatibility,
         source_revision="synthetic-revision",
+        hosts=["codex"],
     )
     assert result.manifest["archive"]["format"] == "tar.gz"
 
@@ -454,3 +456,233 @@ def test_conflicting_duplicate_pack_declarations_fail_closed(tmp_path: Path) -> 
             source_revision="synthetic-revision",
             packs=["small"],
         )
+
+
+@pytest.mark.parametrize("schema_version", [True, "1", 2])
+def test_compatibility_schema_version_is_an_exact_integer(
+    tmp_path: Path, schema_version: object
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    payload = json.loads(compatibility.read_text(encoding="utf-8"))
+    payload["schema_version"] = schema_version
+    compatibility.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ExportError, match="schema version"):
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+
+def test_duplicate_or_unknown_metadata_fields_fail_without_echoing_values(
+    tmp_path: Path,
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    secret_marker = "synthetic-sensitive-value"
+    compatibility.write_text(
+        """{
+          "format": "openmed-agent-skill-compatibility",
+          "schema_version": 1,
+          "schema_version": 1,
+          "hosts": {},
+          "packs": {}
+        }""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ExportError, match="duplicate object keys"):
+        export_bundle(
+            tmp_path / "duplicate.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+    _, compatibility = _write_fixture(tmp_path / "unknown")
+    payload = json.loads(compatibility.read_text(encoding="utf-8"))
+    payload[secret_marker] = secret_marker
+    compatibility.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "unknown.zip",
+            skills_root=tmp_path / "unknown" / "skills",
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+    assert secret_marker not in str(captured.value)
+
+
+def test_pack_manifest_is_canonicalized_before_embedding(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    packs_dir = skills_root / "packs"
+    packs_dir.mkdir()
+    secret_marker = "synthetic-sensitive-value"
+    (packs_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "manifest_version": 1,
+                "packs": [
+                    {
+                        "id": "small",
+                        "version": "1.0.0",
+                        "description": "Synthetic pack.",
+                        "skills": ["alpha-skill"],
+                        "budget": {"max_skills": 2, "max_bytes": 10000},
+                        secret_marker: secret_marker,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+    assert secret_marker not in str(captured.value)
+
+
+def test_default_host_selection_enforces_archive_capabilities(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+
+    with pytest.raises(ExportError, match="host does not support"):
+        export_bundle(
+            tmp_path / "bundle.tar.gz",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+
+def test_public_string_inputs_are_bounded_and_type_checked(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    common = {
+        "skills_root": skills_root,
+        "compatibility_path": compatibility,
+        "source_revision": "synthetic-revision",
+    }
+
+    with pytest.raises(ExportError, match="archive format"):
+        export_bundle(tmp_path / "format.zip", archive_format=1, **common)
+    with pytest.raises(ExportError, match="bundle name"):
+        export_bundle(tmp_path / "name.zip", bundle_name="a" * 129, **common)
+    with pytest.raises(ExportError, match="source revision"):
+        export_bundle(
+            tmp_path / "revision.zip",
+            source_revision="a" * 257,
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+        )
+
+
+def test_windows_reserved_and_trailing_dot_components_are_not_portable() -> None:
+    assert not export_module._portable_component("CON.md")
+    assert not export_module._portable_component("lpt9")
+    assert not export_module._portable_component("example.")
+    assert export_module._portable_component("example.md")
+
+
+def test_skill_scripts_keep_a_deterministic_executable_mode(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    scripts_dir = skills_root / "alpha-skill" / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "run.py").write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    result = export_bundle(
+        tmp_path / "bundle.zip",
+        skills_root=skills_root,
+        compatibility_path=compatibility,
+        source_revision="synthetic-revision",
+    )
+
+    with zipfile.ZipFile(result.archive_path) as archive:
+        script = archive.getinfo("skills/alpha-skill/scripts/run.py")
+        skill = archive.getinfo("skills/alpha-skill/SKILL.md")
+    assert (script.external_attr >> 16) & 0o777 == 0o755
+    assert (skill.external_attr >> 16) & 0o777 == 0o644
+
+
+def test_file_swap_to_symlink_cannot_escape_the_skill_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    source = skills_root / "alpha-skill" / "references" / "example.md"
+    outside = tmp_path / "synthetic-sensitive-value.txt"
+    outside.write_text("synthetic-sensitive-value\n", encoding="utf-8")
+    real_reader = export_module._read_skill_file
+    swapped = False
+
+    def swap_before_open(root: Path, skill_name: str, relative: Path) -> bytes:
+        nonlocal swapped
+        if (
+            not swapped
+            and skill_name == "alpha-skill"
+            and relative.name == "example.md"
+        ):
+            source.unlink()
+            try:
+                source.symlink_to(outside)
+            except OSError:
+                pytest.skip("filesystem does not permit symlink fixtures")
+            swapped = True
+        return real_reader(root, skill_name, relative)
+
+    monkeypatch.setattr(export_module, "_read_skill_file", swap_before_open)
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+    assert "synthetic-sensitive-value" not in str(captured.value)
+
+
+def test_cli_does_not_print_local_output_directories(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    output = tmp_path / "synthetic-private-directory" / "bundle.zip"
+
+    status = export_module.main(
+        [
+            "--output",
+            str(output),
+            "--skills-root",
+            str(skills_root),
+            "--compatibility",
+            str(compatibility),
+            "--source-revision",
+            "synthetic-revision",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert status == 0
+    assert str(tmp_path) not in captured.out
+    assert "Archive written." in captured.out
+    assert output.name not in captured.out
+
+    secret_marker = "synthetic-sensitive-value"
+    status = export_module.main(
+        [
+            "--output",
+            str(tmp_path / "invalid.zip"),
+            "--skills-root",
+            str(skills_root),
+            "--compatibility",
+            str(compatibility),
+            "--source-revision",
+            "synthetic-revision",
+            "--format",
+            secret_marker,
+        ]
+    )
+    captured = capsys.readouterr()
+    assert status == 2
+    assert secret_marker not in captured.err

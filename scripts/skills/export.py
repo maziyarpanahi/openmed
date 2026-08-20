@@ -22,6 +22,7 @@ import io
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tarfile
@@ -48,11 +49,19 @@ SKILL_INFRASTRUCTURE_DIRS = frozenset({"packs"})
 MAX_COMPATIBILITY_BYTES = 1024 * 1024
 MAX_SKILL_FILE_BYTES = 25 * 1024 * 1024
 MAX_BUNDLE_SOURCE_BYTES = 100 * 1024 * 1024
+MAX_BUNDLE_NAME_LENGTH = 128
+MAX_REVISION_LENGTH = 256
 
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BUNDLE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _REVISION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
 _PORTABLE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*$")
+_PACK_PATTERN_RE = re.compile(r"^[a-z0-9*?\[\]-]+$")
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{number}" for number in range(1, 10)}
+    | {f"lpt{number}" for number in range(1, 10)}
+)
 
 
 class ExportError(ValueError):
@@ -111,6 +120,58 @@ def _coerce_path(value: Path | os.PathLike[str] | str, label: str) -> Path:
         raise _error(f"{label} path is invalid") from None
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Build a JSON object while rejecting ambiguous duplicate keys."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _error("JSON data contains duplicate object keys")
+        result[key] = value
+    return result
+
+
+def _decode_json(raw: bytes, label: str) -> Any:
+    """Decode bounded UTF-8 JSON without exposing its values in failures."""
+
+    try:
+        return json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_unique_json_object,
+        )
+    except ExportError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise _error(f"{label} could not be read") from None
+
+
+def _safe_text(value: Any, *, maximum: int) -> str | None:
+    """Return a trimmed, single-line metadata string when it is safe."""
+
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if (
+        not cleaned
+        or len(cleaned) > maximum
+        or any(ord(character) < 32 or ord(character) == 127 for character in cleaned)
+    ):
+        return None
+    return cleaned
+
+
+def _portable_component(component: str) -> bool:
+    """Return whether a path component is portable across supported hosts."""
+
+    if (
+        len(component) > 255
+        or component.endswith((".", " "))
+        or _PORTABLE_COMPONENT_RE.fullmatch(component) is None
+    ):
+        return False
+    return component.split(".", 1)[0].casefold() not in _WINDOWS_RESERVED_NAMES
+
+
 def load_compatibility(
     path: Path | os.PathLike[str] = COMPATIBILITY_PATH,
 ) -> dict[str, Any]:
@@ -135,39 +196,66 @@ def load_compatibility(
         raw = compatibility_path.read_bytes()
         if len(raw) > MAX_COMPATIBILITY_BYTES:
             raise _error("compatibility data exceeds the size limit")
-        data = json.loads(raw.decode("utf-8"))
+        data = _decode_json(raw, "compatibility data")
     except ExportError:
         raise
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except OSError as exc:
         del exc
         raise _error("compatibility data could not be read") from None
 
     if not isinstance(data, dict):
         raise _error("compatibility data must be a JSON object")
+    if set(data) - {"format", "schema_version", "hosts", "packs"}:
+        raise _error("compatibility data contains unsupported fields")
     if data.get("format") != COMPATIBILITY_FORMAT:
         raise _error("unsupported compatibility format")
-    if data.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+    if (
+        not isinstance(data.get("schema_version"), int)
+        or isinstance(data.get("schema_version"), bool)
+        or data["schema_version"] != MANIFEST_SCHEMA_VERSION
+    ):
         raise _error("unsupported compatibility schema version")
 
     hosts = data.get("hosts")
     if not isinstance(hosts, dict) or not hosts:
         raise _error("compatibility data must declare at least one host")
+    canonical_hosts: dict[str, dict[str, Any]] = {}
     for host_name, declaration in hosts.items():
         if not isinstance(host_name, str) or not _IDENTIFIER_RE.fullmatch(host_name):
             raise _error("compatibility data contains an invalid host name")
         if not isinstance(declaration, dict):
-            raise _error(f"host '{host_name}' must be an object")
+            raise _error("a host declaration must be an object")
+        if set(declaration) - {
+            "display_name",
+            "skills_dir",
+            "skills_path",
+            "capabilities",
+        }:
+            raise _error("a host declaration contains unsupported fields")
+        display_name = _safe_text(declaration.get("display_name"), maximum=128)
+        if display_name is None:
+            raise _error("a host declaration is missing a safe display_name")
+        if "skills_dir" in declaration and "skills_path" in declaration:
+            raise _error("a host declaration contains conflicting skills paths")
         skills_dir = declaration.get("skills_dir", declaration.get("skills_path"))
         if (
             not isinstance(skills_dir, str)
-            or not skills_dir.strip()
+            or skills_dir != skills_dir.strip()
             or len(skills_dir) > 512
             or any(character in skills_dir for character in "\x00\r\n")
+            or not skills_dir.startswith("~/")
+            or "\\" in skills_dir
+            or any(
+                component in {"", ".", ".."}
+                for component in skills_dir.removeprefix("~/").split("/")
+            )
         ):
             raise _error("a host declaration is missing a safe skills_dir")
         capabilities = declaration.get("capabilities")
         if not isinstance(capabilities, dict):
             raise _error("a host capabilities declaration must be an object")
+        if set(capabilities) - {"archive_formats", "directory_layout", "symlinks"}:
+            raise _error("a host capabilities declaration contains unsupported fields")
         archive_formats = capabilities.get("archive_formats")
         if (
             not isinstance(archive_formats, list)
@@ -179,18 +267,94 @@ def load_compatibility(
             or len(set(archive_formats)) != len(archive_formats)
         ):
             raise _error("a host declares invalid archive formats")
+        canonical_capabilities: dict[str, Any] = {
+            "archive_formats": [
+                value for value in ARCHIVE_FORMATS if value in archive_formats
+            ]
+        }
+        if "directory_layout" in capabilities:
+            directory_layout = _safe_text(capabilities["directory_layout"], maximum=128)
+            if (
+                directory_layout is None
+                or directory_layout.startswith(("/", "\\"))
+                or "\\" in directory_layout
+                or "<skill>" not in directory_layout
+                or ".." in directory_layout.split("/")
+            ):
+                raise _error("a host declares an invalid directory layout")
+            canonical_capabilities["directory_layout"] = directory_layout
+        if "symlinks" in capabilities:
+            if not isinstance(capabilities["symlinks"], bool):
+                raise _error("a host declares an invalid symlink capability")
+            canonical_capabilities["symlinks"] = capabilities["symlinks"]
+        canonical_hosts[host_name] = {
+            "display_name": display_name,
+            "skills_dir": skills_dir,
+            "capabilities": canonical_capabilities,
+        }
 
     packs = data.get("packs", {})
     if not isinstance(packs, dict):
         raise _error("compatibility packs must be an object")
+    canonical_packs: dict[str, dict[str, Any] | list[str]] = {}
     for pack_name, declaration in packs.items():
         if not isinstance(pack_name, str) or not _IDENTIFIER_RE.fullmatch(pack_name):
             raise _error("compatibility data contains an invalid pack name")
         if not isinstance(declaration, (dict, list)):
             raise _error("a pack declaration must be an object or list")
-        _pack_items(declaration)
+        if isinstance(declaration, dict) and set(declaration) - {
+            "description",
+            "include",
+            "patterns",
+            "skills",
+            "version",
+        }:
+            raise _error("a pack declaration contains unsupported fields")
+        exact, patterns = _pack_items(declaration)
+        if any(
+            (
+                _PACK_PATTERN_RE.fullmatch(item) is None
+                if any(character in item for character in "*?[")
+                else _IDENTIFIER_RE.fullmatch(item) is None
+            )
+            for item in exact + patterns
+        ):
+            raise _error("a pack declaration contains invalid entries")
+        if len(set(exact)) != len(exact) or len(set(patterns)) != len(patterns):
+            raise _error("a pack declaration contains duplicate entries")
+        if isinstance(declaration, list):
+            canonical_packs[pack_name] = sorted(exact)
+            continue
+        canonical_pack: dict[str, Any] = {}
+        if "version" in declaration:
+            version = declaration["version"]
+            if (
+                not isinstance(version, str)
+                or re.fullmatch(
+                    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)",
+                    version,
+                )
+                is None
+            ):
+                raise _error("a pack declaration contains an invalid version")
+            canonical_pack["version"] = version
+        if "description" in declaration:
+            description = _safe_text(declaration["description"], maximum=1024)
+            if description is None:
+                raise _error("a pack declaration contains an invalid description")
+            canonical_pack["description"] = description
+        if exact:
+            canonical_pack["skills"] = sorted(exact)
+        if patterns:
+            canonical_pack["patterns"] = sorted(patterns)
+        canonical_packs[pack_name] = canonical_pack
 
-    return data
+    return {
+        "format": COMPATIBILITY_FORMAT,
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "hosts": dict(sorted(canonical_hosts.items())),
+        "packs": dict(sorted(canonical_packs.items())),
+    }
 
 
 def discover_skills(
@@ -317,21 +481,36 @@ def _load_pack_manifest(
         raw = manifest_path.read_bytes()
         if len(raw) > MAX_COMPATIBILITY_BYTES:
             raise _error("pack manifest exceeds the size limit")
-        payload = json.loads(raw.decode("utf-8"))
+        payload = _decode_json(raw, "pack manifest")
     except ExportError:
         raise
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except OSError:
         raise _error("pack manifest could not be read") from None
 
-    if not isinstance(payload, dict) or payload.get("manifest_version") != 1:
+    if not isinstance(payload, dict) or set(payload) != {"manifest_version", "packs"}:
+        raise _error("pack manifest has an unsupported schema")
+    if (
+        not isinstance(payload.get("manifest_version"), int)
+        or isinstance(payload.get("manifest_version"), bool)
+        or payload["manifest_version"] != 1
+    ):
         raise _error("pack manifest has an unsupported schema")
     declarations = payload.get("packs")
     if not isinstance(declarations, list) or not declarations:
         raise _error("pack manifest must contain packs")
 
     packs: dict[str, dict[str, Any]] = {}
+    canonical_declarations: list[dict[str, Any]] = []
     for declaration in declarations:
         if not isinstance(declaration, dict):
+            raise _error("pack manifest contains an invalid declaration")
+        if set(declaration) != {
+            "budget",
+            "description",
+            "id",
+            "skills",
+            "version",
+        }:
             raise _error("pack manifest contains an invalid declaration")
         identifier = declaration.get("id")
         version = declaration.get("version")
@@ -347,7 +526,8 @@ def _load_pack_manifest(
             version,
         ):
             raise _error("pack manifest contains an invalid version")
-        if not isinstance(description, str) or not description.strip():
+        canonical_description = _safe_text(description, maximum=1024)
+        if canonical_description is None:
             raise _error("pack manifest contains an invalid description")
         if (
             not isinstance(skills, list)
@@ -359,24 +539,38 @@ def _load_pack_manifest(
             or len(set(skills)) != len(skills)
         ):
             raise _error("pack manifest contains invalid skill membership")
-        if not isinstance(budget, dict) or any(
-            not isinstance(budget.get(key), int)
-            or isinstance(budget.get(key), bool)
-            or budget[key] <= 0
-            for key in ("max_skills", "max_bytes")
+        if (
+            not isinstance(budget, dict)
+            or set(budget)
+            != {
+                "max_skills",
+                "max_bytes",
+            }
+            or any(
+                not isinstance(budget.get(key), int)
+                or isinstance(budget.get(key), bool)
+                or budget[key] <= 0
+                for key in ("max_skills", "max_bytes")
+            )
         ):
             raise _error("pack manifest contains an invalid budget")
-        packs[identifier] = {
+        canonical = {
             "budget": {
                 "max_bytes": budget["max_bytes"],
                 "max_skills": budget["max_skills"],
             },
-            "description": description.strip(),
+            "description": canonical_description,
             "skills": sorted(skills),
             "version": version,
         }
+        packs[identifier] = canonical
+        canonical_declarations.append({"id": identifier, **copy.deepcopy(canonical)})
 
-    return payload, dict(sorted(packs.items()))
+    canonical_payload = {
+        "manifest_version": 1,
+        "packs": canonical_declarations,
+    }
+    return canonical_payload, dict(sorted(packs.items()))
 
 
 def _apply_canonical_packs(
@@ -496,6 +690,119 @@ def _selection_identifiers(values: Iterable[str], label: str) -> tuple[str, ...]
     return tuple(selected)
 
 
+def _read_bounded_regular_file(descriptor: int) -> bytes:
+    """Read one already-opened regular file and detect concurrent mutation."""
+
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise _error("a selected skill contains an unsupported file")
+    if before.st_size > MAX_SKILL_FILE_BYTES:
+        raise _error("a selected skill file exceeds the size limit")
+
+    content = bytearray()
+    while len(content) <= MAX_SKILL_FILE_BYTES:
+        chunk = os.read(
+            descriptor,
+            min(1024 * 1024, MAX_SKILL_FILE_BYTES + 1 - len(content)),
+        )
+        if not chunk:
+            break
+        content.extend(chunk)
+    if len(content) > MAX_SKILL_FILE_BYTES:
+        raise _error("a selected skill file exceeds the size limit")
+
+    after = os.fstat(descriptor)
+    before_identity = (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+    )
+    after_identity = (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    )
+    if before_identity != after_identity or len(content) != before.st_size:
+        raise _error("a selected skill changed during export")
+    return bytes(content)
+
+
+def _read_skill_file(skills_root: Path, skill_name: str, relative: Path) -> bytes:
+    """Open a skill file through no-follow directory descriptors when available."""
+
+    descriptors: list[int] = []
+    file_descriptor: int | None = None
+    use_directory_descriptors = (
+        os.open in os.supports_dir_fd
+        and hasattr(os, "O_DIRECTORY")
+        and hasattr(os, "O_NOFOLLOW")
+    )
+    try:
+        if use_directory_descriptors:
+            directory_flags = (
+                os.O_RDONLY
+                | os.O_DIRECTORY
+                | os.O_NOFOLLOW
+                | getattr(os, "O_CLOEXEC", 0)
+            )
+            current = os.open(skills_root, directory_flags)
+            descriptors.append(current)
+            for component in (skill_name, *relative.parts[:-1]):
+                current = os.open(
+                    component,
+                    directory_flags,
+                    dir_fd=current,
+                )
+                descriptors.append(current)
+            file_descriptor = os.open(
+                relative.parts[-1],
+                os.O_RDONLY
+                | os.O_NOFOLLOW
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_BINARY", 0),
+                dir_fd=current,
+            )
+        else:
+            root = skills_root.resolve(strict=True)
+            path = skills_root / skill_name / relative
+            resolved_before = path.resolve(strict=True)
+            if not resolved_before.is_relative_to(root):
+                raise _error("a selected skill path escapes the skills root")
+            file_descriptor = os.open(
+                path,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_BINARY", 0),
+            )
+            resolved_after = path.resolve(strict=True)
+            current_stat = path.stat(follow_symlinks=False)
+            opened = os.fstat(file_descriptor)
+            if (
+                resolved_after != resolved_before
+                or not resolved_after.is_relative_to(root)
+                or not stat.S_ISREG(current_stat.st_mode)
+                or (current_stat.st_dev, current_stat.st_ino)
+                != (opened.st_dev, opened.st_ino)
+            ):
+                raise _error("a selected skill changed during export")
+        return _read_bounded_regular_file(file_descriptor)
+    except ExportError:
+        raise
+    except (OSError, RuntimeError, ValueError):
+        raise _error("a selected skill could not be read") from None
+    finally:
+        if file_descriptor is not None:
+            try:
+                os.close(file_descriptor)
+            except OSError:
+                pass
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def _collect_skill_files(
     skills_root: Path,
     skill_names: Sequence[str],
@@ -535,19 +842,13 @@ def _collect_skill_files(
             elif parts[0] not in SKILL_CONTENT_DIRS:
                 raise _error("a selected skill contains an unsupported directory")
             if any(
-                component.startswith(".")
-                or _PORTABLE_COMPONENT_RE.fullmatch(component) is None
+                component.startswith(".") or not _portable_component(component)
                 for component in parts
             ):
                 raise _error("a selected skill contains a non-portable path")
 
-            try:
-                size = path.stat().st_size
-            except OSError:
-                raise _error("a selected skill could not be inspected") from None
-            if size > MAX_SKILL_FILE_BYTES:
-                raise _error("a selected skill file exceeds the size limit")
-            total_size += size
+            content = _read_skill_file(skills_root, skill_name, relative_to_skill)
+            total_size += len(content)
             if total_size > MAX_BUNDLE_SOURCE_BYTES:
                 raise _error("selected skill files exceed the bundle size limit")
 
@@ -557,12 +858,6 @@ def _collect_skill_files(
             if portable_name in portable_names:
                 raise _error("selected skills contain a portable path collision")
             portable_names.add(portable_name)
-            try:
-                content = path.read_bytes()
-            except OSError:
-                raise _error("a selected skill could not be read") from None
-            if len(content) != size:
-                raise _error("a selected skill changed during export")
             members.append((member_name, content))
     return members
 
@@ -606,7 +901,11 @@ def resolve_source_revision(repo_root: Path | os.PathLike[str] = REPO_ROOT) -> s
 
 
 def _validate_revision(revision: str) -> str:
-    if not isinstance(revision, str) or not _REVISION_RE.fullmatch(revision):
+    if (
+        not isinstance(revision, str)
+        or len(revision) > MAX_REVISION_LENGTH
+        or not _REVISION_RE.fullmatch(revision)
+    ):
         raise _error("source revision must be a non-empty safe identifier")
     return revision
 
@@ -642,6 +941,8 @@ def _validate_host_archive_format(
 
 
 def _normalise_archive_format(archive_format: str | None, output: Path) -> str:
+    if archive_format is not None and not isinstance(archive_format, str):
+        raise _error("archive format must be zip or tar.gz")
     value = archive_format.lower().lstrip(".") if archive_format else ""
     lower_name = output.name.lower()
     inferred: str | None = None
@@ -719,7 +1020,7 @@ def _write_zip(path: Path, members: Sequence[tuple[str, bytes]]) -> None:
         for name, content in members:
             info = zipfile.ZipInfo(filename=name, date_time=(1980, 1, 1, 0, 0, 0))
             info.create_system = 3
-            info.external_attr = 0o100644 << 16
+            info.external_attr = (0o100000 | _member_mode(name)) << 16
             info.compress_type = zipfile.ZIP_STORED
             info.extra = b""
             info.comment = b""
@@ -736,12 +1037,23 @@ def _write_tar_gz(path: Path, members: Sequence[tuple[str, bytes]]) -> None:
                     info = tarfile.TarInfo(name=name)
                     info.size = len(content)
                     info.mtime = 0
-                    info.mode = 0o644
+                    info.mode = _member_mode(name)
                     info.uid = 0
                     info.gid = 0
                     info.uname = ""
                     info.gname = ""
                     archive.addfile(info, io.BytesIO(content))
+
+
+def _member_mode(name: str) -> int:
+    """Use stable executable modes for files shipped below skill scripts/."""
+
+    parts = name.split("/")
+    return (
+        0o755
+        if len(parts) > 3 and parts[0] == "skills" and parts[2] == "scripts"
+        else 0o644
+    )
 
 
 def _write_archive(
@@ -935,7 +1247,11 @@ def export_bundle(
         if manifest_path is not None
         else _default_manifest_path(output_path)
     )
-    if not bundle_name or not _BUNDLE_NAME_RE.fullmatch(bundle_name):
+    if (
+        not isinstance(bundle_name, str)
+        or len(bundle_name) > MAX_BUNDLE_NAME_LENGTH
+        or not _BUNDLE_NAME_RE.fullmatch(bundle_name)
+    ):
         raise _error("bundle name must be a non-empty safe identifier")
 
     skills_root_path = _coerce_path(skills_root, "skills root")
@@ -973,8 +1289,7 @@ def export_bundle(
         else source_revision
     )
     archive_kind = _normalise_archive_format(archive_format, output_path)
-    if hosts is not None:
-        _validate_host_archive_format(selected_hosts, archive_kind)
+    _validate_host_archive_format(selected_hosts, archive_kind)
 
     tracked_files = _tracked_skill_files(skills_root_path, selected_skills)
     skill_members = _collect_skill_files(
@@ -1070,7 +1385,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--pack", action="append", dest="selected_packs")
     parser.add_argument("--host", action="append", dest="selected_hosts")
     parser.add_argument("--source-revision")
-    parser.add_argument("--format", dest="archive_format", choices=ARCHIVE_FORMATS)
+    parser.add_argument("--format", dest="archive_format")
     parser.add_argument("--name", default="openmed-skills", dest="bundle_name")
     parser.add_argument(
         "--force",
@@ -1104,8 +1419,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    print(f"Archive: {result.archive_path}")
-    print(f"Manifest: {result.manifest_path}")
+    print("Archive written.")
+    print("Manifest written.")
     print(f"Archive SHA-256: {result.archive_sha256}")
     return 0
 

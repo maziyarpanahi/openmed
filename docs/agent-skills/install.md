@@ -51,7 +51,8 @@ capabilities, the source revision, and a SHA-256 and byte size for every
 source file. The same manifest is written beside the archive as
 `<archive-name>.manifest.json`. Archive metadata, member order, and JSON
 formatting are fixed so exporting the same source revision twice produces the
-same bytes.
+same bytes. Files below a skill's `scripts/` directory receive a deterministic
+executable mode; all other archive members are non-executable.
 
 ## Install a bundle
 
@@ -85,6 +86,9 @@ and case-folding path collisions are rejected rather than copied. In a Git
 checkout, selected skill files must also be tracked, which prevents a local
 scratch file from entering a bundle accidentally. Source archives without Git
 metadata still use the same bounded skill-directory layout and size limits.
+Compatibility and pack metadata use strict versioned schemas: duplicate JSON
+keys, unknown fields, unsafe host paths, and unsupported capabilities fail
+closed instead of being copied into the archive.
 
 Keep real patient or customer data out of skill files, paths, logs, and
 manifests. Committed examples and tests use synthetic data only.
