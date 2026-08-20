@@ -48,6 +48,7 @@ _SAFE_PATH_KEYS = frozenset(
     }
 )
 _HASHED_PATH_KEY = re.compile(r"^key_sha256_[0-9a-f]{12}$")
+_INVALID_PART_TYPE = object()
 
 
 class ChatSchemaError(ValueError):
@@ -61,6 +62,17 @@ class ChatMessageRedactionError(ChatSchemaError):
 # Discoverable aliases for callers using the shorter vocabulary.
 ChatRedactionError = ChatMessageRedactionError
 RoleMessageSchemaError = ChatSchemaError
+
+
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,19 +171,24 @@ class _RedactionState:
     def redact(self, value: str, path: ContentPath, *, structured: bool) -> str:
         """Apply the injected redactor and retain only aggregate state."""
 
+        source_text = _plain_text(value)
+        if source_text is None:
+            raise ChatMessageRedactionError(
+                f"text content is invalid at {_format_path(path)}"
+            )
         self.text_value_count += 1
         if structured:
             self.structured_part_count += 1
         self.content_paths.append(_format_path(path))
         try:
-            replacement = _coerce_redacted_text(self.redactor(value))
+            replacement = _coerce_redacted_text(self.redactor(source_text))
         except ChatMessageRedactionError:
             raise
         except Exception:
             raise ChatMessageRedactionError(
                 f"text redactor failed at {_format_path(path)}"
             ) from None
-        if replacement != value:
+        if replacement != source_text:
             self.redacted_text_count += 1
         return replacement
 
@@ -208,7 +225,10 @@ def _walk_content(
     """
 
     if isinstance(value, str):
-        return ((path, value, structured),)
+        text = _plain_text(value)
+        if text is None:
+            raise ChatSchemaError("message content text is invalid")
+        return ((path, text, structured),)
     if not isinstance(value, (Mapping, Sequence)) or isinstance(
         value, (bytes, bytearray, str)
     ):
@@ -222,12 +242,19 @@ def _walk_content(
     try:
         if isinstance(value, Mapping):
             items: list[tuple[ContentPath, str, bool]] = []
-            part_type = value.get("type")
+            raw_part_type = value.get("type")
+            if raw_part_type is None:
+                part_type: object = None
+            elif isinstance(raw_part_type, str):
+                part_type = _plain_text(raw_part_type) or _INVALID_PART_TYPE
+            else:
+                part_type = _INVALID_PART_TYPE
             recognized_part = part_type is None or part_type in (
                 _TEXT_PART_TYPES | _TOOL_RESULT_PART_TYPES
             )
-            if recognized_part and isinstance(value.get("text"), str):
-                items.append((path + ("text",), value["text"], True))
+            text_value = _plain_text(value.get("text"))
+            if recognized_part and text_value is not None:
+                items.append((path + ("text",), text_value, True))
 
             if part_type in _TEXT_PART_TYPES:
                 for key in ("value", "content"):
@@ -299,21 +326,31 @@ def _walk_message_sequence(
 ) -> tuple[tuple[tuple[ContentPath, str, bool], ...], int]:
     """Return discovered content and message count for one message array."""
 
-    if not _is_sequence(messages):
-        raise ChatSchemaError("messages must be a list or tuple of message mappings")
-
-    items: list[tuple[ContentPath, str, bool]] = []
-    for index, message in enumerate(messages):
-        if not isinstance(message, Mapping):
-            raise ChatSchemaError("each message must be a mapping")
-        if content_key in message:
-            items.extend(
-                _walk_content(
-                    message[content_key],
-                    path_prefix + (index, content_key),
-                )
+    normalized_content_key = _plain_text(content_key)
+    if normalized_content_key is None or not normalized_content_key:
+        raise ChatSchemaError("content_key must be a non-empty string")
+    try:
+        if not _is_sequence(messages):
+            raise ChatSchemaError(
+                "messages must be a list or tuple of message mappings"
             )
-    return tuple(items), len(messages)
+
+        items: list[tuple[ContentPath, str, bool]] = []
+        for index, message in enumerate(messages):
+            if not isinstance(message, Mapping):
+                raise ChatSchemaError("each message must be a mapping")
+            if normalized_content_key in message:
+                items.extend(
+                    _walk_content(
+                        message[normalized_content_key],
+                        path_prefix + (index, normalized_content_key),
+                    )
+                )
+        return tuple(items), len(messages)
+    except ChatSchemaError:
+        raise
+    except Exception:
+        raise ChatSchemaError("message content could not be read safely") from None
 
 
 def _walk_record(
@@ -322,21 +359,29 @@ def _walk_record(
     messages_key: str,
     content_key: str,
 ) -> tuple[tuple[tuple[ContentPath, str, bool], ...], int]:
-    if not isinstance(record, Mapping):
-        raise ChatSchemaError("record must be a mapping")
-    if messages_key not in record:
-        raise ChatSchemaError("record does not contain a messages field")
-    return _walk_message_sequence(
-        record[messages_key],
-        content_key=content_key,
-        path_prefix=(messages_key,),
-    )
+    try:
+        if not isinstance(record, Mapping):
+            raise ChatSchemaError("record must be a mapping")
+        if messages_key not in record:
+            raise ChatSchemaError("record does not contain a messages field")
+        return _walk_message_sequence(
+            record[messages_key],
+            content_key=content_key,
+            path_prefix=(messages_key,),
+        )
+    except ChatSchemaError:
+        raise
+    except Exception:
+        raise ChatSchemaError("message content could not be read safely") from None
 
 
 def _normalize_path(raw_path: Any) -> ContentPath:
     if isinstance(raw_path, str):
+        path_text = _plain_text(raw_path)
+        if path_text is None:
+            raise ChatSchemaError("content paths must be text")
         parts: list[PathPart] = []
-        for part in raw_path.split("."):
+        for part in path_text.split("."):
             if not part:
                 raise ChatSchemaError("content paths must not contain empty parts")
             parts.append(int(part) if part.isdecimal() else part)
@@ -346,13 +391,21 @@ def _normalize_path(raw_path: Any) -> ContentPath:
         raw_path, (str, bytes, bytearray)
     ):
         raise ChatSchemaError("content paths must be sequences")
+    try:
+        raw_parts = tuple(raw_path)
+    except Exception:
+        raise ChatSchemaError("content paths could not be read") from None
     parts = []
-    for part in raw_path:
-        if isinstance(part, bool) or not isinstance(part, (str, int)):
+    for part in raw_parts:
+        if isinstance(part, str):
+            normalized_part = _plain_text(part)
+            if normalized_part is None or not normalized_part:
+                raise ChatSchemaError("content path keys must not be empty")
+            parts.append(normalized_part)
+            continue
+        if type(part) is not int:
             raise ChatSchemaError("content paths may contain only keys and indexes")
-        if isinstance(part, str) and not part:
-            raise ChatSchemaError("content path keys must not be empty")
-        if isinstance(part, int) and part < 0:
+        if part < 0:
             raise ChatSchemaError("content path indexes must be non-negative")
         parts.append(part)
     if not parts:
@@ -374,7 +427,7 @@ def _validated_replacements(
         raise ChatSchemaError("replacements must be a mapping")
     known_paths = {path for path, _text, _structured in walked}
     normalized: dict[ContentPath, str] = {}
-    for raw_path, replacement in replacements.items():
+    for raw_path, replacement in _replacement_entries(replacements):
         path = _normalize_path(raw_path)
         if path not in known_paths:
             raise ChatSchemaError("replacement path is not discovered content")
@@ -382,10 +435,30 @@ def _validated_replacements(
             raise ChatSchemaError(
                 "replacement paths must be unique after normalization"
             )
-        if not isinstance(replacement, str):
+        replacement_text = _plain_text(replacement)
+        if replacement_text is None:
             raise ChatSchemaError("replacement content must be text")
-        normalized[path] = replacement
+        normalized[path] = replacement_text
     return normalized
+
+
+def _replacement_entries(
+    replacements: Mapping[Any, Any],
+) -> tuple[tuple[Any, Any], ...]:
+    """Materialize replacement entries without exposing iterator failures."""
+
+    try:
+        raw_entries = tuple(replacements.items())
+    except Exception:
+        raise ChatSchemaError("replacements could not be read") from None
+    entries: list[tuple[Any, Any]] = []
+    for raw_entry in raw_entries:
+        try:
+            raw_path, replacement = raw_entry
+        except Exception:
+            raise ChatSchemaError("replacements could not be read") from None
+        entries.append((raw_path, replacement))
+    return tuple(entries)
 
 
 def _replace_at_path(value: Any, path: ContentPath, replacement: str) -> Any:
@@ -446,20 +519,26 @@ def _reconstruct(
 
 
 def _coerce_redacted_text(result: Any) -> str:
-    if isinstance(result, str):
-        return result
+    text = _plain_text(result)
+    if text is not None:
+        return text
     if isinstance(result, Mapping):
         for key in ("deidentified_text", "redacted_text", "text"):
-            candidate = result.get(key)
-            if isinstance(candidate, str):
-                return candidate
+            try:
+                candidate = result.get(key)
+            except Exception:
+                continue
+            text = _plain_text(candidate)
+            if text is not None:
+                return text
     for attribute in ("deidentified_text", "redacted_text"):
         try:
             candidate = getattr(result, attribute)
         except Exception:
             continue
-        if isinstance(candidate, str):
-            return candidate
+        text = _plain_text(candidate)
+        if text is not None:
+            return text
     raise ChatMessageRedactionError("text redactor must return text")
 
 
@@ -573,12 +652,14 @@ class RoleMessageSchemaAdapter:
         messages_key: str = DEFAULT_MESSAGES_KEY,
         content_key: str = DEFAULT_CONTENT_KEY,
     ) -> None:
-        if not isinstance(messages_key, str) or not messages_key.strip():
+        normalized_messages_key = _plain_text(messages_key)
+        if normalized_messages_key is None or not normalized_messages_key.strip():
             raise ChatSchemaError("messages_key must be a non-empty string")
-        if not isinstance(content_key, str) or not content_key.strip():
+        normalized_content_key = _plain_text(content_key)
+        if normalized_content_key is None or not normalized_content_key.strip():
             raise ChatSchemaError("content_key must be a non-empty string")
-        self.messages_key = messages_key.strip()
-        self.content_key = content_key.strip()
+        self.messages_key = normalized_messages_key.strip()
+        self.content_key = normalized_content_key.strip()
         self._text_redactor = (
             _resolve_redactor(
                 text_redactor,

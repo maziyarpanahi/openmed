@@ -286,3 +286,69 @@ def test_redactor_failures_do_not_expose_source_text() -> None:
 
     assert source_text not in str(error.value)
     assert "text redactor failed" in str(error.value)
+
+
+def test_text_subclass_hooks_are_not_used_at_adapter_boundaries() -> None:
+    sensitive = "synthetic private string hook"
+
+    class HostileText(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(sensitive)
+
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(sensitive)
+
+        def strip(self, chars: str | None = None) -> str:
+            del chars
+            raise RuntimeError(sensitive)
+
+    seen_types: list[type[object]] = []
+
+    def redact(value: str) -> str:
+        seen_types.append(type(value))
+        return HostileText("[REDACTED]")
+
+    adapter = RoleMessageSchemaAdapter(
+        messages_key=HostileText("messages"),
+        content_key=HostileText("content"),
+    )
+    rebuilt = adapter.transform(
+        {"messages": [{"role": "user", "content": HostileText("private")}]},
+        redact,
+    )
+
+    replacement = rebuilt["messages"][0]["content"]
+    assert seen_types == [str]
+    assert type(replacement) is str
+    assert str.encode(replacement, "utf-8") == b"[REDACTED]"
+
+
+def test_message_iterator_failures_are_value_free() -> None:
+    sensitive = "synthetic private message iterator"
+
+    class FailingMessages(list[object]):
+        def __iter__(self):
+            yield {"role": "user", "content": "synthetic value"}
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(ChatSchemaError) as error:
+        redact_chat_messages(FailingMessages(), text_redactor=_redact)
+
+    assert sensitive not in str(error.value)
+
+
+def test_replacement_iterator_failures_are_value_free() -> None:
+    sensitive = "synthetic private replacement iterator"
+
+    class FailingReplacements(dict[object, object]):
+        def items(self):
+            yield (("messages", 0, "content"), "[REDACTED]")
+            raise RuntimeError(sensitive)
+
+    adapter = RoleMessageSchemaAdapter()
+    record = {"messages": [{"role": "user", "content": "synthetic value"}]}
+    with pytest.raises(ChatSchemaError) as error:
+        adapter.reconstruct(record, FailingReplacements())
+
+    assert sensitive not in str(error.value)
