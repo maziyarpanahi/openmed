@@ -104,6 +104,7 @@ classification:
     - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
+    - service/self-hosted-redaction.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
