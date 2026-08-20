@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added metadata-only local agent trace-store discovery with platform-aware
+  defaults, explicit opt-out, no content reads or symlink following, PHI-free
+  store labels, and aggregate counts and byte sizes (#2279).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
