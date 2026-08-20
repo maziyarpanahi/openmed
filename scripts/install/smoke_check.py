@@ -24,8 +24,17 @@ _OFFLINE_FLAGS = {
     "TRANSFORMERS_OFFLINE": "1",
     "HF_DATASETS_OFFLINE": "1",
 }
-_MANIFEST_ROW_RE = re.compile(r"\((\d+) rows? checked\)")
-_VERSION_RE = re.compile(r"^openmed\s+(\S+)$")
+_MANIFEST_ROW_RE = re.compile(r"\(([1-9][0-9]{0,8}) rows? checked\)")
+_MAX_VERSION_LENGTH = 64
+_SAFE_VERSION_PATTERN = (
+    r"[0-9]+(?:\.[0-9]+){2}"
+    r"(?:(?:a|b|rc)[0-9]+)?"
+    r"(?:\.post[0-9]+)?"
+    r"(?:\.dev[0-9]+)?"
+    r"(?:\+[0-9A-Za-z]+(?:[._-][0-9A-Za-z]+)*)?"
+)
+_VERSION_RE = re.compile(rf"^openmed ({_SAFE_VERSION_PATTERN})$")
+_SAFE_VERSION_RE = re.compile(rf"^{_SAFE_VERSION_PATTERN}$")
 _HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 # The probe carries only a synthetic marker. It emits hashes and offsets, never
@@ -54,9 +63,10 @@ result = SimpleNamespace(
     ],
 )
 preview = redaction_preview(text, result)
+installed_distribution = distribution("openmed")
 entry_point_declared = any(
     item.name == "openmed" and item.value == "openmed.cli:main"
-    for item in distribution("openmed").entry_points
+    for item in installed_distribution.entry_points
 )
 if not entry_point_declared or preview["change_count"] != 1:
     raise SystemExit(1)
@@ -67,6 +77,7 @@ print(
             "change_count": preview["change_count"],
             "document_hash": preview["document_hash"],
             "entry_point_declared": entry_point_declared,
+            "package_version": installed_distribution.version,
             "surface_hash": change["surface_hash"],
         },
         ensure_ascii=True,
@@ -156,18 +167,28 @@ def _clean_environment(home: Path) -> dict[str, str]:
     return environment
 
 
-def _entry_point_path(
+def _python_path(
     python_executable: str,
     *,
     path: str,
 ) -> Path | None:
+    """Resolve the selected interpreter without dereferencing venv symlinks."""
+    discovered = shutil.which(python_executable, path=path)
+    if discovered is None:
+        return None
+    candidate = Path(discovered)
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    return candidate
+
+
+def _entry_point_path(python_path: Path) -> Path | None:
     """Find the console script installed beside the selected interpreter."""
     script_name = "openmed.exe" if os.name == "nt" else "openmed"
-    adjacent = Path(python_executable).parent / script_name
+    adjacent = python_path.parent / script_name
     if adjacent.is_file():
         return adjacent
-    discovered = shutil.which("openmed", path=path)
-    return Path(discovered) if discovered else None
+    return None
 
 
 def _run_captured(
@@ -193,7 +214,7 @@ def _run_captured(
 
 
 def _parse_version(output: str | None) -> str | None:
-    if not output:
+    if not output or len(output) > len("openmed ") + _MAX_VERSION_LENGTH + 1:
         return None
     match = _VERSION_RE.fullmatch(output.strip())
     return match.group(1) if match else None
@@ -228,13 +249,15 @@ def _manifest_check(
                 row_count = int(match.group(1))
                 break
 
-    details = {"manifest_rows": row_count} if row_count is not None else {}
-    return _passed("bundled_manifest", **details)
+    if row_count is None:
+        return _failed("bundled_manifest", "invalid_result")
+    return _passed("bundled_manifest", manifest_rows=row_count)
 
 
 def _synthetic_check(
     python_executable: str,
     *,
+    expected_version: str,
     cwd: Path,
     environment: Mapping[str, str],
     runner: CommandRunner,
@@ -270,6 +293,15 @@ def _synthetic_check(
         return _failed("synthetic_offline_command", "invalid_result")
     if payload.get("entry_point_declared") is not True:
         return _failed("synthetic_offline_command", "entry_point_not_declared")
+    package_version = payload.get("package_version")
+    if (
+        not isinstance(package_version, str)
+        or len(package_version) > _MAX_VERSION_LENGTH
+        or _SAFE_VERSION_RE.fullmatch(package_version) is None
+    ):
+        return _failed("synthetic_offline_command", "invalid_package_version")
+    if package_version != expected_version:
+        return _failed("synthetic_offline_command", "version_mismatch")
     if payload.get("change_count") != 1:
         return _failed("synthetic_offline_command", "unexpected_change_count")
     if not all(
@@ -303,10 +335,19 @@ def run_smoke_check(
         environment = _clean_environment(home)
         workdir = home / "work"
         workdir.mkdir()
-        entry_point = _entry_point_path(
+        python_path = _python_path(
             python_executable,
             path=environment["PATH"],
         )
+        if python_path is None:
+            return SmokeReport(
+                status="failed",
+                checks=(_failed("entry_point", "python_not_found"),),
+            )
+        # Resolve a bare interpreter name using the caller's PATH, then remove
+        # every unrelated environment from the child executable search path.
+        environment["PATH"] = str(python_path.parent)
+        entry_point = _entry_point_path(python_path)
         if entry_point is None:
             return SmokeReport(
                 status="failed",
@@ -333,7 +374,9 @@ def run_smoke_check(
                 checks=(_failed("entry_point", "invalid_version_output"),),
             )
 
-        checks = [_passed("entry_point", version=version)]
+        # Do not copy even a version-shaped child value into the report until
+        # the isolated metadata probe confirms that it belongs to this install.
+        checks = [_passed("entry_point")]
         manifest_result = _run_captured(
             [str(entry_point), "models", "validate", "--json"],
             cwd=workdir,
@@ -346,13 +389,16 @@ def run_smoke_check(
             return SmokeReport(status="failed", checks=tuple(checks))
 
         synthetic_check = _synthetic_check(
-            python_executable,
+            str(python_path),
+            expected_version=version,
             cwd=workdir,
             environment=environment,
             runner=runner,
         )
         checks.append(synthetic_check)
         status = "passed" if synthetic_check.status == "passed" else "failed"
+        if status == "passed":
+            checks[0] = _passed("entry_point", version=version)
         return SmokeReport(status=status, checks=tuple(checks))
 
 

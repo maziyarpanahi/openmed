@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline installation smoke check with a clean
+  temporary home, selected-environment entry-point and package-version proof,
+  bundled-manifest validation, repeatable synthetic redaction hashes, and
+  value-free failure reports (#2378).
 - Added an opt-in bundled-model manifest and offline bootstrap for the small
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent

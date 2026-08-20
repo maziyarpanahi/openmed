@@ -8,17 +8,20 @@ installing the package:
 python scripts/install/smoke_check.py > install-smoke.json
 ```
 
-The command uses the selected Python environment's `openmed` entry point and
+The command uses only the `openmed` entry point installed beside the selected
+Python interpreter (it does not fall back to another `openmed` on `PATH`) and
 checks three things:
 
-- `openmed --version` starts successfully and matches the installed package.
+- `openmed --version` starts successfully and matches the installed package
+  metadata.
 - `openmed models validate --json` can read the bundled model manifest.
 - A synthetic, in-memory redaction preview is deterministic and privacy-safe.
 
 The child processes receive `OPENMED_OFFLINE=1` together with the Hugging Face
 and Transformers offline flags. They run with a temporary home, cache, and
-configuration directory, and their stdout/stderr are never copied into the
-report. The report contains only stable statuses, counts, the package version,
+configuration directory and a search path restricted to the selected Python
+environment. Their stdout/stderr are never copied into the report. The report
+contains only stable statuses, counts, a metadata-confirmed package version,
 and SHA-256 hashes of synthetic surfaces. A successful run exits `0`; any
 failed check exits `1`.
 
