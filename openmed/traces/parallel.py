@@ -78,6 +78,8 @@ class TraceProcessingError(TraceExecutionError):
     """Raised for a failed input without retaining its exception message."""
 
     def __init__(self, input_index: int, error_type: str | None) -> None:
+        if type(input_index) is not int or input_index < 0:
+            raise TraceInputError("input_index must be a non-negative integer")
         self.input_index = input_index
         self.error_type = _safe_error_type_name(error_type)
         super().__init__(f"trace input {input_index} failed with {self.error_type}")
@@ -85,9 +87,20 @@ class TraceProcessingError(TraceExecutionError):
 
 def _safe_error_type_name(value: Any) -> str:
     """Return an allowlisted exception type suitable for operator output."""
-    if isinstance(value, str) and value in _SAFE_ERROR_TYPES:
-        return value
+    normalized = _plain_text(value)
+    if normalized in _SAFE_ERROR_TYPES:
+        return normalized
     return UNKNOWN_ERROR_TYPE
+
+
+def _plain_text(value: Any) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
 
 
 def _safe_error_type(exc: BaseException) -> str:
@@ -100,7 +113,7 @@ def _safe_error_type(exc: BaseException) -> str:
 
 
 def _validate_positive_int(value: Any, name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+    if type(value) is not int or value < 1:
         raise TraceInputError(f"{name} must be a positive integer")
     return value
 
@@ -128,19 +141,21 @@ class TraceShard:
     input_indices: tuple[int, ...]
 
     def __post_init__(self) -> None:
-        if isinstance(self.shard_id, bool) or not isinstance(self.shard_id, int):
+        if type(self.shard_id) is not int:
             raise TraceInputError("shard_id must be a non-negative integer")
         if self.shard_id < 0:
             raise TraceInputError("shard_id must be a non-negative integer")
 
-        normalized_files = tuple(_coerce_trace_path(path) for path in self.files)
-        indices = tuple(self.input_indices)
+        try:
+            normalized_files = tuple(_coerce_trace_path(path) for path in self.files)
+            indices = tuple(self.input_indices)
+        except TraceInputError:
+            raise
+        except Exception:
+            raise TraceInputError("trace shard inputs could not be read") from None
         if not normalized_files or len(normalized_files) != len(indices):
             raise TraceInputError("trace shards must contain matching non-empty inputs")
-        if any(
-            isinstance(index, bool) or not isinstance(index, int) or index < 0
-            for index in indices
-        ):
+        if any(type(index) is not int or index < 0 for index in indices):
             raise TraceInputError("input indexes must be non-negative integers")
         if tuple(sorted(indices)) != indices:
             raise TraceInputError("input indexes must be ordered")
@@ -183,17 +198,13 @@ class TraceFileResult(Generic[ResultT]):
     duration_seconds: float = 0.0
 
     def __post_init__(self) -> None:
-        if (
-            isinstance(self.input_index, bool)
-            or not isinstance(self.input_index, int)
-            or self.input_index < 0
-        ):
+        if type(self.input_index) is not int or self.input_index < 0:
             raise TraceInputError("input_index must be a non-negative integer")
         if not isinstance(self.success, bool):
             raise TraceInputError("success must be a boolean")
         if (
             isinstance(self.duration_seconds, bool)
-            or not isinstance(self.duration_seconds, (int, float))
+            or type(self.duration_seconds) not in (int, float)
             or not math.isfinite(self.duration_seconds)
             or self.duration_seconds < 0
         ):
@@ -233,26 +244,21 @@ class TraceRunResult(Generic[ResultT]):
     fallback_reason: str | None = None
 
     def __post_init__(self) -> None:
-        if (
-            not isinstance(self.execution_mode, str)
-            or self.execution_mode not in _EXECUTION_MODES
-        ):
+        execution_mode = _plain_text(self.execution_mode)
+        if execution_mode not in _EXECUTION_MODES:
             raise TraceInputError("execution_mode is not recognized")
-        if (
-            isinstance(self.worker_count, bool)
-            or not isinstance(self.worker_count, int)
-            or self.worker_count < 0
-        ):
+        object.__setattr__(self, "execution_mode", execution_mode)
+        if type(self.worker_count) is not int or self.worker_count < 0:
             raise TraceInputError("worker_count must be non-negative")
-        if (
-            isinstance(self.shard_count, bool)
-            or not isinstance(self.shard_count, int)
-            or self.shard_count < 0
-        ):
+        if type(self.shard_count) is not int or self.shard_count < 0:
             raise TraceInputError("shard_count must be non-negative")
-        if self.fallback_reason not in (None, *_FALLBACK_REASONS):
+        fallback_reason = (
+            None if self.fallback_reason is None else _plain_text(self.fallback_reason)
+        )
+        if fallback_reason not in (None, *_FALLBACK_REASONS):
             raise TraceInputError("fallback_reason is not recognized")
-        if self.execution_mode == "processes" and self.fallback_reason is not None:
+        object.__setattr__(self, "fallback_reason", fallback_reason)
+        if execution_mode == "processes" and fallback_reason is not None:
             raise TraceInputError("process execution cannot have a fallback reason")
 
     @property
@@ -599,8 +605,10 @@ def run_trace_files(
         raise TraceInputError("use_processes must be a boolean")
     if not isinstance(raise_on_error, bool):
         raise TraceInputError("raise_on_error must be a boolean")
-    if start_method is not None and not isinstance(start_method, str):
-        raise TraceInputError("start_method must be a string or None")
+    if start_method is not None:
+        start_method = _plain_text(start_method)
+        if start_method is None:
+            raise TraceInputError("start_method must be a string or None")
 
     shards = partition_trace_files(files, shard_size=shard_size)
     file_count = sum(shard.file_count for shard in shards)

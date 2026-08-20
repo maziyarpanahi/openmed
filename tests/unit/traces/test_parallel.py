@@ -223,3 +223,52 @@ def test_dynamic_exception_type_cannot_leak_sensitive_content(tmp_path: Path) ->
     assert result.items[0].error_type == parallel.UNKNOWN_ERROR_TYPE
     assert SYNTHETIC_SECRET.replace("-", "_") not in json.dumps(result.to_dict())
     assert SYNTHETIC_SECRET.replace("-", "_") not in repr(result.items[0])
+
+
+def test_string_subclass_hooks_cannot_leak_from_safe_metadata() -> None:
+    class HostileText(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(SYNTHETIC_SECRET)
+
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(SYNTHETIC_SECRET)
+
+    item = parallel.TraceFileResult(
+        input_index=0,
+        success=False,
+        error_type=HostileText("ValueError"),
+    )
+    result = parallel.TraceRunResult(
+        items=(item,),
+        shard_count=1,
+        worker_count=1,
+        execution_mode=HostileText("sequential"),
+        fallback_reason=HostileText("unsafe"),
+    )
+
+    assert item.error_type == "ValueError"
+    assert type(item.error_type) is str
+    assert result.execution_mode == "sequential"
+    assert type(result.execution_mode) is str
+    assert result.fallback_reason == "unsafe"
+    assert type(result.fallback_reason) is str
+    assert SYNTHETIC_SECRET not in json.dumps(result.to_dict())
+
+    empty_result = run_trace_files(
+        (),
+        _ordered_handler,
+        start_method=HostileText("spawn"),
+    )
+    assert empty_result.is_complete
+
+
+def test_hostile_input_index_cannot_leak_from_processing_error() -> None:
+    class HostileIndex(int):
+        def __str__(self) -> str:
+            raise RuntimeError(SYNTHETIC_SECRET)
+
+    with pytest.raises(parallel.TraceInputError) as raised:
+        TraceProcessingError(HostileIndex(0), "ValueError")
+
+    assert SYNTHETIC_SECRET not in str(raised.value)
