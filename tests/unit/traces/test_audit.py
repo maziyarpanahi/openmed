@@ -8,6 +8,7 @@ import pytest
 
 from openmed.traces.audit import (
     TraceAudit,
+    TraceAuditReport,
     TraceFinding,
     TraceScan,
     build_trace_audit,
@@ -62,11 +63,13 @@ def test_aggregates_findings_by_store_category_and_file_without_values() -> None
     assert payload["finding_count"] == 3
     assert report.by_store["codex"]["count"] == 3
     assert report.by_category["prompt"]["count"] == 2
-    assert report.by_file[("codex", "session-a.jsonl")]["byte_ranges"] == [
+    file_label = str(payload["findings"][0]["file"])
+    assert file_label.startswith("file_sha256_")
+    assert report.by_file[("codex", file_label)]["byte_ranges"] == [
         {"start": 2, "end": 8},
         {"start": 20, "end": 34},
     ]
-    assert payload["findings"][0]["file"] == "session-a.jsonl"
+    assert "session-a.jsonl" not in report.to_json()
     assert _SENSITIVE_VALUE not in report.to_json()
     assert _SENSITIVE_VALUE not in report.to_terminal()
 
@@ -124,7 +127,7 @@ def test_collector_is_read_only_and_accepts_opaque_status_items() -> None:
         (r"C:\private\example\synthetic-trace.jsonl", "C:/private/example"),
     ],
 )
-def test_absolute_file_labels_are_reduced_to_a_basename(
+def test_file_labels_are_hashed_without_exposing_paths(
     file_label: str, directory: str
 ) -> None:
     report = build_trace_audit(
@@ -139,8 +142,76 @@ def test_absolute_file_labels_are_reduced_to_a_basename(
         ]
     )
 
-    assert report.files[0]["file"] == "synthetic-trace.jsonl"
+    assert str(report.files[0]["file"]).startswith("file_sha256_")
+    assert "synthetic-trace.jsonl" not in report.to_json()
     assert directory not in report.to_terminal()
+
+
+def test_caller_controlled_dimensions_are_hashed() -> None:
+    sensitive = "PatientJaneDoe"
+    report = build_trace_audit(
+        [
+            {
+                "store": sensitive,
+                "category": sensitive,
+                "file": f"../../patients/{sensitive}.jsonl",
+                "start": 0,
+                "end": 4,
+            }
+        ]
+    )
+
+    json_report = report.to_json()
+    terminal_report = report.to_terminal()
+    assert sensitive not in json_report
+    assert sensitive not in terminal_report
+    assert "../" not in terminal_report
+    assert str(report.stores[0]["store"]).startswith("store_sha256_")
+    assert str(report.categories[0]["category"]).startswith("category_sha256_")
+    assert str(report.files[0]["file"]).startswith("file_sha256_")
+
+
+@pytest.mark.parametrize("input_name", ["findings", "statuses", "scanned"])
+def test_input_iteration_errors_do_not_expose_values(input_name: str) -> None:
+    sensitive = "PatientJaneDoe"
+
+    def failing_input():
+        raise RuntimeError(sensitive)
+        yield None
+
+    kwargs = {input_name: failing_input()}
+    with pytest.raises(ValueError) as caught:
+        build_trace_audit(**kwargs)
+
+    assert sensitive not in str(caught.value)
+
+
+def test_direct_report_construction_drops_unknown_fields_and_freezes_rows() -> None:
+    sensitive = "PatientJaneDoe"
+    source_row = {
+        "store": sensitive,
+        "count": 1,
+        "byte_ranges": [{"start": 0, "end": 4}],
+        "category_count": 1,
+        "file_count": 1,
+        "value": sensitive,
+    }
+    report = TraceAuditReport(
+        totals={"scanned": 1},
+        stores=(source_row,),
+        categories=(),
+        files=(),
+        findings=(),
+    )
+    source_row["store"] = "changed-after-construction"
+
+    serialized = report.to_json()
+    assert sensitive not in serialized
+    assert "changed-after-construction" not in serialized
+    assert "value" not in report.stores[0]
+    assert str(report.stores[0]["store"]).startswith("store_sha256_")
+    with pytest.raises(TypeError):
+        report.stores[0]["store"] = sensitive  # type: ignore[index]
 
 
 def test_invalid_input_is_value_free() -> None:

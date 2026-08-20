@@ -9,12 +9,14 @@ The module does not open files or make network requests.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-from collections.abc import Iterable, Mapping
+import re
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath, PureWindowsPath
-from typing import Any, Literal, TypeAlias
+from types import MappingProxyType
+from typing import Any, Literal, TypeAlias, TypeVar
 
 AUDIT_SCHEMA_VERSION = 1
 TRACE_STATUSES = ("scanned", "skipped", "unreadable", "unsupported")
@@ -22,6 +24,32 @@ TraceAuditStatus: TypeAlias = Literal["scanned", "skipped", "unreadable", "unsup
 
 _DEFAULT_STORE = "unknown"
 _DEFAULT_FILE = "<unknown>"
+_SAFE_STORE_LABELS = frozenset(
+    {"claude", "codex", "cursor", "custom", "other", "unknown"}
+)
+_SAFE_CATEGORY_LABELS = frozenset(
+    {
+        "assistant",
+        "completion",
+        "credential",
+        "environment",
+        "identifier",
+        "message",
+        "other",
+        "path",
+        "prompt",
+        "response",
+        "secret",
+        "system",
+        "tool-call",
+        "tool-output",
+        "tool-result",
+        "unknown",
+        "user",
+    }
+)
+_T = TypeVar("_T")
+_HASHED_LABEL = re.compile(r"^(?P<prefix>store|category|file)_sha256_[0-9a-f]{16}$")
 
 
 def _metadata_text(value: object, *, fallback: str) -> str:
@@ -30,7 +58,7 @@ def _metadata_text(value: object, *, fallback: str) -> str:
     if isinstance(value, os.PathLike):
         try:
             value = os.fspath(value)
-        except (TypeError, ValueError):
+        except Exception:  # noqa: BLE001 - untrusted metadata must fail closed
             return fallback
     if not isinstance(value, str):
         return fallback
@@ -44,7 +72,10 @@ def _metadata_text(value: object, *, fallback: str) -> str:
 
 
 def _store_name(value: object) -> str:
-    return _metadata_text(value, fallback=_DEFAULT_STORE)
+    text = _metadata_text(value, fallback=_DEFAULT_STORE).lower()
+    if text in _SAFE_STORE_LABELS:
+        return text
+    return _hashed_label(text, prefix="store", fallback=_DEFAULT_STORE)
 
 
 def _file_name(value: object) -> str:
@@ -52,20 +83,43 @@ def _file_name(value: object) -> str:
     if text == _DEFAULT_FILE:
         return text
 
-    # Absolute paths would disclose a home directory.  The basename still
-    # gives a stable file grouping while keeping the report local-sensitive.
-    try:
-        posix_path = PurePosixPath(text)
-        windows_path = PureWindowsPath(text)
-        if posix_path.is_absolute() or windows_path.is_absolute():
-            return _metadata_text(posix_path.name, fallback=_DEFAULT_FILE)
-    except (OSError, ValueError):
-        return _DEFAULT_FILE
-    return text
+    # A basename may itself contain a patient name, encounter identifier, or
+    # other PHI. Hash every caller-provided file label so absolute and relative
+    # paths remain useful as deterministic grouping keys without being echoed.
+    return _hashed_label(text, prefix="file", fallback=_DEFAULT_FILE)
 
 
 def _category_name(value: object) -> str:
-    return _metadata_text(value, fallback="unknown")
+    text = _metadata_text(value, fallback="unknown").lower()
+    if text in _SAFE_CATEGORY_LABELS:
+        return text
+    return _hashed_label(text, prefix="category", fallback="unknown")
+
+
+def _hashed_label(value: str, *, prefix: str, fallback: str) -> str:
+    if value == fallback:
+        return fallback
+    match = _HASHED_LABEL.fullmatch(value)
+    if match is not None and match.group("prefix") == prefix:
+        return value
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}_sha256_{digest}"
+
+
+def _safe_items(value: Iterable[_T], *, error: str) -> Iterator[_T]:
+    """Iterate caller input without propagating value-bearing exceptions."""
+
+    try:
+        items = iter(value)
+    except Exception:  # noqa: BLE001 - input may expose PHI in errors
+        raise TypeError(error) from None
+    while True:
+        try:
+            yield next(items)
+        except StopIteration:
+            return
+        except Exception:  # noqa: BLE001 - input may expose PHI in errors
+            raise ValueError(error) from None
 
 
 def _offset(value: object) -> int:
@@ -251,6 +305,8 @@ class TraceScan:
             raw_findings = ()
         if isinstance(raw_findings, Mapping) or isinstance(raw_findings, str):
             raise TypeError("trace scan findings must be an iterable")
+        if not isinstance(raw_findings, Iterable):
+            raise TypeError("trace scan findings must be an iterable")
         return cls(
             store=value.get("store", value.get("store_type", _DEFAULT_STORE)),
             file=value.get(
@@ -258,7 +314,12 @@ class TraceScan:
                 value.get("path", value.get("file_path", _DEFAULT_FILE)),
             ),
             status=value.get("status", "scanned"),
-            findings=tuple(raw_findings),
+            findings=tuple(
+                _safe_items(
+                    raw_findings,
+                    error="trace scan findings could not be consumed",
+                )
+            ),
         )
 
 
@@ -294,6 +355,28 @@ class TraceAuditReport:
     files: tuple[Mapping[str, Any], ...]
     findings: tuple[Mapping[str, Any], ...]
     schema_version: int = AUDIT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        try:
+            totals = MappingProxyType(
+                {
+                    status: _nonnegative_count(self.totals.get(status, 0))
+                    for status in TRACE_STATUSES
+                }
+            )
+            stores = _normalize_report_rows(self.stores, kind="store")
+            categories = _normalize_report_rows(self.categories, kind="category")
+            files = _normalize_report_rows(self.files, kind="file")
+            findings = _normalize_report_rows(self.findings, kind="finding")
+            if type(self.schema_version) is not int or self.schema_version < 1:
+                raise ValueError
+        except Exception:  # noqa: BLE001 - report inputs may contain PHI
+            raise ValueError("trace audit report is invalid") from None
+        object.__setattr__(self, "totals", totals)
+        object.__setattr__(self, "stores", stores)
+        object.__setattr__(self, "categories", categories)
+        object.__setattr__(self, "files", files)
+        object.__setattr__(self, "findings", findings)
 
     @property
     def status_counts(self) -> dict[str, int]:
@@ -451,6 +534,93 @@ def _format_ranges(value: object) -> str:
     return ",".join(ranges) if ranges else "none"
 
 
+_ReportRowKind: TypeAlias = Literal["store", "category", "file", "finding"]
+
+
+def _normalize_report_rows(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    kind: _ReportRowKind,
+) -> tuple[Mapping[str, Any], ...]:
+    normalized: list[dict[str, Any]] = []
+    for row in _safe_items(rows, error="trace audit rows could not be consumed"):
+        if not isinstance(row, Mapping):
+            raise TypeError("trace audit rows must be mappings")
+        ranges = _normalize_report_ranges(row.get("byte_ranges", ()))
+        base: dict[str, Any] = {
+            "count": _nonnegative_count(row.get("count", 0)),
+            "byte_count": sum(item["end"] - item["start"] for item in ranges),
+            "byte_ranges": ranges,
+        }
+        if kind == "store":
+            normalized.append(
+                {
+                    "store": _store_name(row.get("store", _DEFAULT_STORE)),
+                    **base,
+                    "category_count": _nonnegative_count(row.get("category_count", 0)),
+                    "file_count": _nonnegative_count(row.get("file_count", 0)),
+                }
+            )
+        elif kind == "category":
+            normalized.append(
+                {
+                    "category": _category_name(row.get("category", "unknown")),
+                    **base,
+                    "file_count": _nonnegative_count(row.get("file_count", 0)),
+                    "store_count": _nonnegative_count(row.get("store_count", 0)),
+                }
+            )
+        elif kind == "file":
+            normalized.append(
+                {
+                    "store": _store_name(row.get("store", _DEFAULT_STORE)),
+                    "file": _file_name(row.get("file", _DEFAULT_FILE)),
+                    **base,
+                    "category_count": _nonnegative_count(row.get("category_count", 0)),
+                }
+            )
+        else:
+            normalized.append(
+                {
+                    "store": _store_name(row.get("store", _DEFAULT_STORE)),
+                    "category": _category_name(row.get("category", "unknown")),
+                    "file": _file_name(row.get("file", _DEFAULT_FILE)),
+                    **base,
+                }
+            )
+
+    sort_keys = {
+        "store": lambda row: (str(row["store"]),),
+        "category": lambda row: (str(row["category"]),),
+        "file": lambda row: (str(row["store"]), str(row["file"])),
+        "finding": lambda row: (
+            str(row["store"]),
+            str(row["category"]),
+            str(row["file"]),
+        ),
+    }
+    normalized.sort(key=sort_keys[kind])
+    return tuple(MappingProxyType(row) for row in normalized)
+
+
+def _normalize_report_ranges(value: object) -> list[dict[str, int]]:
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
+        raise TypeError("trace audit byte ranges must be an iterable")
+    ranges: set[ByteRange] = set()
+    for item in _safe_items(
+        value,
+        error="trace audit byte ranges could not be consumed",
+    ):
+        if not isinstance(item, Mapping):
+            raise TypeError("trace audit byte ranges must be mappings")
+        start = _offset(item.get("start"))
+        end = _offset(item.get("end"))
+        ranges.add(ByteRange(start, end))
+    return [item.to_dict() for item in sorted(ranges)]
+
+
 class TraceAudit:
     """Mutable collector for local scan statuses and value-free findings."""
 
@@ -517,7 +687,10 @@ class TraceAudit:
     ) -> None:
         """Add findings from an iterable."""
 
-        for finding in findings:
+        for finding in _safe_items(
+            findings,
+            error="trace findings could not be consumed",
+        ):
             self.add_finding(finding)
 
     def report(self) -> TraceAuditReport:
@@ -640,17 +813,22 @@ def _finding_row(
     }
 
 
-def _status_inputs(collector: TraceAudit, status: str, value: object) -> None:
+def _status_inputs(
+    collector: TraceAudit,
+    status: TraceAuditStatus,
+    value: object,
+) -> None:
     if type(value) is int:
         collector.record_status(status, value)
         return
     if isinstance(value, (str, bytes, Mapping)):
         raise TypeError("trace status input must be a count or iterable")
-    try:
-        items = iter(value)  # type: ignore[arg-type]
-    except TypeError as exc:
-        raise TypeError("trace status input must be a count or iterable") from exc
-    for _ in items:
+    if not isinstance(value, Iterable):
+        raise TypeError("trace status input must be a count or iterable")
+    for _ in _safe_items(
+        value,
+        error="trace status input could not be consumed",
+    ):
         collector.record_status(status)
 
 
@@ -678,9 +856,15 @@ def build_trace_audit(
         raise TypeError("pass either scans or records, not both")
     collector = TraceAudit()
 
-    for scan in scans if scans is not None else records or ():
+    selected_scans = scans if scans is not None else records
+    if selected_scans is None:
+        selected_scans = ()
+    for scan in _safe_items(
+        selected_scans,
+        error="trace scans could not be consumed",
+    ):
         collector.add_scan(scan)
-    collector.extend(findings or ())
+    collector.extend(findings if findings is not None else ())
 
     if statuses is not None:
         if isinstance(statuses, Mapping):
@@ -689,15 +873,19 @@ def build_trace_audit(
         elif isinstance(statuses, (str, bytes)):
             raise TypeError("trace statuses must be a mapping or iterable")
         else:
-            for name in statuses:
+            for name in _safe_items(
+                statuses,
+                error="trace statuses could not be consumed",
+            ):
                 collector.record_status(_status(name))
 
-    for name, value in (
+    status_inputs: tuple[tuple[TraceAuditStatus, object], ...] = (
         ("scanned", scanned),
         ("skipped", skipped),
         ("unreadable", unreadable),
         ("unsupported", unsupported),
-    ):
+    )
+    for name, value in status_inputs:
         if value is not None:
             _status_inputs(collector, name, value)
     return collector.report()

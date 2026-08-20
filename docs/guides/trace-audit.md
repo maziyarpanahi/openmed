@@ -15,7 +15,7 @@ from openmed.traces.audit import TraceScan, build_trace_audit
 report = build_trace_audit(
     findings=[
         {
-            "store": "local-store",
+            "store": "codex",
             "category": "message",
             "file": "trace.jsonl",
             "start": 12,
@@ -23,8 +23,8 @@ report = build_trace_audit(
         }
     ],
     scans=[
-        TraceScan("local-store", "trace.jsonl", "scanned"),
-        TraceScan("local-store", "unreadable.jsonl", "unreadable"),
+        TraceScan("codex", "trace.jsonl", "scanned"),
+        TraceScan("codex", "unreadable.jsonl", "unreadable"),
     ],
 )
 
@@ -34,9 +34,10 @@ json_payload = report.to_json()
 
 The JSON payload contains deterministic totals and aggregate rows under
 `stores`, `categories`, `files`, and `findings`. Rows contain counts, derived
-byte totals, and byte ranges only. Absolute file labels are reduced to a
-basename before they enter a report, and terminal rows replace line breaks in
-metadata so output remains safe to display.
+byte totals, and byte ranges only. File labels are replaced by deterministic
+SHA-256-derived identifiers before they enter a report, so even a basename
+containing patient data is not echoed. Known store and category identifiers
+remain readable; unknown caller-provided labels are hashed for the same reason.
 
 The report builder does not open, rewrite, or delete files and performs no
 network operation. It should be placed after a local scanner that has already
