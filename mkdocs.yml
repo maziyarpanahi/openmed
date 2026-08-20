@@ -122,6 +122,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
       - SMS Short-Text De-identification: sms-short-text-deid.md

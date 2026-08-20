@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
+- Added standard-library HTML/HTM visible-text extraction with source character
+  offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
   audit-key rotation, retired-key verification, surrogate-vault re-keying,
   environment isolation, and file-permission hygiene without serializing keys.
@@ -218,6 +220,9 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   nonce, and body digest, with client-side header helpers, bounded fail-closed
   replay protection, and verifier-compatible signatures on async job webhooks
   (#849).
+- Added `openmed redact-files` for local-only text and line-delimited file
+  redaction with atomic output, PHI-free JSON summaries, consistent surrogate
+  replacement, and no source overwrite (#2278).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
