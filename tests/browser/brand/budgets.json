@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 384,
-    "maximum_total_bytes": 29360128,
-    "maximum_unique_payload_bytes": 28835840,
+    "maximum_files": 416,
+    "maximum_total_bytes": 32505856,
+    "maximum_unique_payload_bytes": 31981568,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -13,13 +13,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 2883584
+    "json": 3145728
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 2883584
+    "docs/search/search_index.json": 3145728
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -32,8 +32,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits are based on the exact staged v2.2 release-candidate bundle, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The audited candidate contains 349 files, 26226053 total bytes, 25888474 unique payload bytes, and a 6040792-byte tokenizer coverage route transfer.",
+    "Artifact limits are based on the exact staged v2.3 schema candidate, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
+    "The audited candidate contains 380 files, 29247340 total bytes, 28909761 unique payload bytes, and a passing tokenizer coverage route transfer.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",

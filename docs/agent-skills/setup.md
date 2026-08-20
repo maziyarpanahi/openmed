@@ -21,7 +21,10 @@ The same choices and template version produce the same artifact. The setup
 workflow does not inspect source text, accept a free-form payload, add
 timestamps, or make a network call. It has no mandatory network call. Keep
 logs, exceptions, reports, fixtures, and the policy artifact free of raw
-sensitive values.
+sensitive values. The template schema and exact placeholder set are validated
+before writing. Output is synced to a same-directory temporary file and
+atomically replaced only after the target is rechecked; status output names
+only `DEID-POLICY.md`, never its absolute or parent path.
 
 The output always starts as `DRAFT — HUMAN APPROVAL REQUIRED`. A human must
 review the choices, local model or rules path, recall evidence, surrogate or

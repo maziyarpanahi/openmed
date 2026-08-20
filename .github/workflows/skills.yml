@@ -48,5 +48,5 @@ jobs:
       - name: Validate the local skill catalog
         run: python scripts/skills/validate.py
 
-      - name: Run focused validation tests
-        run: python -m pytest tests/unit/skills/test_validation.py -q
+      - name: Run focused skill tests
+        run: python -m pytest tests/unit/skills -q

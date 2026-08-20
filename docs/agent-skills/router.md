@@ -15,7 +15,10 @@ intake cue, unclear clinical or personal content starts at the privacy gate.
 Otherwise, inspect the remaining tables and their rows in this fixed order:
 privacy → extraction → exchange → verification. Match each comma-separated cue
 as a case-insensitive substring; the first match wins and no new synonyms are
-inferred.
+inferred. Only fixed positive safety markers such as `synthetic note` and
+`already de-identified` bypass the privacy override. A marker preceded within
+four normalized words by `no`, `not`, `never`, `unknown`, or `uncertain` is
+negated and fails closed to the privacy gate.
 
 | Goal | First route |
 | --- | --- |
@@ -37,6 +40,9 @@ inferred.
 - “Is this de-identified output safe to share?” chooses
   [auditing-deid-leakage](https://github.com/maziyarpanahi/openmed/blob/master/skills/auditing-deid-leakage/SKILL.md); if
   de-identification is not stated, apply the privacy gate first.
+- “Verify this clinical dataset; it is not de-identified” contains a negated
+  safety statement, so it starts at
+  [deidentifying-clinical-text](https://github.com/maziyarpanahi/openmed/blob/master/skills/deidentifying-clinical-text/SKILL.md).
 
 Route diagnostics must contain only the category, selected identifier, matched
 rule index, and next handoff. Do not copy source values into logs, exceptions,
