@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/config.schema.json",
+  "title": "OpenMedConfig",
+  "description": "OpenMedConfig and flat TOML profile settings.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "default_org": {
+      "description": "Default organization on the Hugging Face Hub.",
+      "type": "string"
+    },
+    "cache_dir": {
+      "description": "Model cache directory.",
+      "type": ["string", "null"]
+    },
+    "device": {
+      "description": "Device preference, such as cpu, mps, or cuda.",
+      "type": ["string", "null"]
+    },
+    "hf_token": {
+      "description": "Token for private models, when needed.",
+      "type": ["string", "null"]
+    },
+    "log_level": {
+      "description": "Python logging level.",
+      "type": "string"
+    },
+    "timeout": {
+      "description": "Model loading timeout in seconds.",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "use_medical_tokenizer": {
+      "description": "Whether to use medical-aware output token remapping.",
+      "type": "boolean"
+    },
+    "medical_tokenizer_exceptions": {
+      "description": "Terms kept intact during medical token remapping.",
+      "items": {"type": "string"},
+      "type": ["array", "null"]
+    },
+    "chinese_segmentation_backend": {
+      "description": "Chinese segmentation backend.",
+      "enum": ["jieba", "pkuseg", "hanlp"],
+      "type": "string"
+    },
+    "chinese_user_dict_path": {
+      "description": "Optional user dictionary for Chinese segmentation.",
+      "type": ["string", "null"]
+    },
+    "chinese_pkuseg_domain": {
+      "description": "Domain passed to the pkuseg Chinese segmenter.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "clinical_protect_enabled": {
+      "description": "Whether clinical vocabulary protection is enabled.",
+      "type": "boolean"
+    },
+    "clinical_protect_terms": {
+      "description": "Additional clinical terms protected from over-redaction.",
+      "items": {"type": "string"},
+      "type": ["array", "null"]
+    },
+    "clinical_protect_use_builtin": {
+      "description": "Whether bundled clinical protection terms are enabled.",
+      "type": "boolean"
+    },
+    "backend": {
+      "description": "Inference backend; null selects automatic detection.",
+      "enum": [null, "hf", "mlx", "onnx"],
+      "type": ["string", "null"]
+    },
+    "batch_size": {
+      "description": "Optional inference batch size.",
+      "minimum": 1,
+      "type": ["integer", "null"]
+    },
+    "num_workers": {
+      "description": "Optional number of inference workers.",
+      "minimum": 0,
+      "type": ["integer", "null"]
+    },
+    "lazy_model_loading": {
+      "description": "Whether model loading is deferred until first use.",
+      "type": "boolean"
+    },
+    "pii_model": {
+      "description": "Optional profile-selected PII model identifier.",
+      "type": ["string", "null"]
+    },
+    "pii_model_revision": {
+      "description": "Optional revision for the profile-selected PII model.",
+      "type": ["string", "null"]
+    },
+    "onnx_variant": {
+      "description": "ONNX model variant.",
+      "enum": ["auto", "int8", "fp16", "fp32"],
+      "type": "string"
+    },
+    "onnx_intra_op_num_threads": {
+      "description": "Optional ONNX Runtime intra-op thread count.",
+      "minimum": 1,
+      "type": ["integer", "null"]
+    },
+    "torch_attention_backend": {
+      "description": "PyTorch/Transformers attention implementation.",
+      "enum": ["auto", "flash_attention_2", "sdpa", "eager"],
+      "type": "string"
+    },
+    "load_in_4bit": {
+      "description": "Whether CUDA torch loads use bitsandbytes 4-bit quantization.",
+      "type": "boolean"
+    },
+    "bnb_4bit_use_double_quant": {
+      "description": "Whether bitsandbytes 4-bit double quantization is enabled.",
+      "type": "boolean"
+    },
+    "local_only": {
+      "description": "Whether inference and de-identification must remain cache-only.",
+      "type": "boolean"
+    },
+    "cjk_width_convention": {
+      "description": "Width normalization convention for CJK text.",
+      "enum": ["cjk", "nfkc"],
+      "type": "string"
+    },
+    "chinese_target_script": {
+      "description": "Optional target script for Chinese normalization.",
+      "enum": [null, "simplified", "traditional"],
+      "type": ["string", "null"]
+    },
+    "transliteration_aware_name_matching": {
+      "description": "Whether Indic name matching links transliteration variants.",
+      "type": "boolean"
+    },
+    "indic_name_similarity_threshold": {
+      "description": "Similarity threshold for transliteration-aware name matching.",
+      "maximum": 1.0,
+      "minimum": 0.5,
+      "type": "number"
+    },
+    "profile": {
+      "description": "Name of a built-in or custom profile.",
+      "minLength": 1,
+      "type": ["string", "null"]
+    }
+  },
+  "x-profile-keys": [
+    "default_org",
+    "cache_dir",
+    "device",
+    "hf_token",
+    "log_level",
+    "timeout",
+    "use_medical_tokenizer",
+    "medical_tokenizer_exceptions",
+    "chinese_segmentation_backend",
+    "chinese_user_dict_path",
+    "chinese_pkuseg_domain",
+    "clinical_protect_enabled",
+    "clinical_protect_terms",
+    "clinical_protect_use_builtin",
+    "backend",
+    "batch_size",
+    "num_workers",
+    "lazy_model_loading",
+    "pii_model",
+    "pii_model_revision",
+    "onnx_variant",
+    "onnx_intra_op_num_threads",
+    "torch_attention_backend",
+    "load_in_4bit",
+    "bnb_4bit_use_double_quant",
+    "local_only",
+    "cjk_width_convention",
+    "chinese_target_script",
+    "transliteration_aware_name_matching",
+    "indic_name_similarity_threshold"
+  ]
+}
