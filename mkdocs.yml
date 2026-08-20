@@ -99,6 +99,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Example Notebooks Gallery: examples/notebook-gallery.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md

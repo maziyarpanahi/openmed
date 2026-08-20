@@ -172,6 +172,7 @@ classification:
     - examples.md
     - examples/notebook-gallery.md
     - document-adapter-provenance.md
+    - reference/chat-schema.md
     - reference/training-schemas.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
