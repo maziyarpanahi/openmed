@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic synthetic-only de-identification comparator harness
+  with explicit fail-closed fixture provenance, enforced offline execution,
+  bounded inputs, aggregate privacy metrics, resource budgets, and source-safe
+  reports (#2379).
 - Added an opt-in bundled-model manifest and offline bootstrap for the small
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent
