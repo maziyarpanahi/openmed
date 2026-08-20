@@ -20,7 +20,7 @@ import multiprocessing
 import os
 import pickle
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -353,14 +353,14 @@ def partition_trace_files(
     """
     _validate_positive_int(shard_size, "shard_size")
     if isinstance(files, (str, os.PathLike)):
-        raw_files: Iterable[Any] = (files,)
+        iterator: Iterator[Any] = iter((files,))
     else:
         try:
-            raw_files = iter(files)
+            iterator = iter(files)
         except TypeError:
             raise TraceInputError("files must be an iterable of paths") from None
-
-    iterator = iter(raw_files)
+        except Exception:
+            raise TraceInputError("trace inputs could not be read") from None
     normalized_items: list[Path] = []
     while True:
         try:

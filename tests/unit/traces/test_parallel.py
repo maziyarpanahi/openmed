@@ -72,6 +72,17 @@ def test_partition_sanitizes_input_iterator_failures() -> None:
     assert SYNTHETIC_SECRET not in str(raised.value)
 
 
+def test_partition_sanitizes_initial_iter_failure() -> None:
+    class FailingPaths:
+        def __iter__(self):
+            raise RuntimeError(SYNTHETIC_SECRET)
+
+    with pytest.raises(parallel.TraceInputError) as raised:
+        partition_trace_files(FailingPaths())
+
+    assert SYNTHETIC_SECRET not in str(raised.value)
+
+
 def test_sequential_execution_uses_a_fresh_store_and_input_order(
     tmp_path: Path,
 ) -> None:
