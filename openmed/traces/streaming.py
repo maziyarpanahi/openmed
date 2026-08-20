@@ -654,8 +654,8 @@ class TraceRedactor:
         if callback is not None:
             try:
                 result = callback(text)
-                if hasattr(result, "deidentified_text"):
-                    result = getattr(result, "deidentified_text")
+                if not isinstance(result, str):
+                    result = getattr(result, "deidentified_text", result)
                 if not isinstance(result, str):
                     raise TypeError
                 return result

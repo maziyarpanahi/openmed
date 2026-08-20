@@ -330,6 +330,26 @@ def test_callback_failures_and_oversized_records_do_not_echo_source_values() -> 
     assert SYNTHETIC_NAME not in str(oversized.value)
 
 
+def test_deidentified_result_property_is_read_only_once() -> None:
+    class StatefulResult:
+        def __init__(self) -> None:
+            self.reads = 0
+
+        @property
+        def deidentified_text(self) -> str:
+            self.reads += 1
+            return "[NAME]" if self.reads == 1 else SYNTHETIC_NAME
+
+    result = StatefulResult()
+    runner = TraceRedactor(text_redactor=lambda _text: result)
+
+    output = list(runner.iter_records([{"message": SYNTHETIC_NAME}]))
+
+    assert output == [{"message": "[NAME]"}]
+    assert result.reads == 1
+    assert SYNTHETIC_NAME not in json.dumps(output)
+
+
 def test_ndjson_stream_returns_value_free_report() -> None:
     input_stream = io.StringIO(
         "\n".join(json.dumps(record) for record in _records(2)) + "\n"
