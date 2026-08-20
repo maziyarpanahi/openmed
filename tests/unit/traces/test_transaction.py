@@ -10,6 +10,7 @@ import pytest
 import openmed.traces.transaction as transaction_module
 from openmed.traces.transaction import (
     TransactionConflictError,
+    TransactionReadError,
     TransactionRedactionError,
     TransactionValidationError,
     TransactionWriteError,
@@ -163,6 +164,88 @@ def test_unchanged_candidate_does_not_create_backup(tmp_path: Path) -> None:
     assert result.changed is False
     assert result.backup_path is None
     assert not target.with_name(target.name + ".bak").exists()
+
+
+def test_unchanged_candidate_still_detects_source_conflicts(tmp_path: Path) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+
+    def mutate_source(text: str) -> str:
+        target.write_text("changed outside transaction", encoding="utf-8")
+        return text
+
+    with pytest.raises(TransactionConflictError):
+        transactional_redact(target, mutate_source)
+
+    assert target.read_text(encoding="utf-8") == "changed outside transaction"
+    assert not target.with_name(target.name + ".bak").exists()
+
+
+def test_temporary_payload_uses_exclusive_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    original_write = transaction_module._write_payload
+    temporary_descriptors: list[int | None] = []
+
+    def record_write(
+        path: Path,
+        payload: bytes,
+        *,
+        file_descriptor: int | None = None,
+        mode: int | None,
+        timestamps: tuple[int, int] | None,
+    ) -> None:
+        if path.name.startswith(transaction_module.TEMPORARY_FILE_PREFIX):
+            temporary_descriptors.append(file_descriptor)
+        original_write(
+            path,
+            payload,
+            file_descriptor=file_descriptor,
+            mode=mode,
+            timestamps=timestamps,
+        )
+
+    monkeypatch.setattr(transaction_module, "_write_payload", record_write)
+
+    transactional_redact(
+        target,
+        lambda _text: SYNTHETIC_REPLACEMENT,
+        backup=False,
+    )
+
+    assert len(temporary_descriptors) == 1
+    assert temporary_descriptors[0] is not None
+
+
+def test_path_and_encoding_errors_do_not_expose_values(tmp_path: Path) -> None:
+    sensitive = "PatientJaneDoe"
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+
+    with pytest.raises(TransactionReadError) as encoding_error:
+        transactional_redact(target, lambda text: text, encoding=sensitive)
+    assert sensitive not in str(encoding_error.value)
+
+    class FailingPath:
+        def __fspath__(self) -> str:
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(ValueError) as path_error:
+        transactional_redact(FailingPath(), lambda text: text)
+    assert sensitive not in str(path_error.value)
+
+
+def test_result_repr_does_not_expose_paths(tmp_path: Path) -> None:
+    sensitive = "PatientJaneDoe"
+    target = tmp_path / f"{sensitive}.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+
+    result = transactional_redact(target, lambda text: text)
+
+    assert sensitive not in repr(result)
 
 
 def test_metadata_fallback_omits_unsupported_follow_symlinks(

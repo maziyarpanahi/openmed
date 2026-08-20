@@ -13,7 +13,7 @@ import os
 import stat
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeAlias
 
@@ -81,8 +81,8 @@ class TransactionWriteError(TransactionError):
 class TransactionResult:
     """PHI-free metadata describing one completed file transaction."""
 
-    path: Path
-    backup_path: Path | None
+    path: Path = field(repr=False)
+    backup_path: Path | None = field(repr=False)
     changed: bool
     original_bytes: int
     replacement_bytes: int
@@ -200,7 +200,7 @@ def transactional_redact(
     try:
         original_bytes = target.read_bytes()
         original_text = original_bytes.decode(encoding)
-    except (OSError, UnicodeError):
+    except (LookupError, OSError, UnicodeError):
         raise TransactionReadError("source could not be read") from None
 
     try:
@@ -228,6 +228,7 @@ def transactional_redact(
             raise TransactionValidationError("candidate validation failed")
 
     if replacement_bytes == original_bytes:
+        _assert_source_unchanged(target, source_state)
         return TransactionResult(
             path=target,
             backup_path=None,
@@ -244,10 +245,11 @@ def transactional_redact(
 
     try:
         _assert_source_unchanged(target, source_state)
-        temporary_path = _create_temporary_path(target)
+        temporary_path, temporary_descriptor = _create_temporary_file(target)
         _write_payload(
             temporary_path,
             replacement_bytes,
+            file_descriptor=temporary_descriptor,
             mode=mode,
             timestamps=timestamps,
         )
@@ -300,7 +302,7 @@ def transactional_redact(
 def _coerce_path(value: PathLike) -> Path:
     try:
         return Path(value)
-    except (TypeError, ValueError):
+    except Exception:  # noqa: BLE001 - path-like errors may contain PHI
         raise ValueError("path is invalid") from None
 
 
@@ -389,7 +391,7 @@ def _assert_source_unchanged(path: Path, expected: _FileState) -> None:
         raise TransactionConflictError("source changed during transaction")
 
 
-def _create_temporary_path(target: Path) -> Path:
+def _create_temporary_file(target: Path) -> tuple[Path, int]:
     try:
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=TEMPORARY_FILE_PREFIX,
@@ -398,12 +400,7 @@ def _create_temporary_path(target: Path) -> Path:
         )
     except OSError:
         raise TransactionWriteError("temporary file could not be created") from None
-    try:
-        os.close(descriptor)
-    except OSError:
-        Path(temporary_name).unlink(missing_ok=True)
-        raise TransactionWriteError("temporary file could not be created") from None
-    return Path(temporary_name)
+    return Path(temporary_name), descriptor
 
 
 def _write_payload(
@@ -423,9 +420,9 @@ def _write_payload(
             )
         with os.fdopen(descriptor, "wb") as handle:
             descriptor = None
+            handle.write(payload)
             if mode is not None:
                 _chmod_descriptor(handle.fileno(), path, mode)
-            handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
     finally:
