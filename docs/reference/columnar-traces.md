@@ -15,7 +15,9 @@ uv pip install -e ".[columnar]"
 
 Pass a deterministic local text redactor when the replacement policy is more
 specific than the safe default. Dotted paths traverse nested structs; paths
-through lists of structs are supported as well.
+through lists of structs are supported as well. To select a literal top-level
+column whose name contains a dot, pass it as a one-component tuple such as
+`("payload.message",)`.
 
 ```python
 import pyarrow as pa
