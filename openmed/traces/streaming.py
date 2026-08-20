@@ -582,13 +582,16 @@ class TraceRedactor:
 
     def _emit_batch(
         self,
-        batch: Sequence[tuple[Mapping[str, Any], int]],
+        batch: list[tuple[Mapping[str, Any], int]],
     ) -> Iterator[dict[str, Any]]:
         if not batch:
             return
 
-        processed: list[tuple[dict[str, Any], int, int]] = []
-        for record, _ in batch:
+        for index, (record, _) in enumerate(batch):
+            # Release each source record before yielding its redacted copy. This
+            # keeps the iterator incremental instead of retaining both complete
+            # input and output batches at once.
+            batch[index] = ({}, 0)
             try:
                 redacted_record, field_count = self._redact_record(record)
                 redacted_bytes = _estimate_bytes(redacted_record)
@@ -596,17 +599,13 @@ class TraceRedactor:
                 raise
             except Exception:
                 raise TraceRedactionError("trace record redaction failed") from None
-            processed.append(
-                (
-                    redacted_record,
-                    redacted_bytes,
-                    field_count,
+            if redacted_bytes > self.config.byte_batch_size:
+                raise TraceRecordTooLargeError(
+                    "redacted trace record exceeds byte_batch_size"
                 )
-            )
 
-        for redacted_record, record_bytes, field_count in processed:
             self._records_emitted += 1
-            self._bytes_emitted += record_bytes
+            self._bytes_emitted += redacted_bytes
             self._redacted_fields += field_count
             yield redacted_record
 
@@ -955,64 +954,64 @@ def _apply_field(
         )
 
     if isinstance(value, Mapping):
-        result = dict(value)
+        mapping_result = dict(value)
         if parts[0] == "*":
             count = 0
-            for key in tuple(result):
-                result[key], changed = _apply_field(
-                    result[key],
+            for key in tuple(mapping_result):
+                mapping_result[key], changed = _apply_field(
+                    mapping_result[key],
                     parts[1:],
                     field_name=field_name,
                     redact_text=redact_text,
                 )
                 count += changed
-            return result, count
+            return mapping_result, count
 
         direct_key = ".".join(parts)
-        if direct_key in result:
-            result[direct_key], count = _redact_target(
-                result[direct_key],
+        if direct_key in mapping_result:
+            mapping_result[direct_key], count = _redact_target(
+                mapping_result[direct_key],
                 field_name=field_name,
                 redact_text=redact_text,
             )
-            return result, count
+            return mapping_result, count
 
         key = parts[0]
-        if key not in result:
-            return result, 0
-        result[key], count = _apply_field(
-            result[key],
+        if key not in mapping_result:
+            return mapping_result, 0
+        mapping_result[key], count = _apply_field(
+            mapping_result[key],
             parts[1:],
             field_name=field_name,
             redact_text=redact_text,
         )
-        return result, count
+        return mapping_result, count
 
     if isinstance(value, list) and parts[0] == "*":
-        result = list(value)
+        list_result = list(value)
         count = 0
-        for index, item in enumerate(result):
-            result[index], changed = _apply_field(
+        for index, item in enumerate(list_result):
+            list_result[index], changed = _apply_field(
                 item,
                 parts[1:],
                 field_name=field_name,
                 redact_text=redact_text,
             )
             count += changed
-        return result, count
+        return list_result, count
 
     if isinstance(value, tuple) and parts[0] == "*":
-        result = list(value)
+        tuple_result = list(value)
         count = 0
-        for index, item in enumerate(result):
-            result[index], changed = _apply_field(
+        for index, item in enumerate(tuple_result):
+            tuple_result[index], changed = _apply_field(
                 item,
                 parts[1:],
                 field_name=field_name,
                 redact_text=redact_text,
             )
             count += changed
-        return tuple(result), count
+        return tuple(tuple_result), count
 
     return value, 0
 
@@ -1060,18 +1059,36 @@ def _estimate_bytes(value: Any) -> int:
     if isinstance(value, bool):
         return 4 if value else 5
     if isinstance(value, str):
-        return len(value.encode("utf-8")) + 2
+        total = 2
+        for character in value:
+            codepoint = ord(character)
+            if character in {'"', "\\", "\b", "\f", "\n", "\r", "\t"}:
+                total += 2
+            elif codepoint < 0x20:
+                total += 6
+            else:
+                total += len(character.encode("utf-8"))
+        return total
     if isinstance(value, bytes):
         return len(value) + 2
-    if isinstance(value, (int, float)):
-        return 8
+    if isinstance(value, int):
+        return len(str(value))
+    if isinstance(value, float):
+        return len(json.dumps(value))
     if isinstance(value, Mapping):
-        return 2 + sum(
-            _estimate_bytes(str(key)) + _estimate_bytes(item)
-            for key, item in value.items()
-        )
+        size = 2
+        for index, (key, item) in enumerate(value.items()):
+            if index:
+                size += 1
+            size += _estimate_bytes(str(key)) + 1 + _estimate_bytes(item)
+        return size
     if isinstance(value, (list, tuple)):
-        return 2 + sum(_estimate_bytes(item) for item in value)
+        size = 2
+        for index, item in enumerate(value):
+            if index:
+                size += 1
+            size += _estimate_bytes(item)
+        return size
     return len(type(value).__name__) + 8
 
 

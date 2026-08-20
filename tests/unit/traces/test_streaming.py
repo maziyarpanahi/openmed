@@ -94,6 +94,89 @@ def test_byte_bound_flushes_without_materializing_the_source() -> None:
     assert runner.report.batches_completed == 4
 
 
+def test_batch_emits_incrementally_before_processing_the_next_record() -> None:
+    redactor_calls: list[str] = []
+
+    def redactor(text: str) -> str:
+        redactor_calls.append(text)
+        if text == "second":
+            raise ValueError("synthetic failure")
+        return "[VALUE]"
+
+    runner = TraceRedactor(
+        record_batch_size=2,
+        byte_batch_size=1_000,
+        text_redactor=redactor,
+    )
+    iterator = runner.iter_records(
+        [
+            {"message": "first"},
+            {"message": "second"},
+        ]
+    )
+
+    assert next(iterator) == {"message": "[VALUE]"}
+    assert redactor_calls == ["first"]
+    with pytest.raises(TraceRedactionError):
+        next(iterator)
+
+
+def test_expanded_output_record_cannot_exceed_byte_bound() -> None:
+    runner = TraceRedactor(
+        record_batch_size=2,
+        byte_batch_size=100,
+        text_redactor=lambda _text: "X" * 10_000,
+    )
+
+    with pytest.raises(TraceRecordTooLargeError) as error:
+        list(runner.iter_records([{"message": "small"}]))
+
+    assert str(error.value) == "redacted trace record exceeds byte_batch_size"
+    assert runner.report is not None
+    assert runner.report.records_seen == 1
+    assert runner.report.records_emitted == 0
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"sequence": 10**100},
+        {"payload": '"' * 60},
+    ],
+)
+def test_byte_bound_accounts_for_numbers_and_json_escaping(
+    record: dict[str, Any],
+) -> None:
+    runner = TraceRedactor(byte_batch_size=100)
+
+    with pytest.raises(TraceRecordTooLargeError):
+        list(runner.iter_records([record]))
+
+
+def test_wildcard_paths_redact_lists_and_tuples() -> None:
+    runner = TraceRedactor(
+        text_fields=("events.*.message",),
+        text_redactor=_fake_redactor,
+    )
+    record = {
+        "events": (
+            {"message": SYNTHETIC_NAME},
+            {"message": SYNTHETIC_EMAIL},
+        )
+    }
+
+    output = list(runner.iter_records([record]))
+
+    assert output == [
+        {
+            "events": (
+                {"message": "[NAME]"},
+                {"message": "[EMAIL]"},
+            )
+        }
+    ]
+
+
 def test_default_redactor_is_deterministic_across_batches() -> None:
     records = [
         {
