@@ -8,6 +8,7 @@ the parsed record in place instead of flattening it into text.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -15,7 +16,7 @@ import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, TextIO, cast
 
 JsonPathSegment = str | int
 JsonPath = tuple[JsonPathSegment, ...]
@@ -28,7 +29,24 @@ TextTransform = Callable[[str], str]
 # paths instead.
 DEFAULT_CONTENT_PATHS = ("**.content",)
 
-_PATH_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_SAFE_PATH_KEYS = frozenset(
+    {
+        "arguments",
+        "content",
+        "event",
+        "events",
+        "input",
+        "items",
+        "messages",
+        "output",
+        "parts",
+        "role",
+        "text",
+        "tool_calls",
+        "value",
+    }
+)
+_HASHED_PATH_KEY = re.compile(r"^key_sha256_[0-9a-f]{12}$")
 
 __all__ = [
     "ContentPath",
@@ -37,6 +55,7 @@ __all__ = [
     "JsonPathSegment",
     "TraceContentLocation",
     "TraceContentWalker",
+    "TraceJSONLIOError",
     "TraceJSONLLineError",
     "TraceJSONLTransformError",
     "iter_jsonl_content",
@@ -109,12 +128,16 @@ class TraceJSONLLineError(ValueError):
         return self.line_number
 
 
+class TraceJSONLIOError(ValueError):
+    """Value-free error for an unreadable source or unwritable destination."""
+
+
 class TraceJSONLTransformError(TraceJSONLLineError):
     """Value-free error for a failed configured string transformation."""
 
     def __init__(self, line_number: int, path: JsonPath, message: str) -> None:
-        self.path = path
-        self.json_path = _format_json_path(path)
+        self.path = _sanitize_error_path(path)
+        self.json_path = _format_json_path(self.path)
         super().__init__(line_number, f"{message} at {self.json_path}")
 
 
@@ -264,7 +287,21 @@ def write_trace_jsonl(
 
     Returns:
         The number of physical lines written, including blank lines.
+
+    Raises:
+        ValueError: If path-based input and output resolve to the same file.
     """
+
+    source_path = _path_source(source)
+    output_path: Path | None = None
+    if isinstance(output, (str, os.PathLike)):
+        try:
+            output_path = Path(output)
+        except Exception:  # noqa: BLE001 - path errors may contain PHI
+            raise TraceJSONLIOError("trace destination is invalid") from None
+    if source_path is not None and isinstance(output, (str, os.PathLike)):
+        if output_path is not None and _same_path(source_path, output_path):
+            raise ValueError("input and output paths must be different")
 
     lines = rewrite_trace_jsonl(
         source,
@@ -272,21 +309,27 @@ def write_trace_jsonl(
         content_paths,
         paths=paths,
     )
-    if hasattr(output, "write"):
-        destination = output
-        close_destination = False
-    else:
-        destination = Path(output).open("w", encoding="utf-8", newline="")
-        close_destination = True
+    if output_path is not None:
+        try:
+            with output_path.open("w", encoding="utf-8", newline="") as destination:
+                return _write_rewritten_lines(lines, destination)
+        except (TraceJSONLIOError, TraceJSONLLineError):
+            raise
+        except Exception:  # noqa: BLE001 - I/O errors may contain PHI paths
+            raise TraceJSONLIOError("trace destination could not be written") from None
+    return _write_rewritten_lines(lines, cast(TextIO, output))
 
+
+def _write_rewritten_lines(lines: Iterable[str], destination: TextIO) -> int:
     line_count = 0
     try:
         for line in lines:
             destination.write(line)
             line_count += 1
-    finally:
-        if close_destination:
-            destination.close()
+    except (TraceJSONLIOError, TraceJSONLLineError):
+        raise
+    except Exception:  # noqa: BLE001 - stream errors may contain PHI
+        raise TraceJSONLIOError("trace destination could not be written") from None
     return line_count
 
 
@@ -306,8 +349,13 @@ def _normalise_content_paths(
         raw_paths: Iterable[ContentPath] = DEFAULT_CONTENT_PATHS
     elif isinstance(content_paths, str):
         raw_paths = (content_paths,)
+    elif isinstance(content_paths, Sequence) and any(
+        isinstance(segment, int) and not isinstance(segment, bool)
+        for segment in content_paths
+    ):
+        raw_paths = (cast(Sequence[JsonPathSegment], content_paths),)
     else:
-        raw_paths = content_paths
+        raw_paths = cast(Iterable[ContentPath], content_paths)
 
     compiled: list[JsonPath] = []
     seen: set[JsonPath] = set()
@@ -397,9 +445,11 @@ def _walk_path(
             for index, child in enumerate(node):
                 yield from _walk_path(child, tail, path + (index,))
         else:
-            index = _list_index(segment)
-            if index is not None and 0 <= index < len(node):
-                yield from _walk_path(node[index], tail, path + (index,))
+            selected_index = _list_index(segment)
+            if selected_index is not None and 0 <= selected_index < len(node):
+                yield from _walk_path(
+                    node[selected_index], tail, path + (selected_index,)
+                )
 
 
 def _list_index(segment: JsonPathSegment) -> int | None:
@@ -418,7 +468,7 @@ def _set_path(record: dict[str, Any], path: JsonPath, value: str) -> None:
         else:
             node = node[int(segment)]
     final_segment = path[-1]
-    if isinstance(node, Mapping):
+    if isinstance(node, dict):
         node[final_segment] = value
     else:
         node[int(final_segment)] = value
@@ -499,8 +549,14 @@ def _dump_record(record: Mapping[str, Any]) -> str:
 
 def _iter_source_lines(source: TraceSource) -> Iterator[str]:
     if isinstance(source, os.PathLike):
-        with Path(source).open("r", encoding="utf-8", newline="") as handle:
-            yield from handle
+        try:
+            source_path = Path(source)
+            with source_path.open("r", encoding="utf-8", newline="") as handle:
+                yield from _iter_text_lines(handle)
+        except TraceJSONLIOError:
+            raise
+        except Exception:  # noqa: BLE001 - path errors may contain PHI
+            raise TraceJSONLIOError("trace source could not be read") from None
         return
 
     if isinstance(source, str):
@@ -511,23 +567,65 @@ def _iter_source_lines(source: TraceSource) -> Iterator[str]:
             except OSError:
                 path_exists = False
             if path_exists:
-                with source_path.open("r", encoding="utf-8", newline="") as handle:
-                    yield from handle
+                try:
+                    with source_path.open("r", encoding="utf-8", newline="") as handle:
+                        yield from _iter_text_lines(handle)
+                except TraceJSONLIOError:
+                    raise
+                except Exception:  # noqa: BLE001 - path errors may contain PHI
+                    raise TraceJSONLIOError("trace source could not be read") from None
                 return
-        yield from io.StringIO(source, newline="")
-        return
-
-    if hasattr(source, "read"):
-        for line in source:
-            yield _require_text_line(line)
+        yield from _iter_text_lines(io.StringIO(source, newline=""))
         return
 
     if isinstance(source, Iterable):
-        for line in source:
-            yield _require_text_line(line)
+        yield from _iter_text_lines(source)
         return
 
     raise TypeError("source must be a path, JSONL text, text stream, or line iterable")
+
+
+def _path_source(source: TraceSource) -> Path | None:
+    if isinstance(source, os.PathLike):
+        try:
+            return Path(source)
+        except Exception:  # noqa: BLE001 - path errors may contain PHI
+            raise TraceJSONLIOError("trace source is invalid") from None
+    if isinstance(source, str) and "\n" not in source and "\r" not in source:
+        source_path = Path(source)
+        try:
+            if source_path.exists():
+                return source_path
+        except OSError:
+            return None
+    return None
+
+
+def _iter_text_lines(lines: Iterable[Any]) -> Iterator[str]:
+    try:
+        iterator = iter(lines)
+    except Exception:  # noqa: BLE001 - stream errors may contain PHI
+        raise TraceJSONLIOError("trace source could not be read") from None
+    while True:
+        try:
+            line = next(iterator)
+        except StopIteration:
+            return
+        except Exception:  # noqa: BLE001 - stream errors may contain PHI
+            raise TraceJSONLIOError("trace source could not be read") from None
+        yield _require_text_line(line)
+
+
+def _same_path(first: Path, second: Path) -> bool:
+    try:
+        if first.samefile(second):
+            return True
+    except OSError:
+        pass
+    try:
+        return first.resolve() == second.resolve()
+    except OSError:
+        return first.absolute() == second.absolute()
 
 
 def _require_text_line(line: Any) -> str:
@@ -549,8 +647,24 @@ def _format_json_path(path: JsonPath) -> str:
     for segment in path:
         if isinstance(segment, int):
             result += f"[{segment}]"
-        elif _PATH_IDENTIFIER.fullmatch(segment):
+        elif segment in _SAFE_PATH_KEYS or _HASHED_PATH_KEY.fullmatch(segment):
             result += f".{segment}"
         else:
-            result += f"[{json.dumps(segment, ensure_ascii=False)}]"
+            result += f".{_safe_path_key(segment)}"
     return result
+
+
+def _sanitize_error_path(path: JsonPath) -> JsonPath:
+    return tuple(
+        segment
+        if isinstance(segment, int) or segment in _SAFE_PATH_KEYS
+        else _safe_path_key(segment)
+        for segment in path
+    )
+
+
+def _safe_path_key(value: str) -> str:
+    if _HASHED_PATH_KEY.fullmatch(value):
+        return value
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return f"key_sha256_{digest}"

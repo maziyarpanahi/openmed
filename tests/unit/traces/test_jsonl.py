@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import io
 import json
+import os
+from pathlib import Path
 
 import pytest
 
 from openmed.traces.jsonl import (
     TraceContentWalker,
+    TraceJSONLIOError,
     TraceJSONLLineError,
     TraceJSONLTransformError,
     rewrite_trace_jsonl,
@@ -159,6 +162,27 @@ def test_rewrite_streams_blank_lines_and_writes_to_text_output() -> None:
     ]
 
 
+def test_write_rejects_same_input_output_without_truncating(tmp_path: Path) -> None:
+    trace_path = tmp_path / "trace.jsonl"
+    original = _line({"content": "synthetic content"})
+    trace_path.write_text(original, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be different"):
+        write_trace_jsonl(trace_path, trace_path, lambda _value: "[REDACTED]")
+
+    assert trace_path.read_text(encoding="utf-8") == original
+
+
+def test_tuple_path_with_array_index_is_treated_as_one_path() -> None:
+    source = _line({"events": [{"content": "first"}, {"content": "second"}]})
+
+    locations = list(walk_trace_content(source, ("events", 1, "content")))
+
+    assert [(item.path, item.value) for item in locations] == [
+        (("events", 1, "content"), "second")
+    ]
+
+
 def test_malformed_json_reports_line_without_raw_values() -> None:
     source = (
         _line({"content": "synthetic valid content"})
@@ -199,6 +223,26 @@ def test_transform_failures_are_value_free_and_include_line_number() -> None:
     assert "synthetic secret" not in str(exc_info.value)
 
 
+def test_transform_error_hashes_caller_controlled_path_keys() -> None:
+    sensitive_key = "PatientJaneDoe"
+
+    def fail(value: str) -> str:
+        raise RuntimeError(value)
+
+    with pytest.raises(TraceJSONLTransformError) as exc_info:
+        next(
+            rewrite_trace_jsonl(
+                _line({sensitive_key: "synthetic secret"}),
+                fail,
+                content_paths=[sensitive_key],
+            )
+        )
+
+    assert sensitive_key not in str(exc_info.value)
+    assert sensitive_key not in exc_info.value.path
+    assert exc_info.value.json_path.startswith("$.key_sha256_")
+
+
 def test_walker_does_not_read_until_consumed() -> None:
     consumed = False
 
@@ -211,3 +255,27 @@ def test_walker_does_not_read_until_consumed() -> None:
     assert consumed is False
     assert next(locations).value == "synthetic lazy content"
     assert consumed is True
+
+
+def test_source_and_destination_failures_are_value_free() -> None:
+    sensitive = "PatientJaneDoe"
+
+    class FailingPath(os.PathLike[str]):
+        def __fspath__(self) -> str:
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(TraceJSONLIOError) as source_error:
+        next(walk_trace_content(FailingPath()))
+    assert sensitive not in str(source_error.value)
+
+    class FailingOutput:
+        def write(self, _line: str) -> None:
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(TraceJSONLIOError) as destination_error:
+        write_trace_jsonl(
+            _line({"content": "synthetic content"}),
+            FailingOutput(),
+            lambda _value: "[REDACTED]",
+        )
+    assert sensitive not in str(destination_error.value)

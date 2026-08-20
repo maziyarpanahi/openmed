@@ -72,7 +72,10 @@ output = "".join(rewritten)
 The rewrite retains object insertion order, identifiers, scalar types, list
 positions, and every unconfigured field. A transform must return a string;
 returning another type would change the trace schema and is rejected. Use
-write_trace_jsonl to stream directly to a path or text output.
+write_trace_jsonl to stream directly to a path or text output. Path-based input
+and output must be different files; the writer rejects the same file before it
+opens the destination so a lazy input stream cannot be truncated. Use a
+separate output for validation before any caller-managed replacement.
 
 ## Malformed records
 
@@ -81,6 +84,12 @@ non-object records raise TraceJSONLLineError. The exception exposes the
 one-based line_number and a short message, but never includes the source line
 or a value from it. Transform failures use TraceJSONLTransformError, which
 follows the same value-free rule and also identifies the configured JSON path.
+Common structural keys remain readable in that diagnostic; nonstandard object
+keys are replaced by deterministic `key_sha256_...` segments so a key that
+contains patient data cannot be echoed through an exception.
+Unreadable path/stream inputs and unwritable destinations raise
+`TraceJSONLIOError` with a value-free message; underlying filesystem paths and
+custom stream exception text are not propagated.
 
 Blank physical lines are passed through unchanged by rewrites and do not
 produce locations. All behavior is deterministic and local-first.
