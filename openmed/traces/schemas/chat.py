@@ -223,7 +223,10 @@ def _walk_content(
         if isinstance(value, Mapping):
             items: list[tuple[ContentPath, str, bool]] = []
             part_type = value.get("type")
-            if isinstance(value.get("text"), str):
+            recognized_part = part_type is None or part_type in (
+                _TEXT_PART_TYPES | _TOOL_RESULT_PART_TYPES
+            )
+            if recognized_part and isinstance(value.get("text"), str):
                 items.append((path + ("text",), value["text"], True))
 
             if part_type in _TEXT_PART_TYPES:
@@ -375,6 +378,10 @@ def _validated_replacements(
         path = _normalize_path(raw_path)
         if path not in known_paths:
             raise ChatSchemaError("replacement path is not discovered content")
+        if path in normalized:
+            raise ChatSchemaError(
+                "replacement paths must be unique after normalization"
+            )
         if not isinstance(replacement, str):
             raise ChatSchemaError("replacement content must be text")
         normalized[path] = replacement

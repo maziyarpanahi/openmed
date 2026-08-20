@@ -154,6 +154,7 @@ def test_unknown_part_containers_remain_untouched() -> None:
             "content": [
                 {
                     "type": "custom",
+                    "text": "synthetic value",
                     "parts": [{"text": "synthetic value"}],
                 }
             ],
@@ -195,6 +196,22 @@ def test_adapter_walk_and_reconstruct_use_stable_content_paths() -> None:
     assert rebuilt["messages"][0]["content"] == "[REDACTED-0]"
     assert rebuilt["messages"][1]["content"][0]["text"] == "[REDACTED-1]"
     assert rebuilt["metadata"] == {"split": "synthetic"}
+    assert record["messages"][0]["content"] == "synthetic person"
+
+
+def test_reconstruct_rejects_paths_that_collide_after_normalization() -> None:
+    record = {"messages": [{"role": "user", "content": "synthetic person"}]}
+    adapter = RoleMessageSchemaAdapter()
+
+    with pytest.raises(ChatSchemaError, match="must be unique"):
+        adapter.reconstruct(
+            record,
+            {
+                ("messages", 0, "content"): "[REDACTED-A]",
+                "messages.0.content": "[REDACTED-B]",
+            },
+        )
+
     assert record["messages"][0]["content"] == "synthetic person"
 
 
