@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic counts-only comparator reports with fixed metric
+  definitions, bounded aggregate failure accounting, hashed custom identifiers,
+  immutable sanitized state, environment fingerprints, and value-free JSON,
+  Markdown, and write errors (#2380).
 - Added an opt-in bundled-model manifest and offline bootstrap for the small
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent

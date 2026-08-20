@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
+from typing import Any
+
+import pytest
 
 from openmed.eval.comparator_report import (
+    DEFAULT_METRIC_DEFINITIONS,
     ComparatorReport,
+    ComparatorReportRow,
     build_comparator_report,
     fingerprint_environment,
     render_comparator_report_json,
@@ -113,6 +119,228 @@ def test_comparator_report_accepts_json_ready_mappings() -> None:
     assert report.fixture_count == 3
     assert report.rows[0].metrics["character_recall"] == 1.0
     assert report.failure_summary["total"] == 0
+
+
+def test_source_identifiers_are_hashed_even_when_they_look_like_plain_names() -> None:
+    raw_values = {
+        "suite": "AdaLovelace",
+        "model": "GraceHopper",
+        "device": "AlanTuring",
+        "system": "KatherineJohnson",
+    }
+    report = build_comparator_report(
+        {
+            "suite": raw_values["suite"],
+            "model_name": raw_values["model"],
+            "device": raw_values["device"],
+            "fixture_count": 1,
+            "rows": [
+                {
+                    "system": raw_values["system"],
+                    "status": "scored",
+                    "fixture_count": 1,
+                }
+            ],
+        },
+        environment={"python": "3.12"},
+    )
+
+    rendered = report.to_json()
+    assert all(value not in rendered for value in raw_values.values())
+    assert report.suite.startswith("sha256:")
+    assert report.rows[0].system.startswith("sha256:")
+
+
+def test_failure_counts_are_bounded_without_materializing_each_event() -> None:
+    report = build_comparator_report(
+        {
+            "suite": "comparator",
+            "model_name": "OpenMed",
+            "device": "cpu",
+            "rows": [],
+            "failure_count": 10**30,
+        },
+        environment={"python": "3.12"},
+    )
+
+    assert report.failure_summary == {
+        "by_category": {"other": 1_000_000_000},
+        "systems_affected": 0,
+        "total": 1_000_000_000,
+    }
+
+
+def test_systems_affected_counts_unique_sanitized_systems() -> None:
+    report = build_comparator_report(
+        {
+            "rows": [
+                {"system": "OpenMed", "status": "failed"},
+                {"system": "OpenMed", "status": "failed"},
+            ]
+        },
+        environment={"python": "3.12"},
+    )
+
+    assert report.failure_summary["systems_affected"] == 1
+    assert report.failure_summary["total"] == 2
+
+
+def test_sanitized_report_state_is_deeply_immutable() -> None:
+    row = ComparatorReportRow(
+        system="OpenMed",
+        status="scored",
+        fixture_count=1,
+        metrics={"leakage_rate": 0.0},
+        metric_counts={"leakage_rate": {"total_graphemes": 1}},
+    )
+    report = ComparatorReport(
+        suite="comparator",
+        model_name="OpenMed",
+        device="cpu",
+        fixture_count=1,
+        rows=(row,),
+    )
+
+    with pytest.raises(TypeError):
+        row.metrics["leakage_rate"] = 1.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        row.metric_counts["leakage_rate"]["total_graphemes"] = 99  # type: ignore[index]
+    with pytest.raises(TypeError):
+        report.failure_summary["total"] = 99  # type: ignore[index]
+    with pytest.raises(TypeError):
+        DEFAULT_METRIC_DEFINITIONS["leakage_rate"] = RAW_FIXTURE_VALUE  # type: ignore[index]
+
+    detached = report.to_dict()
+    detached["rows"][0]["metrics"]["leakage_rate"] = 1.0
+    assert report.rows[0].metrics["leakage_rate"] == 0.0
+
+
+def test_hostile_values_cannot_invoke_conversion_hooks() -> None:
+    hostile = _HostileValue()
+    report = build_comparator_report(
+        {
+            "suite": hostile,
+            "model_name": hostile,
+            "device": hostile,
+            "fixture_count": hostile,
+            "rows": [
+                {
+                    "system": hostile,
+                    "status": hostile,
+                    "fixture_count": hostile,
+                    "reason": hostile,
+                    "metrics": {"leakage_rate": hostile},
+                }
+            ],
+        },
+        environment={"hostile": hostile},
+    )
+
+    assert report.suite == "comparator"
+    assert report.rows[0].system == "system"
+    assert RAW_FIXTURE_VALUE not in report.to_json()
+
+
+def test_custom_mapping_is_rejected_without_reading_it() -> None:
+    with pytest.raises(TypeError, match="plain dictionary"):
+        build_comparator_report(_HostileMapping())  # type: ignore[arg-type]
+
+
+def test_report_rejects_unbounded_json_indent_and_unknown_schema() -> None:
+    report = build_comparator_report(
+        {"rows": []},
+        environment={"python": "3.12"},
+    )
+
+    with pytest.raises(ValueError, match="indent"):
+        report.to_json(indent=1000)
+    with pytest.raises(ValueError, match="schema version"):
+        ComparatorReport.from_dict({"schema_version": 999, "rows": []})
+    with pytest.raises(ValueError, match="artifact type"):
+        ComparatorReport.from_dict({"artifact_type": "other", "rows": []})
+
+
+def test_write_failure_does_not_echo_the_output_path() -> None:
+    report = build_comparator_report(
+        {"rows": []},
+        environment={"python": "3.12"},
+    )
+    unsafe_path = f"{RAW_FIXTURE_VALUE}\0.json"
+
+    with pytest.raises(OSError) as captured:
+        report.write_json(unsafe_path)
+
+    assert RAW_FIXTURE_VALUE not in str(captured.value)
+
+
+def test_sanitized_report_round_trip_does_not_rehash_identifiers() -> None:
+    report = build_comparator_report(
+        {
+            "suite": "AdaLovelace",
+            "model_name": "GraceHopper",
+            "device": "AlanTuring",
+            "rows": [
+                {
+                    "system": "KatherineJohnson",
+                    "status": "scored",
+                    "fixture_count": 1,
+                }
+            ],
+        },
+        environment={"python": "3.12"},
+    )
+
+    restored = ComparatorReport.from_dict(report.to_dict())
+
+    assert restored.to_dict() == report.to_dict()
+
+
+def test_loaded_report_reconciles_row_counts_and_failure_status() -> None:
+    report = ComparatorReport.from_dict(
+        {
+            "artifact_type": "openmed.eval.comparator_report",
+            "fixture_count": 0,
+            "rows": [
+                {
+                    "system": "OpenMed",
+                    "status": "not_available",
+                    "fixture_count": 3,
+                    "failure_count": 0,
+                }
+            ],
+            "schema_version": 1,
+        }
+    )
+
+    assert report.fixture_count == 3
+    assert report.rows[0].failure_count == 1
+    assert report.failure_summary["total"] == 1
+    assert report.failure_summary["systems_affected"] == 1
+
+
+class _HostileValue:
+    def __bool__(self) -> bool:
+        raise AssertionError(RAW_FIXTURE_VALUE)
+
+    def __float__(self) -> float:
+        raise AssertionError(RAW_FIXTURE_VALUE)
+
+    def __int__(self) -> int:
+        raise AssertionError(RAW_FIXTURE_VALUE)
+
+    def __str__(self) -> str:
+        raise AssertionError(RAW_FIXTURE_VALUE)
+
+
+class _HostileMapping(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise AssertionError(RAW_FIXTURE_VALUE)
+
+    def __iter__(self) -> Iterator[str]:
+        raise AssertionError(RAW_FIXTURE_VALUE)
+
+    def __len__(self) -> int:
+        raise AssertionError(RAW_FIXTURE_VALUE)
 
 
 def _matrix(environment: dict[str, str]) -> ComparatorMatrixReport:
