@@ -102,6 +102,15 @@ def _error(message: str) -> ExportError:
     return ExportError(message)
 
 
+def _coerce_path(value: Path | os.PathLike[str] | str, label: str) -> Path:
+    """Build a path without retaining value-bearing path-like exceptions."""
+
+    try:
+        return Path(value)
+    except Exception:
+        raise _error(f"{label} path is invalid") from None
+
+
 def load_compatibility(
     path: Path | os.PathLike[str] = COMPATIBILITY_PATH,
 ) -> dict[str, Any]:
@@ -425,8 +434,8 @@ def select_skills(
     """
 
     available_set = set(available)
-    requested_skills = tuple(skill_names)
-    requested_packs = tuple(pack_names)
+    requested_skills = _selection_identifiers(skill_names, "skill")
+    requested_packs = _selection_identifiers(pack_names, "pack")
     if not requested_skills and not requested_packs:
         return tuple(sorted(available_set)), ()
 
@@ -462,6 +471,29 @@ def select_skills(
     if not selected:
         raise _error("selection contains no skills")
     return tuple(sorted(selected)), tuple(sorted(set(requested_packs)))
+
+
+def _selection_identifiers(values: Iterable[str], label: str) -> tuple[str, ...]:
+    """Consume caller selections without exposing iterator values or errors."""
+
+    if isinstance(values, (str, bytes, bytearray)):
+        raise _error(f"{label} selection must be an iterable of identifiers")
+    try:
+        iterator = iter(values)
+    except Exception:
+        raise _error(f"{label} selection could not be read") from None
+    selected: list[str] = []
+    while True:
+        try:
+            value = next(iterator)
+        except StopIteration:
+            break
+        except Exception:
+            raise _error(f"{label} selection could not be read") from None
+        if not isinstance(value, str) or _IDENTIFIER_RE.fullmatch(value) is None:
+            raise _error(f"{label} selection contains an invalid identifier")
+        selected.append(value)
+    return tuple(selected)
 
 
 def _collect_skill_files(
@@ -583,7 +615,11 @@ def _select_hosts(
     compatibility: Mapping[str, Any], host_names: Iterable[str] | None
 ) -> dict[str, Any]:
     hosts = compatibility["hosts"]
-    selected_names = sorted(hosts) if host_names is None else sorted(set(host_names))
+    selected_names = (
+        sorted(hosts)
+        if host_names is None
+        else sorted(set(_selection_identifiers(host_names, "host")))
+    )
     selected: dict[str, Any] = {}
     for host_name in selected_names:
         if host_name not in hosts:
@@ -744,6 +780,7 @@ def _validate_output_locations(
     *,
     skills_root: Path,
     compatibility_path: Path,
+    pack_manifest_path: Path,
     force: bool,
 ) -> None:
     """Reject aliases, source-tree outputs, symlinks, and unsafe overwrites."""
@@ -753,6 +790,7 @@ def _validate_output_locations(
         canonical_sidecar = sidecar.resolve(strict=False)
         canonical_skills = skills_root.resolve(strict=False)
         canonical_compatibility = compatibility_path.resolve(strict=False)
+        canonical_pack_manifest = pack_manifest_path.resolve(strict=False)
     except (OSError, RuntimeError):
         raise _error("bundle output locations could not be resolved") from None
     if canonical_output == canonical_sidecar:
@@ -762,6 +800,8 @@ def _validate_output_locations(
             raise _error("bundle outputs must be outside the skills source tree")
         if target == canonical_compatibility:
             raise _error("bundle outputs must not replace compatibility data")
+        if target == canonical_pack_manifest:
+            raise _error("bundle outputs must not replace source metadata")
 
     for target in (output, sidecar):
         if target.is_symlink():
@@ -889,29 +929,32 @@ def export_bundle(
         ExportError: If selection, source data, or output safety checks fail.
     """
 
-    output_path = Path(output)
+    output_path = _coerce_path(output, "bundle output")
     sidecar_path = (
-        Path(manifest_path) if manifest_path else _default_manifest_path(output_path)
+        _coerce_path(manifest_path, "bundle manifest")
+        if manifest_path is not None
+        else _default_manifest_path(output_path)
     )
     if not bundle_name or not _BUNDLE_NAME_RE.fullmatch(bundle_name):
         raise _error("bundle name must be a non-empty safe identifier")
 
-    skills_root_path = Path(skills_root)
-    compatibility_file = Path(compatibility_path)
+    skills_root_path = _coerce_path(skills_root, "skills root")
+    compatibility_file = _coerce_path(compatibility_path, "compatibility")
+    pack_manifest_file = (
+        _coerce_path(pack_manifest_path, "pack manifest")
+        if pack_manifest_path is not None
+        else skills_root_path / "packs" / "manifest.json"
+    )
     _validate_output_locations(
         output_path,
         sidecar_path,
         skills_root=skills_root_path,
         compatibility_path=compatibility_file,
+        pack_manifest_path=pack_manifest_file,
         force=force,
     )
     compatibility = load_compatibility(compatibility_file)
     pack_manifest_bytes: bytes | None = None
-    pack_manifest_file = (
-        Path(pack_manifest_path)
-        if pack_manifest_path is not None
-        else skills_root_path / "packs" / "manifest.json"
-    )
     if pack_manifest_file.is_symlink() or pack_manifest_file.exists():
         pack_payload, canonical_packs = _load_pack_manifest(pack_manifest_file)
         compatibility = _apply_canonical_packs(compatibility, canonical_packs)
@@ -969,6 +1012,7 @@ def export_bundle(
         sidecar_path,
         skills_root=skills_root_path,
         compatibility_path=compatibility_file,
+        pack_manifest_path=pack_manifest_file,
         force=force,
     )
 

@@ -198,6 +198,20 @@ def test_outputs_cannot_alias_or_modify_skill_sources(tmp_path: Path) -> None:
             force=True,
         )
 
+    pack_manifest = tmp_path / "source-packs.json"
+    pack_manifest.write_text("synthetic source metadata\n", encoding="utf-8")
+    with pytest.raises(ExportError, match="must not replace source metadata"):
+        export_bundle(
+            pack_manifest,
+            manifest_path=tmp_path / "sidecar.json",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            pack_manifest_path=pack_manifest,
+            source_revision="synthetic-revision",
+            force=True,
+        )
+    assert pack_manifest.read_text(encoding="utf-8") == "synthetic source metadata\n"
+
 
 def test_nonportable_and_unexpected_skill_files_are_rejected(tmp_path: Path) -> None:
     skills_root, compatibility = _write_fixture(tmp_path)
@@ -275,6 +289,27 @@ def test_unknown_selection_is_not_echoed(tmp_path: Path) -> None:
         )
 
     assert "unknown identifier" in str(captured.value)
+    assert secret_marker not in str(captured.value)
+
+
+def test_selection_iterator_failures_do_not_expose_values(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    secret_marker = "synthetic-sensitive-value"
+
+    def failing_selection():
+        yield "alpha-skill"
+        raise RuntimeError(secret_marker)
+
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+            skills=failing_selection(),
+        )
+
+    assert "selection could not be read" in str(captured.value)
     assert secret_marker not in str(captured.value)
 
 
