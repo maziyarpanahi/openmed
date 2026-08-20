@@ -101,6 +101,42 @@ def test_custom_detector_and_two_argument_redactor_share_state():
     assert "SYNTH-42" not in str(result.report.to_dict())
 
 
+def test_falsey_callable_redactor_is_not_discarded() -> None:
+    class FalseyRedactor:
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, text: str) -> str:
+            return text.replace("SYNTH-42", "[ID]")
+
+    record = {
+        "prompt": "SYNTH-42 prompt",
+        "chosen": "SYNTH-42 chosen",
+        "rejected": "SYNTH-42 rejected",
+    }
+
+    result = PreferencePairAdapter(text_redactor=FalseyRedactor()).redact(record)
+
+    assert all(
+        "SYNTH-42" not in result[field] for field in ("prompt", "chosen", "rejected")
+    )
+
+
+def test_dataset_iterator_failures_do_not_echo_source_values() -> None:
+    sensitive = "synthetic-secret@example.test"
+    record = {"prompt": "safe", "chosen": "safe", "rejected": "safe"}
+
+    def failing_records():
+        yield record
+        raise RuntimeError(sensitive)
+
+    with pytest.raises(PreferenceSchemaError) as caught:
+        PreferencePairAdapter().redact_dataset(failing_records())
+
+    assert sensitive not in str(caught.value)
+    assert "could not be read" in str(caught.value)
+
+
 def test_determinism_is_stable_across_adapter_instances():
     record = {
         "prompt": "Call +1 415 555 0123.",

@@ -357,7 +357,7 @@ class PreferencePair:
     ) -> "PreferencePair":
         """Return this pair after local redaction with one shared state."""
 
-        redactor = adapter or PreferencePairAdapter()
+        redactor = adapter if adapter is not None else PreferencePairAdapter()
         return PreferencePair.from_mapping(redactor.redact(self.to_mapping()))
 
 
@@ -395,8 +395,8 @@ class PreferencePairAdapter:
             raise TypeError("provide only one of text_redactor or redactor")
         if span_detector is not None and detector is not None:
             raise TypeError("provide only one of span_detector or detector")
-        self.text_redactor = text_redactor or redactor
-        self.span_detector = span_detector or detector
+        self.text_redactor = text_redactor if text_redactor is not None else redactor
+        self.span_detector = span_detector if span_detector is not None else detector
         if sensitive_values is None:
             self.sensitive_values: dict[str, str] = {}
         elif not isinstance(sensitive_values, Mapping):
@@ -478,7 +478,23 @@ class PreferencePairAdapter:
         """Redact records with one shared state and preserve record order."""
 
         active_state = state or self.new_state()
-        return [self.redact(record, state=active_state) for record in records]
+        try:
+            iterator = iter(records)
+        except Exception:
+            raise PreferenceSchemaError("preference dataset is not iterable") from None
+
+        output: list[dict[str, Any]] = []
+        while True:
+            try:
+                record = next(iterator)
+            except StopIteration:
+                break
+            except Exception:
+                raise PreferenceSchemaError(
+                    "preference dataset could not be read"
+                ) from None
+            output.append(self.redact(record, state=active_state))
+        return output
 
     def redact_dataset_with_report(
         self,
@@ -572,7 +588,9 @@ def redact_preference_pair(
 ) -> dict[str, Any]:
     """Redact one preference pair using a local adapter."""
 
-    active_adapter = adapter or PreferencePairAdapter(**adapter_kwargs)
+    active_adapter = (
+        adapter if adapter is not None else PreferencePairAdapter(**adapter_kwargs)
+    )
     return active_adapter.redact(record)
 
 
@@ -595,7 +613,9 @@ def redact_preference_dataset(
 ) -> list[dict[str, Any]]:
     """Redact an iterable of pairs while preserving order and membership."""
 
-    active_adapter = adapter or PreferencePairAdapter(**adapter_kwargs)
+    active_adapter = (
+        adapter if adapter is not None else PreferencePairAdapter(**adapter_kwargs)
+    )
     return active_adapter.redact_dataset(records)
 
 
