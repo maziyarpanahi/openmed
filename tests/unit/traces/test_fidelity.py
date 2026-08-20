@@ -214,6 +214,34 @@ def test_content_path_iteration_errors_are_value_free() -> None:
     assert sensitive not in str(caught.value)
 
 
+def test_content_path_parsing_errors_are_value_free() -> None:
+    sensitive = "PatientJaneDoe"
+
+    class FailingPath(str):
+        def strip(self, *args: object) -> str:
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(ValueError) as caught:
+        verify_trace_fidelity({}, {}, content_paths=FailingPath("content"))
+
+    assert sensitive not in str(caught.value)
+
+
+def test_direct_issue_path_errors_fail_closed() -> None:
+    sensitive = "PatientJaneDoe"
+
+    class FailingPath:
+        def __eq__(self, other: object) -> bool:
+            raise RuntimeError(sensitive)
+
+    issue = TraceFidelityIssue(
+        path=FailingPath(),  # type: ignore[arg-type]
+        code="structure",
+    )
+
+    assert issue.path == "$"
+
+
 def test_cyclic_inputs_fail_closed_without_recursion_errors() -> None:
     original: dict[str, object] = {"messages": []}
     output: dict[str, object] = {"messages": []}

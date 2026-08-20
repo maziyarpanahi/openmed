@@ -781,7 +781,10 @@ def _normalize_content_paths(spec: ContentPathSpec) -> tuple[TracePath, ...]:
     compiled: list[TracePath] = []
     seen: set[TracePath] = set()
     for candidate in candidates:
-        path = _compile_content_path(candidate)
+        try:
+            path = _compile_content_path(candidate)
+        except Exception:  # noqa: BLE001 - configuration may contain PHI
+            raise ValueError("content path is invalid") from None
         if path not in seen:
             compiled.append(path)
             seen.add(path)
@@ -1012,11 +1015,11 @@ def _format_path(path: Sequence[TracePathPart]) -> str:
 
 
 def _sanitize_report_path(value: object) -> str:
-    if value == "$":
-        return "$"
-    if not isinstance(value, str):
-        return "$"
     try:
+        if value == "$":
+            return "$"
+        if not isinstance(value, str):
+            return "$"
         return _format_path(_compile_content_path(value))
     except Exception:  # noqa: BLE001 - direct report input may contain PHI
         return "$"
