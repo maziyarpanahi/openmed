@@ -49,3 +49,8 @@ callers that need isolation can pass their own `cache: new Map()`.
 For tests, pass a small runtime object through `runtime` and explicit
 `capabilities`. That lets Node exercise WebGPU, threaded wasm, and basic wasm
 selection without installing browser APIs or downloading ONNX Runtime assets.
+
+Applications that need typed token tensors, a `run(tokens) -> logits` contract,
+separate WebGPU and WASM model artifacts, parity/recall certification, and
+per-device timing should use the production
+[WebGPU Token-Classification Runtime](webgpu.md).

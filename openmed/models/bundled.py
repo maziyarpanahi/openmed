@@ -16,9 +16,10 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from openmed.core.config import OpenMedConfig
+from openmed.core.model_integrity import ModelIntegrityError
 from openmed.core.model_registry import get_model_info
 from openmed.core.models import ModelLoader
-from openmed.core.offline import network_blocked_if_offline
+from openmed.core.offline import OfflineModeError, network_blocked_if_offline
 
 BUNDLED_MODEL_SCHEMA_VERSION = "openmed.bundled-model.v1"
 BUNDLED_MODEL_VERSION = "1.0.0"
@@ -61,19 +62,23 @@ class BundledModelManifest(Mapping[str, Any]):
 
     def __post_init__(self) -> None:
         """Reject metadata that cannot be safely used as a bundle pin."""
-        if self.schema_version != BUNDLED_MODEL_SCHEMA_VERSION:
-            raise ValueError(
-                f"unsupported bundled-model schema version: {self.schema_version!r}"
-            )
-        if _SEMVER_RE.fullmatch(self.version) is None:
+        if (
+            type(self.schema_version) is not str
+            or self.schema_version != BUNDLED_MODEL_SCHEMA_VERSION
+        ):
+            raise ValueError("unsupported bundled-model schema version")
+        if type(self.version) is not str or _SEMVER_RE.fullmatch(self.version) is None:
             raise ValueError("bundled-model version must use MAJOR.MINOR.PATCH")
         for field_name in ("model_key", "model_id", "license"):
             if (
-                not isinstance(getattr(self, field_name), str)
+                type(getattr(self, field_name)) is not str
                 or not getattr(self, field_name).strip()
             ):
                 raise ValueError(f"bundled-model {field_name} must not be empty")
-        if _SHA256_RE.fullmatch(self.checksum) is None:
+        if (
+            type(self.checksum) is not str
+            or _SHA256_RE.fullmatch(self.checksum) is None
+        ):
             raise ValueError("bundled-model checksum must be a sha256: digest")
         if self.opt_in is not True:
             raise ValueError("bundled models must remain opt-in")
@@ -172,22 +177,15 @@ def validate_bundled_model_manifest(
     candidate = _coerce_manifest(manifest)
     registry_info = get_model_info(candidate.model_key)
     if registry_info is None:
-        raise BundledModelError(
-            f"bundled model key {candidate.model_key!r} is not in the model registry"
-        )
+        raise BundledModelError("bundled model key is not in the model registry")
     if registry_info.model_id != candidate.model_id:
         raise BundledModelError(
-            f"bundled model key {candidate.model_key!r} resolves to an unexpected "
-            "registry model"
+            "bundled model key resolves to an unexpected registry model"
         )
     if registry_info.reproducibility_hash != candidate.checksum:
-        raise BundledModelError(
-            f"bundled model {candidate.model_key!r} has a stale registry checksum"
-        )
+        raise BundledModelError("bundled model has a stale registry checksum")
     if (registry_info.license or "").lower() != candidate.license.lower():
-        raise BundledModelError(
-            f"bundled model {candidate.model_key!r} has mismatched license metadata"
-        )
+        raise BundledModelError("bundled model has mismatched license metadata")
     return candidate
 
 
@@ -206,7 +204,7 @@ def get_bundled_model_manifest(
     if model_key not in {manifest.model_key, manifest.model_id}:
         registry_info = get_model_info(model_key)
         if registry_info is None or registry_info.model_id != manifest.model_id:
-            raise KeyError(f"no bundled model is registered for {model_key!r}")
+            raise KeyError("no bundled model is registered for the requested key")
     return validate_bundled_model_manifest(manifest)
 
 
@@ -265,20 +263,32 @@ def load_bundled_model(
             "bundled model loading requires local_files_only=True; "
             "network fallback is disabled"
         )
+    if kwargs.get("require_integrity") is False:
+        raise BundledModelError(
+            "bundled model loading requires verified artifact integrity"
+        )
 
     offline_config = _offline_config(config)
     model_loader = loader if loader is not None else ModelLoader(offline_config)
     load_kwargs = dict(kwargs)
     load_kwargs["local_files_only"] = True
+    load_kwargs["require_integrity"] = True
 
     with network_blocked_if_offline(offline_config, local_only=True):
         try:
             return model_loader.load_model(manifest.registry_key, **load_kwargs)
-        except (ConnectionError, TimeoutError) as exc:
+        except OfflineModeError:
+            raise
+        except (BundledModelError, ModelIntegrityError):
+            raise BundledModelUnavailableError(
+                "the bundled model could not be verified locally; "
+                "network fallback is disabled"
+            ) from None
+        except Exception:
             raise BundledModelUnavailableError(
                 "the bundled model could not be loaded locally; "
                 "network fallback is disabled"
-            ) from exc
+            ) from None
 
 
 __all__ = [
