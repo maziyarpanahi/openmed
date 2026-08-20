@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.skills import export as export_module
 from scripts.skills.export import ExportError, export_bundle, resolve_source_revision
 
 
@@ -164,3 +165,257 @@ def test_tar_gz_output_has_the_same_manifest_contract(tmp_path: Path) -> None:
 
 def test_source_revision_falls_back_without_git_metadata(tmp_path: Path) -> None:
     assert resolve_source_revision(tmp_path) == "unknown"
+
+
+def test_outputs_cannot_alias_or_modify_skill_sources(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    archive = tmp_path / "bundle.zip"
+
+    with pytest.raises(ExportError, match="paths must be different"):
+        export_bundle(
+            archive,
+            manifest_path=tmp_path / "nested" / ".." / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+    with pytest.raises(ExportError, match="outside the skills source tree"):
+        export_bundle(
+            skills_root / "alpha-skill" / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+    with pytest.raises(ExportError, match="must not replace compatibility"):
+        export_bundle(
+            compatibility,
+            manifest_path=tmp_path / "sidecar.json",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+            force=True,
+        )
+
+
+def test_nonportable_and_unexpected_skill_files_are_rejected(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    unexpected = skills_root / "alpha-skill" / "synthetic-sensitive-value.txt"
+    unexpected.write_text("synthetic secret\n", encoding="utf-8")
+
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+    assert "unsupported root file" in str(captured.value)
+    assert "synthetic-sensitive-value" not in str(captured.value)
+
+
+def test_git_aware_export_rejects_untracked_skill_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    tracked = {path.resolve() for path in skills_root.rglob("*") if path.is_file()}
+    secret_marker = "synthetic-sensitive-value"
+    untracked = skills_root / "alpha-skill" / "references" / f"{secret_marker}.md"
+    untracked.write_text("synthetic secret\n", encoding="utf-8")
+    monkeypatch.setattr(
+        export_module,
+        "_tracked_skill_files",
+        lambda _root, _names: tracked,
+    )
+
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+    assert "untracked file" in str(captured.value)
+    assert secret_marker not in str(captured.value)
+
+
+def test_casefolding_member_collision_is_rejected(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    references = skills_root / "alpha-skill" / "references"
+    upper = references / "CASE.md"
+    lower = references / "case.md"
+    upper.write_text("first\n", encoding="utf-8")
+    lower.write_text("second\n", encoding="utf-8")
+    if upper.samefile(lower):
+        pytest.skip("filesystem does not permit case-distinct fixture paths")
+
+    with pytest.raises(ExportError, match="portable path collision"):
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+        )
+
+
+def test_unknown_selection_is_not_echoed(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    secret_marker = "synthetic-sensitive-value"
+
+    with pytest.raises(ExportError) as captured:
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+            skills=[secret_marker],
+        )
+
+    assert "unknown identifier" in str(captured.value)
+    assert secret_marker not in str(captured.value)
+
+
+def test_archive_suffix_cannot_disagree_with_format(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+
+    with pytest.raises(ExportError, match="conflicts"):
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+            archive_format="tar.gz",
+        )
+
+    result = export_bundle(
+        tmp_path / "bundle.TGZ",
+        skills_root=skills_root,
+        compatibility_path=compatibility,
+        source_revision="synthetic-revision",
+    )
+    assert result.manifest["archive"]["format"] == "tar.gz"
+
+
+def test_selected_host_must_declare_archive_support(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+
+    with pytest.raises(ExportError, match="host does not support"):
+        export_bundle(
+            tmp_path / "bundle.tar.gz",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+            hosts=["other"],
+        )
+
+
+def test_finalize_failure_restores_both_existing_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    archive = tmp_path / "bundle.zip"
+    first = export_bundle(
+        archive,
+        skills_root=skills_root,
+        compatibility_path=compatibility,
+        source_revision="first-revision",
+    )
+    original_archive = archive.read_bytes()
+    original_manifest = first.manifest_path.read_bytes()
+    real_replace = export_module.os.replace
+    replace_calls = 0
+
+    def fail_second_install(source, target):
+        nonlocal replace_calls
+        replace_calls += 1
+        if replace_calls == 4:
+            raise OSError("synthetic finalize failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(export_module.os, "replace", fail_second_install)
+
+    with pytest.raises(ExportError, match="could not be finalized"):
+        export_bundle(
+            archive,
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="second-revision",
+            force=True,
+        )
+
+    assert archive.read_bytes() == original_archive
+    assert first.manifest_path.read_bytes() == original_manifest
+
+
+def test_canonical_pack_manifest_is_embedded_and_controls_selection(
+    tmp_path: Path,
+) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    packs_dir = skills_root / "packs"
+    packs_dir.mkdir()
+    pack_manifest = {
+        "manifest_version": 1,
+        "packs": [
+            {
+                "id": "small",
+                "version": "1.0.0",
+                "description": "Synthetic canonical pack.",
+                "skills": ["alpha-skill"],
+                "budget": {"max_skills": 2, "max_bytes": 10000},
+            }
+        ],
+    }
+    (packs_dir / "manifest.json").write_text(
+        json.dumps(pack_manifest), encoding="utf-8"
+    )
+
+    result = export_bundle(
+        tmp_path / "bundle.zip",
+        skills_root=skills_root,
+        compatibility_path=compatibility,
+        source_revision="synthetic-revision",
+        packs=["small"],
+    )
+
+    assert result.manifest["skills"] == ["alpha-skill"]
+    with zipfile.ZipFile(result.archive_path) as archive:
+        assert "skill-packs.json" in archive.namelist()
+        embedded_packs = json.loads(archive.read("skill-packs.json"))
+        embedded_compatibility = json.loads(archive.read("compatibility.json"))
+    assert embedded_packs == pack_manifest
+    assert embedded_compatibility["packs"]["small"]["version"] == "1.0.0"
+
+
+def test_conflicting_duplicate_pack_declarations_fail_closed(tmp_path: Path) -> None:
+    skills_root, compatibility = _write_fixture(tmp_path)
+    packs_dir = skills_root / "packs"
+    packs_dir.mkdir()
+    (packs_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "manifest_version": 1,
+                "packs": [
+                    {
+                        "id": "small",
+                        "version": "1.0.0",
+                        "description": "Synthetic conflicting pack.",
+                        "skills": ["beta-skill"],
+                        "budget": {"max_skills": 2, "max_bytes": 10000},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ExportError, match="conflict with the canonical"):
+        export_bundle(
+            tmp_path / "bundle.zip",
+            skills_root=skills_root,
+            compatibility_path=compatibility,
+            source_revision="synthetic-revision",
+            packs=["small"],
+        )

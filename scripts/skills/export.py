@@ -7,8 +7,8 @@ network connection or a model download.
 
 Examples:
     python scripts/skills/export.py --output openmed-skills.zip
-    python scripts/skills/export.py --pack starter --host codex \
-        --output openmed-starter.zip --source-revision 0123456789abcdef
+    python scripts/skills/export.py --pack privacy --host codex \
+        --output openmed-privacy.zip --source-revision 0123456789abcdef
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,13 +38,21 @@ COMPATIBILITY_PATH = SKILLS_ROOT / "compatibility.json"
 
 MANIFEST_NAME = "manifest.json"
 COMPATIBILITY_NAME = "compatibility.json"
+PACK_MANIFEST_NAME = "skill-packs.json"
 MANIFEST_FORMAT = "openmed-agent-skill-bundle"
 MANIFEST_SCHEMA_VERSION = 1
 ARCHIVE_FORMATS = ("zip", "tar.gz")
+COMPATIBILITY_FORMAT = "openmed-agent-skill-compatibility"
+SKILL_CONTENT_DIRS = frozenset({"agents", "assets", "references", "scripts"})
+SKILL_INFRASTRUCTURE_DIRS = frozenset({"packs"})
+MAX_COMPATIBILITY_BYTES = 1024 * 1024
+MAX_SKILL_FILE_BYTES = 25 * 1024 * 1024
+MAX_BUNDLE_SOURCE_BYTES = 100 * 1024 * 1024
 
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BUNDLE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _REVISION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
+_PORTABLE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*$")
 
 
 class ExportError(ValueError):
@@ -111,15 +120,23 @@ def load_compatibility(
     """
 
     compatibility_path = Path(path)
+    if compatibility_path.is_symlink() or not compatibility_path.is_file():
+        raise _error("compatibility data could not be read")
     try:
         raw = compatibility_path.read_bytes()
+        if len(raw) > MAX_COMPATIBILITY_BYTES:
+            raise _error("compatibility data exceeds the size limit")
         data = json.loads(raw.decode("utf-8"))
+    except ExportError:
+        raise
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         del exc
         raise _error("compatibility data could not be read") from None
 
     if not isinstance(data, dict):
         raise _error("compatibility data must be a JSON object")
+    if data.get("format") != COMPATIBILITY_FORMAT:
+        raise _error("unsupported compatibility format")
     if data.get("schema_version") != MANIFEST_SCHEMA_VERSION:
         raise _error("unsupported compatibility schema version")
 
@@ -132,8 +149,27 @@ def load_compatibility(
         if not isinstance(declaration, dict):
             raise _error(f"host '{host_name}' must be an object")
         skills_dir = declaration.get("skills_dir", declaration.get("skills_path"))
-        if not isinstance(skills_dir, str) or not skills_dir.strip():
-            raise _error(f"host '{host_name}' is missing skills_dir")
+        if (
+            not isinstance(skills_dir, str)
+            or not skills_dir.strip()
+            or len(skills_dir) > 512
+            or any(character in skills_dir for character in "\x00\r\n")
+        ):
+            raise _error("a host declaration is missing a safe skills_dir")
+        capabilities = declaration.get("capabilities")
+        if not isinstance(capabilities, dict):
+            raise _error("a host capabilities declaration must be an object")
+        archive_formats = capabilities.get("archive_formats")
+        if (
+            not isinstance(archive_formats, list)
+            or not archive_formats
+            or not all(
+                isinstance(value, str) and value in ARCHIVE_FORMATS
+                for value in archive_formats
+            )
+            or len(set(archive_formats)) != len(archive_formats)
+        ):
+            raise _error("a host declares invalid archive formats")
 
     packs = data.get("packs", {})
     if not isinstance(packs, dict):
@@ -142,7 +178,8 @@ def load_compatibility(
         if not isinstance(pack_name, str) or not _IDENTIFIER_RE.fullmatch(pack_name):
             raise _error("compatibility data contains an invalid pack name")
         if not isinstance(declaration, (dict, list)):
-            raise _error(f"pack '{pack_name}' must be an object or list")
+            raise _error("a pack declaration must be an object or list")
+        _pack_items(declaration)
 
     return data
 
@@ -153,7 +190,7 @@ def discover_skills(
     """Return sorted skill directory names containing a regular ``SKILL.md``."""
 
     root = Path(skills_root)
-    if not root.is_dir():
+    if root.is_symlink() or not root.is_dir():
         raise _error("skills root is not a directory")
 
     names: list[str] = []
@@ -162,21 +199,89 @@ def discover_skills(
     except OSError:
         raise _error("skills root could not be listed") from None
     for child in children:
+        if child.name.startswith((".", "_")) or child.name in SKILL_INFRASTRUCTURE_DIRS:
+            continue
         skill_file = child / "SKILL.md"
-        if (
-            child.is_dir()
-            and not child.is_symlink()
-            and _IDENTIFIER_RE.fullmatch(child.name)
-            and skill_file.is_file()
-            and not skill_file.is_symlink()
-        ):
-            names.append(child.name)
+        if not child.is_dir() and not child.is_symlink():
+            continue
+        if child.is_symlink():
+            raise _error("a skill directory must not be a symlink")
+        if _IDENTIFIER_RE.fullmatch(child.name) is None:
+            raise _error("skills root contains an invalid skill directory")
+        if skill_file.is_symlink() or not skill_file.is_file():
+            raise _error("a skill directory is missing a regular SKILL.md")
+        names.append(child.name)
     return tuple(names)
+
+
+def _tracked_skill_files(
+    skills_root: Path, skill_names: Sequence[str]
+) -> set[Path] | None:
+    """Return tracked selected files, or ``None`` outside a Git checkout."""
+
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper()
+        in {
+            "COMSPEC",
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "PATHEXT",
+            "SYSTEMROOT",
+            "WINDIR",
+        }
+    }
+    try:
+        top_level = subprocess.run(
+            ["git", "-C", str(skills_root.parent), "rev-parse", "--show-toplevel"],
+            check=False,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if top_level.returncode != 0:
+        return None
+    try:
+        repository_root = Path(os.fsdecode(top_level.stdout.strip())).resolve()
+        relative_skills_root = skills_root.resolve().relative_to(repository_root)
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+    pathspecs = [
+        (relative_skills_root / skill_name).as_posix() for skill_name in skill_names
+    ]
+    try:
+        tracked = subprocess.run(
+            ["git", "-C", str(repository_root), "ls-files", "-z", "--", *pathspecs],
+            check=False,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        raise _error("tracked skill files could not be inspected") from None
+    if tracked.returncode != 0:
+        raise _error("tracked skill files could not be inspected")
+    return {
+        (repository_root / Path(os.fsdecode(raw_path))).resolve(strict=False)
+        for raw_path in tracked.stdout.split(b"\0")
+        if raw_path
+    }
 
 
 def _pack_items(declaration: dict[str, Any] | list[Any]) -> tuple[list[str], list[str]]:
     if isinstance(declaration, list):
-        return [item for item in declaration if isinstance(item, str)], []
+        if not all(isinstance(item, str) for item in declaration):
+            raise _error("pack entries must be strings")
+        return list(declaration), []
 
     skills = declaration.get("skills", [])
     patterns = declaration.get("patterns", declaration.get("include", []))
@@ -189,6 +294,112 @@ def _pack_items(declaration: dict[str, Any] | list[Any]) -> tuple[list[str], lis
     if not all(isinstance(item, str) for item in skills + patterns):
         raise _error("pack entries must be strings")
     return skills, patterns
+
+
+def _load_pack_manifest(
+    path: Path | os.PathLike[str],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Load the canonical topical-pack manifest used by the pack builder."""
+
+    manifest_path = Path(path)
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise _error("pack manifest could not be read")
+    try:
+        raw = manifest_path.read_bytes()
+        if len(raw) > MAX_COMPATIBILITY_BYTES:
+            raise _error("pack manifest exceeds the size limit")
+        payload = json.loads(raw.decode("utf-8"))
+    except ExportError:
+        raise
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise _error("pack manifest could not be read") from None
+
+    if not isinstance(payload, dict) or payload.get("manifest_version") != 1:
+        raise _error("pack manifest has an unsupported schema")
+    declarations = payload.get("packs")
+    if not isinstance(declarations, list) or not declarations:
+        raise _error("pack manifest must contain packs")
+
+    packs: dict[str, dict[str, Any]] = {}
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            raise _error("pack manifest contains an invalid declaration")
+        identifier = declaration.get("id")
+        version = declaration.get("version")
+        description = declaration.get("description")
+        skills = declaration.get("skills")
+        budget = declaration.get("budget")
+        if not isinstance(identifier, str) or not _IDENTIFIER_RE.fullmatch(identifier):
+            raise _error("pack manifest contains an invalid identifier")
+        if identifier in packs:
+            raise _error("pack manifest contains a duplicate identifier")
+        if not isinstance(version, str) or not re.fullmatch(
+            r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)",
+            version,
+        ):
+            raise _error("pack manifest contains an invalid version")
+        if not isinstance(description, str) or not description.strip():
+            raise _error("pack manifest contains an invalid description")
+        if (
+            not isinstance(skills, list)
+            or not skills
+            or not all(
+                isinstance(skill, str) and _IDENTIFIER_RE.fullmatch(skill)
+                for skill in skills
+            )
+            or len(set(skills)) != len(skills)
+        ):
+            raise _error("pack manifest contains invalid skill membership")
+        if not isinstance(budget, dict) or any(
+            not isinstance(budget.get(key), int)
+            or isinstance(budget.get(key), bool)
+            or budget[key] <= 0
+            for key in ("max_skills", "max_bytes")
+        ):
+            raise _error("pack manifest contains an invalid budget")
+        packs[identifier] = {
+            "budget": {
+                "max_bytes": budget["max_bytes"],
+                "max_skills": budget["max_skills"],
+            },
+            "description": description.strip(),
+            "skills": sorted(skills),
+            "version": version,
+        }
+
+    return payload, dict(sorted(packs.items()))
+
+
+def _apply_canonical_packs(
+    compatibility: Mapping[str, Any],
+    canonical_packs: Mapping[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Replace compatible duplicate declarations with canonical pack data."""
+
+    current = compatibility.get("packs", {})
+    if not isinstance(current, dict):
+        raise _error("compatibility packs must be an object")
+    if current:
+        if set(current) != set(canonical_packs):
+            raise _error("compatibility packs conflict with the canonical manifest")
+        for identifier, canonical in canonical_packs.items():
+            exact, patterns = _pack_items(current[identifier])
+            version = (
+                current[identifier].get("version")
+                if isinstance(current[identifier], dict)
+                else None
+            )
+            if (
+                patterns
+                or any(any(character in name for character in "*?[") for name in exact)
+                or sorted(exact) != canonical["skills"]
+                or (version is not None and version != canonical["version"])
+            ):
+                raise _error("compatibility packs conflict with the canonical manifest")
+
+    merged = copy.deepcopy(dict(compatibility))
+    merged["packs"] = copy.deepcopy(dict(canonical_packs))
+    return merged
 
 
 def select_skills(
@@ -222,20 +433,20 @@ def select_skills(
     selected: set[str] = set()
     for name in requested_skills:
         if name not in available_set:
-            raise _error(f"unknown skill '{name}'")
+            raise _error("skill selection contains an unknown identifier")
         selected.add(name)
 
     packs = compatibility.get("packs", {})
     for pack_name in requested_packs:
         declaration = packs.get(pack_name) if isinstance(packs, dict) else None
         if declaration is None:
-            raise _error(f"unknown pack '{pack_name}'")
+            raise _error("pack selection contains an unknown identifier")
         exact, patterns = _pack_items(declaration)
         for name in exact:
             if any(char in name for char in "*?["):
                 patterns.append(name)
             elif name not in available_set:
-                raise _error(f"pack '{pack_name}' references an unknown skill")
+                raise _error("a pack references an unknown skill")
             else:
                 selected.add(name)
         for pattern in patterns:
@@ -243,10 +454,10 @@ def select_skills(
                 name for name in available_set if fnmatch.fnmatchcase(name, pattern)
             }
             if not matches:
-                raise _error(f"pack '{pack_name}' selects no available skills")
+                raise _error("a pack pattern selects no available skills")
             selected.update(matches)
         if not exact and not patterns:
-            raise _error(f"pack '{pack_name}' selects no skills")
+            raise _error("a pack selects no skills")
 
     if not selected:
         raise _error("selection contains no skills")
@@ -254,32 +465,73 @@ def select_skills(
 
 
 def _collect_skill_files(
-    skills_root: Path, skill_names: Sequence[str]
+    skills_root: Path,
+    skill_names: Sequence[str],
+    *,
+    tracked_files: set[Path] | None = None,
 ) -> list[tuple[str, bytes]]:
-    """Read selected regular files without following symlinks."""
+    """Read bounded, portable skill files without following symlinks."""
 
     members: list[tuple[str, bytes]] = []
+    portable_names: set[str] = set()
+    total_size = 0
     for skill_name in skill_names:
         skill_dir = skills_root / skill_name
         if not skill_dir.is_dir() or skill_dir.is_symlink():
-            raise _error(f"skill '{skill_name}' is not a directory")
+            raise _error("a selected skill is not a regular directory")
         try:
             paths = sorted(skill_dir.rglob("*"), key=lambda item: item.as_posix())
         except OSError:
-            raise _error(f"skill '{skill_name}' could not be listed") from None
+            raise _error("a selected skill could not be listed") from None
         for path in paths:
             if path.is_symlink():
-                raise _error(f"skill '{skill_name}' contains an unsupported symlink")
+                raise _error("a selected skill contains an unsupported symlink")
             if path.is_dir():
                 continue
             if not path.is_file():
-                raise _error(f"skill '{skill_name}' contains an unsupported file")
+                raise _error("a selected skill contains an unsupported file")
+            if tracked_files is not None and path.resolve() not in tracked_files:
+                raise _error("a selected skill contains an untracked file")
+
+            relative_to_skill = path.relative_to(skill_dir)
+            parts = relative_to_skill.parts
+            if not parts:
+                raise _error("a selected skill contains an invalid path")
+            if len(parts) == 1:
+                if parts[0] != "SKILL.md":
+                    raise _error("a selected skill contains an unsupported root file")
+            elif parts[0] not in SKILL_CONTENT_DIRS:
+                raise _error("a selected skill contains an unsupported directory")
+            if any(
+                component.startswith(".")
+                or _PORTABLE_COMPONENT_RE.fullmatch(component) is None
+                for component in parts
+            ):
+                raise _error("a selected skill contains a non-portable path")
+
+            try:
+                size = path.stat().st_size
+            except OSError:
+                raise _error("a selected skill could not be inspected") from None
+            if size > MAX_SKILL_FILE_BYTES:
+                raise _error("a selected skill file exceeds the size limit")
+            total_size += size
+            if total_size > MAX_BUNDLE_SOURCE_BYTES:
+                raise _error("selected skill files exceed the bundle size limit")
+
             relative = path.relative_to(skills_root).as_posix()
+            member_name = f"skills/{relative}"
+            portable_name = unicodedata.normalize("NFC", member_name).casefold()
+            if portable_name in portable_names:
+                raise _error("selected skills contain a portable path collision")
+            portable_names.add(portable_name)
             try:
                 content = path.read_bytes()
             except OSError:
-                raise _error(f"skill '{skill_name}' could not be read") from None
-            members.append((f"skills/{relative}", content))
+                raise _error("a selected skill could not be read") from None
+            if len(content) != size:
+                raise _error("a selected skill changed during export")
+            members.append((member_name, content))
     return members
 
 
@@ -291,11 +543,27 @@ def resolve_source_revision(repo_root: Path | os.PathLike[str] = REPO_ROOT) -> s
     archive without Git metadata.
     """
 
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper()
+        in {
+            "COMSPEC",
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "PATHEXT",
+            "SYSTEMROOT",
+            "WINDIR",
+        }
+    }
     try:
         completed = subprocess.run(
             ["git", "-C", str(Path(repo_root)), "rev-parse", "HEAD"],
             check=True,
             capture_output=True,
+            env=environment,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=5,
         )
@@ -319,32 +587,49 @@ def _select_hosts(
     selected: dict[str, Any] = {}
     for host_name in selected_names:
         if host_name not in hosts:
-            raise _error(f"unknown host '{host_name}'")
+            raise _error("host selection contains an unknown identifier")
         selected[host_name] = copy.deepcopy(hosts[host_name])
     if not selected:
         raise _error("selection contains no hosts")
     return selected
 
 
+def _validate_host_archive_format(
+    hosts: Mapping[str, Any], archive_format: str
+) -> None:
+    """Require every selected host to declare support for the output format."""
+
+    for declaration in hosts.values():
+        capabilities = declaration["capabilities"]
+        if archive_format not in capabilities["archive_formats"]:
+            raise _error("a selected host does not support the archive format")
+
+
 def _normalise_archive_format(archive_format: str | None, output: Path) -> str:
     value = archive_format.lower().lstrip(".") if archive_format else ""
+    lower_name = output.name.lower()
+    inferred: str | None = None
+    if lower_name.endswith((".tar.gz", ".tgz")):
+        inferred = "tar.gz"
+    elif lower_name.endswith(".zip"):
+        inferred = "zip"
     if not value:
-        if output.name.endswith(".tar.gz"):
-            value = "tar.gz"
-        elif output.suffix.lower() == ".zip":
-            value = "zip"
-        else:
-            value = "zip"
+        value = inferred or "zip"
     if value in {"tgz", "tar-gz"}:
         value = "tar.gz"
     if value not in ARCHIVE_FORMATS:
         raise _error("archive format must be zip or tar.gz")
+    if inferred is not None and inferred != value:
+        raise _error("archive format conflicts with the output filename")
     return value
 
 
 def _default_manifest_path(output: Path) -> Path:
-    if output.name.endswith(".tar.gz"):
+    lower_name = output.name.lower()
+    if lower_name.endswith(".tar.gz"):
         stem = output.name[: -len(".tar.gz")]
+    elif lower_name.endswith(".tgz"):
+        stem = output.name[: -len(".tgz")]
     elif output.suffix:
         stem = output.name[: -len(output.suffix)]
     else:
@@ -431,7 +716,7 @@ def _write_archive(
             _write_zip(path, members)
         else:
             _write_tar_gz(path, members)
-    except OSError:
+    except (OSError, OverflowError, ValueError, tarfile.TarError, zipfile.BadZipFile):
         raise _error("bundle archive could not be written") from None
 
 
@@ -442,12 +727,120 @@ def _temporary_path(target: Path) -> Path:
         )
     except OSError:
         raise _error("bundle output directory is not available") from None
-    os.close(descriptor)
+    try:
+        os.close(descriptor)
+    except OSError:
+        try:
+            Path(name).unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise _error("bundle output directory is not available") from None
     return Path(name)
 
 
-def _path_exists(path: Path) -> bool:
-    return path.exists() or path.is_symlink()
+def _validate_output_locations(
+    output: Path,
+    sidecar: Path,
+    *,
+    skills_root: Path,
+    compatibility_path: Path,
+    force: bool,
+) -> None:
+    """Reject aliases, source-tree outputs, symlinks, and unsafe overwrites."""
+
+    try:
+        canonical_output = output.resolve(strict=False)
+        canonical_sidecar = sidecar.resolve(strict=False)
+        canonical_skills = skills_root.resolve(strict=False)
+        canonical_compatibility = compatibility_path.resolve(strict=False)
+    except (OSError, RuntimeError):
+        raise _error("bundle output locations could not be resolved") from None
+    if canonical_output == canonical_sidecar:
+        raise _error("archive and manifest paths must be different")
+    for target in (canonical_output, canonical_sidecar):
+        if target.is_relative_to(canonical_skills):
+            raise _error("bundle outputs must be outside the skills source tree")
+        if target == canonical_compatibility:
+            raise _error("bundle outputs must not replace compatibility data")
+
+    for target in (output, sidecar):
+        if target.is_symlink():
+            raise _error("bundle output targets must not be symlinks")
+        if target.exists() and not target.is_file():
+            raise _error("bundle output targets must be regular files")
+        if target.exists() and not force:
+            raise _error("refusing to overwrite an existing bundle; pass force=True")
+
+
+def _rollback_outputs(
+    prepared: Sequence[Path], backups: Mapping[Path, Path | None]
+) -> bool:
+    """Best-effort rollback of prepared output targets."""
+
+    ok = True
+    for target in reversed(prepared):
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            ok = False
+        backup = backups.get(target)
+        if backup is not None and backup.exists():
+            try:
+                os.replace(backup, target)
+            except OSError:
+                ok = False
+    return ok
+
+
+def _finalize_outputs(
+    archive_temp: Path,
+    output: Path,
+    manifest_temp: Path,
+    sidecar: Path,
+    *,
+    force: bool,
+) -> None:
+    """Finalize both staged files, restoring existing files after any failure."""
+
+    staged = ((archive_temp, output), (manifest_temp, sidecar))
+    prepared: list[Path] = []
+    backups: dict[Path, Path | None] = {}
+    try:
+        for _, target in staged:
+            backup: Path | None = None
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                raise _error("bundle output targets changed during export")
+            if target.exists():
+                if not force:
+                    raise _error("bundle output targets changed during export")
+                backup = _temporary_path(target)
+                backup.unlink()
+                os.replace(target, backup)
+            backups[target] = backup
+            prepared.append(target)
+            descriptor = os.open(
+                target,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+            os.close(descriptor)
+
+        for temporary, target in staged:
+            os.replace(temporary, target)
+    except (OSError, ExportError):
+        rolled_back = _rollback_outputs(prepared, backups)
+        if not rolled_back:
+            raise _error(
+                "bundle outputs could not be finalized or rolled back"
+            ) from None
+        raise _error("bundle outputs could not be finalized") from None
+    else:
+        for backup in backups.values():
+            if backup is not None:
+                try:
+                    backup.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 def export_bundle(
@@ -458,6 +851,7 @@ def export_bundle(
     packs: Iterable[str] = (),
     hosts: Iterable[str] | None = None,
     compatibility_path: Path | os.PathLike[str] = COMPATIBILITY_PATH,
+    pack_manifest_path: Path | os.PathLike[str] | None = None,
     source_revision: str | None = None,
     archive_format: str | None = None,
     manifest_path: Path | os.PathLike[str] | None = None,
@@ -475,13 +869,18 @@ def export_bundle(
         hosts: Host IDs to describe in the manifest.  ``None`` includes every
             declared host.
         compatibility_path: Local host/pack declaration file.
+        pack_manifest_path: Optional canonical topical-pack manifest. By
+            default, ``skills_root/packs/manifest.json`` is used when present.
+            Its versioned declarations replace matching compatibility
+            declarations and are embedded in the bundle.
         source_revision: Safe source identifier.  When omitted, the local Git
             ``HEAD`` is resolved without contacting a remote.
         archive_format: ``zip`` or ``tar.gz``.  By default it is inferred from
             the output suffix, falling back to ``zip``.
         manifest_path: Optional sidecar manifest path.
         bundle_name: Stable human-readable bundle identifier.
-        force: Replace existing archive and manifest paths atomically.
+        force: Replace existing regular archive and manifest files, restoring
+            both prior outputs if finalization fails.
 
     Returns:
         An :class:`ExportResult` containing both output checksums.
@@ -494,16 +893,29 @@ def export_bundle(
     sidecar_path = (
         Path(manifest_path) if manifest_path else _default_manifest_path(output_path)
     )
-    if output_path == sidecar_path:
-        raise _error("archive and manifest paths must be different")
     if not bundle_name or not _BUNDLE_NAME_RE.fullmatch(bundle_name):
         raise _error("bundle name must be a non-empty safe identifier")
 
-    if not force and (_path_exists(output_path) or _path_exists(sidecar_path)):
-        raise _error("refusing to overwrite an existing bundle; pass force=True")
-
     skills_root_path = Path(skills_root)
-    compatibility = load_compatibility(compatibility_path)
+    compatibility_file = Path(compatibility_path)
+    _validate_output_locations(
+        output_path,
+        sidecar_path,
+        skills_root=skills_root_path,
+        compatibility_path=compatibility_file,
+        force=force,
+    )
+    compatibility = load_compatibility(compatibility_file)
+    pack_manifest_bytes: bytes | None = None
+    pack_manifest_file = (
+        Path(pack_manifest_path)
+        if pack_manifest_path is not None
+        else skills_root_path / "packs" / "manifest.json"
+    )
+    if pack_manifest_file.is_symlink() or pack_manifest_file.exists():
+        pack_payload, canonical_packs = _load_pack_manifest(pack_manifest_file)
+        compatibility = _apply_canonical_packs(compatibility, canonical_packs)
+        pack_manifest_bytes = _canonical_json(pack_payload)
     available = discover_skills(skills_root_path)
     selected_skills, selected_packs = select_skills(
         available,
@@ -518,10 +930,20 @@ def export_bundle(
         else source_revision
     )
     archive_kind = _normalise_archive_format(archive_format, output_path)
+    if hosts is not None:
+        _validate_host_archive_format(selected_hosts, archive_kind)
 
-    skill_members = _collect_skill_files(skills_root_path, selected_skills)
+    tracked_files = _tracked_skill_files(skills_root_path, selected_skills)
+    skill_members = _collect_skill_files(
+        skills_root_path,
+        selected_skills,
+        tracked_files=tracked_files,
+    )
     compatibility_bytes = _canonical_json(compatibility)
-    source_members = [(COMPATIBILITY_NAME, compatibility_bytes), *skill_members]
+    source_members = [(COMPATIBILITY_NAME, compatibility_bytes)]
+    if pack_manifest_bytes is not None:
+        source_members.append((PACK_MANIFEST_NAME, pack_manifest_bytes))
+    source_members.extend(skill_members)
     manifest = build_manifest(
         bundle_name=bundle_name,
         skill_names=selected_skills,
@@ -542,24 +964,38 @@ def export_bundle(
         sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
         raise _error("bundle output directory is not available") from None
+    _validate_output_locations(
+        output_path,
+        sidecar_path,
+        skills_root=skills_root_path,
+        compatibility_path=compatibility_file,
+        force=force,
+    )
 
     archive_temp: Path | None = None
     manifest_temp: Path | None = None
+    archive_sha256: str | None = None
     try:
         archive_temp = _temporary_path(output_path)
         manifest_temp = _temporary_path(sidecar_path)
         _write_archive(archive_temp, archive_members, archive_kind)
         try:
+            archive_sha256 = _sha256_file(archive_temp)
+        except OSError:
+            raise _error("bundle archive could not be read after writing") from None
+        try:
             manifest_temp.write_bytes(manifest_bytes)
         except OSError:
             raise _error("bundle manifest could not be written") from None
-        try:
-            os.replace(archive_temp, output_path)
-            archive_temp = None
-            os.replace(manifest_temp, sidecar_path)
-            manifest_temp = None
-        except OSError:
-            raise _error("bundle outputs could not be finalized") from None
+        _finalize_outputs(
+            archive_temp,
+            output_path,
+            manifest_temp,
+            sidecar_path,
+            force=force,
+        )
+        archive_temp = None
+        manifest_temp = None
     finally:
         for temporary in (archive_temp, manifest_temp):
             if temporary is not None:
@@ -568,10 +1004,11 @@ def export_bundle(
                 except OSError:
                     pass
 
+    assert archive_sha256 is not None
     return ExportResult(
         archive_path=output_path,
         manifest_path=sidecar_path,
-        archive_sha256=_sha256_file(output_path),
+        archive_sha256=archive_sha256,
         manifest_sha256=_sha256(manifest_bytes),
         manifest=manifest,
     )
@@ -584,6 +1021,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, help="sidecar manifest path")
     parser.add_argument("--skills-root", type=Path, default=SKILLS_ROOT)
     parser.add_argument("--compatibility", type=Path, default=COMPATIBILITY_PATH)
+    parser.add_argument("--pack-manifest", type=Path)
     parser.add_argument("--skill", action="append", dest="selected_skills")
     parser.add_argument("--pack", action="append", dest="selected_packs")
     parser.add_argument("--host", action="append", dest="selected_hosts")
@@ -611,6 +1049,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             packs=args.selected_packs or [],
             hosts=args.selected_hosts,
             compatibility_path=args.compatibility,
+            pack_manifest_path=args.pack_manifest,
             source_revision=args.source_revision,
             archive_format=args.archive_format,
             manifest_path=args.manifest,

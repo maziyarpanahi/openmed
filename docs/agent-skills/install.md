@@ -2,8 +2,9 @@
 
 OpenMed skills can be exported as a reproducible archive without cloning or
 downloading anything during the export. The exporter reads the local
-`skills/` directory and `skills/compatibility.json`, then writes a bundle and
-an adjacent manifest.
+`skills/` directory, `skills/compatibility.json`, and the versioned topical-pack
+manifest when present, then writes a bundle and an adjacent manifest. Duplicate
+pack declarations must match the canonical manifest or export fails closed.
 
 ## Create a bundle
 
@@ -11,18 +12,17 @@ Export the complete local catalog as a ZIP archive:
 
 ```bash
 python scripts/skills/export.py \
-  --output openmed-skills.zip \
-  --source-revision "$(git rev-parse HEAD)"
+  --output openmed-skills.zip
 ```
 
 Select individual skills, or use a pack declared in
-[`skills/compatibility.json`](../../skills/compatibility.json):
+[`skills/compatibility.json`](https://github.com/maziyarpanahi/openmed/blob/master/skills/compatibility.json):
 
 ```bash
 python scripts/skills/export.py \
-  --pack starter \
+  --pack privacy \
   --host codex \
-  --output openmed-starter.zip
+  --output openmed-privacy.zip
 
 python scripts/skills/export.py \
   --skill deidentifying-clinical-text \
@@ -41,6 +41,7 @@ The archive contains this stable layout:
 ```text
 manifest.json
 compatibility.json
+skill-packs.json  # present when the canonical pack manifest is available
 skills/<skill-name>/SKILL.md
 skills/<skill-name>/references/...
 ```
@@ -67,16 +68,23 @@ Inspect the manifest before installing. Use an archive tool's no-overwrite
 mode to preserve existing skills:
 
 ```bash
-mkdir -p /tmp/openmed-skill-bundle
-unzip -n openmed-starter.zip -d /tmp/openmed-skill-bundle
+bundle_dir="$(mktemp -d)"
+unzip -n openmed-privacy.zip -d "$bundle_dir"
 mkdir -p ~/.codex/skills
-cp -R -n /tmp/openmed-skill-bundle/skills/. ~/.codex/skills/
+cp -R -n "$bundle_dir/skills/." ~/.codex/skills/
+rm -rf "$bundle_dir"
 ```
 
 The exporter refuses to replace an existing archive or manifest. Pass
-`--force` only when replacing both outputs is intentional; it stages each
-output and finalizes it with an atomic rename. Skill files and symlinks outside
-the selected skill folders are never followed into a bundle.
+`--force` only when replacing both outputs is intentional; it stages each file,
+uses an atomic rename per output, and restores both prior files if finalization
+fails. Output targets must be regular non-symlink files outside the source
+`skills/` tree, and a requested format cannot conflict with the archive suffix.
+Skill source symlinks, hidden paths, non-portable names, unsupported root files,
+and case-folding path collisions are rejected rather than copied. In a Git
+checkout, selected skill files must also be tracked, which prevents a local
+scratch file from entering a bundle accidentally. Source archives without Git
+metadata still use the same bounded skill-directory layout and size limits.
 
 Keep real patient or customer data out of skill files, paths, logs, and
 manifests. Committed examples and tests use synthetic data only.

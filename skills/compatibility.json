@@ -52,43 +52,82 @@
     }
   },
   "packs": {
-    "all": {
-      "description": "Every skill in the local catalog.",
-      "patterns": [
-        "*"
+    "coding": {
+      "version": "1.0.0",
+      "description": "Clinical terminology, coding, normalization, and structured cohort-mapping workflows.",
+      "skills": [
+        "coding-hcc-risk-adjustment",
+        "coding-icd10",
+        "etl-to-omop-cdm",
+        "linking-umls-concepts",
+        "mapping-loinc",
+        "mapping-to-snomed",
+        "normalizing-rxnorm",
+        "parsing-lab-values",
+        "querying-terminology-service"
       ]
     },
-    "interop": {
-      "description": "FHIR and healthcare interoperability workflows.",
+    "evaluation": {
+      "version": "1.0.0",
+      "description": "Offline evaluation, model selection, leakage gates, and quality evidence for OpenMed skills.",
+      "skills": [
+        "auditing-subgroup-fairness",
+        "authoring-model-cards",
+        "benchmark-pii-recall",
+        "benchmarking-clinical-ner",
+        "building-gold-corpus",
+        "evaluating-with-leakage-gates",
+        "gating-deid-leakage",
+        "pick-a-pii-model"
+      ]
+    },
+    "interoperability": {
+      "version": "1.0.0",
+      "description": "Local document intake, FHIR exchange, and standards-based interoperability workflows.",
       "skills": [
         "assembling-fhir-bundles",
+        "bridging-presidio-and-spacy",
         "exporting-bulk-fhir",
         "exporting-to-fhir",
-        "extract-clinical-entities-to-fhir",
+        "extracting-dicom-metadata",
+        "fetching-fhir-resources",
+        "ingesting-clinical-documents",
+        "parsing-ccda-documents",
+        "parsing-hl7v2-messages",
         "scaffolding-smart-on-fhir",
         "validating-us-core"
       ]
     },
     "privacy": {
-      "description": "De-identification, leakage review, and privacy workflows.",
+      "version": "1.0.0",
+      "description": "Privacy-first de-identification, audit, policy, and risk workflows for local clinical data.",
       "skills": [
         "auditing-deid-leakage",
         "auditing-deidentification-runs",
+        "auditing-safe-harbor-checklist",
+        "checking-hipaa-compliance",
+        "configuring-privacy-policies",
         "deidentifying-clinical-text",
-        "enforcing-nophi-logging",
         "extracting-pii-entities",
         "generating-synthetic-surrogates",
-        "reviewing-reidentification-risk"
+        "pseudonymizing-for-gdpr",
+        "reviewing-reidentification-risk",
+        "shifting-clinical-dates"
       ]
     },
-    "starter": {
-      "description": "Core orientation, model selection, extraction, and privacy skills.",
+    "research": {
+      "version": "1.0.0",
+      "description": "Synthetic-data, biomedical research, clinical-trial, and longitudinal analysis workflows.",
       "skills": [
-        "building-with-openmed",
-        "choosing-openmed-models",
-        "deidentifying-clinical-text",
-        "extracting-clinical-entities",
-        "loading-openmed-models"
+        "annotating-variants",
+        "building-patient-timelines",
+        "computing-ecqms",
+        "defining-cohort-phenotypes",
+        "extracting-lab-tables",
+        "generating-synthea-data",
+        "mining-pubmed-literature",
+        "parsing-trial-eligibility",
+        "searching-clinicaltrials"
       ]
     }
   }
