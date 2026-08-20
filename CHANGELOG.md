@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a local-only self-hosted redaction service with explicit text and UTF-8
   file workflows, deterministic offline defaults, counts-only review state,
-  content-free errors, and an accessible aggregate-status page (#2371).
+  loopback Host and request-size guards, content-free errors, and an accessible
+  aggregate-status page (#2371).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).

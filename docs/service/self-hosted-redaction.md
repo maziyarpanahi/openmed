@@ -20,9 +20,24 @@ uv pip install -e ".[service]"
 uvicorn openmed.service.redaction_app:app --host 127.0.0.1 --port 8080
 ```
 
+The app accepts only loopback Host headers and intentionally has no remote
+authentication or TLS surface. Do not bind it to `0.0.0.0`, expose it through a
+reverse proxy, or publish its port. JSON request bodies are rejected before
+parsing when they exceed the configured encoded-byte limit; decoded text and
+file reads have a separate character limit.
+
 The default baseline recognizes common email, phone, date, IP address, SSN,
 name-after-a-label, and record-ID shapes. It is intentionally conservative and
 does not replace a clinical privacy review or a broader locally hosted model.
+Policy names are validated against OpenMed's policy registry and recorded in
+the counts-only review state. The baseline does not by itself implement every
+detector or action in those full policy profiles.
+
+The `method` field supports `mask`, `remove`, `replace`, `hash`,
+`shift_dates`, and `format_preserve`. Date shifting is deterministic for a
+caller-supplied integer seed; non-date identifiers remain masked. Hashing and
+format-preserving output retain linkability or shape information, so use them
+only when that tradeoff is intentional.
 
 ## Redact text
 

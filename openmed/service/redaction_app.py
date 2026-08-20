@@ -18,24 +18,32 @@ import os
 import re
 import tempfile
 import threading
+import unicodedata
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
+from openmed.core.policy import canonical_policy_name
+from openmed.core.safety_sweep import safety_sweep
+
+from .security_headers import DEFAULT_TRUSTED_HOSTS, ErrorEnvelopeTrustedHostMiddleware
 
 try:
-    from pydantic import BaseModel, ConfigDict, Field
+    from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
     _PYDANTIC_V2 = True
 except ImportError:  # pragma: no cover - retained for older service installs
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, Field, StrictInt
 
     ConfigDict = None  # type: ignore[assignment,misc]
     _PYDANTIC_V2 = False
@@ -49,10 +57,16 @@ RedactionMethod = Literal[
 DEFAULT_METHOD: RedactionMethod = "mask"
 MAX_TEXT_CHARS = 4_000_000
 MAX_PATH_CHARS = 4_096
+MAX_REQUEST_BODY_BYTES = MAX_TEXT_CHARS * 12 + 65_536
+MIN_SEED = -(2**63)
+MAX_SEED = 2**63 - 1
 SUPPORTED_METHODS: frozenset[RedactionMethod] = frozenset(
     {"mask", "remove", "replace", "hash", "shift_dates", "format_preserve"}
 )
 _SAFE_POLICY = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
+_SAFE_REQUEST_FIELDS = frozenset(
+    {"text", "input_path", "output_path", "policy", "method", "seed"}
+)
 _SAFE_COUNTER_LABELS = frozenset(CANONICAL_LABELS) | frozenset(
     {"ID", "NAME", "UNKNOWN"}
 )
@@ -64,6 +78,77 @@ class RedactionServiceError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+class _BoundedRequestBodyMiddleware:
+    """Reject oversized HTTP request bodies before JSON parsing allocates them."""
+
+    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("method") not in {
+            "POST",
+            "PUT",
+            "PATCH",
+        }:
+            await self.app(scope, receive, send)
+            return
+
+        content_length = Headers(scope=scope).get("content-length")
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length < 0:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length > self.max_bytes:
+                await _error_response(
+                    413,
+                    "budget_exceeded",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+
+        messages: list[Message] = []
+        received_bytes = 0
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            body = message.get("body", b"")
+            received_bytes += len(body)
+            if received_bytes > self.max_bytes:
+                await _error_response(
+                    413,
+                    "budget_exceeded",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        async def replay() -> Message:
+            if messages:
+                return messages.pop(0)
+            return await receive()
+
+        await self.app(scope, replay, send)
 
 
 class _RequestModel(BaseModel):
@@ -84,7 +169,7 @@ class TextRedactionRequest(_RequestModel):
     output_path: str | None = Field(default=None, max_length=MAX_PATH_CHARS)
     policy: str = Field(default=DEFAULT_POLICY, max_length=64)
     method: str = Field(default=DEFAULT_METHOD, max_length=32)
-    seed: int = 0
+    seed: StrictInt = 0
 
 
 class FileRedactionRequest(_RequestModel):
@@ -94,7 +179,7 @@ class FileRedactionRequest(_RequestModel):
     output_path: str = Field(..., max_length=MAX_PATH_CHARS)
     policy: str = Field(default=DEFAULT_POLICY, max_length=64)
     method: str = Field(default=DEFAULT_METHOD, max_length=32)
-    seed: int = 0
+    seed: StrictInt = 0
 
 
 class RedactionRequest(_RequestModel):
@@ -105,7 +190,7 @@ class RedactionRequest(_RequestModel):
     output_path: str | None = Field(default=None, max_length=MAX_PATH_CHARS)
     policy: str = Field(default=DEFAULT_POLICY, max_length=64)
     method: str = Field(default=DEFAULT_METHOD, max_length=32)
-    seed: int = 0
+    seed: StrictInt = 0
 
 
 @dataclass(frozen=True, repr=False)
@@ -177,6 +262,9 @@ class _ArtifactResult:
     result: RedactionResult
     artifact_status: str
     artifact_sha256: str | None
+    policy: str
+    method: RedactionMethod
+    kind: Literal["text", "file"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,6 +321,9 @@ def _normalize_label(value: Any) -> str:
     normalized = normalized.strip("_")[:64]
     if normalized in _SAFE_COUNTER_LABELS:
         return normalized
+    canonical = normalize_label(normalized)
+    if canonical != "OTHER" and canonical in _SAFE_COUNTER_LABELS:
+        return canonical
     return "UNKNOWN"
 
 
@@ -339,6 +430,19 @@ def _find_local_spans(text: str) -> list[_Span]:
         ("DATE", _DATE_PATTERN, 50),
     )
     candidates: list[_Span] = []
+    try:
+        sweep_entities = safety_sweep(text, [])
+    except Exception:
+        raise RedactionServiceError("redaction_failed") from None
+    for entity in sweep_entities:
+        try:
+            start = entity.start
+            end = entity.end
+            label = _normalize_label(_entity_label(entity))
+        except Exception:
+            continue
+        if type(start) is int and type(end) is int and 0 <= start < end <= len(text):
+            candidates.append(_Span(start, end, label, 0))
     for label, pattern, priority in patterns:
         candidates.extend(
             _Span(match.start(), match.end(), label, priority)
@@ -367,13 +471,57 @@ def _find_local_spans(text: str) -> list[_Span]:
     return sorted(selected, key=lambda item: item.start)
 
 
+def _format_preserving_placeholder(source: str) -> str:
+    placeholder: list[str] = []
+    for character in source:
+        category = unicodedata.category(character)
+        if character.isdigit() or category.startswith("N"):
+            placeholder.append("0")
+        elif character.isupper():
+            placeholder.append("X")
+        elif character.islower():
+            placeholder.append("x")
+        elif character.isalpha() or category.startswith(("L", "M")):
+            placeholder.append("x")
+        else:
+            placeholder.append(character)
+    return "".join(placeholder)
+
+
+def _shift_date(source: str, seed: int) -> str | None:
+    formats = (
+        "%m/%d/%Y",
+        "%m/%d/%y",
+        "%Y/%m/%d",
+        "%m-%d-%Y",
+        "%m-%d-%y",
+        "%Y-%m-%d",
+    )
+    digest = hashlib.sha256(f"openmed-local-date-shift:{seed}".encode()).digest()
+    bucket = int.from_bytes(digest[:8], "big") % 730
+    offset = bucket - 365 if bucket < 365 else bucket - 364
+    for date_format in formats:
+        try:
+            parsed = datetime.strptime(source, date_format)
+        except ValueError:
+            continue
+        return (parsed + timedelta(days=offset)).strftime(date_format)
+    return None
+
+
 def _replacement_for(label: str, source: str, method: str, seed: int) -> str:
     if method == "remove":
         return ""
+    if method == "replace":
+        return "[REDACTED]"
     if method == "hash":
         material = f"{seed}:{label}:{source}".encode("utf-8")
         digest = hashlib.sha256(material).hexdigest()[:12]
         return f"[{label}_{digest}]"
+    if method == "format_preserve":
+        return _format_preserving_placeholder(source)
+    if method == "shift_dates" and label in {"DATE", "DATE_OF_BIRTH"}:
+        return _shift_date(source, seed) or f"[{label}]"
     return f"[{label}]"
 
 
@@ -396,8 +544,7 @@ def local_redactor(
         raise RedactionServiceError("invalid_input")
     _validate_policy(policy)
     normalized_method = _validate_method(method)
-    if type(seed) is not int:
-        raise RedactionServiceError("redaction_failed")
+    seed = _validate_seed(seed)
     text = normalized_text
     spans = _find_local_spans(text)
     pieces: list[str] = []
@@ -460,7 +607,10 @@ def _validate_policy(value: str) -> str:
     normalized = plain.strip().lower() if plain is not None else ""
     if not _SAFE_POLICY.fullmatch(normalized):
         raise RedactionServiceError("invalid_policy")
-    return normalized
+    try:
+        return canonical_policy_name(normalized)
+    except (TypeError, ValueError):
+        raise RedactionServiceError("invalid_policy") from None
 
 
 def _validate_method(value: str) -> RedactionMethod:
@@ -469,6 +619,12 @@ def _validate_method(value: str) -> RedactionMethod:
     if normalized not in SUPPORTED_METHODS:
         raise RedactionServiceError("invalid_method")
     return cast(RedactionMethod, normalized)
+
+
+def _validate_seed(value: int) -> int:
+    if type(value) is not int or not MIN_SEED <= value <= MAX_SEED:
+        raise RedactionServiceError("invalid_seed")
+    return value
 
 
 def _resolve_path(value: str) -> Path:
@@ -548,9 +704,11 @@ class RedactionService:
         self._max_input_characters = max_input_characters
         self._lock = threading.Lock()
         self._state = _ReviewState()
+        self._operation_generation = 0
 
-    def _set_processing(self, policy: str, method: str, kind: str) -> None:
+    def _set_processing(self, policy: str, method: str, kind: str) -> int:
         with self._lock:
+            self._operation_generation += 1
             self._state = _ReviewState(
                 status="processing",
                 policy=policy,
@@ -558,9 +716,18 @@ class RedactionService:
                 kind=kind,
                 artifact_status="pending",
             )
+            return self._operation_generation
 
-    def _set_failed(self, policy: str, method: str, kind: str) -> None:
+    def _set_failed(
+        self,
+        operation_generation: int,
+        policy: str,
+        method: str,
+        kind: str,
+    ) -> None:
         with self._lock:
+            if operation_generation != self._operation_generation:
+                return
             self._state = _ReviewState(
                 status="failed",
                 policy=policy,
@@ -571,6 +738,7 @@ class RedactionService:
 
     def _set_completed(
         self,
+        operation_generation: int,
         policy: str,
         method: str,
         kind: str,
@@ -578,6 +746,8 @@ class RedactionService:
         artifact_status: str,
     ) -> None:
         with self._lock:
+            if operation_generation != self._operation_generation:
+                return
             self._state = _ReviewState(
                 status="completed",
                 policy=policy,
@@ -643,7 +813,12 @@ class RedactionService:
     ) -> _ArtifactResult:
         normalized_policy = _validate_policy(policy)
         normalized_method = _validate_method(method)
-        self._set_processing(normalized_policy, normalized_method, "text")
+        seed = _validate_seed(seed)
+        operation_generation = self._set_processing(
+            normalized_policy,
+            normalized_method,
+            "text",
+        )
         try:
             text = self._validate_text(text)
             result = self._run_redactor(
@@ -660,19 +835,37 @@ class RedactionService:
                 digest = _write_artifact(destination, result.redacted_text)
                 artifact_status = "written"
         except RedactionServiceError:
-            self._set_failed(normalized_policy, normalized_method, "text")
+            self._set_failed(
+                operation_generation,
+                normalized_policy,
+                normalized_method,
+                "text",
+            )
             raise
         except Exception:
-            self._set_failed(normalized_policy, normalized_method, "text")
+            self._set_failed(
+                operation_generation,
+                normalized_policy,
+                normalized_method,
+                "text",
+            )
             raise RedactionServiceError("redaction_failed") from None
         self._set_completed(
+            operation_generation,
             normalized_policy,
             normalized_method,
             "text",
             result,
             artifact_status,
         )
-        return _ArtifactResult(result, artifact_status, digest)
+        return _ArtifactResult(
+            result,
+            artifact_status,
+            digest,
+            normalized_policy,
+            normalized_method,
+            "text",
+        )
 
     def process_file(
         self,
@@ -685,7 +878,12 @@ class RedactionService:
     ) -> _ArtifactResult:
         normalized_policy = _validate_policy(policy)
         normalized_method = _validate_method(method)
-        self._set_processing(normalized_policy, normalized_method, "file")
+        seed = _validate_seed(seed)
+        operation_generation = self._set_processing(
+            normalized_policy,
+            normalized_method,
+            "file",
+        )
         try:
             source = _resolve_path(input_path)
             destination = _resolve_path(output_path)
@@ -703,19 +901,37 @@ class RedactionService:
             )
             digest = _write_artifact(destination, result.redacted_text)
         except RedactionServiceError:
-            self._set_failed(normalized_policy, normalized_method, "file")
+            self._set_failed(
+                operation_generation,
+                normalized_policy,
+                normalized_method,
+                "file",
+            )
             raise
         except Exception:
-            self._set_failed(normalized_policy, normalized_method, "file")
+            self._set_failed(
+                operation_generation,
+                normalized_policy,
+                normalized_method,
+                "file",
+            )
             raise RedactionServiceError("redaction_failed") from None
         self._set_completed(
+            operation_generation,
             normalized_policy,
             normalized_method,
             "file",
             result,
             "written",
         )
-        return _ArtifactResult(result, "written", digest)
+        return _ArtifactResult(
+            result,
+            "written",
+            digest,
+            normalized_policy,
+            normalized_method,
+            "file",
+        )
 
     def snapshot(self) -> dict[str, Any]:
         """Return aggregate state safe for JSON and HTML rendering."""
@@ -725,19 +941,24 @@ class RedactionService:
 
 
 _ERROR_DETAILS: dict[str, tuple[int, str, str]] = {
-    "invalid_input": (400, "invalid_input", "Input text is invalid"),
-    "input_too_large": (413, "input_too_large", "Input exceeds the configured limit"),
-    "invalid_path": (400, "invalid_path", "A file path is invalid"),
-    "input_output_same": (400, "input_output_same", "Input and output must differ"),
-    "input_unavailable": (400, "input_unavailable", "Input artifact is unavailable"),
+    "invalid_input": (400, "bad_request", "Input text is invalid"),
+    "input_too_large": (
+        413,
+        "budget_exceeded",
+        "Input exceeds the configured limit",
+    ),
+    "invalid_path": (400, "bad_request", "A file path is invalid"),
+    "input_output_same": (400, "bad_request", "Input and output must differ"),
+    "input_unavailable": (400, "bad_request", "Input artifact is unavailable"),
     "output_unavailable": (
         500,
-        "output_unavailable",
+        "internal_error",
         "Output artifact could not be written",
     ),
-    "invalid_policy": (422, "invalid_policy", "Policy is invalid"),
-    "invalid_method": (422, "invalid_method", "Redaction method is invalid"),
-    "redaction_failed": (500, "redaction_failed", "Redaction failed"),
+    "invalid_policy": (422, "validation_error", "Policy is invalid"),
+    "invalid_method": (422, "validation_error", "Redaction method is invalid"),
+    "invalid_seed": (422, "validation_error", "Seed is invalid"),
+    "redaction_failed": (500, "internal_error", "Redaction failed"),
 }
 
 
@@ -763,9 +984,14 @@ def _validation_response(exc: RequestValidationError) -> JSONResponse:
     for error in exc.errors():
         location = error.get("loc", ("body",))
         if isinstance(location, (list, tuple)):
-            parts = [str(part) for part in location if part != "body"]
-            if all(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*|\d+", part) for part in parts):
-                field_name = ".".join(parts)
+            parts = [part for part in location if part != "body"]
+            if all(
+                (isinstance(part, str) and part in _SAFE_REQUEST_FIELDS)
+                or (type(part) is int and part >= 0)
+                for part in parts
+            ):
+                safe_parts = [str(part) for part in parts]
+                field_name = ".".join(safe_parts)
             else:
                 field_name = "body"
         else:
@@ -786,18 +1012,15 @@ def _validation_response(exc: RequestValidationError) -> JSONResponse:
 def _operation_payload(
     operation: _ArtifactResult,
     *,
-    policy: str,
-    method: str,
-    kind: str,
     include_text: bool,
 ) -> dict[str, Any]:
     result = operation.result
     payload: dict[str, Any] = {
         "status": "completed",
         "summary": {
-            "policy": policy,
-            "method": method,
-            "kind": kind,
+            "policy": operation.policy,
+            "method": operation.method,
+            "kind": operation.kind,
             "input_characters": result.input_characters,
             "output_characters": len(result.redacted_text),
             "counts": {
@@ -807,7 +1030,7 @@ def _operation_payload(
         },
         "artifact": {
             "status": operation.artifact_status,
-            "kind": kind,
+            "kind": operation.kind,
             "sha256": operation.artifact_sha256,
         },
     }
@@ -882,6 +1105,7 @@ def create_app(
     redactor: Callable[..., Any] | None = None,
     local_model_path: str | Path | None = None,
     max_input_characters: int = MAX_TEXT_CHARS,
+    max_request_body_bytes: int = MAX_REQUEST_BODY_BYTES,
 ) -> FastAPI:
     """Create the local redaction app without starting any network client.
 
@@ -893,10 +1117,14 @@ def create_app(
         local_model_path: Optional path to an already-provisioned local model.
             This is mutually exclusive with ``redactor``.
         max_input_characters: Maximum text size accepted by both endpoints.
+        max_request_body_bytes: Maximum encoded request body size accepted
+            before JSON parsing.
     """
 
     if redactor is not None and local_model_path is not None:
         raise ValueError("redactor and local_model_path are mutually exclusive")
+    if type(max_request_body_bytes) is not int or max_request_body_bytes < 1:
+        raise ValueError("max_request_body_bytes must be positive")
     selected_redactor = redactor
     if local_model_path is not None:
         selected_redactor = local_model_redactor(local_model_path)
@@ -911,6 +1139,15 @@ def create_app(
         description="Local-only text and explicit file redaction.",
         docs_url=None,
         redoc_url=None,
+    )
+    app.add_middleware(
+        _BoundedRequestBodyMiddleware,
+        max_bytes=max_request_body_bytes,
+    )
+    app.add_middleware(
+        ErrorEnvelopeTrustedHostMiddleware,
+        allowed_hosts=DEFAULT_TRUSTED_HOSTS,
+        www_redirect=False,
     )
     app.state.redaction_service = service
 
@@ -952,9 +1189,6 @@ def create_app(
             return _service_error_response(exc)
         return _operation_payload(
             operation,
-            policy=payload.policy.strip().lower(),
-            method=payload.method.strip().lower(),
-            kind="text",
             include_text=True,
         )
 
@@ -972,9 +1206,6 @@ def create_app(
             return _service_error_response(exc)
         return _operation_payload(
             operation,
-            policy=payload.policy.strip().lower(),
-            method=payload.method.strip().lower(),
-            kind="file",
             include_text=False,
         )
 
@@ -983,7 +1214,7 @@ def create_app(
         if payload.text is not None and payload.input_path is not None:
             return _error_response(
                 400,
-                "ambiguous_input",
+                "bad_request",
                 "Provide text or input_path, not both",
             )
         if payload.text is not None:
@@ -999,15 +1230,12 @@ def create_app(
                 return _service_error_response(exc)
             return _operation_payload(
                 operation,
-                policy=payload.policy.strip().lower(),
-                method=payload.method.strip().lower(),
-                kind="text",
                 include_text=True,
             )
         if payload.input_path is None or payload.output_path is None:
             return _error_response(
                 400,
-                "explicit_locations_required",
+                "bad_request",
                 "File redaction requires input_path and output_path",
             )
         try:
@@ -1022,9 +1250,6 @@ def create_app(
             return _service_error_response(exc)
         return _operation_payload(
             operation,
-            policy=payload.policy.strip().lower(),
-            method=payload.method.strip().lower(),
-            kind="file",
             include_text=False,
         )
 
