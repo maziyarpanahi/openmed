@@ -174,6 +174,28 @@ def test_redactor_errors_do_not_include_source_values() -> None:
     assert "SYNTHETIC_SECRET_VALUE" not in str(caught.value)
 
 
+def test_string_subclass_callback_result_is_normalized_before_comparison() -> None:
+    sensitive = "SYNTHETIC_PRIVATE_COMPARISON"
+
+    class HostileString(str):
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(sensitive)
+
+        def encode(self, *args: object, **kwargs: object) -> bytes:
+            del args, kwargs
+            raise RuntimeError(sensitive)
+
+    batch = pa.record_batch({"text": ["SYNTHETIC_VALUE"]})
+    adapted = redact_record_batch(
+        batch,
+        text_columns=["text"],
+        text_redactor=lambda _value: HostileString("MASKED_VALUE"),
+    )
+
+    assert adapted.column("text").to_pylist() == ["MASKED_VALUE"]
+
+
 def test_schema_adapter_reuses_configuration() -> None:
     adapter = ColumnarTraceSchemaAdapter(
         ["payload.message"],

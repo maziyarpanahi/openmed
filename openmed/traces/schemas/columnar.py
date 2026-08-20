@@ -526,8 +526,14 @@ def _rewrite_text_array(array: Any, text_redactor: TextRedactor, pyarrow: Any) -
             ) from None
         if not isinstance(replacement, str):
             raise ColumnarTraceAdapterError("The text redactor must return a string")
-        rewritten.append(replacement)
-        changed = changed or replacement != value
+        try:
+            normalized_replacement = str.encode(replacement, "utf-8").decode("utf-8")
+        except Exception:
+            raise ColumnarTraceAdapterError(
+                "The text replacement could not be normalized safely"
+            ) from None
+        rewritten.append(normalized_replacement)
+        changed = changed or normalized_replacement != value
 
     if not changed:
         return array
