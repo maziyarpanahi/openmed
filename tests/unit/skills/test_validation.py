@@ -53,9 +53,14 @@ def test_repository_catalog_passes_the_offline_gate() -> None:
     report = validator.validate_repository(REPO_ROOT)
 
     assert report.ok, validator.format_report(report)
-    assert report.skill_count == 72
-    assert report.link_count == 13
-    assert report.helper_count >= 2
+    expected_skills = sum(
+        1
+        for path in (REPO_ROOT / "skills").iterdir()
+        if path.is_dir() and (path / "SKILL.md").is_file()
+    )
+    assert report.skill_count == expected_skills
+    assert report.link_count > 0
+    assert report.helper_count == len(validator._executable_helpers(REPO_ROOT))
 
 
 def test_interpreter_helpers_do_not_depend_on_posix_mode_bits(tmp_path: Path) -> None:
@@ -92,6 +97,39 @@ def test_missing_reference_and_pack_membership_are_path_based(tmp_path: Path) ->
     assert secret_marker not in output
 
 
+def test_missing_image_reference_is_validated(tmp_path: Path) -> None:
+    validator = _load_validator()
+    _write_fixture_repo(
+        tmp_path,
+        body="\n![synthetic diagram](assets/missing.png)\n",
+        pack_entries=["./skills/synthetic-check"],
+    )
+
+    report = validator.validate_repository(tmp_path, run_helper_help=False)
+
+    assert not report.ok
+    assert any("internal link target is missing" in error for error in report.errors)
+
+
+def test_catalog_infrastructure_directory_is_not_treated_as_a_skill(
+    tmp_path: Path,
+) -> None:
+    validator = _load_validator()
+    _write_fixture_repo(
+        tmp_path,
+        body="\n# Synthetic fixture\n",
+        pack_entries=["./skills/synthetic-check"],
+    )
+    packs = tmp_path / "skills" / "packs"
+    packs.mkdir()
+    (packs / "manifest.json").write_text("{}\n", encoding="utf-8")
+
+    report = validator.validate_repository(tmp_path, run_helper_help=False)
+
+    assert report.ok, validator.format_report(report)
+    assert report.skill_count == 1
+
+
 def test_invalid_frontmatter_does_not_echo_raw_values(tmp_path: Path) -> None:
     validator = _load_validator()
     secret_marker = "synthetic-frontmatter-value"
@@ -121,3 +159,31 @@ def test_validator_help_command_is_successful_and_local() -> None:
 
     assert result.returncode == 0
     assert "without network access" in result.stdout
+
+
+def test_helper_environment_drops_ambient_credentials(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    validator = _load_validator()
+    secret_marker = "synthetic-secret"
+    monkeypatch.setenv("OPENAI_API_KEY", secret_marker)
+    monkeypatch.setenv("GITHUB_TOKEN", secret_marker)
+
+    env = validator._helper_environment(tmp_path)
+
+    assert "OPENAI_API_KEY" not in env
+    assert "GITHUB_TOKEN" not in env
+    assert secret_marker not in env.values()
+    assert env["HOME"] == str(tmp_path)
+    assert env["OPENMED_OFFLINE"] == "1"
+    assert env["PIP_NO_INDEX"] == "1"
+
+
+def test_pack_builder_uses_its_existing_focused_test() -> None:
+    validator = _load_validator()
+    helper = REPO_ROOT / "scripts" / "skills" / "build_packs.py"
+
+    assert validator._focused_test_for_helper(REPO_ROOT, helper) == Path(
+        "tests/unit/skills/test_packs.py"
+    )

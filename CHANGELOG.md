@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline Agent Skills validation gate for frontmatter,
+  identifiers, local references, pack membership, and executable-helper help
+  and test contracts, with path-only diagnostics and a dedicated CI workflow
+  (#2306).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine

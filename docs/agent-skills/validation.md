@@ -18,11 +18,13 @@ It checks:
 - membership of every `skills/<name>` directory in the committed
   `.claude-plugin/marketplace.json` pack, with no duplicate or unknown entries;
 - the `--help` exit status of executable helpers under `skills/` and
-  `scripts/skills/` with offline environment flags enabled.
+  `scripts/skills/` with a temporary home, offline environment flags, proxy
+  blocking, discarded output, and no ambient credential variables.
 
 Failures contain only a repository path, an optional line number, and a fixed
 diagnostic. Skill bodies, parser details, and helper output are intentionally
-not included in logs.
+not included in logs. Symlinked helpers and skill directories are rejected
+rather than followed.
 
 Every executable helper added to the skill workflow must have a successful,
 offline `--help` command and a focused test. The focused gate is

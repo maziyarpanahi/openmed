@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 from urllib.parse import unquote, urlsplit
@@ -27,14 +28,31 @@ HELPER_ROOTS = (Path("skills"), Path("scripts") / "skills")
 FOCUSED_TEST_PATH = Path("tests/unit/skills/test_validation.py")
 HELPER_TEST_OVERRIDES = {
     Path("skills") / "build_catalog.py": Path("tests/unit/test_skills_catalog.py"),
+    Path("scripts") / "skills" / "build_packs.py": Path(
+        "tests/unit/skills/test_packs.py"
+    ),
     Path("scripts") / "skills" / "validate.py": FOCUSED_TEST_PATH,
 }
 INTERPRETER_HELPER_SUFFIXES = frozenset({".py", ".sh"})
+CATALOG_HELPER_DIRS = frozenset({"packs"})
+HELP_ENV_PASSTHROUGH = frozenset(
+    {
+        "COMSPEC",
+        "LANG",
+        "LC_ALL",
+        "PATH",
+        "PATHEXT",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "WINDIR",
+    }
+)
 
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-INLINE_LINK_RE = re.compile(
-    r"(?<!!)\[[^\]\n]+\]\(\s*(?P<target><[^>\n]*>|[^)\n]+?)\s*\)"
-)
+INLINE_LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*(?P<target><[^>\n]*>|[^)\n]+?)\s*\)")
 REFERENCE_LINK_RE = re.compile(
     r"(?m)^\s{0,3}\[[^\]\n]+\]:\s*(?P<target><[^>\n]*>|[^ \t\n]+)"
 )
@@ -165,7 +183,7 @@ def _validate_frontmatter(
     if metadata is _YAML_UNAVAILABLE:
         _add_error(report, repo_root, path, "YAML parser is unavailable")
         return None
-    if metadata is None:
+    if not isinstance(metadata, dict):
         _add_error(report, repo_root, path, "frontmatter is not valid YAML")
         return None
 
@@ -354,8 +372,13 @@ def _validate_pack_membership(
     """Ensure the marketplace pack contains each catalog skill exactly once."""
 
     marketplace = repo_root / MARKETPLACE_PATH
-    if not marketplace.is_file():
-        _add_error(report, repo_root, marketplace, "skill pack manifest is missing")
+    if marketplace.is_symlink() or not marketplace.is_file():
+        _add_error(
+            report,
+            repo_root,
+            marketplace,
+            "skill pack manifest is missing or invalid",
+        )
         return
 
     try:
@@ -422,7 +445,10 @@ def _helper_command(path: Path) -> list[str]:
     return [str(path), "--help"]
 
 
-def _executable_helpers(repo_root: Path) -> list[Path]:
+def _executable_helpers(
+    repo_root: Path,
+    report: ValidationReport | None = None,
+) -> list[Path]:
     """Find executable helper files in the skill-owned directories."""
 
     helpers: list[Path] = []
@@ -431,12 +457,62 @@ def _executable_helpers(repo_root: Path) -> list[Path]:
         if not root.is_dir():
             continue
         for path in sorted(root.rglob("*")):
-            if path.is_file() and (
-                path.stat().st_mode & 0o111
-                or path.suffix.lower() in INTERPRETER_HELPER_SUFFIXES
+            if path.is_symlink():
+                if path.suffix.lower() in INTERPRETER_HELPER_SUFFIXES and report:
+                    _add_error(
+                        report,
+                        repo_root,
+                        path,
+                        "executable helper must not be a symlink",
+                    )
+                continue
+            try:
+                is_file = path.is_file()
+                executable = is_file and bool(path.stat().st_mode & 0o111)
+            except OSError:
+                if report:
+                    _add_error(
+                        report,
+                        repo_root,
+                        path,
+                        "helper path cannot be inspected",
+                    )
+                continue
+            if is_file and (
+                executable or path.suffix.lower() in INTERPRETER_HELPER_SUFFIXES
             ):
                 helpers.append(path)
     return helpers
+
+
+def _helper_environment(scratch_home: Path) -> dict[str, str]:
+    """Build a minimal helper environment without ambient credentials."""
+
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() in HELP_ENV_PASSTHROUGH
+    }
+    env.update(
+        {
+            "ALL_PROXY": "http://127.0.0.1:9",
+            "HF_HUB_OFFLINE": "1",
+            "HOME": str(scratch_home),
+            "HTTPS_PROXY": "http://127.0.0.1:9",
+            "HTTP_PROXY": "http://127.0.0.1:9",
+            "NO_PROXY": "localhost,127.0.0.1,::1",
+            "OPENMED_OFFLINE": "1",
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+            "PIP_NO_INDEX": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONHASHSEED": "0",
+            "PYTHONNOUSERSITE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+            "USERPROFILE": str(scratch_home),
+            "UV_OFFLINE": "1",
+        }
+    )
+    return env
 
 
 def _validate_helper_help(
@@ -446,27 +522,18 @@ def _validate_helper_help(
 ) -> None:
     """Run a helper's help command with local-only environment flags."""
 
-    env = os.environ.copy()
-    env.update(
-        {
-            "OPENMED_OFFLINE": "1",
-            "HF_HUB_OFFLINE": "1",
-            "TRANSFORMERS_OFFLINE": "1",
-            "PYTHONHASHSEED": "0",
-        }
-    )
     try:
-        result = subprocess.run(
-            _helper_command(path),
-            cwd=repo_root,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-            timeout=HELP_TIMEOUT_SECONDS,
-        )
+        with tempfile.TemporaryDirectory(prefix="openmed-skill-help-") as scratch:
+            result = subprocess.run(
+                _helper_command(path),
+                cwd=repo_root,
+                env=_helper_environment(Path(scratch)),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=HELP_TIMEOUT_SECONDS,
+            )
     except subprocess.TimeoutExpired:
         _add_error(report, repo_root, path, "--help command timed out")
         return
@@ -538,11 +605,23 @@ def validate_repository(
         _add_error(report, root, skills_root, "skills directory is missing")
     else:
         children = sorted(
-            (path for path in skills_root.iterdir() if path.is_dir()),
+            (
+                path
+                for path in skills_root.iterdir()
+                if path.is_dir() or path.is_symlink()
+            ),
             key=lambda path: path.name,
         )
         for child in children:
-            if child.name.startswith((".", "_")):
+            if child.name.startswith((".", "_")) or child.name in CATALOG_HELPER_DIRS:
+                continue
+            if child.is_symlink():
+                _add_error(
+                    report,
+                    root,
+                    child / "SKILL.md",
+                    "skill directory must not be a symlink",
+                )
                 continue
             skill_names.add(child.name)
             skill_path = child / "SKILL.md"
@@ -561,12 +640,12 @@ def validate_repository(
 
     _validate_pack_membership(root, skill_names, report)
 
-    helpers = _executable_helpers(root)
+    helpers = _executable_helpers(root, report)
     report.helper_count = len(helpers)
-    if run_helper_help:
-        for helper in helpers:
+    for helper in helpers:
+        if run_helper_help:
             _validate_helper_help(helper, report, root)
-            _validate_helper_test(helper, report, root)
+        _validate_helper_test(helper, report, root)
 
     report.errors = sorted(set(report.errors))
     return report
