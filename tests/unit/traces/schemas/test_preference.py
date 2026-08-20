@@ -9,9 +9,21 @@ import pytest
 from openmed.traces.schemas.preference import (
     PreferencePair,
     PreferencePairAdapter,
+    PreferenceRedactionReport,
+    PreferenceRedactionState,
     PreferenceSchemaError,
     SensitiveSpan,
 )
+
+
+def test_span_repr_and_direct_report_do_not_expose_caller_metadata() -> None:
+    sensitive = "PatientJaneDoe"
+    span = SensitiveSpan(0, 4, sensitive)
+
+    assert sensitive not in repr(span)
+    with pytest.raises(PreferenceSchemaError) as caught:
+        PreferenceRedactionReport(schema_version=sensitive)
+    assert sensitive not in str(caught.value)
 
 
 def test_redacts_three_branches_with_one_shared_pseudonym_state():
@@ -128,3 +140,28 @@ def test_invalid_pair_errors_do_not_echo_content():
 
     assert secret not in str(exc_info.value)
     assert "rejected" in str(exc_info.value)
+
+
+def test_label_normalization_failure_does_not_echo_the_label(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import openmed.core.labels as labels
+
+    sensitive_label = "PatientJaneDoe"
+
+    def fail_normalization(label: str, lang: str) -> str:
+        del label, lang
+        raise RuntimeError("synthetic normalization failure")
+
+    class EchoAnonymizer:
+        def surrogate(self, value: str, label: str, **kwargs: object) -> str:
+            del label, kwargs
+            return value
+
+    monkeypatch.setattr(labels, "normalize_label", fail_normalization)
+    state = PreferenceRedactionState(anonymizer=EchoAnonymizer())
+
+    pseudonym = state.pseudonym("synthetic secret", sensitive_label)
+
+    assert sensitive_label.casefold() not in pseudonym.casefold()
+    assert pseudonym.startswith("[other-")

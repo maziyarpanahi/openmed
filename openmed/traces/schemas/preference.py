@@ -95,7 +95,7 @@ class SensitiveSpan:
 
     start: int
     end: int
-    label: str
+    label: str = field(repr=False)
 
     def __post_init__(self) -> None:
         if isinstance(self.start, bool) or not isinstance(self.start, int):
@@ -170,8 +170,11 @@ class PreferenceRedactionState:
         if existing is not None:
             return existing
 
+        anonymizer = self.anonymizer
+        if anonymizer is None:  # pragma: no cover - guarded by __post_init__
+            raise PreferenceRedactionError("local pseudonym generation failed")
         try:
-            candidate = self.anonymizer.surrogate(
+            candidate = anonymizer.surrogate(
                 value,
                 canonical_label,
                 lang=self.lang,
@@ -243,6 +246,23 @@ class PreferenceRedactionReport:
     replacement_count: int = 0
     branches_visited: int = len(CONTENT_FIELDS)
     schema_version: str = PREFERENCE_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        for name in (
+            "text_nodes_seen",
+            "text_nodes_changed",
+            "replacement_count",
+            "branches_visited",
+        ):
+            value = getattr(self, name)
+            if type(value) is not int or value < 0:
+                raise PreferenceSchemaError(
+                    "preference redaction report counts must be non-negative integers"
+                )
+        if self.schema_version != PREFERENCE_SCHEMA_VERSION:
+            raise PreferenceSchemaError(
+                "preference redaction report version is invalid"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready report containing no source surfaces."""
@@ -629,7 +649,7 @@ def _canonical_label(label: str, *, lang: str) -> str:
 
         return normalize_label(label, lang)
     except Exception:
-        return label.strip().upper().replace("-", "_").replace(" ", "_")
+        return "OTHER"
 
 
 def _normalize_spans(spans: Iterable[Any], text: str) -> tuple[SensitiveSpan, ...]:
@@ -847,21 +867,22 @@ def _detect_sensitive_spans(
         for match in pattern.finditer(text):
             if group_name is None:
                 start, end = match.span()
+                matched_text = match.group(0)
             else:
                 start, end = match.span(group_name)
-            if (
-                label == "PERSON"
-                and match.group(group_name) in _COMMON_NAME_FALSE_POSITIVES
-            ):
+                matched_text = match.group(group_name)
+            if label == "PERSON" and matched_text in _COMMON_NAME_FALSE_POSITIVES:
                 continue
             candidates.append((start, end, label))
 
     candidates.sort(key=lambda item: (item[0], -(item[1] - item[0]), item[2]))
     accepted: list[SensitiveSpan] = []
+    accepted_end = -1
     for start, end, label in candidates:
-        if any(start < existing.end and existing.start < end for existing in accepted):
+        if start < accepted_end:
             continue
         accepted.append(SensitiveSpan(start=start, end=end, label=label))
+        accepted_end = end
     accepted.sort(key=lambda span: span.start)
     return tuple(accepted)
 

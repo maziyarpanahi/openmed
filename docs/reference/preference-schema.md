@@ -52,6 +52,7 @@ adapter = PreferencePairAdapter(span_detector=detector, seed=17)
 A `text_redactor` may accept either `text` or `text, state`. The latter form
 can call `state.redact_spans(...)` to reuse the adapter’s pseudonym state.
 Reports contain only schema versions and aggregate counts; source surfaces are
-not copied into logs, exceptions, or reports. Metadata is intentionally
-preserved as non-content data, so callers should keep metadata itself free of
-raw sensitive values.
+not copied into logs, exceptions, reports, or span representations. Directly
+constructed reports also reject noncanonical schema versions. Metadata is
+intentionally preserved as non-content data, so callers should keep metadata
+itself free of raw sensitive values.
