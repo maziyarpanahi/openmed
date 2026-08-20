@@ -478,7 +478,7 @@ class TraceRedactor:
                 raise TraceRedactionError("trace input is not iterable") from None
 
             while True:
-                if self._check_cancellation():
+                if not batch and self._check_cancellation():
                     break
                 try:
                     record = next(iterator)
@@ -967,24 +967,29 @@ def _apply_field(
                 count += changed
             return mapping_result, count
 
+        count = 0
         direct_key = ".".join(parts)
         if direct_key in mapping_result:
-            mapping_result[direct_key], count = _redact_target(
+            mapping_result[direct_key], changed = _redact_target(
                 mapping_result[direct_key],
                 field_name=field_name,
                 redact_text=redact_text,
             )
+            count += changed
+
+        if len(parts) == 1:
             return mapping_result, count
 
         key = parts[0]
         if key not in mapping_result:
-            return mapping_result, 0
-        mapping_result[key], count = _apply_field(
+            return mapping_result, count
+        mapping_result[key], changed = _apply_field(
             mapping_result[key],
             parts[1:],
             field_name=field_name,
             redact_text=redact_text,
         )
+        count += changed
         return mapping_result, count
 
     if isinstance(value, list) and parts[0] == "*":

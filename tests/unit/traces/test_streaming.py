@@ -177,6 +177,34 @@ def test_wildcard_paths_redact_lists_and_tuples() -> None:
     ]
 
 
+def test_dotted_and_nested_paths_are_all_redacted() -> None:
+    runner = TraceRedactor(
+        text_fields=("attributes.user.email",),
+        text_redactor=_fake_redactor,
+    )
+    record = {
+        "attributes.user.email": SYNTHETIC_EMAIL,
+        "attributes": {
+            "user.email": SYNTHETIC_EMAIL,
+            "user": {"email": SYNTHETIC_EMAIL},
+        },
+    }
+
+    output = list(runner.iter_records([record]))
+
+    assert output == [
+        {
+            "attributes.user.email": "[EMAIL]",
+            "attributes": {
+                "user.email": "[EMAIL]",
+                "user": {"email": "[EMAIL]"},
+            },
+        }
+    ]
+    assert runner.report is not None
+    assert runner.report.redacted_fields == 3
+
+
 def test_default_redactor_is_deterministic_across_batches() -> None:
     records = [
         {
@@ -247,6 +275,35 @@ def test_cancellation_finishes_the_current_batch_and_stops_before_next() -> None
     assert list(second_runner.iter_records(_records())) == []
     assert second_runner.report is not None
     assert second_runner.report.cancelled is True
+
+
+def test_cancellation_requested_mid_batch_emits_the_complete_batch() -> None:
+    consumed: list[int] = []
+    token = CancellationToken()
+
+    def source():
+        for record in _records(4):
+            consumed.append(record["sequence"])
+            yield record
+            if record["sequence"] == 0:
+                token.cancel()
+
+    runner = TraceRedactor(
+        record_batch_size=3,
+        byte_batch_size=10_000,
+        text_redactor=_fake_redactor,
+        cancellation=token,
+    )
+
+    output = list(runner.iter_records(source()))
+
+    assert [record["sequence"] for record in output] == [0, 1, 2]
+    assert consumed == [0, 1, 2]
+    assert runner.report is not None
+    assert runner.report.records_seen == 3
+    assert runner.report.records_emitted == 3
+    assert runner.report.batches_completed == 1
+    assert runner.report.cancelled is True
 
 
 def test_callback_failures_and_oversized_records_do_not_echo_source_values() -> None:
