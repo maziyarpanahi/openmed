@@ -330,11 +330,31 @@ def _validate_internal_links(
     """Resolve local markdown links without making any network request."""
 
     for line, raw_target in _markdown_links(body):
-        target = _local_target(raw_target)
+        try:
+            target = _local_target(raw_target)
+        except (OSError, TypeError, ValueError):
+            _add_error(
+                report,
+                repo_root,
+                path,
+                "internal link target is invalid",
+                line=line,
+            )
+            continue
         if target is None:
             continue
         report.link_count += 1
-        candidate = (path.parent / Path(target)).resolve(strict=False)
+        try:
+            candidate = (path.parent / Path(target)).resolve(strict=False)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            _add_error(
+                report,
+                repo_root,
+                path,
+                "internal link target is invalid",
+                line=line,
+            )
+            continue
         if not candidate.is_relative_to(repo_root.resolve()):
             _add_error(
                 report,

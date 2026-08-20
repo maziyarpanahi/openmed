@@ -111,6 +111,23 @@ def test_missing_image_reference_is_validated(tmp_path: Path) -> None:
     assert any("internal link target is missing" in error for error in report.errors)
 
 
+def test_malformed_link_target_is_a_path_only_error(tmp_path: Path) -> None:
+    validator = _load_validator()
+    secret_marker = "synthetic-sensitive-value"
+    _write_fixture_repo(
+        tmp_path,
+        body=f"\n[malformed](//[{secret_marker})\n",
+        pack_entries=["./skills/synthetic-check"],
+    )
+
+    report = validator.validate_repository(tmp_path, run_helper_help=False)
+    output = validator.format_report(report)
+
+    assert not report.ok
+    assert "internal link target is invalid" in output
+    assert secret_marker not in output
+
+
 def test_catalog_infrastructure_directory_is_not_treated_as_a_skill(
     tmp_path: Path,
 ) -> None:
