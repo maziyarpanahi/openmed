@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import pytest
 
@@ -173,6 +175,31 @@ def test_report_is_deterministic_and_contains_only_safe_metadata():
     assert SYNTHETIC_PHONE not in json.dumps(first.report.to_dict())
 
 
+def test_reports_and_errors_hash_data_derived_object_keys():
+    sensitive_key = SYNTHETIC_NAME
+    processed = redact_tool_call_with_report(
+        {"arguments": {sensitive_key: SYNTHETIC_PHONE}},
+        content_paths=(("arguments", sensitive_key),),
+        text_redactor=_redactor,
+    )
+
+    report_json = json.dumps(processed.report.to_dict(), sort_keys=True)
+    assert sensitive_key not in report_json
+    assert "sha256:" in report_json
+
+    def failing_redactor(_text: str) -> str:
+        raise RuntimeError("synthetic failure")
+
+    with pytest.raises(ToolCallRedactionError) as error:
+        redact_tool_call(
+            {"arguments": {sensitive_key: SYNTHETIC_PHONE}},
+            content_paths=(("arguments", sensitive_key),),
+            text_redactor=failing_redactor,
+        )
+
+    assert sensitive_key not in str(error.value)
+
+
 def test_redactor_failure_has_a_safe_exception_message():
     def failing_redactor(text: str) -> str:
         raise RuntimeError(f"unexpected value: {text}")
@@ -185,6 +212,30 @@ def test_redactor_failure_has_a_safe_exception_message():
 
     assert SYNTHETIC_NAME not in str(error.value)
     assert error.value.__cause__ is None
+
+
+def test_default_redactor_enforces_local_only_guard(monkeypatch):
+    guard_calls: list[bool] = []
+    config = object()
+
+    @contextmanager
+    def fake_guard(received_config, *, local_only=False):
+        assert received_config is config
+        guard_calls.append(local_only)
+        yield
+
+    def fake_deidentify(text, **kwargs):
+        assert kwargs["config"] is config
+        return SimpleNamespace(deidentified_text=_redactor(text))
+
+    monkeypatch.setattr("openmed.core.config.get_config", lambda: config)
+    monkeypatch.setattr("openmed.core.offline.network_blocked_if_offline", fake_guard)
+    monkeypatch.setattr("openmed.core.pii.deidentify", fake_deidentify)
+
+    redacted = redact_tool_call({"arguments": SYNTHETIC_NAME})
+
+    assert redacted == {"arguments": "[NAME]"}
+    assert guard_calls == [True]
 
 
 def test_redact_tool_calls_preserves_input_order():

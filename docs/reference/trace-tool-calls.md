@@ -66,7 +66,12 @@ processed = redact_tool_call_with_report(
 safe_report = processed.report.to_dict()
 ```
 
-The report contains counts and structural paths only. It never stores source
-strings, replacement strings, or the original payload. The module has no
-network side effects at import time; an explicit `text_redactor` is the
-recommended path for deterministic offline workflows.
+The report contains counts and structural paths only. Object-key path segments
+are represented by stable SHA-256 digest prefixes while array indexes and
+wildcards retain their structural form, so data-derived object keys cannot leak
+through report or exception text. The report never stores source strings,
+replacement strings, or the original payload. The module has no network side
+effects at import time; an explicit `text_redactor` is the recommended path for
+deterministic offline workflows. When it is omitted, the default OpenMed
+redactor runs under the enforced local-only network guard and therefore
+requires a cached model or local model configuration.

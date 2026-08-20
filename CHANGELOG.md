@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added structure-aware tool-call trace redaction for JSON objects and encoded
+  payloads, with caller-controlled content paths, deterministic serialization,
+  hashed path-only reports, and a local-only default de-identifier (#2281).
 - Added an offline, versioned key-lifecycle helper and operator guide for
   audit-key rotation, retired-key verification, surrogate-vault re-keying,
   environment isolation, and file-permission hygiene without serializing keys.

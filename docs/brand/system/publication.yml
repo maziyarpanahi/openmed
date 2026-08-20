@@ -99,6 +99,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md

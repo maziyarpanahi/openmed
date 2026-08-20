@@ -12,6 +12,7 @@ report.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -243,23 +244,24 @@ def _parse_content_path(path: Any) -> tuple[str | int, ...]:
         if path in ("", "$"):
             return ()
         if path.startswith("/"):
-            parts = path[1:].split("/")
+            pointer_parts = path[1:].split("/")
             return tuple(
-                _parse_path_segment(_unescape_pointer_part(part)) for part in parts
+                _parse_path_segment(_unescape_pointer_part(part))
+                for part in pointer_parts
             )
         raw_parts = path.split(".")
         if any(part == "" for part in raw_parts):
             raise ValueError("content paths must not contain empty segments")
-        parts: list[str | int] = []
+        dotted_parts: list[str | int] = []
         for part in raw_parts:
             if part.endswith("[]"):
                 base = part[:-2]
                 if not base:
                     raise ValueError("content path array segments need a field name")
-                parts.extend((_parse_path_segment(base), "*"))
+                dotted_parts.extend((_parse_path_segment(base), "*"))
             else:
-                parts.append(_parse_path_segment(part))
-        return tuple(parts)
+                dotted_parts.append(_parse_path_segment(part))
+        return tuple(dotted_parts)
 
     if isinstance(path, Sequence) and not isinstance(path, (str, bytes)):
         return tuple(_parse_path_segment(segment) for segment in path)
@@ -313,30 +315,37 @@ def _redact_path(
     remainder = tuple(tail)
 
     if isinstance(value, Mapping):
-        target = value if isinstance(value, dict) else dict(value)
+        mapping_target = value if isinstance(value, dict) else dict(value)
         if head == "*":
-            keys = _stable_keys(target)
+            keys = _stable_keys(mapping_target)
         else:
             key: Any = head
-            if key not in target and isinstance(head, int) and str(head) in target:
+            if (
+                key not in mapping_target
+                and isinstance(head, int)
+                and str(head) in mapping_target
+            ):
                 key = str(head)
-            keys = [key] if key in target else []
+            keys = [key] if key in mapping_target else []
         for key in keys:
-            target[key] = _redact_path(target[key], remainder, location + (key,), state)
-        return target
+            mapping_target[key] = _redact_path(
+                mapping_target[key], remainder, location + (key,), state
+            )
+        return mapping_target
 
     if isinstance(value, (list, tuple)):
-        target = list(value)
+        list_target = list(value)
+        indexes: Iterable[int]
         if head == "*":
-            indexes = range(len(target))
+            indexes = range(len(list_target))
         else:
             index = _path_index(head)
-            indexes = (index,) if index is not None and index < len(target) else ()
+            indexes = (index,) if index is not None and index < len(list_target) else ()
         for index in indexes:
-            target[index] = _redact_path(
-                target[index], remainder, location + (index,), state
+            list_target[index] = _redact_path(
+                list_target[index], remainder, location + (index,), state
             )
-        return tuple(target) if isinstance(value, tuple) else target
+        return tuple(list_target) if isinstance(value, tuple) else list_target
 
     return value
 
@@ -397,21 +406,23 @@ def _redact_value(
         if identifier in state.visited_containers:
             return value
         state.visited_containers.add(identifier)
-        target = value if isinstance(value, dict) else dict(value)
-        for key in _stable_keys(target):
-            target[key] = _redact_value(target[key], location + (key,), state)
-        return target
+        mapping_target = value if isinstance(value, dict) else dict(value)
+        for key in _stable_keys(mapping_target):
+            mapping_target[key] = _redact_value(
+                mapping_target[key], location + (key,), state
+            )
+        return mapping_target
 
     if isinstance(value, (list, tuple)):
         identifier = id(value)
         if identifier in state.visited_containers:
             return value
         state.visited_containers.add(identifier)
-        target = [
+        list_target = [
             _redact_value(item, location + (index,), state)
             for index, item in enumerate(value)
         ]
-        return tuple(target) if isinstance(value, tuple) else target
+        return tuple(list_target) if isinstance(value, tuple) else list_target
 
     return value
 
@@ -460,10 +471,9 @@ def _format_path(path: Sequence[str | int]) -> str:
             rendered += f"[{part}]"
         elif part == "*":
             rendered += ".*"
-        elif isinstance(part, str) and part.isidentifier():
-            rendered += f".{part}"
         else:
-            rendered += "[" + json.dumps(str(part), ensure_ascii=False) + "]"
+            digest = hashlib.sha256(str(part).encode("utf-8")).hexdigest()[:16]
+            rendered += f'["sha256:{digest}"]'
     return rendered
 
 
@@ -502,9 +512,19 @@ def _resolve_text_redactor(
 
 def _default_text_redactor(*, policy: Any | None, lang: str) -> TextRedactor:
     def redact(text: str) -> str:
+        from openmed.core.config import get_config
+        from openmed.core.offline import network_blocked_if_offline
         from openmed.core.pii import deidentify
 
-        result = deidentify(text, method="mask", lang=lang, policy=policy)
+        config = get_config()
+        with network_blocked_if_offline(config, local_only=True):
+            result = deidentify(
+                text,
+                method="mask",
+                lang=lang,
+                policy=policy,
+                config=config,
+            )
         return _coerce_redacted_text(result)
 
     return redact
