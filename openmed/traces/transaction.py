@@ -180,13 +180,16 @@ def transactional_redact(
     target = _coerce_path(path)
     resolved_redactor = _resolve_redactor(redactor, transform)
     resolved_validator = _resolve_validator(validator, validate)
+    normalized_encoding = _plain_text(encoding)
+    if normalized_encoding is None or not normalized_encoding:
+        raise ValueError("encoding must be a non-empty string")
     _validate_options(
         backup=backup,
         backup_path=backup_path,
         preserve_permissions=preserve_permissions,
         preserve_timestamps=preserve_timestamps,
         preserve_metadata=preserve_metadata,
-        encoding=encoding,
+        encoding=normalized_encoding,
     )
     if preserve_metadata is not None:
         preserve_permissions = preserve_metadata
@@ -196,10 +199,11 @@ def transactional_redact(
     if preferred_backup is not None and _same_path(target, preferred_backup):
         raise ValueError("backup path must differ from the target")
 
-    source_state = _read_source_state(target)
     try:
-        original_bytes = target.read_bytes()
-        original_text = original_bytes.decode(encoding)
+        source_state, original_bytes = _read_source(target)
+        original_text = bytes.decode(original_bytes, normalized_encoding)
+    except TransactionError:
+        raise
     except (LookupError, OSError, UnicodeError):
         raise TransactionReadError("source could not be read") from None
 
@@ -209,11 +213,12 @@ def transactional_redact(
         raise
     except BaseException:
         raise TransactionRedactionError("redactor failed") from None
-    if not isinstance(replacement_text, str):
+    normalized_replacement = _plain_text(replacement_text)
+    if normalized_replacement is None:
         raise TransactionRedactionError("redactor must return text")
 
     try:
-        replacement_bytes = replacement_text.encode(encoding)
+        replacement_bytes = str.encode(normalized_replacement, normalized_encoding)
     except (KeyboardInterrupt, SystemExit):
         raise
     except BaseException:
@@ -221,7 +226,7 @@ def transactional_redact(
 
     if resolved_validator is not None:
         try:
-            valid = resolved_validator(replacement_text)
+            valid = resolved_validator(normalized_replacement)
         except (KeyboardInterrupt, SystemExit):
             raise
         except BaseException:
@@ -255,6 +260,7 @@ def transactional_redact(
             mode=mode,
             timestamps=timestamps,
         )
+        candidate_state = _read_source_state(temporary_path)
         _assert_source_unchanged(target, source_state)
 
         if backup:
@@ -276,9 +282,26 @@ def transactional_redact(
                 raise
 
         _assert_source_unchanged(target, source_state)
-        os.replace(os.fspath(temporary_path), os.fspath(target))
-        temporary_path = None
-        committed = True
+        try:
+            os.replace(os.fspath(temporary_path), os.fspath(target))
+        except (KeyboardInterrupt, SystemExit):
+            if _path_matches_candidate(target, candidate_state):
+                temporary_path = None
+                committed = True
+            raise
+        except OSError:
+            if not _path_matches_candidate(target, candidate_state):
+                raise
+            temporary_path = None
+            committed = True
+        except BaseException:
+            if _path_matches_candidate(target, candidate_state):
+                temporary_path = None
+                committed = True
+            raise
+        else:
+            temporary_path = None
+            committed = True
     except TransactionError:
         raise
     except (KeyboardInterrupt, SystemExit):
@@ -303,9 +326,20 @@ def transactional_redact(
 
 def _coerce_path(value: PathLike) -> Path:
     try:
-        return Path(value)
+        return Path(os.path.abspath(os.fspath(Path(value))))
     except Exception:  # noqa: BLE001 - path-like errors may contain PHI
         raise ValueError("path is invalid") from None
+
+
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:  # noqa: BLE001 - callback text may contain PHI
+        return None
 
 
 def _resolve_redactor(
@@ -367,6 +401,72 @@ def _read_source_state(path: Path) -> _FileState:
     return _state_from_stat(source_stat)
 
 
+def _read_source(path: Path) -> tuple[_FileState, bytes]:
+    """Read a regular source through the descriptor whose state is audited."""
+
+    descriptor: int | None = None
+    verification_descriptor: int | None = None
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(os.fspath(path), flags)
+        opened_stat = os.fstat(descriptor)
+        path_stat = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(opened_stat.st_mode) or not stat.S_ISREG(path_stat.st_mode):
+            raise TransactionReadError("source must be a regular file")
+        opened_state = _state_from_stat(opened_stat)
+        source_state = _state_from_stat(path_stat)
+
+        # Python 3.12's path-based stat implementation on Windows can expose a
+        # wider file identity than fstat.  Verify identity through a second
+        # descriptor, where both results use the same representation, and use
+        # only portable fields to bind that descriptor pair to the path stat.
+        verification_descriptor = os.open(os.fspath(path), flags)
+        verification_stat = os.fstat(verification_descriptor)
+        if (
+            not stat.S_ISREG(verification_stat.st_mode)
+            or not os.path.samestat(opened_stat, verification_stat)
+            or _state_without_atime(_state_from_stat(verification_stat))
+            != _state_without_atime(opened_state)
+            or _portable_stat_state(path_stat) != _portable_stat_state(opened_stat)
+        ):
+            raise TransactionConflictError("source changed during transaction")
+        os.close(verification_descriptor)
+        verification_descriptor = None
+
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = None
+            payload = handle.read()
+            final_descriptor_state = _state_from_stat(os.fstat(handle.fileno()))
+        if _state_without_atime(final_descriptor_state) != _state_without_atime(
+            opened_state
+        ):
+            raise TransactionConflictError("source changed during transaction")
+        _assert_source_unchanged(path, source_state)
+        return source_state, payload
+    except TransactionError:
+        raise
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except OSError:
+        raise TransactionReadError("source could not be read") from None
+    finally:
+        if verification_descriptor is not None:
+            try:
+                os.close(verification_descriptor)
+            except OSError:
+                pass
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def _state_from_stat(source_stat: os.stat_result) -> _FileState:
     return (
         source_stat.st_dev,
@@ -379,6 +479,20 @@ def _state_from_stat(source_stat: os.stat_result) -> _FileState:
     )
 
 
+def _portable_stat_state(source_stat: os.stat_result) -> tuple[int, int, int]:
+    """Return fields consistent across path and descriptor stats."""
+
+    return (
+        stat.S_IFMT(source_stat.st_mode),
+        source_stat.st_size,
+        source_stat.st_mtime_ns,
+    )
+
+
+def _state_without_atime(state: _FileState) -> tuple[int, int, int, int, int, int]:
+    return state[:6]
+
+
 def _assert_source_unchanged(path: Path, expected: _FileState) -> None:
     try:
         current_stat = os.stat(path, follow_symlinks=False)
@@ -389,8 +503,24 @@ def _assert_source_unchanged(path: Path, expected: _FileState) -> None:
     current = _state_from_stat(current_stat)
     # Reading a file may update atime.  It is preserved on the replacement,
     # but it must not make an otherwise unchanged source look like a conflict.
-    if current[:6] != expected[:6]:
+    if _state_without_atime(current) != _state_without_atime(expected):
         raise TransactionConflictError("source changed during transaction")
+
+
+def _path_matches_candidate(path: Path, expected: _FileState) -> bool:
+    """Return whether a replace completed before an exception was delivered."""
+
+    try:
+        current_stat = os.stat(path, follow_symlinks=False)
+    except OSError:
+        return False
+    if not stat.S_ISREG(current_stat.st_mode):
+        return False
+    current = _state_from_stat(current_stat)
+    identity = (0, 1, 2, 3, 5)
+    return tuple(current[index] for index in identity) == tuple(
+        expected[index] for index in identity
+    )
 
 
 def _create_temporary_file(target: Path) -> tuple[Path, int]:
@@ -418,14 +548,20 @@ def _write_payload(
         if descriptor is None:
             descriptor = os.open(
                 os.fspath(path),
-                os.O_WRONLY | os.O_TRUNC | getattr(os, "O_BINARY", 0),
+                os.O_WRONLY
+                | os.O_TRUNC
+                | getattr(os, "O_BINARY", 0)
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
             )
         with os.fdopen(descriptor, "wb") as handle:
             descriptor = None
             handle.write(payload)
+            handle.flush()
             if mode is not None:
                 _chmod_descriptor(handle.fileno(), path, mode)
-            handle.flush()
+            if timestamps is not None:
+                _utime_descriptor(handle.fileno(), path, timestamps)
             os.fsync(handle.fileno())
     finally:
         if descriptor is not None:
@@ -433,12 +569,6 @@ def _write_payload(
                 os.close(descriptor)
             except OSError:
                 pass
-
-    if timestamps is not None:
-        if os.utime in os.supports_follow_symlinks:
-            os.utime(path, ns=timestamps, follow_symlinks=False)
-        else:
-            os.utime(path, ns=timestamps)
 
 
 def _chmod_descriptor(descriptor: int, path: Path, mode: int) -> None:
@@ -448,6 +578,19 @@ def _chmod_descriptor(descriptor: int, path: Path, mode: int) -> None:
         os.chmod(path, mode, follow_symlinks=False)
     else:
         os.chmod(path, mode)
+
+
+def _utime_descriptor(
+    descriptor: int,
+    path: Path,
+    timestamps: tuple[int, int],
+) -> None:
+    if os.utime in os.supports_fd:
+        os.utime(descriptor, ns=timestamps)
+    elif os.utime in os.supports_follow_symlinks:
+        os.utime(path, ns=timestamps, follow_symlinks=False)
+    else:
+        os.utime(path, ns=timestamps)
 
 
 def _reserve_backup_path(
