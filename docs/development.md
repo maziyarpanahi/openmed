@@ -43,6 +43,7 @@ provide the lockfile-based workflow used by CI:
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/pre-commit install
 ```
 
 On Windows, use `.venv\\Scripts\\python.exe` in place of
@@ -68,17 +69,16 @@ The shell provides Python 3.12, OpenMed, the tools and Python packages from the
 Optional ML and platform extras such as MLX and Core ML are not part of the Nix
 shell.
 
-Run a focused test while iterating locally; GitHub Actions owns the complete
-cross-platform test matrix:
+Run the complete repository suite before opening a pull request:
 
 ```bash
-python -m pytest tests/unit/test_offline_mode.py -q
+python -m pytest tests/ -q
 ```
 
 For a single non-interactive command, use:
 
 ```bash
-nix develop --command python -m pytest tests/unit/test_offline_mode.py -q
+nix develop --command python -m pytest tests/ -q
 ```
 
 ## Build the package
@@ -111,5 +111,5 @@ and commit both lock and flake files together:
 ```bash
 nix flake update
 nix flake check --print-build-logs
-nix develop --command python -m pytest tests/unit/test_offline_mode.py -q
+nix develop --command python -m pytest tests/ -q
 ```

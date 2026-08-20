@@ -10,7 +10,7 @@ help: ## Show this help message
 
 build: ## Build the package
 	@echo "🔨 Building package..."
-	$(UV) run --frozen --extra dev --with build python -m build
+	$(UV) build
 
 publish: ## Publish to PyPI using Hatch
 	@echo "📤 Publishing to PyPI..."
@@ -104,7 +104,7 @@ docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages 
 
 test-build: ## Test build without publishing
 	@echo "🧪 Testing build..."
-	$(UV) run --frozen --extra dev --with build python -m build
+	$(UV) build
 	@echo "✅ Build successful! Check dist/ directory"
 
 bump-patch: ## Bump patch version (0.1.1 -> 0.1.2)

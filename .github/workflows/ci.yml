@@ -68,8 +68,7 @@ jobs:
 
     - name: Assert built wheel contains no restricted vocabulary data
       run: |
-        uv run --no-project --with build python -m build \
-          --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
+        uv build --wheel --out-dir "$RUNNER_TEMP/openmed-wheel"
         python scripts/release/check_license_policy.py \
           --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
 
@@ -498,7 +497,7 @@ jobs:
 
     - name: Build package
       run: |
-        uv run --with build python -m build
+        uv build
 
     - name: Enforce wheel size budget and record language-extra footprints
       run: |

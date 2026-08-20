@@ -32,6 +32,7 @@ is a regular virtual environment and editable pip install:
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/pre-commit install
 ```
 
 The pre-commit hooks also run the Gitleaks secret scanner on staged changes.
@@ -41,7 +42,7 @@ behavior, and baseline maintenance.
 ## Run the checks before opening a PR
 
 ```bash
-uv run --frozen --extra dev pytest tests/unit/test_offline_mode.py -q
+uv run --frozen --extra dev pytest tests/ -q
 make format                              # apply canonical Ruff formatting
 make lint                                # lint
 make type-check                          # scoped public-module type check

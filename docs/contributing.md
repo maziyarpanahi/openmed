@@ -69,7 +69,7 @@ new public callable or class.
 ## Release outline
 
 1. Bump the version via `make bump-patch` (or `bump-minor` / `bump-major`). These commands update `openmed/__about__.py`.
-2. Run `make build` to produce wheels and sdists through the locked uv environment.
+2. Run `make build` to produce wheels and sdists with the pinned uv frontend.
 3. Confirm the PyPI upload setup in [PyPI Publishing](release/trusted-publishing.md), then publish by pushing a tag (`vX.Y.Z`) to trigger `.github/workflows/publish.yml`.
 4. Update `CHANGELOG.md` with release notes before tagging.
 
