@@ -61,6 +61,7 @@ Legend: `→ before` runs upstream of OpenMed, `after →` consumes its output, 
 
 | Skill | What it does | Pairs |
 | --- | --- | --- |
+| [`ask-openmed`](ask-openmed/SKILL.md) | Choose the first OpenMed workflow skill for an intake, privacy, extraction, exchange, or verification request using deterministic local r…. | ↔ adjacent |
 | [`building-with-openmed`](building-with-openmed/SKILL.md) | Orient and bootstrap any project that uses OpenMed, the on-device clinical and biomedical NLP library, for named-entity recognition, PHI …. | ↔ adjacent |
 | [`choosing-openmed-models`](choosing-openmed-models/SKILL.md) | Discover and pick the right OpenMed model for a clinical or biomedical task, domain, or language. | ↔ adjacent |
 | [`deidentifying-clinical-text`](deidentifying-clinical-text/SKILL.md) | Remove, mask, or replace PHI/PII in clinical free text on-device with OpenMed's deidentify(). | ↔ adjacent |
