@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
 TextRedactor: TypeAlias = Callable[[str], str]
@@ -156,8 +156,8 @@ class ColumnarTraceSchemaAdapter:
     ``text_redactor`` for domain-specific masking, or use the safe default.
     """
 
-    text_columns: tuple[FieldPath, ...]
-    text_redactor: TextRedactor | None
+    text_columns: tuple[FieldPath, ...] = field(repr=False)
+    text_redactor: TextRedactor | None = field(repr=False)
     batch_size: int
 
     def __init__(
@@ -645,7 +645,15 @@ def _normalize_field_paths(
 
     normalized: list[FieldPath] = []
     seen: set[FieldPath] = set()
-    for selection in values:
+    while True:
+        try:
+            selection = next(values)
+        except StopIteration:
+            break
+        except Exception:
+            raise ColumnarTraceAdapterError(
+                "Text column paths could not be read safely"
+            ) from None
         if isinstance(selection, str):
             parts = tuple(selection.split("."))
         else:
@@ -654,6 +662,10 @@ def _normalize_field_paths(
             except TypeError:
                 raise TypeError(
                     "Each text column path must be a string sequence"
+                ) from None
+            except Exception:
+                raise ColumnarTraceAdapterError(
+                    "A text column path could not be read safely"
                 ) from None
         if any(not isinstance(part, str) for part in parts):
             raise TypeError("Each text column path must contain only strings")

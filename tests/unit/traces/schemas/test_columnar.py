@@ -223,6 +223,39 @@ def test_source_iteration_errors_do_not_expose_values() -> None:
     assert secret not in str(caught.value)
 
 
+def test_text_column_iteration_errors_do_not_expose_values() -> None:
+    secret = "SYNTHETIC_PRIVATE_COLUMN"
+
+    def failing_columns():
+        yield "text"
+        raise RuntimeError(secret)
+
+    with pytest.raises(ColumnarTraceAdapterError) as caught:
+        redact_record_batch(
+            pa.record_batch({"text": ["synthetic"]}),
+            text_columns=failing_columns(),
+        )
+
+    assert secret not in str(caught.value)
+
+
+def test_adapter_repr_hides_selected_columns_and_redactor() -> None:
+    sensitive_column = "PatientJaneDoe"
+    sensitive_redactor = type(
+        "PatientJaneDoeRedactor",
+        (),
+        {"__call__": lambda self, value: value},
+    )()
+
+    adapter = ColumnarTraceSchemaAdapter(
+        [sensitive_column],
+        text_redactor=sensitive_redactor,
+    )
+
+    assert sensitive_column not in repr(adapter)
+    assert type(sensitive_redactor).__name__ not in repr(adapter)
+
+
 def test_missing_column_name_is_hashed_in_errors() -> None:
     sensitive_column = "PatientJaneDoe"
 
