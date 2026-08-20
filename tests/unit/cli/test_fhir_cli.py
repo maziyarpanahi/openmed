@@ -145,3 +145,37 @@ def test_fhir_bundle_cli_reports_result_without_resources(
     assert "standalone FHIR resources" in captured.err
     assert captured.out == ""
     assert not output.exists()
+
+
+def test_fhir_validate_cli_runs_local_profile_check(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = ROOT / "tests" / "fixtures" / "fhir" / "synthetic_ips_r4.json"
+    output = tmp_path / "outcome.json"
+
+    exit_code = main_module.main(
+        [
+            "fhir",
+            "validate",
+            "--input",
+            str(source),
+            "--version",
+            "R4",
+            "--profile",
+            "ips",
+            "--output",
+            str(output),
+            "--json",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["data"]["valid"] is True
+    assert (
+        json.loads(output.read_text(encoding="utf-8"))["issue"][0]["severity"]
+        == "information"
+    )
+    assert captured.err == ""

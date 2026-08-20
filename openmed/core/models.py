@@ -76,6 +76,7 @@ if TYPE_CHECKING:
 
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
+from .errors import MissingExtraError, ModelLoadError
 from .model_integrity import prepare_model_reference
 from .model_registry import (
     ModelInfo as RegistryModelInfo,
@@ -119,10 +120,14 @@ class ModelLoader:
             config: OpenMed configuration. If None, uses global config.
         """
         self.config = config or get_config()
-        if not HF_AVAILABLE and getattr(self.config, "backend", None) != "onnx":
-            raise ImportError(
-                "HuggingFace transformers is required. "
-                "Install with: pip install transformers"
+        backend = getattr(self.config, "backend", None)
+        if not HF_AVAILABLE and backend not in {"onnx", "remote"}:
+            raise MissingExtraError(
+                "HuggingFace transformers is required. Install it with "
+                "`pip install openmed[hf]` or `pip install transformers`.",
+                package="transformers",
+                feature="HuggingFace Transformers inference",
+                extra="hf",
             )
 
         configure_offline_mode(self.config)
@@ -283,9 +288,18 @@ class ModelLoader:
                 "config": config,
             }
 
-        except Exception as e:
-            logger.error("Failed to load model %s: %s", full_model_name, e)
-            raise ValueError(f"Could not load model {full_model_name}: {e}") from e
+        except Exception as exc:
+            logger.error(
+                "Failed to load model %s: error_type=%s",
+                full_model_name,
+                type(exc).__name__,
+            )
+            raise ModelLoadError(
+                f"Could not load model {full_model_name}. Verify the model ID or "
+                "local path, ensure required files are available, and retry.",
+                model_name=full_model_name,
+                details={"error_type": type(exc).__name__},
+            ) from exc
 
     def create_pipeline(
         self,
@@ -394,6 +408,7 @@ class ModelLoader:
         )
 
         model_kwargs: Dict[str, Any] = {}
+        effective_local_only = bool(requested_local_loading.get("local_files_only"))
         try:
             # Create pipeline directly with model name for better caching
             pipeline_device = kwargs.get("device", self._get_device_id())
@@ -408,6 +423,12 @@ class ModelLoader:
                 pipeline_model_reference,
                 kwargs,
             )
+            prepared_reference_is_local = (
+                self._as_existing_local_path(pipeline_model_reference) is not None
+            )
+            prepared_reference_local_only = bool(
+                local_loading_kwargs.get("local_files_only")
+            )
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
             # Transformers forwards loader options through ``model_kwargs``;
@@ -415,10 +436,15 @@ class ModelLoader:
             pipeline_load_kwargs.pop("local_files_only", None)
             model_kwargs.update(local_loading_kwargs)
             cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
-            if cache_dir is None and local_loading_kwargs.get("local_files_only"):
+            if cache_dir is None and prepared_reference_local_only:
                 cache_dir = getattr(self.config, "cache_dir", None)
             if cache_dir is not None:
                 model_kwargs.setdefault("cache_dir", cache_dir)
+            if prepared_reference_is_local:
+                # Transformers 5 already marks filesystem model references as
+                # local. Repeating the option through ``model_kwargs`` makes
+                # AutoConfig receive ``local_files_only`` twice.
+                model_kwargs.pop("local_files_only", None)
             if "quantization_config" in pipeline_load_kwargs:
                 model_kwargs.setdefault(
                     "quantization_config",
@@ -436,7 +462,11 @@ class ModelLoader:
             pipeline_kwargs.update(pipeline_load_kwargs)
             self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
-            effective_local_only = bool(model_kwargs.get("local_files_only"))
+            effective_local_only = bool(
+                requested_local_loading.get("local_files_only")
+                or prepared_reference_local_only
+                or model_kwargs.get("local_files_only")
+            )
             with network_blocked_if_offline(
                 self.config,
                 local_only=effective_local_only,
@@ -450,11 +480,9 @@ class ModelLoader:
         except Exception as e:
             logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
-            fallback_load_kwargs = {
-                key: model_kwargs[key]
-                for key in ("local_files_only",)
-                if key in model_kwargs
-            }
+            fallback_load_kwargs = (
+                {"local_files_only": True} if effective_local_only else {}
+            )
             with network_blocked_if_offline(
                 self.config,
                 local_only=bool(fallback_load_kwargs.get("local_files_only")),

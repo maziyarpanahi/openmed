@@ -1,0 +1,12 @@
+{
+  "http://hl7.org/fhir/sid/icd-10-cm|E11.9": {
+    "concept_id": 201826,
+    "source_concept_id": 9002200,
+    "source_concept_name": "Synthetic ICD-10-CM source condition",
+    "source_vocabulary_id": "ICD10CM",
+    "target_vocabulary_id": "SNOMED",
+    "target_concept_name": "Diabetes mellitus",
+    "standard_concept": "S",
+    "target_concept_code": "73211009"
+  }
+}
