@@ -91,6 +91,20 @@ def _best_run_seconds(text: str, *, repeats: int = 5) -> float:
     return best
 
 
+def _best_stage_durations_ms(text: str, *, repeats: int = 5) -> dict[str, float]:
+    """Return each stage's minimum duration across repeated warm runs."""
+    pipeline = _build_pipeline()
+    pipeline.run(text, method="mask")  # warm caches / imports before timing
+    best = {stage_name: float("inf") for stage_name in STAGE_NAMES}
+    for _ in range(repeats):
+        result = pipeline.run(text, method="mask")
+        for stage_name in STAGE_NAMES:
+            best[stage_name] = min(
+                best[stage_name], result.stage_duration_ms(stage_name)
+            )
+    return best
+
+
 def test_pipeline_reports_per_stage_latency_for_all_stages():
     """Every stage exposes a non-negative, latency-only duration."""
     result = _build_pipeline().run(_synthetic_note(20), method="mask")
@@ -161,35 +175,29 @@ def test_pipeline_latency_scales_roughly_linearly_with_note_length():
 
 @pytest.mark.slow
 def test_no_single_stage_dominates_superlinearly_on_long_notes():
-    """No stage's share of total time should explode as the note grows.
+    """No stage's absolute latency should grow super-linearly.
 
-    We compare each stage's *fraction* of total runtime between a short and a
-    long note. A stage that scales worse than the whole pipeline (e.g. a hidden
-    per-span re-scan of the full text) would see its fraction grow sharply. We
-    assert the fraction does not more than triple, which tolerates CI noise but
-    catches genuine super-linear stage blowups.
+    Runtime fractions are not a valid scaling signal: a linear stage can occupy
+    a larger share when other stages have fixed costs. Compare repeated minimum
+    absolute durations instead, with the same generous 3x-over-linear headroom
+    as the whole-pipeline regression test.
     """
-    pipeline = _build_pipeline()
-    # Import and module-initialization costs are not length-dependent stage
-    # work. Warm the same pipeline before comparing the two measurements so a
-    # cold short run cannot make a warmed long run look super-linear.
-    pipeline.run(_synthetic_note(20), method="mask")
-    short = pipeline.run(_synthetic_note(20), method="mask")
-    long = pipeline.run(_synthetic_note(160), method="mask")
+    short_blocks = 20
+    factor = 8
+    short_note = _synthetic_note(short_blocks)
+    long_note = _synthetic_note(short_blocks * factor)
 
-    short_total = max(sum(short.stage_durations_ms.values()), 1e-6)
-    long_total = max(sum(long.stage_durations_ms.values()), 1e-6)
+    length_ratio = len(long_note) / len(short_note)
+    assert factor - 0.5 <= length_ratio <= factor + 0.5
+
+    short_durations = _best_stage_durations_ms(short_note)
+    long_durations = _best_stage_durations_ms(long_note)
 
     for stage_name in STAGE_NAMES:
-        short_frac = short.stage_duration_ms(stage_name) / short_total
-        long_frac = long.stage_duration_ms(stage_name) / long_total
-        # Only meaningful for stages that take a non-trivial slice; skip stages
-        # whose share is negligible in both runs (timing them is dominated by
-        # clock resolution).
-        if short_frac < 0.05 and long_frac < 0.05:
-            continue
-        assert long_frac <= short_frac * 3 + 0.05, (
-            f"stage {stage_name!r} share grew from {short_frac:.2%} to "
-            f"{long_frac:.2%} between short and long notes (possible "
-            f"super-linear blowup)"
+        short_ms = max(short_durations[stage_name], 0.05)
+        stage_ratio = long_durations[stage_name] / short_ms
+        assert stage_ratio <= factor * 3, (
+            f"stage {stage_name!r} latency scaled {stage_ratio:.1f}x for a "
+            f"{length_ratio:.1f}x longer note; expected roughly linear "
+            f"(<= {factor * 3}x)"
         )

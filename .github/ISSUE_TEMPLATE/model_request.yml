@@ -1,0 +1,173 @@
+name: Model or language support request
+description: Request support for a model, language, or both
+title: "[MODEL/LANGUAGE] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to request a new model or language in OpenMed's manifest-driven catalog.
+
+        **Do not include protected health information (PHI), personally identifiable information (PII), secrets, or real patient data.** Use only synthetic or fully de-identified examples. Report security vulnerabilities privately through [GitHub Security Advisories](https://github.com/maziyarpanahi/openmed/security/advisories/new).
+
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request type
+      options:
+        - New model
+        - Language support for an existing model
+        - New model and language support
+    validations:
+      required: true
+
+  - type: input
+    id: repo_id
+    attributes:
+      label: Model repository ID
+      description: Provide the existing or proposed Hugging Face `repo_id`. Enter `N/A` for a language-only request with no model candidate.
+      placeholder: e.g. OpenMed/... or N/A
+    validations:
+      required: true
+
+  - type: dropdown
+    id: family
+    attributes:
+      label: Model family
+      description: Choose the closest manifest `family` value.
+      options:
+        - NER
+        - PII
+        - Vision
+        - ZeroShot
+        - Other or unsure
+    validations:
+      required: true
+
+  - type: input
+    id: task
+    attributes:
+      label: Task
+      description: Provide the pipeline task expected in the manifest.
+      placeholder: e.g. token-classification
+    validations:
+      required: true
+
+  - type: input
+    id: languages
+    attributes:
+      label: Languages
+      description: List BCP 47-style language codes separated by commas.
+      placeholder: e.g. en, si, ta
+    validations:
+      required: true
+
+  - type: input
+    id: tier
+    attributes:
+      label: Published size tier
+      description: Provide the model's published tier, or enter `Unknown`.
+      placeholder: e.g. tiny, base, large, or Unknown
+
+  - type: input
+    id: parameter_count
+    attributes:
+      label: Parameter count
+      description: Provide the parameter count if known.
+      placeholder: e.g. 110000000
+
+  - type: input
+    id: architecture
+    attributes:
+      label: Architecture
+      description: Provide the backbone architecture if known.
+      placeholder: e.g. DeBERTa-v3
+
+  - type: input
+    id: base_model
+    attributes:
+      label: Base model
+      description: Provide the source model ID if known.
+      placeholder: e.g. microsoft/deberta-v3-base
+
+  - type: input
+    id: formats
+    attributes:
+      label: Available formats
+      description: List known artifact formats separated by commas, or enter `Unknown`.
+      placeholder: e.g. pytorch, onnx, mlx-4bit
+    validations:
+      required: true
+
+  - type: textarea
+    id: canonical_labels
+    attributes:
+      label: Canonical labels
+      description: List the OpenMed entity labels the model supports. Enter `N/A` for a language-only request if unknown.
+      placeholder: e.g. PERSON, DATE, EMAIL
+    validations:
+      required: true
+
+  - type: input
+    id: license
+    attributes:
+      label: License
+      description: Provide the model license identifier, or enter `Unknown`.
+      placeholder: e.g. apache-2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence_links
+    attributes:
+      label: Model card and evidence links
+      description: Link the model card, paper, benchmark, or language-coverage evidence if available.
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case and rationale
+      description: Explain why OpenMed should support this model or language.
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal_example
+    attributes:
+      label: Minimal synthetic example
+      description: Provide a short synthetic example showing the intended behavior. Do not use real patient data.
+    validations:
+      required: true
+
+  - type: input
+    id: openmed_version
+    attributes:
+      label: OpenMed version
+      placeholder: e.g. 2.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      placeholder: e.g. Windows 11, Ubuntu 24.04, macOS 15
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: e.g. 3.12.4
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy_confirmation
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I confirm that this issue contains no PHI, PII, secrets, or real patient data.
+          required: true
