@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+// The pinned browser-test package lives in ./brand while this issue's focused
+// spec remains at the repository-level path named in its acceptance criteria.
+import { expect, test } from "./brand/node_modules/@playwright/test/index.js";
 
 test.use({
   screenshot: "off",
@@ -35,6 +37,8 @@ test("redacts synthetic input locally without exposing source values", async ({
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto(PLAYGROUND_PATH, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("#input-text")).toHaveAttribute("autocomplete", "off");
+  await expect(page.locator("#input-text")).toHaveAttribute("spellcheck", "false");
   const blockedUploadCount = await page.evaluate(async (value) => {
     try {
       await fetch("/synthetic-upload", { body: value, method: "POST" });
@@ -246,4 +250,42 @@ test("rejects oversized adapter output without rendering it", async ({ page }) =
     "No local result yet.",
   );
   await expect(page.locator("#total-count")).toHaveText("0");
+});
+
+test("covers overlapping predictions and ignores outside labels", async ({ page }) => {
+  const runtimePath = "/docs/demo/privacy-playground/overlap-runtime.js";
+  const marker = "SYNTHETIC-OVERLAP-449";
+  await page.route(`**${runtimePath}`, async (route) => {
+    await route.fulfill({
+      body: `
+        export async function createOpenMedPipeline() {
+          return async function detect(text) {
+            const start = text.indexOf("${marker}");
+            return [
+              { entity_group: "O", score: 1, start: 0, end: 4 },
+              { entity_group: "PERSON", score: 1, start, end: start + 12 },
+              {
+                entity_group: "ID",
+                score: 1,
+                start: start + 8,
+                end: start + "${marker}".length,
+              },
+            ];
+          };
+        }
+      `,
+      contentType: "text/javascript; charset=utf-8",
+      status: 200,
+    });
+  });
+
+  await page.goto(PLAYGROUND_PATH, { waitUntil: "domcontentloaded" });
+  await page.locator("#runtime-module").fill("./overlap-runtime.js");
+  await page.locator("#model-url").fill("./models/synthetic/");
+  await page.locator("#input-text").fill(`safe ${marker}`);
+  await page.locator("#redact-button").click();
+
+  await expect(page.locator("#total-count")).toHaveText("1");
+  await expect(page.locator("#redacted-output")).toHaveText("safe [PII]");
+  await expect(page.locator("#redacted-output")).not.toContainText(marker);
 });

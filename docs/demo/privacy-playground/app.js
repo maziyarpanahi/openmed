@@ -308,8 +308,8 @@ function locateWord(text, modelWord, searchCursor) {
   if (!cleaned) {
     return null;
   }
-  const start = text.toLocaleLowerCase().indexOf(
-    cleaned.toLocaleLowerCase(),
+  const start = text.toLowerCase().indexOf(
+    cleaned.toLowerCase(),
     searchCursor,
   );
   return start === -1 ? null : { end: start + cleaned.length, start };
@@ -331,7 +331,7 @@ function mergeBioSpans(spans, text) {
         (prefix === null && gap === ""));
 
     if (continuesPrevious) {
-      previous.end = span.end;
+      previous.end = Math.max(previous.end, span.end);
       previous.score = (previous.score + span.score) / 2;
       continue;
     }
@@ -393,7 +393,14 @@ function nonOverlappingSpans(spans, textLength) {
   for (const span of spans) {
     const start = Math.max(0, Math.min(span.start, textLength));
     const end = Math.max(start, Math.min(span.end, textLength));
-    if (start < cursor || end === start) {
+    if (end === start) {
+      continue;
+    }
+    const previous = accepted.at(-1);
+    if (previous && start < cursor) {
+      previous.end = Math.max(previous.end, end);
+      previous.label = previous.label === span.label ? previous.label : "PII";
+      cursor = previous.end;
       continue;
     }
     accepted.push({ ...span, start, end });
@@ -406,6 +413,9 @@ function normalizeLabel(label) {
   const normalized = String(label ?? "")
     .trim()
     .toUpperCase();
+  if (normalized === "O") {
+    return "O";
+  }
   const match = /^(?:([BIES])-)?([A-Z][A-Z0-9_]{0,63})$/.exec(normalized);
   const prefix = match?.[1] ?? null;
   const base = match?.[2] ?? "PII";

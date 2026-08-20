@@ -153,7 +153,15 @@
         <section class="card full" aria-labelledby="input-heading">
           <h2 id="input-heading">Synthetic input</h2>
           <label for="input-text">Text to redact locally</label>
-          <textarea id="input-text" name="input-text" maxlength="100000">Synthetic note: Demo Person uses MRN SYN-MRN-2048 and demo.person@example.invalid on 2030-04-12.</textarea>
+          <textarea
+            id="input-text"
+            name="input-text"
+            maxlength="100000"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+          >Synthetic note: Demo Person uses MRN SYN-MRN-2048 and demo.person@example.invalid on 2030-04-12.</textarea>
           <div class="actions">
             <button id="redact-button" type="button">Redact locally</button>
             <button id="reset-button" class="secondary" type="button">
