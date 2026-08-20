@@ -148,6 +148,7 @@ nav:
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md

@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a preference-pair training schema adapter with structure-preserving
   redaction, bounded span reconciliation, validated schema-version reports, and
   privacy-safe labels and diagnostics (#2288).
+- Added a local-first, schema-preserving columnar trace-batch adapter with
+  bounded iteration, nested text-path redaction, deterministic defaults,
+  unchanged labels and metadata, and hashed value-free diagnostics (#2289).
 - Added a streaming, schema-preserving JSONL agent-trace content walker and
   rewriter with explicit string paths, value-free errors, duplicate-key
   rejection, same-file overwrite protection, and caller-supplied local
