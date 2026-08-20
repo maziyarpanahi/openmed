@@ -14,10 +14,11 @@ provides small, versioned selections for common OpenMed workflows:
 
 ## Manifest contract
 
-[`skills/packs/manifest.json`](../../skills/packs/manifest.json) is a local,
-version-controlled contract. `manifest_version` is the schema version, each
-pack has its own semantic `version`, and every entry in `skills` is a stable
-skill identifier: the kebab-case directory name containing `SKILL.md`.
+[`skills/packs/manifest.json`](https://github.com/maziyarpanahi/openmed/blob/master/skills/packs/manifest.json)
+is a local, version-controlled contract. `manifest_version` is the schema
+version, each pack has its own semantic `version`, and every entry in `skills`
+is a stable skill identifier: the kebab-case directory name containing
+`SKILL.md`.
 
 A skill may appear in only one topical pack. Skills that are not selected remain
 available from the full catalog and are intentionally not copied into a pack.
