@@ -1,1 +1,1 @@
-"""Focused tests for trace helpers."""
+"""Unit tests for trace utilities."""

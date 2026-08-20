@@ -27,12 +27,16 @@ nav:
   - Core Guides:
       - Building with an Agent: agent-usage.md
       - Local Trace-Store Discovery: guides/trace-discovery.md
+      - JSONL Trace Content Walker: reference/trace-jsonl.md
+      - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
+      - Streaming Trace Redaction: guides/streaming-traces.md
+      - Read-only Trace Scan Report: guides/trace-audit.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
@@ -95,6 +99,9 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Example Notebooks Gallery: examples/notebook-gallery.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Chat Message Schema: reference/chat-schema.md
+      - Training Schema Registry: reference/training-schemas.md
+      - Preference Pair Schema: reference/preference-schema.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
@@ -133,6 +140,7 @@ nav:
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
@@ -141,6 +149,7 @@ nav:
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
