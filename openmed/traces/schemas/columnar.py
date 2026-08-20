@@ -8,6 +8,7 @@ this module.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, TypeAlias
@@ -239,13 +240,32 @@ def _source_batches(source: Any, batch_size: int, pyarrow: Any) -> Iterator[Any]
     elif isinstance(source, pyarrow.Table):
         candidates = source.to_batches(max_chunksize=batch_size)
     else:
-        scanner_factory = getattr(source, "scanner", None)
+        try:
+            scanner_factory = getattr(source, "scanner", None)
+        except Exception:
+            raise ColumnarTraceAdapterError(
+                "The columnar source could not be inspected safely"
+            ) from None
         if callable(scanner_factory):
             try:
                 scanner = scanner_factory(batch_size=batch_size)
             except TypeError:
-                scanner = scanner_factory()
-            candidates = scanner.to_batches()
+                try:
+                    scanner = scanner_factory()
+                except Exception:
+                    raise ColumnarTraceAdapterError(
+                        "The columnar source scanner could not be created"
+                    ) from None
+            except Exception:
+                raise ColumnarTraceAdapterError(
+                    "The columnar source scanner could not be created"
+                ) from None
+            try:
+                candidates = scanner.to_batches()
+            except Exception:
+                raise ColumnarTraceAdapterError(
+                    "The columnar source scanner could not produce batches"
+                ) from None
         else:
             try:
                 candidates = iter(source)
@@ -253,10 +273,38 @@ def _source_batches(source: Any, batch_size: int, pyarrow: Any) -> Iterator[Any]
                 raise TypeError(
                     "source must be a RecordBatch, Table, dataset, or iterable"
                 ) from None
+            except Exception:
+                raise ColumnarTraceAdapterError(
+                    "The columnar source could not be opened safely"
+                ) from None
 
-    for candidate in candidates:
+    try:
+        iterator = iter(candidates)
+    except TypeError:
+        raise TypeError(
+            "source must be a RecordBatch, Table, dataset, or iterable"
+        ) from None
+    except Exception:
+        raise ColumnarTraceAdapterError(
+            "The columnar source could not be opened safely"
+        ) from None
+
+    while True:
+        try:
+            candidate = next(iterator)
+        except StopIteration:
+            return
+        except Exception:
+            raise ColumnarTraceAdapterError(
+                "The columnar source could not yield a record batch"
+            ) from None
         if isinstance(candidate, pyarrow.Table):
-            yield from candidate.to_batches(max_chunksize=batch_size)
+            try:
+                yield from candidate.to_batches(max_chunksize=batch_size)
+            except Exception:
+                raise ColumnarTraceAdapterError(
+                    "A source table could not be split into record batches"
+                ) from None
         elif isinstance(candidate, pyarrow.RecordBatch):
             yield candidate
         else:
@@ -277,7 +325,7 @@ def _rewrite_array(
         field_index = array_type.get_field_index(path[0])
         if field_index < 0:
             raise ColumnarTraceAdapterError(
-                f"Selected nested field is missing: {'.'.join(path)}"
+                f"Selected nested field is missing: {_safe_path_label(path)}"
             )
         children = [array.field(index) for index in range(array_type.num_fields)]
         children[field_index] = _rewrite_array(
@@ -525,14 +573,15 @@ def _validate_paths(
     resolved: list[FieldPath] = []
     for path in normalized:
         joined = ".".join(path)
+        safe_path = _safe_path_label(path)
         if schema.get_field_index(joined) >= 0:
-            actual_path = (joined,)
+            actual_path: FieldPath = (joined,)
         else:
             actual_path = path
         field_index = schema.get_field_index(actual_path[0])
         if field_index < 0:
             raise ColumnarTraceAdapterError(
-                f"Selected text column is missing: {joined}"
+                f"Selected text column is missing: {safe_path}"
             )
         field_type = schema.field(field_index).type
         for segment in actual_path[1:]:
@@ -546,15 +595,15 @@ def _validate_paths(
                 field_type = field_type.item_type
             if not pyarrow.types.is_struct(field_type):
                 raise ColumnarTraceAdapterError(
-                    f"Selected path does not resolve through a struct: {joined}"
+                    f"Selected path does not resolve through a struct: {safe_path}"
                 )
             child_index = field_type.get_field_index(segment)
             if child_index < 0:
                 raise ColumnarTraceAdapterError(
-                    f"Selected nested field is missing: {joined}"
+                    f"Selected nested field is missing: {safe_path}"
                 )
             field_type = field_type.field(child_index).type
-        _validate_selected_type(field_type, joined, pyarrow)
+        _validate_selected_type(field_type, safe_path, pyarrow)
         if actual_path not in resolved:
             resolved.append(actual_path)
     return tuple(resolved)
@@ -606,7 +655,9 @@ def _normalize_field_paths(
                 raise TypeError(
                     "Each text column path must be a string sequence"
                 ) from None
-        clean = tuple(str(part).strip() for part in parts)
+        if any(not isinstance(part, str) for part in parts):
+            raise TypeError("Each text column path must contain only strings")
+        clean = tuple(part.strip() for part in parts)
         if not clean or any(not part for part in clean):
             raise ValueError("Text column paths must not contain empty fields")
         if clean not in seen:
@@ -615,6 +666,14 @@ def _normalize_field_paths(
     if not normalized:
         raise ValueError("At least one text column must be selected")
     return tuple(normalized)
+
+
+def _safe_path_label(path: str | Sequence[str]) -> str:
+    """Return a stable path identifier without exposing schema field names."""
+
+    raw_path = path if isinstance(path, str) else ".".join(path)
+    digest = hashlib.sha256(raw_path.encode("utf-8")).hexdigest()[:12]
+    return f"path_sha256_{digest}"
 
 
 def _resolve_redactor(

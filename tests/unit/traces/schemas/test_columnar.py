@@ -200,3 +200,37 @@ def test_invalid_nested_path_is_reported_without_values() -> None:
             _trace_batch(),
             text_columns=["payload.missing"],
         )
+
+
+def test_source_iteration_errors_do_not_expose_values() -> None:
+    secret = "SYNTHETIC_PRIVATE_PATH"
+
+    class FailingSource:
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            raise RuntimeError(secret)
+
+    iterator = iter_redacted_record_batches(
+        FailingSource(),
+        text_columns=["text"],
+    )
+
+    with pytest.raises(ColumnarTraceAdapterError) as caught:
+        next(iterator)
+
+    assert secret not in str(caught.value)
+
+
+def test_missing_column_name_is_hashed_in_errors() -> None:
+    sensitive_column = "PatientJaneDoe"
+
+    with pytest.raises(ColumnarTraceAdapterError) as caught:
+        redact_record_batch(
+            pa.record_batch({"text": ["synthetic"]}),
+            text_columns=[sensitive_column],
+        )
+
+    assert sensitive_column not in str(caught.value)
+    assert "path_sha256_" in str(caught.value)

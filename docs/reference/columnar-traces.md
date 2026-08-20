@@ -69,7 +69,8 @@ calls through `adapt_batch` and `adapt_batches`.
 - Only selected string, large-string, dictionary-string, or list-like text
   values are rewritten. Labels and other columns are copied through unchanged.
 - Missing paths, non-text selections, and redactor failures raise a
-  `ColumnarTraceAdapterError` whose message contains schema context only; raw
-  source values are not included.
+  `ColumnarTraceAdapterError` whose message uses a deterministic
+  `path_sha256_...` identifier; raw source values, schema field names, and
+  underlying iterator exception text are not included.
 - The module emits no logs or reports and contains no dataset fixtures. Use
   synthetic offline fixtures in downstream tests.
