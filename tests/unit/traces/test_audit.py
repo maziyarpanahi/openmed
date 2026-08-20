@@ -65,10 +65,10 @@ def test_aggregates_findings_by_store_category_and_file_without_values() -> None
     assert report.by_category["prompt"]["count"] == 2
     file_label = str(payload["findings"][0]["file"])
     assert file_label.startswith("file_sha256_")
-    assert report.by_file[("codex", file_label)]["byte_ranges"] == [
+    assert report.by_file[("codex", file_label)]["byte_ranges"] == (
         {"start": 2, "end": 8},
         {"start": 20, "end": 34},
-    ]
+    )
     assert "session-a.jsonl" not in report.to_json()
     assert _SENSITIVE_VALUE not in report.to_json()
     assert _SENSITIVE_VALUE not in report.to_terminal()
@@ -257,6 +257,19 @@ def test_byte_totals_keep_identical_ranges_from_distinct_files() -> None:
     assert [item["byte_count"] for item in report.files] == [4, 4]
 
 
+def test_byte_totals_count_overlapping_ranges_once_per_file() -> None:
+    report = build_trace_audit(
+        [
+            TraceFinding("codex", "message", "trace.jsonl", 0, 10),
+            TraceFinding("codex", "prompt", "trace.jsonl", 5, 15),
+        ]
+    )
+
+    assert report.stores[0]["byte_count"] == 15
+    assert report.files[0]["byte_count"] == 15
+    assert [item["byte_count"] for item in report.categories] == [10, 10]
+
+
 def test_direct_report_construction_drops_unknown_fields_and_freezes_rows() -> None:
     sensitive = "PatientJaneDoe"
     source_row = {
@@ -275,14 +288,28 @@ def test_direct_report_construction_drops_unknown_fields_and_freezes_rows() -> N
         findings=(),
     )
     source_row["store"] = "changed-after-construction"
+    source_row["byte_ranges"][0]["start"] = 3
 
     serialized = report.to_json()
     assert sensitive not in serialized
     assert "changed-after-construction" not in serialized
     assert "value" not in report.stores[0]
     assert str(report.stores[0]["store"]).startswith("store_sha256_")
+    assert report.stores[0]["byte_ranges"] == ({"start": 0, "end": 4},)
     with pytest.raises(TypeError):
         report.stores[0]["store"] = sensitive  # type: ignore[index]
+    with pytest.raises(TypeError):
+        report.stores[0]["byte_ranges"][0]["start"] = 3  # type: ignore[index]
+
+
+def test_serialized_report_rows_are_detached_from_the_frozen_snapshot() -> None:
+    report = build_trace_audit([TraceFinding("codex", "message", "trace.jsonl", 0, 4)])
+
+    payload = report.to_dict()
+    payload["stores"][0]["byte_ranges"][0]["start"] = _SENSITIVE_VALUE
+
+    assert _SENSITIVE_VALUE not in report.to_json()
+    assert report.stores[0]["byte_ranges"] == ({"start": 0, "end": 4},)
 
 
 def test_invalid_input_is_value_free() -> None:
