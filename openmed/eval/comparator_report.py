@@ -231,7 +231,7 @@ class ComparatorReportRow:
 
 
 @dataclass(frozen=True)
-class ComparatorReport:
+class CountsOnlyComparatorReport:
     """Deterministic, counts-only comparator report."""
 
     suite: str
@@ -333,7 +333,7 @@ class ComparatorReport:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "ComparatorReport":
+    def from_dict(cls, payload: Mapping[str, Any]) -> "CountsOnlyComparatorReport":
         """Load and re-sanitize a counts-only report mapping."""
 
         if type(payload) is not dict:
@@ -487,10 +487,10 @@ class ComparatorReportRenderer:
 
     def build(
         self,
-        result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+        result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
         *,
         generated_at: str | None = None,
-    ) -> ComparatorReport:
+    ) -> CountsOnlyComparatorReport:
         """Build a counts-only report from comparator results."""
 
         return build_comparator_report(
@@ -502,7 +502,7 @@ class ComparatorReportRenderer:
 
     def render(
         self,
-        result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+        result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
         *,
         format: str = "markdown",
         generated_at: str | None = None,
@@ -514,7 +514,7 @@ class ComparatorReportRenderer:
 
     def render_json(
         self,
-        result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+        result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
         *,
         generated_at: str | None = None,
         indent: int = 2,
@@ -525,7 +525,7 @@ class ComparatorReportRenderer:
 
     def render_markdown(
         self,
-        result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+        result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
         *,
         generated_at: str | None = None,
     ) -> str:
@@ -535,12 +535,12 @@ class ComparatorReportRenderer:
 
 
 def build_comparator_report(
-    result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+    result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
     *,
     environment: Mapping[str, Any] | None = None,
     environment_fingerprint: str | None = None,
     generated_at: str | None = None,
-) -> ComparatorReport:
+) -> CountsOnlyComparatorReport:
     """Project comparator results onto an aggregate-only report.
 
     ``result`` may be a :class:`ComparatorMatrixReport` or its JSON-ready
@@ -548,7 +548,7 @@ def build_comparator_report(
     benchmark reports, and exception messages are intentionally not copied.
     """
 
-    if type(result) is ComparatorReport:
+    if type(result) is CountsOnlyComparatorReport:
         if (
             environment is None
             and environment_fingerprint is None
@@ -613,7 +613,7 @@ def build_comparator_report(
         "systems_affected": len(row_failure_systems),
         "total": _bounded_total(failure_categories.values()),
     }
-    return ComparatorReport(
+    return CountsOnlyComparatorReport(
         suite=_value(source, "suite", "comparator"),
         model_name=_value(source, "model_name", "OpenMed"),
         device=_value(source, "device", "unknown"),
@@ -626,7 +626,7 @@ def build_comparator_report(
 
 
 def render_comparator_report(
-    result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+    result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
     *,
     format: str = "markdown",
     output_format: str | None = None,
@@ -651,7 +651,7 @@ def render_comparator_report(
 
 
 def render_comparator_report_json(
-    result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+    result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
     *,
     environment: Mapping[str, Any] | None = None,
     environment_fingerprint: str | None = None,
@@ -671,7 +671,7 @@ def render_comparator_report_json(
 
 
 def render_comparator_report_markdown(
-    result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+    result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
     *,
     environment: Mapping[str, Any] | None = None,
     environment_fingerprint: str | None = None,
@@ -689,7 +689,7 @@ def render_comparator_report_markdown(
 
 
 def write_comparator_report(
-    result: ComparatorMatrixReport | ComparatorReport | Mapping[str, Any],
+    result: ComparatorMatrixReport | CountsOnlyComparatorReport | Mapping[str, Any],
     path: str | Path,
     *,
     format: str | None = None,
@@ -1136,7 +1136,7 @@ def _value(source: Any, key: str, default: Any = _MISSING) -> Any:
         BenchmarkReport,
         ComparatorMatrixReport,
         ComparatorMatrixRow,
-        ComparatorReport,
+        CountsOnlyComparatorReport,
         ComparatorReportRow,
     ):
         return object.__getattribute__(source, "__dict__").get(key, default)
@@ -1233,7 +1233,12 @@ def _markdown_cell(value: Any) -> str:
     return str(value).replace("|", r"\|").replace("\n", " ")
 
 
-def _render_report(report: ComparatorReport, *, format: str, indent: int = 2) -> str:
+def _render_report(
+    report: CountsOnlyComparatorReport,
+    *,
+    format: str,
+    indent: int = 2,
+) -> str:
     if type(format) is not str:
         raise TypeError("comparator report format must be a string")
     normalized = format.strip().lower()
@@ -1249,7 +1254,7 @@ __all__ = [
     "COMPARATOR_REPORT_SCHEMA_VERSION",
     "DEFAULT_METRIC_DEFINITIONS",
     "METRIC_NAMES",
-    "ComparatorReport",
+    "CountsOnlyComparatorReport",
     "ComparatorReportRenderer",
     "ComparatorReportRow",
     "build_comparator_report",

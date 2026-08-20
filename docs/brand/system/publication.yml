@@ -188,6 +188,7 @@ classification:
     - testing.md
     - eval-harness.md
     - evaluation/comparator-reports.md
+    - evaluation/comparator-harness.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -216,6 +217,7 @@ classification:
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/secret-detection.md
+    - guides/in-place-redaction.md
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md

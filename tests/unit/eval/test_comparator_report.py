@@ -10,8 +10,8 @@ import pytest
 
 from openmed.eval.comparator_report import (
     DEFAULT_METRIC_DEFINITIONS,
-    ComparatorReport,
     ComparatorReportRow,
+    CountsOnlyComparatorReport,
     build_comparator_report,
     fingerprint_environment,
     render_comparator_report_json,
@@ -27,6 +27,16 @@ from openmed.eval.report import BenchmarkReport
 RAW_FIXTURE_VALUE = "Patient Ada Lovelace MRN-493021"
 
 
+def test_counts_only_report_has_a_distinct_public_type() -> None:
+    from openmed.eval import ComparatorReport as BenchmarkComparatorReport
+    from openmed.eval import (
+        CountsOnlyComparatorReport as PublicCountsOnlyComparatorReport,
+    )
+
+    assert PublicCountsOnlyComparatorReport is CountsOnlyComparatorReport
+    assert PublicCountsOnlyComparatorReport is not BenchmarkComparatorReport
+
+
 def test_comparator_report_is_counts_only_and_aggregates_failures() -> None:
     environment = {
         "python": "3.12.4",
@@ -39,7 +49,7 @@ def test_comparator_report_is_counts_only_and_aggregates_failures() -> None:
     payload = report.to_dict()
     serialized = json.dumps(payload, sort_keys=True)
 
-    assert isinstance(report, ComparatorReport)
+    assert isinstance(report, CountsOnlyComparatorReport)
     assert RAW_FIXTURE_VALUE not in serialized
     assert payload["environment_fingerprint"] == fingerprint_environment(environment)
     assert payload["summary"] == {
@@ -193,7 +203,7 @@ def test_sanitized_report_state_is_deeply_immutable() -> None:
         metrics={"leakage_rate": 0.0},
         metric_counts={"leakage_rate": {"total_graphemes": 1}},
     )
-    report = ComparatorReport(
+    report = CountsOnlyComparatorReport(
         suite="comparator",
         model_name="OpenMed",
         device="cpu",
@@ -255,9 +265,9 @@ def test_report_rejects_unbounded_json_indent_and_unknown_schema() -> None:
     with pytest.raises(ValueError, match="indent"):
         report.to_json(indent=1000)
     with pytest.raises(ValueError, match="schema version"):
-        ComparatorReport.from_dict({"schema_version": 999, "rows": []})
+        CountsOnlyComparatorReport.from_dict({"schema_version": 999, "rows": []})
     with pytest.raises(ValueError, match="artifact type"):
-        ComparatorReport.from_dict({"artifact_type": "other", "rows": []})
+        CountsOnlyComparatorReport.from_dict({"artifact_type": "other", "rows": []})
 
 
 def test_write_failure_does_not_echo_the_output_path() -> None:
@@ -290,13 +300,13 @@ def test_sanitized_report_round_trip_does_not_rehash_identifiers() -> None:
         environment={"python": "3.12"},
     )
 
-    restored = ComparatorReport.from_dict(report.to_dict())
+    restored = CountsOnlyComparatorReport.from_dict(report.to_dict())
 
     assert restored.to_dict() == report.to_dict()
 
 
 def test_loaded_report_reconciles_row_counts_and_failure_status() -> None:
-    report = ComparatorReport.from_dict(
+    report = CountsOnlyComparatorReport.from_dict(
         {
             "artifact_type": "openmed.eval.comparator_report",
             "fixture_count": 0,

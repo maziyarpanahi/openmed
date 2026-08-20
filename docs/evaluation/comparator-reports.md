@@ -6,6 +6,10 @@ plain JSON-ready dictionary and writes deterministic JSON or Markdown without co
 fixture text, fixture identifiers, arbitrary metadata, nested benchmark
 reports, or exception messages.
 
+`build_comparator_report` returns a `CountsOnlyComparatorReport`. That public
+type is intentionally distinct from the benchmark harness's
+`ComparatorReport`, so importing the renderer cannot shadow benchmark results.
+
 ```python
 from openmed.eval import (
     build_comparator_report,

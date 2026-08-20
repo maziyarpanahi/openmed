@@ -115,6 +115,7 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Comparator Reports: evaluation/comparator-reports.md
+      - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -144,6 +145,7 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Secret Token Detection: security/secret-detection.md
+      - In-place Trace Redaction: guides/in-place-redaction.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
