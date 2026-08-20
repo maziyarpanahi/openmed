@@ -1,3 +1,54 @@
+const MAX_INPUT_CHARS = 100_000;
+const MAX_OUTPUT_ITEMS = 10_000;
+const SAFE_LABELS = new Set([
+  "ACCOUNT",
+  "ACCOUNT_NUMBER",
+  "ADDRESS",
+  "AGE",
+  "API_KEY",
+  "BIC",
+  "CITY",
+  "COUNTRY",
+  "CREDIT_CARD",
+  "CVV",
+  "DATE",
+  "DATE_OF_BIRTH",
+  "DOB",
+  "DOCTOR",
+  "EMAIL",
+  "EMAIL_ADDRESS",
+  "FACILITY",
+  "HOSPITAL",
+  "IBAN",
+  "ID",
+  "ID_NUM",
+  "IP",
+  "IP_ADDRESS",
+  "LOC",
+  "LOCATION",
+  "MEDICAL_RECORD_NUMBER",
+  "MRN",
+  "NAME",
+  "ORG",
+  "ORGANIZATION",
+  "PATIENT",
+  "PATIENT_NAME",
+  "PER",
+  "PERSON",
+  "PHONE",
+  "PHONE_NUMBER",
+  "PII",
+  "PIN",
+  "POSTAL_CODE",
+  "PROVIDER",
+  "SSN",
+  "STREET_ADDRESS",
+  "URL",
+  "USERNAME",
+  "ZIP",
+  "ZIPCODE",
+]);
+
 const BUILTIN_RULES = [
   {
     label: "EMAIL",
@@ -35,6 +86,8 @@ let blockedUploadAttempts = 0;
 let activeConfiguration = "";
 let detector = null;
 let detectorMode = "builtin";
+let allowedAssetPrefixes = [];
+let networkPolicyReady = true;
 
 installLocalOnlyNetworkPolicy();
 initializeFromQuery();
@@ -47,6 +100,8 @@ for (const input of [runtimeInput, modelInput]) {
     activeConfiguration = "";
     detector = null;
     detectorMode = "builtin";
+    allowedAssetPrefixes = [];
+    renderNetworkStatus();
     runtimeStatus.textContent = "Adapter configuration changed.";
   });
 }
@@ -59,6 +114,9 @@ async function redactLocally() {
     const input = textInput.value;
     if (!input.trim()) {
       throw new Error("empty-input");
+    }
+    if (input.length > MAX_INPUT_CHARS) {
+      throw new Error("input-too-large");
     }
 
     const localDetector = await loadDetector();
@@ -84,11 +142,16 @@ async function loadDetector() {
   const modelValue = modelInput.value.trim();
   if (!runtimeValue && !modelValue) {
     detectorMode = "builtin";
+    allowedAssetPrefixes = [];
+    renderNetworkStatus();
     runtimeStatus.textContent = "Deterministic local rules selected.";
     return builtinDetector;
   }
   if (!runtimeValue || !modelValue) {
     throw new Error("incomplete-adapter");
+  }
+  if (!networkPolicyReady) {
+    throw new Error("network-guard-unavailable");
   }
 
   const configuration = localConfiguration(runtimeValue, modelValue);
@@ -96,32 +159,46 @@ async function loadDetector() {
     return detector;
   }
 
-  runtimeStatus.textContent = "Loading same-origin adapter…";
-  const runtime = await import(configuration.runtimeUrl.href);
-  if (typeof runtime.createOpenMedPipeline !== "function") {
-    throw new Error("invalid-adapter");
-  }
-  const candidate = await runtime.createOpenMedPipeline({
-    backend: "wasm",
-    dtype: "q8",
-    modelUrl: configuration.modelUrl.href,
-    task: "token-classification",
-  });
-  if (typeof candidate !== "function") {
-    throw new Error("invalid-detector");
+  runtimeStatus.textContent = "Loading trusted same-origin adapter…";
+  allowedAssetPrefixes = configuration.assetPrefixes;
+  renderNetworkStatus();
+  let candidate;
+  try {
+    const runtime = await import(configuration.runtimeUrl.href);
+    if (typeof runtime.createOpenMedPipeline !== "function") {
+      throw new Error("invalid-adapter");
+    }
+    candidate = await runtime.createOpenMedPipeline({
+      backend: "wasm",
+      dtype: "q8",
+      modelUrl: configuration.modelUrl.href,
+      task: "token-classification",
+    });
+    if (typeof candidate !== "function") {
+      throw new Error("invalid-detector");
+    }
+  } catch (error) {
+    allowedAssetPrefixes = [];
+    runtimeStatus.textContent = "Local adapter unavailable.";
+    renderNetworkStatus();
+    throw error;
   }
 
   activeConfiguration = configuration.key;
   detector = candidate;
   detectorMode = "adapter";
-  runtimeStatus.textContent = "Same-origin local adapter ready.";
+  runtimeStatus.textContent = "Trusted same-origin local adapter ready.";
   return detector;
 }
 
 function localConfiguration(runtimeValue, modelValue) {
   const runtimeUrl = sameOriginUrl(runtimeValue);
   const modelUrl = sameOriginUrl(modelValue);
+  if (!modelUrl.pathname.endsWith("/")) {
+    throw new Error("unsafe-adapter-url");
+  }
   return {
+    assetPrefixes: [new URL(".", runtimeUrl).pathname, modelUrl.pathname],
     key: `${runtimeUrl.href}\n${modelUrl.href}`,
     modelUrl,
     runtimeUrl,
@@ -130,7 +207,13 @@ function localConfiguration(runtimeValue, modelValue) {
 
 function sameOriginUrl(value) {
   const resolved = new URL(value, window.location.href);
-  if (resolved.origin !== window.location.origin) {
+  if (
+    resolved.origin !== window.location.origin ||
+    resolved.username ||
+    resolved.password ||
+    resolved.search ||
+    resolved.hash
+  ) {
     throw new Error("cross-origin-adapter");
   }
   return resolved;
@@ -153,10 +236,7 @@ async function builtinDetector(text) {
 }
 
 function normalizeOutput(output, text) {
-  const flat = Array.isArray(output?.[0]) ? output.flat() : output;
-  if (!Array.isArray(flat)) {
-    return [];
-  }
+  const flat = boundedOutputItems(output);
 
   const located = [];
   let searchCursor = 0;
@@ -191,9 +271,33 @@ function normalizeOutput(output, text) {
     });
   }
 
-  return mergeBioSpans(located, text).sort(
+  located.sort(
     (left, right) => left.start - right.start || right.end - left.end,
   );
+  return mergeBioSpans(located, text);
+}
+
+function boundedOutputItems(output) {
+  if (!Array.isArray(output)) {
+    return [];
+  }
+  if (output.length > MAX_OUTPUT_ITEMS) {
+    throw new Error("adapter-output-too-large");
+  }
+  const groups = Array.isArray(output[0]) ? output : [output];
+  const items = [];
+  for (const group of groups) {
+    if (!Array.isArray(group)) {
+      continue;
+    }
+    for (const item of group) {
+      if (items.length >= MAX_OUTPUT_ITEMS) {
+        throw new Error("adapter-output-too-large");
+      }
+      items.push(item);
+    }
+  }
+  return items;
 }
 
 function locateWord(text, modelWord, searchCursor) {
@@ -299,7 +403,14 @@ function nonOverlappingSpans(spans, textLength) {
 }
 
 function normalizeLabel(label) {
-  return String(label).toUpperCase();
+  const normalized = String(label ?? "")
+    .trim()
+    .toUpperCase();
+  const match = /^(?:([BIES])-)?([A-Z][A-Z0-9_]{0,63})$/.exec(normalized);
+  const prefix = match?.[1] ?? null;
+  const base = match?.[2] ?? "PII";
+  const safeBase = SAFE_LABELS.has(base) ? base : "PII";
+  return prefix ? `${prefix}-${safeBase}` : safeBase;
 }
 
 function clearResult({ keepStatus = false } = {}) {
@@ -328,10 +439,15 @@ function publicErrorMessage(error) {
   switch (error?.message) {
     case "empty-input":
       return "Enter synthetic text before running local redaction.";
+    case "input-too-large":
+      return "Synthetic input exceeds the 100,000-character local limit.";
     case "incomplete-adapter":
       return "Provide both local adapter fields, or leave both empty.";
     case "cross-origin-adapter":
+    case "unsafe-adapter-url":
       return "Local adapter and model URLs must use this page's origin.";
+    case "network-guard-unavailable":
+      return "This browser cannot enforce the local adapter network guard.";
     case "invalid-adapter":
     case "invalid-detector":
       return "The local adapter does not implement the OpenMed browser contract.";
@@ -387,12 +503,15 @@ function installLocalOnlyNetworkPolicy() {
   };
 
   try {
-    navigator.sendBeacon = () => {
-      recordBlockedUpload();
-      return false;
-    };
+    Object.defineProperty(navigator, "sendBeacon", {
+      configurable: true,
+      value: () => {
+        recordBlockedUpload();
+        return false;
+      },
+    });
   } catch {
-    // A hardened browser may expose sendBeacon as read-only; CSP still applies.
+    networkPolicyReady = false;
   }
   try {
     window.WebSocket = class LocalOnlyWebSocket {
@@ -402,15 +521,31 @@ function installLocalOnlyNetworkPolicy() {
       }
     };
   } catch {
-    // A hardened browser may expose WebSocket as read-only; CSP still applies.
+    networkPolicyReady = false;
+  }
+  try {
+    window.EventSource = class LocalOnlyEventSource {
+      constructor() {
+        recordBlockedUpload();
+        throw new Error("local-only-network-policy");
+      }
+    };
+  } catch {
+    networkPolicyReady = false;
   }
 }
 
 function allowedAssetRequest(value, method) {
   try {
     const url = new URL(value, window.location.href);
-    return url.origin === window.location.origin && ["GET", "HEAD"].includes(
-      String(method).toUpperCase(),
+    return (
+      url.origin === window.location.origin &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      ["GET", "HEAD"].includes(String(method).toUpperCase()) &&
+      allowedAssetPrefixes.some((prefix) => url.pathname.startsWith(prefix))
     );
   } catch {
     return false;
@@ -426,5 +561,10 @@ function renderNetworkStatus() {
   const connection = navigator.onLine
     ? "Browser reports online"
     : "Browser reports offline";
-  networkStatus.textContent = `${connection}; uploads blocked`;
+  const reads = !networkPolicyReady
+    ? "optional adapter network guard unavailable"
+    : allowedAssetPrefixes.length > 0
+      ? "trusted same-origin adapter assets enabled"
+      : "script-initiated asset reads disabled";
+  networkStatus.textContent = `${connection}; ${reads}; upload bodies blocked`;
 }
