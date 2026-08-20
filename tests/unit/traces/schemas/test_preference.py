@@ -7,6 +7,7 @@ from copy import deepcopy
 import pytest
 
 from openmed.traces.schemas.preference import (
+    CONTENT_FIELDS,
     PreferencePair,
     PreferencePairAdapter,
     PreferenceRedactionReport,
@@ -120,6 +121,44 @@ def test_falsey_callable_redactor_is_not_discarded() -> None:
     assert all(
         "SYNTH-42" not in result[field] for field in ("prompt", "chosen", "rejected")
     )
+
+
+def test_falsey_callable_detector_is_not_discarded() -> None:
+    class FalseyDetector:
+        calls = 0
+
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, text: str):
+            self.calls += 1
+            return (SensitiveSpan(0, len(text), "ID_NUM"),)
+
+    detector = FalseyDetector()
+    record = {
+        "prompt": "opaque prompt value",
+        "chosen": "opaque chosen value",
+        "rejected": "opaque rejected value",
+    }
+
+    result = PreferencePairAdapter(span_detector=detector).redact(record)
+
+    assert detector.calls == 3
+    assert all(result[field] != record[field] for field in CONTENT_FIELDS)
+
+
+def test_hostile_anonymizer_property_error_is_sanitized() -> None:
+    sensitive = "synthetic private anonymizer value"
+
+    class HostileAnonymizer:
+        @property
+        def surrogate(self):
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(PreferenceSchemaError) as caught:
+        PreferenceRedactionState(anonymizer=HostileAnonymizer())
+
+    assert sensitive not in str(caught.value)
 
 
 def test_dataset_iterator_failures_do_not_echo_source_values() -> None:

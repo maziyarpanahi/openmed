@@ -154,7 +154,13 @@ class PreferenceRedactionState:
                 consistent=True,
                 seed=self.seed,
             )
-        if not callable(getattr(self.anonymizer, "surrogate", None)):
+        try:
+            surrogate = getattr(self.anonymizer, "surrogate", None)
+        except Exception:
+            raise PreferenceRedactionError(
+                "anonymizer could not be inspected safely"
+            ) from None
+        if not callable(surrogate):
             raise TypeError("anonymizer must provide a surrogate method")
 
     def pseudonym(self, value: str, label: str) -> str:
@@ -442,7 +448,7 @@ class PreferencePairAdapter:
 
         source = record.to_mapping() if isinstance(record, PreferencePair) else record
         _validate_record(source)
-        active_state = state or self.new_state()
+        active_state = state if state is not None else self.new_state()
         output = _copy_mapping(source)
         for field_name in CONTENT_FIELDS:
             output[field_name] = self._redact_content(
@@ -461,7 +467,7 @@ class PreferencePairAdapter:
     ) -> PreferenceRedactionResult:
         """Redact one pair and return a source-text-free processing report."""
 
-        active_state = state or self.new_state()
+        active_state = state if state is not None else self.new_state()
         before = active_state._snapshot()
         output = self.redact(record, state=active_state)
         return PreferenceRedactionResult(
@@ -477,7 +483,7 @@ class PreferencePairAdapter:
     ) -> list[dict[str, Any]]:
         """Redact records with one shared state and preserve record order."""
 
-        active_state = state or self.new_state()
+        active_state = state if state is not None else self.new_state()
         try:
             iterator = iter(records)
         except Exception:
@@ -504,7 +510,7 @@ class PreferencePairAdapter:
     ) -> tuple[list[dict[str, Any]], PreferenceRedactionReport]:
         """Redact records and return one PHI-safe aggregate report."""
 
-        active_state = state or self.new_state()
+        active_state = state if state is not None else self.new_state()
         before = active_state._snapshot()
         output = self.redact_dataset(records, state=active_state)
         return output, active_state.report(before)
@@ -550,7 +556,11 @@ class PreferencePairAdapter:
 
     def _redact_text(self, text: str, state: PreferenceRedactionState) -> str:
         if self.text_redactor is None:
-            detector = self.span_detector or self._default_detector
+            detector = (
+                self.span_detector
+                if self.span_detector is not None
+                else self._default_detector
+            )
             try:
                 spans = detector(text)
             except Exception:
