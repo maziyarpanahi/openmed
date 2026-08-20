@@ -193,6 +193,39 @@ def test_schema_names_are_hashed_in_diagnostics() -> None:
     assert "schema_sha256_" in str(invalid_error.value)
 
 
+def test_hostile_schema_introspection_errors_are_sanitized() -> None:
+    sensitive = "Synthetic private adapter value"
+    registry = TrainingSchemaRegistry(include_defaults=False)
+
+    class HostileNameSchema:
+        @property
+        def name(self) -> str:
+            raise RuntimeError(sensitive)
+
+    with pytest.raises(InvalidSchemaError) as name_error:
+        registry.register(HostileNameSchema())
+    assert sensitive not in str(name_error.value)
+
+    class HostileMethodSchema:
+        name = "hostile-method"
+
+        @property
+        def detect(self):
+            raise RuntimeError(sensitive)
+
+        def walk(self, record: object):
+            del record
+            return ()
+
+        def reconstruct(self, record: object, replacements: object) -> object:
+            del replacements
+            return record
+
+    with pytest.raises(InvalidSchemaError) as method_error:
+        registry.register(HostileMethodSchema())
+    assert sensitive not in str(method_error.value)
+
+
 def test_registry_rejects_a_canonical_name_that_collides_with_an_alias() -> None:
     class AliasCollisionSchema:
         name = "chat"

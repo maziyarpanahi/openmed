@@ -396,17 +396,19 @@ def _replace_at_path(value: Any, path: ContentPath, replacement: str) -> Any:
 
 def _schema_method(schema: object, *names: str) -> Any:
     for name in names:
-        method = getattr(schema, name, None)
+        try:
+            method = getattr(schema, name, None)
+        except Exception:
+            raise InvalidSchemaError(
+                "training schema protocol could not be inspected safely"
+            ) from None
         if callable(method):
             return method
     return None
 
 
 def _validated_schema(schema: object) -> TrainingConversationSchema:
-    name = getattr(schema, "name", None)
-    if not isinstance(name, str) or not name.strip():
-        raise InvalidSchemaError("training schemas must declare a non-empty name")
-    safe_name = _safe_schema_label(name.strip())
+    safe_name = _safe_schema_label(_schema_name(schema))
     if _schema_method(schema, "detect", "matches") is None:
         raise InvalidSchemaError(f"training schema {safe_name} must define detect()")
     if _schema_method(schema, "walk", "iter_content") is None:
@@ -419,7 +421,12 @@ def _validated_schema(schema: object) -> TrainingConversationSchema:
 
 
 def _schema_name(schema: object) -> str:
-    name = getattr(schema, "name", None)
+    try:
+        name = getattr(schema, "name", None)
+    except Exception:
+        raise InvalidSchemaError(
+            "training schema name could not be inspected safely"
+        ) from None
     if not isinstance(name, str) or not name.strip():
         raise InvalidSchemaError("training schemas must declare a non-empty name")
     return name.strip()
