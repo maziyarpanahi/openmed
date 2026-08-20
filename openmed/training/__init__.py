@@ -29,6 +29,7 @@ __all__ = [
     "ActiveLearningCandidate",
     "ActiveLearningQueue",
     "CRITICAL_LABELS",
+    "CORPUS_RECORD_REQUIRED_FIELDS",
     "CorpusManifestError",
     "ClinicalPrivacyCheckpointManifest",
     "ClinicalPrivacyGateThreshold",
@@ -96,6 +97,7 @@ __all__ = [
     "HardNegativeGenerator",
     "HardNegativeSampler",
     "JsonlPassageSource",
+    "jsonl_records_hash",
     "KDLossBreakdown",
     "LabeledSpan",
     "LabelRecallDelta",
@@ -169,6 +171,7 @@ __all__ = [
     "student_backbone_from_tiny_distill_preset",
     "token_count",
     "validate_clinical_privacy_checkpoint_manifest",
+    "validate_corpus_record",
     "validate_directid_contract",
     "validate_directid_batch",
     "validate_directid_dataset_manifest",
@@ -176,6 +179,7 @@ __all__ = [
     "validate_directid_split_records",
     "weak_label_document",
     "write_clinical_privacy_checkpoint_manifest",
+    "write_jsonl_records",
 ]
 
 
@@ -240,12 +244,14 @@ def __getattr__(name: str) -> Any:
         recipe = import_module(".recipe", __name__)
         return getattr(recipe, name)
     if name in {
+        "CORPUS_RECORD_REQUIRED_FIELDS",
         "DAPT_CORPUS_MANIFEST_PATH",
         "DAPT_CORPUS_SCHEMA_VERSION",
         "CorpusManifestError",
         "DaptCorpusAssemblyResult",
         "GatedCorpusAccessError",
         "JsonlPassageSource",
+        "jsonl_records_hash",
         "MimicIIIDuaSource",
         "Passage",
         "PassageSource",
@@ -261,6 +267,8 @@ def __getattr__(name: str) -> Any:
         "pmc_abstract_source",
         "pubmed_abstract_source",
         "token_count",
+        "validate_corpus_record",
+        "write_jsonl_records",
     }:
         corpus = import_module(".corpus", __name__)
         return getattr(corpus, name)
