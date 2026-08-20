@@ -289,3 +289,56 @@ def test_missing_column_name_is_hashed_in_errors() -> None:
 
     assert sensitive_column not in str(caught.value)
     assert "path_sha256_" in str(caught.value)
+
+
+def test_text_column_string_subclass_hooks_are_not_used() -> None:
+    secret = "SYNTHETIC_PRIVATE_COLUMN_HOOK"
+
+    class HostileString(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(secret)
+
+        def split(self, separator: str | None = None, maxsplit: int = -1):
+            del separator, maxsplit
+            raise RuntimeError(secret)
+
+        def strip(self, chars: str | None = None) -> str:
+            del chars
+            raise RuntimeError(secret)
+
+    adapted = redact_record_batch(
+        pa.record_batch({"text": ["SYNTHETIC_VALUE"]}),
+        text_columns=[HostileString("text")],
+    )
+
+    assert adapted.column("text").to_pylist() == ["[REDACTED]"]
+
+
+def test_initial_column_iterator_failures_are_value_free() -> None:
+    secret = "SYNTHETIC_PRIVATE_INITIAL_ITERATOR"
+
+    class FailingColumns:
+        def __iter__(self):
+            raise RuntimeError(secret)
+
+    with pytest.raises(ColumnarTraceAdapterError) as caught:
+        redact_record_batch(
+            pa.record_batch({"text": ["synthetic"]}),
+            text_columns=FailingColumns(),
+        )
+
+    assert secret not in str(caught.value)
+
+
+def test_batch_size_integer_subclasses_are_rejected_safely() -> None:
+    secret = "SYNTHETIC_PRIVATE_BATCH_SIZE"
+
+    class HostileInteger(int):
+        def __le__(self, other: object) -> bool:
+            del other
+            raise RuntimeError(secret)
+
+    with pytest.raises(TypeError) as caught:
+        ColumnarTraceSchemaAdapter(["text"], batch_size=HostileInteger(1))
+
+    assert secret not in str(caught.value)

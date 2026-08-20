@@ -42,6 +42,17 @@ class ColumnarTraceAdapterError(ValueError):
     """Raised when a trace batch cannot be adapted safely."""
 
 
+def _plain_text(value: object) -> str | None:
+    """Copy a string into a base ``str`` without calling subclass hooks."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        return None
+
+
 def default_text_redactor(value: str) -> str:
     """Return the deterministic, safe default replacement for one text value."""
 
@@ -648,6 +659,10 @@ def _normalize_field_paths(
         values = iter(selections)
     except TypeError:
         raise TypeError("text_columns must be a sequence of column paths") from None
+    except Exception:
+        raise ColumnarTraceAdapterError(
+            "Text column paths could not be read safely"
+        ) from None
 
     normalized: list[FieldPath] = []
     seen: set[FieldPath] = set()
@@ -661,7 +676,12 @@ def _normalize_field_paths(
                 "Text column paths could not be read safely"
             ) from None
         if isinstance(selection, str):
-            parts = tuple(selection.split("."))
+            selection_text = _plain_text(selection)
+            if selection_text is None:
+                raise ColumnarTraceAdapterError(
+                    "A text column path could not be normalized safely"
+                )
+            parts = tuple(selection_text.split("."))
         else:
             try:
                 parts = tuple(selection)
@@ -673,9 +693,13 @@ def _normalize_field_paths(
                 raise ColumnarTraceAdapterError(
                     "A text column path could not be read safely"
                 ) from None
-        if any(not isinstance(part, str) for part in parts):
-            raise TypeError("Each text column path must contain only strings")
-        clean = tuple(part.strip() for part in parts)
+        clean_parts: list[str] = []
+        for part in parts:
+            normalized_part = _plain_text(part)
+            if normalized_part is None:
+                raise TypeError("Each text column path must contain only strings")
+            clean_parts.append(normalized_part.strip())
+        clean = tuple(clean_parts)
         if not clean or any(not part for part in clean):
             raise ValueError("Text column paths must not contain empty fields")
         if clean not in seen:
@@ -689,7 +713,18 @@ def _normalize_field_paths(
 def _safe_path_label(path: str | Sequence[str]) -> str:
     """Return a stable path identifier without exposing schema field names."""
 
-    raw_path = path if isinstance(path, str) else ".".join(path)
+    if isinstance(path, str):
+        raw_path = _plain_text(path) or "invalid"
+    else:
+        try:
+            parts = tuple(_plain_text(part) for part in path)
+        except Exception:
+            parts = ()
+        raw_path = (
+            ".".join(part for part in parts if part is not None)
+            if parts and all(part is not None for part in parts)
+            else "invalid"
+        )
     digest = hashlib.sha256(raw_path.encode("utf-8")).hexdigest()[:12]
     return f"path_sha256_{digest}"
 
@@ -709,7 +744,7 @@ def _resolve_redactor(
 
 
 def _validate_batch_size(batch_size: int) -> None:
-    if isinstance(batch_size, bool) or not isinstance(batch_size, int):
+    if type(batch_size) is not int:
         raise TypeError("batch_size must be a positive integer")
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
