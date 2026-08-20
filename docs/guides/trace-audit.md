@@ -34,10 +34,12 @@ json_payload = report.to_json()
 
 The JSON payload contains deterministic totals and aggregate rows under
 `stores`, `categories`, `files`, and `findings`. Rows contain counts, derived
-byte totals, and byte ranges only. File labels are replaced by deterministic
-SHA-256-derived identifiers before they enter a report, so even a basename
-containing patient data is not echoed. Known store and category identifiers
-remain readable; unknown caller-provided labels are hashed for the same reason.
+byte totals, and byte ranges only. Derived byte totals merge overlapping ranges
+within each file while keeping matching offsets from different files distinct.
+File labels are replaced by deterministic SHA-256-derived identifiers before
+they enter a report, so even a basename containing patient data is not echoed.
+Known store and category identifiers remain readable; unknown caller-provided
+labels are hashed for the same reason.
 
 The report builder does not open, rewrite, or delete files and performs no
 network operation. It should be placed after a local scanner that has already

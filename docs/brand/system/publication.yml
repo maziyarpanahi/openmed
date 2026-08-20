@@ -131,6 +131,7 @@ classification:
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
     - model-loader.md
+    - models/bundled-offline.md
     - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
