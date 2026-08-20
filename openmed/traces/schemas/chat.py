@@ -562,7 +562,7 @@ class RoleMessageSchemaAdapter:
     value, so the source record is never modified.
     """
 
-    name = "chat"
+    name = "role_messages"
 
     def __init__(
         self,

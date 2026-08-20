@@ -179,6 +179,7 @@ def test_adapter_walk_and_reconstruct_use_stable_content_paths() -> None:
     }
     adapter = RoleMessageSchemaAdapter()
 
+    assert adapter.name == "role_messages"
     assert adapter.detect(record) is True
     assert adapter.walk(record) == (
         (("messages", 0, "content"), "synthetic person"),

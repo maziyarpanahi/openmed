@@ -66,4 +66,5 @@ caller-controlled path keys are represented by deterministic
 The `RoleMessageSchemaAdapter` also exposes `detect`, `walk`, `reconstruct`,
 and `transform` for callers that use a training-schema registry. All
 reconstruction paths return deep-copied values and preserve untouched mapping
-and sequence structure.
+and sequence structure. Its stable registry name is `role_messages`, which is
+distinct from the registry's built-in `chat` alias.
