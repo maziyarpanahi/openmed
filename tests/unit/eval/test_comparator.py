@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import socket
 
 import pytest
 
+import openmed.eval.comparator as comparator_module
 from openmed.eval.comparator import (
     STATUS_NOT_AVAILABLE,
     STATUS_SCORED,
@@ -14,9 +16,12 @@ from openmed.eval.comparator import (
     ComparatorBudget,
     ComparatorExecutionError,
     ComparatorFixture,
+    ComparatorFixtureError,
     ComparatorReport,
+    load_comparator_fixtures,
     run_comparator_benchmark,
 )
+from openmed.eval.harness import BenchmarkFixture
 
 
 def test_comparator_scores_required_metrics_with_shared_budget() -> None:
@@ -102,10 +107,16 @@ def test_missing_or_network_adapters_are_reported_without_running() -> None:
                 runner=should_not_run,
                 requires_network=True,
             ),
+            ComparatorAdapter(
+                name="declared-missing",
+                runner=should_not_run,
+                unavailable_reason="local optional dependency is absent",
+            ),
         ],
     )
 
     assert [row.status for row in report.results] == [
+        STATUS_NOT_AVAILABLE,
         STATUS_NOT_AVAILABLE,
         STATUS_NOT_AVAILABLE,
     ]
@@ -144,6 +155,232 @@ def test_unavailable_exception_is_not_a_failed_benchmark() -> None:
 
     assert report.result("optional").status == STATUS_NOT_AVAILABLE
     assert report.result("optional").metrics is None
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {},
+        {"synthetic": True},
+        {"phi_free": True},
+        {"synthetic": "true", "phi_free": True},
+    ],
+)
+def test_mapping_fixtures_require_explicit_boolean_safety_flags(flags) -> None:
+    payload = {
+        "fixture_id": "synthetic-mapping",
+        "text": "Synthetic text only.",
+        **flags,
+    }
+
+    with pytest.raises(ComparatorFixtureError):
+        ComparatorFixture.from_mapping(payload)
+
+    payload.update(synthetic=True, phi_free=True)
+    assert ComparatorFixture.from_mapping(payload).synthetic is True
+
+    with pytest.raises(ComparatorFixtureError):
+        ComparatorFixture(
+            fixture_id="synthetic-defaults",
+            text="Synthetic text only.",
+        )
+
+
+def test_existing_benchmark_fixture_requires_explicit_safety_metadata() -> None:
+    fixture = BenchmarkFixture(
+        fixture_id="synthetic-existing",
+        text="Synthetic text only.",
+        gold_spans=(),
+    )
+
+    with pytest.raises(ComparatorFixtureError):
+        ComparatorFixture.from_benchmark_fixture(fixture)
+
+    trusted = BenchmarkFixture(
+        fixture_id=fixture.fixture_id,
+        text=fixture.text,
+        gold_spans=(),
+        metadata={"synthetic": True, "phi_free": True},
+    )
+    assert ComparatorFixture.from_benchmark_fixture(trusted).phi_free is True
+
+
+def test_fixture_loader_is_bounded_and_fails_closed(tmp_path, monkeypatch) -> None:
+    fixture_path = tmp_path / "fixtures.json"
+    fixture_path.write_text(
+        json.dumps(
+            [
+                {
+                    "fixture_id": "synthetic-file",
+                    "text": "Synthetic text only.",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ComparatorFixtureError):
+        load_comparator_fixtures(fixture_path)
+
+    fixture_path.write_text(
+        json.dumps(
+            [
+                {
+                    "fixture_id": "synthetic-file",
+                    "text": "Synthetic text only.",
+                    "synthetic": True,
+                    "phi_free": True,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assert len(load_comparator_fixtures(fixture_path)) == 1
+
+    monkeypatch.setattr(comparator_module, "_MAX_FIXTURE_FILE_BYTES", 8)
+    with pytest.raises(ComparatorFixtureError, match="exceeds size limit"):
+        load_comparator_fixtures(fixture_path)
+
+
+def test_fixture_and_adapter_reprs_exclude_raw_values() -> None:
+    secret = "SYNTHETIC-RAW-VALUE-DO-NOT-REPORT"
+    fixture = ComparatorFixture(
+        fixture_id="synthetic-safe-repr",
+        text=secret,
+        metadata={"note": secret},
+        synthetic=True,
+        phi_free=True,
+    )
+    adapter = ComparatorAdapter(
+        name="safe-adapter",
+        runner=_exact_runner,
+        unavailable_reason=secret,
+        metadata={"note": secret},
+    )
+
+    assert secret not in repr(fixture)
+    assert secret not in repr(adapter)
+    assert "text_length" in repr(fixture)
+    assert "runner_available=True" in repr(adapter)
+
+
+def test_runner_is_forced_offline_even_without_network_declaration() -> None:
+    original_create_connection = socket.create_connection
+
+    def network_runner(text: str, language: str):
+        del text, language
+        socket.create_connection(("127.0.0.1", 9), timeout=0.001)
+        return ()
+
+    with pytest.raises(
+        ComparatorExecutionError,
+        match="comparator adapter execution failed",
+    ):
+        run_comparator_benchmark(
+            [_fixture()],
+            [ComparatorAdapter(name="local-only", runner=network_runner)],
+        )
+
+    assert socket.create_connection is original_create_connection
+
+
+def test_report_identifiers_reject_markup_without_echoing_it() -> None:
+    secret = "SYNTHETIC-REPORT-INJECTION"
+
+    with pytest.raises(ValueError) as adapter_error:
+        ComparatorAdapter(name=f"safe\n| {secret}", runner=_exact_runner)
+    assert secret not in str(adapter_error.value)
+
+    with pytest.raises(ValueError) as suite_error:
+        run_comparator_benchmark(
+            [_fixture()],
+            [ComparatorAdapter(name="safe", runner=_exact_runner)],
+            suite=f"safe\n# {secret}",
+        )
+    assert secret not in str(suite_error.value)
+
+    with pytest.raises(ValueError) as report_error:
+        ComparatorReport(
+            suite="safe",
+            fixture_count=1,
+            results=(),
+            fixture_digests=(secret,),
+            critical_labels=("SSN",),
+            budget=ComparatorBudget(),
+        )
+    assert secret not in str(report_error.value)
+
+    report = run_comparator_benchmark(
+        [_fixture()],
+        [ComparatorAdapter(name="safe", runner=_exact_runner)],
+    )
+    with pytest.raises(KeyError) as lookup_error:
+        report.result(f"safe\n{secret}")
+    assert secret not in str(lookup_error.value)
+
+
+def test_prediction_span_collection_is_bounded(monkeypatch) -> None:
+    fixture = _fixture()
+    monkeypatch.setattr(comparator_module, "_MAX_SPAN_COUNT", 1)
+
+    with pytest.raises(ComparatorExecutionError):
+        run_comparator_benchmark(
+            [fixture],
+            [ComparatorAdapter(name="too-many", runner=_exact_runner)],
+        )
+
+
+def test_falsey_callable_runner_is_preserved() -> None:
+    class FalseyRunner:
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, text: str, language: str):
+            return _exact_runner(text, language)
+
+    report = run_comparator_benchmark(
+        [_fixture()],
+        [ComparatorAdapter(name="falsey-runner", runner=FalseyRunner())],
+    )
+
+    assert report.result("falsey-runner").status == STATUS_SCORED
+
+
+def test_legacy_runner_cannot_read_gold_spans_or_arbitrary_metadata() -> None:
+    observed = {}
+
+    def legacy_runner(fixture, model_name, device):
+        observed["gold_spans"] = fixture.gold_spans
+        observed["metadata"] = fixture.metadata
+        observed["model_name"] = model_name
+        observed["device"] = device
+        return _exact_runner(fixture.text, fixture.language)
+
+    report = run_comparator_benchmark(
+        [_fixture()],
+        [
+            ComparatorAdapter(
+                name="legacy",
+                runner=legacy_runner,
+                model_name="local-model",
+            )
+        ],
+    )
+
+    assert report.result("legacy").status == STATUS_SCORED
+    assert observed == {
+        "gold_spans": (),
+        "metadata": {"synthetic": True, "phi_free": True},
+        "model_name": "local-model",
+        "device": "cpu",
+    }
+
+
+def test_resource_budget_rejects_ambiguous_runtime_values() -> None:
+    with pytest.raises(ValueError):
+        ComparatorBudget(max_latency_ms=True)
+    with pytest.raises(ValueError):
+        ComparatorBudget(max_memory_bytes="100")
 
 
 def _fixture() -> ComparatorFixture:

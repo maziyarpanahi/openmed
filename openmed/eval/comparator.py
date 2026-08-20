@@ -6,6 +6,7 @@ import inspect
 import json
 import math
 import random
+import re
 import sys
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -16,6 +17,7 @@ from typing import Any, Iterator
 
 from openmed.core.audit import stable_hash
 from openmed.core.labels import normalize_label
+from openmed.core.offline import network_blocked_if_offline
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import (
     EvalSpan,
@@ -30,6 +32,19 @@ from openmed.eval.metrics import (
 COMPARATOR_SCHEMA_VERSION = "openmed.eval.comparator.v1"
 STATUS_SCORED = "scored"
 STATUS_NOT_AVAILABLE = "not_available"
+_MAX_FIXTURE_FILE_BYTES = 32 * 1024 * 1024
+_MAX_FIXTURE_COUNT = 10_000
+_MAX_FIXTURE_TEXT_CHARS = 2_000_000
+_MAX_SPAN_COUNT = 100_000
+_MAX_ADAPTER_COUNT = 256
+_SAFE_IDENTIFIER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._:/@+()-]{0,127}\Z")
+_SAFE_LANGUAGE_RE = re.compile(r"[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8}){0,4}\Z")
+_SAFE_LABEL_RE = re.compile(r"[A-Z][A-Z0-9_]{0,63}\Z")
+_SAFE_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_SAFE_TIMESTAMP_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})\Z"
+)
+_OFFLINE_UNAVAILABLE_REASON = "adapter is not available for this offline run"
 _DEFAULT_CRITICAL_LABELS = frozenset(
     {
         "SSN",
@@ -66,15 +81,14 @@ class ComparatorAdapterUnavailable(ImportError):
     """Raised by an adapter when its optional local dependency is unavailable."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class ComparatorFixture:
     """One synthetic document and its gold de-identification spans.
 
     The raw text is accepted only for the in-process adapter call. It is never
     included in :meth:`to_dict`, reports, or error messages. ``synthetic`` and
-    ``phi_free`` default to ``True`` for inline test fixtures; callers loading
-    external data should set both flags explicitly and keep the source corpus
-    synthetic.
+    ``phi_free`` must be asserted explicitly, either as constructor flags or
+    exact boolean metadata. The source corpus must remain synthetic.
     """
 
     fixture_id: str
@@ -82,28 +96,37 @@ class ComparatorFixture:
     gold_spans: tuple[EvalSpan, ...] = ()
     language: str = "en"
     metadata: Mapping[str, Any] = field(default_factory=dict)
-    synthetic: bool = True
-    phi_free: bool = True
+    synthetic: bool = False
+    phi_free: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.text, str) or not self.text:
             raise ComparatorFixtureError("invalid comparator fixture")
-        fixture_id = str(self.fixture_id).strip()
-        if not fixture_id:
+        if len(self.text) > _MAX_FIXTURE_TEXT_CHARS:
             raise ComparatorFixtureError("invalid comparator fixture")
-        language = str(self.language or "en").strip().lower() or "en"
+        try:
+            fixture_id = _safe_identifier(self.fixture_id)
+            language = _safe_language(self.language)
+        except ValueError:
+            raise ComparatorFixtureError("invalid comparator fixture") from None
         if not isinstance(self.metadata, Mapping):
             raise ComparatorFixtureError("invalid comparator fixture")
+        try:
+            metadata = dict(self.metadata)
+        except Exception:
+            raise ComparatorFixtureError("invalid comparator fixture") from None
 
-        metadata_synthetic = self.metadata.get("synthetic")
-        metadata_phi_free = self.metadata.get("phi_free")
-        if metadata_synthetic is not None and not _flag(metadata_synthetic):
+        metadata_synthetic = metadata.get("synthetic")
+        metadata_phi_free = metadata.get("phi_free")
+        if metadata_synthetic is not None and metadata_synthetic is not True:
             raise ComparatorFixtureError("comparator fixtures must be synthetic")
-        if metadata_phi_free is not None and not _flag(metadata_phi_free):
+        if metadata_phi_free is not None and metadata_phi_free is not True:
             raise ComparatorFixtureError("comparator fixtures must be PHI-free")
-        if not self.synthetic:
+        synthetic = self.synthetic is True or metadata_synthetic is True
+        phi_free = self.phi_free is True or metadata_phi_free is True
+        if not synthetic:
             raise ComparatorFixtureError("comparator fixtures must be synthetic")
-        if not self.phi_free:
+        if not phi_free:
             raise ComparatorFixtureError("comparator fixtures must be PHI-free")
 
         try:
@@ -118,7 +141,19 @@ class ComparatorFixture:
         object.__setattr__(self, "fixture_id", fixture_id)
         object.__setattr__(self, "language", language)
         object.__setattr__(self, "gold_spans", spans)
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        object.__setattr__(self, "metadata", metadata)
+        object.__setattr__(self, "synthetic", True)
+        object.__setattr__(self, "phi_free", True)
+
+    def __repr__(self) -> str:
+        """Return a source-safe descriptor without text, IDs, spans, or metadata."""
+
+        return (
+            "ComparatorFixture("
+            f"text_length={len(self.text)}, "
+            f"gold_span_count={len(self.gold_spans)}, "
+            f"language={self.language!r}, synthetic=True, phi_free=True)"
+        )
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "ComparatorFixture":
@@ -126,32 +161,45 @@ class ComparatorFixture:
 
         if not isinstance(data, Mapping):
             raise ComparatorFixtureError("invalid comparator fixture")
-        metadata = data.get("metadata") or {}
-        if not isinstance(metadata, Mapping):
-            raise ComparatorFixtureError("invalid comparator fixture")
-        synthetic = data.get("synthetic", metadata.get("synthetic", True))
-        phi_free = data.get("phi_free", metadata.get("phi_free", True))
-        return cls(
-            fixture_id=data.get("fixture_id") or data.get("id") or "",
-            text=data.get("text", ""),
-            gold_spans=data.get("gold_spans") or data.get("entities") or (),
-            language=data.get("language") or data.get("lang") or "en",
-            metadata=metadata,
-            synthetic=_flag(synthetic),
-            phi_free=_flag(phi_free),
-        )
+        try:
+            metadata = data.get("metadata") or {}
+            if not isinstance(metadata, Mapping):
+                raise ComparatorFixtureError("invalid comparator fixture")
+            synthetic = data.get("synthetic", metadata.get("synthetic"))
+            phi_free = data.get("phi_free", metadata.get("phi_free"))
+            return cls(
+                fixture_id=data.get("fixture_id") or data.get("id") or "",
+                text=data.get("text", ""),
+                gold_spans=data.get("gold_spans") or data.get("entities") or (),
+                language=data.get("language") or data.get("lang") or "en",
+                metadata=metadata,
+                synthetic=synthetic is True,
+                phi_free=phi_free is True,
+            )
+        except ComparatorFixtureError:
+            raise
+        except Exception:
+            raise ComparatorFixtureError("invalid comparator fixture") from None
 
     @classmethod
     def from_benchmark_fixture(cls, fixture: BenchmarkFixture) -> "ComparatorFixture":
         """Convert an existing local harness fixture without retaining it in a report."""
 
-        return cls(
-            fixture_id=fixture.fixture_id,
-            text=fixture.text,
-            gold_spans=fixture.gold_spans,
-            language=fixture.language,
-            metadata=fixture.metadata,
-        )
+        try:
+            metadata = fixture.metadata
+            return cls(
+                fixture_id=fixture.fixture_id,
+                text=fixture.text,
+                gold_spans=fixture.gold_spans,
+                language=fixture.language,
+                metadata=metadata,
+                synthetic=metadata.get("synthetic") is True,
+                phi_free=metadata.get("phi_free") is True,
+            )
+        except ComparatorFixtureError:
+            raise
+        except Exception:
+            raise ComparatorFixtureError("invalid comparator fixture") from None
 
     @property
     def digest(self) -> str:
@@ -181,18 +229,18 @@ class ComparatorFixture:
         }
 
     def as_benchmark_fixture(self) -> BenchmarkFixture:
-        """Return the existing harness shape for legacy three-argument runners."""
+        """Return a gold-free harness shape for legacy three-argument runners."""
 
         return BenchmarkFixture(
             fixture_id=self.fixture_id,
             text=self.text,
-            gold_spans=self.gold_spans,
+            gold_spans=(),
             language=self.language,
-            metadata=self.metadata,
+            metadata={"synthetic": True, "phi_free": True},
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class ComparatorAdapter:
     """A local baseline adapter used by :func:`run_comparator_benchmark`.
 
@@ -218,17 +266,40 @@ class ComparatorAdapter:
     )
 
     def __post_init__(self) -> None:
-        name = str(self.name).strip()
-        if not name:
-            raise ValueError("comparator adapter name must be non-empty")
+        name = _safe_identifier(self.name)
+        version = _safe_identifier(self.version or "local")
+        device = _safe_identifier(self.device or "cpu")
+        model_name = (
+            None if self.model_name is None else _safe_identifier(self.model_name)
+        )
         if not isinstance(self.metadata, Mapping):
             raise ValueError("comparator adapter metadata must be a mapping")
-        runner = self.runner or self.predict
+        try:
+            metadata = dict(self.metadata)
+        except Exception:
+            raise ValueError("invalid comparator adapter metadata") from None
+        if not isinstance(self.requires_network, bool):
+            raise ValueError("comparator adapter requires_network must be a boolean")
+        runner = self.runner if self.runner is not None else self.predict
+        if runner is not None and not callable(runner):
+            raise ValueError("comparator adapter runner must be callable")
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "runner", runner)
-        object.__setattr__(self, "version", str(self.version or "local"))
-        object.__setattr__(self, "device", str(self.device or "cpu"))
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        object.__setattr__(self, "version", version)
+        object.__setattr__(self, "model_name", model_name)
+        object.__setattr__(self, "device", device)
+        object.__setattr__(self, "requires_network", _flag(self.requires_network))
+        object.__setattr__(self, "metadata", metadata)
+
+    def __repr__(self) -> str:
+        """Return an adapter descriptor without runner or metadata values."""
+
+        return (
+            "ComparatorAdapter("
+            f"name={self.name!r}, version={self.version!r}, "
+            f"runner_available={self.runner is not None}, "
+            f"requires_network={self.requires_network})"
+        )
 
 
 @dataclass(frozen=True)
@@ -239,15 +310,23 @@ class ComparatorBudget:
     max_memory_bytes: int | None = None
 
     def __post_init__(self) -> None:
-        if self.max_latency_ms is not None and (
-            not math.isfinite(float(self.max_latency_ms))
-            or float(self.max_latency_ms) <= 0
-        ):
-            raise ValueError("max_latency_ms must be positive")
-        if self.max_memory_bytes is not None and (
-            isinstance(self.max_memory_bytes, bool) or self.max_memory_bytes <= 0
-        ):
-            raise ValueError("max_memory_bytes must be positive")
+        if self.max_latency_ms is not None:
+            if isinstance(self.max_latency_ms, bool):
+                raise ValueError("max_latency_ms must be positive")
+            try:
+                latency = float(self.max_latency_ms)
+            except (TypeError, ValueError, OverflowError):
+                raise ValueError("max_latency_ms must be positive") from None
+            if not math.isfinite(latency) or latency <= 0:
+                raise ValueError("max_latency_ms must be positive")
+            object.__setattr__(self, "max_latency_ms", latency)
+        if self.max_memory_bytes is not None:
+            if (
+                isinstance(self.max_memory_bytes, bool)
+                or not isinstance(self.max_memory_bytes, int)
+                or self.max_memory_bytes <= 0
+            ):
+                raise ValueError("max_memory_bytes must be positive")
 
     def to_dict(self) -> dict[str, int | float | None]:
         """Return the stable budget payload."""
@@ -348,6 +427,36 @@ class ComparatorResult:
     reason: str | None = None
     metadata_digest: str | None = None
 
+    def __post_init__(self) -> None:
+        """Reject report-facing values that could expose arbitrary content."""
+
+        try:
+            adapter = _safe_identifier(self.adapter)
+            version = _safe_identifier(self.version)
+            valid = (
+                self.status in {STATUS_SCORED, STATUS_NOT_AVAILABLE}
+                and isinstance(self.fixture_count, int)
+                and not isinstance(self.fixture_count, bool)
+                and self.fixture_count >= 0
+                and self.reason in {None, _OFFLINE_UNAVAILABLE_REASON}
+                and (
+                    self.metadata_digest is None
+                    or isinstance(self.metadata_digest, str)
+                    and _SAFE_DIGEST_RE.fullmatch(self.metadata_digest) is not None
+                )
+                and (
+                    self.metrics is None or isinstance(self.metrics, ComparatorMetrics)
+                )
+                and (self.status != STATUS_SCORED or self.metrics is not None)
+                and (self.status != STATUS_NOT_AVAILABLE or self.metrics is None)
+            )
+        except Exception:
+            valid = False
+        if not valid:
+            raise ValueError("invalid comparator result")
+        object.__setattr__(self, "adapter", adapter)
+        object.__setattr__(self, "version", version)
+
     @property
     def system(self) -> str:
         """Compatibility alias for matrix-style consumers."""
@@ -391,13 +500,53 @@ class ComparatorReport:
     schema_version: str = COMPARATOR_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "results", tuple(self.results))
-        object.__setattr__(self, "fixture_digests", tuple(self.fixture_digests))
-        object.__setattr__(
-            self,
-            "critical_labels",
-            tuple(sorted(str(label) for label in self.critical_labels)),
-        )
+        try:
+            suite = _safe_identifier(self.suite)
+            generated_at = _safe_generated_at(self.generated_at)
+            results = tuple(self.results)
+            fixture_digests = tuple(self.fixture_digests)
+            critical_labels = tuple(sorted(self.critical_labels))
+            valid = (
+                isinstance(self.fixture_count, int)
+                and not isinstance(self.fixture_count, bool)
+                and self.fixture_count >= 0
+                and self.fixture_count == len(fixture_digests)
+                and all(isinstance(row, ComparatorResult) for row in results)
+                and all(row.fixture_count == self.fixture_count for row in results)
+                and all(
+                    isinstance(digest, str)
+                    and _SAFE_DIGEST_RE.fullmatch(digest) is not None
+                    for digest in fixture_digests
+                )
+                and all(
+                    isinstance(label, str)
+                    and _SAFE_LABEL_RE.fullmatch(label) is not None
+                    for label in critical_labels
+                )
+                and isinstance(self.budget, ComparatorBudget)
+                and isinstance(self.seed, int)
+                and not isinstance(self.seed, bool)
+                and self.schema_version == COMPARATOR_SCHEMA_VERSION
+                and (
+                    self.metadata_digest is None
+                    or isinstance(self.metadata_digest, str)
+                    and _SAFE_DIGEST_RE.fullmatch(self.metadata_digest) is not None
+                )
+                and (
+                    not self.reproducibility_hash
+                    or isinstance(self.reproducibility_hash, str)
+                    and _SAFE_DIGEST_RE.fullmatch(self.reproducibility_hash) is not None
+                )
+            )
+        except Exception:
+            valid = False
+        if not valid:
+            raise ValueError("invalid comparator report")
+        object.__setattr__(self, "suite", suite)
+        object.__setattr__(self, "generated_at", generated_at)
+        object.__setattr__(self, "results", results)
+        object.__setattr__(self, "fixture_digests", fixture_digests)
+        object.__setattr__(self, "critical_labels", critical_labels)
         if not self.reproducibility_hash:
             object.__setattr__(
                 self,
@@ -426,10 +575,14 @@ class ComparatorReport:
     def result(self, adapter: str) -> ComparatorResult:
         """Return the result named *adapter*."""
 
+        try:
+            adapter_name = _safe_identifier(adapter)
+        except ValueError:
+            raise KeyError("unknown comparator adapter") from None
         for row in self.results:
-            if row.adapter == adapter:
+            if row.adapter == adapter_name:
                 return row
-        raise KeyError(adapter)
+        raise KeyError("unknown comparator adapter")
 
     def _reproducibility_payload(self) -> dict[str, Any]:
         return {
@@ -472,6 +625,7 @@ class ComparatorReport:
 
         return json.dumps(
             self.to_dict(),
+            allow_nan=False,
             ensure_ascii=False,
             indent=indent,
             sort_keys=True,
@@ -556,7 +710,11 @@ def load_comparator_fixtures(path: str | Path) -> tuple[ComparatorFixture, ...]:
 
     fixture_path = Path(path)
     try:
-        raw = fixture_path.read_text(encoding="utf-8")
+        with fixture_path.open("rb") as stream:
+            encoded = stream.read(_MAX_FIXTURE_FILE_BYTES + 1)
+        if len(encoded) > _MAX_FIXTURE_FILE_BYTES:
+            raise ComparatorFixtureError("comparator fixture file exceeds size limit")
+        raw = encoded.decode("utf-8")
         if fixture_path.suffix.lower() == ".jsonl":
             rows: Any = [
                 json.loads(line)
@@ -565,6 +723,8 @@ def load_comparator_fixtures(path: str | Path) -> tuple[ComparatorFixture, ...]:
             ]
         else:
             rows = json.loads(raw)
+    except ComparatorFixtureError:
+        raise
     except Exception:
         raise ComparatorFixtureError("could not load comparator fixtures") from None
 
@@ -572,6 +732,8 @@ def load_comparator_fixtures(path: str | Path) -> tuple[ComparatorFixture, ...]:
         rows = rows.get("fixtures")
     if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes, bytearray)):
         raise ComparatorFixtureError("invalid comparator fixture collection")
+    if len(rows) > _MAX_FIXTURE_COUNT:
+        raise ComparatorFixtureError("comparator fixture collection exceeds limit")
     try:
         return tuple(ComparatorFixture.from_mapping(row) for row in rows)
     except ComparatorFixtureError:
@@ -628,21 +790,37 @@ def run_comparator_benchmark(
         raise ComparatorFixtureError("comparator benchmark requires fixtures")
     _validate_unique_fixtures(resolved_fixtures)
 
-    resolved_adapters = tuple(_coerce_adapter(adapter) for adapter in adapters)
+    try:
+        resolved_adapters = tuple(
+            _coerce_adapter(adapter)
+            for adapter in _bounded_items(
+                adapters,
+                limit=_MAX_ADAPTER_COUNT,
+                message="comparator adapter collection exceeds limit",
+            )
+        )
+    except Exception:
+        raise ValueError("invalid comparator adapter collection") from None
     if not resolved_adapters:
         raise ValueError("comparator benchmark requires adapters")
     _validate_unique_adapters(resolved_adapters)
 
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise ValueError("comparator seed must be an integer")
+    safe_suite = _safe_identifier(suite or "synthetic-comparator")
+    safe_generated_at = _safe_generated_at(generated_at)
+    if metadata is not None and not isinstance(metadata, Mapping):
+        raise ValueError("comparator metadata must be a mapping")
     active_budget = budget or ComparatorBudget()
+    if not isinstance(active_budget, ComparatorBudget):
+        raise ValueError("invalid comparator budget")
     labels = _resolve_critical_labels(critical_labels)
-    run_clock = clock or time.perf_counter
-    sample_memory = memory_sampler or _peak_rss_bytes
+    run_clock = time.perf_counter if clock is None else clock
+    sample_memory = _peak_rss_bytes if memory_sampler is None else memory_sampler
     results: list[ComparatorResult] = []
 
     for adapter in resolved_adapters:
-        if adapter.requires_network:
+        if adapter.requires_network or adapter.unavailable_reason is not None:
             results.append(_unavailable_result(adapter, len(resolved_fixtures)))
             continue
         if adapter.runner is None:
@@ -678,15 +856,15 @@ def run_comparator_benchmark(
         )
 
     return ComparatorReport(
-        suite=str(suite).strip() or "synthetic-comparator",
+        suite=safe_suite,
         fixture_count=len(resolved_fixtures),
         results=tuple(results),
         fixture_digests=tuple(fixture.digest for fixture in resolved_fixtures),
         critical_labels=tuple(labels),
         budget=active_budget,
         seed=seed,
-        generated_at=generated_at,
-        metadata_digest=_metadata_digest(metadata or {}),
+        generated_at=safe_generated_at,
+        metadata_digest=_metadata_digest({} if metadata is None else metadata),
     )
 
 
@@ -713,7 +891,14 @@ def _resolve_fixtures(
     else:
         values = fixtures
     try:
-        return tuple(_coerce_fixture(value) for value in values)
+        return tuple(
+            _coerce_fixture(value)
+            for value in _bounded_items(
+                values,
+                limit=_MAX_FIXTURE_COUNT,
+                message="comparator fixture collection exceeds limit",
+            )
+        )
     except ComparatorFixtureError:
         raise
     except Exception:
@@ -734,7 +919,9 @@ def _coerce_adapter(value: Any) -> ComparatorAdapter:
     if isinstance(value, ComparatorAdapter):
         return value
     if isinstance(value, Mapping):
-        runner = value.get("runner") or value.get("predict")
+        runner = value.get("runner")
+        if runner is None:
+            runner = value.get("predict")
         return ComparatorAdapter(
             name=value.get("name") or value.get("system") or "adapter",
             runner=runner,
@@ -747,11 +934,15 @@ def _coerce_adapter(value: Any) -> ComparatorAdapter:
         )
     if callable(value):
         return ComparatorAdapter(
-            name=getattr(value, "name", None) or getattr(value, "__name__", "adapter"),
+            name=_safe_identifier(
+                getattr(value, "name", None) or getattr(value, "__name__", "adapter")
+            ),
             runner=value,
         )
 
-    runner = getattr(value, "runner", None) or getattr(value, "predict", None)
+    runner = getattr(value, "runner", None)
+    if runner is None:
+        runner = getattr(value, "predict", None)
     if runner is None and not hasattr(value, "name"):
         raise ValueError("invalid comparator adapter")
     return ComparatorAdapter(
@@ -788,7 +979,7 @@ def _run_adapter(
     latencies: list[float] = []
     memory_samples: list[int] = []
 
-    with _random_context(seed):
+    with _random_context(seed), network_blocked_if_offline(local_only=True):
         for fixture in fixtures:
             before_memory = _sample_memory(memory_sampler)
             started = clock()
@@ -940,8 +1131,13 @@ def _normalize_spans(
     language: str,
     text: str,
 ) -> tuple[EvalSpan, ...]:
-    normalized = normalize_eval_spans(
+    bounded_spans = _bounded_items(
         spans,
+        limit=_MAX_SPAN_COUNT,
+        message="comparator span collection exceeds limit",
+    )
+    normalized = normalize_eval_spans(
+        bounded_spans,
         default_language=language,
         default_device="cpu",
         source_text=text,
@@ -1037,11 +1233,16 @@ def _peak_rss_bytes() -> int | None:
 def _resolve_critical_labels(labels: Iterable[str] | None) -> frozenset[str]:
     values = _DEFAULT_CRITICAL_LABELS if labels is None else labels
     try:
-        return frozenset(
+        resolved = frozenset(
             normalize_label(str(label), "en") for label in values if str(label).strip()
         )
     except Exception:
         raise ValueError("invalid critical label configuration") from None
+    if not resolved or any(
+        _SAFE_LABEL_RE.fullmatch(label) is None for label in resolved
+    ):
+        raise ValueError("invalid critical label configuration")
+    return resolved
 
 
 def _unavailable_result(
@@ -1053,7 +1254,7 @@ def _unavailable_result(
         status=STATUS_NOT_AVAILABLE,
         fixture_count=fixture_count,
         version=adapter.version,
-        reason="adapter is not available for this offline run",
+        reason=_OFFLINE_UNAVAILABLE_REASON,
         metadata_digest=_metadata_digest(adapter.metadata),
     )
 
@@ -1094,8 +1295,61 @@ def _flag(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
+def _safe_identifier(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("invalid comparator identifier")
+    normalized = value.strip()
+    if _SAFE_IDENTIFIER_RE.fullmatch(normalized) is None:
+        raise ValueError("invalid comparator identifier")
+    return normalized
+
+
+def _safe_language(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("invalid comparator language")
+    normalized = value.strip().replace("_", "-").lower()
+    if _SAFE_LANGUAGE_RE.fullmatch(normalized) is None:
+        raise ValueError("invalid comparator language")
+    return normalized
+
+
+def _safe_generated_at(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or _SAFE_TIMESTAMP_RE.fullmatch(value) is None:
+        raise ValueError("invalid comparator generated_at timestamp")
+    return value
+
+
+def _bounded_items(
+    values: Iterable[Any],
+    *,
+    limit: int,
+    message: str,
+) -> tuple[Any, ...]:
+    result: list[Any] = []
+    try:
+        iterator = iter(values)
+    except Exception:
+        raise ValueError(message) from None
+    while True:
+        try:
+            value = next(iterator)
+        except StopIteration:
+            break
+        except Exception:
+            raise ValueError(message) from None
+        if len(result) >= limit:
+            raise ValueError(message)
+        result.append(value)
+    return tuple(result)
+
+
 def _metadata_digest(value: Mapping[str, Any]) -> str:
-    return stable_hash(_digest_value(value))
+    try:
+        return stable_hash(_digest_value(value))
+    except Exception:
+        raise ValueError("invalid comparator metadata") from None
 
 
 def _digest_value(value: Any) -> Any:

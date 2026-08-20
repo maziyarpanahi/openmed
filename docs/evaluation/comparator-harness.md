@@ -2,9 +2,10 @@
 
 `openmed.eval.comparator` provides a local, reproducible comparison surface for
 OpenMed and user-supplied de-identification baselines. The harness itself never
-downloads a model, contacts a service, or writes telemetry. An adapter may load
-its own already-installed local model, but network-dependent adapters are
-reported as unavailable when `requires_network=True`.
+downloads a model, contacts a service, or writes telemetry. Every runner
+executes behind OpenMed's outbound-socket guard, even when an adapter forgets
+to declare that it requires a network connection. Network-dependent adapters
+are reported as unavailable when `requires_network=True`.
 
 ## Adapter contract
 
@@ -43,11 +44,16 @@ report = run_comparator_benchmark(
 
 Existing OpenMed benchmark runners with the signature
 `(fixture, model_name, device)` are also accepted. A runner must return spans;
-it must not receive gold spans or fixture metadata as part of the normal
-two-argument contract.
+the compatibility fixture contains text and language but deliberately replaces
+gold spans and arbitrary metadata with empty/safety-only values. This keeps a
+baseline from accidentally reading the answer key.
 
 Only synthetic, PHI-free fixtures are in scope. JSON and JSONL fixture files can
-be loaded with `load_comparator_fixtures`; loading is local-only.
+be loaded with `load_comparator_fixtures`; loading is local-only and bounded.
+Each mapping loaded from a file, or supplied directly as a mapping, must include
+the JSON booleans `"synthetic": true` and `"phi_free": true` (either at the
+top level or in `metadata`). Existing `BenchmarkFixture` values must carry the
+same explicit metadata flags. Missing flags fail closed.
 
 ## Measurements
 
@@ -75,5 +81,8 @@ JSON and Markdown reports contain fixture content digests, counts, labels,
 metrics, and provenance digests. They do not contain fixture identifiers,
 source text, predicted surfaces, arbitrary adapter metadata, or adapter
 exception text. The harness raises source-safe errors if fixture or adapter
-output validation fails. Reports are evaluation evidence, not a compliance
+output validation fails. Report-facing suite, adapter, version, language, and
+fixture identifiers are bounded and restricted to non-markup identifier
+characters. Fixture files, case counts, text, spans, and adapter counts also
+have defensive limits. Reports are evaluation evidence, not a compliance
 certification or a clinical decision guarantee.
