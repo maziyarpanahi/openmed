@@ -186,6 +186,41 @@ def test_input_iteration_errors_do_not_expose_values(input_name: str) -> None:
     assert sensitive not in str(caught.value)
 
 
+def test_mapping_lookup_errors_do_not_expose_values() -> None:
+    class FailingMapping(dict[str, object]):
+        def get(self, key: str, default: object = None) -> object:
+            raise RuntimeError(_SENSITIVE_VALUE)
+
+    with pytest.raises(ValueError) as caught:
+        build_trace_audit([FailingMapping()])
+
+    assert _SENSITIVE_VALUE not in str(caught.value)
+
+
+def test_direct_scan_iteration_errors_do_not_expose_values() -> None:
+    def failing_findings():
+        raise RuntimeError(_SENSITIVE_VALUE)
+        yield None
+
+    with pytest.raises(ValueError) as caught:
+        TraceScan(findings=failing_findings())  # type: ignore[arg-type]
+
+    assert _SENSITIVE_VALUE not in str(caught.value)
+
+
+def test_byte_totals_keep_identical_ranges_from_distinct_files() -> None:
+    report = build_trace_audit(
+        [
+            TraceFinding("codex", "message", "first.jsonl", 0, 4),
+            TraceFinding("codex", "message", "second.jsonl", 0, 4),
+        ]
+    )
+
+    assert report.stores[0]["byte_count"] == 8
+    assert report.categories[0]["byte_count"] == 8
+    assert [item["byte_count"] for item in report.files] == [4, 4]
+
+
 def test_direct_report_construction_drops_unknown_fields_and_freezes_rows() -> None:
     sensitive = "PatientJaneDoe"
     source_row = {

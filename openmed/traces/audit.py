@@ -49,6 +49,7 @@ _SAFE_CATEGORY_LABELS = frozenset(
     }
 )
 _T = TypeVar("_T")
+_MISSING = object()
 _HASHED_LABEL = re.compile(r"^(?P<prefix>store|category|file)_sha256_[0-9a-f]{16}$")
 
 
@@ -120,6 +121,24 @@ def _safe_items(value: Iterable[_T], *, error: str) -> Iterator[_T]:
             return
         except Exception:  # noqa: BLE001 - input may expose PHI in errors
             raise ValueError(error) from None
+
+
+def _mapping_value(
+    value: Mapping[str, Any],
+    *keys: str,
+    default: Any,
+    error: str,
+) -> Any:
+    """Read the first present mapping key without exposing lookup failures."""
+
+    for key in keys:
+        try:
+            item = value.get(key, _MISSING)
+        except Exception:  # noqa: BLE001 - mapping errors may contain PHI
+            raise ValueError(error) from None
+        if item is not _MISSING:
+            return item
+    return default
 
 
 def _offset(value: object) -> int:
@@ -245,27 +264,77 @@ class TraceFinding:
         if not isinstance(value, Mapping):
             raise TypeError("trace finding must be a mapping")
 
-        byte_range = value.get("byte_range")
-        start = value.get("start", value.get("byte_start"))
-        end = value.get("end", value.get("byte_end"))
+        byte_range = _mapping_value(
+            value,
+            "byte_range",
+            default=None,
+            error="trace finding metadata could not be read",
+        )
+        start = _mapping_value(
+            value,
+            "start",
+            "byte_start",
+            default=None,
+            error="trace finding metadata could not be read",
+        )
+        end = _mapping_value(
+            value,
+            "end",
+            "byte_end",
+            default=None,
+            error="trace finding metadata could not be read",
+        )
         if isinstance(byte_range, Mapping):
-            start = byte_range.get("start", byte_range.get("byte_start", start))
-            end = byte_range.get("end", byte_range.get("byte_end", end))
+            start = _mapping_value(
+                byte_range,
+                "start",
+                "byte_start",
+                default=start,
+                error="trace finding byte range could not be read",
+            )
+            end = _mapping_value(
+                byte_range,
+                "end",
+                "byte_end",
+                default=end,
+                error="trace finding byte range could not be read",
+            )
         elif isinstance(byte_range, (list, tuple)) and len(byte_range) == 2:
             start, end = byte_range
         if start is None or end is None:
             raise ValueError("trace finding requires a byte range")
 
         return cls(
-            store=value.get("store", value.get("store_type", default_store)),
-            category=value.get("category", value.get("kind", "unknown")),
-            file=value.get(
+            store=_mapping_value(
+                value,
+                "store",
+                "store_type",
+                default=default_store,
+                error="trace finding metadata could not be read",
+            ),
+            category=_mapping_value(
+                value,
+                "category",
+                "kind",
+                default="unknown",
+                error="trace finding metadata could not be read",
+            ),
+            file=_mapping_value(
+                value,
                 "file",
-                value.get("path", value.get("file_path", default_file)),
+                "path",
+                "file_path",
+                default=default_file,
+                error="trace finding metadata could not be read",
             ),
             start=start,
             end=end,
-            count=value.get("count", 1),
+            count=_mapping_value(
+                value,
+                "count",
+                default=1,
+                error="trace finding metadata could not be read",
+            ),
         )
 
 
@@ -290,7 +359,10 @@ class TraceScan:
                 default_store=self.store,
                 default_file=self.file,
             )
-            for item in self.findings
+            for item in _safe_items(
+                self.findings,
+                error="trace scan findings could not be consumed",
+            )
         )
         object.__setattr__(self, "findings", normalized)
 
@@ -300,7 +372,12 @@ class TraceScan:
 
         if not isinstance(value, Mapping):
             raise TypeError("trace scan must be a mapping")
-        raw_findings = value.get("findings", ())
+        raw_findings = _mapping_value(
+            value,
+            "findings",
+            default=(),
+            error="trace scan metadata could not be read",
+        )
         if raw_findings is None:
             raw_findings = ()
         if isinstance(raw_findings, Mapping) or isinstance(raw_findings, str):
@@ -308,12 +385,27 @@ class TraceScan:
         if not isinstance(raw_findings, Iterable):
             raise TypeError("trace scan findings must be an iterable")
         return cls(
-            store=value.get("store", value.get("store_type", _DEFAULT_STORE)),
-            file=value.get(
-                "file",
-                value.get("path", value.get("file_path", _DEFAULT_FILE)),
+            store=_mapping_value(
+                value,
+                "store",
+                "store_type",
+                default=_DEFAULT_STORE,
+                error="trace scan metadata could not be read",
             ),
-            status=value.get("status", "scanned"),
+            file=_mapping_value(
+                value,
+                "file",
+                "path",
+                "file_path",
+                default=_DEFAULT_FILE,
+                error="trace scan metadata could not be read",
+            ),
+            status=_mapping_value(
+                value,
+                "status",
+                default="scanned",
+                error="trace scan metadata could not be read",
+            ),
             findings=tuple(
                 _safe_items(
                     raw_findings,
@@ -327,6 +419,7 @@ class TraceScan:
 class _Aggregate:
     count: int = 0
     byte_ranges: set[ByteRange] = field(default_factory=set)
+    located_byte_ranges: set[tuple[str, str, ByteRange]] = field(default_factory=set)
     stores: set[str] = field(default_factory=set)
     categories: set[str] = field(default_factory=set)
     files: set[tuple[str, str]] = field(default_factory=set)
@@ -334,6 +427,7 @@ class _Aggregate:
     def add(self, finding: TraceFinding) -> None:
         self.count += finding.count
         self.byte_ranges.add(finding.byte_range)
+        self.located_byte_ranges.add((finding.store, finding.file, finding.byte_range))
         self.stores.add(finding.store)
         self.categories.add(finding.category)
         self.files.add((finding.store, finding.file))
@@ -342,7 +436,7 @@ class _Aggregate:
         return [item.to_dict() for item in sorted(self.byte_ranges)]
 
     def byte_count(self) -> int:
-        return sum(item.length for item in self.byte_ranges)
+        return sum(item.length for _, _, item in self.located_byte_ranges)
 
 
 @dataclass(frozen=True, slots=True)
@@ -547,9 +641,13 @@ def _normalize_report_rows(
         if not isinstance(row, Mapping):
             raise TypeError("trace audit rows must be mappings")
         ranges = _normalize_report_ranges(row.get("byte_ranges", ()))
+        minimum_byte_count = sum(item["end"] - item["start"] for item in ranges)
+        byte_count = _nonnegative_count(row.get("byte_count", minimum_byte_count))
+        if byte_count < minimum_byte_count:
+            raise ValueError("trace audit byte count is inconsistent")
         base: dict[str, Any] = {
             "count": _nonnegative_count(row.get("count", 0)),
-            "byte_count": sum(item["end"] - item["start"] for item in ranges),
+            "byte_count": byte_count,
             "byte_ranges": ranges,
         }
         if kind == "store":
@@ -868,8 +966,18 @@ def build_trace_audit(
 
     if statuses is not None:
         if isinstance(statuses, Mapping):
-            for name, count in statuses.items():
-                collector.record_status(_status(name), _nonnegative_count(count))
+            for name in _safe_items(
+                statuses,
+                error="trace statuses could not be consumed",
+            ):
+                safe_status = _status(name)
+                count = _mapping_value(
+                    statuses,
+                    name,
+                    default=0,
+                    error="trace statuses could not be read",
+                )
+                collector.record_status(safe_status, _nonnegative_count(count))
         elif isinstance(statuses, (str, bytes)):
             raise TypeError("trace statuses must be a mapping or iterable")
         else:
