@@ -75,6 +75,18 @@ def test_router_examples_escalate_ambiguous_sensitive_work() -> None:
     assert "explicitly" in body and "synthetic" in body
 
 
+def test_router_applies_intake_before_the_privacy_gate() -> None:
+    """Structured intake must precede text privacy and downstream stages."""
+    body = ROUTER.read_text(encoding="utf-8")
+    normalized = " ".join(body.split())
+
+    intake_rule = body.index("2. Apply the intake boundary")
+    privacy_rule = body.index("3. For a goal with no intake cue")
+    assert intake_rule < privacy_rule
+    assert "select the first matching intake skill even when the goal" in normalized
+    assert "before extraction, exchange, or verification" in normalized
+
+
 def test_router_is_present_in_generated_catalogs() -> None:
     """The new router must be discoverable through both shipped catalogs."""
     assert "[`ask-openmed`](ask-openmed/SKILL.md)" in CATALOG.read_text(

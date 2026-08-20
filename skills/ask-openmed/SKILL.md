@@ -22,17 +22,21 @@ Apply these rules in order:
 
 1. Normalize only the stated goal: lowercase it, trim surrounding whitespace,
    and collapse repeated whitespace. Do not inspect or copy the data payload.
-2. Apply the privacy override. If the goal asks to analyze, extract, exchange,
-   share, upload, or verify clinical or personal content and does not say that
-   the input is synthetic or already de-identified, start at the **privacy
-   gate**: [deidentifying-clinical-text](../deidentifying-clinical-text/SKILL.md).
-   An intake-only goal may start with its format parser, but the gate must run
-   before the parsed content reaches a downstream stage.
-3. Otherwise inspect the tables in the fixed handoff order shown below. Treat
+2. Apply the intake boundary. If the goal matches an Intake row, select the
+   first matching intake skill even when the goal also names a later stage. If
+   sensitivity is unclear, its next handoff is the **privacy gate**:
+   [deidentifying-clinical-text](../deidentifying-clinical-text/SKILL.md), before
+   extraction, exchange, or verification sees the parsed content.
+3. For a goal with no intake cue, apply the privacy override. If it asks to
+   analyze, extract, exchange, share, upload, or verify clinical or personal
+   content and does not say that the input is synthetic or already
+   de-identified, start at the privacy gate.
+4. Otherwise inspect the remaining tables in the fixed handoff order shown
+   below. Treat
    each comma-separated cue as a case-insensitive substring of the normalized
    goal, and select the first matching row. Do not add synonyms or infer cues
    from the payload. This stage order and row order break every tie.
-4. If no row matches, use [building-with-openmed](../building-with-openmed/SKILL.md)
+5. If no row matches, use [building-with-openmed](../building-with-openmed/SKILL.md)
    as the orientation fallback.
 
 Route output should contain only the selected category, skill identifier,

@@ -8,10 +8,11 @@ decision, download a model, or call a network service.
 ## Fixed routing order
 
 Normalize the stated goal by lowercasing it, trimming it, and collapsing
-whitespace. If a downstream operation touches content whose sensitivity is
-unclear, start at the privacy gate. An intake-only request may start with its
-format parser, but the gate must precede extraction, exchange, or verification.
-Otherwise, inspect the tables and their rows in this fixed order: intake →
+whitespace. First select a matching intake route, even when the goal also names
+a later stage. If sensitivity is unclear, its next handoff is the privacy gate,
+which must precede extraction, exchange, or verification. For a goal with no
+intake cue, unclear clinical or personal content starts at the privacy gate.
+Otherwise, inspect the remaining tables and their rows in this fixed order:
 privacy → extraction → exchange → verification. Match each comma-separated cue
 as a case-insensitive substring; the first match wins and no new synonyms are
 inferred.
