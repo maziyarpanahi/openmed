@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rewriter with explicit string paths, value-free errors, duplicate-key
   rejection, same-file overwrite protection, and caller-supplied local
   transforms (#2280).
+- Added structure-aware tool-call trace redaction for JSON objects and encoded
+  payloads, with caller-controlled content paths, deterministic serialization,
+  hashed path-only reports, and a local-only default de-identifier (#2281).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
