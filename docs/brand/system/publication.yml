@@ -100,12 +100,15 @@ classification:
     - onboarding-india.md
     - agent-usage.md
     - guides/trace-discovery.md
+    - reference/trace-jsonl.md
+    - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
+    - guides/streaming-traces.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
@@ -168,6 +171,9 @@ classification:
     - examples.md
     - examples/notebook-gallery.md
     - document-adapter-provenance.md
+    - reference/chat-schema.md
+    - reference/training-schemas.md
+    - reference/preference-schema.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/email-ingestion.md
@@ -205,6 +211,7 @@ classification:
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
+    - security/secret-detection.md
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md

@@ -1,4 +1,4 @@
-"""Privacy-safe discovery helpers for local agent trace stores."""
+"""Local-first helpers for privacy-safe agent traces."""
 
 from .discovery import (
     SUPPORTED_TRACE_ROOT_RULES,
@@ -9,13 +9,63 @@ from .discovery import (
     TraceStoreSummary,
     discover_trace_stores,
 )
+from .schemas.preference import (
+    CONTENT_FIELDS,
+    PREFERENCE_SCHEMA_VERSION,
+    PreferencePair,
+    PreferencePairAdapter,
+    PreferenceRedactionError,
+    PreferenceRedactionReport,
+    PreferenceRedactionResult,
+    PreferenceRedactionState,
+    PreferenceSchemaError,
+    PreferenceSpan,
+    SensitiveSpan,
+    adapt_preference_pair,
+    redact_preference_dataset,
+    redact_preference_pair,
+)
+from .tool_calls import (
+    DEFAULT_CONTENT_PATHS,
+    ContentPath,
+    TextRedactor,
+    ToolCallRedactionError,
+    ToolCallRedactionReport,
+    ToolCallRedactionResult,
+    redact_tool_call,
+    redact_tool_call_with_report,
+    redact_tool_calls,
+)
 
 __all__ = [
+    "CONTENT_FIELDS",
+    "ContentPath",
+    "DEFAULT_CONTENT_PATHS",
+    "PREFERENCE_SCHEMA_VERSION",
+    "SUPPORTED_TRACE_ROOT_RULES",
     "TRACE_DISCOVERY_ENV_VAR",
     "TRACE_ROOTS_ENV_VAR",
-    "SUPPORTED_TRACE_ROOT_RULES",
+    "PreferencePair",
+    "PreferencePairAdapter",
+    "PreferenceRedactionError",
+    "PreferenceRedactionReport",
+    "PreferenceRedactionResult",
+    "PreferenceRedactionState",
+    "PreferenceSchemaError",
+    "PreferenceSpan",
+    "SensitiveSpan",
+    "TextRedactor",
+    "ToolCallRedactionError",
+    "ToolCallRedactionReport",
+    "ToolCallRedactionResult",
     "TraceRootRule",
     "TraceStore",
     "TraceStoreSummary",
+    "adapt_preference_pair",
     "discover_trace_stores",
+    "redact_preference_dataset",
+    "redact_preference_pair",
+    "redact_tool_call",
+    "redact_tool_call_with_report",
+    "redact_tool_calls",
 ]
