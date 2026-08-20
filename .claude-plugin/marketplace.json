@@ -82,6 +82,7 @@
         "./skills/searching-clinicaltrials",
         "./skills/segmenting-clinical-sections",
         "./skills/serving-openmed-rest-api",
+        "./skills/setup-openmed",
         "./skills/shifting-clinical-dates",
         "./skills/structuring-radiology-reports",
         "./skills/summarizing-clinical-notes",

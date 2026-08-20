@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the local-first `setup-openmed` skill and versioned de-identification
+  policy template for collecting five bounded privacy decisions, producing a
+  deterministic review draft, and stopping at an explicit human approval gate
+  before the policy can control a run (#2305).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine

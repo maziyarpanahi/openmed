@@ -83,9 +83,12 @@ Follow this order exactly:
    Preserve the template version, section order, checkboxes, and line endings.
    Do not add a timestamp, random identifier, machine path, user identity,
    source text, detected span, model output, or free-form rationale.
-5. Write the result as `DEID-POLICY.md` in the requested project directory.
-   If a file already exists, ask for explicit permission before replacing it;
-   never overwrite it implicitly.
+5. Resolve the user-requested project directory and require it to be an
+   existing local directory. The output target is exactly its direct child
+   `DEID-POLICY.md`; do not accept a different filename or derive one from an
+   answer. Refuse a symlink or any existing non-regular target. If a regular
+   file already exists, ask for explicit permission before replacing it; never
+   overwrite it implicitly or write through a symlink.
 6. Report only that the draft path was written and that review is pending.
    Do not print the collected answers or any source payload.
 
