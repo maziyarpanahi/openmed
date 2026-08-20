@@ -40,11 +40,12 @@ _NON_PERSONAL_ACCOUNT_NAMES: Final = frozenset(
     }
 )
 
-# Usernames are intentionally conservative: a path separator, whitespace, or
-# a log delimiter ends the segment.  This covers the normal POSIX and Windows
-# account-name shapes without consuming prose after a path at the end of a
-# trace line.
-_USERNAME_PATTERN = r"[^\s/\\\"'`<>|()[\]{};,!?]+"
+# Usernames are intentionally conservative: they begin with a Unicode word
+# character, continue with common POSIX/Windows account-name characters, and
+# never match a prefix of a longer segment.  Requiring a word-character start
+# excludes path-navigation and hidden-directory components such as ``..`` and
+# ``.cache`` while a colon remains available as a common log/line delimiter.
+_USERNAME_PATTERN = r"[\w][\w.@+-]{0,63}(?![\w.@+-])"
 
 # A POSIX path may contain an intermediate directory before a conventional
 # home/profile marker (for example ``/srv/users/fixture_user``).  Requiring

@@ -89,6 +89,28 @@ def test_ignores_generic_system_paths_shared_accounts_and_relative_fixtures() ->
     assert detect_local_identifiers(text) == []
 
 
+def test_ignores_navigation_hidden_directories_and_overlong_segments() -> None:
+    overlong = "a" * 65
+    text = f"/home/../etc /home/.cache/file /home/{overlong}/trace.jsonl"
+
+    assert detect_local_identifiers(text) == []
+
+
+def test_stops_at_log_line_delimiter_without_consuming_it() -> None:
+    text = "frame /home/synthetic_user:123"
+
+    matches = _spans(text)
+
+    assert matches == [
+        (
+            "synthetic_user",
+            USERNAME,
+            text.index("synthetic_user"),
+            text.index("synthetic_user") + len("synthetic_user"),
+        )
+    ]
+
+
 def test_detector_adapter_matches_function() -> None:
     text = "trace /home/adapter_user/project"
     detector = LocalIdentifierDetector()
