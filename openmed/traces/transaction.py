@@ -214,7 +214,9 @@ def transactional_redact(
 
     try:
         replacement_bytes = replacement_text.encode(encoding)
-    except (LookupError, UnicodeError):
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise TransactionRedactionError("redactor returned unencodable text") from None
 
     if resolved_validator is not None:
@@ -224,7 +226,7 @@ def transactional_redact(
             raise
         except BaseException:
             raise TransactionValidationError("candidate validation failed") from None
-        if not valid:
+        if not isinstance(valid, bool) or not valid:
             raise TransactionValidationError("candidate validation failed")
 
     if replacement_bytes == original_bytes:

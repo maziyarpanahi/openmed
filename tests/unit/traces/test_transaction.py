@@ -106,6 +106,32 @@ def test_validation_mismatch_rolls_back_without_creating_backup(tmp_path: Path) 
     assert not target.with_name(target.name + ".bak").exists()
 
 
+def test_callback_result_failures_are_value_free(tmp_path: Path) -> None:
+    target = tmp_path / "trace.jsonl"
+    target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+
+    class FailingText(str):
+        def encode(self, *args: object, **kwargs: object) -> bytes:
+            raise RuntimeError(SYNTHETIC_VALUE)
+
+    class FailingDecision:
+        def __bool__(self) -> bool:
+            raise RuntimeError(SYNTHETIC_VALUE)
+
+    with pytest.raises(TransactionRedactionError) as encoding_error:
+        transactional_redact(target, lambda _text: FailingText(SYNTHETIC_REPLACEMENT))
+    assert SYNTHETIC_VALUE not in str(encoding_error.value)
+
+    with pytest.raises(TransactionValidationError) as validation_error:
+        transactional_redact(
+            target,
+            lambda _text: SYNTHETIC_REPLACEMENT,
+            validator=lambda _candidate: FailingDecision(),  # type: ignore[return-value]
+        )
+    assert SYNTHETIC_VALUE not in str(validation_error.value)
+    assert target.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+
+
 def test_source_change_is_detected_before_atomic_exchange(tmp_path: Path) -> None:
     target = tmp_path / "trace.jsonl"
     target.write_text(SYNTHETIC_VALUE, encoding="utf-8")
