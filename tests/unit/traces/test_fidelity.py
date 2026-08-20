@@ -88,6 +88,26 @@ def test_message_order_failure_reports_only_the_sequence_path() -> None:
     assert SYNTHETIC_CONTENT not in report.summary()
 
 
+def test_content_only_message_reordering_is_detected() -> None:
+    original = {
+        "messages": [
+            {"role": "user", "content": "SYNTHETIC_FIRST"},
+            {"role": "user", "content": "SYNTHETIC_SECOND"},
+        ]
+    }
+    output = {
+        "messages": [
+            {"role": "user", "content": "SYNTHETIC_SECOND"},
+            {"role": "user", "content": "SYNTHETIC_FIRST"},
+        ]
+    }
+
+    report = verify_trace_fidelity(original, output)
+
+    assert report.has_code("message_order")
+    assert report.failing_paths == ("$.messages",)
+
+
 @pytest.mark.parametrize(
     ("field", "replacement", "code"),
     [

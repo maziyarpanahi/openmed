@@ -658,6 +658,28 @@ def _compare_sequence(
                 path, "message_order", expected_type="array", actual_type="array"
             )
             return
+        if expected_fingerprints == actual_fingerprints:
+            # Content masking can make same-role messages indistinguishable.
+            # A second internal-only comparison catches an exact content-only
+            # permutation without rejecting ordinary redaction changes.
+            expected_strict = [
+                _fingerprint(value, path + (index,), ())
+                for index, value in enumerate(expected)
+            ]
+            actual_strict = [
+                _fingerprint(value, path + (index,), ())
+                for index, value in enumerate(actual)
+            ]
+            if expected_strict != actual_strict and _same_multiset(
+                expected_strict, actual_strict
+            ):
+                state.issue(
+                    path,
+                    "message_order",
+                    expected_type="array",
+                    actual_type="array",
+                )
+                return
 
     pair = (id(expected), id(actual))
     if pair in state.active_pairs:
