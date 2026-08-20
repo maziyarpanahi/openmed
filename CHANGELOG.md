@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
+- Added a streaming, schema-preserving JSONL agent-trace content walker and
+  rewriter with explicit string paths, value-free errors, duplicate-key
+  rejection, same-file overwrite protection, and caller-supplied local
+  transforms (#2280).
+- Added structure-aware tool-call trace redaction for JSON objects and encoded
+  payloads, with caller-controlled content paths, deterministic serialization,
+  hashed path-only reports, and a local-only default de-identifier (#2281).
+- Added local credential and secret-token detection for authorization headers,
+  environment values, provider tokens, and private keys, with bounded scanning
+  and value-free, hashed diagnostics (#2283).
 - Added bounded-memory streaming redaction for structured trace records and
   NDJSON, with independent record and byte limits, deterministic pseudonyms,
   aggregate-only progress, and local cancellation (#2284).
