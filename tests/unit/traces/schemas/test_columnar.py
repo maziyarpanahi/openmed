@@ -130,6 +130,99 @@ def test_default_redactor_is_deterministic_and_only_touches_selected_text() -> N
     assert first.column("label").equals(batch.column("label"))
 
 
+def test_dotted_paths_cannot_be_shadowed_by_literal_column_names() -> None:
+    batch = pa.record_batch(
+        [
+            pa.array(["SYNTHETIC_LITERAL"]),
+            pa.array([{"message": "SYNTHETIC_NESTED"}]),
+        ],
+        names=["payload.message", "payload"],
+    )
+
+    nested = redact_record_batch(batch, text_columns=["payload.message"])
+
+    assert nested.column("payload.message").to_pylist() == ["SYNTHETIC_LITERAL"]
+    assert nested.column("payload").to_pylist() == [{"message": "[REDACTED]"}]
+
+    literal = redact_record_batch(batch, text_columns=[("payload.message",)])
+
+    assert literal.column("payload.message").to_pylist() == ["[REDACTED]"]
+    assert literal.column("payload").to_pylist() == [{"message": "SYNTHETIC_NESTED"}]
+
+
+def test_column_names_are_matched_exactly_without_whitespace_coercion() -> None:
+    batch = pa.record_batch(
+        [
+            pa.array(["SYNTHETIC_SELECTED"]),
+            pa.array(["SYNTHETIC_UNSELECTED"]),
+        ],
+        names=[" text ", "text"],
+    )
+
+    adapted = redact_record_batch(batch, text_columns=[(" text ",)])
+
+    assert adapted.column(" text ").to_pylist() == ["[REDACTED]"]
+    assert adapted.column("text").to_pylist() == ["SYNTHETIC_UNSELECTED"]
+
+
+def test_supported_container_types_preserve_their_exact_schema() -> None:
+    arrays = [
+        pa.array(["SYNTHETIC_A", "SYNTHETIC_B"]).dictionary_encode(),
+        pa.array(
+            [["SYNTHETIC_A", None], None],
+            type=pa.list_(pa.string()),
+        ),
+        pa.array(
+            [["SYNTHETIC_A"], []],
+            type=pa.large_list(pa.large_string()),
+        ),
+        pa.array(
+            [["SYNTHETIC_A", "SYNTHETIC_B"], None],
+            type=pa.list_(
+                pa.field(
+                    "token",
+                    pa.string(),
+                    metadata={b"kind": b"text"},
+                ),
+                2,
+            ),
+        ),
+        pa.array(
+            [[("synthetic-key", "SYNTHETIC_A")], None],
+            type=pa.map_(pa.string(), pa.string()),
+        ),
+    ]
+    names = ["dictionary", "list", "large_list", "fixed", "map"]
+    schema = pa.schema(
+        [
+            pa.field(name, array.type, metadata={b"scope": b"synthetic"})
+            for name, array in zip(names, arrays, strict=True)
+        ],
+        metadata={b"fixture": b"container-types"},
+    )
+    batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
+
+    adapted = redact_record_batch(batch, text_columns=names)
+
+    assert adapted.schema.equals(batch.schema, check_metadata=True)
+    assert adapted.to_pylist() == [
+        {
+            "dictionary": "[REDACTED]",
+            "list": ["[REDACTED]", None],
+            "large_list": ["[REDACTED]"],
+            "fixed": ["[REDACTED]", "[REDACTED]"],
+            "map": [("synthetic-key", "[REDACTED]")],
+        },
+        {
+            "dictionary": "[REDACTED]",
+            "list": None,
+            "large_list": [],
+            "fixed": None,
+            "map": None,
+        },
+    ]
+
+
 def test_iter_redacted_record_batches_is_lazy_and_bounded() -> None:
     batch = pa.record_batch(
         {
