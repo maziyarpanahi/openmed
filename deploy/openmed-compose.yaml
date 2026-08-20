@@ -17,6 +17,9 @@ services:
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       HF_DATASETS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
       HF_HOME: /cache/huggingface
       HF_HUB_CACHE: /cache/huggingface/hub
       TRANSFORMERS_CACHE: /cache/huggingface/transformers
@@ -32,7 +35,7 @@ services:
       OPENMED_OPENHIM_MEDIATOR_ENABLED: "false"
     volumes:
       - openmed-cache:/cache
-      - "${OPENMED_MODEL_DIR:-../models}:/models:ro"
+      - openmed-models:/models:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=128m
@@ -40,6 +43,15 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    pids_limit: 512
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - openmed-internal
     restart: unless-stopped
     healthcheck:
       test:
@@ -57,3 +69,9 @@ services:
 volumes:
   openmed-cache:
     name: "${OPENMED_CACHE_VOLUME_NAME:-openmed-cache}"
+  openmed-models:
+    name: "${OPENMED_MODEL_VOLUME_NAME:-openmed-models}"
+
+networks:
+  openmed-internal:
+    internal: true

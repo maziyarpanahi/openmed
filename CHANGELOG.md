@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added an offline-first self-hosted Compose bundle with loopback-only default
   publishing, a hardened non-root runtime, persistent cache and read-only model
-  mounts, a bounded readiness probe, and opt-in-only remote integrations (#2372).
+  mounts, an internal network, bounded logs and processes, a readiness probe,
+  and opt-in-only remote integrations (#2372).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
