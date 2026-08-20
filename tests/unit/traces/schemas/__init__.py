@@ -1,1 +1,1 @@
-"""Unit tests for trace schema adapters."""
+"""Tests for trace schema adapters."""

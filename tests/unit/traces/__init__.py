@@ -1,1 +1,1 @@
-"""Unit tests for trace and training-record schemas."""
+"""Unit tests for trace utilities."""

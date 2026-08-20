@@ -25,9 +25,22 @@ from .schemas.preference import (
     redact_preference_dataset,
     redact_preference_pair,
 )
+from .tool_calls import (
+    DEFAULT_CONTENT_PATHS,
+    ContentPath,
+    TextRedactor,
+    ToolCallRedactionError,
+    ToolCallRedactionReport,
+    ToolCallRedactionResult,
+    redact_tool_call,
+    redact_tool_call_with_report,
+    redact_tool_calls,
+)
 
 __all__ = [
     "CONTENT_FIELDS",
+    "ContentPath",
+    "DEFAULT_CONTENT_PATHS",
     "PREFERENCE_SCHEMA_VERSION",
     "SUPPORTED_TRACE_ROOT_RULES",
     "TRACE_DISCOVERY_ENV_VAR",
@@ -41,6 +54,10 @@ __all__ = [
     "PreferenceSchemaError",
     "PreferenceSpan",
     "SensitiveSpan",
+    "TextRedactor",
+    "ToolCallRedactionError",
+    "ToolCallRedactionReport",
+    "ToolCallRedactionResult",
     "TraceRootRule",
     "TraceStore",
     "TraceStoreSummary",
@@ -48,4 +65,7 @@ __all__ = [
     "discover_trace_stores",
     "redact_preference_dataset",
     "redact_preference_pair",
+    "redact_tool_call",
+    "redact_tool_call_with_report",
+    "redact_tool_calls",
 ]
