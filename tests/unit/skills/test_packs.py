@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
 
 import pytest
@@ -92,6 +93,24 @@ def test_missing_skill_is_rejected_without_echoing_skill_content(
     message = "\n".join(raised.value.errors)
     assert "missing-skill" in message
     assert "Synthetic body only" not in message
+
+
+def test_manifest_read_errors_do_not_expose_local_paths(tmp_path: Path) -> None:
+    builder = _load_builder()
+    sensitive = "PatientJaneDoe"
+    missing_manifest = tmp_path / sensitive / "manifest.json"
+
+    with pytest.raises(builder.PackValidationError) as raised:
+        builder.load_manifest(missing_manifest)
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(raised.value),
+            raised.value,
+            raised.value.__traceback__,
+        )
+    )
+    assert sensitive not in rendered
 
 
 def test_duplicate_membership_is_rejected(tmp_path: Path) -> None:

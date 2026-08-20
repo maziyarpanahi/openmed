@@ -79,8 +79,8 @@ def _read_json(path: Path) -> object:
 
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise PackValidationError(("unable to read the pack manifest",)) from exc
+    except OSError:
+        raise PackValidationError(("unable to read the pack manifest",)) from None
 
     try:
         return json.loads(text)
@@ -89,7 +89,7 @@ def _read_json(path: Path) -> object:
             (
                 f"pack manifest is not valid JSON at line {exc.lineno}, column {exc.colno}",
             )
-        ) from exc
+        ) from None
 
 
 def _valid_identifier(value: object) -> bool:
@@ -230,8 +230,8 @@ def discover_skills(skills_dir: Path = DEFAULT_SKILLS_DIR) -> dict[str, Path]:
     skills: dict[str, Path] = {}
     try:
         entries = sorted(skills_dir.iterdir(), key=lambda path: path.name)
-    except OSError as exc:
-        raise PackValidationError(("unable to inspect the skills directory",)) from exc
+    except OSError:
+        raise PackValidationError(("unable to inspect the skills directory",)) from None
 
     for entry in entries:
         if entry.name.startswith((".", "_")):
@@ -247,8 +247,15 @@ def discover_skills(skills_dir: Path = DEFAULT_SKILLS_DIR) -> dict[str, Path]:
 def skill_size_bytes(skill_dir: Path) -> int:
     """Return the regular-file byte size of one skill without following links."""
 
+    def walk_error(_error: OSError) -> None:
+        raise PackValidationError(("unable to measure a skill directory",))
+
     total = 0
-    for root, directories, filenames in os.walk(skill_dir, followlinks=False):
+    for root, directories, filenames in os.walk(
+        skill_dir,
+        followlinks=False,
+        onerror=walk_error,
+    ):
         root_path = Path(root)
         directories[:] = sorted(
             name for name in directories if not (root_path / name).is_symlink()
@@ -259,10 +266,10 @@ def skill_size_bytes(skill_dir: Path) -> int:
                 continue
             try:
                 total += file_path.stat().st_size
-            except OSError as exc:
+            except OSError:
                 raise PackValidationError(
-                    (f"unable to measure skill '{skill_dir.name}'",)
-                ) from exc
+                    ("unable to measure a skill directory",)
+                ) from None
     return total
 
 
@@ -331,8 +338,8 @@ def _ensure_directory(path: Path, label: str) -> None:
         raise PackBuildError(f"{label} is not a safe directory")
     try:
         path.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
-        raise PackBuildError(f"could not create {label}") from exc
+    except OSError:
+        raise PackBuildError(f"could not create {label}") from None
 
 
 def _resolved_path(path: Path, label: str) -> Path:
@@ -340,8 +347,8 @@ def _resolved_path(path: Path, label: str) -> Path:
 
     try:
         return path.resolve(strict=False)
-    except OSError as exc:
-        raise PackBuildError(f"{label} is not a safe directory") from exc
+    except OSError:
+        raise PackBuildError(f"{label} is not a safe directory") from None
 
 
 def _expected_link_target(source: Path, destination: Path) -> str:
@@ -355,8 +362,10 @@ def _validate_existing_skill_link(
     try:
         actual_target = os.readlink(destination)
         resolves_to_source = destination.resolve(strict=False) == source.resolve()
-    except OSError as exc:
-        raise PackBuildError(f"pack '{pack_id}' contains an unsafe skill link") from exc
+    except OSError:
+        raise PackBuildError(
+            f"pack '{pack_id}' contains an unsafe skill link"
+        ) from None
     if actual_target != expected_target or not resolves_to_source:
         raise PackBuildError(f"pack '{pack_id}' contains an unexpected skill link")
 
@@ -370,8 +379,8 @@ def _validate_existing_metadata(metadata_path: Path, pack_id: str) -> None:
         return
     try:
         payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise PackBuildError(f"pack '{pack_id}' metadata is not safe") from exc
+    except (OSError, json.JSONDecodeError):
+        raise PackBuildError(f"pack '{pack_id}' metadata is not safe") from None
     if not isinstance(payload, dict) or payload.get("pack_id") != pack_id:
         raise PackBuildError(f"pack '{pack_id}' metadata is not owned by this pack")
 
@@ -393,8 +402,8 @@ def _preflight_pack_directory(
 
     try:
         entries = {entry.name: entry for entry in pack_dir.iterdir()}
-    except OSError as exc:
-        raise PackBuildError(f"could not inspect pack '{pack_id}'") from exc
+    except OSError:
+        raise PackBuildError(f"could not inspect pack '{pack_id}'") from None
 
     allowed_entries = {"pack.json"}
     if not selection_only:
@@ -416,8 +425,8 @@ def _preflight_pack_directory(
     expected_skills = set(report.pack.skills)
     try:
         links = tuple(links_dir.iterdir())
-    except OSError as exc:
-        raise PackBuildError(f"could not inspect pack '{pack_id}' skills") from exc
+    except OSError:
+        raise PackBuildError(f"could not inspect pack '{pack_id}' skills") from None
     for destination in links:
         if destination.name not in expected_skills or not destination.is_symlink():
             raise PackBuildError(f"pack '{pack_id}' contains stale skill output")
@@ -450,10 +459,10 @@ def _write_pack_metadata(
             json.dumps(metadata, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-    except OSError as exc:
+    except OSError:
         raise PackBuildError(
             f"could not write pack '{report.pack.identifier}'"
-        ) from exc
+        ) from None
 
 
 def _link_skill(source: Path, destination: Path, pack_id: str) -> None:
@@ -466,11 +475,11 @@ def _link_skill(source: Path, destination: Path, pack_id: str) -> None:
     target = _expected_link_target(source, destination)
     try:
         destination.symlink_to(target, target_is_directory=True)
-    except OSError as exc:
+    except OSError:
         raise PackBuildError(
             f"could not link skills for pack '{pack_id}'; use --selection-only "
             "when directory symlinks are unavailable"
-        ) from exc
+        ) from None
 
 
 def build_packs(
