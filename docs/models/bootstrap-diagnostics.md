@@ -4,10 +4,12 @@
 readiness report before it starts model work. It is intended for cache
 preflight and troubleshooting, not for clinical or compliance decisions.
 
-The check performs no downloads and makes no network calls. It reads cache
+The check performs no downloads and does not open sockets. It reads cache
 directory metadata and, when a local integrity manifest is present, verifies
-the manifest's listed files. It never emits cache paths, model identifiers,
-checksums, environment values, credentials, or model contents.
+the manifest's listed files. A caller-controlled cache path can still refer to
+a mounted or remote filesystem, so use a known-local path for an offline
+preflight. The report never emits cache paths, model identifiers, checksums,
+environment values, credentials, or model contents.
 
 ## Run the check
 
@@ -58,8 +60,11 @@ The JSON report has a versioned top level and exactly four categories:
 Category facts are limited to booleans, counts, and fixed labels. An absent
 checksum manifest is a warning by default; `--require-checksum` turns it into a
 readiness failure. Optional extras are informational unless one or more
-`--extra` options make them required. `--require-offline` requires the
-OpenMed and dependency-specific offline flags to be enabled.
+`--extra` options make them required. `--require-offline` requires the OpenMed
+and dependency-specific offline flags to be enabled. This proves that the
+offline policy is configured; it does not claim that a socket guard is active
+during the diagnostic itself. Run the protected model operation through
+OpenMed's normal offline guard.
 
 The result is a preflight signal. It does not prove that a model is suitable
 for a clinical task, that a host is compliant, or that an application will

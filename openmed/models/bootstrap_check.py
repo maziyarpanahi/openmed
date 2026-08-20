@@ -58,6 +58,8 @@ OPTIONAL_EXTRAS: Mapping[str, tuple[str, ...]] = {
 }
 
 _MANIFEST_SUFFIX = ".json"
+_MAX_MODEL_ID_LENGTH = 256
+_MAX_REQUIRED_EXTRA_INPUTS = 32
 
 
 @dataclass(frozen=True)
@@ -149,8 +151,8 @@ def run_bootstrap_check(
             required by the caller.  Other extras are reported as optional.
         require_checksum: Make an absent local integrity manifest a readiness
             failure instead of a warning.
-        require_offline: Make an unrequested or unenforced offline policy a
-            readiness failure.
+        require_offline: Make an unrequested or incompletely configured
+            offline policy a readiness failure.
         offline: Explicitly request or clear offline policy for this check.
             When omitted, the environment and optional config are inspected.
         config: Optional object with a boolean ``local_only`` attribute.
@@ -237,7 +239,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="python -m openmed.models.bootstrap_check",
-        description="Check local model bootstrap readiness without network access.",
+        description="Check local model readiness without downloads or socket access.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -273,7 +275,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--offline",
         dest="require_offline",
         action="store_true",
-        help="Require an enforced local-only policy.",
+        help="Require complete local-only policy flags.",
     )
     parser.add_argument(
         "--json",
@@ -331,16 +333,18 @@ def _emit_invalid_input(json_output: bool) -> int:
 def _normalize_model_id(model_id: str | None) -> str | None:
     if model_id is None:
         return None
-    if not isinstance(model_id, str):
+    if type(model_id) is not str:
         raise ValueError("model_id must be a non-empty safe string")
     value = model_id.strip()
+    segments = value.split("/")
     if (
         not value
+        or len(value) > _MAX_MODEL_ID_LENGTH
         or any(not character.isprintable() for character in value)
-        or value.startswith("/")
-        or value.endswith("/")
-        or "//" in value
-        or ".." in value.split("/")
+        or "\\" in value
+        or ":" in value
+        or len(segments) > 2
+        or any(segment in {"", ".", ".."} for segment in segments)
     ):
         raise ValueError("model_id must be a non-empty safe string")
     return value
@@ -350,11 +354,26 @@ def _normalize_required_extras(values: Iterable[str] | None) -> tuple[str, ...]:
     if values is None:
         return ()
     if isinstance(values, str):
+        if type(values) is not str:
+            raise ValueError("required extras must use known names")
         values = (values,)
 
     normalized: set[str] = set()
-    for value in values:
-        if not isinstance(value, str):
+    try:
+        iterator = iter(values)
+    except Exception:  # noqa: BLE001 - convert caller hooks safely
+        raise ValueError("required extras could not be read") from None
+
+    for index in range(_MAX_REQUIRED_EXTRA_INPUTS + 1):
+        try:
+            value = next(iterator)
+        except StopIteration:
+            break
+        except Exception:  # noqa: BLE001 - do not expose source values
+            raise ValueError("required extras could not be read") from None
+        if index == _MAX_REQUIRED_EXTRA_INPUTS:
+            raise ValueError("too many required extras")
+        if type(value) is not str:
             raise ValueError("required extras must use known names")
         name = value.strip().lower().replace("-", "_")
         if name not in OPTIONAL_EXTRAS:
@@ -558,11 +577,27 @@ def _check_offline_policy(
     offline: bool | None,
     require_offline: bool,
 ) -> DiagnosticCategory:
-    config_requested = bool(getattr(config, "local_only", False))
-    environment_requested = env_flag_enabled(os.getenv(OFFLINE_ENV_VAR))
-    dependency_flags_enabled = all(
-        env_flag_enabled(os.getenv(name)) for name in HF_OFFLINE_ENV_VARS
-    )
+    try:
+        configured_value = getattr(config, "local_only", False)
+        if type(configured_value) is not bool:
+            raise TypeError
+        config_requested = configured_value
+        environment_requested = env_flag_enabled(os.getenv(OFFLINE_ENV_VAR))
+        dependency_flags_enabled = all(
+            env_flag_enabled(os.getenv(name)) for name in HF_OFFLINE_ENV_VARS
+        )
+    except Exception:  # noqa: BLE001 - keep configuration failures value-free
+        return DiagnosticCategory(
+            STATUS_FAIL,
+            "offline_policy_invalid",
+            {
+                "requested": False,
+                "configured": False,
+                "network_guard": "unknown",
+                "dependency_flags": "unknown",
+                "source": "invalid",
+            },
+        )
 
     if offline is not None:
         requested = offline
@@ -578,17 +613,20 @@ def _check_offline_policy(
         else:
             source = "none"
 
-    enforced = requested and dependency_flags_enabled
+    configured = requested and dependency_flags_enabled
     facts = {
         "requested": requested,
-        "enforced": enforced,
-        "network": "blocked" if enforced else "allowed",
+        "configured": configured,
+        "network_guard": "requested" if requested else "not_requested",
+        "dependency_flags": "enabled" if dependency_flags_enabled else "incomplete",
         "source": source,
     }
-    if enforced:
-        return DiagnosticCategory(STATUS_PASS, "offline_enforced", facts)
+    if configured:
+        return DiagnosticCategory(STATUS_PASS, "offline_configured", facts)
     if requested:
-        return DiagnosticCategory(STATUS_FAIL, "offline_not_enforced", facts)
+        return DiagnosticCategory(
+            STATUS_FAIL, "offline_configuration_incomplete", facts
+        )
     if require_offline:
         return DiagnosticCategory(STATUS_FAIL, "offline_required", facts)
     return DiagnosticCategory(STATUS_PASS, "offline_not_requested", facts)
@@ -600,7 +638,7 @@ def _extra_available(name: str) -> bool:
             importlib.util.find_spec(module) is not None
             for module in OPTIONAL_EXTRAS[name]
         )
-    except (ImportError, ModuleNotFoundError, ValueError, AttributeError):
+    except Exception:  # noqa: BLE001 - import finders are caller-controlled hooks
         return False
 
 
@@ -626,7 +664,7 @@ def _cache_location(cache_dir: str | Path | None) -> Path | None:
 def _coerce_path(value: str | Path) -> Path | None:
     try:
         return Path(value).expanduser()
-    except (OSError, TypeError, ValueError):
+    except Exception:  # noqa: BLE001 - path-like hooks must not leak values
         return None
 
 
@@ -781,8 +819,11 @@ def _reason_text(reason: str) -> str:
         "no_required_extras": "no optional extras are required",
         "required_extras_available": "required optional extras are available",
         "required_extras_missing": "one or more required optional extras are missing",
-        "offline_enforced": "offline policy is enforced",
-        "offline_not_enforced": "offline policy was requested but is not enforced",
+        "offline_configured": "offline policy is configured",
+        "offline_configuration_incomplete": (
+            "offline policy was requested but dependency flags are incomplete"
+        ),
+        "offline_policy_invalid": "offline policy configuration is invalid",
         "offline_required": "offline policy is required",
         "offline_not_requested": "offline policy was not requested",
     }.get(reason, "diagnostic completed")

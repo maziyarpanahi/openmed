@@ -6,6 +6,8 @@ import json
 import socket
 from pathlib import Path
 
+import pytest
+
 from openmed.core.model_integrity import sha256_file
 from openmed.models import bootstrap_check
 
@@ -130,12 +132,14 @@ def test_required_extra_and_offline_policy_fail_without_leaking_values(
 
     assert report.ready is False
     assert report.categories["optional_extras"].reason == "required_extras_missing"
-    assert report.categories["offline_policy"].reason == "offline_not_enforced"
+    assert (
+        report.categories["offline_policy"].reason == "offline_configuration_incomplete"
+    )
     serialized = bootstrap_check.render_json(report)
     assert "OPENMED_OFFLINE" not in serialized
 
 
-def test_enforced_offline_policy_is_reported_without_network_access(
+def test_configured_offline_policy_is_reported_without_network_access(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -154,12 +158,115 @@ def test_enforced_offline_policy_is_reported_without_network_access(
     assert report.ready is True
     assert report.categories["offline_policy"].to_dict() == {
         "status": "pass",
-        "reason": "offline_enforced",
+        "reason": "offline_configured",
         "requested": True,
-        "enforced": True,
-        "network": "blocked",
+        "configured": True,
+        "network_guard": "requested",
+        "dependency_flags": "enabled",
         "source": "environment",
     }
+
+
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        r"OpenMed\model",
+        r"OpenMed\branch\..\outside",
+        "C:model",
+        "OpenMed/../outside",
+        "OpenMed/model/extra",
+    ],
+)
+def test_model_id_rejects_cross_platform_path_syntax(model_id: str) -> None:
+    """A model id cannot escape the cache through Windows path semantics."""
+
+    with pytest.raises(ValueError, match="safe string") as raised:
+        bootstrap_check.run_bootstrap_check(model_id=model_id)
+
+    assert model_id not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_hostile_required_extra_iterable_has_a_value_free_error() -> None:
+    """Iterator failures cannot copy their source value into an exception."""
+
+    marker = "synthetic-extra-iterator-value-884"
+
+    def failing_extras():
+        yield "hf"
+        raise RuntimeError(marker)
+
+    with pytest.raises(ValueError, match="could not be read") as raised:
+        bootstrap_check.run_bootstrap_check(required_extras=failing_extras())
+
+    assert marker not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_hostile_config_property_becomes_a_value_free_failed_category(
+    tmp_path: Path,
+) -> None:
+    """Configuration access failures do not escape or claim offline safety."""
+
+    marker = "synthetic-config-property-value-117"
+    cache_dir = tmp_path / "synthetic-cache"
+    _write_snapshot(cache_dir)
+
+    class FailingConfig:
+        @property
+        def local_only(self) -> bool:
+            raise RuntimeError(marker)
+
+    report = bootstrap_check.run_bootstrap_check(
+        cache_dir=cache_dir,
+        config=FailingConfig(),
+    )
+
+    assert report.ready is False
+    assert report.categories["offline_policy"].reason == "offline_policy_invalid"
+    assert marker not in bootstrap_check.render_json(report)
+
+
+def test_optional_import_finder_failures_are_value_free(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A hostile import finder is treated as a missing required extra."""
+
+    marker = "synthetic-import-finder-value-492"
+    cache_dir = tmp_path / "synthetic-cache"
+    _write_snapshot(cache_dir)
+
+    def failing_find_spec(_module_name: str):
+        raise RuntimeError(marker)
+
+    monkeypatch.setattr(bootstrap_check.importlib.util, "find_spec", failing_find_spec)
+    report = bootstrap_check.run_bootstrap_check(
+        cache_dir=cache_dir,
+        required_extras=["hf"],
+    )
+
+    assert report.ready is False
+    assert report.categories["optional_extras"].reason == "required_extras_missing"
+    assert marker not in bootstrap_check.render_json(report)
+
+
+def test_hostile_pathlike_failure_is_value_free() -> None:
+    """Path conversion hooks cannot leak values through the public check."""
+
+    marker = "synthetic-pathlike-value-714"
+
+    class FailingPath:
+        def __fspath__(self) -> str:
+            raise RuntimeError(marker)
+
+    report = bootstrap_check.run_bootstrap_check(  # type: ignore[arg-type]
+        cache_dir=FailingPath()
+    )
+
+    assert report.ready is False
+    assert report.categories["cache"].reason == "cache_missing"
+    assert marker not in bootstrap_check.render_json(report)
 
 
 def test_json_cli_uses_stable_not_ready_exit_and_value_free_output(
