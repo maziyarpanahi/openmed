@@ -46,10 +46,10 @@ runtime references such as `${TOKEN}` are ignored to keep documentation and
 configuration examples from becoming findings. High-entropy text without a
 recognized shape or secret-name context is also ignored deliberately.
 
-Private-key boundaries are scanned in a single pass, and overlap resolution is
-kept ordered without comparing every finding to every other finding. This keeps
-malformed or adversarial trace input from triggering regex backtracking or
-quadratic candidate selection.
+Private-key boundaries are scanned in a single pass, token patterns have
+explicit length bounds, and overlap resolution checks only the neighboring
+selected spans found by binary search. These choices avoid regex backtracking
+and pairwise overlap comparisons on malformed or adversarial trace input.
 
 ## Safe handling
 
