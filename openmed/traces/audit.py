@@ -450,7 +450,33 @@ class _Aggregate:
         return [item.to_dict() for item in sorted(self.byte_ranges)]
 
     def byte_count(self) -> int:
-        return sum(item.length for _, _, item in self.located_byte_ranges)
+        ranges_by_file: dict[tuple[str, str], list[ByteRange]] = {}
+        for store, file, byte_range in self.located_byte_ranges:
+            ranges_by_file.setdefault((store, file), []).append(byte_range)
+        return sum(
+            _merged_byte_range_length(ranges) for ranges in ranges_by_file.values()
+        )
+
+
+def _merged_byte_range_length(ranges: Iterable[ByteRange]) -> int:
+    """Return unique byte coverage after merging overlaps."""
+
+    total = 0
+    current_start: int | None = None
+    current_end = 0
+    for byte_range in sorted(ranges):
+        if current_start is None:
+            current_start = byte_range.start
+            current_end = byte_range.end
+        elif byte_range.start > current_end:
+            total += current_end - current_start
+            current_start = byte_range.start
+            current_end = byte_range.end
+        else:
+            current_end = max(current_end, byte_range.end)
+    if current_start is not None:
+        total += current_end - current_start
+    return total
 
 
 @dataclass(frozen=True, slots=True)
@@ -547,10 +573,10 @@ class TraceAuditReport:
             "schema_version": self.schema_version,
             "totals": self.status_counts,
             "finding_count": self.finding_count,
-            "stores": [dict(item) for item in self.stores],
-            "categories": [dict(item) for item in self.categories],
-            "files": [dict(item) for item in self.files],
-            "findings": [dict(item) for item in self.findings],
+            "stores": [_serialize_report_row(item) for item in self.stores],
+            "categories": [_serialize_report_row(item) for item in self.categories],
+            "files": [_serialize_report_row(item) for item in self.files],
+            "findings": [_serialize_report_row(item) for item in self.findings],
         }
 
     def as_dict(self) -> dict[str, Any]:
@@ -630,7 +656,7 @@ def _terminal_rows(rows: Iterable[Mapping[str, Any]], label_key: str) -> list[st
 
 
 def _format_ranges(value: object) -> str:
-    if not isinstance(value, list) or not value:
+    if not isinstance(value, (list, tuple)) or not value:
         return "none"
     ranges: list[str] = []
     for item in value:
@@ -640,6 +666,14 @@ def _format_ranges(value: object) -> str:
             if type(start) is int and type(end) is int:
                 ranges.append(f"{start}-{end}")
     return ",".join(ranges) if ranges else "none"
+
+
+def _serialize_report_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a detached, JSON-compatible copy of one normalized row."""
+
+    serialized = dict(row)
+    serialized["byte_ranges"] = [dict(item) for item in row["byte_ranges"]]
+    return serialized
 
 
 _ReportRowKind: TypeAlias = Literal["store", "category", "file", "finding"]
@@ -655,7 +689,9 @@ def _normalize_report_rows(
         if not isinstance(row, Mapping):
             raise TypeError("trace audit rows must be mappings")
         ranges = _normalize_report_ranges(row.get("byte_ranges", ()))
-        minimum_byte_count = sum(item["end"] - item["start"] for item in ranges)
+        minimum_byte_count = _merged_byte_range_length(
+            ByteRange(item["start"], item["end"]) for item in ranges
+        )
         byte_count = _nonnegative_count(row.get("byte_count", minimum_byte_count))
         if byte_count < minimum_byte_count:
             raise ValueError("trace audit byte count is inconsistent")
@@ -715,9 +751,9 @@ def _normalize_report_rows(
     return tuple(MappingProxyType(row) for row in normalized)
 
 
-def _normalize_report_ranges(value: object) -> list[dict[str, int]]:
+def _normalize_report_ranges(value: object) -> tuple[Mapping[str, int], ...]:
     if value is None:
-        return []
+        return ()
     if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
         raise TypeError("trace audit byte ranges must be an iterable")
     ranges: set[ByteRange] = set()
@@ -730,7 +766,7 @@ def _normalize_report_ranges(value: object) -> list[dict[str, int]]:
         start = _offset(item.get("start"))
         end = _offset(item.get("end"))
         ranges.add(ByteRange(start, end))
-    return [item.to_dict() for item in sorted(ranges)]
+    return tuple(MappingProxyType(item.to_dict()) for item in sorted(ranges))
 
 
 class TraceAudit:
