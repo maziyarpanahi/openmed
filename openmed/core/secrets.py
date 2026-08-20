@@ -508,7 +508,7 @@ def _parameterized_header_candidate(
 
 
 def _private_key_candidates(text: str) -> list[_Candidate]:
-    """Find private-key blocks and unmatched headers in one linear pass."""
+    """Find private-key blocks and fail closed on unmatched begin markers."""
     candidates: list[_Candidate] = []
     pending: dict[str, list[tuple[int, int]]] = {}
 
@@ -530,9 +530,8 @@ def _private_key_candidates(text: str) -> list[_Candidate]:
             )
 
     for spans in pending.values():
-        candidates.extend(
-            _Candidate(start, end, PRIVATE_KEY, 99) for start, end in spans
-        )
+        if spans:
+            candidates.append(_Candidate(spans[0][0], len(text), PRIVATE_KEY, 99))
     return candidates
 
 

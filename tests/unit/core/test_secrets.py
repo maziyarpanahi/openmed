@@ -85,12 +85,14 @@ def test_detects_private_key_material_as_one_span():
     assert private_key not in json.dumps(finding.to_dict())
 
 
-def test_unmatched_private_key_headers_scale_without_backtracking():
+def test_unmatched_private_key_headers_fail_closed_without_backtracking():
     header = "-----BEGIN PRIVATE KEY-----\n"
-    findings = detect_secrets(header * 2_000)
+    text = header * 2_000 + "synthetic-key-material"
+    findings = detect_secrets(text)
 
-    assert len(findings) == 2_000
-    assert all(finding.category == PRIVATE_KEY for finding in findings)
+    assert len(findings) == 1
+    assert findings[0].category == PRIVATE_KEY
+    assert findings[0].offset == (0, len(text))
 
 
 def test_detects_parameterized_authorization_value_as_one_span():

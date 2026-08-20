@@ -35,7 +35,8 @@ string passed to the scan.
 - `authorization`, `proxy-authorization`, and common API/auth headers;
 - JWT-like values and recognizable GitHub, Slack, Hugging Face, npm, PyPI,
   Google, Stripe, and cloud access-key prefixes;
-- PEM and PGP private-key blocks, including an unmatched private-key header;
+- PEM and PGP private-key blocks; an unmatched `BEGIN` marker fails closed by
+  covering the remaining input so truncated key material is not left exposed;
 - parameterized AWS Signature Version 4, Digest, and Signature authorization
   values;
 - secret-looking values assigned to names such as `API_KEY`, `ACCESS_TOKEN`,
