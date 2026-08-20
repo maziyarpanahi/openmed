@@ -65,8 +65,9 @@ redacted = registry.transform(
 ```
 
 Use `AmbiguousSchemaError` and `UnknownSchemaError` to report a safe decision
-state to a caller. Registry errors contain schema names and paths only; they do
-not include record values.
+state to a caller. Registry errors never include record values, and schema
+identifiers in diagnostics are represented by deterministic
+`schema_sha256_...` labels rather than caller-provided names.
 
 Custom schemas can implement the `TrainingConversationSchema` protocol and be
 registered with `registry.register(...)`. Registration is in-process and has

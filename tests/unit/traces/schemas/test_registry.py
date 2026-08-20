@@ -157,3 +157,88 @@ def test_registry_validates_custom_protocol_and_duplicate_names() -> None:
     assert registry.transform({"text": "Synthetic value"}, str.upper) == {
         "text": "SYNTHETIC VALUE"
     }
+
+
+def test_schema_names_are_hashed_in_diagnostics() -> None:
+    sensitive = "PatientJaneDoe"
+    registry = TrainingSchemaRegistry(include_defaults=False)
+
+    with pytest.raises(UnknownSchemaError) as unknown_error:
+        registry.get(sensitive)
+    assert sensitive not in str(unknown_error.value)
+    assert "schema_sha256_" in str(unknown_error.value)
+
+    incomplete = type("IncompleteSchema", (), {"name": sensitive})()
+    with pytest.raises(InvalidSchemaError) as invalid_error:
+        registry.register(incomplete)
+    assert sensitive not in str(invalid_error.value)
+    assert "schema_sha256_" in str(invalid_error.value)
+
+
+def test_registry_rejects_a_canonical_name_that_collides_with_an_alias() -> None:
+    class AliasCollisionSchema:
+        name = "chat"
+
+        def detect(self, record: object) -> bool:
+            return isinstance(record, dict)
+
+        def walk(self, record: object):
+            del record
+            return ()
+
+        def reconstruct(self, record: object, replacements: object) -> object:
+            del replacements
+            return record
+
+    registry = TrainingSchemaRegistry()
+
+    with pytest.raises(SchemaRegistryError, match="already registered"):
+        registry.register(AliasCollisionSchema())
+
+    assert registry.get("chat").name == "messages"
+    assert "chat" not in registry.available()
+
+
+def test_custom_detection_and_walk_cannot_mutate_the_source_record() -> None:
+    class MutatingSchema:
+        name = "mutating"
+
+        def detect(self, record: dict[str, object]) -> bool:
+            record["detect_mutation"] = True
+            return "text" in record
+
+        def walk(self, record: dict[str, object]):
+            record["walk_mutation"] = True
+            return ((("text",), record["text"]),)
+
+        def reconstruct(self, record: dict[str, object], replacements):
+            record["text"] = replacements[("text",)]
+            return record
+
+    record = {"text": "Synthetic private value"}
+    registry = TrainingSchemaRegistry([MutatingSchema()], include_defaults=False)
+
+    walked = registry.walk(record)
+    rebuilt = registry.reconstruct(
+        record,
+        {("text",): "[REDACTED]"},
+    )
+
+    assert walked == ((("text",), "Synthetic private value"),)
+    assert rebuilt == {"text": "[REDACTED]"}
+    assert record == {"text": "Synthetic private value"}
+
+
+def test_messages_schema_rejects_partially_unrecognized_content() -> None:
+    registry = TrainingSchemaRegistry()
+    record = {
+        "messages": [
+            {"role": "user", "content": "Synthetic private value"},
+            {"role": "assistant", "unexpected": "Synthetic hidden value"},
+        ]
+    }
+
+    with pytest.raises(SchemaMismatchError):
+        registry.resolve(record, schema="messages")
+
+    assert record["messages"][0]["content"] == "Synthetic private value"

@@ -14,6 +14,7 @@ values.
 from __future__ import annotations
 
 import copy
+import hashlib
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, TypeAlias, cast, runtime_checkable
@@ -71,7 +72,10 @@ class TrainingConversationSchema(Protocol):
     flattening or rebuilding the surrounding record shape.
     """
 
-    name: str
+    @property
+    def name(self) -> str:
+        """Return the stable registry name for this schema."""
+        ...
 
     def detect(self, record: Any) -> bool:
         """Return whether this schema can handle ``record``."""
@@ -185,10 +189,15 @@ def _walk_message_list(
     items: list[ContentItem] = []
     for index, message in enumerate(messages):
         if not isinstance(message, Mapping) or content_key not in message:
-            continue
-        items.extend(
-            _walk_text_value(message[content_key], path + (index, content_key))
+            return ()
+        content = message[content_key]
+        content_items = _walk_text_value(
+            content,
+            path + (index, content_key),
         )
+        if content is not None and not content_items:
+            return ()
+        items.extend(content_items)
     return tuple(items)
 
 
@@ -282,7 +291,7 @@ def _preference_root_walker(
 def _reconstruct_record(
     record: Any,
     walked: Iterable[ContentItem],
-    replacements: Mapping[ContentPath | str, str],
+    replacements: Mapping[ContentPath, str],
 ) -> Any:
     """Apply validated replacements to a deep copy of a JSON-like record."""
 
@@ -308,19 +317,19 @@ def _reconstruct_record(
 
 def _normalize_path(raw_path: ContentPath | str | Sequence[PathPart]) -> ContentPath:
     if isinstance(raw_path, str):
-        parts: tuple[PathPart, ...] = tuple(
+        string_parts: tuple[PathPart, ...] = tuple(
             int(part) if part.isdecimal() else part
             for part in raw_path.split(".")
             if part
         )
-        if not parts:
+        if not string_parts:
             raise SchemaReconstructionError("content paths must not be empty")
-        return parts
+        return string_parts
 
     if not isinstance(raw_path, Sequence) or isinstance(raw_path, (bytes, bytearray)):
         raise SchemaReconstructionError("content paths must be sequences")
 
-    parts: list[PathPart] = []
+    normalized_parts: list[PathPart] = []
     for part in raw_path:
         if isinstance(part, bool) or not isinstance(part, (str, int)):
             raise SchemaReconstructionError(
@@ -330,10 +339,10 @@ def _normalize_path(raw_path: ContentPath | str | Sequence[PathPart]) -> Content
             raise SchemaReconstructionError("content path keys must not be empty")
         if isinstance(part, int) and part < 0:
             raise SchemaReconstructionError("content path indexes must be positive")
-        parts.append(part)
-    if not parts:
+        normalized_parts.append(part)
+    if not normalized_parts:
         raise SchemaReconstructionError("content paths must not be empty")
-    return tuple(parts)
+    return tuple(normalized_parts)
 
 
 def _path_sort_key(path: ContentPath) -> tuple[tuple[int, str], ...]:
@@ -393,15 +402,14 @@ def _validated_schema(schema: object) -> TrainingConversationSchema:
     name = getattr(schema, "name", None)
     if not isinstance(name, str) or not name.strip():
         raise InvalidSchemaError("training schemas must declare a non-empty name")
+    safe_name = _safe_schema_label(name.strip())
     if _schema_method(schema, "detect", "matches") is None:
-        raise InvalidSchemaError(
-            f"training schema {name.strip()!r} must define detect()"
-        )
+        raise InvalidSchemaError(f"training schema {safe_name} must define detect()")
     if _schema_method(schema, "walk", "iter_content") is None:
-        raise InvalidSchemaError(f"training schema {name.strip()!r} must define walk()")
+        raise InvalidSchemaError(f"training schema {safe_name} must define walk()")
     if _schema_method(schema, "reconstruct") is None:
         raise InvalidSchemaError(
-            f"training schema {name.strip()!r} must define reconstruct()"
+            f"training schema {safe_name} must define reconstruct()"
         )
     return cast(TrainingConversationSchema, schema)
 
@@ -411,6 +419,11 @@ def _schema_name(schema: object) -> str:
     if not isinstance(name, str) or not name.strip():
         raise InvalidSchemaError("training schemas must declare a non-empty name")
     return name.strip()
+
+
+def _safe_schema_label(name: str) -> str:
+    digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:12]
+    return f"schema_sha256_{digest}"
 
 
 def _normalize_walk_items(
@@ -426,19 +439,22 @@ def _normalize_walk_items(
                 or len(raw_item) != 2
             ):
                 raise SchemaDetectionError(
-                    f"training schema {_schema_name(schema)!r} returned an invalid "
+                    f"training schema {_safe_schema_label(_schema_name(schema))} "
+                    "returned an invalid "
                     "content item"
                 )
             path = _normalize_path(raw_item[0])
             text = raw_item[1]
             if not isinstance(text, str):
                 raise SchemaDetectionError(
-                    f"training schema {_schema_name(schema)!r} returned non-text "
+                    f"training schema {_safe_schema_label(_schema_name(schema))} "
+                    "returned non-text "
                     "content"
                 )
             if path in seen:
                 raise SchemaDetectionError(
-                    f"training schema {_schema_name(schema)!r} returned a duplicate "
+                    f"training schema {_safe_schema_label(_schema_name(schema))} "
+                    "returned a duplicate "
                     "content path"
                 )
             seen.add(path)
@@ -447,7 +463,8 @@ def _normalize_walk_items(
         raise
     except Exception:
         raise SchemaDetectionError(
-            f"training schema {_schema_name(schema)!r} could not walk the record"
+            f"training schema {_safe_schema_label(_schema_name(schema))} could not "
+            "walk the record"
         ) from None
     return tuple(items)
 
@@ -457,14 +474,16 @@ def _call_detect(schema: object, record: Any) -> bool:
     if method is None:
         raise InvalidSchemaError("training schema does not define detect()")
     try:
-        result = method(record)
+        result = method(copy.deepcopy(record))
     except Exception:
         raise SchemaDetectionError(
-            f"training schema {_schema_name(schema)!r} could not inspect the record"
+            f"training schema {_safe_schema_label(_schema_name(schema))} could not "
+            "inspect the record"
         ) from None
     if not isinstance(result, bool):
         raise SchemaDetectionError(
-            f"training schema {_schema_name(schema)!r} must return a boolean from "
+            f"training schema {_safe_schema_label(_schema_name(schema))} must return "
+            "a boolean from "
             "detect()"
         )
     return result
@@ -475,17 +494,19 @@ def _call_walk(schema: object, record: Any) -> tuple[ContentItem, ...]:
     if method is None:
         raise InvalidSchemaError("training schema does not define walk()")
     try:
-        raw_items = method(record)
+        raw_items = method(copy.deepcopy(record))
         if isinstance(raw_items, (str, bytes, bytearray)):
             raise SchemaDetectionError(
-                f"training schema {_schema_name(schema)!r} returned invalid walk output"
+                f"training schema {_safe_schema_label(_schema_name(schema))} returned "
+                "invalid walk output"
             )
         return _normalize_walk_items(schema, raw_items)
     except SchemaRegistryError:
         raise
     except Exception:
         raise SchemaDetectionError(
-            f"training schema {_schema_name(schema)!r} could not walk the record"
+            f"training schema {_safe_schema_label(_schema_name(schema))} could not "
+            "walk the record"
         ) from None
 
 
@@ -650,8 +671,15 @@ class TrainingSchemaRegistry:
 
         validated = _validated_schema(schema)
         name = _schema_name(validated)
+        alias_owner = self._aliases.get(name)
+        if alias_owner is not None and alias_owner != name:
+            raise SchemaRegistryError(
+                f"training schema name {_safe_schema_label(name)} is already registered"
+            )
         if not replace and name in self._schemas:
-            raise SchemaRegistryError(f"training schema {name!r} is already registered")
+            raise SchemaRegistryError(
+                f"training schema {_safe_schema_label(name)} is already registered"
+            )
         normalized_aliases: list[str] = []
         for raw_alias in aliases:
             alias = _schema_name_value(raw_alias, "schema aliases")
@@ -664,7 +692,8 @@ class TrainingSchemaRegistry:
             )
             if owner is not None and owner != name:
                 raise SchemaRegistryError(
-                    f"training schema name {alias!r} is already registered"
+                    f"training schema name {_safe_schema_label(alias)} is already "
+                    "registered"
                 )
             normalized_aliases.append(alias)
 
@@ -681,7 +710,7 @@ class TrainingSchemaRegistry:
             return self._schemas[canonical]
         except KeyError:
             raise UnknownSchemaError(
-                f"training schema {normalized!r} is not registered"
+                f"training schema {_safe_schema_label(normalized)} is not registered"
             ) from None
 
     def available(self) -> tuple[str, ...]:
@@ -721,7 +750,8 @@ class TrainingSchemaRegistry:
             )
             if not _call_detect(selected, record):
                 raise SchemaMismatchError(
-                    f"selected training schema {_schema_name(selected)!r} does not "
+                    "selected training schema "
+                    f"{_safe_schema_label(_schema_name(selected))} does not "
                     "match the record"
                 )
             return selected
@@ -730,7 +760,7 @@ class TrainingSchemaRegistry:
         if not matches:
             raise UnknownSchemaError("no training schema matched the record")
         if len(matches) > 1:
-            names = ", ".join(matches)
+            names = ", ".join(_safe_schema_label(name) for name in matches)
             raise AmbiguousSchemaError(
                 "multiple training schemas matched the record; select one "
                 f"explicitly: {names}"
@@ -820,12 +850,14 @@ class TrainingSchemaRegistry:
             raise
         except Exception:
             raise SchemaReconstructionError(
-                f"training schema {_schema_name(schema)!r} could not reconstruct "
+                f"training schema {_safe_schema_label(_schema_name(schema))} could "
+                "not reconstruct "
                 "the record"
             ) from None
         if result is None:
             raise SchemaReconstructionError(
-                f"training schema {_schema_name(schema)!r} returned no record"
+                f"training schema {_safe_schema_label(_schema_name(schema))} returned "
+                "no record"
             )
         return result
 
