@@ -226,3 +226,62 @@ def test_unknown_segments_pass_through_unless_configured():
 
     assert zzz.get_field(2) == "Leave Jane Roe unchanged"
     assert znt.get_field(2) == "Call [PERSON] at [PHONE]"
+
+
+BLANK_LINE_BASE = "\n".join(
+    [
+        "MSH|^~\\&|SYNTHETIC|TEST|OPENMED|LOCAL|202401011200||ADT^A01|MSG00001|P|2.5",
+        "PID|1||MRN12345^^^TEST^MR||Jane Roe||19800101|F",
+        "PV1|1|O",
+        "",
+    ]
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "message"),
+    [
+        ("no blank lines", BLANK_LINE_BASE),
+        ("leading blank line", "\n" + BLANK_LINE_BASE),
+        ("interior blank line", BLANK_LINE_BASE.replace("|F\n", "|F\n\n")),
+        ("extra trailing blank line", BLANK_LINE_BASE + "\n"),
+        (
+            "blank lines in every position",
+            "\n\n" + BLANK_LINE_BASE.replace("|F\n", "|F\n\n\n") + "\n",
+        ),
+        ("no trailing separator", BLANK_LINE_BASE.rstrip("\n")),
+        ("carriage-return separators", BLANK_LINE_BASE.replace("\n", "\r")),
+    ],
+)
+def test_serialize_round_trips_messages_containing_blank_lines(
+    label: str, message: str
+) -> None:
+    assert parse_hl7v2(message).serialize() == message, label
+
+
+def test_blank_lines_are_not_parsed_as_segments():
+    parsed = parse_hl7v2("\n" + BLANK_LINE_BASE.replace("|F\n", "|F\n\n"))
+
+    assert parsed.segment_names() == ("MSH", "PID", "PV1")
+    assert parsed.blank_line_positions == (0, 3)
+
+
+def test_redaction_preserves_blank_lines():
+    message = BLANK_LINE_BASE.replace("|F\n", "|F\n\n")
+
+    redacted = redact_hl7v2(
+        message,
+        deidentifier=fake_deidentifier,
+        date_shift_days=1,
+    )
+
+    assert redacted.count("\n") == message.count("\n")
+    assert "\n\n" in redacted
+    assert parse_hl7v2(redacted).segment_names() == ("MSH", "PID", "PV1")
+
+
+def test_serialize_ignores_blank_line_positions_beyond_the_segment_list():
+    parsed = parse_hl7v2(BLANK_LINE_BASE)
+    parsed.blank_line_positions = (99,)
+
+    assert parsed.serialize() == BLANK_LINE_BASE
