@@ -130,6 +130,25 @@ def test_duplicate_membership_is_rejected(tmp_path: Path) -> None:
     assert any("assigned to both" in error for error in raised.value.errors)
 
 
+def test_boolean_manifest_version_is_rejected(tmp_path: Path) -> None:
+    builder = _load_builder()
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "manifest_version": True,
+                "packs": [_pack("privacy", ["privacy-skill"])],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(builder.PackValidationError) as raised:
+        builder.load_manifest(manifest_path)
+
+    assert any("manifest_version" in error for error in raised.value.errors)
+
+
 def test_pack_byte_budget_is_enforced(tmp_path: Path) -> None:
     builder = _load_builder()
     skills_dir = tmp_path / "skills"
@@ -230,6 +249,34 @@ def test_output_inside_skill_sources_is_rejected_before_writing(
     assert not (skills_dir / "generated-packs").exists()
 
 
+def test_in_memory_manifest_cannot_escape_the_pack_output(
+    tmp_path: Path,
+) -> None:
+    builder = _load_builder()
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _write_skill(skills_dir, "privacy-skill")
+    manifest = builder.PackManifest(
+        manifest_version=1,
+        packs=(
+            builder.PackSpec(
+                identifier="../escape",
+                version="1.0.0",
+                description="Synthetic test pack.",
+                skills=("privacy-skill",),
+                budget=builder.PackBudget(max_skills=1, max_bytes=10_000),
+            ),
+        ),
+    )
+    output_dir = tmp_path / "output"
+
+    with pytest.raises(builder.PackValidationError, match="validation failed"):
+        builder.build_packs(manifest, skills_dir, output_dir)
+
+    assert not output_dir.exists()
+    assert not (tmp_path / "escape").exists()
+
+
 @pytest.mark.skipif(
     os.name == "nt",
     reason="directory symlink behavior differs without Windows developer mode",
@@ -303,3 +350,30 @@ def test_foreign_pack_metadata_is_not_overwritten(tmp_path: Path) -> None:
         builder.build_from_files(manifest_path, skills_dir, tmp_path / "output")
 
     assert metadata_path.read_text(encoding="utf-8") == "synthetic foreign content\n"
+
+
+def test_metadata_replace_failure_preserves_the_previous_pack(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    builder = _load_builder()
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _write_skill(skills_dir, "privacy-skill")
+    manifest_path = tmp_path / "manifest.json"
+    _write_manifest(manifest_path, [_pack("privacy", ["privacy-skill"])])
+    output_dir = tmp_path / "output"
+    builder.build_from_files(manifest_path, skills_dir, output_dir)
+    metadata_path = output_dir / "privacy" / "pack.json"
+    metadata_before = metadata_path.read_bytes()
+
+    def fail_replace(_source: object, _destination: object) -> None:
+        raise OSError("synthetic replace failure")
+
+    monkeypatch.setattr(builder.os, "replace", fail_replace)
+
+    with pytest.raises(builder.PackBuildError, match="could not write pack"):
+        builder.build_from_files(manifest_path, skills_dir, output_dir)
+
+    assert metadata_path.read_bytes() == metadata_before
+    assert list(metadata_path.parent.glob(".pack-json-*.tmp")) == []
