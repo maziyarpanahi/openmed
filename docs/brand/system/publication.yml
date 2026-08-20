@@ -116,6 +116,7 @@ classification:
     - serving/backpressure.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
+    - deploy/self-hosted-compose.md
     - offline-install.md
     - serving/async-jobs.md
     - serving/request-signing.md
