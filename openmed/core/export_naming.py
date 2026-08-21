@@ -316,31 +316,49 @@ class ExportArtifactMetadata:
     def format_name(self) -> str:
         """Return ``format`` under the descriptive alias used by callers."""
 
-        return self.format
+        return _validated_metadata_copy(self).format
 
     @property
     def provenance_fingerprint(self) -> str:
         """Return the canonical provenance digest."""
 
-        return cast(str, self.fingerprint)
+        return cast(str, _validated_metadata_copy(self).fingerprint)
 
     def to_dict(self) -> dict[str, Any]:
         """Return stable metadata without any source or identifier values."""
 
+        validated = _validated_metadata_copy(self)
         result: dict[str, Any] = {
-            "artifact_type": self.artifact_type,
-            "format": self.format,
-            "schema_version": self.schema_version,
-            "fingerprint": self.fingerprint,
-            "extension": self.extension,
+            "artifact_type": validated.artifact_type,
+            "format": validated.format,
+            "schema_version": validated.schema_version,
+            "fingerprint": validated.fingerprint,
+            "extension": validated.extension,
         }
-        if self.explicit_timestamp is not None:
-            result["explicit_timestamp"] = self.explicit_timestamp
+        if validated.explicit_timestamp is not None:
+            result["explicit_timestamp"] = validated.explicit_timestamp
         return result
 
 
 ArtifactMetadata = ExportArtifactMetadata
 ExportMetadata = ExportArtifactMetadata
+
+
+def _validated_metadata_copy(
+    metadata: ExportArtifactMetadata,
+) -> ExportArtifactMetadata:
+    """Revalidate stored metadata before exposing or consuming its fields."""
+
+    if type(metadata) is not ExportArtifactMetadata:
+        raise TypeError("metadata must be exact export metadata")
+    return ExportArtifactMetadata(
+        artifact_type=metadata.artifact_type,
+        format=metadata.format,
+        schema_version=metadata.schema_version,
+        fingerprint=metadata.fingerprint,
+        extension=metadata.extension,
+        explicit_timestamp=metadata.explicit_timestamp,
+    )
 
 
 def _snapshot_metadata_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -380,38 +398,33 @@ def _metadata_from_mapping(value: Mapping[str, Any]) -> ExportArtifactMetadata:
     """Build typed metadata from a bounded allowlisted mapping snapshot."""
 
     fields = _snapshot_metadata_mapping(value)
-    format_value = fields.get("format")
     format_name_value = fields.get("format_name")
-    if format_value is not None and format_name_value is not None:
+    if "format" in fields and "format_name" in fields:
         _fail("metadata", "contains conflicting format fields")
-    fingerprint_value = fields.get("fingerprint")
     provenance_value = fields.get("provenance_fingerprint")
-    if fingerprint_value is not None and provenance_value is not None:
+    if "fingerprint" in fields and "provenance_fingerprint" in fields:
         _fail("metadata", "contains conflicting fingerprint fields")
-    timestamp_value = fields.get("explicit_timestamp")
     timestamp_alias = fields.get("timestamp")
-    if timestamp_value is not None and timestamp_alias is not None:
+    if "explicit_timestamp" in fields and "timestamp" in fields:
         _fail("metadata", "contains conflicting timestamp fields")
 
     return ExportArtifactMetadata(
         artifact_type=cast(str, fields.get("artifact_type")),
-        format=cast(
-            str, format_value if format_value is not None else format_name_value
-        ),
+        format=cast(str, fields["format"] if "format" in fields else format_name_value),
         schema_version=cast(str | int, fields.get("schema_version")),
         fingerprint=(
             cast(
                 str | bytes,
-                fingerprint_value
-                if fingerprint_value is not None
-                else provenance_value,
+                fields["fingerprint"] if "fingerprint" in fields else provenance_value,
             )
         ),
         extension=cast(str | None, fields.get("extension")),
         explicit_timestamp=(
             cast(
                 str | date | datetime | None,
-                timestamp_value if timestamp_value is not None else timestamp_alias,
+                fields["explicit_timestamp"]
+                if "explicit_timestamp" in fields
+                else timestamp_alias,
             )
         ),
     )
@@ -494,14 +507,7 @@ def build_export_filename(
     elif isinstance(metadata, ExportArtifactMetadata):
         if type(metadata) is not ExportArtifactMetadata:
             raise TypeError("metadata must be exact export metadata or a mapping")
-        metadata = ExportArtifactMetadata(
-            artifact_type=metadata.artifact_type,
-            format=metadata.format,
-            schema_version=metadata.schema_version,
-            fingerprint=metadata.fingerprint,
-            extension=metadata.extension,
-            explicit_timestamp=metadata.explicit_timestamp,
-        )
+        metadata = _validated_metadata_copy(metadata)
     else:
         raise TypeError("metadata must be export metadata or a mapping")
 

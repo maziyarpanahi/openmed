@@ -237,6 +237,42 @@ def test_tampered_metadata_is_revalidated_without_echoing_values() -> None:
 
     assert secret not in str(error.value)
 
+    with pytest.raises(ExportNamingError) as report_error:
+        metadata.to_dict()
+
+    assert secret not in str(report_error.value)
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        ("format", "format_name"),
+        ("fingerprint", "provenance_fingerprint"),
+        ("explicit_timestamp", "timestamp"),
+    ],
+)
+def test_mapping_aliases_conflict_even_when_one_value_is_null(
+    first: str,
+    second: str,
+) -> None:
+    fields: dict[str, Any] = {
+        "artifact_type": "audit-report",
+        "format": "json",
+        "schema_version": "v1",
+        "fingerprint": _FINGERPRINT,
+    }
+    alias_values: dict[str, Any] = {
+        "format_name": "json",
+        "provenance_fingerprint": _FINGERPRINT,
+        "explicit_timestamp": "2024-01-02",
+        "timestamp": "2024-01-02",
+    }
+    fields[first] = None
+    fields[second] = alias_values[second]
+
+    with pytest.raises(ExportNamingError, match="conflicting"):
+        build_export_filename(fields)
+
 
 def test_fingerprint_input_requires_a_full_sha256_digest() -> None:
     with pytest.raises(ExportNamingError, match="full hexadecimal SHA-256"):
