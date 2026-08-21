@@ -1,0 +1,62 @@
+From: Alice Patient <alice.patient@example.test>
+To: Dr. Bob Care <bob.care@clinic.test>
+Cc: Records Team <records@clinic.test>
+Bcc: Hidden Reviewer <hidden.reviewer@example.test>
+Reply-To: Alice Patient <alice.reply@example.test>
+Subject: Alice Patient MRI report - MRN 12345678
+Date: Tue, 12 Aug 2025 09:30:00 +0000
+Message-ID: <alice-patient-12345678@example.test>
+X-Patient-Note: Alice Patient can be reached at 415-555-1212
+X-Alice-Patient-ID: 12345678
+Authentication-Results: clinic.test; patient=Alice Patient
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="synthetic-outer-boundary"
+
+Alice Patient preamble MRN 12345678
+--synthetic-outer-boundary
+Content-Type: multipart/alternative; boundary="synthetic-alternative-boundary"
+
+--synthetic-alternative-boundary
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Hello Alice Patient,
+
+Your MRN is 12345678. Call 415-555-1212 or email alice.patient@example.test.
+
+--synthetic-alternative-boundary
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html PUBLIC "Alice Patient"><html><body><p>Hello <strong>Alice Patient</strong>,</p><p>MRN 12345678; phone=
+ 415-555-1212; <a href=3D"mailto:alice.patient@example.test">email Alice</a>.</p>
+<img src=3D"cid:alice-scan@example.test" alt=3D"Alice Patient MRI">
+<img src=3D"https://tracker.example.test/opened" alt=3D"remote tracker">
+<a href=3D"javascript:alert(1)">unsafe link</a>
+<alice-patient data-private=3D"Alice Patient">Alice Patient</alice-patient>
+<!-- Alice Patient private note --><script>const ssn =3D '999-99-9999';</script>
+</body></html>
+--synthetic-alternative-boundary--
+
+--synthetic-outer-boundary
+Content-Type: application/pdf; name="Alice Patient report.pdf"
+Content-Disposition: attachment; filename="Alice Patient report.pdf"
+Content-Description: MRI report for Alice Patient
+X-Attachment-Patient: Alice Patient
+Content-ID: <alice-scan@example.test>
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJXN5bnRoZXRpYwoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAg
+UiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWzMgMCBSXSAvQ291bnQg
+MSA+PgplbmRvYmoKMyAwIG9iago8PCAvVHlwZSAvUGFnZSAvUGFyZW50IDIgMCBSIC9NZWRpYUJv
+eCBbMCAwIDYxMiA3OTJdIC9SZXNvdXJjZXMgPDwgL0ZvbnQgPDwgL0YxIDQgMCBSID4+ID4+IC9D
+b250ZW50cyA1IDAgUiA+PgplbmRvYmoKNCAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAv
+VHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCjUgMCBvYmoKPDwgL0xlbmd0aCA4
+MCA+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjcyIDcyMCBUZAooUGF0aWVudCBBbGljZSBQYXRpZW50
+KSBUagowIC0xOCBUZAooTVJOIDEyMzQ1Njc4KSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYK
+MCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAyMCAwMDAwMCBuIAowMDAwMDAwMDY5IDAw
+MDAwIG4gCjAwMDAwMDAxMjYgMDAwMDAgbiAKMDAwMDAwMDI1MiAwMDAwMCBuIAowMDAwMDAwMzIy
+IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNDUx
+CiUlRU9GCg==
+--synthetic-outer-boundary--
+Alice Patient epilogue MRN 12345678
