@@ -39,6 +39,7 @@ nav:
       - Parallel Trace Shards: guides/parallel-traces.md
       - Streaming Trace Redaction: guides/streaming-traces.md
       - Read-only Trace Scan Report: guides/trace-audit.md
+      - Trace Replay Fidelity: reference/trace-fidelity.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md

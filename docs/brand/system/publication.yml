@@ -112,6 +112,7 @@ classification:
     - guides/parallel-traces.md
     - guides/streaming-traces.md
     - guides/trace-audit.md
+    - reference/trace-fidelity.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md

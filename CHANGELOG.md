@@ -62,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added local-only transactional in-place trace redaction with sibling
   temporary files, source-consistency checks, exclusive backups, metadata
   preservation, atomic replacement, cleanup, and value-free errors (#2291).
+- Added a deterministic offline trace-fidelity verifier that limits changes to
+  declared content fields; preserves order, linkage, identifiers, timestamps,
+  labels, scalar types, and structure; and emits hashed value-free diagnostics
+  (#2292).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
