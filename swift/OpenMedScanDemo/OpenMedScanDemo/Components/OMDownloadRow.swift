@@ -149,39 +149,40 @@ public struct OMDownloadRow: View {
 
     private var icon: String {
         switch modelID {
-        case .piiLiteClinical:     return "shield.lefthalf.filled"
+        case .piiLiteClinical: return "shield.lefthalf.filled"
         case .openaiPrivacyFilter: return "lock.shield.fill"
         case .multilingualPrivacyFilter: return "globe.europe.africa.fill"
-        case .glinerRelex:         return "sparkles"
+        case .glinerRelex: return "sparkles"
+        case .maplePreview: return "leaf.fill"
         }
     }
 
     private var tone: Color {
         switch entry.state {
         case .failed: return .omSignal
-        default:      return .omTealAccent
+        default: return .omTealAccent
         }
     }
 
     private var stateBadgeText: String {
         switch entry.state {
-        case .missing:     return "NEEDED"
-        case .partial:     return "PAUSED"
-        case .queued:      return "QUEUED"
+        case .missing: return "NEEDED"
+        case .partial: return "PAUSED"
+        case .queued: return "QUEUED"
         case .downloading: return "LIVE"
-        case .installing:  return "INSTALLING"
-        case .ready:       return "READY"
-        case .failed:      return "FAILED"
-        case .cancelled:   return "CANCELLED"
+        case .installing: return "INSTALLING"
+        case .ready: return "READY"
+        case .failed: return "FAILED"
+        case .cancelled: return "CANCELLED"
         }
     }
 
     private var stateBadgeTone: OMBadge.Tone {
         switch entry.state {
-        case .ready:       return .positive
-        case .failed:      return .signal
+        case .ready: return .positive
+        case .failed: return .signal
         case .downloading, .queued, .installing: return .accent
-        default:           return .neutral
+        default: return .neutral
         }
     }
 }
