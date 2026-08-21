@@ -99,21 +99,30 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent-skills/install.md
+    - agent-skills/validation.md
+    - agent-skills/setup.md
+    - agent-skills/packs.md
+    - agent-skills/router.md
     - guides/trace-discovery.md
     - reference/trace-jsonl.md
     - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
+    - service/self-hosted-redaction.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
     - guides/parallel-traces.md
     - guides/streaming-traces.md
+    - guides/trace-audit.md
+    - reference/trace-fidelity.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
+    - deploy/self-hosted-compose.md
     - offline-install.md
     - serving/async-jobs.md
     - serving/request-signing.md
@@ -128,6 +137,7 @@ classification:
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
     - model-loader.md
+    - models/bundled-offline.md
     - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
@@ -185,6 +195,8 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/comparator-reports.md
+    - evaluation/comparator-harness.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -213,6 +225,7 @@ classification:
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/secret-detection.md
+    - guides/in-place-redaction.md
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md
