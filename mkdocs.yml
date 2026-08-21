@@ -26,11 +26,16 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Skill Validation: agent-skills/validation.md
+      - De-identification Policy Setup: agent-skills/setup.md
+      - Agent Skill Packs: agent-skills/packs.md
+      - Agent Skill Router: agent-skills/router.md
       - Local Trace-Store Discovery: guides/trace-discovery.md
       - JSONL Trace Content Walker: reference/trace-jsonl.md
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
@@ -38,10 +43,12 @@ nav:
       - Parallel Trace Shards: guides/parallel-traces.md
       - Streaming Trace Redaction: guides/streaming-traces.md
       - Read-only Trace Scan Report: guides/trace-audit.md
+      - Trace Replay Fidelity: reference/trace-fidelity.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
       - Hardened Service Image: deploy/hardened-image.md
+      - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - HMAC Request Signing: serving/request-signing.md
@@ -56,6 +63,7 @@ nav:
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
+      - Bundled Offline Model Bootstrap: models/bundled-offline.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
@@ -113,6 +121,7 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -142,6 +151,7 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Secret Token Detection: security/secret-detection.md
+      - In-place Trace Redaction: guides/in-place-redaction.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md

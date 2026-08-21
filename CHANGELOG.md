@@ -12,6 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).
+- Added a deterministic offline Agent Skills validation gate for frontmatter,
+  identifiers, local references, pack membership, and executable-helper help
+  and test contracts, with symlink and local-path containment, path-only
+  diagnostics, scratch-isolated helper probes, and a dedicated CI workflow
+  that runs every focused skill test (#2306).
+- Added the local-first `setup-openmed` skill and versioned de-identification
+  policy template for collecting five bounded privacy decisions, producing a
+  deterministic atomically written review draft with path-free status output,
+  and stopping at an explicit human approval gate before the policy can control
+  a run (#2305).
+- Added an offline-first self-hosted Compose bundle with loopback-only default
+  publishing, a hardened non-root runtime, persistent cache and read-only model
+  mounts, an internal network, bounded logs and processes, a readiness probe,
+  and opt-in-only remote integrations (#2372).
+- Added a local-only self-hosted redaction service with explicit text and UTF-8
+  file workflows, deterministic offline defaults, counts-only review state,
+  loopback Host and request-size guards, content-free errors, and an accessible
+  aggregate-status page (#2371).
+- Added a deterministic synthetic-only de-identification comparator harness
+  with explicit fail-closed fixture provenance, enforced offline execution,
+  bounded inputs, aggregate privacy metrics, resource budgets, and source-safe
+  reports (#2379).
+- Added an opt-in bundled-model manifest and offline bootstrap for the small
+  English PII model, with registry checksum and license pins, mandatory cached
+  artifact-integrity proof, concurrency-safe socket guarding, and no silent
+  network fallback (#2375).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
@@ -46,6 +72,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a deterministic, read-only local trace privacy inventory with
   counts-only store, category, and file aggregates; byte ranges; file-status
   totals; hashed caller-supplied labels; and value-free renderers (#2290).
+- Added local-only transactional in-place trace redaction with sibling
+  temporary files, source-consistency checks, exclusive backups, metadata
+  preservation, atomic replacement, cleanup, and value-free errors (#2291).
+- Added a deterministic offline trace-fidelity verifier that limits changes to
+  declared content fields; preserves order, linkage, identifiers, timestamps,
+  labels, scalar types, and structure; and emits hashed value-free diagnostics
+  (#2292).
+- Added versioned topical agent-skill packs for privacy, interoperability,
+  coding, evaluation, and research, with an offline deterministic builder,
+  membership and size-budget validation, canonical relative links,
+  selection-only output, and fail-closed output preflight (#2303).
+- Added the deterministic `ask-openmed` workflow router skill, with a
+  fail-closed privacy override for ambiguous or negated safety statements,
+  fixed intake-to-verification handoff ordering, canonical links to existing
+  skills, and PHI-free route diagnostics (#2304).
 - Added standard-library HTML/HTM visible-text extraction with source character
   offsets and markup-preserving redaction write-back (#278).
 - Added an offline, versioned key-lifecycle helper and operator guide for
