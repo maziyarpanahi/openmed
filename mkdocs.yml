@@ -98,8 +98,10 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
+      - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
+      - Plugin Quarantine Preflight: plugins/quarantine-report.md
       - Batch Processing: batch-processing.md
       - Batch Processing How-To: batch-howto.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
@@ -163,7 +165,7 @@ nav:
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
-      - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
+      - LlamaIndex Redaction Transform: integrations/llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
