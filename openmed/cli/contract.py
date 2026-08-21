@@ -78,7 +78,7 @@ class CliContractFixture:
             raise ValueError("failed fixtures must provide an error")
 
         if self.data is not None:
-            _copy_json_object(self.data)
+            object.__setattr__(self, "data", _copy_json_object(self.data))
         else:
             if not self.error_code or not self.error_code.strip():
                 raise ValueError("failed fixtures must provide an error code")

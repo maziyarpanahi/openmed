@@ -80,14 +80,16 @@ def test_contract_rendering_is_deterministic() -> None:
         assert first.json_text == second.json_text
 
 
-def test_expected_payload_returns_a_deep_json_copy() -> None:
+def test_success_fixture_snapshots_input_and_returns_a_deep_json_copy() -> None:
+    source_data = {"nested": {"items": []}}
     fixture = CliContractFixture(
         name="nested_success",
         command="models list",
         expected_exit_code=0,
-        data={"nested": {"items": []}},
+        data=source_data,
     )
 
+    source_data["nested"]["items"].append("source mutation")
     payload = fixture.expected_payload
     payload["data"]["nested"]["items"].append("caller mutation")
 
