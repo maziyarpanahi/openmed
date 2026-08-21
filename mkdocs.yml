@@ -98,6 +98,7 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
+      - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
