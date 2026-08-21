@@ -295,10 +295,16 @@ class PostgresRedactionAdapter:
                 batches_processed=batches_processed,
             )
         except Exception:
-            _rollback_safely(self.connection)
-            raise PostgresRedactionError(
+            rollback_confirmed = _rollback_safely(self.connection)
+            message = (
                 "PostgreSQL redaction failed; transaction rolled back"
-            ) from None
+                if rollback_confirmed
+                else (
+                    "PostgreSQL redaction failed; transaction rollback "
+                    "could not be confirmed"
+                )
+            )
+            raise PostgresRedactionError(message) from None
         finally:
             _close_safely(cursor)
 
@@ -535,11 +541,12 @@ def _result_span_count(result: Any) -> int:
         return 0
 
 
-def _rollback_safely(connection: Any) -> None:
+def _rollback_safely(connection: Any) -> bool:
     try:
         connection.rollback()
     except Exception:
-        pass
+        return False
+    return True
 
 
 def _close_safely(cursor: Any | None) -> None:

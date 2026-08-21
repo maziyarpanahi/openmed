@@ -81,6 +81,7 @@ class _FakeConnection:
         self.execute_calls: list[tuple[str, tuple[Any, ...]]] = []
         self.executemany_calls: list[tuple[str, list[tuple[Any, ...]]]] = []
         self.rollback_calls = 0
+        self.rollback_error: Exception | None = None
         self.commit_calls = 0
         self.cursors: list[_FakeCursor] = []
 
@@ -91,6 +92,8 @@ class _FakeConnection:
 
     def rollback(self) -> None:
         self.rollback_calls += 1
+        if self.rollback_error is not None:
+            raise self.rollback_error
         self.rows = deepcopy(self.initial_rows)
 
     def commit(self) -> None:
@@ -194,6 +197,37 @@ def test_failure_rolls_back_and_does_not_expose_cell_value():
     assert connection.rollback_calls == 1
     assert connection.commit_calls == 0
     assert connection.rows == connection.initial_rows
+    assert connection.cursors[0].closed is True
+
+
+def test_rollback_failure_is_value_free_and_not_reported_as_successful():
+    connection = _FakeConnection()
+    sensitive_value = "synthetic secret rollback"
+    connection.rows[1]["note"] = sensitive_value
+    connection.rollback_error = RuntimeError(f"rollback detail: {sensitive_value}")
+
+    def failing_deidentifier(text: str, **_: Any) -> str:
+        if text == sensitive_value:
+            raise RuntimeError(f"driver detail: {text}")
+        return text
+
+    with pytest.raises(PostgresRedactionError) as exc_info:
+        redact_postgres_table(
+            connection,
+            table="clinical_notes",
+            text_columns=["note"],
+            key_column="record_id",
+            batch_size=1,
+            deidentifier=failing_deidentifier,
+        )
+
+    assert str(exc_info.value) == (
+        "PostgreSQL redaction failed; transaction rollback could not be confirmed"
+    )
+    assert sensitive_value not in str(exc_info.value)
+    assert connection.rollback_calls == 1
+    assert connection.commit_calls == 0
+    assert connection.rows != connection.initial_rows
     assert connection.cursors[0].closed is True
 
 
