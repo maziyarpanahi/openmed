@@ -18,16 +18,18 @@ from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
 from typing import Any, Literal
 
+SourceClass = Literal["default", "file", "environment", "cli"]
+
 SCHEMA_VERSION = 1
 
-DEFAULT_SOURCE = "default"
-FILE_SOURCE = "file"
-ENVIRONMENT_SOURCE = "environment"
-CLI_SOURCE = "cli"
+DEFAULT_SOURCE: SourceClass = "default"
+FILE_SOURCE: SourceClass = "file"
+ENVIRONMENT_SOURCE: SourceClass = "environment"
+CLI_SOURCE: SourceClass = "cli"
 
 # Later entries win.  Keep this tuple immutable and use it for every merge and
 # every report so input mapping order cannot affect the audit.
-CONFIG_PRECEDENCE = (
+CONFIG_PRECEDENCE: tuple[SourceClass, ...] = (
     DEFAULT_SOURCE,
     FILE_SOURCE,
     ENVIRONMENT_SOURCE,
@@ -43,7 +45,6 @@ CONFLICT_CATEGORIES = (
     CONFLICT_OVERRIDDEN,
 )
 
-SourceClass = Literal["default", "file", "environment", "cli"]
 ConfigInput = Mapping[str, Any] | str | Path | None
 
 _UNSET = object()
@@ -156,17 +157,15 @@ class ConfigurationResolution:
         return self.provenance_report
 
     def to_dict(self) -> dict[str, Any]:
-        """Return effective values and provenance for in-process callers.
+        """Return the value-free report as a fresh dictionary.
 
-        Use :attr:`provenance_report` when serializing an audit artifact.  This
-        method includes the selected values by design and is therefore not a
-        value-free report.
+        Effective values remain available through :attr:`values` and
+        :attr:`effective_values`.  Keeping the conventional serialization
+        helper value-free prevents an accidental log or artifact write from
+        exposing credentials or other sensitive configuration values.
         """
 
-        return {
-            "values": dict(self.values),
-            "provenance": self.provenance_report,
-        }
+        return self.provenance_report
 
     def __repr__(self) -> str:
         """Avoid exposing selected values through an accidental repr/log."""
@@ -431,9 +430,11 @@ def _environment_key(raw_key: Any, env_prefix: str) -> str | None:
         if not suffix or suffix.lower() == "config":
             return None
         return _normalize_key(suffix)
-    # Explicit normalized names make deterministic snapshots convenient in
-    # tests and allow callers to supply an already-normalized env adapter.
-    return _normalize_key(raw_key)
+    # Ignore unrelated ambient variables.  Accepting unprefixed names such as
+    # ``DEVICE`` or ``PROFILE`` would let a host environment silently override
+    # OpenMed configuration even though the documented contract requires the
+    # OPENMED_ prefix (apart from the explicit compatibility aliases above).
+    return None
 
 
 def _environment_priority(raw_key: Any, key: str, env_prefix: str) -> int:

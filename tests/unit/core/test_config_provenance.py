@@ -44,6 +44,12 @@ def test_file_environment_and_cli_precedence_has_value_free_report():
     assert "synthetic-environment" not in serialized
     assert "30" not in serialized
 
+    serialized_resolution = json.dumps(result.to_dict(), sort_keys=True)
+    assert serialized_resolution == serialized
+    assert "synthetic-default" not in serialized_resolution
+    assert "synthetic-file" not in serialized_resolution
+    assert "synthetic-environment" not in serialized_resolution
+
 
 def test_same_values_are_not_reported_as_a_conflict_and_order_is_stable():
     first = resolve_configuration(
@@ -92,6 +98,22 @@ def test_environment_aliases_are_deterministic_and_typed():
 
     assert result.values == {"device": "cuda", "local_only": True, "timeout": 15}
     assert result.report["keys"]["device"]["source_class"] == "environment"
+
+
+def test_unprefixed_ambient_variables_do_not_override_openmed_settings():
+    result = resolve_configuration(
+        defaults={"device": "cpu", "profile": None, "timeout": 300},
+        environment={
+            "DEVICE": "cuda",
+            "PROFILE": "production",
+            "timeout": "1",
+            "OPENMED_TIMEOUT": "15",
+        },
+    )
+
+    assert result.values == {"device": "cpu", "profile": None, "timeout": 15}
+    assert result.report["keys"]["device"]["source_class"] == "default"
+    assert result.report["keys"]["profile"]["source_class"] == "default"
 
 
 def test_invalid_environment_value_does_not_echo_raw_value():

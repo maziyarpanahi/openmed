@@ -62,8 +62,10 @@ report has this shape:
 ```
 
 The report contains no selected values, file paths, environment payloads, or
-command-line arguments. Store or log `resolution.provenance_report`, not
-`resolution.to_dict()`, when producing an audit artifact.
+command-line arguments. Both `resolution.provenance_report` and
+`resolution.to_dict()` return this value-free report. Effective values remain
+available separately through `resolution.values` for in-process use and must
+not be written to audit artifacts.
 
 ## Auditing existing OpenMed defaults
 
