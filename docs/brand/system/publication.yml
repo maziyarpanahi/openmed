@@ -195,6 +195,7 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
