@@ -65,6 +65,9 @@ class InputValidationError(InputError):
         if actual is not None:
             details.setdefault("actual", actual)
         super().__init__(message, code=code, details=details)
+        # Preserve the v2.1 constructor-owned public attribute for the static
+        # compatibility inventory as well as the runtime value from InputError.
+        self.code = code  # type: ignore[misc]
         self.metadata = details
         self.limit = limit
         self.actual = actual
