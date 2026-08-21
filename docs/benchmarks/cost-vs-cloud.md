@@ -47,10 +47,20 @@ openmed benchmark cost \
   --output-dir reports/cost
 ```
 
-The command writes `cost-vs-cloud.json` and `cost-vs-cloud.md`. Every input
-contributes to the report's SHA-256 fingerprint. A price row is rejected when
-it lacks an HTTPS source, capture date, positive normalized price, or explicit
-`verify: true` marker.
+The command writes `cost-vs-cloud.json` and `cost-vs-cloud.md` atomically. Every
+normalized semantic input contributes to the report's SHA-256 fingerprint;
+unknown fields and raw text do not. Local model paths are replaced by stable
+digests. Input files, price rows, strings, numeric ranges, and report sizes are
+bounded before they are materialized. A price row is rejected when it lacks a
+safe HTTPS source, capture date, positive normalized price, or explicit
+`verify: true` marker, or when its monthly band overlaps another row for the
+same provider, service, and region.
+
+Paid rows represent marginal monthly bands. The reported cloud USD per million
+characters and breakeven value are sensitivity calculations at one row's
+marginal rate; they do not integrate a progressive monthly invoice across all
+preceding bands. Monthly tier boundaries and lifetime breakeven volume are
+therefore shown separately.
 
 ## Committed price snapshot
 
@@ -65,7 +75,9 @@ AWS's page states that requests use 100-character units and its worked
 production example publishes the three NERe prices. Microsoft's retail meter
 publishes `$20`, `$15`, `$6`, and `$5` per 1,000 health text records across
 the paid volume bands; the normalized values divide by the 1,000 characters
-covered by each record.
+covered by each record. Microsoft's public pricing page also directs customers
+above 10 million monthly records to contact sales, so the final retail-API row
+must not be treated as a negotiated quote.
 
 Re-capture and review the table before a release, pricing statement, or
 hardware purchase. Set `verify` to true only after confirming the source,

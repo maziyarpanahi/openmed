@@ -4,7 +4,9 @@
   "notes": [
     "Prices are dated public retail snapshots, not vendor quotes.",
     "Free tiers are excluded from paid-tier comparisons.",
-    "AWS requests have a 100-character minimum; Azure bills 1,000-character text records."
+    "AWS requests have a 100-character minimum; Azure bills 1,000-character text records.",
+    "Tier prices are marginal monthly bands; the benchmark does not compute blended progressive invoices.",
+    "Azure directs usage above 10 million monthly records to contact sales; the final row is a retail API snapshot only."
   ],
   "prices": [
     {
