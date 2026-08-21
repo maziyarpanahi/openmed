@@ -165,6 +165,7 @@ nav:
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - dbt Privacy-Safe Text Projection: integrations/dbt.md
+      - PostgreSQL Redaction Adapter: integrations/postgres.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
