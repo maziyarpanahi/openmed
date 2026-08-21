@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, dependency-free browser network-egress proof harness with
+  exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
+  source-safe digest reports, and fail-closed local trace validation (#2374).
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).
@@ -49,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent
   network fallback (#2375).
+- Added deterministic offline bootstrap diagnostics for cache readiness,
+  integrity manifests, optional dependencies, and local-only configuration,
+  with stable exit codes and value-free human and JSON reports (#2376).
 - Added a deterministic standalone local-redactor manifest with a synchronized
   package/dependency boundary, permissive-license enforcement, explicit opt-in
   integrations, and excluded restricted dependencies and assets (#2377).
