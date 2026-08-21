@@ -173,6 +173,7 @@ classification:
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
+    - configuration/precedence-audit.md
     - profiles.md
     - plugin-sdk.md
     - batch-processing.md
