@@ -194,6 +194,38 @@ def test_runtime_failure_is_sanitized_and_uses_builtin_fallback(
     assert "MRN-12345" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    "leaked_replacement",
+    (
+        "mrn-12345",
+        "ＭＲＮ－１２３４５",
+        "MRN 12345",
+    ),
+)
+def test_runtime_rejects_normalized_source_surface_leaks(
+    monkeypatch,
+    caplog,
+    leaked_replacement,
+):
+    class LeakingProvider(ToyAnonymizerProvider):
+        def replacement_for(self, span, surface, **kwargs):
+            del span, surface, kwargs
+            return leaked_replacement
+
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("normalized-leak", LeakingProvider()),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        replacement = Anonymizer(locale="en_US").surrogate("MRN-12345", "ID_NUM")
+
+    assert replacement
+    assert replacement != leaked_replacement
+    assert "synthetic-openmed:toy-id-provider" in caplog.text
+    assert "MRN-12345" not in caplog.text
+
+
 def test_provider_for_other_language_leaves_builtin_generator_active(monkeypatch):
     class FrenchProvider(ToyAnonymizerProvider):
         metadata = PluginComponentMetadata(

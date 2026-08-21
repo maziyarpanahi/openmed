@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import secrets
+import unicodedata
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from importlib import import_module, resources
@@ -1601,7 +1602,7 @@ def _build_plugin_dispatcher(canonical_label: str) -> Generator:
                 )
                 if not isinstance(replacement, str) or not replacement:
                     raise TypeError("replacement_for must return a non-empty string")
-                if original and original in replacement:
+                if _replacement_retains_source_surface(original, replacement):
                     raise ValueError("replacement_for retained the source surface")
                 return replacement
             except Exception as exc:
@@ -1615,6 +1616,25 @@ def _build_plugin_dispatcher(canonical_label: str) -> Generator:
         return fallback(faker, original, locale=locale)
 
     return generate
+
+
+def _replacement_retains_source_surface(source: str, replacement: str) -> bool:
+    """Return whether a replacement preserves a normalized source surface."""
+
+    if not source:
+        return False
+    normalized_source = unicodedata.normalize("NFKC", source).casefold()
+    normalized_replacement = unicodedata.normalize("NFKC", replacement).casefold()
+    if normalized_source in normalized_replacement:
+        return True
+
+    compact_source = "".join(
+        character for character in normalized_source if character.isalnum()
+    )
+    compact_replacement = "".join(
+        character for character in normalized_replacement if character.isalnum()
+    )
+    return bool(compact_source) and compact_source in compact_replacement
 
 
 def _plugin_runtime_span(
