@@ -10,8 +10,10 @@ import pytest
 
 from scripts.web import network_egress_check as egress_module
 from scripts.web.network_egress_check import (
+    EgressReport,
     NetworkEgressProbe,
     NetworkEgressViolation,
+    RequestSummary,
     assert_no_unexpected_requests,
     capture_browser_requests,
     check_network_egress,
@@ -91,6 +93,56 @@ def test_unexpected_remote_data_call_fails_closed_and_stays_safe() -> None:
     assert synthetic_value not in str(raised.value)
     assert "https://data.example.invalid/redact" not in rendered
     assert "url_digest" in rendered
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("method", "SYNTHETIC-PATIENT-METHOD"),
+        ("resource_type", "synthetic-patient-resource"),
+        ("scheme", "synthetic-patient-scheme"),
+        ("url_digest", "synthetic-patient-url"),
+        ("origin_digest", "synthetic-patient-origin"),
+        ("classification", "synthetic-patient-classification"),
+    ],
+)
+def test_public_summary_rejects_unsafe_metadata(field: str, value: str) -> None:
+    """Exported report types cannot be used to serialize arbitrary values."""
+
+    values: dict[str, object] = {
+        "classification": "unexpected-network",
+        "index": 0,
+        "method": "GET",
+        "origin_digest": "a" * 64,
+        "resource_type": "fetch",
+        "scheme": "https",
+        "url_digest": "b" * 64,
+    }
+    values[field] = value
+
+    with pytest.raises(ValueError, match="safe metadata") as raised:
+        RequestSummary(**values)  # type: ignore[arg-type]
+
+    assert value not in str(raised.value)
+
+
+def test_public_report_requires_validated_sequential_summaries() -> None:
+    """A report cannot silently accept mutable or reordered caller data."""
+
+    summary = RequestSummary(
+        classification="model-asset",
+        index=1,
+        method="GET",
+        origin_digest="a" * 64,
+        resource_type="fetch",
+        scheme="https",
+        url_digest="b" * 64,
+    )
+
+    with pytest.raises(ValueError, match="request summaries"):
+        EgressReport(requests=(summary,))
+    with pytest.raises(ValueError, match="request summaries"):
+        EgressReport(requests=[summary])  # type: ignore[arg-type]
 
 
 def test_allowlist_is_explicit_and_does_not_match_a_sibling_path() -> None:

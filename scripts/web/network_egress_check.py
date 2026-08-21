@@ -46,6 +46,10 @@ _RESOURCE_TYPES = frozenset(
         "xhr",
     }
 )
+_CLASSIFICATIONS = frozenset(
+    {"browser-internal", "invalid-url", "model-asset", "unexpected-network"}
+)
+_REPORT_SCHEMES = NETWORK_SCHEMES | NON_NETWORK_SCHEMES | {"unknown"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +89,30 @@ class RequestSummary:
     origin_digest: str
     classification: str
 
+    def __post_init__(self) -> None:
+        """Reject caller-supplied values that could make a report unsafe."""
+
+        digest_fields = (self.url_digest, self.origin_digest)
+        if (
+            type(self.index) is not int
+            or self.index < 0
+            or type(self.method) is not str
+            or self.method not in _HTTP_METHODS | {"UNKNOWN"}
+            or type(self.resource_type) is not str
+            or self.resource_type not in _RESOURCE_TYPES
+            or type(self.scheme) is not str
+            or self.scheme not in _REPORT_SCHEMES
+            or type(self.classification) is not str
+            or self.classification not in _CLASSIFICATIONS
+            or any(
+                type(digest) is not str
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+                for digest in digest_fields
+            )
+        ):
+            raise ValueError("request summary contains invalid safe metadata")
+
     @property
     def is_unexpected(self) -> bool:
         """Return whether the request violates the configured policy."""
@@ -110,6 +138,15 @@ class EgressReport:
     """Deterministic result of checking a browser request sequence."""
 
     requests: tuple[RequestSummary, ...]
+
+    def __post_init__(self) -> None:
+        """Require a complete, immutable sequence of validated summaries."""
+
+        if type(self.requests) is not tuple or any(
+            type(request) is not RequestSummary or request.index != index
+            for index, request in enumerate(self.requests)
+        ):
+            raise ValueError("egress report contains invalid request summaries")
 
     @property
     def request_count(self) -> int:
