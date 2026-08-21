@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, NoReturn, TypeAlias, cast
@@ -102,10 +103,12 @@ class CapabilityAdapter:
     version: str | None = None
 
     def __post_init__(self) -> None:
-        if type(self.name) is not str or not self.name.strip():
+        if type(self.name) is not str:
             raise ValueError("capability adapter name must be a non-empty string")
         if len(self.name) > _MAX_SOURCE_TEXT_LENGTH:
             raise ValueError("capability adapter name exceeds the safe length limit")
+        if not self.name.strip():
+            raise ValueError("capability adapter name must be a non-empty string")
         if not callable(self.probe):
             raise TypeError("capability adapter probe must be callable")
         for value, field_name in (
@@ -166,6 +169,7 @@ class CapabilityStatus:
     def __post_init__(self) -> None:
         if (
             type(self.name) is not str
+            or len(self.name) > 64
             or _SAFE_IDENTIFIER_RE.fullmatch(self.name) is None
             or _safe_identifier(self.name, prefix="capability") != self.name
         ):
@@ -178,12 +182,14 @@ class CapabilityStatus:
             raise ValueError("capability status availability and reason disagree")
         if self.extra is not None and (
             type(self.extra) is not str
+            or len(self.extra) > 64
             or _SAFE_IDENTIFIER_RE.fullmatch(self.extra) is None
             or _safe_identifier(self.extra, prefix="extra") != self.extra
         ):
             raise ValueError("capability status extra must be a safe identifier")
         if self.provider_fingerprint is not None and (
             type(self.provider_fingerprint) is not str
+            or len(self.provider_fingerprint) != len("sha256:") + 64
             or _SHA256_RE.fullmatch(self.provider_fingerprint) is None
         ):
             raise ValueError("provider_fingerprint must be a SHA-256 digest")
@@ -361,15 +367,18 @@ def provider_fingerprint(
         _fail("provider exceeds the safe length limit")
     if not provider.strip():
         return None
-    canonical = provider.strip().casefold()
+    canonical_provider = unicodedata.normalize("NFKC", provider.strip().casefold())
+    canonical_version: str | None = None
     if version is not None:
         if type(version) is not str:
             raise TypeError("version must be a string or None")
         if len(version) > _MAX_SOURCE_TEXT_LENGTH:
             _fail("version exceeds the safe length limit")
         if version.strip():
-            canonical = f"{canonical}\x00{version.strip().casefold()}"
-    return _sha256_text(canonical)
+            canonical_version = unicodedata.normalize(
+                "NFKC", version.strip().casefold()
+            )
+    return _sha256_json([canonical_provider, canonical_version])
 
 
 def probe_capabilities(
@@ -418,7 +427,9 @@ def _status_key(status: CapabilityStatus) -> tuple[str, str, str, str, bool]:
 def _bounded_tuple(value: Any, *, label: str, maximum: int) -> tuple[Any, ...]:
     try:
         iterator = iter(value)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         _fail(f"{label} must be a bounded iterable")
     collected: list[Any] = []
     for _ in range(maximum + 1):
@@ -426,7 +437,9 @@ def _bounded_tuple(value: Any, *, label: str, maximum: int) -> tuple[Any, ...]:
             item = next(iterator)
         except StopIteration:
             return tuple(collected)
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             _fail(f"{label} iteration failed")
         if len(collected) == maximum:
             _fail(f"{label} exceed the limit of {maximum}")
@@ -443,7 +456,9 @@ def _snapshot_mapping(
     pairs = _bounded_tuple(value, label="mapping keys", maximum=maximum)
     snapshot: dict[Any, Any] = {}
     for key in pairs:
-        if allowed is not None and (type(key) is not str or key not in allowed):
+        if type(key) is not str or len(key) > _MAX_SOURCE_TEXT_LENGTH:
+            _fail("mapping contains unsupported fields")
+        if allowed is not None and key not in allowed:
             _fail("mapping contains unsupported fields")
         try:
             if key in snapshot:
@@ -451,7 +466,9 @@ def _snapshot_mapping(
             snapshot[key] = value[key]
         except CapabilityProbeError:
             raise
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             _fail("mapping could not be read safely")
     return snapshot
 
@@ -466,8 +483,9 @@ def _collect_adapters(adapters: Any) -> tuple[Any, ...]:
             adapters,
             maximum=MAX_CAPABILITY_ADAPTERS,
         )
+        name_fields = {"capability", "name"}
         probe_fields = {"available", "check", "is_available", "probe"}
-        if probe_fields.intersection(snapshot):
+        if name_fields.intersection(snapshot) and probe_fields.intersection(snapshot):
             return (snapshot,)
         return tuple(
             _with_default_name(value, name) for name, value in snapshot.items()
@@ -502,7 +520,9 @@ def _coerce_adapter(raw: Any) -> CapabilityAdapter:
                 extra=raw.extra,
                 version=raw.version,
             )
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             return _invalid_adapter()
 
     if isinstance(raw, Mapping):
@@ -567,12 +587,14 @@ def _make_adapter(
     extra: Any,
     version: Any,
 ) -> CapabilityAdapter:
-    safe_name = name if type(name) is str and name.strip() else "capability-unknown"
+    safe_name = (
+        name
+        if type(name) is str and len(name) <= _MAX_SOURCE_TEXT_LENGTH and name.strip()
+        else "capability-unknown"
+    )
     safe_provider = provider if type(provider) is str else None
     safe_extra = extra if type(extra) is str else None
     safe_version = version if type(version) is str else None
-    if len(safe_name) > _MAX_SOURCE_TEXT_LENGTH:
-        safe_name = "capability-unknown"
     if safe_provider is not None and len(safe_provider) > _MAX_SOURCE_TEXT_LENGTH:
         safe_provider = None
     if safe_extra is not None and len(safe_extra) > _MAX_SOURCE_TEXT_LENGTH:
@@ -627,7 +649,9 @@ def _probe_adapter(raw: Any) -> CapabilityStatus:
             extra=extra,
             provider_fingerprint=fingerprint,
         )
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         return CapabilityStatus(
             name=name,
             available=False,
@@ -638,7 +662,9 @@ def _probe_adapter(raw: Any) -> CapabilityStatus:
 
     try:
         available, reason = _interpret_result(result, has_extra=extra is not None)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         available, reason = False, "invalid_result"
     return CapabilityStatus(
         name=name,
@@ -702,7 +728,9 @@ def _safe_reason(raw_reason: Any, *, has_extra: bool) -> str:
 def _read_attribute(value: Any, name: str) -> Any:
     try:
         return getattr(value, name, None)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         return None
 
 
@@ -737,7 +765,9 @@ def _sha256_json(value: Any) -> str:
             separators=(",", ":"),
             sort_keys=True,
         )
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         _fail("capability report could not be serialized safely")
     return _sha256_text(encoded)
 

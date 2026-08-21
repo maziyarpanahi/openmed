@@ -54,9 +54,13 @@ def test_probe_is_deterministic_and_reports_stable_counts() -> None:
     ]
     assert first.unavailable_count == 1
     assert first.available_count == 2
-    assert first.provider_fingerprints == (
-        provider_fingerprint("Local Adapter"),
-        provider_fingerprint("Other Adapter"),
+    assert first.provider_fingerprints == tuple(
+        sorted(
+            (
+                provider_fingerprint("Local Adapter"),
+                provider_fingerprint("Other Adapter"),
+            )
+        )
     )
 
 
@@ -144,6 +148,30 @@ def test_hostile_declaration_iteration_failure_is_value_free() -> None:
     assert secret not in rendered
 
 
+def test_base_exception_failures_are_contained_without_value_leakage() -> None:
+    secret = "synthetic-sensitive-base-exception-value"
+
+    class ProbeFailure(BaseException):
+        pass
+
+    def failed_probe() -> bool:
+        raise ProbeFailure(secret)
+
+    report = probe_capabilities(
+        [CapabilityAdapter(name="local-failure", probe=failed_probe)]
+    )
+
+    assert report.capabilities[0].reason == "probe_error"
+    assert secret not in report.to_json()
+
+
+def test_registry_name_overlapping_a_declaration_field_is_not_ambiguous() -> None:
+    report = probe_capabilities({"available": lambda: True})
+
+    assert report.capabilities[0].name == "available"
+    assert report.capabilities[0].available is True
+
+
 def test_hostile_probe_result_is_safely_classified() -> None:
     secret = "synthetic-sensitive-result-value"
 
@@ -186,6 +214,12 @@ def test_raw_declaration_repr_is_value_free() -> None:
 
     assert secret not in repr(adapter)
     assert secret not in repr(adapter.probe())
+
+
+def test_provider_fingerprint_has_unambiguous_structured_components() -> None:
+    assert provider_fingerprint("a\x00b", version="c") != provider_fingerprint(
+        "a", version="b\x00c"
+    )
 
 
 def test_duplicate_capability_names_fail_closed() -> None:

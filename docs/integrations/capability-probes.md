@@ -63,10 +63,12 @@ classified as `probe_error`. Probe exception messages are discarded.
 Provider identifiers and versions are never serialized. Each is represented by
 a deterministic `sha256:` provider fingerprint, allowing comparisons across
 reports without placing configuration, tokens, or other sensitive values in
-logs or artifacts. Capability names and extra names should therefore be
-non-sensitive identifiers such as package or integration labels. Values shaped
-like direct identifiers are fingerprinted before reporting, and raw declaration
-objects use value-free representations.
+logs or artifacts. Provider and version components are Unicode-normalized and
+hashed as a structured pair so embedded separators cannot create aliases.
+Capability names and extra names should therefore be non-sensitive identifiers
+such as package or integration labels. Values shaped like direct identifiers
+are fingerprinted before reporting, and raw declaration objects use value-free
+representations.
 
 The overall report also has a stable fingerprint and can be serialized with
 `report.to_json(indent=None)` for compact JSON. The report is diagnostic only;
