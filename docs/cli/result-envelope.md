@@ -26,10 +26,11 @@ Every result contains the same six top-level fields:
 The category is a code, not a human-written explanation.
 
 `counters` is an object of at most 128 entries whose keys are lowercase logical
-identifiers and whose values are non-negative integers. Keys are sorted during
-serialization. An envelope can include at most 64 artifact fingerprints. The
-envelope does not accept arbitrary `data`, `message`, `details`, or other
-free-text fields.
+identifiers and whose values are non-negative integers no larger than
+9,007,199,254,740,991, the interoperable JSON integer ceiling. Keys are sorted
+during serialization. An envelope can include at most 64 artifact fingerprints,
+and fingerprint byte counts use the same ceiling. The envelope does not accept
+arbitrary `data`, `message`, `details`, or other free-text fields.
 
 `remediation_codes` is a sorted, de-duplicated list of at most three values
 from this finite set:

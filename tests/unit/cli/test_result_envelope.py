@@ -19,6 +19,7 @@ from openmed.cli.result_envelope import (
     MAX_COUNTERS,
     MAX_JSON_CHARS,
     MAX_REMEDIATION_CODES,
+    MAX_SAFE_INTEGER,
     ArtifactFingerprint,
     RemediationCode,
     ResultCategory,
@@ -122,6 +123,27 @@ def test_file_fingerprint_reads_local_bytes_without_serializing_the_path(
     assert fingerprint.sha256 == hashlib.sha256(content).hexdigest()
     assert fingerprint.size_bytes == len(content)
     assert str(path) not in json.dumps(fingerprint.to_dict())
+
+
+def test_file_fingerprint_validates_name_before_opening_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_open(*args: Any, **kwargs: Any) -> int:
+        del args, kwargs
+        raise AssertionError("path must not be opened")
+
+    monkeypatch.setattr(result_envelope_module.os, "open", unexpected_open)
+
+    with pytest.raises(ResultEnvelopeError, match="artifact names"):
+        ArtifactFingerprint.from_file("not a logical name", "unused")
+
+
+def test_numeric_wire_values_stay_in_the_interoperable_json_range() -> None:
+    with pytest.raises(ResultEnvelopeError, match="bounded non-negative integer"):
+        ArtifactFingerprint("report", "a" * 64, MAX_SAFE_INTEGER + 1)
+
+    with pytest.raises(ResultEnvelopeError, match="non-negative integers"):
+        create_success_envelope(counters={"processed": MAX_SAFE_INTEGER + 1})
 
 
 def test_file_fingerprint_rejects_a_swapped_verification_descriptor(

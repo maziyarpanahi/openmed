@@ -25,10 +25,13 @@ MAX_REMEDIATION_CODES = 3
 MAX_COUNTERS = 128
 MAX_ARTIFACTS = 64
 MAX_JSON_CHARS = 1_048_576
+MAX_SAFE_INTEGER = (1 << 53) - 1
 
 _IDENTIFIER = re.compile(r"[a-z0-9](?:[a-z0-9_.-]{0,63})\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _HASH_CHUNK_SIZE = 1024 * 1024
+_MAX_ENUM_VALUE_LENGTH = 64
+_MAX_WIRE_KEY_LENGTH = 64
 
 _ENVELOPE_KEYS = frozenset(
     {
@@ -84,7 +87,11 @@ def _invalid(message: str) -> ResultEnvelopeError:
 
 
 def _is_identifier(value: Any) -> bool:
-    return type(value) is str and _IDENTIFIER.fullmatch(value) is not None
+    return (
+        type(value) is str
+        and 0 < len(value) <= _MAX_WIRE_KEY_LENGTH
+        and _IDENTIFIER.fullmatch(value) is not None
+    )
 
 
 _ValueT = TypeVar("_ValueT")
@@ -94,7 +101,7 @@ _EnumT = TypeVar("_EnumT", bound=Enum)
 def _coerce_enum(value: Any, enum_type: type[_EnumT], message: str) -> _EnumT:
     if type(value) is enum_type:
         return value
-    if type(value) is str:
+    if type(value) is str and len(value) <= _MAX_ENUM_VALUE_LENGTH:
         try:
             return enum_type(value)
         except ValueError:
@@ -144,7 +151,7 @@ def _copy_wire_mapping(
         raise _invalid(message)
     keys = _bounded_values(payload, maximum=len(expected_keys), message=message)
     if (
-        any(type(key) is not str for key in keys)
+        any(type(key) is not str or len(key) > _MAX_WIRE_KEY_LENGTH for key in keys)
         or len(set(keys)) != len(keys)
         or frozenset(keys) != expected_keys
     ):
@@ -188,6 +195,7 @@ def _normalize_counters(
             or entry[0] in seen
             or type(entry[1]) is not int
             or entry[1] < 0
+            or entry[1] > MAX_SAFE_INTEGER
         ):
             raise _invalid("counters must be a mapping of non-negative integers")
         key, value = entry
@@ -263,10 +271,18 @@ class ArtifactFingerprint:
     def __post_init__(self) -> None:
         if not _is_identifier(self.name):
             raise _invalid("artifact names must be lowercase logical identifiers")
-        if type(self.sha256) is not str or _SHA256.fullmatch(self.sha256) is None:
+        if (
+            type(self.sha256) is not str
+            or len(self.sha256) != 64
+            or _SHA256.fullmatch(self.sha256) is None
+        ):
             raise _invalid("artifact sha256 must be lowercase hexadecimal")
-        if type(self.size_bytes) is not int or self.size_bytes < 0:
-            raise _invalid("artifact size_bytes must be a non-negative integer")
+        if (
+            type(self.size_bytes) is not int
+            or self.size_bytes < 0
+            or self.size_bytes > MAX_SAFE_INTEGER
+        ):
+            raise _invalid("artifact size_bytes must be a bounded non-negative integer")
 
     @classmethod
     def from_bytes(
@@ -276,6 +292,8 @@ class ArtifactFingerprint:
     ) -> "ArtifactFingerprint":
         """Return a fingerprint for in-memory artifact bytes."""
 
+        if not _is_identifier(name):
+            raise _invalid("artifact names must be lowercase logical identifiers")
         if type(content) not in {bytes, bytearray, memoryview}:
             raise _invalid("artifact content must be bytes")
         try:
@@ -294,6 +312,8 @@ class ArtifactFingerprint:
     def from_file(cls, name: str, path: str | Path) -> "ArtifactFingerprint":
         """Return a fingerprint for a local file without serializing its path."""
 
+        if not _is_identifier(name):
+            raise _invalid("artifact names must be lowercase logical identifiers")
         descriptor: int | None = None
         verification_descriptor: int | None = None
         digest = hashlib.sha256()
@@ -309,7 +329,11 @@ class ArtifactFingerprint:
             artifact_path = Path(path)
             descriptor = os.open(os.fspath(artifact_path), flags)
             opened_stat = os.fstat(descriptor)
-            if not stat.S_ISREG(opened_stat.st_mode):
+            if (
+                not stat.S_ISREG(opened_stat.st_mode)
+                or opened_stat.st_size < 0
+                or opened_stat.st_size > MAX_SAFE_INTEGER
+            ):
                 raise OSError
 
             with os.fdopen(descriptor, "rb") as handle:
@@ -592,6 +616,7 @@ __all__ = [
     "MAX_COUNTERS",
     "MAX_JSON_CHARS",
     "MAX_REMEDIATION_CODES",
+    "MAX_SAFE_INTEGER",
     "RemediationCode",
     "ResultCategory",
     "ResultEnvelope",
