@@ -20,12 +20,17 @@ import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Final, overload
+from typing import Any, Final, cast, overload
 from urllib.parse import urlsplit
 
 SCHEMA_VERSION: Final[int] = 1
 SUPPORTED_PYTHON: Final[str] = ">=3.10"
 MATRIX_DOCUMENTATION_PATH: Final[str] = "docs/integrations/matrix.md"
+MAX_CAPABILITIES: Final[int] = 256
+
+_MAX_SEQUENCE_ITEMS: Final[int] = 64
+_MAX_TEXT_LENGTH: Final[int] = 4_096
+_MAX_NAME_INPUT_LENGTH: Final[int] = 256
 
 _ALLOWED_POLICIES: Final[frozenset[str]] = frozenset(
     {"local-only", "configured-network", "user-supplied-resource"}
@@ -37,7 +42,47 @@ _CAPABILITY_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _REQUIREMENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
-@dataclass(frozen=True)
+def _bounded_tuple(value: Any, *, label: str, maximum: int) -> tuple[Any, ...]:
+    """Snapshot an iterable without unbounded materialization or hook leakage."""
+
+    try:
+        iterator = iter(value)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise TypeError(f"{label} must be a bounded iterable") from None
+
+    collected: list[Any] = []
+    for _ in range(maximum + 1):
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return tuple(collected)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError(f"{label} iteration failed") from None
+        if len(collected) == maximum:
+            raise ValueError(f"{label} exceed the limit of {maximum}")
+        collected.append(item)
+    raise AssertionError("bounded iteration must return or raise")
+
+
+def _validate_bounded_text(value: Any, label: str) -> None:
+    if type(value) is not str:
+        raise TypeError(f"{label} must be a string")
+    if len(value) > _MAX_TEXT_LENGTH:
+        raise ValueError(f"{label} exceeds the safe length limit")
+
+
+def _bounded_text_tuple(value: Any, *, label: str) -> tuple[str, ...]:
+    items = _bounded_tuple(value, label=label, maximum=_MAX_SEQUENCE_ITEMS)
+    for item in items:
+        _validate_bounded_text(item, f"{label} item")
+    return cast(tuple[str, ...], items)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
 class IntegrationCapability:
     """Describe one supported integration surface.
 
@@ -72,17 +117,41 @@ class IntegrationCapability:
     def __post_init__(self) -> None:
         """Normalize sequence fields without importing any adapter."""
 
+        for value, field_name in (
+            (self.name, "name"),
+            (self.surface, "surface"),
+            (self.module, "module"),
+            (self.policy, "policy"),
+            (self.test_guarantee, "test_guarantee"),
+            (self.description, "description"),
+            (self.supported_python, "supported_python"),
+        ):
+            _validate_bounded_text(value, field_name)
+        if self.extra is not None:
+            _validate_bounded_text(self.extra, "extra")
         object.__setattr__(
             self,
             "optional_dependencies",
-            tuple(str(item) for item in self.optional_dependencies),
+            _bounded_text_tuple(
+                self.optional_dependencies,
+                label="optional_dependencies",
+            ),
         )
         object.__setattr__(
             self,
             "documentation",
-            tuple(str(item) for item in self.documentation),
+            _bounded_text_tuple(self.documentation, label="documentation"),
         )
-        object.__setattr__(self, "tests", tuple(str(item) for item in self.tests))
+        object.__setattr__(
+            self,
+            "tests",
+            _bounded_text_tuple(self.tests, label="tests"),
+        )
+
+    def __repr__(self) -> str:
+        """Render the declaration without retaining caller-supplied text."""
+
+        return "IntegrationCapability(<validated metadata>)"
 
     @property
     def dependency_names(self) -> tuple[str, ...]:
@@ -104,23 +173,90 @@ class IntegrationCapability:
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible, deterministic capability record."""
 
+        validated = _validated_capability_copy(self)
+        _assert_capability_report_safe(validated)
         return {
-            "description": self.description,
-            "documentation": list(self.documentation),
-            "extra": self.extra,
-            "module": self.module,
-            "name": self.name,
-            "optional_dependencies": list(self.optional_dependencies),
-            "policy": self.policy,
-            "supported_python": self.supported_python,
-            "supported_versions": list(self.supported_versions),
-            "surface": self.surface,
-            "test_guarantee": self.test_guarantee,
-            "tests": list(self.tests),
+            "description": validated.description,
+            "documentation": list(validated.documentation),
+            "extra": validated.extra,
+            "module": validated.module,
+            "name": validated.name,
+            "optional_dependencies": list(validated.optional_dependencies),
+            "policy": validated.policy,
+            "supported_python": validated.supported_python,
+            "supported_versions": list(validated.supported_versions),
+            "surface": validated.surface,
+            "test_guarantee": validated.test_guarantee,
+            "tests": list(validated.tests),
         }
 
 
-@dataclass(frozen=True)
+def _validated_capability_copy(
+    capability: IntegrationCapability,
+) -> IntegrationCapability:
+    """Revalidate frozen public state before it reaches a report surface."""
+
+    if type(capability) is not IntegrationCapability:
+        raise TypeError("capability must be an IntegrationCapability record")
+    try:
+        return IntegrationCapability(
+            name=capability.name,
+            surface=capability.surface,
+            module=capability.module,
+            extra=capability.extra,
+            optional_dependencies=capability.optional_dependencies,
+            documentation=capability.documentation,
+            tests=capability.tests,
+            policy=capability.policy,
+            test_guarantee=capability.test_guarantee,
+            description=capability.description,
+            supported_python=capability.supported_python,
+        )
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("capability contains invalid metadata") from None
+
+
+def _assert_capability_report_safe(capability: IntegrationCapability) -> None:
+    """Reject metadata that is unsafe or ambiguous on public report surfaces."""
+
+    valid = (
+        _CAPABILITY_NAME.fullmatch(capability.name) is not None
+        and bool(capability.surface.strip())
+        and capability.module.startswith("openmed.")
+        and capability.extra != ""
+        and (capability.extra is not None or not capability.optional_dependencies)
+        and (
+            capability.extra is None
+            or _CAPABILITY_NAME.fullmatch(capability.extra.replace("-", "_"))
+            is not None
+        )
+        and capability.policy in _ALLOWED_POLICIES
+        and capability.test_guarantee in _ALLOWED_TEST_GUARANTEES
+        and capability.supported_python == SUPPORTED_PYTHON
+        and bool(capability.description.strip())
+        and bool(capability.documentation)
+        and bool(capability.tests)
+        and all(_valid_requirement(value) for value in capability.optional_dependencies)
+        and all(
+            (relative := _safe_relative_path(value)) is not None
+            and relative.startswith("docs/")
+            and relative.split("#", 1)[0].endswith(".md")
+            for value in capability.documentation
+        )
+        and all(
+            (relative := _safe_relative_path(value)) is not None
+            and relative.startswith("tests/")
+            and relative.split("#", 1)[0].endswith(".py")
+            for value in capability.tests
+        )
+    )
+    if not valid:
+        raise ValueError("capability cannot be serialized safely")
+
+
+@dataclass(frozen=True, slots=True)
 class CapabilityMatrix:
     """Versioned collection of :class:`IntegrationCapability` records."""
 
@@ -130,7 +266,20 @@ class CapabilityMatrix:
     def __post_init__(self) -> None:
         """Freeze the supplied capability sequence for stable iteration."""
 
-        object.__setattr__(self, "capabilities", tuple(self.capabilities))
+        if type(self.schema_version) is not int:
+            raise TypeError("schema_version must be an integer")
+        capabilities = _bounded_tuple(
+            self.capabilities,
+            label="capabilities",
+            maximum=MAX_CAPABILITIES,
+        )
+        if any(type(entry) is not IntegrationCapability for entry in capabilities):
+            raise TypeError("capabilities must contain IntegrationCapability records")
+        validated = tuple(
+            _validated_capability_copy(entry)
+            for entry in cast(tuple[IntegrationCapability, ...], capabilities)
+        )
+        object.__setattr__(self, "capabilities", validated)
 
     def __iter__(self) -> Iterator[IntegrationCapability]:
         """Iterate over capabilities in their declared stable order."""
@@ -164,23 +313,33 @@ class CapabilityMatrix:
 
         key = _normalize_capability_name(name)
         for capability in self.capabilities:
+            _assert_capability_report_safe(capability)
+        for capability in self.capabilities:
             compact_name = capability.name.replace("_", "")
             if capability.name == key or compact_name == key.replace("_", ""):
                 return capability
         known = ", ".join(capability.name for capability in self.capabilities)
-        raise KeyError(f"unknown integration capability {name!r}; available: {known}")
+        raise KeyError(f"unknown integration capability; available: {known}")
 
     def to_dict(self) -> dict[str, Any]:
         """Return the complete matrix as JSON-compatible data."""
 
+        validated = CapabilityMatrix(
+            capabilities=self.capabilities,
+            schema_version=self.schema_version,
+        )
         return {
-            "capabilities": [capability.to_dict() for capability in self.capabilities],
-            "schema_version": self.schema_version,
+            "capabilities": [
+                capability.to_dict() for capability in validated.capabilities
+            ],
+            "schema_version": validated.schema_version,
         }
 
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the matrix deterministically as JSON."""
 
+        if type(indent) is not int or not 0 <= indent <= 8:
+            raise ValueError("indent must be an integer between 0 and 8")
         return json.dumps(
             self.to_dict(),
             ensure_ascii=False,
@@ -191,13 +350,19 @@ class CapabilityMatrix:
     def to_markdown(self) -> str:
         """Render a compact deterministic Markdown view of the matrix."""
 
+        validated = CapabilityMatrix(
+            capabilities=self.capabilities,
+            schema_version=self.schema_version,
+        )
+        for capability in validated.capabilities:
+            _assert_capability_report_safe(capability)
         lines = [
             "# Integration Capability Matrix",
             "",
             "| Capability | Surface | Optional requirements | Policy | Offline evidence | Test files | Documentation |",
             "|---|---|---|---|---|---|---|",
         ]
-        for capability in self.capabilities:
+        for capability in validated.capabilities:
             requirements = (
                 ", ".join(
                     f"`{_markdown_cell(requirement)}`"
@@ -257,6 +422,27 @@ def _capability(
 # ``docs/integrations/matrix.md``.
 INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
     _capability(
+        "airflow",
+        "Apache Airflow",
+        "openmed.interop.airflow",
+        extra="airflow",
+        dependencies=("apache-airflow>=3.2.2,<4",),
+        documentation=("docs/integrations/airflow.md",),
+        tests=("tests/unit/interop/test_airflow.py",),
+        description="Bounded local redaction operator for files and record batches.",
+    ),
+    _capability(
+        "arrow_flight",
+        "Arrow Flight",
+        "openmed.integrations.arrow_flight",
+        extra="columnar",
+        dependencies=("pyarrow>=16",),
+        documentation=("docs/integrations/arrow-flight.md",),
+        tests=("tests/unit/integrations/test_arrow_flight.py",),
+        policy="configured-network",
+        description="Authenticated record-batch redaction over caller-hosted Flight.",
+    ),
+    _capability(
         "beam",
         "Apache Beam",
         "openmed.interop.beam_transform",
@@ -286,6 +472,16 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         description="Parquet, ORC, and Arrow column redaction with safe manifests.",
     ),
     _capability(
+        "dagster",
+        "Dagster",
+        "openmed.integrations.dagster_assets",
+        extra="dagster",
+        dependencies=("dagster>=1.8,<2",),
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_dagster_assets.py",),
+        description="Partitioned local ops and assets with counts-only metadata.",
+    ),
+    _capability(
         "dask",
         "Dask DataFrame",
         "openmed.integrations.dask_accessor",
@@ -296,6 +492,34 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         description="Partition-local DataFrame and Series de-identification.",
     ),
     _capability(
+        "dataflow",
+        "Apache Beam Dataflow",
+        "openmed.integrations.dataflow_processor",
+        extra="beam",
+        dependencies=("apache-beam>=2.73,<3",),
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_dataflow_processor.py",),
+        description="Bundle-scoped record redaction for Beam and Dataflow workers.",
+    ),
+    _capability(
+        "dataflow_tool",
+        "Embedded dataflow tools",
+        "openmed.integrations.dataflow_tool_processor",
+        extra=None,
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_dataflow_tool_processor.py",),
+        description="Bounded callable and JSON-lines processor for local flows.",
+    ),
+    _capability(
+        "distributed_sql",
+        "Distributed SQL UDF",
+        "openmed.integrations.distributed_sql_udf",
+        extra=None,
+        documentation=("docs/integrations/distributed-sql-udf.md",),
+        tests=("tests/unit/integrations/test_distributed_sql_udf.py",),
+        description="Vectorized worker-local UDF with deterministic registration.",
+    ),
+    _capability(
         "duckdb",
         "DuckDB UDFs",
         "openmed.interop.duckdb_udf",
@@ -304,6 +528,15 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         documentation=("docs/duckdb-deidentification.md",),
         tests=("tests/unit/interop/test_duckdb_udf.py",),
         description="Local SQL functions for clinical extraction and redaction.",
+    ),
+    _capability(
+        "executable_udf",
+        "Executable UDF",
+        "openmed.integrations.executable_udf",
+        extra=None,
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_executable_udf.py",),
+        description="Streaming stdin and stdout column redaction for local engines.",
     ),
     _capability(
         "fhir",
@@ -372,7 +605,7 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         "openmed.interop.langchain",
         extra="langchain",
         dependencies=("langchain-core>=0.2,<2",),
-        documentation=("docs/integrations-langchain.md",),
+        documentation=("docs/integrations/langchain.md",),
         tests=("tests/unit/interop/test_langchain_redaction.py",),
         description="Runnable and transform adapters for local context redaction.",
     ),
@@ -392,9 +625,18 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         "openmed.interop.llamaindex",
         extra="llamaindex",
         dependencies=("llama-index-core>=0.10,<1",),
-        documentation=("docs/integrations-llamaindex.md",),
+        documentation=("docs/integrations/llamaindex.md",),
         tests=("tests/unit/interop/test_llamaindex_redaction.py",),
         description="Node and metadata redaction before local synthesis or storage.",
+    ),
+    _capability(
+        "log_redactor",
+        "Structured log redaction",
+        "openmed.integrations.log_redactor",
+        extra=None,
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_log_redactor.py",),
+        description="Local structured-event redaction before log emission.",
     ),
     _capability(
         "omop",
@@ -428,6 +670,16 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         description="DataFrame de-identification and safe release helpers.",
     ),
     _capability(
+        "pandas_on_spark",
+        "Pandas API on Spark",
+        "openmed.integrations.pandas_on_spark",
+        extra="spark",
+        dependencies=("pyspark>=3.5,<4", "pandas>=2.0", "pyarrow>=16"),
+        documentation=("docs/integrations/pandas-on-spark.md",),
+        tests=("tests/unit/integrations/test_pandas_on_spark.py",),
+        description="Distributed pandas-style accessors with worker-local models.",
+    ),
+    _capability(
         "philter",
         "PHILTER",
         "openmed.interop.philter",
@@ -446,6 +698,24 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         documentation=("docs/feature-map.md",),
         tests=("tests/unit/interop/test_dataframe_accessor.py",),
         description="Polars de-identification and safe release helpers.",
+    ),
+    _capability(
+        "postgres",
+        "PostgreSQL transaction adapter",
+        "openmed.interop.postgres",
+        extra=None,
+        documentation=("docs/integrations/postgres.md",),
+        tests=("tests/unit/interop/test_postgres.py",),
+        description="Caller-owned transaction redaction with parameterized writes.",
+    ),
+    _capability(
+        "postgres_plpython",
+        "PostgreSQL PL/Python",
+        "openmed.integrations.postgres_plpython",
+        extra=None,
+        documentation=("docs/integrations/postgres.md",),
+        tests=("tests/unit/integrations/test_postgres_plpython.py",),
+        description="Generated local PL/Python bodies for in-database redaction.",
     ),
     _capability(
         "prefect",
@@ -499,6 +769,27 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         description="Actor-based batch column de-identification for Ray Data.",
     ),
     _capability(
+        "ray_map_batches",
+        "Ray Data map_batches",
+        "openmed.integrations.ray_map_batches",
+        extra="ray",
+        dependencies=("ray[data]>=2.30,<3",),
+        documentation=("docs/integrations/ray-map-batches.md",),
+        tests=("tests/unit/integrations/test_ray_map_batches.py",),
+        description="Stateful model actors for deterministic Ray batch redaction.",
+    ),
+    _capability(
+        "remote_function",
+        "Warehouse remote function",
+        "openmed.integrations.remote_function",
+        extra="service",
+        dependencies=("fastapi>=0.110",),
+        documentation=("docs/integrations/warehouse-remote-function.md",),
+        tests=("tests/unit/integrations/test_remote_function.py",),
+        policy="configured-network",
+        description="Caller-hosted batch handler for warehouse text redaction.",
+    ),
+    _capability(
         "scispacy",
         "scispaCy UMLS linker",
         "openmed.interop.scispacy_linker",
@@ -518,6 +809,17 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         documentation=("docs/feature-map.md",),
         tests=("tests/unit/interop/test_scrubadub_adapter.py",),
         description="Filth span conversion to canonical OpenMed entities.",
+    ),
+    _capability(
+        "search_ingest",
+        "Search ingest sidecar",
+        "openmed.integrations.search_ingest_processor",
+        extra="service",
+        dependencies=("fastapi>=0.110",),
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_search_ingest_processor.py",),
+        policy="configured-network",
+        description="Caller-hosted redaction sidecar for search document envelopes.",
     ),
     _capability(
         "search_pipeline",
@@ -551,6 +853,25 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
             "tests/unit/integrations/test_spark_streaming.py",
         ),
         description="Local pandas UDF and streaming de-identification surfaces.",
+    ),
+    _capability(
+        "sqlalchemy",
+        "SQLAlchemy",
+        "openmed.integrations.sqlalchemy_redact",
+        extra="sqlalchemy",
+        dependencies=("sqlalchemy>=2.0,<3",),
+        documentation=("docs/integrations/sqlalchemy.md",),
+        tests=("tests/unit/integrations/test_sqlalchemy_redact.py",),
+        description="Write-time local de-identification for selected ORM columns.",
+    ),
+    _capability(
+        "stream_processor",
+        "Stream processor",
+        "openmed.integrations.stream_processor",
+        extra=None,
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/integrations/test_stream_processor.py",),
+        description="Framework-neutral record redaction for caller-owned streams.",
     ),
     _capability(
         "zh",
@@ -601,29 +922,43 @@ def validate_capability_matrix(
         ValueError: If one or more records are incomplete or inconsistent.
     """
 
-    if isinstance(matrix, CapabilityMatrix):
-        entries = matrix.capabilities
-        schema_version = matrix.schema_version
+    if type(matrix) is CapabilityMatrix:
+        validated_matrix = CapabilityMatrix(
+            capabilities=matrix.capabilities,
+            schema_version=matrix.schema_version,
+        )
+        entries = validated_matrix.capabilities
+        schema_version = validated_matrix.schema_version
     else:
-        entries = tuple(matrix)
+        raw_entries = _bounded_tuple(
+            matrix,
+            label="capability matrix",
+            maximum=MAX_CAPABILITIES,
+        )
+        entries = tuple(
+            _validated_capability_copy(entry)
+            if type(entry) is IntegrationCapability
+            else entry
+            for entry in raw_entries
+        )
         schema_version = SCHEMA_VERSION
 
     errors: list[str] = []
     if schema_version != SCHEMA_VERSION:
-        errors.append(f"unsupported schema_version {schema_version!r}")
+        errors.append("unsupported schema_version")
     if not entries:
         errors.append("matrix must contain at least one capability")
 
     names: set[str] = set()
     for index, entry in enumerate(entries):
         prefix = f"capability[{index}]"
-        if not isinstance(entry, IntegrationCapability):
+        if type(entry) is not IntegrationCapability:
             errors.append(f"{prefix} is not an IntegrationCapability")
             continue
         if not _CAPABILITY_NAME.fullmatch(entry.name):
             errors.append(f"{prefix}.name is not a stable lowercase key")
         if entry.name in names:
-            errors.append(f"duplicate capability name: {entry.name!r}")
+            errors.append(f"duplicate capability name at {prefix}")
         names.add(entry.name)
         if not entry.surface.strip():
             errors.append(f"{prefix}.surface is empty")
@@ -638,23 +973,23 @@ def validate_capability_matrix(
         ):
             errors.append(f"{prefix}.extra is not a stable extra name")
         if entry.policy not in _ALLOWED_POLICIES:
-            errors.append(f"{prefix}.policy is unsupported: {entry.policy!r}")
+            errors.append(f"{prefix}.policy is unsupported")
         if entry.test_guarantee not in _ALLOWED_TEST_GUARANTEES:
-            errors.append(
-                f"{prefix}.test_guarantee is unsupported: {entry.test_guarantee!r}"
-            )
+            errors.append(f"{prefix}.test_guarantee is unsupported")
         if entry.supported_python != SUPPORTED_PYTHON:
-            errors.append(f"{prefix}.supported_python must be {SUPPORTED_PYTHON!r}")
+            errors.append(f"{prefix}.supported_python is unsupported")
         if not entry.documentation:
             errors.append(f"{prefix}.documentation is empty")
         if not entry.tests:
             errors.append(f"{prefix}.tests is empty")
-        for requirement in entry.optional_dependencies:
+        for requirement_index, requirement in enumerate(entry.optional_dependencies):
             if not _valid_requirement(requirement):
-                errors.append(f"{prefix} has invalid requirement {requirement!r}")
+                errors.append(
+                    f"{prefix}.optional_dependencies[{requirement_index}] is invalid"
+                )
 
     entry_names = tuple(
-        entry.name for entry in entries if isinstance(entry, IntegrationCapability)
+        entry.name for entry in entries if type(entry) is IntegrationCapability
     )
     if entry_names != tuple(sorted(entry_names)):
         errors.append("capabilities must be sorted by name")
@@ -663,7 +998,7 @@ def validate_capability_matrix(
     if root is not None:
         project_extras = _project_optional_dependencies(root / "pyproject.toml")
         for index, entry in enumerate(entries):
-            if not isinstance(entry, IntegrationCapability):
+            if type(entry) is not IntegrationCapability:
                 continue
             prefix = f"capability[{index}]"
             _validate_local_path_fields(entry, root, prefix, errors)
@@ -674,10 +1009,10 @@ def validate_capability_matrix(
                     if _requirement_name(requirement)
                 }
                 if entry.extra not in project_extras:
-                    errors.append(
-                        f"{prefix}.extra {entry.extra!r} is not declared in pyproject.toml"
-                    )
-                for requirement in entry.optional_dependencies:
+                    errors.append(f"{prefix}.extra is not declared in pyproject.toml")
+                for requirement_index, requirement in enumerate(
+                    entry.optional_dependencies
+                ):
                     dependency_name = _requirement_name(requirement)
                     if (
                         dependency_name
@@ -685,8 +1020,8 @@ def validate_capability_matrix(
                         not in declared
                     ):
                         errors.append(
-                            f"{prefix} requirement {requirement!r} is not declared "
-                            f"by openmed[{entry.extra}]"
+                            f"{prefix}.optional_dependencies[{requirement_index}] "
+                            "is not declared by its OpenMed extra"
                         )
             elif entry.extra is not None and project_extras == {}:
                 errors.append(
@@ -711,28 +1046,40 @@ def _validate_local_path_fields(
         root / module_relative / "__init__.py",
     )
     if not any(candidate.is_file() for candidate in module_candidates):
-        errors.append(f"{prefix}.module does not resolve locally: {entry.module}")
+        errors.append(f"{prefix}.module does not resolve locally")
 
     for field_name, values, expected_root, suffix in (
         ("documentation", entry.documentation, "docs", ".md"),
         ("tests", entry.tests, "tests", ".py"),
     ):
-        for value in values:
+        for value_index, value in enumerate(values):
             relative = _safe_relative_path(value)
             if relative is None or not relative.startswith(f"{expected_root}/"):
-                errors.append(f"{prefix}.{field_name} has unsafe path: {value!r}")
+                errors.append(
+                    f"{prefix}.{field_name}[{value_index}] has an unsafe path"
+                )
                 continue
             path_without_anchor = relative.split("#", 1)[0]
             candidate = root / path_without_anchor
             if not candidate.is_file() or not path_without_anchor.endswith(suffix):
                 errors.append(
-                    f"{prefix}.{field_name} does not resolve locally: {value!r}"
+                    f"{prefix}.{field_name}[{value_index}] does not resolve locally"
                 )
 
 
 def _resolve_repository_root(repository_root: str | Path | None) -> Path | None:
     if repository_root is not None:
-        return Path(repository_root).resolve()
+        if type(repository_root) is str:
+            if len(repository_root) > _MAX_TEXT_LENGTH:
+                raise ValueError("repository_root exceeds the safe length limit")
+        elif not isinstance(repository_root, Path):
+            raise TypeError("repository_root must be a string or Path")
+        try:
+            return Path(repository_root).resolve()
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("repository_root could not be resolved") from None
     candidate = Path(__file__).resolve().parents[2]
     return candidate if (candidate / "pyproject.toml").is_file() else None
 
@@ -755,18 +1102,22 @@ def _validate_matrix_documentation(
         )
         return
 
-    for entry in entries:
+    for entry_index, entry in enumerate(entries):
         if f"`{entry.name}`" not in markdown:
-            errors.append(f"{MATRIX_DOCUMENTATION_PATH} does not list {entry.name!r}")
-        for requirement in entry.optional_dependencies:
+            errors.append(
+                f"{MATRIX_DOCUMENTATION_PATH} omits capability[{entry_index}]"
+            )
+        for requirement_index, requirement in enumerate(entry.optional_dependencies):
             if f"`{requirement}`" not in markdown:
                 errors.append(
-                    f"{MATRIX_DOCUMENTATION_PATH} omits requirement {requirement!r}"
+                    f"{MATRIX_DOCUMENTATION_PATH} omits capability[{entry_index}] "
+                    f"requirement[{requirement_index}]"
                 )
-        for test_path in entry.tests:
+        for test_index, test_path in enumerate(entry.tests):
             if f"`{test_path}`" not in markdown:
                 errors.append(
-                    f"{MATRIX_DOCUMENTATION_PATH} omits test path {test_path!r}"
+                    f"{MATRIX_DOCUMENTATION_PATH} omits capability[{entry_index}] "
+                    f"test[{test_index}]"
                 )
 
     link_pattern = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)")
@@ -778,12 +1129,10 @@ def _validate_matrix_documentation(
             posixpath.normpath(posixpath.join("docs/integrations", parsed.path))
         )
         if relative is None or not relative.startswith("docs/"):
-            errors.append(f"{MATRIX_DOCUMENTATION_PATH} has unsafe link: {target!r}")
+            errors.append(f"{MATRIX_DOCUMENTATION_PATH} has an unsafe link")
             continue
         if not (root / relative.split("#", 1)[0]).is_file():
-            errors.append(
-                f"{MATRIX_DOCUMENTATION_PATH} link does not resolve: {target!r}"
-            )
+            errors.append(f"{MATRIX_DOCUMENTATION_PATH} has an unresolved link")
 
 
 def _project_optional_dependencies(path: Path) -> Mapping[str, Sequence[str]] | None:
@@ -811,14 +1160,18 @@ def _project_optional_dependencies(path: Path) -> Mapping[str, Sequence[str]] | 
 
 
 def _valid_requirement(requirement: str) -> bool:
-    value = str(requirement).strip()
+    if type(requirement) is not str or len(requirement) > _MAX_TEXT_LENGTH:
+        return False
+    value = requirement.strip()
     if not value or _requirement_name(value) == "":
         return False
     return not any(character in value for character in "/\\\n\r")
 
 
 def _requirement_name(requirement: str) -> str:
-    match = _REQUIREMENT_NAME.match(str(requirement).strip())
+    if type(requirement) is not str or len(requirement) > _MAX_TEXT_LENGTH:
+        return ""
+    match = _REQUIREMENT_NAME.match(requirement.strip())
     return match.group(0) if match is not None else ""
 
 
@@ -827,11 +1180,19 @@ def _normalize_distribution_name(name: str) -> str:
 
 
 def _normalize_capability_name(name: str) -> str:
-    return str(name or "").strip().lower().replace("-", "_")
+    if type(name) is not str:
+        raise TypeError("capability name must be a string")
+    if len(name) > _MAX_NAME_INPUT_LENGTH:
+        raise ValueError("capability name exceeds the safe length limit")
+    return name.strip().lower().replace("-", "_")
 
 
 def _safe_relative_path(value: str) -> str | None:
-    raw = str(value).replace("\\", "/")
+    if type(value) is not str or len(value) > _MAX_TEXT_LENGTH:
+        return None
+    if "\x00" in value or any(ord(character) < 32 for character in value):
+        return None
+    raw = value.replace("\\", "/")
     path = PurePosixPath(raw.split("#", 1)[0])
     if path.is_absolute() or ".." in path.parts:
         return None
@@ -840,11 +1201,13 @@ def _safe_relative_path(value: str) -> str | None:
 
 
 def _markdown_cell(value: str) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ").strip()
+    _validate_bounded_text(value, "Markdown cell")
+    return value.replace("|", "\\|").replace("\n", " ").strip()
 
 
 def _markdown_doc_link(path: str) -> str:
-    raw_path, _, anchor = str(path).partition("#")
+    _validate_bounded_text(path, "documentation path")
+    raw_path, _, anchor = path.partition("#")
     relative = posixpath.relpath(raw_path, "docs/integrations")
     href = f"{relative}#{anchor}" if anchor else relative
     return f"[{raw_path}]({href})"
@@ -861,6 +1224,7 @@ __all__ = [
     "INTEGRATION_CAPABILITIES",
     "INTEGRATION_CAPABILITY_MATRIX",
     "IntegrationCapability",
+    "MAX_CAPABILITIES",
     "capabilities",
     "capability",
     "validate_capability_matrix",

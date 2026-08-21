@@ -5,7 +5,11 @@ from __future__ import annotations
 import socket
 import subprocess
 import sys
+import traceback
+from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -35,18 +39,31 @@ def test_matrix_is_sorted_and_validates_against_local_repository() -> None:
 def test_matrix_covers_documented_optional_and_data_surfaces() -> None:
     names = {entry.name for entry in CAPABILITY_MATRIX}
     assert {
+        "airflow",
+        "arrow_flight",
         "cda",
         "columnar",
+        "dagster",
         "dask",
+        "dataflow",
+        "distributed_sql",
         "duckdb",
+        "executable_udf",
         "fhir",
         "hl7v2",
         "langchain",
         "llamaindex",
         "openmrs",
         "pandas",
+        "pandas_on_spark",
+        "postgres",
+        "ray_map_batches",
+        "remote_function",
+        "search_ingest",
         "spark",
         "spacy",
+        "sqlalchemy",
+        "stream_processor",
     } <= names
 
     assert capability("Lang-Chain").name == "langchain"
@@ -118,3 +135,92 @@ def test_invalid_matrix_reports_structural_errors() -> None:
 
     with pytest.raises(ValueError, match="duplicate capability name"):
         validate_capability_matrix(matrix, repository_root=ROOT)
+
+
+def test_unknown_capability_errors_do_not_echo_caller_input() -> None:
+    secret = "synthetic-patient-482901"
+
+    with pytest.raises(KeyError) as exc_info:
+        CAPABILITY_MATRIX.get(secret)
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(exc_info.value),
+            exc_info.value,
+            exc_info.value.__traceback__,
+        )
+    )
+    assert secret not in rendered
+
+
+def test_capability_sequences_are_bounded_without_string_hooks() -> None:
+    entry = CAPABILITY_MATRIX[0]
+
+    class StringFailure(BaseException):
+        pass
+
+    class HostileValue:
+        def __str__(self) -> str:
+            raise StringFailure("synthetic-sensitive-string-hook")
+
+    with pytest.raises(TypeError, match="optional_dependencies item must be a string"):
+        replace(
+            entry,
+            optional_dependencies=(HostileValue(),),  # type: ignore[arg-type]
+        )
+
+    class EndlessStrings(Iterator[str]):
+        def __iter__(self) -> EndlessStrings:
+            return self
+
+        def __next__(self) -> str:
+            return "bounded-value"
+
+    with pytest.raises(ValueError, match="optional_dependencies exceed"):
+        replace(
+            entry,
+            optional_dependencies=EndlessStrings(),  # type: ignore[arg-type]
+        )
+
+
+def test_matrix_iterables_are_bounded_and_fatal_failures_are_sanitized() -> None:
+    entry = CAPABILITY_MATRIX[0]
+
+    class EndlessCapabilities(Iterator[IntegrationCapability]):
+        def __iter__(self) -> EndlessCapabilities:
+            return self
+
+        def __next__(self) -> IntegrationCapability:
+            return entry
+
+    with pytest.raises(ValueError, match="capabilities exceed"):
+        CapabilityMatrix(EndlessCapabilities())  # type: ignore[arg-type]
+
+    secret = "synthetic-sensitive-iterator-hook"
+
+    class IteratorFailure(BaseException):
+        pass
+
+    class BrokenCapabilities:
+        def __iter__(self) -> Iterator[Any]:
+            raise IteratorFailure(secret)
+
+    with pytest.raises(TypeError) as exc_info:
+        validate_capability_matrix(BrokenCapabilities())  # type: ignore[arg-type]
+
+    assert secret not in str(exc_info.value)
+
+
+def test_report_surfaces_revalidate_tampered_metadata_and_indent() -> None:
+    secret = "synthetic-patient-482901"
+    entry = replace(CAPABILITY_MATRIX[0])
+    object.__setattr__(entry, "name", secret)
+
+    with pytest.raises(ValueError, match="serialized safely") as exc_info:
+        entry.to_dict()
+
+    assert secret not in str(exc_info.value)
+    with pytest.raises(ValueError, match="between 0 and 8"):
+        CAPABILITY_MATRIX.to_json(indent=9)
+    with pytest.raises(ValueError, match="between 0 and 8"):
+        CAPABILITY_MATRIX.to_json(indent=True)  # type: ignore[arg-type]
