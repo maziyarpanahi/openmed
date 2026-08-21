@@ -74,6 +74,35 @@ def test_from_dict_rejects_unknown_keys_instead_of_filtering_them() -> None:
         OpenMedConfig.from_dict({"typo_timeout": 30})
 
 
+def test_from_dict_aggregates_invalid_values_before_post_init() -> None:
+    private_value = "private-canary-value"
+
+    with pytest.raises(ConfigValidationError) as exc_info:
+        OpenMedConfig.from_dict(
+            {
+                "batch_size": "many",
+                "chinese_pkuseg_domain": 7,
+                "cjk_width_convention": private_value,
+            }
+        )
+
+    message = str(exc_info.value)
+    assert "batch_size" in message
+    assert "chinese_pkuseg_domain" in message
+    assert "cjk_width_convention" in message
+    assert private_value not in message
+    assert len(exc_info.value.errors) == 3
+
+
+def test_from_dict_rejects_numeric_overflow_as_a_value_free_schema_error() -> None:
+    with pytest.raises(ConfigValidationError) as exc_info:
+        OpenMedConfig.from_dict({"remote_inference_timeout_seconds": 10**400})
+
+    assert exc_info.value.errors == (
+        "remote_inference_timeout_seconds: number must be finite",
+    )
+
+
 @pytest.mark.parametrize(
     ("contents", "bad_key"),
     [

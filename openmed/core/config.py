@@ -106,19 +106,38 @@ def _validate_config_mapping(
         raise ConfigValidationError(errors)
 
 
-def _validate_config_keys(data: Mapping[str, Any]) -> None:
-    """Reject unknown full-config keys before dataclass construction."""
+def _config_validation_view(data: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return the values as ``OpenMedConfig.__post_init__`` normalizes them.
 
-    properties = _config_schema().get("properties")
-    if not isinstance(properties, dict):
-        raise RuntimeError("OpenMed configuration schema has no properties object")
-    errors = [
-        f"{key}: unknown configuration key"
-        for key in sorted(data, key=str)
-        if not isinstance(key, str) or key not in properties
-    ]
-    if errors:
-        raise ConfigValidationError(errors)
+    Validation must run before dataclass construction so malformed mappings do
+    not reach field-specific operations or value-bearing legacy exceptions.
+    Preserve the established whitespace, case, and numeric-string coercions in
+    the validation-only copy; the constructor remains responsible for applying
+    those normalizations to the actual instance.
+    """
+
+    normalized = dict(data)
+    for key in ("chinese_segmentation_backend", "remote_inference_protocol"):
+        value = normalized.get(key)
+        if isinstance(value, str):
+            normalized[key] = value.strip().lower()
+
+    chinese_domain = normalized.get("chinese_pkuseg_domain")
+    if isinstance(chinese_domain, str):
+        normalized["chinese_pkuseg_domain"] = chinese_domain.strip()
+
+    for key in (
+        "indic_name_similarity_threshold",
+        "remote_inference_timeout_seconds",
+    ):
+        value = normalized.get(key)
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            normalized[key] = float(value)
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return normalized
 
 
 def _property_validation_errors(
@@ -154,9 +173,12 @@ def _property_validation_errors(
             errors.append(f"{path}: string is shorter than the minimum length")
 
     if _matches_json_type(value, "number"):
-        numeric = float(value)
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return [f"{path}: number must be finite"]
         if not math.isfinite(numeric):
-            errors.append(f"{path}: number must be finite")
+            return [f"{path}: number must be finite"]
         minimum = schema.get("minimum")
         if isinstance(minimum, (int, float)) and numeric < float(minimum):
             errors.append(f"{path}: number is below the minimum")
@@ -528,7 +550,7 @@ class OpenMedConfig:
     def from_dict(cls, config_dict: Dict[str, Any]) -> "OpenMedConfig":
         """Create config from a schema-validated dictionary."""
 
-        _validate_config_keys(config_dict)
+        _validate_config_mapping(_config_validation_view(config_dict))
         config = cls(**config_dict)
         config.validate()
         return config
