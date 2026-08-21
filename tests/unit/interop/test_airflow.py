@@ -201,6 +201,64 @@ def test_record_batch_bound_and_deidentifier_failures_are_value_free(
     assert _SYNTHETIC_VALUE not in str(redaction_error.value)
 
 
+def test_result_metadata_failure_is_value_free(tmp_path: Path) -> None:
+    class ExplodingResult:
+        deidentified_text = "[EMAIL]"
+
+        @property
+        def pii_entities(self):
+            raise RuntimeError(f"leaked value: {_SYNTHETIC_VALUE}")
+
+    def deidentifier(text: str, **kwargs):
+        del text, kwargs
+        return ExplodingResult()
+
+    with pytest.raises(RedactionOperatorError) as redaction_error:
+        OpenMedRedactionOperator(
+            records=[_SYNTHETIC_VALUE],
+            output_path=tmp_path / "failed-metadata.jsonl",
+            deidentifier=deidentifier,
+        ).execute({})
+
+    assert _SYNTHETIC_VALUE not in str(redaction_error.value)
+
+
+def test_record_iterator_failure_is_value_free(tmp_path: Path) -> None:
+    class ExplodingRecords:
+        def __iter__(self):
+            yield "synthetic note"
+            raise RuntimeError(f"leaked value: {_SYNTHETIC_VALUE}")
+
+    with pytest.raises(RedactionOperatorError) as record_error:
+        OpenMedRedactionOperator(
+            records=ExplodingRecords(),  # type: ignore[arg-type]
+            output_path=tmp_path / "failed-records.jsonl",
+            deidentifier=_fake_deidentifier,
+        ).execute({})
+
+    assert _SYNTHETIC_VALUE not in str(record_error.value)
+
+
+def test_record_metadata_failure_is_value_free(tmp_path: Path) -> None:
+    class ExplodingRecord(dict[str, str]):
+        reads = 0
+
+        def __getitem__(self, key: str) -> str:
+            self.reads += 1
+            if self.reads > 1:
+                raise RuntimeError(f"leaked value: {_SYNTHETIC_VALUE}")
+            return super().__getitem__(key)
+
+    with pytest.raises(RedactionOperatorError) as record_error:
+        OpenMedRedactionOperator(
+            records=[ExplodingRecord(text=_SYNTHETIC_VALUE)],
+            output_path=tmp_path / "failed-record-metadata.jsonl",
+            deidentifier=_fake_deidentifier,
+        ).execute({})
+
+    assert _SYNTHETIC_VALUE not in str(record_error.value)
+
+
 def test_default_deidentifier_is_configured_cache_only(
     monkeypatch,
     tmp_path: Path,

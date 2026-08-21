@@ -33,10 +33,10 @@ try:
 except ImportError:  # pragma: no cover - exercised in core-only installs
     _AIRFLOW_AVAILABLE = False
 
-    class _AirflowException(RuntimeError):
+    class _AirflowException(RuntimeError):  # type: ignore[no-redef]
         """Fallback exception used when the optional Airflow extra is absent."""
 
-    class _AirflowBaseOperator:
+    class _AirflowBaseOperator:  # type: ignore[no-redef]
         """Fallback base so the local operator remains unit-testable."""
 
 
@@ -180,7 +180,10 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         self.max_input_bytes = max_input_bytes
         self.max_records = max_records
         self._deidentifier = deidentifier
-        self._deidentify_kwargs = dict(deidentify_kwargs or {})
+        try:
+            self._deidentify_kwargs = dict(deidentify_kwargs or {})
+        except Exception:
+            raise ValueError("deidentify_kwargs could not be copied") from None
 
         if input_path is not None and output_path is not None:
             if _same_path(input_path, output_path):
@@ -381,15 +384,26 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
                 spans_redacted += spans
                 continue
 
-            value = record[self.text_field]
+            try:
+                value = record[self.text_field]
+            except Exception:
+                raise RedactionOperatorError("unable to read record metadata") from None
             if value is None:
-                redacted_records.append(dict(record))
+                try:
+                    redacted_records.append(dict(record))
+                except Exception:
+                    raise RedactionOperatorError(
+                        "unable to copy record metadata"
+                    ) from None
                 continue
             redacted, spans = self._redact_text(
                 value,
                 input_fingerprint=input_fingerprint,
             )
-            output_record = dict(record)
+            try:
+                output_record = dict(record)
+            except Exception:
+                raise RedactionOperatorError("unable to copy record metadata") from None
             output_record[self.text_field] = redacted
             redacted_records.append(output_record)
             records_redacted += int(redacted != value)
@@ -412,18 +426,19 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         try:
             result = deidentifier(text, **self._deidentifier_options())
             redacted = _result_text(result)
+            entities = getattr(result, "pii_entities", None)
+            if isinstance(entities, Sequence) and not isinstance(
+                entities, (str, bytes)
+            ):
+                span_count = len(entities)
+            else:
+                span_count = int(redacted != text)
         except RedactionOperatorError:
             raise
         except Exception:
             raise RedactionOperatorError(
                 f"redaction failed; input_fingerprint={input_fingerprint}"
             ) from None
-
-        entities = getattr(result, "pii_entities", None)
-        if isinstance(entities, Sequence) and not isinstance(entities, (str, bytes)):
-            span_count = len(entities)
-        else:
-            span_count = int(redacted != text)
         return redacted, span_count
 
     def _deidentifier_options(self) -> dict[str, Any]:
@@ -435,16 +450,23 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         return options
 
     def _configuration_fingerprint(self, input_format: str) -> str:
-        payload = {
-            "schema_version": _MANIFEST_SCHEMA_VERSION,
-            "adapter": "openmed.interop.airflow",
-            "mode": "records" if self._records_source is not None else "file",
-            "input_format": input_format,
-            "text_field": self.text_field,
-            "options": _fingerprint_value(self._deidentifier_options()),
-            "deidentifier": _callable_identity(self._deidentifier),
-        }
-        return _digest_bytes(_serialize_canonical(payload))
+        try:
+            payload = {
+                "schema_version": _MANIFEST_SCHEMA_VERSION,
+                "adapter": "openmed.interop.airflow",
+                "mode": "records" if self._records_source is not None else "file",
+                "input_format": input_format,
+                "text_field": self.text_field,
+                "options": _fingerprint_value(self._deidentifier_options()),
+                "deidentifier": _callable_identity(self._deidentifier),
+            }
+            return _digest_bytes(_serialize_canonical(payload))
+        except RedactionOperatorError:
+            raise
+        except Exception:
+            raise RedactionOperatorError(
+                "redaction configuration could not be fingerprinted"
+            ) from None
 
     def _manifest_path(self) -> Path | None:
         if self.output_path is None:
@@ -566,8 +588,14 @@ def _materialize_records(
         raise TypeError("record batch must be iterable") from None
 
     materialized: list[Record] = []
-    for index, record in enumerate(iterator):
-        if index >= max_records:
+    while len(materialized) <= max_records:
+        try:
+            record = next(iterator)
+        except StopIteration:
+            return materialized
+        except Exception:
+            raise RedactionOperatorError("unable to read record batch") from None
+        if len(materialized) == max_records:
             raise RedactionOperatorError("record batch exceeds the configured limit")
         materialized.append(record)
     return materialized
@@ -579,9 +607,16 @@ def _validate_records(records: Sequence[Record], *, text_field: str) -> None:
             continue
         if not isinstance(record, Mapping):
             raise TypeError("records must contain strings or mappings")
-        if text_field not in record:
-            raise RedactionOperatorError("record is missing the configured text field")
-        value = record[text_field]
+        try:
+            if text_field not in record:
+                raise RedactionOperatorError(
+                    "record is missing the configured text field"
+                )
+            value = record[text_field]
+        except RedactionOperatorError:
+            raise
+        except Exception:
+            raise RedactionOperatorError("unable to read record metadata") from None
         if value is not None and not isinstance(value, str):
             raise TypeError("configured record field must contain text or null")
 
@@ -678,7 +713,8 @@ def _load_existing_manifest(path: Path) -> Mapping[str, Any] | None:
     try:
         if not path.exists():
             return None
-        payload = path.read_bytes()
+        with path.open("rb") as handle:
+            payload = handle.read(_MAX_MANIFEST_BYTES + 1)
     except (OSError, ValueError):
         raise RedactionOperatorError("unable to read fingerprint manifest") from None
     if len(payload) > _MAX_MANIFEST_BYTES:
