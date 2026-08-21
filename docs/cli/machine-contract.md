@@ -29,7 +29,7 @@ Successful commands use the following top-level keys:
 {
   "ok": true,
   "command": "models list",
-  "data": {"status": "ready", "fixture": "synthetic"}
+  "data": {"count": 0, "models": []}
 }
 ```
 

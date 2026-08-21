@@ -15,6 +15,7 @@ from openmed.cli.contract import (
     OFFLINE_ERROR_MESSAGE,
     PRIVACY_POLICY_ERROR_CODE,
     PRIVACY_POLICY_ERROR_MESSAGE,
+    SUCCESS_FIXTURE,
     VALIDATION_ERROR_CODE,
     VALIDATION_ERROR_MESSAGE,
     render_contract_fixture,
@@ -49,7 +50,7 @@ def test_contract_fixture_has_stable_envelope_and_exit_code(fixture) -> None:
 
     if fixture.expected_exit_code == 0:
         assert result.payload["ok"] is True
-        assert set(result.payload["data"]) == {"status", "fixture"}
+        assert set(result.payload["data"]) == {"count", "models"}
     else:
         assert result.payload["ok"] is False
         assert set(result.payload["error"]) == {"code", "message"}
@@ -76,6 +77,23 @@ def test_contract_rendering_is_deterministic() -> None:
         second = render_contract_fixture(fixture)
         assert first.exit_code == second.exit_code
         assert first.json_text == second.json_text
+
+
+def test_models_list_success_matches_contract(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(main_module, "_load_and_apply_config", lambda _args: object())
+    monkeypatch.setattr(
+        main_module,
+        "_lazy_api",
+        lambda: (None, None, lambda **_kwargs: [], None),
+    )
+
+    exit_code = cli_main(["models", "list", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == SUCCESS_FIXTURE.expected_exit_code
+    assert payload == SUCCESS_FIXTURE.expected_payload
+    assert captured.err == ""
 
 
 def test_contract_payloads_are_value_free() -> None:

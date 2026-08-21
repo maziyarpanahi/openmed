@@ -153,7 +153,7 @@ SUCCESS_FIXTURE = CliContractFixture(
     name="success",
     command="models list",
     expected_exit_code=EXIT_OK,
-    data={"status": "ready", "fixture": "synthetic"},
+    data={"count": 0, "models": []},
 )
 
 VALIDATION_FAILURE_FIXTURE = CliContractFixture(
