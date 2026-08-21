@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   definitions, bounded aggregate failure accounting, hashed custom identifiers,
   immutable sanitized state, environment fingerprints, and value-free JSON,
   Markdown, and write errors (#2380).
+- Added a standard-library Agent Skills exporter for deterministic ZIP and
+  tar.gz bundles with per-file SHA-256 manifests, source revision provenance,
+  data-driven host and topical-pack selection, portable source-path checks,
+  and rollback-safe overwrite handling (#2307).
 - Added a deterministic offline Agent Skills validation gate for frontmatter,
   identifiers, local references, pack membership, and executable-helper help
   and test contracts, with symlink and local-path containment, path-only
