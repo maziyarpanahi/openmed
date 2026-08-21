@@ -212,7 +212,11 @@ _HAN_CHARACTER_CLASS = "\u3400-\u4dbf\u4e00-\u9fff"
 def _load_chinese_surnames() -> frozenset[str]:
     """Load the packaged public-domain/CC0 Chinese surname gazetteer."""
 
-    resource = resources.files("openmed.clinical").joinpath(_CHINESE_SURNAME_RESOURCE)
+    # Resolve through the top-level package so importing core PII helpers does
+    # not execute the clinical package's eager public-export imports.
+    resource = resources.files("openmed").joinpath(
+        "clinical", _CHINESE_SURNAME_RESOURCE
+    )
     with resource.open("r", encoding="utf-8") as handle:
         surnames = {
             line.strip()
@@ -784,6 +788,84 @@ def validate_mpesa_transaction_code(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def validate_belgian_rrn(text: str) -> bool:
+    """Validate a Belgian Rijksregister / national-register number.
+
+    Belgian RRN values contain ``YYMMDD`` birth-date digits, a three-digit
+    sequence number, and a two-digit modulo-97 control number. For births from
+    2000 onward, the control number is calculated after prefixing the first
+    nine digits with ``2``.
+
+    Args:
+        text: Candidate RRN, either as 11 digits or with common separators.
+
+    Returns:
+        True when the shape, embedded date, sequence, and checksum are valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9][0-9./\s-]*[0-9]", candidate) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", candidate)
+    if len(digits) != 11:
+        return False
+
+    body = digits[:9]
+    sequence = int(body[6:9])
+    if not 1 <= sequence <= 998:
+        return False
+
+    control = int(digits[9:11])
+    checksum_paths = (
+        (1900 + int(body[:2]), 97 - (int(body) % 97)),
+        (2000 + int(body[:2]), 97 - (int(f"2{body}") % 97)),
+    )
+    for year, expected_control in checksum_paths:
+        if control != expected_control:
+            continue
+        try:
+            birth_date = date(year, int(body[2:4]), int(body[4:6]))
+        except ValueError:
+            continue
+        if birth_date <= date.today():
+            return True
+
+    return False
+
+
+def validate_swiss_ahv(text: str) -> bool:
+    """Validate a Swiss AHV/AVS number with its EAN-13 check digit.
+
+    Args:
+        text: Candidate 13-digit AHV number, optionally separated by dots,
+            spaces, or hyphens.
+
+    Returns:
+        True when the value starts with Switzerland's ``756`` prefix and its
+        final digit passes the EAN-13 modulo-10 checksum.
+    """
+    if not isinstance(text, str):
+        return False
+
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9][0-9.\s-]*[0-9]", candidate) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", candidate)
+    if len(digits) != 13 or not digits.startswith("756"):
+        return False
+
+    weighted_sum = sum(
+        int(digit) * (1 if index % 2 == 0 else 3)
+        for index, digit in enumerate(digits[:12])
+    )
+    expected_check = (10 - weighted_sum % 10) % 10
+    return int(digits[-1]) == expected_check
+
+
 def _is_nigeria_sequential_run(digits: str) -> bool:
     """Return whether an 11-digit value contains a full ascending/descending run."""
 
@@ -1203,6 +1285,55 @@ def validate_assam_pin(text: str) -> bool:
         return False
     normalized = normalize_bengali_assamese_digits(text).strip()
     return validate_indian_pin(normalized) and 780_000 <= int(normalized) <= 789_999
+
+
+def validate_bengali_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Bengali decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(
+        normalize_bengali_assamese_digits(text)
+    )
+
+
+def validate_bangladesh_nid(text: str) -> bool:
+    """Validate the publicly documented Bangladesh NID structure.
+
+    Bangladesh NIDs contain 10, 13, or 17 digits. No publicly specified
+    checksum is available, so validation is intentionally structural only.
+    Bengali decimal digits are normalized to ASCII before validation.
+    """
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    return re.fullmatch(r"(?:[0-9]{10}|[0-9]{13}|[0-9]{17})", normalized) is not None
+
+
+def validate_bengali_mobile(text: str) -> bool:
+    """Validate international Indian or Bangladeshi mobile numbers."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    compact = re.sub(r"[\s.-]", "", normalized)
+    return (
+        re.fullmatch(
+            r"(?:\+91[6-9][0-9]{9}|\+8801[3-9][0-9]{8})",
+            compact,
+        )
+        is not None
+    )
+
+
+def validate_bengali_postcode(text: str) -> bool:
+    """Validate a Bangladesh postcode or Indian PIN in Bengali context."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    return re.fullmatch(
+        r"[1-9][0-9]{3}", normalized
+    ) is not None or validate_indian_pin(normalized)
 
 
 def validate_maharashtra_pin(text: str) -> bool:
@@ -3662,6 +3793,33 @@ def generate_mrz_td1(rng=None) -> str:
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
 
+_BELGIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{2}(?:[.\s/-]?\d{2}){2}[.\s/-]?\d{3}[.\s/-]?\d{2}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "rrn",
+            "niss",
+            "insz",
+            "registre national",
+            "numéro de registre national",
+            "numero de registre national",
+            "numéro national",
+            "numero national",
+            "rijksregister",
+            "rijksregisternummer",
+            "nationaal nummer",
+            "nationalregister",
+            "nationalregisternummer",
+        ],
+        context_boost=0.45,
+        validator=validate_belgian_rrn,
+        safety_sweep_requires_context=True,
+    ),
+]
+
 _LOCALE_FORMAT_VALIDATORS = {
     "egyptian_national_id": validate_egyptian_national_id,
     "moroccan_cin": validate_moroccan_cin,
@@ -4465,6 +4623,30 @@ _GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_SWISS_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)756(?:[.\s-]?\d{4}){2}[.\s-]?\d{2}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "ahv",
+            "ahv-nummer",
+            "avs",
+            "numéro avs",
+            "numero avs",
+            "numero avs/ai",
+            "versichertennummer",
+            "sozialversicherungsnummer",
+            "numéro d'assuré",
+            "numero d'assure",
+            "numero d'assicurato",
+        ],
+        context_boost=0.45,
+        validator=validate_swiss_ahv,
+        safety_sweep_requires_context=True,
+    ),
+]
 
 _KENYA_ID_PII_PATTERNS: List[PIIPattern] = [
     # KE_MAISHA_NAMBA: structural UPI with mandatory nearby identifier context.
@@ -6017,6 +6199,178 @@ _ASSAMESE_PII_PATTERNS: List[PIIPattern] = [
         context_words=_ASSAMESE_PIN_CONTEXT,
         context_boost=0.5,
         validator=validate_assam_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+_BENGALI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u09EC-\u09EF"
+_BENGALI_BD_OPERATOR_DIGIT_CLASS = r"3-9\u09E9-\u09EF"
+_BENGALI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u09E8-\u09EF"
+_BENGALI_NONZERO_DIGIT_CLASS = r"1-9\u09E7-\u09EF"
+_BENGALI_WORD = rf"(?:{_BENGALI_ASSAMESE_GRAPHEME}){{2,}}"
+_BENGALI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["bn"]
+)
+_BENGALI_ROAD_MARKER = r"(?:রোড|সড়ক|সড়ক|রাস্তা|নগর|লেন|মার্গ)"
+
+_BENGALI_DATE_CONTEXT = [
+    "জন্ম",
+    "জন্মতারিখ",
+    "জন্ম তারিখ",
+    "তারিখ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_BENGALI_PHONE_CONTEXT = ["ফোন", "মোবাইল", "যোগাযোগ", "phone", "mobile"]
+_BENGALI_AADHAAR_CONTEXT = [
+    "আধার",
+    "পরিচয়",
+    "পরিচয়",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_BENGALI_NID_CONTEXT = [
+    "জাতীয় পরিচয়পত্র",
+    "জাতীয় পরিচয়পত্র",
+    "এনআইডি",
+    "এনআইডি নম্বর",
+    "nid",
+    "national id",
+]
+_BENGALI_ADDRESS_CONTEXT = [
+    "ঠিকানা",
+    "বাসার ঠিকানা",
+    "বাড়ি",
+    "বাড়ি",
+    "address",
+]
+_BENGALI_POSTCODE_CONTEXT = [
+    "পোস্টকোড",
+    "পোস্ট কোড",
+    "পিন",
+    "পিন কোড",
+    "ডাক",
+    "ঠিকানা",
+    "postcode",
+    "pin",
+]
+
+_BENGALI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_BENGALI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_BENGALI_MONTH_PATTERN})\s+"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_BENGALI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
+        rf"\+[9\u09EF][1\u09E7][\s-]?"
+        rf"[{_BENGALI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]"
+        rf"|"
+        rf"\+[8\u09EE][8\u09EE][0\u09E6][\s-]?"
+        rf"[1\u09E7][{_BENGALI_BD_OPERATOR_DIGIT_CLASS}]"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}][\s.-]?){{7}}"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]"
+        rf")(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_BENGALI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_bengali_mobile,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}"
+        rf"(?P<bn_aadhaar_sep> ?)"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?P=bn_aadhaar_sep)"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_BENGALI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_bengali_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{10}}|"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{13}}|"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{17}})"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=_BENGALI_NID_CONTEXT,
+        context_boost=0.6,
+        validator=validate_bangladesh_nid,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![\w\u0980-\u09FF])"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,5}}[ \t]+)?"
+        rf"(?:{_BENGALI_WORD}[ \t]+){{0,5}}"
+        rf"{_BENGALI_ROAD_MARKER}"
+        rf"(?:[ \t]+[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,5}})?"
+        rf"(?![\w\u0980-\u09FF])",
+        "street_address",
+        priority=9,
+        base_score=0.7,
+        context_words=_BENGALI_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
+        rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}|"
+        rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{5}})"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.4,
+        context_words=_BENGALI_POSTCODE_CONTEXT,
+        context_boost=0.5,
+        validator=validate_bengali_postcode,
         reject_on_validation_failure=True,
         safety_sweep_requires_context=True,
         flags=0,
@@ -9846,7 +10200,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *_ASSAMESE_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
-    "bn": [],
+    "bn": [
+        *_BENGALI_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "or": [
         *_ODIA_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
@@ -10047,6 +10404,12 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_be": _BELGIAN_PII_PATTERNS,
+    "nl_be": _BELGIAN_PII_PATTERNS,
+    "de_be": _BELGIAN_PII_PATTERNS,
+    "fr_ch": _SWISS_PII_PATTERNS,
+    "de_ch": _SWISS_PII_PATTERNS,
+    "it_ch": _SWISS_PII_PATTERNS,
     "fr_sn": [
         _AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_sn"],
         _SENEGAL_CNI_PII_PATTERN,

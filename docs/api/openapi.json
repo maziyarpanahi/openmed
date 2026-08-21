@@ -95,6 +95,56 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "CohortResolveRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for in-memory ``POST /cohort/resolve``.",
+        "properties": {
+          "concept_ancestors": {
+            "items": {
+              "$ref": "#/components/schemas/ConceptAncestorRequest"
+            },
+            "title": "Concept Ancestors",
+            "type": "array"
+          },
+          "phenotype": {
+            "additionalProperties": true,
+            "title": "Phenotype",
+            "type": "object"
+          },
+          "records_jsonl": {
+            "title": "Records Jsonl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phenotype",
+          "records_jsonl"
+        ],
+        "title": "CohortResolveRequest",
+        "type": "object"
+      },
+      "ConceptAncestorRequest": {
+        "additionalProperties": false,
+        "description": "One caller-supplied concept hierarchy edge.",
+        "properties": {
+          "ancestor_concept_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ancestor Concept Id",
+            "type": "integer"
+          },
+          "descendant_concept_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Descendant Concept Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ancestor_concept_id",
+          "descendant_concept_id"
+        ],
+        "title": "ConceptAncestorRequest",
+        "type": "object"
+      },
       "DeidentifyJobDocument": {
         "additionalProperties": false,
         "description": "One document in an async de-identification job.",
@@ -300,6 +350,64 @@
           "documents"
         ],
         "title": "DeidentifyJobRequest",
+        "type": "object"
+      },
+      "GroundRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for the offline terminology grounding route.",
+        "properties": {
+          "entities": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entities"
+          },
+          "offline": {
+            "default": true,
+            "title": "Offline",
+            "type": "boolean"
+          },
+          "source_language": {
+            "default": "en",
+            "title": "Source Language",
+            "type": "string"
+          },
+          "systems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Systems",
+            "type": "array"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "top_k": {
+            "default": 5,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "title": "GroundRequest",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -570,6 +678,181 @@
           "text"
         ],
         "title": "PIIDeidentifyRequest",
+        "type": "object"
+      },
+      "PIIDeidentifyStreamRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for ``/pii/deidentify/stream``.",
+        "properties": {
+          "chunk_size": {
+            "default": 1024,
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Chunk Size",
+            "type": "integer"
+          },
+          "confidence_threshold": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "date_shift_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Shift Days"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "keep_mapping": {
+            "default": false,
+            "title": "Keep Mapping",
+            "type": "boolean"
+          },
+          "keep_year": {
+            "default": false,
+            "title": "Keep Year",
+            "type": "boolean"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "am",
+              "as",
+              "bn",
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
+              "te",
+              "ur",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th",
+              "ko",
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "method": {
+            "default": "mask",
+            "enum": [
+              "mask",
+              "remove",
+              "replace",
+              "hash",
+              "shift_dates"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy"
+          },
+          "shift_dates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Dates"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "use_safety_sweep": {
+            "default": true,
+            "title": "Use Safety Sweep",
+            "type": "boolean"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PIIDeidentifyStreamRequest",
         "type": "object"
       },
       "PIIExtractRequest": {
@@ -1197,7 +1480,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "2.0.0"
+    "version": "2.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1239,6 +1522,46 @@
           }
         },
         "summary": "Analyze"
+      }
+    },
+    "/cohort/resolve": {
+      "post": {
+        "operationId": "cohort_resolve_cohort_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CohortResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cohort Resolve Cohort Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cohort Resolve"
       }
     },
     "/fhir/smart-backend/ingestions": {
@@ -1361,6 +1684,47 @@
           }
         },
         "summary": "Smart Backend Ingestion Summary"
+      }
+    },
+    "/ground": {
+      "post": {
+        "description": "Ground text or pre-extracted entities against local snapshots.",
+        "operationId": "ground_route_ground_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ground Route Ground Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ground Route"
       }
     },
     "/health": {
@@ -1626,6 +1990,42 @@
           }
         },
         "summary": "Pii Deidentify"
+      }
+    },
+    "/pii/deidentify/stream": {
+      "post": {
+        "operationId": "pii_deidentify_stream_pii_deidentify_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PIIDeidentifyStreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pii Deidentify Stream"
       }
     },
     "/pii/extract": {
