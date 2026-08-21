@@ -22,6 +22,7 @@ nav:
       - Low-Bandwidth & Proxy Install: low-bandwidth-install.md
       - Persona Quickstarts: quickstarts.md
       - Project Scaffold CLI: cli/openmed-init.md
+      - CLI Help-Surface Drift: cli/help-drift.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
