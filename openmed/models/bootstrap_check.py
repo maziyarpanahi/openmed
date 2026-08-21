@@ -21,7 +21,8 @@ import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, NoReturn
 
 from ..core.model_integrity import (
     ARTIFACT_MANIFEST_FILENAME,
@@ -60,6 +61,88 @@ OPTIONAL_EXTRAS: Mapping[str, tuple[str, ...]] = {
 _MANIFEST_SUFFIX = ".json"
 _MAX_MODEL_ID_LENGTH = 256
 _MAX_REQUIRED_EXTRA_INPUTS = 32
+_BOOLEAN_FACTS = frozenset(
+    {"cache_present", "configured", "local_model_present", "requested"}
+)
+_COUNT_FACTS = frozenset(
+    {
+        "failed",
+        "manifests_checked",
+        "repository_count",
+        "snapshot_count",
+        "verified",
+    }
+)
+_EXTRA_LIST_FACTS = frozenset({"available_optional", "missing_required", "required"})
+_ENUM_FACTS: Mapping[str, frozenset[str]] = {
+    "dependency_flags": frozenset({"enabled", "incomplete", "unknown"}),
+    "network_guard": frozenset({"not_requested", "requested", "unknown"}),
+    "source": frozenset(
+        {"argument", "config", "config+environment", "environment", "invalid", "none"}
+    ),
+}
+_REASON_STATUSES: Mapping[str, str] = {
+    "cache_missing": STATUS_FAIL,
+    "cache_empty": STATUS_FAIL,
+    "model_not_cached": STATUS_FAIL,
+    "local_model_missing": STATUS_FAIL,
+    "local_model_empty": STATUS_FAIL,
+    "local_model_available": STATUS_PASS,
+    "snapshot_available": STATUS_PASS,
+    "checksum_not_checked": STATUS_WARN,
+    "checksum_unavailable": STATUS_WARN,
+    "checksum_required": STATUS_FAIL,
+    "checksum_mismatch": STATUS_FAIL,
+    "checksums_verified": STATUS_PASS,
+    "no_required_extras": STATUS_PASS,
+    "required_extras_available": STATUS_PASS,
+    "required_extras_missing": STATUS_FAIL,
+    "offline_configured": STATUS_PASS,
+    "offline_configuration_incomplete": STATUS_FAIL,
+    "offline_policy_invalid": STATUS_FAIL,
+    "offline_required": STATUS_FAIL,
+    "offline_not_requested": STATUS_PASS,
+}
+
+
+def _freeze_facts(facts: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Copy only bounded, enumerated diagnostic facts into immutable state."""
+
+    try:
+        items = list(facts.items())
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("diagnostic facts must use safe metadata") from None
+
+    frozen: dict[str, Any] = {}
+    for key, value in items:
+        if type(key) is not str or key in frozen:
+            raise ValueError("diagnostic facts must use safe metadata")
+        if key in _BOOLEAN_FACTS:
+            if type(value) is not bool:
+                raise ValueError("diagnostic facts must use safe metadata")
+            frozen[key] = value
+        elif key in _COUNT_FACTS:
+            if type(value) is not int or value < 0:
+                raise ValueError("diagnostic facts must use safe metadata")
+            frozen[key] = value
+        elif key in _EXTRA_LIST_FACTS:
+            if type(value) not in {list, tuple}:
+                raise ValueError("diagnostic facts must use safe metadata")
+            names = tuple(value)
+            if any(
+                type(name) is not str or name not in OPTIONAL_EXTRAS for name in names
+            ) or names != tuple(sorted(set(names))):
+                raise ValueError("diagnostic facts must use safe metadata")
+            frozen[key] = names
+        elif key in _ENUM_FACTS:
+            if type(value) is not str or value not in _ENUM_FACTS[key]:
+                raise ValueError("diagnostic facts must use safe metadata")
+            frozen[key] = value
+        else:
+            raise ValueError("diagnostic facts must use safe metadata")
+    return MappingProxyType(frozen)
 
 
 @dataclass(frozen=True)
@@ -75,13 +158,28 @@ class DiagnosticCategory:
     reason: str
     facts: Mapping[str, Any]
 
+    def __post_init__(self) -> None:
+        """Validate and freeze the category before it can enter a report."""
+
+        if (
+            type(self.status) is not str
+            or type(self.reason) is not str
+            or _REASON_STATUSES.get(self.reason) != self.status
+        ):
+            raise ValueError("diagnostic category must use safe metadata")
+        object.__setattr__(self, "facts", _freeze_facts(self.facts))
+
     def to_dict(self) -> dict[str, Any]:
         """Return the category as a JSON-compatible mapping."""
 
+        facts = {
+            key: list(value) if key in _EXTRA_LIST_FACTS else value
+            for key, value in self.facts.items()
+        }
         return {
             "status": self.status,
             "reason": self.reason,
-            **dict(self.facts),
+            **facts,
         }
 
 
@@ -95,6 +193,30 @@ class BootstrapReport(Mapping[str, Any]):
 
     ready: bool
     categories: Mapping[str, DiagnosticCategory]
+
+    def __post_init__(self) -> None:
+        """Freeze a complete category set and verify the derived ready state."""
+
+        try:
+            if type(self.ready) is not bool or set(self.categories) != set(
+                CATEGORY_ORDER
+            ):
+                raise ValueError
+            categories = {name: self.categories[name] for name in CATEGORY_ORDER}
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("bootstrap report must use validated categories") from None
+        if any(
+            type(category) is not DiagnosticCategory for category in categories.values()
+        ):
+            raise ValueError("bootstrap report must use validated categories")
+        derived_ready = all(
+            category.status != STATUS_FAIL for category in categories.values()
+        )
+        if self.ready != derived_ready:
+            raise ValueError("bootstrap report readiness is inconsistent")
+        object.__setattr__(self, "categories", MappingProxyType(categories))
 
     @property
     def exit_code(self) -> int:
@@ -234,10 +356,18 @@ def render_json(report: BootstrapReport) -> str:
     )
 
 
+class _ValueFreeArgumentParser(argparse.ArgumentParser):
+    """Convert parser failures into one fixed, source-safe exception."""
+
+    def error(self, message: str) -> NoReturn:
+        del message
+        raise ValueError("invalid bootstrap diagnostic arguments")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the standalone ``python -m`` argument parser."""
 
-    parser = argparse.ArgumentParser(
+    parser = _ValueFreeArgumentParser(
         prog="python -m openmed.models.bootstrap_check",
         description="Check local model readiness without downloads or socket access.",
     )
@@ -288,8 +418,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the standalone check and return a stable process exit code."""
 
-    args = build_parser().parse_args(argv)
+    json_output = _json_output_requested(argv)
     try:
+        args = build_parser().parse_args(argv)
         report = run_bootstrap_check(
             cache_dir=args.cache_dir,
             model_id=args.model_id,
@@ -299,11 +430,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             require_offline=args.require_offline,
         )
     except ValueError:
-        return _emit_invalid_input(args.json)
+        return _emit_invalid_input(json_output)
 
     output = render_json(report) if args.json else format_human(report)
     print(output)
     return report.exit_code
+
+
+def _json_output_requested(argv: Sequence[str] | None) -> bool:
+    """Detect the fixed JSON flag without retaining other argument values."""
+
+    values: Sequence[str] = sys.argv[1:] if argv is None else argv
+    try:
+        return any(type(value) is str and value == "--json" for value in values)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return False
 
 
 def _emit_invalid_input(json_output: bool) -> int:
@@ -361,7 +504,9 @@ def _normalize_required_extras(values: Iterable[str] | None) -> tuple[str, ...]:
     normalized: set[str] = set()
     try:
         iterator = iter(values)
-    except Exception:  # noqa: BLE001 - convert caller hooks safely
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise ValueError("required extras could not be read") from None
 
     for index in range(_MAX_REQUIRED_EXTRA_INPUTS + 1):
@@ -369,7 +514,9 @@ def _normalize_required_extras(values: Iterable[str] | None) -> tuple[str, ...]:
             value = next(iterator)
         except StopIteration:
             break
-        except Exception:  # noqa: BLE001 - do not expose source values
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             raise ValueError("required extras could not be read") from None
         if index == _MAX_REQUIRED_EXTRA_INPUTS:
             raise ValueError("too many required extras")
@@ -586,7 +733,9 @@ def _check_offline_policy(
         dependency_flags_enabled = all(
             env_flag_enabled(os.getenv(name)) for name in HF_OFFLINE_ENV_VARS
         )
-    except Exception:  # noqa: BLE001 - keep configuration failures value-free
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         return DiagnosticCategory(
             STATUS_FAIL,
             "offline_policy_invalid",
@@ -638,7 +787,9 @@ def _extra_available(name: str) -> bool:
             importlib.util.find_spec(module) is not None
             for module in OPTIONAL_EXTRAS[name]
         )
-    except Exception:  # noqa: BLE001 - import finders are caller-controlled hooks
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         return False
 
 
@@ -664,7 +815,9 @@ def _cache_location(cache_dir: str | Path | None) -> Path | None:
 def _coerce_path(value: str | Path) -> Path | None:
     try:
         return Path(value).expanduser()
-    except Exception:  # noqa: BLE001 - path-like hooks must not leak values
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         return None
 
 

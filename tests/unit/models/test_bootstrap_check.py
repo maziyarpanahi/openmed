@@ -192,9 +192,12 @@ def test_hostile_required_extra_iterable_has_a_value_free_error() -> None:
 
     marker = "synthetic-extra-iterator-value-884"
 
+    class CallerHookFailure(BaseException):
+        pass
+
     def failing_extras():
         yield "hf"
-        raise RuntimeError(marker)
+        raise CallerHookFailure(marker)
 
     with pytest.raises(ValueError, match="could not be read") as raised:
         bootstrap_check.run_bootstrap_check(required_extras=failing_extras())
@@ -324,3 +327,62 @@ def test_invalid_input_has_usage_exit_without_echoing_input(capsys) -> None:
         "message": "Invalid bootstrap diagnostic input.",
     }
     assert "not-a-real-extra" not in captured.out
+
+
+def test_unknown_cli_arguments_have_value_free_usage_output(capsys) -> None:
+    """Argument-parser errors cannot echo an unknown option or its value."""
+
+    marker = "synthetic-unknown-cli-value-227"
+    exit_code = bootstrap_check.main(["--unknown-option", marker, "--json"])
+    captured = capsys.readouterr()
+
+    assert exit_code == bootstrap_check.EXIT_USAGE
+    assert json.loads(captured.out)["error"]["code"] == "invalid_input"
+    assert captured.err == ""
+    assert marker not in captured.out
+
+
+def test_report_state_is_immutable_after_the_check(tmp_path: Path) -> None:
+    """Callers cannot inject source values into a completed safe report."""
+
+    cache_dir = tmp_path / "synthetic-cache"
+    _write_snapshot(cache_dir)
+    report = bootstrap_check.run_bootstrap_check(cache_dir=cache_dir)
+    rendered = bootstrap_check.render_json(report)
+
+    with pytest.raises(TypeError):
+        report.categories["unsafe"] = report.categories["cache"]  # type: ignore[index]
+    with pytest.raises(TypeError):
+        report.categories["cache"].facts["unsafe"] = "synthetic-value"  # type: ignore[index]
+
+    assert bootstrap_check.render_json(report) == rendered
+
+
+def test_public_report_types_reject_unsafe_or_inconsistent_state() -> None:
+    """Exported constructors accept only enumerated, internally consistent data."""
+
+    marker = "synthetic-report-value-663"
+    with pytest.raises(ValueError, match="safe metadata") as raised:
+        bootstrap_check.DiagnosticCategory(
+            status="pass",
+            reason="no_required_extras",
+            facts={
+                "required": [marker],
+                "missing_required": [],
+                "available_optional": [],
+            },
+        )
+    assert marker not in str(raised.value)
+
+    valid = bootstrap_check.DiagnosticCategory(
+        status="pass",
+        reason="no_required_extras",
+        facts={
+            "required": [],
+            "missing_required": [],
+            "available_optional": [],
+        },
+    )
+    categories = {name: valid for name in bootstrap_check.CATEGORY_ORDER}
+    with pytest.raises(ValueError, match="readiness"):
+        bootstrap_check.BootstrapReport(ready=False, categories=categories)
