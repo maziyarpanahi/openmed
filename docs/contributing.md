@@ -6,14 +6,17 @@ publish the package to PyPI or GitHub Pages.
 ## Local workflows
 
 - `make help` prints a list of scripted tasks (build, publish, release, docs, etc.).
+- `uv sync --frozen --extra dev` creates the locked editable development environment in `.venv`.
+- Run Python tools with `uv run --frozen --extra dev ...` or use the Makefile targets.
 - `make format` applies the canonical Ruff import ordering and formatting.
 - `make lint` and `make format-check` run the same style gates used by CI.
 - `make type-check` runs the same scoped, pinned mypy gate used by CI.
 - `make format-swift` and `make lint-swift` apply the canonical Swift format checks for OpenMedKit.
-- `pre-commit install` enables the local hooks that auto-format staged Python files before commit.
+- `uv run --frozen --extra dev pre-commit install` enables the local hooks that auto-format staged Python files before commit.
 - `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
 - `make docs-build` runs `mkdocs build --strict` for CI parity.
-- `uv pip install ".[dev]"` pulls in pytest + coverage; `uv pip install ".[dev,hf]"` stacks extras.
+- `uv sync --frozen --extra dev --extra hf` adds the Hugging Face development extra.
+- If uv is unavailable, follow the [pip fallback](development.md#pip-fallback) with a regular virtual environment.
 - Follow the [no-raw-PHI logging policy](security/no-raw-phi-logging.md) for every PII, de-identification,
   text-processing, service, and batch change.
 
@@ -23,7 +26,7 @@ Ruff is the single source of truth for Python linting, import ordering, and form
 or editor-specific formatters over the repository. Before opening a pull request, run:
 
 ```bash
-uv pip install -e ".[dev]"
+uv sync --frozen --extra dev
 make format
 make lint
 make type-check
@@ -51,8 +54,8 @@ so the gate resolves them into an explicit inventory instead of scoring them as
 functions or classes.
 
 ```bash
-python scripts/check_public_api_docstrings.py            # prints coverage + offenders
-pytest tests/unit/test_public_api_docstrings.py -q       # CI gate
+uv run --frozen --extra dev python scripts/check_public_api_docstrings.py
+uv run --frozen --extra dev pytest tests/unit/test_public_api_docstrings.py -q
 ```
 
 The standalone checker is stdlib-only (`ast` parsing, no runtime import). The
@@ -66,7 +69,7 @@ new public callable or class.
 ## Release outline
 
 1. Bump the version via `make bump-patch` (or `bump-minor` / `bump-major`). These commands update `openmed/__about__.py`.
-2. Run `python3 -m build` (or `make build`) to produce wheels and sdists.
+2. Run `make build` to produce wheels and sdists with the pinned uv frontend.
 3. Confirm the PyPI upload setup in [PyPI Publishing](release/trusted-publishing.md), then publish by pushing a tag (`vX.Y.Z`) to trigger `.github/workflows/publish.yml`.
 4. Update `CHANGELOG.md` with release notes before tagging.
 
@@ -76,7 +79,7 @@ The `pages.yml` workflow builds MkDocs on every push to `master`, bundles the ma
 `https://openmed.life/docs/`), and deploys the combined `site/` artifact via GitHub Pages. To test locally:
 
 ```bash
-uv pip install ".[docs]"
+uv sync --frozen --extra dev --extra docs
 uv run mkdocs serve -a 127.0.0.1:8008
 make docs-stage
 python3 -m http.server --directory site 9000  # inspect the marketing+docs bundle
