@@ -205,6 +205,48 @@
       ]
     },
     {
+      "name": "Grounding",
+      "description": "Offline-first grounding against caller-provisioned terminology snapshots.",
+      "item": [
+        {
+          "name": "Ground Clinical Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Aspirin 81 mg daily\",\n  \"systems\": [\"rxnorm\"],\n  \"source_language\": \"en\",\n  \"top_k\": 5,\n  \"offline\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/ground",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ground"
+              ]
+            },
+            "description": "Ground synthetic clinical text using local terminology snapshots."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "PII",
       "description": "PII extraction and de-identification endpoints.",
       "item": [
@@ -317,6 +359,44 @@
               ]
             },
             "description": "De-identify PII in the supplied text using the selected method (mask, remove, replace, hash, shift_dates)."
+          },
+          "response": []
+        },
+        {
+          "name": "PII Deidentify (Stream)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/x-ndjson"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Contact Jordan Sample at 555-0100 or jordan.sample@example.org regarding appointment on 2021-04-15.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.7,\n  \"lang\": \"en\",\n  \"method\": \"mask\",\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true,\n  \"keep_mapping\": false,\n  \"chunk_size\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pii/deidentify/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pii",
+                "deidentify",
+                "stream"
+              ]
+            },
+            "description": "Stream safely finalized de-identified text and aggregate audit metadata as newline-delimited JSON (application/x-ndjson)."
           },
           "response": []
         }
