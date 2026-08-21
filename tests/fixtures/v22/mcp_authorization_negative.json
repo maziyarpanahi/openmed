@@ -1,0 +1,75 @@
+{
+  "schema_version": "openmed.mcp.authorization_conformance.v1",
+  "synthetic": true,
+  "protected_resource": {
+    "resource": "https://mcp.synthetic.invalid",
+    "authorization_servers": [
+      "https://auth.synthetic.invalid"
+    ],
+    "scopes_supported": [
+      "mcp.tools.state_change"
+    ],
+    "bearer_methods_supported": [
+      "header"
+    ]
+  },
+  "authorization_server": {
+    "issuer": "https://auth.synthetic.invalid",
+    "authorization_endpoint": "https://auth.synthetic.invalid/authorize",
+    "token_endpoint": "https://auth.synthetic.invalid/token",
+    "code_challenge_methods_supported": [
+      "S256"
+    ],
+    "registered_redirect_uris": [
+      "http://127.0.0.1:8765/callback"
+    ]
+  },
+  "policy": {
+    "max_tool_payload_bytes": 1024
+  },
+  "cases": [
+    {
+      "id": "negative-unapproved-state-change",
+      "kind": "negative",
+      "behavior": "reject a state-changing tool call without explicit approval",
+      "failure_boundary": "state_change_policy",
+      "expected_failure": "unapproved_state_change",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "SYNTH-MCP-VERIFIER-2200",
+          "challenge_ref": "SYNTH-MCP-VERIFIER-2200"
+        },
+        "client_key_ref": "SYNTH-MCP-CLIENT-KEY-2200"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "confirmation_key_ref": "SYNTH-MCP-CLIENT-KEY-2200"
+      },
+      "tool_call": {
+        "name": "openmed_update_task",
+        "required_scope": "mcp.tools.state_change",
+        "payload_bytes": 128,
+        "state_change": true,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    }
+  ],
+  "sensitive_values": [
+    "SYNTH-MCP-VERIFIER-2200",
+    "SYNTH-MCP-CLIENT-KEY-2200"
+  ]
+}

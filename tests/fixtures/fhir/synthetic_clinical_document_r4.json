@@ -1,0 +1,175 @@
+{
+  "resourceType": "Bundle",
+  "id": "clinical-document-original",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:clinical-composition",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "clinical-composition-original",
+        "meta": {
+          "profile": [
+            "http://hl7.org/fhir/uv/fhir-clinical-document/StructureDefinition/clinical-document-composition|1.1.0"
+          ]
+        },
+        "status": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34133-9",
+              "display": "Summarization of Episode of Care"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/document-patient-original"
+        },
+        "date": "2026-01-01T00:00:00Z",
+        "author": [
+          {
+            "reference": "Device/openmed"
+          }
+        ],
+        "title": "Synthetic clinical document",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Clinical note for Avery Example</p></div>"
+        },
+        "section": [
+          {
+            "title": "Results",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "30954-2"
+                }
+              ]
+            },
+            "text": {
+              "status": "generated",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Observation narrative for Avery Example</p></div>"
+            },
+            "entry": [
+              {
+                "reference": "Observation/document-observation-original"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:clinical-patient",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "document-patient-original",
+        "identifier": [
+          {
+            "system": "https://openmed.example/synthetic/mrn",
+            "value": "SYNTH-DOC-MRN-001"
+          }
+        ],
+        "name": [
+          {
+            "family": "Example",
+            "given": [
+              "Avery"
+            ],
+            "text": "Avery Example"
+          }
+        ],
+        "birthDate": "1980-01-01"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:clinical-document-reference",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "id": "document-reference-original",
+        "status": "current",
+        "docStatus": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34133-9",
+              "display": "Summarization of Episode of Care"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/document-patient-original"
+        },
+        "date": "2026-01-01T00:00:00Z",
+        "description": "Clinical document for Avery Example",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain",
+              "title": "Synthetic clinical document",
+              "data": "U3ludGhldGljIGRvY3VtZW50"
+            },
+            "format": {
+              "system": "http://ihe.net/fhir/ihe.formatcode.fhir/CodeSystem/formatcode",
+              "code": "urn:ihe:iti:xds:2017:mimeTypeSufficient"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:clinical-observation",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "document-observation-original",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/document-patient-original"
+        },
+        "valueQuantity": {
+          "value": 72.5,
+          "unit": "kg",
+          "system": "http://unitsofmeasure.org",
+          "code": "kg"
+        },
+        "note": [
+          {
+            "text": "Avery Example provided the measurement."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:clinical-provenance",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "clinical-provenance-original",
+        "target": [
+          {
+            "reference": "DocumentReference/document-reference-original"
+          }
+        ],
+        "recorded": "2026-01-01T00:00:00Z",
+        "agent": [
+          {
+            "who": {
+              "reference": "Device/openmed"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

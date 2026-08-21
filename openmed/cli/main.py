@@ -64,8 +64,23 @@ from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
+from .contract import (
+    OFFLINE_ERROR_CODE,
+    OFFLINE_ERROR_MESSAGE,
+    PRIVACY_POLICY_ERROR_CODE,
+    PRIVACY_POLICY_ERROR_MESSAGE,
+    VALIDATION_ERROR_CODE,
+    VALIDATION_ERROR_MESSAGE,
+)
 from .gates import add_gates_command
+from .redact_files import add_redact_files_command
 from .registry import add_registry_command
+from .scaffold import (
+    PERSONA_PRESETS,
+    ScaffoldConflictError,
+    ScaffoldError,
+    scaffold_project,
+)
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -195,6 +210,13 @@ def _non_negative_float(value: str) -> float:
         raise argparse.ArgumentTypeError(
             "value must be a finite number greater than or equal to 0"
         )
+    return parsed
+
+
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than 0")
     return parsed
 
 
@@ -347,6 +369,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_batch_run_command(subparsers)
     _add_deid_command(subparsers)
     _add_redact_dataset_command(subparsers)
+    add_redact_files_command(subparsers)
     _add_pii_command(subparsers)
     _add_tui_command(subparsers)
     _add_audit_command(subparsers)
@@ -357,6 +380,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
+    _add_ground_command(subparsers)
+    _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
@@ -365,6 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
+    _add_init_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
     _add_doctor_command(subparsers)
@@ -1076,6 +1102,24 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     safe_harbor_parser.set_defaults(handler=_handle_compliance_safe_harbor)
 
+    part11_export_parser = compliance_sub.add_parser(
+        "part11-export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(part11_export_parser)
+
+    # Keep a discoverable noun/verb spelling alongside the flat command name.
+    part11_parser = compliance_sub.add_parser(
+        "part11",
+        help="21 CFR Part 11 audit-trail utilities.",
+    )
+    part11_sub = part11_parser.add_subparsers(dest="part11_command")
+    nested_export_parser = part11_sub.add_parser(
+        "export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(nested_export_parser)
+
     expert_verify_parser = compliance_sub.add_parser(
         "expert-review-verify",
         help="Verify a PHI-safe de-identification expert-review evidence bundle.",
@@ -1127,6 +1171,32 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     attestation_verify_parser.set_defaults(handler=_handle_expert_attestation_verify)
+
+
+def _add_part11_export_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the input/output arguments shared by Part 11 export aliases."""
+
+    parser.add_argument(
+        "input",
+        type=Path,
+        help=(
+            "JSON file containing safe event objects, an events array, or an "
+            "existing Part 11 trail."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        required=True,
+        help="Path for the local Part 11 audit-trail JSON file.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing output file atomically.",
+    )
+    parser.set_defaults(handler=_handle_compliance_part11_export)
 
 
 def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1225,6 +1295,144 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     )
     discover_parser.add_argument("--overwrite", action="store_true")
     discover_parser.set_defaults(handler=_handle_risk_discover)
+
+    lab_parser = risk_sub.add_parser(
+        "lab",
+        help=(
+            "Profile, transform, and report structured privacy risk with "
+            "explicit offline policy choices."
+        ),
+    )
+    lab_parser.add_argument("input", type=Path)
+    lab_parser.add_argument(
+        "--evidence",
+        "-e",
+        type=Path,
+        required=True,
+        help="PHI-safe JSON method/evidence report.",
+    )
+    lab_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help="Optional transformed release table; written only when policy passes.",
+    )
+    lab_parser.add_argument(
+        "--qi",
+        type=_column_list_arg,
+        required=True,
+        help="Comma-separated quasi-identifier columns; no automatic selection.",
+    )
+    lab_parser.add_argument(
+        "--qi-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal quasi-identifier column name.",
+    )
+    lab_parser.add_argument(
+        "--sensitive",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated sensitive attributes; omit only after review.",
+    )
+    lab_parser.add_argument(
+        "--sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal sensitive-attribute column name.",
+    )
+    lab_parser.add_argument("--direct-id", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--direct-id-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--non-sensitive", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--non-sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--exclude", type=_column_list_arg, default=())
+    lab_parser.add_argument(
+        "--exclude-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+    )
+    lab_parser.add_argument("--privacy-unit", default=None)
+    lab_parser.add_argument("--k", type=_positive_int, required=True)
+    lab_parser.add_argument("--l", type=_positive_int, default=1)
+    lab_parser.add_argument("--t", type=_unit_interval_float, default=1.0)
+    suppression_group = lab_parser.add_mutually_exclusive_group()
+    suppression_group.add_argument(
+        "--suppression-limit",
+        "--max-suppressed-units",
+        dest="suppression_limit",
+        type=_non_negative_int,
+        default=None,
+    )
+    suppression_group.add_argument(
+        "--suppression-rate",
+        "--max-suppression-rate",
+        dest="suppression_rate",
+        type=_unit_interval_float,
+        default=0.0,
+    )
+    lab_parser.add_argument(
+        "--membership-candidates",
+        type=Path,
+        default=None,
+        help="Optional local candidate population for the bounded self-test.",
+    )
+    lab_parser.add_argument(
+        "--membership-max-inference-rate",
+        type=_unit_interval_float,
+        default=None,
+    )
+    lab_parser.add_argument(
+        "--membership-max-candidates",
+        type=_positive_int,
+        default=10_000,
+    )
+    lab_parser.add_argument(
+        "--hierarchies",
+        type=Path,
+        default=None,
+        help="Optional local JSON generalization hierarchy configuration.",
+    )
+    lab_parser.add_argument(
+        "--population-scope",
+        default="release_cohort",
+        help="Coded user-declared population assumption.",
+    )
+    lab_parser.add_argument("--overwrite", action="store_true")
+    lab_parser.set_defaults(handler=_handle_risk_lab)
+
+    dp_parser = risk_sub.add_parser(
+        "dp-aggregate",
+        help="Release named numeric aggregates under an explicit DP ledger.",
+    )
+    dp_parser.add_argument(
+        "input",
+        type=Path,
+        help="Local JSON object mapping aggregate names to numeric values.",
+    )
+    dp_parser.add_argument("--output", "-o", type=Path, required=True)
+    dp_parser.add_argument("--epsilon", type=_positive_float, required=True)
+    dp_parser.add_argument("--delta", type=_unit_interval_float, default=0.0)
+    dp_parser.add_argument("--budget-epsilon", type=_positive_float, required=True)
+    dp_parser.add_argument("--budget-delta", type=_unit_interval_float, default=0.0)
+    dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
+    dp_parser.add_argument("--label", default="aggregate_query")
+    dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument("--overwrite", action="store_true")
+    dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
     assess_parser = risk_sub.add_parser(
         "assess",
@@ -1555,6 +1763,37 @@ def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
     )
     bundle_parser.set_defaults(handler=_handle_fhir_bundle)
 
+    validate_parser = fhir_sub.add_parser(
+        "validate",
+        help="Run the offline supported-profile checks over a FHIR JSON payload.",
+    )
+    validate_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="FHIR resource or Bundle JSON file to validate.",
+    )
+    validate_parser.add_argument(
+        "--version",
+        choices=("R4", "R5"),
+        default="R4",
+        help="Explicit FHIR release of the input (default: R4).",
+    )
+    validate_parser.add_argument(
+        "--profile",
+        choices=("fhir-r4-core", "fhir-r5-core", "ips", "ipa", "clinical-document"),
+        default=None,
+        help="Optional profile from the checked-in local profile matrix.",
+    )
+    validate_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the OperationOutcome JSON.",
+    )
+    add_json_flag(validate_parser)
+    validate_parser.set_defaults(handler=_handle_fhir_validate)
+
 
 def _add_icd11_command(subparsers: argparse._SubParsersAction) -> None:
     """Add offline ICD-11 snapshot management commands."""
@@ -1655,6 +1894,107 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         help="Validate CDM constraints and report PHI-free violation counts.",
     )
     load_parser.set_defaults(handler=_handle_omop_load)
+
+
+def _add_ground_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add the shared offline grounding command."""
+
+    ground_parser = subparsers.add_parser(
+        "ground",
+        help="Ground text or pre-extracted entities against local snapshots.",
+    )
+    input_group = ground_parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
+        "--text",
+        help="Synthetic or caller-owned text to treat as one span.",
+    )
+    input_group.add_argument(
+        "--input",
+        type=Path,
+        help="JSON/JSONL file containing text or pre-extracted entities.",
+    )
+    ground_parser.add_argument(
+        "--system",
+        dest="systems",
+        action="append",
+        help="Vocabulary system to search; repeat for multiple systems.",
+    )
+    ground_parser.add_argument(
+        "--source-language",
+        default="en",
+        help="Source language tag used for multilingual aliases.",
+    )
+    ground_parser.add_argument(
+        "--top-k",
+        type=_positive_int,
+        default=5,
+        help="Maximum ranked candidates per retrieval channel (default: 5).",
+    )
+    ground_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Local grounding snapshot cache directory.",
+    )
+    ground_parser.add_argument(
+        "--offline",
+        dest="offline",
+        action="store_true",
+        default=True,
+        help="Disable network access during grounding (default).",
+    )
+    ground_parser.add_argument(
+        "--online",
+        dest="offline",
+        action="store_false",
+        help="Allow configured snapshot downloads during grounding.",
+    )
+    ground_parser.set_defaults(handler=_handle_ground)
+
+
+def _add_grounding_snapshot_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add explicit import/download lifecycle commands for snapshots."""
+
+    grounding_parser = subparsers.add_parser(
+        "grounding",
+        help="Manage checksum-verified terminology snapshots.",
+    )
+    grounding_sub = grounding_parser.add_subparsers(dest="grounding_command")
+
+    import_parser = grounding_sub.add_parser(
+        "import",
+        help="Import a local permissive vocabulary snapshot into the cache.",
+    )
+    import_parser.add_argument("--system", required=True)
+    import_parser.add_argument("--input", type=Path, required=True)
+    import_parser.add_argument("--version", required=True)
+    import_parser.add_argument("--sha256", default=None)
+    import_parser.add_argument("--cache-dir", type=Path, default=None)
+    import_parser.add_argument("--license-note", default="")
+    import_parser.add_argument("--replace", action="store_true")
+    import_parser.set_defaults(handler=_handle_grounding_snapshot_import)
+
+    download_parser = grounding_sub.add_parser(
+        "download",
+        help="Download and checksum-verify one configured public snapshot.",
+    )
+    download_parser.add_argument("--system", required=True)
+    download_parser.add_argument("--url", required=True)
+    download_parser.add_argument("--sha256", required=True)
+    download_parser.add_argument("--version", default=None)
+    download_parser.add_argument("--checksum-url", default=None)
+    download_parser.add_argument("--artifact-name", default="concepts.tsv")
+    download_parser.add_argument("--archive-member", default=None)
+    download_parser.add_argument("--cache-dir", type=Path, default=None)
+    download_parser.add_argument("--timeout", type=float, default=60.0)
+    download_parser.set_defaults(handler=_handle_grounding_snapshot_download)
+
+    list_parser = grounding_sub.add_parser(
+        "list",
+        help="List locally imported terminology snapshots.",
+    )
+    list_parser.add_argument("--cache-dir", type=Path, default=None)
+    list_parser.set_defaults(handler=_handle_grounding_snapshot_list)
 
 
 def _add_cohort_command(subparsers: argparse._SubParsersAction) -> None:
@@ -2132,6 +2472,34 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     profile_delete.set_defaults(handler=_handle_profile_delete)
 
 
+def _add_init_command(subparsers: argparse._SubParsersAction) -> None:
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Create an offline-ready OpenMed project scaffold.",
+    )
+    init_parser.add_argument(
+        "directory",
+        nargs="?",
+        type=Path,
+        default=Path("."),
+        help="Project directory to create or populate (default: current directory).",
+    )
+    init_parser.add_argument(
+        "--preset",
+        "--persona",
+        choices=PERSONA_PRESETS,
+        default="researcher",
+        dest="preset",
+        help="Persona-specific starter template (default: researcher).",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace only differing scaffold-managed files.",
+    )
+    init_parser.set_defaults(handler=_handle_init)
+
+
 def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
     policy_parser = subparsers.add_parser(
         "policy", help="Inspect and validate OpenMed policy profiles."
@@ -2313,6 +2681,43 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Optional path for a JSON suite-resolution summary.",
     )
     clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
+
+    domain_coverage_parser = benchmark_sub.add_parser(
+        "domain-coverage",
+        help="Gate shipped clinical label maps against synthetic span fixtures.",
+    )
+    domain_coverage_parser.add_argument(
+        "--domain",
+        action="append",
+        dest="domains",
+        default=None,
+        help="Inspect one domain; repeat for a selected offline coverage scope.",
+    )
+    domain_coverage_parser.add_argument(
+        "--label-map",
+        type=Path,
+        default=None,
+        help="Optional local JSON label map override.",
+    )
+    domain_coverage_parser.add_argument(
+        "--fixture-dir",
+        type=Path,
+        default=None,
+        help="Optional directory containing synthetic clinical JSONL fixtures.",
+    )
+    domain_coverage_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the machine-readable coverage summary.",
+    )
+    domain_coverage_parser.add_argument(
+        "--markdown-output",
+        type=Path,
+        default=None,
+        help="Optional path for the aggregate Markdown coverage report.",
+    )
+    domain_coverage_parser.set_defaults(handler=_handle_benchmark_domain_coverage)
 
     mobile_parser = benchmark_sub.add_parser(
         "mobile",
@@ -3290,6 +3695,83 @@ def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
     )
 
 
+def _handle_compliance_part11_export(args: argparse.Namespace) -> int:
+    """Export safe event mappings to a verified Part 11 audit trail."""
+
+    from ..compliance.part11 import (
+        PART11_FORMAT,
+        Part11AuditTrail,
+        build_part11_audit_trail,
+    )
+
+    try:
+        source = args.input.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to read the Part 11 input file.",
+            code="input_read_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        parsed = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in Part 11 input at line {exc.lineno} column {exc.colno}.",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        if isinstance(parsed, MappingABC) and parsed.get("format") == PART11_FORMAT:
+            trail = Part11AuditTrail.from_dict(parsed)
+        else:
+            if isinstance(parsed, MappingABC):
+                events = parsed.get("events", parsed.get("records"))
+                if events is None:
+                    events = [parsed]
+            else:
+                events = parsed
+            if not isinstance(events, Sequence) or isinstance(events, (str, bytes)):
+                raise TypeError("Part 11 input must contain an event list")
+            trail = build_part11_audit_trail(events)
+        if not trail.verify():
+            raise ValueError("Part 11 audit trail integrity verification failed")
+        serialized = trail.to_json() + "\n"
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to build the Part 11 audit trail: {exc}",
+            code="part11_export_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        _write_safe_text(args.output, serialized, overwrite=args.overwrite)
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to write the Part 11 audit-trail file.",
+            code="output_write_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "output": str(args.output),
+        "record_count": len(trail.records),
+        "head_hash": trail.head_hash,
+        "trail_hash": trail.trail_hash,
+        "verified": True,
+    }
+    return emit(
+        args,
+        payload,
+        human=(
+            f"Part 11 audit trail written to: {args.output}\n"
+            f"Records: {len(trail.records)}\n"
+            "Verification: PASS"
+        ),
+    )
+
+
 def _handle_expert_review_verify(args: argparse.Namespace) -> int:
     from ..compliance import ExpertReviewEvidenceReport
 
@@ -3491,7 +3973,7 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
     if len(role_overrides) != len(args.role):
         raise CliError(
             "Each structured discovery column may have only one role override.",
-            code="invalid_discovery_config",
+            code=VALIDATION_ERROR_CODE,
             exit_code=EXIT_USAGE,
         )
     _preflight_structured_paths(
@@ -3526,8 +4008,8 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
         )
     except DiscoveryConfigurationError as exc:
         raise CliError(
-            "The structured discovery configuration does not match the input schema.",
-            code="invalid_discovery_config",
+            VALIDATION_ERROR_MESSAGE,
+            code=VALIDATION_ERROR_CODE,
             exit_code=EXIT_USAGE,
         ) from exc
     except (ImportError, OSError, TypeError, ValueError) as exc:
@@ -3553,6 +4035,209 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
         f"Manifest: {args.output}\n"
     )
     return emit(args, payload, human=human)
+
+
+def _handle_risk_lab(args: argparse.Namespace) -> int:
+    from ..structured import (
+        SUPPORTED_TABLE_SUFFIXES,
+        StructuredPrivacyPolicy,
+        read_table,
+        run_structured_privacy_lab,
+        write_table,
+    )
+
+    quasi_identifiers = _merged_column_args(args.qi, args.qi_column)
+    sensitive_attributes = _merged_column_args(
+        args.sensitive,
+        args.sensitive_column,
+    )
+    direct_identifiers = _merged_column_args(
+        args.direct_id,
+        args.direct_id_column,
+    )
+    non_sensitive_attributes = _merged_column_args(
+        args.non_sensitive,
+        args.non_sensitive_column,
+    )
+    excluded_attributes = _merged_column_args(
+        args.exclude,
+        args.exclude_column,
+    )
+    input_paths = [(args.input, "Structured lab input", SUPPORTED_TABLE_SUFFIXES)]
+    if args.membership_candidates is not None:
+        input_paths.append(
+            (
+                args.membership_candidates,
+                "Membership candidate input",
+                SUPPORTED_TABLE_SUFFIXES,
+            )
+        )
+    if args.hierarchies is not None:
+        input_paths.append(
+            (args.hierarchies, "Hierarchy configuration", frozenset({".json"}))
+        )
+    output_paths = [(args.evidence, "Privacy lab evidence", frozenset({".json"}))]
+    if args.output is not None:
+        output_paths.append(
+            (args.output, "Structured lab release", SUPPORTED_TABLE_SUFFIXES)
+        )
+    _preflight_structured_paths(
+        inputs=tuple(input_paths),
+        outputs=tuple(output_paths),
+        overwrite=args.overwrite,
+    )
+    try:
+        records = read_table(args.input)
+        candidates = (
+            read_table(args.membership_candidates)
+            if args.membership_candidates is not None
+            else None
+        )
+        hierarchies = _load_lab_hierarchies(args.hierarchies)
+    except (ImportError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise CliError(
+            "Failed to read a structured privacy lab input.",
+            code="privacy_lab_input_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    try:
+        policy = StructuredPrivacyPolicy(
+            quasi_identifiers=quasi_identifiers,
+            target_k=args.k,
+            sensitive_attributes=sensitive_attributes,
+            direct_identifiers=direct_identifiers,
+            non_sensitive_attributes=non_sensitive_attributes,
+            excluded_attributes=excluded_attributes,
+            privacy_unit=args.privacy_unit,
+            target_l=args.l,
+            target_t=args.t,
+            suppression_limit=args.suppression_limit,
+            suppression_rate=args.suppression_rate,
+            membership_max_inference_rate=args.membership_max_inference_rate,
+            membership_max_candidates=args.membership_max_candidates,
+        )
+        result = run_structured_privacy_lab(
+            records,
+            policy,
+            population_assumptions={"scope": args.population_scope},
+            membership_candidates=candidates,
+            hierarchies=hierarchies,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The structured privacy lab configuration or input is invalid.",
+            code="invalid_privacy_lab_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+    try:
+        _write_safe_text(
+            args.evidence,
+            result.evidence.to_json() + "\n",
+            overwrite=args.overwrite,
+        )
+        if args.output is not None and result.meets_policy:
+            if result.anonymization is None:
+                raise ValueError("no transformed release is available")
+            write_table(
+                args.output,
+                result.records,
+                overwrite=args.overwrite,
+            )
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to write structured privacy lab outputs.",
+            code="privacy_lab_output_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "evidence": str(args.evidence),
+        "output": str(args.output) if args.output is not None else None,
+        "transformation_status": result.transformation_status,
+        "meets_policy": result.meets_policy,
+        "source_dataset_digest": result.profile.dataset_digest,
+        "evidence_integrity_digest": result.evidence.to_dict()["integrity_digest"],
+    }
+    human = (
+        "Structured privacy risk lab\n"
+        f"Meets configured policy: {_pass_fail(result.meets_policy)}\n"
+        f"Transformation: {result.transformation_status}\n"
+        f"Evidence: {args.evidence}\n"
+        "The evidence is aggregate-only and requires qualified expert review.\n"
+    )
+    emitted = emit(args, payload, human=human)
+    return emitted if result.meets_policy else EXIT_ERROR
+
+
+def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
+    from ..risk import (
+        AggregateDPBudgetLedger,
+        DPAggregateBudgetExceeded,
+        release_aggregate,
+    )
+
+    _preflight_structured_paths(
+        inputs=((args.input, "Aggregate input", frozenset({".json"})),),
+        outputs=((args.output, "Aggregate output", frozenset({".json"})),),
+        overwrite=args.overwrite,
+    )
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        ledger = AggregateDPBudgetLedger(
+            max_epsilon=args.budget_epsilon,
+            max_delta=args.budget_delta,
+        )
+        release = release_aggregate(
+            payload,
+            ledger=ledger,
+            epsilon=args.epsilon,
+            delta=args.delta,
+            sensitivity=args.sensitivity,
+            label=args.label,
+            seed=args.seed,
+        )
+        _write_safe_text(
+            args.output,
+            json.dumps(
+                release.to_dict(),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            overwrite=args.overwrite,
+        )
+    except (DPAggregateBudgetExceeded, ImportError, OSError, TypeError, ValueError):
+        raise CliError(
+            "The aggregate differential-privacy release failed safely.",
+            code="dp_aggregate_failed",
+            exit_code=EXIT_ERROR,
+        ) from None
+    result = {
+        "output": str(args.output),
+        "scope": "aggregate_only",
+        "row_level_anonymization": False,
+        "ledger": ledger.to_dict(),
+    }
+    return emit(
+        args,
+        result,
+        human=(
+            "Aggregate differential-privacy release complete\n"
+            f"Output: {args.output}\n"
+            "This output is aggregate-only and is not row-level anonymization.\n"
+        ),
+    )
+
+
+def _load_lab_hierarchies(path: Path | None) -> Mapping[str, Any] | None:
+    if path is None:
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError("hierarchy configuration must be an object")
+    return payload
 
 
 def _handle_risk_assess(args: argparse.Namespace) -> int:
@@ -3618,9 +4303,8 @@ def _handle_risk_assess(args: argparse.Namespace) -> int:
             _unlink_path(staged_path, missing_ok=True)
     if not assessment.meets_policy:
         raise CliError(
-            "Structured release does not meet the configured privacy policy; "
-            f"the aggregate assessment was written to {args.output}.",
-            code="release_policy_failed",
+            PRIVACY_POLICY_ERROR_MESSAGE,
+            code=PRIVACY_POLICY_ERROR_CODE,
             exit_code=EXIT_ERROR,
         )
 
@@ -4505,6 +5189,58 @@ def _handle_fhir_bundle(args: argparse.Namespace) -> int:
     return emit(args, payload, human=f"FHIR Bundle written to: {args.output}")
 
 
+def _handle_fhir_validate(args: argparse.Namespace) -> int:
+    try:
+        source = json.loads(args.input.read_text(encoding="utf-8"))
+        from ..clinical.exporters.fhir import validate_exchange
+
+        outcome = validate_exchange(
+            source,
+            version=args.version,
+            profile=args.profile,
+        )
+        if args.output is not None:
+            args.output.write_text(
+                json.dumps(outcome, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+    except FileNotFoundError:
+        raise CliError(
+            f"Input file not found: {args.input}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"FHIR validation failed: {exc}",
+            code="validation_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    blocking = sum(
+        issue.get("severity") in {"fatal", "error"}
+        for issue in outcome.get("issue", [])
+        if isinstance(issue, MappingABC)
+    )
+    payload = {
+        "input": str(args.input),
+        "version": args.version,
+        "profile": args.profile,
+        "valid": blocking == 0,
+        "outcome": outcome,
+    }
+    human = json.dumps(outcome, indent=2, sort_keys=True)
+    return_code = emit(args, payload, human=human)
+    return 1 if blocking else return_code
+
+
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
     """Build one local ICD-11 snapshot using environment-held credentials."""
     from ..interop.icd11_api import (
@@ -4648,6 +5384,170 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
     return emit(args, payload, human=human)
+
+
+def _handle_ground(args: argparse.Namespace) -> int:
+    """Run the canonical offline grounding facade."""
+
+    from ..clinical.grounding import RankingConfig, VocabLoader, ground_payload
+    from ..clinical.grounding.vocab import RestrictedVocabularyError, VocabLoaderError
+    from ..core.offline import OfflineModeError
+
+    systems = tuple(args.systems or ("rxnorm", "icd10cm", "loinc", "hpo"))
+    inputs: Any
+    if args.text is not None:
+        inputs = args.text
+    else:
+        try:
+            raw = args.input.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise CliError(
+                "Grounding input file was not found.",
+                code="input_not_found",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        except OSError as exc:
+            raise CliError(
+                "Grounding input file could not be read.",
+                code="input_read_failed",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        try:
+            if args.input.suffix.casefold() == ".jsonl":
+                inputs = [json.loads(line) for line in raw.splitlines() if line.strip()]
+            else:
+                inputs = json.loads(raw)
+        except json.JSONDecodeError:
+            inputs = raw
+        if isinstance(inputs, MappingABC) and "entities" in inputs:
+            inputs = inputs["entities"]
+        elif isinstance(inputs, MappingABC) and "text" in inputs:
+            inputs = inputs["text"]
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=args.offline)
+    try:
+        payload = ground_payload(
+            inputs,
+            systems=systems,
+            loader=loader,
+            config=RankingConfig(k=args.top_k),
+            source_language=args.source_language,
+            offline=args.offline,
+        )
+    except RestrictedVocabularyError as exc:
+        raise CliError(
+            "Restricted terminology requires a configured user-supplied "
+            "out-of-process endpoint.",
+            code="restricted_terminology_unconfigured",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except OfflineModeError as exc:
+        raise CliError(
+            "The requested vocabulary snapshot is unavailable offline.",
+            code="offline_snapshot_unavailable",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except VocabLoaderError as exc:
+        raise CliError(
+            "The requested vocabulary snapshot could not be verified.",
+            code="snapshot_invalid",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The grounding request is invalid.",
+            code="grounding_invalid_request",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    human = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
+    return emit(args, payload, human=human)
+
+
+def _handle_grounding_snapshot_import(args: argparse.Namespace) -> int:
+    """Import one local snapshot and emit its manifest."""
+
+    from ..clinical.grounding import VocabLoader
+    from ..clinical.grounding.vocab import VocabLoaderError
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=True)
+    try:
+        manifest = loader.import_snapshot(
+            args.system,
+            args.input,
+            version=args.version,
+            sha256=args.sha256,
+            license_note=args.license_note,
+            replace=args.replace,
+        )
+    except (OSError, TypeError, ValueError, VocabLoaderError) as exc:
+        raise CliError(
+            "The vocabulary snapshot could not be imported.",
+            code="snapshot_import_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = manifest.to_dict()
+    return emit(
+        args,
+        payload,
+        human=f"Imported {manifest.system} snapshot {manifest.version}.",
+    )
+
+
+def _handle_grounding_snapshot_download(args: argparse.Namespace) -> int:
+    """Download one explicitly configured and checksum-pinned snapshot."""
+
+    from ..clinical.grounding import VocabLoader, VocabSource
+    from ..clinical.grounding.vocab import VocabLoaderError
+    from ..core.offline import OfflineModeError
+
+    source = VocabSource(
+        system=args.system,
+        url=args.url,
+        sha256=args.sha256,
+        checksum_url=args.checksum_url,
+        artifact_name=args.artifact_name,
+        archive_member=args.archive_member,
+        version=args.version,
+    )
+    loader = VocabLoader(
+        cache_dir=args.cache_dir,
+        local_only=False,
+        registry={args.system: source},
+        timeout=args.timeout,
+    )
+    try:
+        manifest = loader.download_snapshot(args.system)
+    except OfflineModeError as exc:
+        raise CliError(
+            "Snapshot download is blocked by offline mode.",
+            code="offline_download_blocked",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (OSError, TypeError, ValueError, VocabLoaderError) as exc:
+        raise CliError(
+            "The vocabulary snapshot could not be downloaded and verified.",
+            code="snapshot_download_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = manifest.to_dict()
+    return emit(
+        args,
+        payload,
+        human=f"Downloaded {manifest.system} snapshot {manifest.version}.",
+    )
+
+
+def _handle_grounding_snapshot_list(args: argparse.Namespace) -> int:
+    """List checksum-pinned snapshots without touching the network."""
+
+    from ..clinical.grounding import VocabLoader
+
+    loader = VocabLoader(cache_dir=args.cache_dir, local_only=True)
+    payload = {
+        "snapshots": [manifest.to_dict() for manifest in loader.list_snapshots()]
+    }
+    return emit(args, payload, human=json.dumps(payload, indent=2, sort_keys=True))
 
 
 def _handle_cohort_resolve(args: argparse.Namespace) -> int:
@@ -5160,6 +6060,31 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
         )
 
     return _write_json_payload(args, payload, args.output)
+
+
+def _handle_benchmark_domain_coverage(args: argparse.Namespace) -> int:
+    """Run the offline clinical-domain label-map coverage gate."""
+    from openmed.eval.domain_coverage import run_domain_coverage
+
+    try:
+        report = run_domain_coverage(
+            label_map_path=args.label_map,
+            fixture_dir=args.fixture_dir,
+            domains=args.domains,
+        )
+        if args.output is not None:
+            report.write_json(args.output)
+        if args.markdown_output is not None:
+            report.write_markdown(args.markdown_output)
+    except (OSError, ValueError) as exc:
+        raise CliError(
+            f"Clinical domain coverage could not run: {exc}",
+            code="domain_coverage_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    result = emit(args, report.to_dict(), human=report.to_markdown())
+    return result if report.passed else EXIT_ERROR
 
 
 def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
@@ -6147,13 +7072,19 @@ def _handle_models_list(args: argparse.Namespace) -> int:
 
 
 def _handle_models_pull(args: argparse.Namespace) -> int:
-    from ..core.hf_hub import DownloadProgress, prefetch_model
+    from ..core.hf_hub import (
+        DownloadIntegrityError,
+        DownloadProgress,
+        prefetch_model,
+    )
 
     config = _load_and_apply_config(args)
     completed_files = 0
 
     def report_progress(progress: DownloadProgress) -> None:
         nonlocal completed_files
+        if wants_json(args):
+            return
         finished = progress.files_done > completed_files
         completed_files = max(completed_files, progress.files_done)
         line_end = "\n" if finished else "\r"
@@ -6174,12 +7105,30 @@ def _handle_models_pull(args: argparse.Namespace) -> int:
             max_bandwidth=args.max_bandwidth,
             progress_callback=report_progress,
         )
+    except OfflineModeError as exc:
+        raise CliError(
+            OFFLINE_ERROR_MESSAGE,
+            code=OFFLINE_ERROR_CODE,
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except DownloadIntegrityError as exc:
+        raise CliError(
+            "Model integrity verification failed after a forced re-fetch.",
+            code="model_pull_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
     except Exception as exc:  # pragma: no cover - exact failures tested in helper
-        sys.stderr.write(f"Failed to pull model: {exc}\n")
-        return 1
+        raise CliError(
+            "Failed to pull the requested model.",
+            code="model_pull_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
 
-    sys.stdout.write(f"Model ready: {path}\n")
-    return 0
+    return emit(
+        args,
+        {"status": "ready"},
+        human=f"Model ready: {path}",
+    )
 
 
 def _handle_models_info(args: argparse.Namespace) -> int:
@@ -6517,6 +7466,40 @@ def _coerce_value(key: str, value: str) -> Any:
         except ValueError:
             raise ValueError("timeout must be an integer") from None
     return value
+
+
+def _handle_init(args: argparse.Namespace) -> int:
+    try:
+        result = scaffold_project(
+            args.directory,
+            preset=args.preset,
+            force=args.force,
+        )
+    except ScaffoldConflictError as exc:
+        raise CliError(
+            str(exc),
+            code="scaffold_conflict",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except ScaffoldError as exc:
+        raise CliError(
+            str(exc),
+            code="invalid_scaffold",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+    lines = [
+        f"OpenMed {result.preset} scaffold ready at {result.destination}",
+    ]
+    for status, paths in (
+        ("created", result.created),
+        ("overwritten", result.overwritten),
+        ("unchanged", result.unchanged),
+    ):
+        if paths:
+            lines.append(f"{status.capitalize()}: {', '.join(paths)}")
+    lines.append("Next: run `python pipeline.py --check` inside the project directory.")
+    return emit(args, result.to_dict(), human="\n".join(lines))
 
 
 # ---------------------------------------------------------------------------
