@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a canonical CLI result envelope with bounded counters, artifact
   fingerprints, and remediation codes; strict JSON parsing; immutable state;
   and free-text-free failures (#2636).
+- Added a bounded, dependency-free browser network-egress proof harness with
+  exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
+  source-safe digest reports, and fail-closed local trace validation (#2374).
+- Added a deterministic offline installation smoke check with a clean
+  temporary home, selected-environment entry-point and package-version proof,
+  bundled-manifest validation, repeatable synthetic redaction hashes, and
+  value-free failure reports (#2378).
+- Added a bounded zero-upload browser privacy playground with deterministic
+  local rules, trusted same-origin adapter support, aggregate-only status,
+  source-safe labels, and explicit network-boundary controls (#2373).
+- Added a canonical, lockfile-backed uv contributor workflow with an explicitly
+  pinned CI frontend, frozen optional-extra installs, uv-native package builds,
+  and documented pip and Nix fallback paths (#2339).
 - Added deterministic counts-only comparator reports with fixed metric
   definitions, bounded aggregate failure accounting, hashed custom identifiers,
   immutable sanitized state, environment fingerprints, and value-free JSON,
@@ -46,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent
   network fallback (#2375).
+- Added deterministic offline bootstrap diagnostics for cache readiness,
+  integrity manifests, optional dependencies, and local-only configuration,
+  with stable exit codes and value-free human and JSON reports (#2376).
+- Added a deterministic standalone local-redactor manifest with a synchronized
+  package/dependency boundary, permissive-license enforcement, explicit opt-in
+  integrations, and excluded restricted dependencies and assets (#2377).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
@@ -140,36 +159,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   core privacy-pipeline stages, with lazy optional imports, no exporter by
   default, shared `Timer` measurements, synthetic leakage regression tests, and
   an `otel` installation extra.
-- Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
-  batch processing, FHIR export, and multilingual evaluation, with offline
-  execution and committed-output freshness checks in CI.
-- Added first-class Cohere Compass vision-language inference for the five
-  OpenMed North Micro Vision MLX precision variants: a native Python runtime,
-  a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
-  native-resolution image processing, and deterministic text/image parity
-  tests across Python and Swift.
 - Added a minimal local-artifact `edge-sbc` ONNX Runtime profile, native ARM64
   Raspberry Pi and Jetson synthetic benchmark workflow, aggregate cold-start,
   token-throughput, install-size, and peak-RSS records, plus fail-closed
   footprint budgets and archived ARM64 proxy evidence.
 
-## [2.2.0] - 2026-08-13
+## [2.2.0] - 2026-08-21
 
 OpenMed 2.2 completes the trustworthy clinical-data-exchange milestone across
 terminology grounding, document intake, FHIR, OMOP, structured privacy, MCP,
-service security, and offline release evidence. The final audited
-`v2.1.0..v2.2.0` range contains 98 commits and 462 changed files, including 31
-merged feature-integration PRs, release-preparation PR #2699,
-release-evidence correction PR #2700, and the contributor commits preserved by
-the v2.2 batches.
+service security, local model runtimes, and offline release evidence. The final
+audited `v2.1.0..v2.2.0` range contains 111 commits and 571 changed files.
+GitHub generated notes associate 38 PRs with that range, including the
+contributor commits preserved by maintainer integration batches.
 
-The static public Python surface grows from 31,619 to 37,307 symbols with
-5,688 additions, zero removals or narrowed signatures, and zero new
+The static public Python surface grows from 31,619 to 37,735 symbols with
+6,116 additions, zero removals or narrowed signatures, and zero new
 deprecations. The REST surface grows additively from 17 to 19 paths and from
 15 to 17 component schemas through `POST /ground` and
-`POST /pii/deidentify/stream`. Swift package source is unchanged. Android
-keeps its public method signatures while making diagnostic descriptions and
-internal logging PHI-safe by default.
+`POST /pii/deidentify/stream`. Swift adds public Maple and Compass local-model
+runtimes without removing an existing package API. Android keeps its public
+method signatures while making diagnostic descriptions and internal logging
+PHI-safe by default.
 
 ### Added
 
@@ -180,6 +191,14 @@ internal logging PHI-safe by default.
   reproducible 4-bit/8-bit MLX planning and checksum-verified ONNX/ORT bundle
   tooling. Model weights remain external and every clinical or disclosure
   result requires human review.
+- Added first-class Cohere Compass vision-language inference for the five
+  OpenMed North Micro Vision MLX precision variants: a native Python runtime,
+  a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
+  native-resolution image processing, and deterministic text/image parity
+  tests across Python and Swift.
+- Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
+  batch processing, FHIR export, and multilingual evaluation, with offline
+  execution and committed-output freshness checks in CI.
 - Added a local-first terminology workbench with checksum-pinned vocabulary
   snapshots, exact and ranked grounding, calibration, section context,
   caller-supplied Athena and crosswalk support, value-free provenance, and
@@ -230,11 +249,12 @@ internal logging PHI-safe by default.
   send it to diagnostics or telemetry.
 - Active Python, npm, Swift, Android/JitPack, Helm, container, website, and
   documentation coordinates now target `2.2.0` / `v2.2.0`.
-- Rebased the wheel-size gate to the reproducible 4,076,360-byte v2.2 wheel
-  after auditing 62,667 additions and 786 removals across 169 Python files.
-  The gate retains 10% headroom with a 4,483,996-byte maximum; the payload
-  contains source, synthetic metadata, and the committed model manifest rather
-  than an unexpected binary or restricted vocabulary asset.
+- The final candidate wheel is reproducibly 4,134,629 bytes and remains within
+  the committed 4,483,996-byte maximum. The gate retains its 4,076,360-byte
+  baseline and 10% headroom; the payload contains source, synthetic metadata,
+  and the committed model manifest rather than an unexpected binary or
+  restricted vocabulary asset.
+
 ### Fixed
 
 - Fixed production builds to emit Core Metadata 2.4 for compatibility with the
@@ -256,14 +276,13 @@ internal logging PHI-safe by default.
 
 ### Release integration ledger
 
-- GitHub-generated release-note PRs (33): #2228, #2230, #2237, #2239, #2241,
-  #2243, #2244, #2541, #2543, #2548, #2549, #2550, #2551, #2678, #2679,
-  #2680, #2681, #2682, #2685, #2686, #2687, #2688, #2689, #2690, #2691,
-  #2692, #2693, #2694, #2695, #2696, #2698, #2699, and #2700.
-- All 95 issues assigned to the `v2.2` milestone are closed. The final two
-  issues that had no contributor PR were implemented in #2696 and #2698.
+- GitHub-generated release-note PRs (38): #2228, #2230, #2237, #2239, #2241,
+  #2243, #2244, #2245, #2541, #2543, #2548, #2549, #2550, #2551, #2678,
+  #2679, #2680, #2681, #2682, #2685, #2686, #2687, #2688, #2689, #2690,
+  #2691, #2692, #2693, #2694, #2695, #2696, #2698, #2699, #2700, #2885,
+  #2886, #2887, and #2891.
 - The GitHub generated-note set is intentionally smaller than the complete
-  98-commit ancestry range because the maintainer batches preserve source
+  111-commit ancestry range because the maintainer batches preserve source
   contributor commits while presenting one reviewed integration PR per
   coherent subsystem.
 
