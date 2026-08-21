@@ -268,3 +268,30 @@ def test_public_report_types_revalidate_sensitive_or_tampered_entries() -> None:
     object.__setattr__(status, "name", "patient-482901")
     with pytest.raises(ValueError, match="safe identifier"):
         CapabilityProbeReport((status,))
+
+    clean_status = CapabilityStatus(
+        name="local-safe",
+        available=True,
+        reason="available",
+        extra=None,
+        provider_fingerprint=None,
+    )
+    report = CapabilityProbeReport((clean_status,))
+    object.__setattr__(report.capabilities[0], "name", "patient-482901")
+
+    with pytest.raises(ValueError, match="safe identifier") as exc_info:
+        report.to_json()
+
+    assert "patient-482901" not in str(exc_info.value)
+
+
+def test_tampered_structured_probe_result_is_invalid() -> None:
+    check = CapabilityCheck(available=True)
+    object.__setattr__(check, "available", "yes")
+
+    report = probe_capabilities(
+        [CapabilityAdapter(name="local-tampered", probe=lambda: check)]
+    )
+
+    assert report.capabilities[0].available is False
+    assert report.capabilities[0].reason == "invalid_result"

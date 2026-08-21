@@ -198,24 +198,26 @@ class CapabilityStatus:
     def status(self) -> str:
         """Return the stable string form of the availability state."""
 
-        return "available" if self.available else "unavailable"
+        validated = _validated_status_copy(self)
+        return "available" if validated.available else "unavailable"
 
     @property
     def missing_extra(self) -> bool:
         """Return whether the unavailable result points to a missing extra."""
 
-        return self.reason == "missing_extra"
+        return _validated_status_copy(self).reason == "missing_extra"
 
     def as_dict(self) -> dict[str, object]:
         """Return a JSON-safe status without raw provider or error values."""
 
+        validated = _validated_status_copy(self)
         return {
-            "name": self.name,
-            "status": self.status,
-            "available": self.available,
-            "reason": self.reason,
-            "extra": self.extra,
-            "provider_fingerprint": self.provider_fingerprint,
+            "name": validated.name,
+            "status": "available" if validated.available else "unavailable",
+            "available": validated.available,
+            "reason": validated.reason,
+            "extra": validated.extra,
+            "provider_fingerprint": validated.provider_fingerprint,
         }
 
     to_dict = as_dict
@@ -234,45 +236,25 @@ class CapabilityProbeReport:
             or self.schema_version != CAPABILITY_PROBE_SCHEMA_VERSION
         ):
             raise ValueError("capability report schema_version is not supported")
-        capabilities = _bounded_tuple(
-            self.capabilities,
-            label="capability statuses",
-            maximum=MAX_CAPABILITY_ADAPTERS,
+        object.__setattr__(
+            self,
+            "capabilities",
+            _validated_capabilities(self.capabilities),
         )
-        if any(type(status) is not CapabilityStatus for status in capabilities):
-            raise TypeError("capability reports require CapabilityStatus entries")
-        validated = tuple(
-            CapabilityStatus(
-                name=status.name,
-                available=status.available,
-                reason=status.reason,
-                extra=status.extra,
-                provider_fingerprint=status.provider_fingerprint,
-            )
-            for status in cast(tuple[CapabilityStatus, ...], capabilities)
-        )
-        ordered = tuple(sorted(validated, key=_status_key))
-        names = tuple(status.name for status in ordered)
-        if len(names) != len(set(names)):
-            raise CapabilityProbeError("capability declarations must have unique names")
-        object.__setattr__(self, "capabilities", ordered)
 
     @property
     def entries(self) -> tuple[CapabilityStatus, ...]:
         """Alias for callers that use report-entry terminology."""
 
-        return self.capabilities
+        _, capabilities = _validated_report_state(self)
+        return capabilities
 
     @property
     def counts(self) -> dict[str, int]:
         """Return stable total, available, and unavailable counts."""
 
-        available = sum(status.available for status in self.capabilities)
-        return {
-            "total": len(self.capabilities),
-            "available": available,
-            "unavailable": len(self.capabilities) - available,
-        }
+        _, capabilities = _validated_report_state(self)
+        return _capability_counts(capabilities)
 
     @property
     def available_count(self) -> int:
@@ -290,38 +272,22 @@ class CapabilityProbeReport:
     def provider_fingerprints(self) -> tuple[str, ...]:
         """Return unique provider fingerprints in stable order."""
 
-        return tuple(
-            sorted(
-                {
-                    status.provider_fingerprint
-                    for status in self.capabilities
-                    if status.provider_fingerprint is not None
-                }
-            )
-        )
+        _, capabilities = _validated_report_state(self)
+        return _provider_fingerprints(capabilities)
 
     @property
     def fingerprint(self) -> str:
         """Return a stable fingerprint of the safe report contents."""
 
-        payload = {
-            "schema_version": self.schema_version,
-            "counts": self.counts,
-            "capabilities": [status.as_dict() for status in self.capabilities],
-            "provider_fingerprints": list(self.provider_fingerprints),
-        }
-        return _sha256_json(payload)
+        schema_version, capabilities = _validated_report_state(self)
+        return _sha256_json(_report_payload(schema_version, capabilities))
 
     def as_dict(self) -> dict[str, object]:
         """Return the complete JSON-safe report."""
 
-        return {
-            "schema_version": self.schema_version,
-            "counts": self.counts,
-            "capabilities": [status.as_dict() for status in self.capabilities],
-            "provider_fingerprints": list(self.provider_fingerprints),
-            "fingerprint": self.fingerprint,
-        }
+        schema_version, capabilities = _validated_report_state(self)
+        payload = _report_payload(schema_version, capabilities)
+        return {**payload, "fingerprint": _sha256_json(payload)}
 
     to_dict = as_dict
 
@@ -347,6 +313,84 @@ class CapabilityProbeReport:
             indent=indent,
             sort_keys=True,
         )
+
+
+def _validated_status_copy(status: CapabilityStatus) -> CapabilityStatus:
+    """Return a validated copy before exposing persisted status fields."""
+
+    if type(status) is not CapabilityStatus:
+        raise TypeError("capability reports require CapabilityStatus entries")
+    return CapabilityStatus(
+        name=status.name,
+        available=status.available,
+        reason=status.reason,
+        extra=status.extra,
+        provider_fingerprint=status.provider_fingerprint,
+    )
+
+
+def _validated_capabilities(value: Any) -> tuple[CapabilityStatus, ...]:
+    capabilities = _bounded_tuple(
+        value,
+        label="capability statuses",
+        maximum=MAX_CAPABILITY_ADAPTERS,
+    )
+    validated = tuple(_validated_status_copy(status) for status in capabilities)
+    ordered = tuple(sorted(validated, key=_status_key))
+    names = tuple(status.name for status in ordered)
+    if len(names) != len(set(names)):
+        raise CapabilityProbeError("capability declarations must have unique names")
+    return ordered
+
+
+def _validated_report_state(
+    report: CapabilityProbeReport,
+) -> tuple[str, tuple[CapabilityStatus, ...]]:
+    if type(report) is not CapabilityProbeReport:
+        raise TypeError("report must be a CapabilityProbeReport")
+    if (
+        type(report.schema_version) is not str
+        or report.schema_version != CAPABILITY_PROBE_SCHEMA_VERSION
+    ):
+        raise ValueError("capability report schema_version is not supported")
+    return report.schema_version, _validated_capabilities(report.capabilities)
+
+
+def _capability_counts(
+    capabilities: tuple[CapabilityStatus, ...],
+) -> dict[str, int]:
+    available = sum(status.available for status in capabilities)
+    return {
+        "total": len(capabilities),
+        "available": available,
+        "unavailable": len(capabilities) - available,
+    }
+
+
+def _provider_fingerprints(
+    capabilities: tuple[CapabilityStatus, ...],
+) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                status.provider_fingerprint
+                for status in capabilities
+                if status.provider_fingerprint is not None
+            }
+        )
+    )
+
+
+def _report_payload(
+    schema_version: str,
+    capabilities: tuple[CapabilityStatus, ...],
+) -> dict[str, object]:
+    return {
+        "schema_version": schema_version,
+        "counts": _capability_counts(capabilities),
+        "capabilities": [status.as_dict() for status in capabilities],
+        "provider_fingerprints": list(_provider_fingerprints(capabilities)),
+    }
 
 
 def provider_fingerprint(
@@ -677,8 +721,12 @@ def _probe_adapter(raw: Any) -> CapabilityStatus:
 
 def _interpret_result(result: Any, *, has_extra: bool) -> tuple[bool, str]:
     if type(result) is CapabilityCheck:
-        available = result.available
-        raw_reason = result.reason
+        validated = CapabilityCheck(
+            available=result.available,
+            reason=result.reason,
+        )
+        available = validated.available
+        raw_reason = validated.reason
     elif type(result) is bool:
         available = result
         raw_reason = None
