@@ -13,7 +13,9 @@ objects, and a list or tuple field may contain flat text or `None` values.
 Missing fields raise a value-free `OpenSearchRedactionError` by default; set
 `ignore_missing=True` when a field is optional. Documents must use bounded,
 JSON-compatible mappings, lists, tuples, scalar values, and string keys; cyclic
-or oversized inputs fail with a stable error before redaction starts.
+or oversized inputs fail with a stable error before redaction starts. The
+document boundary accepts at most 10,000 container items, 32 levels, 32 MiB of
+UTF-8 key and string payload, and signed 64-bit finite numeric values.
 
 ```python
 from openmed.interop.opensearch import OpenSearchRedactionProcessor
@@ -55,4 +57,8 @@ receives `text`, `policy`, `method`, and any explicit `deidentify_kwargs`, and
 returns either a redacted string or an object with a string
 `deidentified_text` attribute/key. Redaction failures are converted to the
 stable message `redaction failed`; source values are not copied into logs,
-exceptions, or reports.
+exceptions, or reports. Deidentifier options are detached data-only snapshots:
+up to 64 top-level options, 4,096 nested values, 16 levels, 1 MiB per string or
+byte value, and 4 MiB in aggregate. Supported option values are null, booleans,
+signed 64-bit integers, finite floats, strings, bytes, lists, tuples, and
+string-keyed dictionaries. Callables and other live objects are rejected.
