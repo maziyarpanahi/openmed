@@ -31,6 +31,8 @@ MAX_CAPABILITIES: Final[int] = 256
 _MAX_SEQUENCE_ITEMS: Final[int] = 64
 _MAX_TEXT_LENGTH: Final[int] = 4_096
 _MAX_NAME_INPUT_LENGTH: Final[int] = 256
+_MAX_LOCAL_METADATA_BYTES: Final[int] = 4 * 1024 * 1024
+_MAX_SCHEMA_VERSION: Final[int] = (1 << 31) - 1
 
 _ALLOWED_POLICIES: Final[frozenset[str]] = frozenset(
     {"local-only", "configured-network", "user-supplied-resource"}
@@ -40,6 +42,17 @@ _ALLOWED_TEST_GUARANTEES: Final[frozenset[str]] = frozenset(
 )
 _CAPABILITY_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _REQUIREMENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
+_REQUIREMENT = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]*"
+    r"(?:\[[A-Za-z0-9_,.-]+\])?"
+    r"(?:[<>=!~]=?[A-Za-z0-9.*+_-]+"
+    r"(?:,[<>=!~]=?[A-Za-z0-9.*+_-]+)*)?$"
+)
+_MODULE_NAME = re.compile(r"^openmed(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+_RELATIVE_PATH = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._/-]*"
+    r"(?:#[A-Za-z0-9][A-Za-z0-9._-]*)?$"
+)
 
 
 def _bounded_tuple(value: Any, *, label: str, maximum: int) -> tuple[Any, ...]:
@@ -157,8 +170,10 @@ class IntegrationCapability:
     def dependency_names(self) -> tuple[str, ...]:
         """Return normalized distribution names from the requirements."""
 
+        validated = _validated_capability_copy(self)
+        _assert_capability_report_safe(validated)
         names: list[str] = []
-        for requirement in self.optional_dependencies:
+        for requirement in validated.optional_dependencies:
             match = _REQUIREMENT_NAME.match(requirement.strip())
             if match is not None:
                 names.append(_normalize_distribution_name(match.group(0)))
@@ -168,7 +183,9 @@ class IntegrationCapability:
     def supported_versions(self) -> tuple[str, ...]:
         """Return the version-pinned requirement strings for this surface."""
 
-        return self.optional_dependencies
+        validated = _validated_capability_copy(self)
+        _assert_capability_report_safe(validated)
+        return validated.optional_dependencies
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible, deterministic capability record."""
@@ -218,13 +235,23 @@ def _validated_capability_copy(
         raise ValueError("capability contains invalid metadata") from None
 
 
+def _safe_report_text(value: Any) -> bool:
+    return (
+        type(value) is str
+        and bool(value.strip())
+        and value.isprintable()
+        and "|" not in value
+        and "`" not in value
+    )
+
+
 def _assert_capability_report_safe(capability: IntegrationCapability) -> None:
     """Reject metadata that is unsafe or ambiguous on public report surfaces."""
 
     valid = (
         _CAPABILITY_NAME.fullmatch(capability.name) is not None
-        and bool(capability.surface.strip())
-        and capability.module.startswith("openmed.")
+        and _safe_report_text(capability.surface)
+        and _MODULE_NAME.fullmatch(capability.module) is not None
         and capability.extra != ""
         and (capability.extra is not None or not capability.optional_dependencies)
         and (
@@ -235,10 +262,14 @@ def _assert_capability_report_safe(capability: IntegrationCapability) -> None:
         and capability.policy in _ALLOWED_POLICIES
         and capability.test_guarantee in _ALLOWED_TEST_GUARANTEES
         and capability.supported_python == SUPPORTED_PYTHON
-        and bool(capability.description.strip())
+        and _safe_report_text(capability.description)
         and bool(capability.documentation)
         and bool(capability.tests)
         and all(_valid_requirement(value) for value in capability.optional_dependencies)
+        and len(set(capability.optional_dependencies))
+        == len(capability.optional_dependencies)
+        and len(set(capability.documentation)) == len(capability.documentation)
+        and len(set(capability.tests)) == len(capability.tests)
         and all(
             (relative := _safe_relative_path(value)) is not None
             and relative.startswith("docs/")
@@ -268,6 +299,8 @@ class CapabilityMatrix:
 
         if type(self.schema_version) is not int:
             raise TypeError("schema_version must be an integer")
+        if not 0 <= self.schema_version <= _MAX_SCHEMA_VERSION:
+            raise ValueError("schema_version is outside the supported integer range")
         capabilities = _bounded_tuple(
             self.capabilities,
             label="capabilities",
@@ -284,12 +317,12 @@ class CapabilityMatrix:
     def __iter__(self) -> Iterator[IntegrationCapability]:
         """Iterate over capabilities in their declared stable order."""
 
-        return iter(self.capabilities)
+        return iter(_validated_matrix_report(self).capabilities)
 
     def __len__(self) -> int:
         """Return the number of capabilities in the matrix."""
 
-        return len(self.capabilities)
+        return len(_validated_matrix_report(self).capabilities)
 
     @overload
     def __getitem__(self, index: int) -> IntegrationCapability: ...
@@ -302,7 +335,7 @@ class CapabilityMatrix:
     ) -> IntegrationCapability | tuple[IntegrationCapability, ...]:
         """Return one capability or a tuple slice."""
 
-        return self.capabilities[index]
+        return _validated_matrix_report(self).capabilities[index]
 
     def get(self, name: str) -> IntegrationCapability:
         """Return a capability by normalized name.
@@ -312,22 +345,17 @@ class CapabilityMatrix:
         """
 
         key = _normalize_capability_name(name)
-        for capability in self.capabilities:
-            _assert_capability_report_safe(capability)
-        for capability in self.capabilities:
+        validated = _validated_matrix_report(self)
+        for capability in validated.capabilities:
             compact_name = capability.name.replace("_", "")
             if capability.name == key or compact_name == key.replace("_", ""):
                 return capability
-        known = ", ".join(capability.name for capability in self.capabilities)
-        raise KeyError(f"unknown integration capability; available: {known}")
+        raise KeyError("unknown integration capability")
 
     def to_dict(self) -> dict[str, Any]:
         """Return the complete matrix as JSON-compatible data."""
 
-        validated = CapabilityMatrix(
-            capabilities=self.capabilities,
-            schema_version=self.schema_version,
-        )
+        validated = _validated_matrix_report(self)
         return {
             "capabilities": [
                 capability.to_dict() for capability in validated.capabilities
@@ -350,12 +378,7 @@ class CapabilityMatrix:
     def to_markdown(self) -> str:
         """Render a compact deterministic Markdown view of the matrix."""
 
-        validated = CapabilityMatrix(
-            capabilities=self.capabilities,
-            schema_version=self.schema_version,
-        )
-        for capability in validated.capabilities:
-            _assert_capability_report_safe(capability)
+        validated = _validated_matrix_report(self)
         lines = [
             "# Integration Capability Matrix",
             "",
@@ -386,6 +409,31 @@ class CapabilityMatrix:
                 f"{documentation} |"
             )
         return "\n".join(lines) + "\n"
+
+
+def _validated_matrix_report(matrix: Any) -> CapabilityMatrix:
+    """Reconstruct matrix state before exposing any report or lookup surface."""
+
+    if type(matrix) is not CapabilityMatrix:
+        raise ValueError("capability matrix cannot be reported safely")
+    try:
+        validated = CapabilityMatrix(
+            capabilities=object.__getattribute__(matrix, "capabilities"),
+            schema_version=object.__getattribute__(matrix, "schema_version"),
+        )
+        if validated.schema_version != SCHEMA_VERSION or not validated.capabilities:
+            raise ValueError
+        names: list[str] = []
+        for capability in validated.capabilities:
+            _assert_capability_report_safe(capability)
+            names.append(capability.name)
+        if names != sorted(names) or len(names) != len(set(names)):
+            raise ValueError
+        return validated
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("capability matrix cannot be reported safely") from None
 
 
 def _capability(
@@ -896,13 +944,13 @@ CAPABILITY_MATRIX: Final[CapabilityMatrix] = INTEGRATION_CAPABILITY_MATRIX
 def capabilities() -> tuple[IntegrationCapability, ...]:
     """Return the canonical integration records in stable order."""
 
-    return INTEGRATION_CAPABILITIES
+    return _validated_matrix_report(INTEGRATION_CAPABILITY_MATRIX).capabilities
 
 
 def capability(name: str) -> IntegrationCapability:
     """Return one canonical integration record by name."""
 
-    return INTEGRATION_CAPABILITY_MATRIX.get(name)
+    return _validated_matrix_report(INTEGRATION_CAPABILITY_MATRIX).get(name)
 
 
 def validate_capability_matrix(
@@ -955,6 +1003,12 @@ def validate_capability_matrix(
         if type(entry) is not IntegrationCapability:
             errors.append(f"{prefix} is not an IntegrationCapability")
             continue
+        try:
+            _assert_capability_report_safe(entry)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            errors.append(f"{prefix} contains unsafe report metadata")
         if not _CAPABILITY_NAME.fullmatch(entry.name):
             errors.append(f"{prefix}.name is not a stable lowercase key")
         if entry.name in names:
@@ -1094,12 +1148,9 @@ def _validate_matrix_documentation(
     path = root / MATRIX_DOCUMENTATION_PATH
     if not path.is_file():
         return
-    try:
-        markdown = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        errors.append(
-            f"cannot read {MATRIX_DOCUMENTATION_PATH}: {exc.__class__.__name__}"
-        )
+    markdown = _read_bounded_utf8(path)
+    if markdown is None:
+        errors.append(f"cannot read {MATRIX_DOCUMENTATION_PATH} safely")
         return
 
     for entry_index, entry in enumerate(entries):
@@ -1145,9 +1196,12 @@ def _project_optional_dependencies(path: Path) -> Mapping[str, Sequence[str]] | 
             import tomli as tomllib  # type: ignore[no-redef]
         except ModuleNotFoundError:
             return None
+    source = _read_bounded_utf8(path)
+    if source is None:
+        return None
     try:
-        payload = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        payload = tomllib.loads(source)
+    except ValueError:
         return None
     project = payload.get("project", {})
     extras = project.get("optional-dependencies", {})
@@ -1165,7 +1219,7 @@ def _valid_requirement(requirement: str) -> bool:
     value = requirement.strip()
     if not value or _requirement_name(value) == "":
         return False
-    return not any(character in value for character in "/\\\n\r")
+    return _REQUIREMENT.fullmatch(value) is not None
 
 
 def _requirement_name(requirement: str) -> str:
@@ -1190,7 +1244,7 @@ def _normalize_capability_name(name: str) -> str:
 def _safe_relative_path(value: str) -> str | None:
     if type(value) is not str or len(value) > _MAX_TEXT_LENGTH:
         return None
-    if "\x00" in value or any(ord(character) < 32 for character in value):
+    if _RELATIVE_PATH.fullmatch(value) is None:
         return None
     raw = value.replace("\\", "/")
     path = PurePosixPath(raw.split("#", 1)[0])
@@ -1198,6 +1252,22 @@ def _safe_relative_path(value: str) -> str | None:
         return None
     normalized = posixpath.normpath(raw)
     return None if normalized in {".", ""} else normalized
+
+
+def _read_bounded_utf8(path: Path) -> str | None:
+    try:
+        with path.open("rb") as handle:
+            payload = handle.read(_MAX_LOCAL_METADATA_BYTES + 1)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except OSError:
+        return None
+    if len(payload) > _MAX_LOCAL_METADATA_BYTES:
+        return None
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
 def _markdown_cell(value: str) -> str:

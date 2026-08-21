@@ -18,6 +18,7 @@ from openmed.interop.capabilities import (
     INTEGRATION_CAPABILITIES,
     CapabilityMatrix,
     IntegrationCapability,
+    capabilities,
     capability,
     validate_capability_matrix,
 )
@@ -224,3 +225,59 @@ def test_report_surfaces_revalidate_tampered_metadata_and_indent() -> None:
         CAPABILITY_MATRIX.to_json(indent=9)
     with pytest.raises(ValueError, match="between 0 and 8"):
         CAPABILITY_MATRIX.to_json(indent=True)  # type: ignore[arg-type]
+
+
+def test_capability_properties_revalidate_tampered_requirements() -> None:
+    secret = "synthetic-patient-482901"
+    entry = replace(CAPABILITY_MATRIX[0])
+    object.__setattr__(entry, "optional_dependencies", (f"safe>=1`{secret}",))
+
+    for accessor in (
+        lambda: entry.dependency_names,
+        lambda: entry.supported_versions,
+        lambda: entry.to_dict(),
+    ):
+        with pytest.raises(ValueError) as exc_info:
+            accessor()
+        assert secret not in str(exc_info.value)
+
+
+def test_matrix_report_surfaces_reject_corrupted_state() -> None:
+    secret = "synthetic-patient-482901"
+    matrix = CapabilityMatrix((CAPABILITY_MATRIX[0],))
+    object.__setattr__(matrix, "schema_version", 2)
+
+    for accessor in (
+        lambda: matrix.to_dict(),
+        lambda: matrix.to_markdown(),
+        lambda: tuple(matrix),
+    ):
+        with pytest.raises(ValueError) as exc_info:
+            accessor()
+        assert str(exc_info.value) == "capability matrix cannot be reported safely"
+        assert secret not in str(exc_info.value)
+
+
+def test_capabilities_returns_detached_canonical_records() -> None:
+    secret = "synthetic-patient-482901"
+    returned = capabilities()
+    object.__setattr__(returned[0], "name", secret)
+
+    assert capabilities()[0].name == "airflow"
+    assert capability("airflow").name == "airflow"
+
+
+def test_validation_rejects_report_injection_without_repository_checks() -> None:
+    entry = replace(
+        CAPABILITY_MATRIX[0],
+        optional_dependencies=("safe>=1`unsafe",),
+        documentation=("docs/integrations/matrix.md)unsafe",),
+    )
+
+    with pytest.raises(ValueError, match="unsafe report metadata"):
+        validate_capability_matrix(CapabilityMatrix((entry,)), repository_root=None)
+
+
+def test_schema_version_is_bounded_before_serialization() -> None:
+    with pytest.raises(ValueError, match="outside the supported integer range"):
+        CapabilityMatrix((CAPABILITY_MATRIX[0],), schema_version=1 << 80)

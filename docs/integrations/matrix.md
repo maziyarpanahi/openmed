@@ -14,7 +14,9 @@ Custom matrices are bounded to 256 capability records and 64 values per
 dependency, documentation, or test-path sequence. Public JSON and Markdown
 renderers revalidate frozen records before emitting them, so tampered or
 unbounded metadata fails closed without retaining caller-supplied values in
-errors.
+errors. Iteration, lookup, and version properties use the same detached
+snapshot boundary. Repository coherence reads are capped at 4 MiB per metadata
+file and never fetch links or import optional adapters.
 
 ## Policy meanings
 
