@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
+    from .aio import aanalyze_text, abatch, adeidentify, aextract_pii
     from .core import ModelCachePolicy, ModelLoader, OpenMedConfig
     from .core.capabilities import (
         BackendSpec,
@@ -881,6 +882,7 @@ __all__ = [
     "DatasetRedactionResult",
     "DatasetRedactionSummary",
     "process_batch",
+    "abatch",
     "redact_dataset",
     "AdvancedNERProcessor",
     "StreamingReplayResult",
@@ -912,6 +914,7 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "aanalyze_text",
     "explain",
     "ExplainReport",
     "generate_text",
@@ -944,7 +947,9 @@ __all__ = [
     "timed",
     # PII detection and de-identification
     "extract_pii",
+    "aextract_pii",
     "deidentify",
+    "adeidentify",
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",

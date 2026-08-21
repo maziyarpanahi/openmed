@@ -85,6 +85,7 @@ def test_top_level_async_helpers_are_lazy_exports() -> None:
         helper = getattr(openmed, name)
         assert helper is getattr(aio, name)
         assert inspect.iscoroutinefunction(helper)
+        assert name in openmed.__all__
 
 
 def test_import_openmed_does_not_import_asyncio() -> None:
