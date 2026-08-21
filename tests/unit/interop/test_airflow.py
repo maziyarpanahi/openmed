@@ -206,6 +206,84 @@ def test_deidentifier_options_are_snapshotted_and_fresh_per_record(
     assert observed_tags == [["en"], ["en"]]
 
 
+def test_retry_fingerprint_is_independent_of_nested_mapping_order(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "notes.txt"
+    output = tmp_path / "notes.redacted.txt"
+    source.write_text(_SYNTHETIC_VALUE, encoding="utf-8")
+    first_options = {
+        "metadata": {
+            "languages": ["en", "fr"],
+            "rules": {"email": True, "phone": False},
+        },
+        "threshold": 2,
+    }
+    second_options = {
+        "threshold": 2,
+        "metadata": {
+            "rules": {"phone": False, "email": True},
+            "languages": ["en", "fr"],
+        },
+    }
+
+    OpenMedRedactionOperator(
+        input_path=source,
+        output_path=output,
+        deidentifier=_fake_deidentifier,
+        deidentify_kwargs=first_options,
+    ).execute({})
+    result = OpenMedRedactionOperator(
+        input_path=source,
+        output_path=output,
+        deidentifier=_fake_deidentifier,
+        deidentify_kwargs=second_options,
+    ).execute({})
+
+    assert result["status"] == "skipped"
+
+
+def test_uncopyable_deidentifier_options_fail_without_value_leak(
+    tmp_path: Path,
+) -> None:
+    class UncopyableOption:
+        def __deepcopy__(self, memo):
+            del memo
+            raise RuntimeError(f"leaked value: {_SYNTHETIC_VALUE}")
+
+    with pytest.raises(ValueError) as options_error:
+        OpenMedRedactionOperator(
+            records=["synthetic note"],
+            output_path=tmp_path / "redacted.jsonl",
+            deidentifier=_fake_deidentifier,
+            deidentify_kwargs={"custom": UncopyableOption()},
+        )
+
+    assert _SYNTHETIC_VALUE not in str(options_error.value)
+
+
+def test_corrupted_deidentifier_snapshot_fails_without_deserialization(
+    tmp_path: Path,
+) -> None:
+    class CorruptedSnapshot:
+        def __deepcopy__(self, memo):
+            del memo
+            raise RuntimeError(f"leaked value: {_SYNTHETIC_VALUE}")
+
+    operator = OpenMedRedactionOperator(
+        records=["synthetic note"],
+        output_path=tmp_path / "redacted.jsonl",
+        deidentifier=_fake_deidentifier,
+    )
+    operator._deidentify_kwargs_snapshot = CorruptedSnapshot()
+
+    with pytest.raises(RedactionOperatorError) as options_error:
+        operator.execute({})
+
+    assert str(options_error.value).startswith("redaction failed; input_fingerprint=")
+    assert _SYNTHETIC_VALUE not in str(options_error.value)
+
+
 def test_record_batch_writes_output_and_returns_only_phi_free_counts(
     tmp_path: Path,
 ):

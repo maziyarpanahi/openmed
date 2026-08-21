@@ -14,18 +14,19 @@ included in logs, exceptions, XCom summaries, or the sidecar.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
 import marshal
 import os
-import pickle
 import stat
 import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from importlib import import_module
 from pathlib import Path
+from types import BuiltinFunctionType, CodeType, FunctionType, MethodType, ModuleType
 from typing import Any, Final
 
 try:
@@ -51,6 +52,9 @@ _DEFAULT_MAX_RECORDS = 10_000
 _MANIFEST_SCHEMA_VERSION = 1
 _MAX_MANIFEST_BYTES = 64 * 1024
 _MAX_OUTPUT_EXPANSION = 8
+_MAX_FINGERPRINT_DEPTH = 16
+_MAX_FINGERPRINT_ITEMS = 10_000
+_MAX_FINGERPRINT_LEAF_BYTES = 1024 * 1024
 _JSONL_SUFFIXES: Final[frozenset[str]] = frozenset({".jsonl", ".ndjson"})
 
 Deidentifier = Callable[..., Any]
@@ -190,15 +194,18 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             raise ValueError("deidentifier identity could not be captured") from None
         try:
             options = dict(deidentify_kwargs or {})
-            if any(not isinstance(key, str) or not key for key in options):
+            if any(type(key) is not str or not key for key in options):
                 raise TypeError
-            self._deidentify_kwargs_payload = pickle.dumps(
-                options,
-                protocol=pickle.HIGHEST_PROTOCOL,
+            self._deidentify_kwargs_snapshot = copy.deepcopy(options)
+            self._deidentify_kwargs_fingerprint = _digest_bytes(
+                _serialize_canonical(
+                    _callable_state_value(self._deidentify_kwargs_snapshot)
+                )
             )
         except Exception:
             raise ValueError(
-                "deidentify_kwargs must contain serializable string-keyed options"
+                "deidentify_kwargs must contain copyable, fingerprintable "
+                "string-keyed options"
             ) from None
 
         if input_path is not None and output_path is not None:
@@ -462,7 +469,7 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
 
     def _deidentifier_options(self) -> dict[str, Any]:
         try:
-            options = pickle.loads(self._deidentify_kwargs_payload)
+            options = copy.deepcopy(self._deidentify_kwargs_snapshot)
         except Exception:
             raise RedactionOperatorError(
                 "redaction options could not be restored"
@@ -483,7 +490,7 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
                 "mode": "records" if self._records_source is not None else "file",
                 "input_format": input_format,
                 "text_field": self.text_field,
-                "options_snapshot": _digest_bytes(self._deidentify_kwargs_payload),
+                "options_snapshot": self._deidentify_kwargs_fingerprint,
                 "method": self.method,
                 "policy": self.policy,
                 "default_offline_config": self._deidentifier is None,
@@ -912,6 +919,8 @@ def _callable_identity(value: Any) -> str:
         return "default"
     module = getattr(value, "__module__", type(value).__module__)
     qualname = getattr(value, "__qualname__", type(value).__qualname__)
+    identity = f"{module}.{qualname}"
+    _bounded_fingerprint_payload(identity.encode("utf-8"))
     target = getattr(value, "__func__", value)
     owner = getattr(value, "__self__", None)
     code = getattr(target, "__code__", None)
@@ -924,9 +933,9 @@ def _callable_identity(value: Any) -> str:
     if code is None:
         state = _callable_state_value(value)
         state_digest = _digest_bytes(_serialize_canonical(state))
-        return f"{module}.{qualname}:{state_digest}"
+        return f"{identity}:{state_digest}"
 
-    digest = hashlib.sha256(marshal.dumps(code))
+    digest = hashlib.sha256(_bounded_fingerprint_payload(marshal.dumps(code)))
     defaults = getattr(target, "__defaults__", None)
     keyword_defaults = getattr(target, "__kwdefaults__", None)
     closure = getattr(target, "__closure__", None) or ()
@@ -943,7 +952,7 @@ def _callable_identity(value: Any) -> str:
         "owner": _callable_owner_state(owner),
     }
     digest.update(_serialize_canonical(state))
-    return f"{module}.{qualname}:{digest.hexdigest()}"
+    return f"{identity}:{digest.hexdigest()}"
 
 
 def _callable_owner_state(value: Any) -> Any:
@@ -951,57 +960,254 @@ def _callable_owner_state(value: Any) -> Any:
 
     if value is None:
         return None
-    try:
-        return _callable_state_value(value)
-    except TypeError:
-        try:
-            attributes = dict(vars(value))
-        except (TypeError, ValueError):
-            raise TypeError("callback owner state must be serializable") from None
-        return {
-            "type": f"{type(value).__module__}.{type(value).__qualname__}",
-            "attributes": _callable_state_value(attributes),
-        }
+    return _callable_state_value(value)
 
 
 def _callable_state_value(value: Any) -> Any:
-    """Return a value-free digest of callback state captured at construction."""
+    """Return bounded, deterministic, value-free callback state."""
 
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value
-    if isinstance(value, bytes):
-        return {"type": "bytes", "sha256": _digest_bytes(value)}
-    if isinstance(value, Path):
-        return {"type": "path", "sha256": _digest_bytes(str(value).encode())}
-    if isinstance(value, type):
-        digest = hashlib.sha256(
-            f"{value.__module__}.{value.__qualname__}".encode("utf-8")
-        )
-        for name, member in sorted(vars(value).items()):
-            target = member.fget if isinstance(member, property) else member
-            code = getattr(target, "__code__", None)
-            if code is not None:
-                digest.update(name.encode("utf-8"))
-                digest.update(marshal.dumps(code))
-            elif target is None or isinstance(target, (bool, int, float, str)):
-                digest.update(
-                    _serialize_canonical(
-                        {"name": name, "value": target},
-                    )
-                )
-        return {
-            "type": "class",
-            "identity": f"{value.__module__}.{value.__qualname__}",
-            "sha256": digest.hexdigest(),
-        }
     try:
-        payload = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+        return _normalize_fingerprint_value(
+            value,
+            depth=0,
+            active=set(),
+            item_count=[0],
+        )
     except Exception:
-        raise TypeError("callback captured state must be serializable") from None
+        raise TypeError(
+            "callback captured state must be bounded and deterministic"
+        ) from None
+
+
+def _normalize_fingerprint_value(
+    value: Any,
+    *,
+    depth: int,
+    active: set[int],
+    item_count: list[int],
+) -> Any:
+    """Normalize supported state without serializing executable objects."""
+
+    if depth > _MAX_FINGERPRINT_DEPTH:
+        raise TypeError("callback captured state exceeds the depth limit")
+    item_count[0] += 1
+    if item_count[0] > _MAX_FINGERPRINT_ITEMS:
+        raise TypeError("callback captured state exceeds the item limit")
+
+    value_type = type(value)
+    if value is None:
+        return {"type": "none"}
+    if value_type is bool:
+        return {"type": "bool", "value": value}
+    if value_type is int:
+        return _fingerprint_leaf("int", str(value).encode("ascii"))
+    if value_type is float:
+        return _fingerprint_leaf("float", value.hex().encode("ascii"))
+    if value_type is complex:
+        payload = f"{value.real.hex()}:{value.imag.hex()}".encode("ascii")
+        return _fingerprint_leaf("complex", payload)
+    if value_type is str:
+        return _fingerprint_leaf("str", value.encode("utf-8"))
+    if value_type is bytes:
+        return _fingerprint_leaf("bytes", value)
+    if value_type is bytearray:
+        return _fingerprint_leaf("bytearray", bytes(value))
+    if value_type is memoryview:
+        return _fingerprint_leaf("memoryview", value.tobytes())
+    if isinstance(value, Path):
+        return _fingerprint_leaf("path", str(value).encode("utf-8"))
+    if isinstance(value, ModuleType):
+        return _fingerprint_leaf("module", value.__name__.encode("utf-8"))
+    if isinstance(value, CodeType):
+        return _fingerprint_leaf("code", marshal.dumps(value))
+    if isinstance(value, type):
+        return _fingerprint_class(value, item_count=item_count)
+
+    object_id = id(value)
+    if object_id in active:
+        raise TypeError("callback captured state must not contain cycles")
+    active.add(object_id)
+    try:
+        if value_type in (list, tuple):
+            return {
+                "type": value_type.__name__,
+                "items": [
+                    _normalize_fingerprint_value(
+                        item,
+                        depth=depth + 1,
+                        active=active,
+                        item_count=item_count,
+                    )
+                    for item in value
+                ],
+            }
+        if value_type in (set, frozenset):
+            normalized_items = [
+                _normalize_fingerprint_value(
+                    item,
+                    depth=depth + 1,
+                    active=active,
+                    item_count=item_count,
+                )
+                for item in value
+            ]
+            normalized_items.sort(key=_serialize_canonical)
+            return {"type": value_type.__name__, "items": normalized_items}
+        if isinstance(value, Mapping):
+            normalized_pairs: list[tuple[bytes, list[Any]]] = []
+            for key, item in value.items():
+                normalized_key = _normalize_fingerprint_value(
+                    key,
+                    depth=depth + 1,
+                    active=active,
+                    item_count=item_count,
+                )
+                normalized_value = _normalize_fingerprint_value(
+                    item,
+                    depth=depth + 1,
+                    active=active,
+                    item_count=item_count,
+                )
+                pair = [normalized_key, normalized_value]
+                normalized_pairs.append((_serialize_canonical(normalized_key), pair))
+            normalized_pairs.sort(key=lambda pair: pair[0])
+            return {"type": "mapping", "items": [pair[1] for pair in normalized_pairs]}
+        if isinstance(value, (FunctionType, MethodType, BuiltinFunctionType)):
+            return _fingerprint_function(
+                value,
+                depth=depth,
+                active=active,
+                item_count=item_count,
+            )
+        if is_dataclass(value) and not isinstance(value, type):
+            attributes = {
+                field.name: getattr(value, field.name) for field in fields(value)
+            }
+        else:
+            attributes = vars(value)
+        return {
+            "type": "object",
+            "identity": _type_identity(value_type),
+            "attributes": _normalize_fingerprint_value(
+                attributes,
+                depth=depth + 1,
+                active=active,
+                item_count=item_count,
+            ),
+        }
+    finally:
+        active.remove(object_id)
+
+
+def _fingerprint_leaf(kind: str, payload: bytes) -> dict[str, str]:
     return {
-        "type": f"{type(value).__module__}.{type(value).__qualname__}",
-        "sha256": _digest_bytes(payload),
+        "type": kind,
+        "sha256": _digest_bytes(_bounded_fingerprint_payload(payload)),
     }
+
+
+def _bounded_fingerprint_payload(payload: bytes) -> bytes:
+    if len(payload) > _MAX_FINGERPRINT_LEAF_BYTES:
+        raise TypeError("callback captured state exceeds the byte limit")
+    return payload
+
+
+def _type_identity(value: type[Any]) -> str:
+    identity = f"{value.__module__}.{value.__qualname__}"
+    _bounded_fingerprint_payload(identity.encode("utf-8"))
+    return identity
+
+
+def _fingerprint_class(
+    value: type[Any],
+    *,
+    item_count: list[int],
+) -> dict[str, str]:
+    """Fingerprint class identity and executable members without descriptors."""
+
+    identity = _type_identity(value)
+    digest = hashlib.sha256(_bounded_fingerprint_payload(identity.encode("utf-8")))
+    members: list[tuple[str, Any]] = []
+    for name, member in vars(value).items():
+        item_count[0] += 1
+        if item_count[0] > _MAX_FINGERPRINT_ITEMS:
+            raise TypeError("callback captured state exceeds the item limit")
+        members.append((name, member))
+    members.sort(key=lambda item: item[0])
+    for name, member in members:
+        target = member.fget if isinstance(member, property) else member
+        if isinstance(target, (staticmethod, classmethod)):
+            target = target.__func__
+        code = getattr(target, "__code__", None)
+        if code is not None:
+            digest.update(_bounded_fingerprint_payload(name.encode("utf-8")))
+            digest.update(_bounded_fingerprint_payload(marshal.dumps(code)))
+        elif target is None or type(target) in (bool, int, float, str):
+            digest.update(_bounded_fingerprint_payload(name.encode("utf-8")))
+            digest.update(_bounded_fingerprint_payload(repr(target).encode("utf-8")))
+    return {"type": "class", "identity": identity, "sha256": digest.hexdigest()}
+
+
+def _fingerprint_function(
+    value: FunctionType | MethodType | BuiltinFunctionType,
+    *,
+    depth: int,
+    active: set[int],
+    item_count: list[int],
+) -> dict[str, Any]:
+    """Fingerprint nested function state using code and captured values."""
+
+    target = getattr(value, "__func__", value)
+    code = getattr(target, "__code__", None)
+    identity = (
+        f"{getattr(value, '__module__', type(value).__module__)}."
+        f"{getattr(value, '__qualname__', type(value).__qualname__)}"
+    )
+    state: dict[str, Any] = {
+        "type": "function",
+        "identity": identity,
+    }
+    if code is None:
+        return state
+    state["code"] = _digest_bytes(_bounded_fingerprint_payload(marshal.dumps(code)))
+    state["defaults"] = _normalize_fingerprint_value(
+        getattr(target, "__defaults__", None),
+        depth=depth + 1,
+        active=active,
+        item_count=item_count,
+    )
+    state["keyword_defaults"] = _normalize_fingerprint_value(
+        getattr(target, "__kwdefaults__", None),
+        depth=depth + 1,
+        active=active,
+        item_count=item_count,
+    )
+    closure = getattr(target, "__closure__", None) or ()
+    closure_values: list[Any] = []
+    for cell in closure:
+        try:
+            captured = cell.cell_contents
+        except ValueError:
+            closure_values.append({"type": "empty-cell"})
+            continue
+        closure_values.append(
+            _normalize_fingerprint_value(
+                captured,
+                depth=depth + 1,
+                active=active,
+                item_count=item_count,
+            )
+        )
+    state["closure"] = closure_values
+    owner = getattr(value, "__self__", None)
+    if owner is not None:
+        state["owner"] = _normalize_fingerprint_value(
+            owner,
+            depth=depth + 1,
+            active=active,
+            item_count=item_count,
+        )
+    return state
 
 
 def _coerce_path(value: str | Path | None, field_name: str) -> Path:
