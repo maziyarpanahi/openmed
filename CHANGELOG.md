@@ -19,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic atomically written review draft with path-free status output,
   and stopping at an explicit human approval gate before the policy can control
   a run (#2305).
+- Added an offline-first self-hosted Compose bundle with loopback-only default
+  publishing, a hardened non-root runtime, persistent cache and read-only model
+  mounts, an internal network, bounded logs and processes, a readiness probe,
+  and opt-in-only remote integrations (#2372).
+- Added a local-only self-hosted redaction service with explicit text and UTF-8
+  file workflows, deterministic offline defaults, counts-only review state,
+  loopback Host and request-size guards, content-free errors, and an accessible
+  aggregate-status page (#2371).
+- Added a deterministic synthetic-only de-identification comparator harness
+  with explicit fail-closed fixture provenance, enforced offline execution,
+  bounded inputs, aggregate privacy metrics, resource budgets, and source-safe
+  reports (#2379).
 - Added an opt-in bundled-model manifest and offline bootstrap for the small
   English PII model, with registry checksum and license pins, mandatory cached
   artifact-integrity proof, concurrency-safe socket guarding, and no silent
