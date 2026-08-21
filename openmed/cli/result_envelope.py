@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -292,17 +294,62 @@ class ArtifactFingerprint:
     def from_file(cls, name: str, path: str | Path) -> "ArtifactFingerprint":
         """Return a fingerprint for a local file without serializing its path."""
 
+        descriptor: int | None = None
+        verification_descriptor: int | None = None
         digest = hashlib.sha256()
         size_bytes = 0
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+        )
         try:
-            with Path(path).open("rb") as handle:
-                for chunk in iter(lambda: handle.read(_HASH_CHUNK_SIZE), b""):
+            artifact_path = Path(path)
+            descriptor = os.open(os.fspath(artifact_path), flags)
+            opened_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_stat.st_mode):
+                raise OSError
+
+            with os.fdopen(descriptor, "rb") as handle:
+                descriptor = None
+                while size_bytes <= opened_stat.st_size:
+                    remaining = opened_stat.st_size - size_bytes + 1
+                    chunk = handle.read(min(_HASH_CHUNK_SIZE, remaining))
+                    if not chunk:
+                        break
                     digest.update(chunk)
                     size_bytes += len(chunk)
+                final_descriptor_stat = os.fstat(handle.fileno())
+
+            verification_descriptor = os.open(os.fspath(artifact_path), flags)
+            verification_stat = os.fstat(verification_descriptor)
+            path_stat = os.stat(artifact_path, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(verification_stat.st_mode)
+                or not stat.S_ISREG(path_stat.st_mode)
+                or not os.path.samestat(opened_stat, verification_stat)
+                or not os.path.samestat(verification_stat, path_stat)
+                or _stable_stat_state(final_descriptor_stat)
+                != _stable_stat_state(opened_stat)
+                or _stable_stat_state(verification_stat)
+                != _stable_stat_state(opened_stat)
+                or _portable_stat_state(path_stat) != _portable_stat_state(opened_stat)
+                or size_bytes != opened_stat.st_size
+            ):
+                raise OSError
         except (KeyboardInterrupt, SystemExit):
             raise
         except BaseException:
             raise _invalid("artifact file could not be fingerprinted") from None
+        finally:
+            for open_descriptor in (descriptor, verification_descriptor):
+                if open_descriptor is not None:
+                    try:
+                        os.close(open_descriptor)
+                    except OSError:
+                        pass
         return cls(name=name, sha256=digest.hexdigest(), size_bytes=size_bytes)
 
     @classmethod
@@ -467,6 +514,29 @@ def _reject_json_constant(value: str) -> Any:
 
     del value
     raise ValueError("non-standard JSON constant")
+
+
+def _stable_stat_state(source_stat: os.stat_result) -> tuple[int, ...]:
+    """Return descriptor fields that must remain stable while hashing."""
+
+    return (
+        source_stat.st_dev,
+        source_stat.st_ino,
+        source_stat.st_size,
+        source_stat.st_mtime_ns,
+        source_stat.st_ctime_ns,
+        source_stat.st_mode,
+    )
+
+
+def _portable_stat_state(source_stat: os.stat_result) -> tuple[int, int, int]:
+    """Return fields consistent between path and descriptor stats."""
+
+    return (
+        stat.S_IFMT(source_stat.st_mode),
+        source_stat.st_size,
+        source_stat.st_mtime_ns,
+    )
 
 
 # The CLI-specific name is useful to callers while ResultEnvelope remains the

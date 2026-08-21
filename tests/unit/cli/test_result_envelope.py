@@ -6,11 +6,14 @@ import hashlib
 import io
 import itertools
 import json
+import os
 from collections.abc import Iterator, Mapping
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+import openmed.cli.result_envelope as result_envelope_module
 from openmed.cli.result_envelope import (
     MAX_ARTIFACTS,
     MAX_COUNTERS,
@@ -119,6 +122,72 @@ def test_file_fingerprint_reads_local_bytes_without_serializing_the_path(
     assert fingerprint.sha256 == hashlib.sha256(content).hexdigest()
     assert fingerprint.size_bytes == len(content)
     assert str(path) not in json.dumps(fingerprint.to_dict())
+
+
+def test_file_fingerprint_rejects_a_swapped_verification_descriptor(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact_path = tmp_path / "synthetic-sensitive-artifact.json"
+    replacement_path = tmp_path / "replacement.json"
+    content = b'{"status":"synthetic"}\n'
+    artifact_path.write_bytes(content)
+    replacement_path.write_bytes(content)
+    original_open = os.open
+    artifact_open_count = 0
+
+    def substitute_verification_descriptor(
+        path: str | os.PathLike[str], flags: int, mode: int = 0o777
+    ) -> int:
+        nonlocal artifact_open_count
+        if Path(path) == artifact_path:
+            artifact_open_count += 1
+            if artifact_open_count == 2:
+                return original_open(replacement_path, flags, mode)
+        return original_open(path, flags, mode)
+
+    monkeypatch.setattr(
+        result_envelope_module.os,
+        "open",
+        substitute_verification_descriptor,
+    )
+    with pytest.raises(ResultEnvelopeError) as raised:
+        ArtifactFingerprint.from_file("report", artifact_path)
+
+    assert "synthetic-sensitive-artifact" not in str(raised.value)
+    assert "replacement" not in str(raised.value)
+
+
+def test_file_fingerprint_rejects_a_swapped_path_stat(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact_path = tmp_path / "synthetic-sensitive-artifact.json"
+    replacement_path = tmp_path / "replacement.json"
+    content = b'{"status":"synthetic"}\n'
+    artifact_path.write_bytes(content)
+    replacement_path.write_bytes(content)
+    artifact_stat = artifact_path.stat()
+    os.utime(
+        replacement_path,
+        ns=(artifact_stat.st_atime_ns, artifact_stat.st_mtime_ns),
+    )
+    original_stat = os.stat
+
+    def substitute_path_stat(
+        path: str | bytes | os.PathLike[str] | int,
+        *,
+        dir_fd: int | None = None,
+        follow_symlinks: bool = True,
+    ) -> os.stat_result:
+        if path == artifact_path and not follow_symlinks:
+            return original_stat(replacement_path, follow_symlinks=False)
+        return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(result_envelope_module.os, "stat", substitute_path_stat)
+    with pytest.raises(ResultEnvelopeError) as raised:
+        ArtifactFingerprint.from_file("report", artifact_path)
+
+    assert "synthetic-sensitive-artifact" not in str(raised.value)
+    assert "replacement" not in str(raised.value)
 
 
 @pytest.mark.parametrize(
