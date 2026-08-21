@@ -171,21 +171,34 @@ class SchemaField:
         if not isinstance(payload, Mapping):
             raise TypeError("schema field must be metadata mapping")
 
+        if path is not None and "path" in payload:
+            if _normalize_path(payload["path"]) != _normalize_path(path):
+                raise ValueError("schema field path is inconsistent")
         field_path = payload.get("path", path)
         raw_type = payload.get("type", payload.get("field_type", _MISSING))
         if field_path is None or raw_type is _MISSING:
             raise ValueError("schema field metadata requires path and type")
-        if "optional" in payload:
-            optional = payload["optional"]
-        elif "nullable" in payload:
-            optional = payload["nullable"]
-        elif "required" in payload:
+        if "type" in payload and "field_type" in payload:
+            if _normalize_type(payload["type"]) != _normalize_type(
+                payload["field_type"]
+            ):
+                raise ValueError("schema field type aliases are inconsistent")
+
+        optionality: list[bool] = []
+        for key in ("optional", "nullable"):
+            if key in payload:
+                value = payload[key]
+                if type(value) is not bool:
+                    raise TypeError("schema field optionality must be a boolean")
+                optionality.append(value)
+        if "required" in payload:
             required = payload["required"]
             if type(required) is not bool:
                 raise TypeError("schema field requiredness must be a boolean")
-            optional = not required
-        else:
-            optional = False
+            optionality.append(not required)
+        if len(set(optionality)) > 1:
+            raise ValueError("schema field optionality aliases are inconsistent")
+        optional = optionality[0] if optionality else False
         return cls(path=field_path, type=raw_type, optional=optional)
 
 
@@ -274,6 +287,16 @@ class SchemaSnapshot:
         }
 
     as_dict = to_dict
+
+    def to_json(self) -> str:
+        """Return canonical JSON containing schema metadata only."""
+
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "SchemaSnapshot":

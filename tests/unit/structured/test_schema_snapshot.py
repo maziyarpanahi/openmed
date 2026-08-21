@@ -167,6 +167,8 @@ def test_reports_and_snapshots_never_serialize_example_values() -> None:
     assert sensitive_canary not in serialized
     assert "example" not in serialized
     assert "default" not in serialized
+    assert sensitive_canary not in before.to_json()
+    assert json.loads(before.to_json()) == before.to_dict()
 
 
 def test_invalid_metadata_errors_do_not_echo_sensitive_values() -> None:
@@ -204,3 +206,23 @@ def test_mapping_inputs_and_boolean_helper_use_the_same_rules() -> None:
 
     assert report.compatible is True
     assert is_schema_compatible(before, after, rules_version=1) is True
+
+
+@pytest.mark.parametrize(
+    "field_metadata",
+    [
+        {"path": "different.path", "type": "string"},
+        {"type": "string", "field_type": "integer"},
+        {"type": "string", "optional": True, "required": True},
+        {"type": "string", "optional": False, "nullable": True},
+    ],
+)
+def test_conflicting_field_aliases_are_rejected_without_echoing_values(
+    field_metadata: dict[str, object],
+) -> None:
+    sensitive_path = "synthetic.secret.path"
+
+    with pytest.raises(ValueError) as exc_info:
+        SchemaSnapshot(fields={sensitive_path: field_metadata})
+
+    assert sensitive_path not in str(exc_info.value)
