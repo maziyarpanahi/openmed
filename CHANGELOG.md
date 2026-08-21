@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).
+- Added a standard-library Agent Skills exporter for deterministic ZIP and
+  tar.gz bundles with per-file SHA-256 manifests, source revision provenance,
+  data-driven host and topical-pack selection, portable source-path checks,
+  and rollback-safe overwrite handling (#2307).
 - Added a deterministic offline Agent Skills validation gate for frontmatter,
   identifiers, local references, pack membership, and executable-helper help
   and test contracts, with symlink and local-path containment, path-only

@@ -101,6 +101,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
     - agent-skills/packs.md
