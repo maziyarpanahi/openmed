@@ -52,6 +52,7 @@ nav:
       - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Standalone Local Redactor Manifest: install/standalone.md
+      - Offline Install Smoke Check: install/smoke-check.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md

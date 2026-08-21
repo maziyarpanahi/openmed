@@ -127,6 +127,7 @@ classification:
     - deploy/self-hosted-compose.md
     - offline-install.md
     - install/standalone.md
+    - install/smoke-check.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
