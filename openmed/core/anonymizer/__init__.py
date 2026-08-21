@@ -29,7 +29,12 @@ from ..language_pack import LanguagePack, register_language_pack
 from .engine import Anonymizer, AnonymizerConfig
 from .locales import LANG_TO_LOCALE, resolve_locale
 from .providers.clinical_ids import IndiaSurrogateProvider
-from .registry import LABEL_GENERATORS, Generator, register_label_generator
+from .registry import (
+    LABEL_GENERATORS,
+    Generator,
+    discover_anonymizer_provider_plugins,
+    register_label_generator,
+)
 
 
 def register_clinical_provider(provider: Any) -> None:
@@ -54,6 +59,7 @@ __all__ = [
     "LABEL_GENERATORS",
     "LANG_TO_LOCALE",
     "LanguagePack",
+    "discover_anonymizer_provider_plugins",
     "register_clinical_provider",
     "register_language_pack",
     "register_label_generator",

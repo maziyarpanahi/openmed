@@ -15,10 +15,14 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 from __future__ import annotations
 
 import json
+import logging
 import re
+import secrets
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
-from importlib import resources
-from typing import Callable, Dict
+from importlib import import_module, resources
+from threading import RLock
+from typing import Any, Callable, Dict
 
 from .. import labels as L
 from ..language_pack import (
@@ -26,6 +30,7 @@ from ..language_pack import (
     get_language_pack,
     register_language_pack,
 )
+from ..schemas.span import OpenMedSpan, hmac_text_hash
 from .format_preserve import (
     preserve_date_format,
     preserve_email_pattern,
@@ -36,6 +41,16 @@ from .locales import ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
+
+logger = logging.getLogger(__name__)
+
+_PLUGIN_DISCOVERY_LOCK = RLock()
+_PLUGIN_DISCOVERY_COMPLETE = False
+_PLUGIN_PROVIDER_IDS: set[str] = set()
+_PLUGIN_PROVIDERS_BY_LABEL: Dict[str, list[Any]] = {}
+_PLUGIN_PROVIDER_FALLBACKS: Dict[str, Generator] = {}
+_PLUGIN_PROVIDER_DISPATCHERS: Dict[str, Generator] = {}
+_PLUGIN_SPAN_HASH_KEY = secrets.token_bytes(32)
 
 _INDIA_LOCALES = frozenset({"as_IN", "en_IN", "hi_IN", "mr_IN", "or_IN", "ta_IN"})
 
@@ -1339,6 +1354,234 @@ LANGUAGE_PACK_GENERATORS: Dict[tuple[str, str, str], Generator] = {}
 """Script-specific generators keyed by ``(pack code, script, label)``."""
 
 
+def discover_anonymizer_provider_plugins(
+    *,
+    allow_network_egress: bool = False,
+    allow_non_permissive_licenses: bool = False,
+    opt_in_plugins: Sequence[str] = (),
+) -> tuple[str, ...]:
+    """Discover and wire validated anonymizer-provider plugins.
+
+    Discovery is lazy and idempotent under the safe default policy. Explicit
+    policy opt-ins are forwarded to the shared plugin SDK registry and do not
+    change the default policy for later calls.
+
+    Args:
+        allow_network_egress: Allow plugins that declare network access.
+        allow_non_permissive_licenses: Allow plugins outside the permissive
+            license allowlist.
+        opt_in_plugins: Plugin or qualified component ids explicitly enabled.
+
+    Returns:
+        Qualified ids of anonymizer providers wired in this process.
+    """
+
+    global _PLUGIN_DISCOVERY_COMPLETE
+
+    default_policy = not (
+        allow_network_egress or allow_non_permissive_licenses or tuple(opt_in_plugins)
+    )
+    with _PLUGIN_DISCOVERY_LOCK:
+        if default_policy and _PLUGIN_DISCOVERY_COMPLETE:
+            return tuple(sorted(_PLUGIN_PROVIDER_IDS))
+
+        try:
+            plugin_registry = import_module("openmed.plugins.registry")
+            result = plugin_registry.discover_plugins(
+                allow_network_egress=allow_network_egress,
+                allow_non_permissive_licenses=allow_non_permissive_licenses,
+                opt_in_plugins=opt_in_plugins,
+            )
+        except Exception as exc:  # pragma: no cover - defensive SDK boundary
+            logger.warning(
+                "Failed to discover OpenMed anonymizer providers: %s",
+                exc.__class__.__name__,
+            )
+            if default_policy:
+                _PLUGIN_DISCOVERY_COMPLETE = True
+            return tuple(sorted(_PLUGIN_PROVIDER_IDS))
+
+        for record in result.quarantined:
+            metadata = getattr(record, "metadata", {})
+            kind = metadata.get("kind") if hasattr(metadata, "get") else None
+            if kind not in {None, "", "anonymizer_provider"}:
+                continue
+            logger.warning(
+                "OpenMed plugin entry point %r was quarantined during "
+                "anonymizer discovery: %s",
+                getattr(record, "entry_point_name", "<unknown>"),
+                getattr(record, "reason", "invalid_plugin"),
+            )
+
+        register_anonymizer_provider_plugins(
+            result.registrations_for_kind("anonymizer_provider")
+        )
+        if default_policy:
+            _PLUGIN_DISCOVERY_COMPLETE = True
+        return tuple(sorted(_PLUGIN_PROVIDER_IDS))
+
+
+def register_anonymizer_provider_plugins(
+    registrations: Iterable[Any],
+) -> tuple[str, ...]:
+    """Adapt validated SDK registrations into label generators.
+
+    Args:
+        registrations: Accepted plugin SDK registration records.
+
+    Returns:
+        Qualified ids newly registered by this call.
+    """
+
+    registered: list[str] = []
+    with _PLUGIN_DISCOVERY_LOCK:
+        for registration in sorted(
+            tuple(registrations),
+            key=_safe_plugin_registration_id,
+        ):
+            qualified_id = _safe_plugin_registration_id(registration)
+            try:
+                metadata = registration.metadata
+                if metadata.kind != "anonymizer_provider":
+                    continue
+                labels = tuple(metadata.labels)
+                if not labels:
+                    raise ValueError(
+                        "anonymizer providers must declare canonical labels"
+                    )
+                if any(label not in L.CANONICAL_LABELS for label in labels):
+                    raise ValueError("anonymizer provider declared invalid labels")
+                replacement_for = registration.component.replacement_for
+                if not callable(replacement_for):
+                    raise TypeError("replacement_for must be callable")
+            except Exception as exc:
+                logger.warning(
+                    "Failed to wire OpenMed anonymizer provider %s: %s",
+                    qualified_id,
+                    exc.__class__.__name__,
+                )
+                continue
+
+            if qualified_id in _PLUGIN_PROVIDER_IDS:
+                continue
+            for canonical_label in labels:
+                providers = _PLUGIN_PROVIDERS_BY_LABEL.setdefault(
+                    canonical_label,
+                    [],
+                )
+                providers.append(registration)
+                providers.sort(key=_safe_plugin_registration_id)
+                if canonical_label not in _PLUGIN_PROVIDER_DISPATCHERS:
+                    fallback = LABEL_GENERATORS.get(
+                        canonical_label,
+                        LABEL_GENERATORS[L.OTHER],
+                    )
+                    dispatcher = _build_plugin_dispatcher(canonical_label)
+                    _PLUGIN_PROVIDER_FALLBACKS[canonical_label] = fallback
+                    _PLUGIN_PROVIDER_DISPATCHERS[canonical_label] = dispatcher
+                    LABEL_GENERATORS[canonical_label] = dispatcher
+            _PLUGIN_PROVIDER_IDS.add(qualified_id)
+            registered.append(qualified_id)
+    return tuple(registered)
+
+
+def _build_plugin_dispatcher(canonical_label: str) -> Generator:
+    def generate(faker: Any, original: str, *, locale: str) -> str:
+        with _PLUGIN_DISCOVERY_LOCK:
+            registrations = tuple(_PLUGIN_PROVIDERS_BY_LABEL.get(canonical_label, ()))
+            fallback = _PLUGIN_PROVIDER_FALLBACKS[canonical_label]
+
+        for registration in registrations:
+            metadata = registration.metadata
+            if not _plugin_language_matches(metadata.languages, locale):
+                continue
+            qualified_id = _safe_plugin_registration_id(registration)
+            span = _plugin_runtime_span(
+                canonical_label,
+                original,
+                qualified_id=qualified_id,
+            )
+            try:
+                replacement = registration.component.replacement_for(
+                    span,
+                    original,
+                    faker=faker,
+                    locale=locale,
+                )
+                if not isinstance(replacement, str) or not replacement:
+                    raise TypeError("replacement_for must return a non-empty string")
+                if original and original in replacement:
+                    raise ValueError("replacement_for retained the source surface")
+                return replacement
+            except Exception as exc:
+                logger.warning(
+                    "OpenMed anonymizer provider %s failed for label %s: %s",
+                    qualified_id,
+                    canonical_label,
+                    exc.__class__.__name__,
+                )
+
+        return fallback(faker, original, locale=locale)
+
+    return generate
+
+
+def _plugin_runtime_span(
+    canonical_label: str,
+    surface: str,
+    *,
+    qualified_id: str,
+) -> OpenMedSpan:
+    return OpenMedSpan(
+        doc_id="anonymizer-provider-runtime",
+        start=0,
+        end=len(surface),
+        text_hash=hmac_text_hash(surface, _PLUGIN_SPAN_HASH_KEY),
+        entity_type=canonical_label,
+        canonical_label=canonical_label,
+        detector=f"plugin:{qualified_id}",
+        action="replace",
+    )
+
+
+def _plugin_language_matches(languages: Sequence[str], locale: str) -> bool:
+    normalized_locale = str(locale or "").strip().lower().replace("_", "-")
+    base_language = normalized_locale.partition("-")[0]
+    for language in languages:
+        normalized = str(language or "").strip().lower().replace("_", "-")
+        if normalized == "*" or normalized == normalized_locale:
+            return True
+        if "-" not in normalized and normalized == base_language:
+            return True
+    return False
+
+
+def _safe_plugin_registration_id(registration: Any) -> str:
+    try:
+        qualified_id = registration.metadata.qualified_id
+    except Exception:
+        return "<unknown>"
+    return (
+        qualified_id if isinstance(qualified_id, str) and qualified_id else "<unknown>"
+    )
+
+
+def _reset_anonymizer_provider_plugins_for_tests() -> None:
+    global _PLUGIN_DISCOVERY_COMPLETE
+
+    with _PLUGIN_DISCOVERY_LOCK:
+        for canonical_label, dispatcher in _PLUGIN_PROVIDER_DISPATCHERS.items():
+            if LABEL_GENERATORS.get(canonical_label) is dispatcher:
+                LABEL_GENERATORS[canonical_label] = _PLUGIN_PROVIDER_FALLBACKS[
+                    canonical_label
+                ]
+        _PLUGIN_PROVIDER_IDS.clear()
+        _PLUGIN_PROVIDERS_BY_LABEL.clear()
+        _PLUGIN_PROVIDER_FALLBACKS.clear()
+        _PLUGIN_PROVIDER_DISPATCHERS.clear()
+        _PLUGIN_DISCOVERY_COMPLETE = False
+
+
 def register_label_generator(
     canonical_label: str,
     generator: Generator,
@@ -1389,6 +1632,7 @@ def resolve_label_generator(
         data is not being used for the selected provider.
     """
 
+    discover_anonymizer_provider_plugins()
     if language_pack is not None and script in language_pack.scripts:
         generator = LANGUAGE_PACK_GENERATORS.get(
             (language_pack.code, script, canonical_label)
@@ -1475,7 +1719,9 @@ __all__ = [
     "Generator",
     "LANGUAGE_PACK_GENERATORS",
     "LABEL_GENERATORS",
+    "discover_anonymizer_provider_plugins",
     "register_india_label_generators",
+    "register_anonymizer_provider_plugins",
     "register_label_generator",
     "resolve_label_generator",
 ]

@@ -59,7 +59,7 @@ def plugin_components() -> tuple[ExampleRecognizer, ...]:
 | `sdk_version` | Semantic version of the SDK contract targeted by the component. |
 | `license` | SPDX-like license expression. Unknown or restricted expressions require opt-in. |
 | `network_egress` | Boolean declaring whether the component may make network calls. |
-| `labels` | Canonical OpenMed labels emitted or handled by the component. Recognizers must declare at least one. |
+| `labels` | Canonical OpenMed labels emitted or handled by the component. Recognizers and anonymizer providers must declare at least one. |
 | `languages` | Normalized language tags supported by the component, or `*`. |
 | `name` and `description` | Optional human-readable component information. |
 | `metadata` | Optional static, non-PHI mapping. Recognizers may select `deterministic`, `fast_pii`, or `clinical_phi` with `stage`. |
@@ -84,6 +84,45 @@ Recognizer and interop outputs must use valid character offsets, canonical
 labels, finite scores, and privacy-safe evidence and metadata. Components must
 not persist the source text or raw PHI. OpenMed rewrites document identity,
 text hashes, and recognizer provenance before pipeline arbitration.
+
+### Anonymizer provider example
+
+An anonymizer provider is routed by its declared canonical labels and
+languages. It receives the source span and surface only while replacement is
+running. The configured Faker instance and resolved locale are available in
+keyword arguments, so seeded anonymizers remain deterministic:
+
+```toml
+[project.entry-points."openmed.plugins"]
+example = "example_openmed_plugin:plugin_components"
+```
+
+```python
+class ExampleIdProvider:
+    metadata = {
+        "plugin_id": "example-openmed-plugin",
+        "component_id": "example-id-provider",
+        "kind": "anonymizer_provider",
+        "sdk_version": "1.0.0",
+        "license": "Apache-2.0",
+        "network_egress": False,
+        "labels": ("ID_NUM",),
+        "languages": ("en",),
+    }
+
+    def replacement_for(self, span, surface, **kwargs):
+        faker = kwargs["faker"]
+        return f"SYN-{faker.random_int(min=100000, max=999999)}"
+
+
+def plugin_components():
+    return (ExampleIdProvider(),)
+```
+
+The replacement must be a non-empty string and must not contain the source
+surface. Exceptions and invalid replacements produce a PHI-safe warning and
+fall back to the built-in generator. When multiple accepted providers cover
+the same label and locale, the lowest qualified component id wins.
 
 ## Discovery, quarantine, and policy opt-in
 
@@ -121,6 +160,19 @@ Validated recognizers are adapted into `DetectorSpec` records on the first
 detector lookup. Their spans run in the declared pipeline stage and participate
 in the same arbitration, provenance rewriting, and privacy-safe metadata
 filtering as first-party spans.
+
+Validated anonymizer providers are adapted into the label-generator registry
+on the first `Anonymizer.surrogate()` lookup. Discovery is process-scoped and
+idempotent. A caller that intentionally enables a policy-restricted provider
+can wire it before first use:
+
+```python
+from openmed import discover_anonymizer_provider_plugins
+
+discover_anonymizer_provider_plugins(
+    opt_in_plugins=("example-openmed-plugin:example-id-provider",),
+)
+```
 
 Validated exporters and interop adapters are registered lazily with:
 

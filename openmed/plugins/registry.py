@@ -18,6 +18,7 @@ from typing import Any
 from openmed.core.labels import CANONICAL_LABELS
 
 from .protocols import (
+    COMPONENT_ANONYMIZER_PROVIDER,
     COMPONENT_RECOGNIZER,
     PLUGIN_COMPONENT_KINDS,
     PLUGIN_SDK_MAJOR,
@@ -644,10 +645,14 @@ def _metadata_rejection(
 def _label_rejection(
     metadata: PluginComponentMetadata,
 ) -> tuple[str, str] | None:
-    if metadata.kind == COMPONENT_RECOGNIZER and not metadata.labels:
+    if (
+        metadata.kind in {COMPONENT_RECOGNIZER, COMPONENT_ANONYMIZER_PROVIDER}
+        and not metadata.labels
+    ):
+        component_name = metadata.kind.replace("_", " ")
         return (
             REASON_MISSING_LABELS,
-            "recognizer plugins must declare at least one canonical label",
+            f"{component_name} plugins must declare at least one canonical label",
         )
     for label in metadata.labels:
         if label not in CANONICAL_LABELS:

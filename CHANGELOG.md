@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added lazy runtime wiring for validated anonymizer-provider plugins, with
+  canonical-label and locale routing, deterministic Faker access, idempotent
+  discovery, PHI-safe failure warnings, and built-in-generator fallback (#2341).
+
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
