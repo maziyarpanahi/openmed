@@ -17,14 +17,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any
 
+from openmed.core.policy import canonical_policy_name
+
 try:
-    _beam = import_module("apache_beam")
+    _beam: Any = import_module("apache_beam")
 except ModuleNotFoundError as exc:
     if exc.name != "apache_beam":  # pragma: no cover - broken installation
         raise
@@ -43,7 +46,38 @@ _DEFAULT_MAX_INPUT_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_RECORD_BYTES = 1024 * 1024
 _DEFAULT_MAX_ATTEMPTS = 3
 _MAX_ATTEMPTS = 10
+_MAX_CONFIG_TEXT_CHARS = 256
+_MAX_EXTRA_DEPTH = 16
+_MAX_EXTRA_ITEMS = 1_000
+_MAX_EXTRA_INT_BITS = 4_096
+_MAX_EXTRA_KEY_CHARS = 128
+_MAX_EXTRA_KWARGS = 64
+_MAX_EXTRA_STRING_CHARS = 64 * 1024
+_MAX_INPUT_BYTES = 256 * 1024 * 1024
+_MIN_OUTPUT_CHARS = 4_096
+_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+_MAX_OUTPUT_EXPANSION = 8
+_MAX_OUTPUT_RECORD_BYTES = 64 * 1024 * 1024
+_MAX_RECORD_BYTES = 16 * 1024 * 1024
+_MAX_RECORD_DEPTH = 32
+_MAX_RECORD_INT_BITS = 4_096
+_MAX_RECORD_ITEMS = 10_000
+_MAX_RECORD_KEY_CHARS = 4_096
+_MAX_RECORDS = 1_000_000
 _MAX_RETRY_BACKOFF_SECONDS = 60.0
+_MAX_SPANS_PER_RECORD = 10_000
+_RESERVED_EXTRA_KEYS = frozenset(
+    {
+        "audit",
+        "config",
+        "keep_mapping",
+        "loader",
+        "method",
+        "policy",
+        "use_safety_sweep",
+    }
+)
+_MISSING = object()
 
 Record = str | Mapping[str, Any]
 Deidentifier = Callable[..., Any]
@@ -51,6 +85,36 @@ Deidentifier = Callable[..., Any]
 
 class BeamRedactionError(RuntimeError):
     """Raised for a safe, deterministic Beam redaction contract failure."""
+
+
+class _BoundaryError(Exception):
+    """Internal marker for a rejected untrusted input boundary."""
+
+
+class _FrozenList(tuple[Any, ...]):
+    """Pickle-friendly marker preserving a caller-supplied list shape."""
+
+
+@dataclass(frozen=True)
+class _FrozenOptions(Mapping[str, Any]):
+    """Pickle-friendly immutable mapping with a value-free representation."""
+
+    _items: tuple[tuple[str, Any], ...]
+
+    def __iter__(self) -> Iterator[str]:
+        return (key for key, _ in self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __getitem__(self, key: str) -> Any:
+        for candidate, value in self._items:
+            if candidate == key:
+                return value
+        raise KeyError(key)
+
+    def __repr__(self) -> str:
+        return f"_FrozenOptions(keys={tuple(self)!r})"
 
 
 @dataclass(frozen=True)
@@ -77,27 +141,51 @@ class BeamRedactionSpec:
     def __post_init__(self) -> None:
         """Validate and normalize configuration before a worker is created."""
 
-        _require_non_empty_string(self.text_field, "text_field")
-        _require_non_empty_string(self.policy, "policy")
-        _require_non_empty_string(self.method, "method")
-        _require_positive_int(self.max_records, "max_records")
-        _require_positive_int(self.max_input_bytes, "max_input_bytes")
-        _require_positive_int(self.max_record_bytes, "max_record_bytes")
+        object.__setattr__(
+            self,
+            "text_field",
+            _normalize_config_text(self.text_field, "text_field"),
+        )
+        object.__setattr__(self, "policy", _normalize_policy(self.policy))
+        object.__setattr__(
+            self,
+            "method",
+            _normalize_config_text(self.method, "method").lower(),
+        )
+        _require_positive_int(
+            self.max_records,
+            "max_records",
+            maximum=_MAX_RECORDS,
+        )
+        _require_positive_int(
+            self.max_input_bytes,
+            "max_input_bytes",
+            maximum=_MAX_INPUT_BYTES,
+        )
+        _require_positive_int(
+            self.max_record_bytes,
+            "max_record_bytes",
+            maximum=_MAX_RECORD_BYTES,
+        )
         _require_positive_int(self.max_attempts, "max_attempts")
         if self.max_attempts > _MAX_ATTEMPTS:
             raise ValueError("max_attempts exceeds the bounded retry limit")
-        if isinstance(self.retry_backoff_seconds, bool) or not isinstance(
-            self.retry_backoff_seconds, (int, float)
-        ):
+        if type(self.retry_backoff_seconds) not in (int, float):
             raise TypeError("retry_backoff_seconds must be a real number")
-        if not 0 <= float(self.retry_backoff_seconds) <= _MAX_RETRY_BACKOFF_SECONDS:
+        normalized_backoff = float(self.retry_backoff_seconds)
+        if (
+            not math.isfinite(normalized_backoff)
+            or not 0 <= normalized_backoff <= _MAX_RETRY_BACKOFF_SECONDS
+        ):
             raise ValueError("retry_backoff_seconds is outside the bounded range")
+        object.__setattr__(self, "retry_backoff_seconds", normalized_backoff)
         if not isinstance(self.extra_kwargs, Mapping):
             raise TypeError("extra_kwargs must be a mapping")
-        collisions = {"loader"} & set(self.extra_kwargs)
-        if collisions:
-            raise ValueError("extra_kwargs cannot override the worker-local loader")
-        object.__setattr__(self, "extra_kwargs", dict(self.extra_kwargs))
+        object.__setattr__(
+            self,
+            "extra_kwargs",
+            _snapshot_extra_kwargs(self.extra_kwargs),
+        )
 
     @property
     def input_schema(self) -> str:
@@ -118,11 +206,9 @@ class BeamRedactionSpec:
             "method": self.method,
             "policy": self.policy,
         }
-        collisions = sorted(set(kwargs) & set(self.extra_kwargs))
-        if collisions:
-            fields = ", ".join(collisions)
-            raise ValueError(f"extra_kwargs cannot override named fields: {fields}")
-        kwargs.update(self.extra_kwargs)
+        kwargs.update(
+            {key: _clone_extra_value(value) for key, value in self.extra_kwargs.items()}
+        )
         return kwargs
 
     def to_dict(self) -> dict[str, Any]:
@@ -140,8 +226,8 @@ class BeamRedactionSpec:
             "max_input_bytes": self.max_input_bytes,
             "max_record_bytes": self.max_record_bytes,
             "max_attempts": self.max_attempts,
-            "retry_backoff_seconds": float(self.retry_backoff_seconds),
-            "extra_keys": tuple(sorted(str(key) for key in self.extra_kwargs)),
+            "retry_backoff_seconds": self.retry_backoff_seconds,
+            "extra_keys": tuple(sorted(self.extra_kwargs)),
         }
 
     def fingerprint(self) -> str:
@@ -175,12 +261,22 @@ class BeamRedactionCounters:
     def __post_init__(self) -> None:
         """Reject invalid counter values instead of serializing them."""
 
-        for name in self.to_dict():
+        for name in (
+            "attempts",
+            "input_bytes",
+            "output_bytes",
+            "records_changed",
+            "records_failed",
+            "records_processed",
+            "retries",
+            "spans_redacted",
+        ):
             _require_non_negative_int(getattr(self, name), name)
 
     def to_dict(self) -> dict[str, int]:
         """Return deterministic counts without identifiers or source values."""
 
+        self.__post_init__()
         return {
             "attempts": self.attempts,
             "input_bytes": self.input_bytes,
@@ -215,9 +311,21 @@ class BeamRedactionState:
     def __post_init__(self) -> None:
         """Validate state bounds and counters."""
 
-        _require_positive_int(self.max_records, "max_records")
-        _require_positive_int(self.max_input_bytes, "max_input_bytes")
-        _require_positive_int(self.max_record_bytes, "max_record_bytes")
+        _require_positive_int(
+            self.max_records,
+            "max_records",
+            maximum=_MAX_RECORDS,
+        )
+        _require_positive_int(
+            self.max_input_bytes,
+            "max_input_bytes",
+            maximum=_MAX_INPUT_BYTES,
+        )
+        _require_positive_int(
+            self.max_record_bytes,
+            "max_record_bytes",
+            maximum=_MAX_RECORD_BYTES,
+        )
         _require_non_negative_int(self.records_seen, "records_seen")
         _require_non_negative_int(self.input_bytes, "input_bytes")
         if self.records_seen > self.max_records:
@@ -228,6 +336,9 @@ class BeamRedactionState:
     def accept(self, serialized_record: bytes) -> None:
         """Account for one serialized record, enforcing all state bounds."""
 
+        self.__post_init__()
+        if type(serialized_record) is not bytes:
+            raise TypeError("serialized_record must be bytes")
         if len(serialized_record) > self.max_record_bytes:
             raise BeamRedactionError("record exceeds the configured byte limit")
         if self.records_seen >= self.max_records:
@@ -240,6 +351,7 @@ class BeamRedactionState:
     def to_dict(self) -> dict[str, int]:
         """Return only bounded state counters."""
 
+        self.__post_init__()
         return {
             "input_bytes": self.input_bytes,
             "max_input_bytes": self.max_input_bytes,
@@ -260,9 +372,23 @@ class BeamRedactionResult:
     spec_fingerprint: str
     serialized_output: bytes
 
+    def __post_init__(self) -> None:
+        """Validate public report state without inspecting record values."""
+
+        if type(self.redacted_records) is not tuple:
+            raise TypeError("redacted_records must be a tuple")
+        if not isinstance(self.counters, BeamRedactionCounters):
+            raise TypeError("counters must be BeamRedactionCounters")
+        _require_digest(self.input_fingerprint, "input_fingerprint")
+        _require_digest(self.output_fingerprint, "output_fingerprint")
+        _require_digest(self.spec_fingerprint, "spec_fingerprint")
+        if type(self.serialized_output) is not bytes:
+            raise TypeError("serialized_output must be bytes")
+
     def report(self) -> dict[str, Any]:
         """Return a report containing no record values or exception details."""
 
+        self.__post_init__()
         return {
             "artifact_type": _ARTIFACT_TYPE,
             "schema_version": _SCHEMA_VERSION,
@@ -280,6 +406,7 @@ class BeamRedactionResult:
     def __repr__(self) -> str:
         """Return a safe summary without output records or serialized bytes."""
 
+        self.__post_init__()
         return (
             "BeamRedactionResult("
             f"records={len(self.redacted_records)}, "
@@ -328,6 +455,10 @@ class _BeamRedactionDoFn(_DoFnBase):  # type: ignore[misc,valid-type]
         deidentifier: Deidentifier | None = None,
         loader_factory: Callable[[], Any] | None = None,
     ) -> None:
+        if not isinstance(spec, BeamRedactionSpec):
+            raise TypeError("spec must be a BeamRedactionSpec")
+        _require_optional_callable(deidentifier, "deidentifier")
+        _require_optional_callable(loader_factory, "loader_factory")
         self._spec = spec
         self._deidentifier = deidentifier
         self._loader_factory = loader_factory
@@ -344,7 +475,20 @@ class _BeamRedactionDoFn(_DoFnBase):  # type: ignore[misc,valid-type]
         """Initialize one local loader and value-free Beam metrics."""
 
         if self._loader is None and self._deidentifier is None:
-            self._loader = (self._loader_factory or _new_model_loader)()
+            try:
+                factory = (
+                    _new_model_loader
+                    if self._loader_factory is None
+                    else self._loader_factory
+                )
+                loaded = factory()
+                if loaded is None:
+                    raise BeamRedactionError("worker-local model setup failed")
+                self._loader = loaded
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException:
+                raise BeamRedactionError("worker-local model setup failed") from None
         if _beam is not None and not self._metrics:
             metrics = _beam.metrics.Metrics
             self._metrics = {
@@ -381,12 +525,16 @@ class _BeamRedactionDoFn(_DoFnBase):  # type: ignore[misc,valid-type]
                 deidentifier=self._deidentifier,
                 loader=self._loader,
             )
+            output_bytes = _serialize_output_record(redacted, self._spec)
+            _validate_output_budget(
+                output_bytes,
+                spec=self._spec,
+                current_output_bytes=self._counters.output_bytes,
+            )
         except BeamRedactionError:
             self._counters.records_failed += 1
             self._inc("records_failed")
             raise
-
-        output_bytes = serialize_record(redacted)
         self._counters.attempts += attempts
         self._counters.retries += retries
         self._counters.spans_redacted += spans
@@ -434,19 +582,18 @@ class BeamRedactionTransform(_PTransformBase):  # type: ignore[misc,valid-type]
         if _beam is not None:
             super().__init__()
         if spec is not None:
-            if any(
-                value != default
-                for value, default in (
-                    (text_field, _DEFAULT_TEXT_FIELD),
-                    (policy, _DEFAULT_POLICY),
-                    (method, _DEFAULT_METHOD),
-                    (max_records, _DEFAULT_MAX_RECORDS),
-                    (max_input_bytes, _DEFAULT_MAX_INPUT_BYTES),
-                    (max_record_bytes, _DEFAULT_MAX_RECORD_BYTES),
-                    (max_attempts, _DEFAULT_MAX_ATTEMPTS),
-                    (retry_backoff_seconds, 0.0),
-                    (extra_kwargs, None),
-                )
+            if not isinstance(spec, BeamRedactionSpec):
+                raise TypeError("spec must be a BeamRedactionSpec")
+            if _direct_transform_options_supplied(
+                text_field=text_field,
+                policy=policy,
+                method=method,
+                max_records=max_records,
+                max_input_bytes=max_input_bytes,
+                max_record_bytes=max_record_bytes,
+                max_attempts=max_attempts,
+                retry_backoff_seconds=retry_backoff_seconds,
+                extra_kwargs=extra_kwargs,
             ):
                 raise TypeError("spec cannot be combined with direct options")
             self.spec = spec
@@ -460,8 +607,10 @@ class BeamRedactionTransform(_PTransformBase):  # type: ignore[misc,valid-type]
                 max_record_bytes=max_record_bytes,
                 max_attempts=max_attempts,
                 retry_backoff_seconds=retry_backoff_seconds,
-                extra_kwargs=extra_kwargs or {},
+                extra_kwargs={} if extra_kwargs is None else extra_kwargs,
             )
+        _require_optional_callable(deidentifier, "deidentifier")
+        _require_optional_callable(loader_factory, "loader_factory")
         self._deidentifier = deidentifier
         self._loader_factory = loader_factory
 
@@ -494,7 +643,11 @@ def run_synthetic_harness(
     OpenMed path is configured for cache-only loading.
     """
 
-    resolved_spec = spec or BeamRedactionSpec()
+    if spec is not None and not isinstance(spec, BeamRedactionSpec):
+        raise TypeError("spec must be a BeamRedactionSpec")
+    _require_optional_callable(deidentifier, "deidentifier")
+    _require_optional_callable(loader_factory, "loader_factory")
+    resolved_spec = BeamRedactionSpec() if spec is None else spec
     state = BeamRedactionState(
         max_records=resolved_spec.max_records,
         max_input_bytes=resolved_spec.max_input_bytes,
@@ -506,7 +659,7 @@ def run_synthetic_harness(
     redacted_records: list[Record] = []
     loader: Any = None
 
-    for record in records:
+    for record in _iter_bounded_records(records, resolved_spec.max_records):
         normalized, serialized = _validate_and_serialize_record(
             record,
             resolved_spec,
@@ -520,7 +673,17 @@ def run_synthetic_harness(
             and loader is None
             and _record_text(normalized, resolved_spec.text_field) is not None
         ):
-            loader = (loader_factory or _new_model_loader)()
+            try:
+                factory = (
+                    _new_model_loader if loader_factory is None else loader_factory
+                )
+                loader = factory()
+                if loader is None:
+                    raise BeamRedactionError("worker-local model setup failed")
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException:
+                raise BeamRedactionError("worker-local model setup failed") from None
 
         redacted, spans, attempts, retries = _redact_with_retries(
             normalized,
@@ -528,7 +691,12 @@ def run_synthetic_harness(
             deidentifier=deidentifier,
             loader=loader,
         )
-        output = serialize_record(redacted)
+        output = _serialize_output_record(redacted, resolved_spec)
+        _validate_output_budget(
+            output,
+            spec=resolved_spec,
+            current_output_bytes=counters.output_bytes,
+        )
         redacted_records.append(redacted)
         output_serialized.append(output)
         counters.attempts += attempts
@@ -550,15 +718,27 @@ def run_synthetic_harness(
 
 
 def serialize_record(record: Record) -> bytes:
-    """Return one record in deterministic canonical JSON bytes."""
+    """Return one bounded record in deterministic canonical JSON bytes."""
 
-    return _canonical_json(record)
+    normalized = _copy_record(record, maximum_text_chars=_DEFAULT_MAX_RECORD_BYTES)
+    serialized = _serialize_json_safely(normalized)
+    if len(serialized) > _DEFAULT_MAX_RECORD_BYTES:
+        raise BeamRedactionError("record exceeds the default byte limit")
+    return serialized
 
 
 def serialize_records(records: Iterable[Record]) -> bytes:
-    """Return a deterministic newline-delimited serialization of records."""
+    """Return a bounded deterministic newline-delimited serialization."""
 
-    return _serialize_lines(serialize_record(record) for record in records)
+    serialized: list[bytes] = []
+    total_bytes = 0
+    for record in _iter_bounded_records(records, _DEFAULT_MAX_RECORDS):
+        value = serialize_record(record)
+        total_bytes += len(value) + 1
+        if total_bytes > _DEFAULT_MAX_INPUT_BYTES:
+            raise BeamRedactionError("record batch exceeds the default byte limit")
+        serialized.append(value)
+    return _serialize_lines(serialized)
 
 
 def _redact_with_retries(
@@ -572,12 +752,20 @@ def _redact_with_retries(
     if text is None:
         return record, 0, 0, 0
 
-    kwargs = spec.to_deidentify_kwargs()
-    if deidentifier is None:
-        deidentifier = _default_deidentifier
-        kwargs.setdefault("config", _offline_config())
-    if loader is not None:
-        kwargs["loader"] = loader
+    try:
+        kwargs = spec.to_deidentify_kwargs()
+        if deidentifier is None:
+            deidentifier = _default_deidentifier
+            kwargs["config"] = _offline_config()
+            kwargs["keep_mapping"] = False
+            kwargs["audit"] = False
+            kwargs["use_safety_sweep"] = True
+        if loader is not None:
+            kwargs["loader"] = loader
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise BeamRedactionError("redaction setup failed") from None
 
     attempts = 0
     retries = 0
@@ -585,9 +773,18 @@ def _redact_with_retries(
         attempts += 1
         try:
             result = deidentifier(text, **kwargs)
-            redacted, spans = _result_text_and_spans(result, text)
+            redacted, spans = _result_text_and_spans(
+                result,
+                text,
+                maximum_output_chars=min(
+                    spec.max_record_bytes * _MAX_OUTPUT_EXPANSION,
+                    _MAX_OUTPUT_RECORD_BYTES,
+                ),
+            )
             break
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             if attempts >= spec.max_attempts:
                 fingerprint = _digest_bytes(text.encode("utf-8"))
                 raise BeamRedactionError(
@@ -611,25 +808,21 @@ def _validate_and_serialize_record(
     record: Record,
     spec: BeamRedactionSpec,
 ) -> tuple[Record, bytes]:
-    if isinstance(record, str):
-        normalized: Record = record
-    elif isinstance(record, Mapping):
-        if not all(isinstance(key, str) for key in record):
-            raise BeamRedactionError("record mapping keys must be strings")
-        normalized = dict(record)
+    normalized = _copy_record(
+        record,
+        maximum_text_chars=spec.max_record_bytes,
+    )
+    if type(normalized) is dict:
         if spec.text_field not in normalized:
             raise BeamRedactionError("record is missing the configured text field")
         value = normalized[spec.text_field]
-        if value is not None and not isinstance(value, str):
+        if value is not None and type(value) is not str:
             raise BeamRedactionError(
                 "configured record field must contain text or null"
             )
-    else:
-        raise BeamRedactionError("records must contain strings or mappings")
-    try:
-        serialized = serialize_record(normalized)
-    except (TypeError, ValueError, OverflowError):
-        raise BeamRedactionError("record is not JSON serializable") from None
+    serialized = _serialize_json_safely(normalized)
+    if len(serialized) > spec.max_record_bytes:
+        raise BeamRedactionError("record exceeds the configured byte limit")
     return normalized, serialized
 
 
@@ -640,20 +833,238 @@ def _record_text(record: Record, text_field: str) -> str | None:
     return value
 
 
-def _result_text_and_spans(result: Any, original: str) -> tuple[str, int]:
-    if isinstance(result, str):
-        return result, int(result != original)
-    redacted = getattr(result, "deidentified_text", None)
-    if not isinstance(redacted, str):
+def _result_text_and_spans(
+    result: Any,
+    original: str,
+    *,
+    maximum_output_chars: int,
+) -> tuple[str, int]:
+    redacted: Any
+    entities: Any
+    if type(result) is str:
+        redacted = result
+        entities = None
+    elif isinstance(result, Mapping):
+        redacted = result.get("deidentified_text")
+        entities = _result_entities(result)
+    else:
+        redacted = getattr(result, "deidentified_text", None)
+        entities = _result_entities(result)
+    if type(redacted) is not str:
         raise TypeError("deidentifier must return text or deidentified_text")
-    entities = getattr(result, "pii_entities", ())
+    allowed_chars = min(
+        maximum_output_chars,
+        max(_MIN_OUTPUT_CHARS, len(original) * _MAX_OUTPUT_EXPANSION),
+    )
+    if len(redacted) > allowed_chars:
+        raise ValueError("deidentifier output exceeds the bounded size")
+    if redacted == original:
+        return redacted, 0
+    if isinstance(entities, (list, tuple)) and type(entities) in (list, tuple):
+        spans = min(len(entities), _MAX_SPANS_PER_RECORD)
+    else:
+        spans = 0
+    return redacted, spans or 1
+
+
+def _result_entities(result: Any) -> Any:
+    """Return optional entity metadata without trusting fallback accessors."""
+
     try:
-        spans = len(entities)
-    except (TypeError, ValueError):
-        spans = int(redacted != original)
-    if isinstance(entities, (str, bytes, bytearray)):
-        spans = int(redacted != original)
-    return redacted, max(0, int(spans))
+        if isinstance(result, Mapping):
+            entities = result.get("pii_entities", _MISSING)
+            return result.get("entities") if entities is _MISSING else entities
+        entities = getattr(result, "pii_entities", _MISSING)
+        return getattr(result, "entities", None) if entities is _MISSING else entities
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return None
+
+
+def _iter_bounded_records(
+    records: Iterable[Record],
+    maximum_records: int,
+) -> Iterator[Record]:
+    """Yield a bounded record source while sanitizing iterator failures."""
+
+    try:
+        iterator = iter(records)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise BeamRedactionError("record source could not be read") from None
+    for index in range(maximum_records + 1):
+        try:
+            record = next(iterator)
+        except StopIteration:
+            return
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise BeamRedactionError("record source could not be read") from None
+        if index == maximum_records:
+            raise BeamRedactionError("record batch exceeds the configured limit")
+        yield record
+
+
+def _copy_record(record: Any, *, maximum_text_chars: int) -> Record:
+    """Return a bounded detached copy of one JSON-compatible record."""
+
+    try:
+        copied = _copy_record_value(
+            record,
+            maximum_text_chars=maximum_text_chars,
+            depth=0,
+            item_count=[0],
+            active_containers=set(),
+        )
+        if type(copied) not in (str, dict):
+            raise _BoundaryError
+        return copied
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise BeamRedactionError("record could not be inspected") from None
+
+
+def _copy_record_value(
+    value: Any,
+    *,
+    maximum_text_chars: int,
+    depth: int,
+    item_count: list[int],
+    active_containers: set[int],
+) -> Any:
+    if value is None or type(value) is bool:
+        return value
+    if type(value) is int:
+        if value.bit_length() > _MAX_RECORD_INT_BITS:
+            raise _BoundaryError
+        return value
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise _BoundaryError
+        return value
+    if type(value) is str:
+        if len(value) > maximum_text_chars:
+            raise _BoundaryError
+        return value
+    if depth > _MAX_RECORD_DEPTH:
+        raise _BoundaryError
+
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in active_containers:
+            raise _BoundaryError
+        active_containers.add(marker)
+        try:
+            try:
+                iterator = iter(value.items())
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException as error:
+                raise _BoundaryError from error
+            copied_mapping: dict[str, Any] = {}
+            while True:
+                try:
+                    entry = next(iterator)
+                except StopIteration:
+                    return copied_mapping
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except BaseException as error:
+                    raise _BoundaryError from error
+                if item_count[0] >= _MAX_RECORD_ITEMS:
+                    raise _BoundaryError
+                item_count[0] += 1
+                try:
+                    key, item = entry
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except BaseException as error:
+                    raise _BoundaryError from error
+                if (
+                    type(key) is not str
+                    or len(key) > _MAX_RECORD_KEY_CHARS
+                    or key in copied_mapping
+                ):
+                    raise _BoundaryError
+                copied_mapping[key] = _copy_record_value(
+                    item,
+                    maximum_text_chars=maximum_text_chars,
+                    depth=depth + 1,
+                    item_count=item_count,
+                    active_containers=active_containers,
+                )
+        finally:
+            active_containers.discard(marker)
+
+    if type(value) in (list, tuple):
+        marker = id(value)
+        if marker in active_containers:
+            raise _BoundaryError
+        if len(value) > _MAX_RECORD_ITEMS - item_count[0]:
+            raise _BoundaryError
+        active_containers.add(marker)
+        try:
+            copied_values = []
+            for item in value:
+                item_count[0] += 1
+                copied_values.append(
+                    _copy_record_value(
+                        item,
+                        maximum_text_chars=maximum_text_chars,
+                        depth=depth + 1,
+                        item_count=item_count,
+                        active_containers=active_containers,
+                    )
+                )
+        finally:
+            active_containers.discard(marker)
+        return tuple(copied_values) if type(value) is tuple else copied_values
+
+    raise _BoundaryError
+
+
+def _serialize_json_safely(record: Record) -> bytes:
+    try:
+        return _canonical_json(record)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise BeamRedactionError("record is not JSON serializable") from None
+
+
+def _serialize_output_record(record: Record, spec: BeamRedactionSpec) -> bytes:
+    normalized = _copy_record(
+        record,
+        maximum_text_chars=min(
+            spec.max_record_bytes * _MAX_OUTPUT_EXPANSION,
+            _MAX_OUTPUT_RECORD_BYTES,
+        ),
+    )
+    return _serialize_json_safely(normalized)
+
+
+def _validate_output_budget(
+    serialized_record: bytes,
+    *,
+    spec: BeamRedactionSpec,
+    current_output_bytes: int,
+) -> None:
+    maximum_record_bytes = min(
+        spec.max_record_bytes * _MAX_OUTPUT_EXPANSION,
+        _MAX_OUTPUT_RECORD_BYTES,
+    )
+    maximum_total_bytes = min(
+        spec.max_input_bytes * _MAX_OUTPUT_EXPANSION,
+        _MAX_OUTPUT_BYTES,
+    )
+    if len(serialized_record) > maximum_record_bytes:
+        raise BeamRedactionError("redacted record exceeds the output byte limit")
+    if current_output_bytes + len(serialized_record) > maximum_total_bytes:
+        raise BeamRedactionError("redacted batch exceeds the output byte limit")
 
 
 def _serialize_lines(records: Iterable[bytes]) -> bytes:
@@ -676,20 +1087,174 @@ def _digest_bytes(value: bytes) -> str:
 
 
 def _fingerprint_value(value: Any) -> Any:
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or type(value) in (bool, int, float):
         return value
-    if isinstance(value, str):
+    if type(value) is str:
         return {"type": "str", "sha256": _digest_bytes(value.encode("utf-8"))}
-    if isinstance(value, bytes):
+    if type(value) is bytes:
         return {"type": "bytes", "sha256": _digest_bytes(value)}
-    if isinstance(value, Mapping):
-        return {
-            str(key): _fingerprint_value(item)
-            for key, item in sorted(value.items(), key=lambda item: str(item[0]))
-        }
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, _FrozenOptions):
+        return {key: _fingerprint_value(item) for key, item in sorted(value.items())}
+    if isinstance(value, (_FrozenList, tuple)):
         return [_fingerprint_value(item) for item in value]
-    return {"type": type(value).__name__}
+    raise TypeError("unsupported fingerprint value")
+
+
+def _snapshot_extra_kwargs(options: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return a bounded detached snapshot of worker options."""
+
+    try:
+        iterator = iter(options.items())
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("extra_kwargs could not be inspected") from None
+
+    snapshot: dict[str, Any] = {}
+    item_count = [0]
+    active_containers: set[int] = set()
+    for index in range(_MAX_EXTRA_KWARGS + 1):
+        try:
+            entry = next(iterator)
+        except StopIteration:
+            return _FrozenOptions(tuple(snapshot.items()))
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("extra_kwargs could not be inspected") from None
+        if index == _MAX_EXTRA_KWARGS:
+            raise ValueError("extra_kwargs contain too many entries")
+        try:
+            key, value = entry
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("extra_kwargs could not be inspected") from None
+        if (
+            type(key) is not str
+            or not key
+            or len(key) > _MAX_EXTRA_KEY_CHARS
+            or not key.isprintable()
+        ):
+            raise ValueError("extra_kwargs must use bounded string keys")
+        if key in _RESERVED_EXTRA_KEYS:
+            raise ValueError("extra_kwargs cannot override reserved worker options")
+        if key in snapshot:
+            raise ValueError("extra_kwargs must not contain duplicate keys")
+        try:
+            snapshot[key] = _snapshot_extra_value(
+                value,
+                depth=0,
+                item_count=item_count,
+                active_containers=active_containers,
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError(
+                "extra_kwargs contain unsupported or unbounded values"
+            ) from None
+    raise AssertionError("unreachable")
+
+
+def _snapshot_extra_value(
+    value: Any,
+    *,
+    depth: int,
+    item_count: list[int],
+    active_containers: set[int],
+) -> Any:
+    if value is None or type(value) is bool:
+        return value
+    if type(value) is int:
+        if value.bit_length() > _MAX_EXTRA_INT_BITS:
+            raise _BoundaryError
+        return value
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise _BoundaryError
+        return value
+    if type(value) is str:
+        if len(value) > _MAX_EXTRA_STRING_CHARS:
+            raise _BoundaryError
+        return value
+    if type(value) is bytes:
+        if len(value) > _MAX_EXTRA_STRING_CHARS:
+            raise _BoundaryError
+        return value
+    if depth > _MAX_EXTRA_DEPTH:
+        raise _BoundaryError
+
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in active_containers:
+            raise _BoundaryError
+        active_containers.add(marker)
+        try:
+            iterator = iter(value.items())
+            copied: dict[str, Any] = {}
+            while True:
+                try:
+                    entry = next(iterator)
+                except StopIteration:
+                    return _FrozenOptions(tuple(copied.items()))
+                if item_count[0] >= _MAX_EXTRA_ITEMS:
+                    raise _BoundaryError
+                item_count[0] += 1
+                key, item = entry
+                if (
+                    type(key) is not str
+                    or not key
+                    or len(key) > _MAX_EXTRA_KEY_CHARS
+                    or not key.isprintable()
+                    or key in copied
+                ):
+                    raise _BoundaryError
+                copied[key] = _snapshot_extra_value(
+                    item,
+                    depth=depth + 1,
+                    item_count=item_count,
+                    active_containers=active_containers,
+                )
+        finally:
+            active_containers.discard(marker)
+
+    if type(value) in (list, tuple):
+        marker = id(value)
+        if marker in active_containers:
+            raise _BoundaryError
+        if len(value) > _MAX_EXTRA_ITEMS - item_count[0]:
+            raise _BoundaryError
+        active_containers.add(marker)
+        try:
+            copied_values = []
+            for item in value:
+                item_count[0] += 1
+                copied_values.append(
+                    _snapshot_extra_value(
+                        item,
+                        depth=depth + 1,
+                        item_count=item_count,
+                        active_containers=active_containers,
+                    )
+                )
+        finally:
+            active_containers.discard(marker)
+        return (
+            tuple(copied_values) if type(value) is tuple else _FrozenList(copied_values)
+        )
+
+    raise _BoundaryError
+
+
+def _clone_extra_value(value: Any) -> Any:
+    if isinstance(value, _FrozenOptions):
+        return {key: _clone_extra_value(item) for key, item in value.items()}
+    if isinstance(value, _FrozenList):
+        return [_clone_extra_value(item) for item in value]
+    if type(value) is tuple:
+        return tuple(_clone_extra_value(item) for item in value)
+    return value
 
 
 def _require_beam() -> Any:
@@ -716,23 +1281,99 @@ def _default_deidentifier(text: str, **kwargs: Any) -> Any:
 def _offline_config() -> Any:
     from openmed.core.config import OpenMedConfig
 
-    return OpenMedConfig(local_only=True)
+    return OpenMedConfig(local_only=True, hf_token="")
 
 
-def _require_non_empty_string(value: Any, name: str) -> None:
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{name} must be a non-empty string")
+def _normalize_config_text(value: Any, name: str) -> str:
+    if type(value) is not str:
+        raise ValueError(f"{name} must be bounded text")
+    normalized = value.strip()
+    if (
+        not normalized
+        or len(normalized) > _MAX_CONFIG_TEXT_CHARS
+        or not normalized.isprintable()
+    ):
+        raise ValueError(f"{name} must be bounded text")
+    return normalized
 
 
-def _require_positive_int(value: Any, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int):
+def _normalize_policy(policy: Any) -> str:
+    normalized = _normalize_config_text(policy, "policy")
+    try:
+        canonical = canonical_policy_name(normalized)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("policy is invalid") from None
+    if type(canonical) is not str or len(canonical) > _MAX_CONFIG_TEXT_CHARS:
+        raise ValueError("policy is invalid")
+    return canonical
+
+
+def _require_optional_callable(value: Any, name: str) -> None:
+    if value is not None and not callable(value):
+        raise TypeError(f"{name} must be callable")
+
+
+def _direct_transform_options_supplied(
+    *,
+    text_field: Any,
+    policy: Any,
+    method: Any,
+    max_records: Any,
+    max_input_bytes: Any,
+    max_record_bytes: Any,
+    max_attempts: Any,
+    retry_backoff_seconds: Any,
+    extra_kwargs: Any,
+) -> bool:
+    return (
+        type(text_field) is not str
+        or text_field != _DEFAULT_TEXT_FIELD
+        or type(policy) is not str
+        or policy != _DEFAULT_POLICY
+        or type(method) is not str
+        or method != _DEFAULT_METHOD
+        or type(max_records) is not int
+        or max_records != _DEFAULT_MAX_RECORDS
+        or type(max_input_bytes) is not int
+        or max_input_bytes != _DEFAULT_MAX_INPUT_BYTES
+        or type(max_record_bytes) is not int
+        or max_record_bytes != _DEFAULT_MAX_RECORD_BYTES
+        or type(max_attempts) is not int
+        or max_attempts != _DEFAULT_MAX_ATTEMPTS
+        or type(retry_backoff_seconds) not in (int, float)
+        or float(retry_backoff_seconds) != 0.0
+        or extra_kwargs is not None
+    )
+
+
+def _require_digest(value: Any, name: str) -> None:
+    if (
+        type(value) is not str
+        or len(value) != 71
+        or not value.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in value[7:])
+    ):
+        raise ValueError(f"{name} must be a SHA-256 digest")
+
+
+def _require_positive_int(
+    value: Any,
+    name: str,
+    *,
+    maximum: int | None = None,
+) -> None:
+    if type(value) is not int:
         raise TypeError(f"{name} must be an integer")
     if value <= 0:
         raise ValueError(f"{name} must be positive")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} exceeds the bounded maximum")
 
 
 def _require_non_negative_int(value: Any, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int):
+    if type(value) is not int:
         raise TypeError(f"{name} must be an integer")
     if value < 0:
         raise ValueError(f"{name} must be non-negative")
