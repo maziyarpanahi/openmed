@@ -93,6 +93,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     from openmed.interop import adapter_spec, available_adapters
 
     assert available_adapters() == (
+        "airflow",
         "beam",
         "cda",
         "cdm_etl",
