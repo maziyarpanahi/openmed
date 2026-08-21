@@ -23,6 +23,10 @@ PAGED_KV_CACHE_BUDGET_BYTES_NAME = "openmed_service_mlx_paged_kv_cache_budget_by
 BATCH_QUEUE_DEPTH_NAME = "openmed_service_batch_queue_depth"
 BATCH_QUEUE_WAIT_NAME = "openmed_service_batch_queue_wait_seconds"
 BATCH_SHED_NAME = "openmed_service_batch_shed_total"
+ADMISSION_QUEUE_DEPTH_NAME = "openmed_service_admission_queue_depth"
+ADMISSION_QUEUE_SHEDDING_NAME = "openmed_service_admission_queue_shedding"
+ADMISSION_QUEUE_WAIT_NAME = "openmed_service_admission_queue_wait_seconds"
+ADMISSION_SHED_NAME = "openmed_service_admission_shed_total"
 CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
 CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
 CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
@@ -112,6 +116,10 @@ class PrometheusMetricsRegistry:
         self._batch_wait_count: dict[str, int] = {}
         self._batch_wait_sum: dict[str, float] = {}
         self._batch_shed_total: dict[str, int] = {}
+        self._admission_queue_depth: dict[str, int] = {}
+        self._admission_queue_shedding: dict[str, int] = {}
+        self._admission_queue_wait: dict[str, float] = {}
+        self._admission_shed_total: dict[str, int] = {}
         self._circuit_breaker_state_counts = {
             "closed": 0,
             "open": 0,
@@ -250,6 +258,39 @@ class PrometheusMetricsRegistry:
                 priority_label, 0
             ) + int(count)
 
+    def record_admission_queue_state(
+        self,
+        *,
+        queue: str,
+        depth: int,
+        shedding: bool,
+    ) -> None:
+        """Set aggregate outstanding depth and load-shedding state."""
+        queue_label = str(queue)
+        with self._lock:
+            self._admission_queue_depth[queue_label] = max(int(depth), 0)
+            self._admission_queue_shedding[queue_label] = int(bool(shedding))
+
+    def record_admission_queue_wait(
+        self,
+        *,
+        queue: str,
+        wait_seconds: float,
+    ) -> None:
+        """Set the latest bounded pre-dispatch wait for an admission queue."""
+        with self._lock:
+            self._admission_queue_wait[str(queue)] = max(float(wait_seconds), 0.0)
+
+    def record_admission_shed(self, *, queue: str, count: int = 1) -> None:
+        """Record requests rejected or expired by aggregate admission control."""
+        if count <= 0:
+            return
+        queue_label = str(queue)
+        with self._lock:
+            self._admission_shed_total[queue_label] = self._admission_shed_total.get(
+                queue_label, 0
+            ) + int(count)
+
     def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
         """Replace aggregate circuit-breaker state gauges."""
         with self._lock:
@@ -337,6 +378,10 @@ class PrometheusMetricsRegistry:
             batch_wait_count = dict(self._batch_wait_count)
             batch_wait_sum = dict(self._batch_wait_sum)
             batch_shed_total = dict(self._batch_shed_total)
+            admission_queue_depth = dict(self._admission_queue_depth)
+            admission_queue_shedding = dict(self._admission_queue_shedding)
+            admission_queue_wait = dict(self._admission_queue_wait)
+            admission_shed_total = dict(self._admission_shed_total)
             circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
             model_resident_total = self._model_resident_total
             model_resident_bytes = self._model_resident_bytes
@@ -461,6 +506,48 @@ class PrometheusMetricsRegistry:
         for priority, value in sorted(batch_shed_total.items()):
             labels = _label_suffix({"priority": priority})
             lines.append(f"{BATCH_SHED_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            ADMISSION_QUEUE_DEPTH_NAME,
+            "Outstanding requests admitted to each dynamic-batching path.",
+            "gauge",
+        )
+        for queue, value in sorted(admission_queue_depth.items()):
+            labels = _label_suffix({"queue": queue})
+            lines.append(f"{ADMISSION_QUEUE_DEPTH_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            ADMISSION_QUEUE_SHEDDING_NAME,
+            "Whether each dynamic-batching admission queue is shedding load.",
+            "gauge",
+        )
+        for queue, value in sorted(admission_queue_shedding.items()):
+            labels = _label_suffix({"queue": queue})
+            lines.append(f"{ADMISSION_QUEUE_SHEDDING_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            ADMISSION_QUEUE_WAIT_NAME,
+            "Latest pre-dispatch wait in seconds for each admission queue.",
+            "gauge",
+        )
+        for queue, value in sorted(admission_queue_wait.items()):
+            labels = _label_suffix({"queue": queue})
+            lines.append(
+                f"{ADMISSION_QUEUE_WAIT_NAME}{labels} {_format_sample_value(value)}"
+            )
+
+        _append_family_header(
+            lines,
+            ADMISSION_SHED_NAME,
+            "Requests shed by bounded dynamic-batching admission control.",
+            "counter",
+        )
+        for queue, value in sorted(admission_shed_total.items()):
+            labels = _label_suffix({"queue": queue})
+            lines.append(f"{ADMISSION_SHED_NAME}{labels} {value}")
 
         _append_family_header(
             lines,
