@@ -29,6 +29,13 @@ from .dataflow_tool_processor import (
     process_record,
     script_processor,
 )
+from .executable_udf import (
+    DEFAULT_EXECUTABLE_UDF_MODEL,
+    ExecutableUDFConfig,
+    ExecutableUDFError,
+    redact_tsv_lines,
+    redact_tsv_stream,
+)
 from .lakehouse_redact import (
     LakehouseRedactionProgress,
     LakehouseRedactionResult,
@@ -44,6 +51,14 @@ from .log_redactor import (
     redact_ndjson_lines,
     redact_ndjson_stream,
 )
+from .ray_map_batches import (
+    DEFAULT_RAY_PII_MODEL,
+    ActorPoolConcurrency,
+    BatchFormat,
+    RayDeidentifyBatch,
+    RayMapBatchesDeidentifier,
+    map_batches_deidentify,
+)
 from .spark_streaming import (
     DEFAULT_BATCH_ID_COLUMN,
     DEFAULT_SPARK_POLICY,
@@ -52,6 +67,14 @@ from .spark_streaming import (
     SparkDeidentifyStreamBuilder,
     deidentify_write_stream,
     write_deidentified_stream,
+)
+from .stream_processor import (
+    DEFAULT_STREAM_BATCH_SIZE,
+    DEFAULT_STREAM_POLICY,
+    DeidentifyMapFunction,
+    StreamDeidentifyMapFunction,
+    StreamSink,
+    run_stream_job,
 )
 
 __all__ = [
@@ -62,25 +85,39 @@ __all__ = [
     "CapabilityStatus",
     "ColumnarProgress",
     "ColumnarRedactionResult",
+    "DEFAULT_EXECUTABLE_UDF_MODEL",
     "DEFAULT_DATAFLOW_TOOL_MODEL",
     "DEFAULT_LOG_MESSAGE_FIELDS",
     "DEFAULT_LOG_REDACTION_MODEL",
     "DEFAULT_BATCH_ID_COLUMN",
+    "DEFAULT_RAY_PII_MODEL",
     "DEFAULT_SPARK_POLICY",
+    "DEFAULT_STREAM_BATCH_SIZE",
+    "DEFAULT_STREAM_POLICY",
+    "DeidentifyMapFunction",
+    "ActorPoolConcurrency",
+    "BatchFormat",
     "ENTITY_COUNT_ATTRIBUTE",
     "FIELD_COUNT_ATTRIBUTE",
     "LakehouseRedactionProgress",
     "LakehouseRedactionResult",
+    "ExecutableUDFConfig",
+    "ExecutableUDFError",
     "LogRedactorConfig",
     "LogRedactorError",
     "RECORD_COUNT_ATTRIBUTE",
     "SparkDeidentifyColumn",
     "SparkDeidentifySink",
     "SparkDeidentifyStreamBuilder",
+    "StreamDeidentifyMapFunction",
+    "StreamSink",
     "DataflowToolConfig",
     "DataflowToolProcessorError",
     "clear_pipeline_cache",
     "deidentify_write_stream",
+    "RayDeidentifyBatch",
+    "RayMapBatchesDeidentifier",
+    "map_batches_deidentify",
     "process_flow_file",
     "process_json_lines",
     "process_record",
@@ -94,6 +131,9 @@ __all__ = [
     "redact_log_events",
     "redact_ndjson_lines",
     "redact_ndjson_stream",
+    "run_stream_job",
+    "redact_tsv_lines",
+    "redact_tsv_stream",
     "script_processor",
     "write_deidentified_stream",
 ]
