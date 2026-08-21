@@ -466,19 +466,6 @@ def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
     if bash is None:
         pytest.skip("bash is not available on this platform")
 
-    probe = subprocess.run(
-        [bash, "-n"],
-        capture_output=True,
-        input="",
-        text=True,
-    )
-
-    if probe.returncode != 0:
-        pytest.skip(
-            "bash is available but not executable on this platform: "
-            + probe.stderr.strip()
-        )
-
     markdown = _LOW_BANDWIDTH_DOC.read_text(encoding="utf-8")
     blocks = re.findall(r"```bash\n(.*?)```", markdown, flags=re.DOTALL)
 
@@ -675,8 +662,10 @@ def test_models_pull_exits_nonzero_when_refetched_file_remains_corrupt(
     captured = capsys.readouterr()
     assert result == 1
     assert calls == [False, True]
-    assert "model.bin" in captured.err
-    assert "forced re-fetch" in captured.err
+    assert captured.err == (
+        "Model integrity verification failed after a forced re-fetch.\n"
+    )
+    assert "model.bin" not in captured.err
 
 
 def test_prefetch_model_retries_transient_failures_with_backoff(

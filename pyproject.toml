@@ -170,6 +170,13 @@ quickumls = [
 # opts into the subprocess-only bridge without adding GPL code or dependencies.
 interop-gpl = []
 
+# extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
+# stdin/stdout subprocess bridge. This explicit extra keeps GPL code out of the
+# base and general multimodal environments.
+email-msg-gpl = [
+  "extract-msg>=0.56,<0.57",
+]
+
 multimodal = [
   "numpy>=1.26",
   "openpyxl>=3.1,<4",
@@ -242,6 +249,10 @@ beam = [
   "apache-beam>=2.73,<3",
 ]
 
+airflow = [
+  "apache-airflow>=3.2.2,<4",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -279,6 +290,13 @@ hf = [
   "tokenizers>=0.15"
 ]
 
+# Core pipeline observability. The SDK enables caller-owned in-process
+# providers and test exporters; no network exporter is included or configured.
+otel = [
+  "opentelemetry-api>=1.26,<2",
+  "opentelemetry-sdk>=1.26,<2",
+]
+
 service = [
   "cryptography>=50,<51",
   "fastapi>=0.110",
@@ -290,6 +308,19 @@ service = [
   "protobuf>=5.26,<7",
   "strawberry-graphql[fastapi]>=0.316,<1",
   "uvicorn[standard]>=0.29",
+]
+
+# Client libraries only. OpenMed never installs Triton or KServe servers.
+triton = [
+  "grpcio>=1.64",
+  "httpx>=0.27",
+  "numpy>=1.26",
+  "protobuf>=5.26,<7",
+  "transformers>=4.50",
+]
+
+operator = [
+  "kopf>=1.44.6,<2",
 ]
 
 gliner = [
@@ -330,6 +361,15 @@ onnx-runtime = [
   "tokenizers>=0.15",
 ]
 
+# Minimal, local-artifact ONNX Runtime profile for aarch64 SBCs. It excludes
+# graph-building, Torch, and Transformers dependencies; use onnx-runtime when
+# the application also needs OpenMed's Hub download path.
+edge-sbc = [
+  "numpy>=1.26",
+  "onnxruntime>=1.16",
+  "tokenizers>=0.15",
+]
+
 openvino = [
   "openvino>=2024.0",
   "nncf>=2.10",
@@ -351,7 +391,7 @@ docs = [
 ]
 
 yasbd = [
-  "yasbd-lib>=0.13.1,<0.14",
+  "yasbd-lib>=0.14.0,<0.15",
 ]
 
 [project.scripts]
@@ -370,6 +410,10 @@ override-dependencies = [
   "httplib2>=0.32",
 ]
 conflicts = [
+  [
+    { extra = "airflow" },
+    { extra = "ocr-paddle" },
+  ],
   [
     { extra = "awq" },
     { extra = "gliner" },

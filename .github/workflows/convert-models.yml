@@ -91,7 +91,6 @@ jobs:
     - name: Run queued model release
       env:
         HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
-        HF_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
         OPENMED_BATCH_ITEM: ${{ toJson(matrix) }}
       run: |
         python scripts/release/dispatch_batch.py run-item \

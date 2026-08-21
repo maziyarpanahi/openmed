@@ -15,6 +15,7 @@ expected_routes:
   - docs/hi/onboarding-india/index.html
   - docs/eval/benchmark-leaderboard/index.html
   - docs/demo/web/index.html
+  - docs/demo/privacy-playground/index.html
   - docs/demo/rtl/index.html
 
 expected_assets:
@@ -61,6 +62,7 @@ expected_assets:
   - docs/eval/benchmark-leaderboard/reports/golden.report.json
   - docs/demo/web/app.js
   - docs/demo/web/styles.css
+  - docs/demo/privacy-playground/app.js
 
 translation_groups:
   documentation_home:
@@ -95,19 +97,38 @@ classification:
     - africa-onboarding.md
     - low-bandwidth-install.md
     - quickstarts.md
+    - cli/openmed-init.md
+    - cli/machine-contract.md
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent-skills/install.md
+    - agent-skills/validation.md
+    - agent-skills/setup.md
+    - agent-skills/packs.md
+    - agent-skills/router.md
+    - guides/trace-discovery.md
+    - reference/trace-jsonl.md
+    - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
+    - service/self-hosted-redaction.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
     - serving/tracing.md
+    - guides/parallel-traces.md
+    - guides/streaming-traces.md
+    - guides/trace-audit.md
+    - reference/trace-fidelity.md
     - serving/resilience.md
     - serving/backpressure.md
+    - serving/kserve-triton.md
     - deploy/hardened-image.md
+    - deploy/self-hosted-compose.md
     - offline-install.md
+    - install/standalone.md
+    - install/smoke-check.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
@@ -116,10 +137,13 @@ classification:
     - serving/load-testing.md
     - serving/mtls.md
     - deploy/helm.md
+    - deploy/operator.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
     - model-loader.md
+    - models/bundled-offline.md
+    - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
@@ -150,12 +174,15 @@ classification:
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
+    - configuration/precedence-audit.md
     - profiles.md
     - plugin-sdk.md
+    - plugins/quarantine-report.md
     - batch-processing.md
     - batch-howto.md
     - legacy-indic-encoding.md
     - profiling.md
+    - core-observability.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
     - zero-shot-howto.md
@@ -163,6 +190,12 @@ classification:
     - examples.md
     - examples/notebook-gallery.md
     - document-adapter-provenance.md
+    - reference/chat-schema.md
+    - reference/training-schemas.md
+    - reference/preference-schema.md
+    - multimodal/pdf-reading-order.md
+    - multimodal/pdf-redaction-fidelity.md
+    - multimodal/email-ingestion.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md
     - multimodal/odt-extraction.md
@@ -170,19 +203,25 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/comparator-reports.md
+    - evaluation/comparator-harness.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
+    - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
+    - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - tiers.md
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
     - api/deidentification.md
+    - api/errors.md
     - api/compatibility-gate.md
+    - guides/file-redaction.md
     - reidentification-risk.md
     - privacy/structured-risk-lab.md
     - sms-short-text-deid.md
@@ -193,21 +232,30 @@ classification:
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
+    - security/secret-detection.md
+    - guides/in-place-redaction.md
     - security/tamper-evident-audit-log.md
+    - security/key-management.md
     - integrations-langchain.md
+    - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
-    - integrations-llamaindex.md
+    - integrations/llamaindex.md
     - integrations/columnar-redactor.md
+    - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/dbt.md
+    - integrations/postgres.md
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
+    - integrations/warehouse-remote-function.md
     - spark-deidentification.md
     - prefect-integration.md
+    - integrations/airflow.md
     - spacy-component.md
     - hl7v2-deidentification.md
     - interop/hl7v2-narrative-extraction.md
@@ -303,6 +351,8 @@ classification:
     - compliance/model-card-eu-ai-act-fields.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
+    - demo/browser-egress.md
+    - integrations-llamaindex.md
     - i18n/glossary.md
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md

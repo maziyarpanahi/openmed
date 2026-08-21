@@ -69,6 +69,17 @@ def test_cryptography_license_is_reviewed_without_installed_metadata(monkeypatch
     assert reason == "permissive license"
 
 
+def test_apache_airflow_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("apache-airflow")
+    allowed, reason = policy.is_allowed_license("apache-airflow", license_text)
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_gitpython_license_is_reviewed_without_installed_metadata(monkeypatch):
     monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
 
@@ -131,6 +142,13 @@ dependencies = ["example-gpl>=1"]
     assert len(results) == 1
     assert results[0].allowed is False
     assert "not allowed" in results[0].reason
+
+
+def test_extract_msg_is_an_explicit_subprocess_bridge_exception():
+    allowed, reason = policy.is_allowed_license("extract-msg", "GPL-3.0-only")
+
+    assert allowed is True
+    assert "out-of-process Outlook MSG bridge" in reason
 
 
 def test_elastic_dependency_fails_policy(tmp_path):

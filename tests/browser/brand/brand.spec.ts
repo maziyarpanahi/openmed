@@ -101,6 +101,13 @@ const surfaces: Surface[] = [
   },
   {
     engine: "standalone",
+    name: "privacy-playground",
+    path: "/docs/demo/privacy-playground/",
+    themes: ["light", "dark"],
+    viewports: focusedViewports,
+  },
+  {
+    engine: "standalone",
     name: "rtl-fixture",
     path: "/docs/demo/rtl/",
     themes: ["light", "dark"],
@@ -393,17 +400,32 @@ async function expectVisibleKeyboardFocus(page: Page): Promise<void> {
 }
 
 async function expectTextSpacingReflow(page: Page): Promise<void> {
-  await page.addStyleTag({
-    content: `
-      * {
-        letter-spacing: 0.12em !important;
-        line-height: 1.5 !important;
-        word-spacing: 0.16em !important;
-      }
-      p { margin-bottom: 2em !important; }
-    `,
+  const spacingUrl = new URL(
+    "/__openmed-brand-test-text-spacing.css",
+    page.url(),
+  ).href;
+  await page.route(spacingUrl, async (route) => {
+    await route.fulfill({
+      body: `
+        * {
+          letter-spacing: 0.12em !important;
+          line-height: 1.5 !important;
+          word-spacing: 0.16em !important;
+        }
+        p { margin-bottom: 2em !important; }
+      `,
+      contentType: "text/css",
+      status: 200,
+    });
   });
-  await expectNoPageOverflow(page);
+  const style = await page.addStyleTag({ url: spacingUrl });
+  try {
+    await expectNoPageOverflow(page);
+  } finally {
+    await style.evaluate((element) => element.remove());
+    await style.dispose();
+    await page.unroute(spacingUrl);
+  }
 }
 
 function formatViolations(
@@ -1161,11 +1183,13 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   });
   await search.click();
   await expect(search).toBeFocused();
+  await expect(page.locator("#__search")).toBeChecked();
   await search.pressSequentially("OpenMedSpan");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
   );
+  await expect(page.locator(".md-search-result__link").first()).toBeVisible();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
@@ -1513,6 +1537,7 @@ test("staged artifact manifest owns and hashes every published file", async ({
     routes.get("/docs/eval/benchmark-leaderboard/")?.owner,
   ).toBe("leaderboard");
   expect(routes.get("/docs/demo/web/")?.owner).toBe("browser-demo");
+  expect(routes.get("/docs/demo/privacy-playground/")?.owner).toBe("mkdocs");
 });
 
 test("staged artifact respects recorded byte budgets", async ({

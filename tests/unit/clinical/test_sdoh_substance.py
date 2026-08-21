@@ -2,13 +2,12 @@ from openmed.clinical.sdoh import (
     available_determinant_extractors,
     extract_sdoh,
 )
+from openmed.clinical.sections import detect_sections
 
 
 def test_tobacco_pack_year_smoker_quit_is_past():
-    findings = extract_sdoh(
-        "30 pack-year smoker, quit 2010.",
-        spans=[],
-    )
+    text = "30 pack-year smoker, quit 2010."
+    findings = extract_sdoh(text, spans=[])
 
     tobacco = [finding for finding in findings if finding.category == "tobacco"]
 
@@ -16,6 +15,7 @@ def test_tobacco_pack_year_smoker_quit_is_past():
     assert tobacco[0].status == "past"
     assert tobacco[0].extent == "30 pack-years"
     assert tobacco[0].temporality == "historical"
+    assert text[slice(*tobacco[0].span)] == tobacco[0].value
 
 
 def test_denies_alcohol_is_none():
@@ -67,6 +67,35 @@ def test_negation_does_not_cross_sentence_boundary():
 
     assert status_by_category["alcohol"] == "none"
     assert status_by_category["tobacco"] == "current"
+
+
+def test_status_cues_do_not_cross_adversative_clause():
+    findings = extract_sdoh(
+        "Denies alcohol, but is a current smoker.",
+        spans=[],
+    )
+
+    status_by_category = {finding.category: finding.status for finding in findings}
+
+    assert status_by_category == {"alcohol": "none", "tobacco": "current"}
+
+
+def test_substance_findings_are_scoped_to_social_history_sections():
+    text = (
+        "Assessment: Current smoker.\n"
+        "Social History: Denies alcohol.\n"
+        "Plan: Occasional IVDU."
+    )
+
+    findings = extract_sdoh(
+        text,
+        spans=[],
+        sections=detect_sections(text),
+    )
+
+    assert [(finding.category, finding.status) for finding in findings] == [
+        ("alcohol", "none")
+    ]
 
 
 def test_multiple_tobacco_triggers_in_same_statement_are_deduplicated():

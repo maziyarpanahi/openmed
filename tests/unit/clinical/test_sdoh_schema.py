@@ -40,7 +40,7 @@ def test_sdoh_finding_round_trips_through_dict() -> None:
     assert SDOHFinding.from_dict(payload) == finding
 
 
-def test_extract_sdoh_without_registered_determinants_returns_empty() -> None:
+def test_substance_extractors_are_registered_by_default() -> None:
     available = available_determinant_extractors()
 
     assert "tobacco" in available

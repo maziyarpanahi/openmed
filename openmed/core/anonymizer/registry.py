@@ -568,6 +568,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "es_ES",
         "nl_NL",
         "as_IN",
+        "bn_BD",
         "hi_IN",
         "mr_IN",
         "en_IN",
@@ -632,6 +633,7 @@ _LOCALE_ID_METHODS = {
     "am_ET": "ethiopia_fayda",
     "ar_EG": "egyptian_national_id",
     "ar_MA": "moroccan_cin",
+    "bn_BD": "bangladesh_nid",
     "en_ZA": "south_african_id",
     "en_NG": "nigeria_nin",
     "ha_NG": "nigeria_nin",
@@ -701,7 +703,9 @@ _INDIA_ID_METHODS = {
     "ABDM_HFR_ID": "abdm_hfr_id",
 }
 
-_FIELD_PRESERVING_ID_METHODS = frozenset({"rwanda_id", "tanzania_nida", "uganda_nin"})
+_FIELD_PRESERVING_ID_METHODS = frozenset(
+    {"bangladesh_nid", "rwanda_id", "tanzania_nida", "uganda_nin"}
+)
 
 
 _MRZ_CHARSET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
@@ -867,6 +871,11 @@ def _india_health_id_surrogate(faker, original):
 
 def _gen_id_num(faker, original, *, locale):
     method = _LOCALE_ID_METHODS.get(locale)
+    if locale == "bn_BD" and original:
+        from openmed.core.pii_i18n import validate_bengali_aadhaar
+
+        if validate_bengali_aadhaar(original) and hasattr(faker, "aadhaar"):
+            return _draw_distinct(faker, original, "aadhaar")
     if locale == "zh_CN" and method and hasattr(faker, method) and original:
         from openmed.core.pii_i18n import validate_chinese_resident_id
 
