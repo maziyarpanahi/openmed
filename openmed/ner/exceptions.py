@@ -29,6 +29,7 @@ __all__ = [
     "ConfigurationError",
     "CapabilityError",
     "MissingExtraError",
+    "MissingOptionalDependencyError",
     "ModelLoadError",
     "PolicyError",
     "BudgetExceededError",
@@ -64,3 +65,8 @@ class MissingDependencyError(MissingOptionalDependencyError):
         self.message = message
         self.dependency = dependency
         self.instruction = instruction
+        # Keep the v2.1 constructor-owned attributes visible on this concrete
+        # compatibility class as well as initialized by the shared parent.
+        self.package = dependency
+        self.feature = "This operation"
+        self.extra = None
