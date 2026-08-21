@@ -33,6 +33,7 @@ nav:
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
@@ -45,6 +46,7 @@ nav:
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
       - Hardened Service Image: deploy/hardened-image.md
+      - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - HMAC Request Signing: serving/request-signing.md
@@ -117,6 +119,7 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
