@@ -45,9 +45,11 @@ synthetic or already-deidentified provenance when building that input.
 The policy rejects POSIX and Windows path separators, control characters,
 traversal components, unsupported filename characters, and values that look
 like direct identifiers. It also rejects arbitrary metadata fields such as
-`subject_id`; only the typed fields above are accepted. A fingerprint must be
-a short or full hexadecimal SHA-256 digest, so a raw identifier cannot be
-silently placed in the fingerprint slot.
+`subject_id`; only the typed fields above are accepted. A supplied text
+fingerprint must be a full hexadecimal SHA-256 digest; the policy shortens it
+only while constructing the filename. This prevents a short numeric identifier
+from being silently placed in the fingerprint slot. Final names are limited to
+240 ASCII characters.
 
 Names do not contain a generated timestamp. An explicit ISO date or datetime
 may be passed as `explicit_timestamp` when a caller has a documented need for

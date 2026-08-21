@@ -19,7 +19,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Any, Final, NoReturn
+from typing import Any, Final, NoReturn, cast
 
 EXPORT_FILENAME_SCHEMA_VERSION: Final[str] = "openmed.export_filename.v1"
 SCHEMA_VERSION: Final[int] = 1
@@ -28,9 +28,12 @@ DEFAULT_FINGERPRINT_LENGTH: Final[int] = 12
 MIN_FINGERPRINT_LENGTH: Final[int] = 6
 MAX_FINGERPRINT_LENGTH: Final[int] = 64
 MAX_COMPONENT_LENGTH: Final[int] = 64
+MAX_FILENAME_LENGTH: Final[int] = 240
+_MAX_COMPONENT_INPUT_LENGTH: Final[int] = 256
+_MAX_TIMESTAMP_INPUT_LENGTH: Final[int] = 64
 
 _COMPONENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?")
-_HEX_FINGERPRINT_RE = re.compile(r"[0-9a-f]{6,64}")
+_HEX_FINGERPRINT_RE = re.compile(r"[0-9a-f]{64}")
 _UUID_RE = re.compile(
     r"(?<![a-z0-9])[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![a-z0-9])"
@@ -42,6 +45,19 @@ _NAMED_IDENTIFIER_RE = re.compile(
 )
 _EXPLICIT_IDENTIFIER_RE = re.compile(
     r"(?:^|[-_.])(?:identifier|raw|sensitive|id)(?:$|[-_.])"
+)
+_ALLOWED_METADATA_FIELDS = frozenset(
+    {
+        "artifact_type",
+        "format",
+        "format_name",
+        "schema_version",
+        "fingerprint",
+        "provenance_fingerprint",
+        "extension",
+        "explicit_timestamp",
+        "timestamp",
+    }
 )
 
 
@@ -55,7 +71,7 @@ ExportFilenameError = ExportNamingError
 def _fail(field: str, reason: str) -> NoReturn:
     """Raise a value-only error that never includes the rejected value."""
 
-    raise ExportNamingError(f"{field} {reason}")
+    raise ExportNamingError(f"{field} {reason}") from None
 
 
 def _reject_path_syntax(value: str, field: str) -> None:
@@ -81,8 +97,10 @@ def _looks_like_raw_identifier(value: str) -> bool:
 def _normalise_component(value: object, field: str) -> str:
     """Validate and normalize one non-sensitive filename component."""
 
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError(f"{field} must be a string")
+    if len(value) > _MAX_COMPONENT_INPUT_LENGTH:
+        _fail(field, "is too long")
     _reject_path_syntax(value, field)
     candidate = value.strip().lower()
     if not candidate:
@@ -99,9 +117,13 @@ def _normalise_component(value: object, field: str) -> str:
 def _normalise_schema_version(value: object) -> str:
     """Normalize a string or integer schema version without exposing it."""
 
-    if isinstance(value, bool) or not isinstance(value, (str, int)):
+    if type(value) not in (str, int):
         raise TypeError("schema_version must be a string or integer")
-    return _normalise_component(str(value), "schema_version")
+    try:
+        rendered = str(value)
+    except Exception:
+        _fail("schema_version", "could not be normalized")
+    return _normalise_component(rendered, "schema_version")
 
 
 def _normalise_extension(value: object, format_name: str) -> str:
@@ -109,7 +131,7 @@ def _normalise_extension(value: object, format_name: str) -> str:
 
     if value is None:
         return format_name
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError("extension must be a string")
     candidate = value[1:] if value.startswith(".") else value
     if not candidate:
@@ -120,27 +142,37 @@ def _normalise_extension(value: object, format_name: str) -> str:
 def _normalise_fingerprint(value: object) -> str:
     """Return a canonical ``sha256:`` fingerprint without echoing input."""
 
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        raw = bytes(value)
+    if type(value) is bytes:
+        raw = value
+    elif type(value) in (bytearray, memoryview):
+        try:
+            raw = bytes(cast(bytearray | memoryview, value))
+        except Exception:
+            _fail("fingerprint", "could not be read safely")
+    else:
+        raw = None
+    if raw is not None:
         if not raw:
             _fail("fingerprint", "must not be empty")
         return f"{FINGERPRINT_ALGORITHM}:{hashlib.sha256(raw).hexdigest()}"
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError("fingerprint must be hexadecimal text or bytes")
 
+    if len(value) > len(FINGERPRINT_ALGORITHM) + MAX_FINGERPRINT_LENGTH + 3:
+        _fail("fingerprint", "is too long")
     _reject_path_syntax(value, "fingerprint")
     candidate = value.strip().lower()
     if candidate.startswith(f"{FINGERPRINT_ALGORITHM}:"):
         candidate = candidate.split(":", 1)[1]
     if not _HEX_FINGERPRINT_RE.fullmatch(candidate):
-        _fail("fingerprint", "must be a short hexadecimal digest")
+        _fail("fingerprint", "must be a full hexadecimal SHA-256 digest")
     return f"{FINGERPRINT_ALGORITHM}:{candidate}"
 
 
 def _normalise_fingerprint_length(value: object) -> int:
     """Validate the requested visible fingerprint prefix length."""
 
-    if isinstance(value, bool) or not isinstance(value, int):
+    if type(value) is not int:
         raise TypeError("fingerprint_length must be an integer")
     if not MIN_FINGERPRINT_LENGTH <= value <= MAX_FINGERPRINT_LENGTH:
         _fail(
@@ -153,13 +185,16 @@ def _normalise_fingerprint_length(value: object) -> int:
 def _format_datetime(value: datetime) -> str:
     """Render an explicitly supplied datetime without punctuation or paths."""
 
-    resolved = value
-    suffix = ""
-    if value.tzinfo is not None:
-        resolved = value.astimezone(timezone.utc)
-        suffix = "z"
-    fraction = f"{resolved.microsecond:06d}" if resolved.microsecond else ""
-    return resolved.strftime("%Y%m%dt%H%M%S") + fraction + suffix
+    try:
+        resolved = value
+        suffix = ""
+        if value.tzinfo is not None:
+            resolved = value.astimezone(timezone.utc)
+            suffix = "z"
+        fraction = f"{resolved.microsecond:06d}" if resolved.microsecond else ""
+        return resolved.strftime("%Y%m%dt%H%M%S") + fraction + suffix
+    except Exception:
+        _fail("explicit_timestamp", "could not be normalized")
 
 
 def _normalise_explicit_timestamp(value: object) -> str | None:
@@ -167,13 +202,15 @@ def _normalise_explicit_timestamp(value: object) -> str | None:
 
     if value is None:
         return None
-    if isinstance(value, datetime):
+    if type(value) is datetime:
         return _format_datetime(value)
-    if isinstance(value, date):
+    if type(value) is date:
         return value.strftime("%Y%m%d")
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError("explicit_timestamp must be an ISO date or datetime")
 
+    if len(value) > _MAX_TIMESTAMP_INPUT_LENGTH:
+        _fail("explicit_timestamp", "is too long")
     _reject_path_syntax(value, "explicit_timestamp")
     candidate = value.strip()
     if not candidate:
@@ -199,10 +236,10 @@ def _canonical_json(value: Any) -> bytes:
             separators=(",", ":"),
             sort_keys=True,
         )
-    except (TypeError, ValueError, OverflowError) as exc:
+    except Exception:
         raise ExportNamingError(
             "fingerprint source must be finite and JSON-serializable"
-        ) from exc
+        ) from None
     return serialized.encode("utf-8")
 
 
@@ -213,8 +250,11 @@ def fingerprint_for(value: Any) -> str:
     exception text, or a report.  Mappings are canonicalized by key order.
     """
 
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        raw = bytes(value)
+    if type(value) in (bytes, bytearray, memoryview):
+        try:
+            raw = bytes(value)
+        except Exception:
+            _fail("fingerprint source", "could not be read safely")
     else:
         raw = _canonical_json(value)
     return f"{FINGERPRINT_ALGORITHM}:{hashlib.sha256(raw).hexdigest()}"
@@ -270,7 +310,7 @@ class ExportArtifactMetadata:
     def provenance_fingerprint(self) -> str:
         """Return the canonical provenance digest."""
 
-        return self.fingerprint
+        return cast(str, self.fingerprint)
 
     def to_dict(self) -> dict[str, Any]:
         """Return stable metadata without any source or identifier values."""
@@ -291,46 +331,70 @@ ArtifactMetadata = ExportArtifactMetadata
 ExportMetadata = ExportArtifactMetadata
 
 
+def _snapshot_metadata_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Read a bounded allowlisted mapping without retaining exception context."""
+
+    try:
+        iterator = iter(value)
+    except Exception:
+        _fail("metadata", "could not be read safely")
+
+    snapshot: dict[str, Any] = {}
+    for _ in range(len(_ALLOWED_METADATA_FIELDS) + 1):
+        try:
+            key = next(iterator)
+        except StopIteration:
+            return snapshot
+        except Exception:
+            _fail("metadata", "could not be read safely")
+        if type(key) is not str or key not in _ALLOWED_METADATA_FIELDS:
+            _fail("metadata", "contains unsupported fields")
+        if key in snapshot:
+            _fail("metadata", "contains duplicate fields")
+        try:
+            snapshot[key] = value[key]
+        except Exception:
+            _fail("metadata", "could not be read safely")
+    _fail("metadata", "contains unsupported fields")
+
+
 def _metadata_from_mapping(value: Mapping[str, Any]) -> ExportArtifactMetadata:
-    """Build typed metadata from an allowlisted mapping."""
+    """Build typed metadata from a bounded allowlisted mapping snapshot."""
 
-    allowed = {
-        "artifact_type",
-        "format",
-        "format_name",
-        "schema_version",
-        "fingerprint",
-        "provenance_fingerprint",
-        "extension",
-        "explicit_timestamp",
-        "timestamp",
-    }
-    if any(key not in allowed for key in value):
-        _fail("metadata", "contains unsupported fields")
-
-    format_value = value.get("format")
-    format_name_value = value.get("format_name")
+    fields = _snapshot_metadata_mapping(value)
+    format_value = fields.get("format")
+    format_name_value = fields.get("format_name")
     if format_value is not None and format_name_value is not None:
         _fail("metadata", "contains conflicting format fields")
-    fingerprint_value = value.get("fingerprint")
-    provenance_value = value.get("provenance_fingerprint")
+    fingerprint_value = fields.get("fingerprint")
+    provenance_value = fields.get("provenance_fingerprint")
     if fingerprint_value is not None and provenance_value is not None:
         _fail("metadata", "contains conflicting fingerprint fields")
-    timestamp_value = value.get("explicit_timestamp")
-    timestamp_alias = value.get("timestamp")
+    timestamp_value = fields.get("explicit_timestamp")
+    timestamp_alias = fields.get("timestamp")
     if timestamp_value is not None and timestamp_alias is not None:
         _fail("metadata", "contains conflicting timestamp fields")
 
     return ExportArtifactMetadata(
-        artifact_type=value.get("artifact_type"),
-        format=format_value if format_value is not None else format_name_value,
-        schema_version=value.get("schema_version"),
-        fingerprint=(
-            fingerprint_value if fingerprint_value is not None else provenance_value
+        artifact_type=cast(str, fields.get("artifact_type")),
+        format=cast(
+            str, format_value if format_value is not None else format_name_value
         ),
-        extension=value.get("extension"),
+        schema_version=cast(str | int, fields.get("schema_version")),
+        fingerprint=(
+            cast(
+                str | bytes,
+                fingerprint_value
+                if fingerprint_value is not None
+                else provenance_value,
+            )
+        ),
+        extension=cast(str | None, fields.get("extension")),
         explicit_timestamp=(
-            timestamp_value if timestamp_value is not None else timestamp_alias
+            cast(
+                str | date | datetime | None,
+                timestamp_value if timestamp_value is not None else timestamp_alias,
+            )
         ),
     )
 
@@ -385,13 +449,23 @@ def build_export_filename(
             _fail("fingerprint", "has conflicting aliases")
         if explicit_timestamp is not None and timestamp is not None:
             _fail("explicit_timestamp", "has conflicting aliases")
+        resolved_format = format if format is not None else format_name
+        resolved_fingerprint = (
+            fingerprint if fingerprint is not None else provenance_fingerprint
+        )
+        if artifact_type is None:
+            raise TypeError("artifact_type must be a string")
+        if resolved_format is None:
+            raise TypeError("format must be a string")
+        if schema_version is None:
+            raise TypeError("schema_version must be a string or integer")
+        if resolved_fingerprint is None:
+            raise TypeError("fingerprint must be hexadecimal text or bytes")
         metadata = ExportArtifactMetadata(
             artifact_type=artifact_type,
-            format=format if format is not None else format_name,
+            format=resolved_format,
             schema_version=schema_version,
-            fingerprint=(
-                fingerprint if fingerprint is not None else provenance_fingerprint
-            ),
+            fingerprint=resolved_fingerprint,
             extension=extension,
             explicit_timestamp=(
                 explicit_timestamp if explicit_timestamp is not None else timestamp
@@ -399,19 +473,33 @@ def build_export_filename(
         )
     elif isinstance(metadata, Mapping):
         metadata = _metadata_from_mapping(metadata)
-    elif not isinstance(metadata, ExportArtifactMetadata):
+    elif isinstance(metadata, ExportArtifactMetadata):
+        if type(metadata) is not ExportArtifactMetadata:
+            raise TypeError("metadata must be exact export metadata or a mapping")
+        metadata = ExportArtifactMetadata(
+            artifact_type=metadata.artifact_type,
+            format=metadata.format,
+            schema_version=metadata.schema_version,
+            fingerprint=metadata.fingerprint,
+            extension=metadata.extension,
+            explicit_timestamp=metadata.explicit_timestamp,
+        )
+    else:
         raise TypeError("metadata must be export metadata or a mapping")
 
-    parts = [
+    parts: list[str] = [
         metadata.artifact_type,
         metadata.format,
         "schema",
-        metadata.schema_version,
+        cast(str, metadata.schema_version),
         _normalise_fingerprint(metadata.fingerprint).split(":", 1)[1][:resolved_length],
     ]
     if metadata.explicit_timestamp is not None:
-        parts.append(metadata.explicit_timestamp)
-    return "-".join(parts) + f".{metadata.extension}"
+        parts.append(cast(str, metadata.explicit_timestamp))
+    filename = "-".join(parts) + f".{cast(str, metadata.extension)}"
+    if len(filename) > MAX_FILENAME_LENGTH:
+        _fail("filename", f"exceeds the {MAX_FILENAME_LENGTH}-character limit")
+    return filename
 
 
 def make_export_filename(
@@ -448,6 +536,7 @@ def export_naming_policy() -> dict[str, Any]:
             "minimum": MIN_FINGERPRINT_LENGTH,
             "maximum": MAX_FINGERPRINT_LENGTH,
         },
+        "filename_length": {"maximum": MAX_FILENAME_LENGTH},
         "timestamp_policy": "omitted_unless_explicitly_supplied",
         "raw_identifier_policy": "reject",
         "path_policy": "relative_single_filename",
@@ -467,6 +556,7 @@ __all__ = [
     "ExportNamingError",
     "FINGERPRINT_ALGORITHM",
     "MAX_COMPONENT_LENGTH",
+    "MAX_FILENAME_LENGTH",
     "MAX_FINGERPRINT_LENGTH",
     "MIN_FINGERPRINT_LENGTH",
     "SCHEMA_VERSION",

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import traceback
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timezone
+from typing import Any
 
 import pytest
 
 from openmed.core.export_naming import (
     DEFAULT_FINGERPRINT_LENGTH,
     EXPORT_FILENAME_SCHEMA_VERSION,
+    MAX_FILENAME_LENGTH,
     ExportArtifactMetadata,
     ExportNamingError,
     build_export_filename,
@@ -170,6 +174,85 @@ def test_unsupported_metadata_fields_are_rejected_without_serializing_values() -
     assert "synthetic-subject-482901" not in str(error.value)
 
 
+def test_hostile_mapping_failure_is_value_free() -> None:
+    secret = "synthetic-sensitive-mapping-482901"
+
+    class HostileMapping(Mapping[str, Any]):
+        def __getitem__(self, key: str) -> Any:
+            raise RuntimeError(f"{secret}:{key}")
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(("artifact_type",))
+
+        def __len__(self) -> int:
+            return 1
+
+    with pytest.raises(ExportNamingError) as error:
+        build_export_filename(HostileMapping())
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(error.value), error.value, error.value.__traceback__
+        )
+    )
+    assert secret not in rendered
+
+
+def test_serialization_failure_does_not_retain_exception_context() -> None:
+    secret = "synthetic-sensitive-serialization-482901"
+
+    class ExplodingKey(str):
+        def __lt__(self, other: object) -> bool:
+            raise RuntimeError(secret)
+
+    with pytest.raises(ExportNamingError) as error:
+        fingerprint_for({ExplodingKey("first"): 1, ExplodingKey("second"): 2})
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(error.value), error.value, error.value.__traceback__
+        )
+    )
+    assert secret not in rendered
+
+
+def test_tampered_metadata_is_revalidated_without_echoing_values() -> None:
+    secret = "synthetic-sensitive/path-482901"
+    metadata = ExportArtifactMetadata(
+        artifact_type="audit-report",
+        format="json",
+        schema_version="v1",
+        fingerprint=_FINGERPRINT,
+    )
+    object.__setattr__(metadata, "artifact_type", secret)
+
+    with pytest.raises(ExportNamingError) as error:
+        build_export_filename(metadata)
+
+    assert secret not in str(error.value)
+
+
+def test_fingerprint_input_requires_a_full_sha256_digest() -> None:
+    with pytest.raises(ExportNamingError, match="full hexadecimal SHA-256"):
+        build_export_filename(
+            artifact_type="audit-report",
+            format="json",
+            schema_version="v1",
+            fingerprint="482901",
+        )
+
+
+def test_final_filename_length_is_bounded() -> None:
+    with pytest.raises(ExportNamingError, match=str(MAX_FILENAME_LENGTH)):
+        build_export_filename(
+            artifact_type="a" * 64,
+            format="b" * 64,
+            schema_version="c" * 64,
+            fingerprint="d" * 64,
+            extension="e" * 64,
+        )
+
+
 def test_policy_report_is_stable_and_value_free() -> None:
     report = export_naming_policy()
 
@@ -178,6 +261,7 @@ def test_policy_report_is_stable_and_value_free() -> None:
         "hash_algorithm": "sha256",
         "default_fingerprint_length": 12,
         "fingerprint_length": {"minimum": 6, "maximum": 64},
+        "filename_length": {"maximum": 240},
         "timestamp_policy": "omitted_unless_explicitly_supplied",
         "raw_identifier_policy": "reject",
         "path_policy": "relative_single_filename",

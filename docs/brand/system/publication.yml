@@ -309,6 +309,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
     - security/threat-model-multilingual-ingestion.md
