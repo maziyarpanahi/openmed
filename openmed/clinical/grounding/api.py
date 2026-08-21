@@ -7,14 +7,16 @@ from dataclasses import replace
 from typing import Any
 
 from openmed.core.labels import normalize_label
+from openmed.core.offline import network_blocked_if_offline
 
 from ..context import ClinicalAssertion, ClinicalContextResult, RerankContext
 from .decompose import decompose_and_relink
 from .embeddings import AliasEncoder
-from .matcher import LexicalMatcher
+from .matcher import ConceptMatch, LexicalMatcher
 from .postcoordination import PostCoordinationStage
 from .ranker import CandidateRankingStage, RankingConfig
 from .restricted import UserKeyVocabularyLoader
+from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
 from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -23,7 +25,7 @@ from .vocab import (
     normalize_language,
 )
 
-__all__ = ["DEFAULT_GROUNDING_SYSTEMS", "ground"]
+__all__ = ["DEFAULT_GROUNDING_SYSTEMS", "ground", "ground_payload"]
 
 DEFAULT_GROUNDING_SYSTEMS: tuple[str, ...] = (
     "rxnorm",
@@ -57,14 +59,17 @@ _LABEL_FIELDS = ("canonical_label", "label", "entity_label", "entity_type")
 
 
 def ground(
-    spans: Iterable[Any],
+    spans: Iterable[Any] | Mapping[str, Any] | GroundedSpan | str,
     systems: Sequence[str] = DEFAULT_GROUNDING_SYSTEMS,
     *,
     loader: VocabLoader | None = None,
     encoder: AliasEncoder | None = None,
     config: RankingConfig | None = None,
     restricted_loaders: Mapping[str, UserKeyVocabularyLoader] | None = None,
+    restricted_endpoint: Any = None,
     source_language: str | None = None,
+    offline: bool = False,
+    local_only: bool | None = None,
     normalize_composites: bool = False,
     composite_atomic_terms: Iterable[str] | None = None,
     postcoordination: PostCoordinationStage | None = None,
@@ -91,7 +96,11 @@ def ground(
         encoder: Optional local dense encoder. No encoder download occurs.
         config: Optional ranking configuration.
         restricted_loaders: Explicit user-key-gated local UMLS/SNOMED loaders.
+        restricted_endpoint: Optional caller-configured out-of-process endpoint
+            for restricted terminology lookups.
         source_language: Default source language when a span omits one.
+        offline: Whether to block network access during grounding.
+        local_only: Compatibility alias for ``offline`` when provided.
         normalize_composites: Opt in to rules-first composite decomposition and
             child re-linking before emission. Exact whole-span concepts remain
             single pre-coordinated results; uncodable proposals are retained as
@@ -112,6 +121,100 @@ def ground(
             requested without an explicit gated loader.
     """
 
+    if local_only is not None:
+        offline = bool(local_only)
+    raw_spans = _coerce_span_inputs(spans)
+    ordered_systems = _normalize_systems(systems)
+    selected_loader = loader
+    if selected_loader is None and any(
+        canonical_system(system) not in RESTRICTED_SYSTEMS for system in ordered_systems
+    ):
+        selected_loader = VocabLoader(local_only=offline)
+    if offline and isinstance(selected_loader, VocabLoader):
+        selected_loader.local_only = True
+
+    with network_blocked_if_offline(local_only=offline):
+        return _ground_spans(
+            raw_spans,
+            ordered_systems,
+            loader=selected_loader,
+            encoder=encoder,
+            config=config,
+            restricted_loaders=restricted_loaders,
+            restricted_endpoint=restricted_endpoint,
+            source_language=source_language,
+            offline=offline,
+            normalize_composites=normalize_composites,
+            composite_atomic_terms=composite_atomic_terms,
+            postcoordination=postcoordination,
+        )
+
+
+def ground_payload(
+    spans: Iterable[Any] | Mapping[str, Any] | GroundedSpan | str,
+    systems: Sequence[str] = DEFAULT_GROUNDING_SYSTEMS,
+    *,
+    loader: VocabLoader | None = None,
+    encoder: AliasEncoder | None = None,
+    config: RankingConfig | None = None,
+    restricted_loaders: Mapping[str, UserKeyVocabularyLoader] | None = None,
+    restricted_endpoint: Any = None,
+    source_language: str | None = None,
+    offline: bool = True,
+    local_only: bool | None = None,
+) -> dict[str, Any]:
+    """Return the shared REST/CLI grounding response contract."""
+
+    if local_only is not None:
+        offline = bool(local_only)
+    raw_spans = _coerce_span_inputs(spans)
+    selected_loader = loader
+    ordered_systems = _normalize_systems(systems)
+    free_systems = tuple(
+        system for system in ordered_systems if system in _FREE_ALIASES
+    )
+    if selected_loader is None and free_systems:
+        selected_loader = VocabLoader(local_only=offline)
+    results = ground(
+        raw_spans,
+        ordered_systems,
+        loader=selected_loader,
+        encoder=encoder,
+        config=config,
+        restricted_loaders=restricted_loaders,
+        restricted_endpoint=restricted_endpoint,
+        source_language=source_language,
+        offline=offline,
+    )
+    snapshots = _snapshot_provenance(
+        selected_loader,
+        free_systems,
+        restricted_loaders=restricted_loaders,
+    )
+    return {
+        "schema_version": "openmed.grounding.v1",
+        "offline": bool(offline),
+        "systems": list(ordered_systems),
+        "snapshots": snapshots,
+        "results": [result.to_dict() for result in results],
+    }
+
+
+def _ground_spans(
+    spans: Sequence[Any],
+    systems: Sequence[str],
+    *,
+    loader: VocabLoader | None,
+    encoder: AliasEncoder | None,
+    config: RankingConfig | None,
+    restricted_loaders: Mapping[str, UserKeyVocabularyLoader] | None,
+    restricted_endpoint: Any,
+    source_language: str | None,
+    offline: bool,
+    normalize_composites: bool,
+    composite_atomic_terms: Iterable[str] | None,
+    postcoordination: PostCoordinationStage | None,
+) -> list[GroundedSpan]:
     ordered_systems = _normalize_systems(systems)
     if not isinstance(normalize_composites, bool):
         raise TypeError("normalize_composites must be a boolean")
@@ -130,11 +233,20 @@ def ground(
     restricted_systems = tuple(
         system for system in ordered_systems if system in _RESTRICTED_ALIASES
     )
-    gated = _prepare_restricted_matchers(restricted_systems, restricted_loaders)
+    gated = _prepare_restricted_matchers(
+        restricted_systems,
+        restricted_loaders,
+        restricted_endpoint=restricted_endpoint,
+    )
     stage = (
         CandidateRankingStage(loader, encoder=encoder, config=config)
         if free_systems
         else None
+    )
+    snapshots = _snapshot_provenance(
+        loader,
+        free_systems,
+        restricted_loaders=restricted_loaders,
     )
 
     results: list[GroundedSpan] = []
@@ -142,8 +254,9 @@ def ground(
         span = _coerce_span(raw_span, index=index, default_language=source_language)
         rerank_context = _rerank_context(raw_span, span.assertion)
 
-        def link_surface(surface: str) -> list[Candidate]:
+        def rank_surface(surface: str) -> tuple[list[Candidate], list[Candidate]]:
             candidates: list[Candidate] = []
+            alternatives: list[Candidate] = []
             if stage is not None:
                 ranked = stage.rank(
                     surface,
@@ -151,8 +264,13 @@ def ground(
                     context=rerank_context,
                     source_language=span.source_language,
                 )
-                candidates.extend(
-                    _select_one_per_system(item.candidate for item in ranked)
+                ranked_candidates = [item.candidate for item in ranked]
+                candidates.extend(_select_one_per_system(ranked_candidates))
+                selected_keys = {(item.system, item.code) for item in candidates}
+                alternatives.extend(
+                    item
+                    for item in ranked_candidates
+                    if (item.system, item.code) not in selected_keys
                 )
             for system in restricted_systems:
                 matcher, gated_loader = gated[system]
@@ -167,13 +285,16 @@ def ground(
                         display=match.display,
                         score=match.score,
                         source_language=span.source_language,
-                        source="sparse",
+                        source="endpoint" if restricted_endpoint else "sparse",
                         matched_alias=match.matched_term,
                         match_kind=match.match_type,
-                        vocab_version=gated_loader.content_hash,
+                        vocab_version=_restricted_version(gated_loader),
                     )
                 )
-            return _ordered_candidates(candidates, ordered_systems)
+            return _ordered_candidates(candidates, ordered_systems), alternatives
+
+        def link_surface(surface: str) -> list[Candidate]:
+            return rank_surface(surface)[0]
 
         if normalize_composites:
             byte_start = _first_value(raw_span, ("byte_start", "start_byte"))
@@ -190,22 +311,39 @@ def ground(
                 source_language=span.source_language,
                 metadata=span.metadata,
             )
-            emitted = decomposition.spans
+            emitted = tuple(
+                replace(
+                    item,
+                    section=span.section,
+                    provenance={
+                        **item.provenance,
+                        "offline": bool(offline),
+                        "snapshot_provenance": snapshots,
+                    },
+                )
+                for item in decomposition.spans
+            )
             if postcoordination is not None:
                 emitted = tuple(postcoordination.apply(item) for item in emitted)
             results.extend(emitted)
             continue
 
-        candidates = link_surface(span.text)
+        candidates, alternatives = rank_surface(span.text)
         grounded_span = GroundedSpan(
             text=span.text,
             start=span.start,
             end=span.end,
             candidates=tuple(candidates),
+            alternatives=tuple(alternatives),
             canonical_label=span.canonical_label,
             assertion=span.assertion,
             source_language=span.source_language,
             metadata=span.metadata,
+            section=span.section,
+            provenance={
+                "offline": bool(offline),
+                "snapshot_provenance": snapshots,
+            },
         )
         if postcoordination is not None:
             grounded_span = postcoordination.apply(grounded_span)
@@ -220,13 +358,16 @@ def _normalize_systems(systems: Sequence[str]) -> tuple[str, ...]:
     for raw_system in systems:
         if not isinstance(raw_system, str):
             raise TypeError("grounding system names must be strings")
-        key = raw_system.strip().casefold().replace("_", "-")
-        if key in {"cpt", "cpt4", "cpt-4"}:
+        system = canonical_system(raw_system)
+        if system == "cpt":
             raise RestrictedVocabularyError(
-                "CPT is proprietary and remains caller-supplied and out of process."
+                f"{system.upper()} is proprietary and remains caller-supplied and "
+                "out of process."
             )
-        system = _FREE_ALIASES.get(key) or _RESTRICTED_ALIASES.get(key)
-        if system is None:
+        if system not in FREE_VOCAB_SYSTEMS and system not in {
+            "umls",
+            "snomed",
+        }:
             allowed = sorted({*FREE_VOCAB_SYSTEMS, "umls", "snomed"})
             raise ValueError(
                 f"unsupported grounding system {raw_system!r}; expected {allowed}"
@@ -238,12 +379,37 @@ def _normalize_systems(systems: Sequence[str]) -> tuple[str, ...]:
     return tuple(normalized)
 
 
+def _coerce_span_inputs(
+    spans: Iterable[Any] | Mapping[str, Any] | GroundedSpan | str,
+) -> list[Any]:
+    """Normalize text, one entity, or an iterable of entity records."""
+
+    if isinstance(spans, (str, Mapping, GroundedSpan)):
+        return [spans]
+    try:
+        return list(spans)
+    except TypeError as exc:
+        raise TypeError(
+            "spans must be text, one entity mapping, or an iterable of spans"
+        ) from exc
+
+
 def _prepare_restricted_matchers(
     systems: Sequence[str],
     loaders: Mapping[str, UserKeyVocabularyLoader] | None,
-) -> dict[str, tuple[LexicalMatcher, UserKeyVocabularyLoader]]:
+    *,
+    restricted_endpoint: Any = None,
+) -> dict[str, tuple[Any, Any]]:
     if not systems:
         return {}
+    if restricted_endpoint is not None:
+        return {
+            system: (
+                _endpoint_matcher(restricted_endpoint, system),
+                restricted_endpoint,
+            )
+            for system in systems
+        }
     normalized_loaders = {
         _RESTRICTED_ALIASES.get(key.strip().casefold().replace("_", "-"), key): value
         for key, value in (loaders or {}).items()
@@ -253,9 +419,10 @@ def _prepare_restricted_matchers(
         gated_loader = normalized_loaders.get(system)
         if gated_loader is None or gated_loader.system != system:
             raise RestrictedVocabularyError(
-                f"{system.upper()} grounding requires an explicit matching "
-                "UserKeyVocabularyLoader; restricted content is never bundled "
-                "or downloaded."
+                f"{system.upper()} grounding requires an explicit matching, "
+                "configured, user-supplied "
+                "out-of-process terminology endpoint; restricted content is never "
+                "bundled or downloaded."
             )
         result[system] = (
             LexicalMatcher(
@@ -265,6 +432,50 @@ def _prepare_restricted_matchers(
             gated_loader,
         )
     return result
+
+
+class _EndpointMatcher:
+    """Adapter for an explicitly supplied out-of-process terminology service."""
+
+    def __init__(self, endpoint: Any, system: str) -> None:
+        self.endpoint = endpoint
+        self.system = system
+        if not callable(getattr(endpoint, "lookup", None)):
+            raise TypeError("restricted_endpoint must expose lookup(system, text)")
+
+    def lookup(self, query: str, *, limit: int = 1) -> tuple[ConceptMatch, ...]:
+        raw_matches = self.endpoint.lookup(self.system, query, limit=limit)
+        if isinstance(raw_matches, Mapping):
+            raw_matches = raw_matches.get("matches", ())
+        if isinstance(raw_matches, (str, bytes)) or raw_matches is None:
+            return ()
+        matches: list[ConceptMatch] = []
+        for raw in raw_matches:
+            if not isinstance(raw, Mapping):
+                continue
+            code = raw.get("code") or raw.get("concept_id")
+            display = raw.get("display") or raw.get("preferred_term")
+            if not code or not display:
+                continue
+            score = raw.get("confidence", raw.get("score", 0.0))
+            matches.append(
+                ConceptMatch(
+                    system_uri=SYSTEM_URIS[self.system],
+                    code=str(code),
+                    display=str(display),
+                    score=float(score),
+                    match_type="exact",
+                    matched_term=str(raw.get("matched_term") or display),
+                    metadata={"source": "user-supplied-out-of-process"},
+                )
+            )
+        return tuple(matches[:limit])
+
+
+def _endpoint_matcher(endpoint: Any, system: str) -> _EndpointMatcher:
+    """Return an adapter without touching the endpoint until a query arrives."""
+
+    return _EndpointMatcher(endpoint, system)
 
 
 def _coerce_span(
@@ -297,6 +508,7 @@ def _coerce_span(
     label = _first_value(raw_span, _LABEL_FIELDS)
     language = _first_value(raw_span, ("source_language", "language", "lang"))
     metadata = _first_value(raw_span, ("metadata", "meta")) or {}
+    section = _first_value(raw_span, ("section", "section_label"))
     assertion_value = _first_value(raw_span, ("assertion", "context"))
     if assertion_value is None and isinstance(metadata, Mapping):
         assertion_value = metadata.get("clinical_context")
@@ -321,6 +533,7 @@ def _coerce_span(
         assertion=assertion,
         source_language=normalize_language(language or default_language),
         metadata=metadata,
+        section=str(section).strip() if section is not None else None,
     )
 
 
@@ -391,3 +604,44 @@ def _first_value(source: Any, fields: Sequence[str]) -> Any:
         if value is not None:
             return value
     return None
+
+
+def _snapshot_provenance(
+    loader: VocabLoader | None,
+    systems: Sequence[str],
+    *,
+    restricted_loaders: Mapping[str, UserKeyVocabularyLoader] | None,
+) -> dict[str, dict[str, str]]:
+    """Collect stable snapshot metadata without retaining source surfaces."""
+
+    if loader is None and not restricted_loaders:
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    if loader is not None:
+        snapshot_method = getattr(loader, "snapshot_provenance", None)
+        if callable(snapshot_method) and systems:
+            result.update(snapshot_method(systems))
+    for raw_system, restricted_loader in (restricted_loaders or {}).items():
+        system = canonical_system(raw_system)
+        if system not in result:
+            result[system] = {
+                "system": system,
+                "system_uri": system_uri(system) or "",
+                "version": restricted_loader.content_hash,
+                "sha256": restricted_loader.content_hash,
+                "content_hash": restricted_loader.content_hash,
+                "artifact": "user-supplied-local",
+            }
+    return result
+
+
+def _restricted_version(loader: Any) -> str:
+    """Return a stable endpoint/local-loader version without reading secrets."""
+
+    value = getattr(loader, "content_hash", None)
+    if isinstance(value, str) and value:
+        return value
+    value = getattr(loader, "version", None)
+    if isinstance(value, str) and value:
+        return value
+    return "user-supplied-endpoint"
