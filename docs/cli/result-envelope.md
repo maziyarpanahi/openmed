@@ -59,8 +59,9 @@ count:
 Use `ArtifactFingerprint.from_bytes()` or `.from_file()` to calculate a
 fingerprint. File paths and artifact bytes are never included in the envelope;
 the name must be a lowercase logical identifier rather than a path. File
-fingerprinting requires a stable regular file and rejects links, special files,
-or files replaced or modified while hashing.
+fingerprinting requires a stable regular file and rejects symbolic links,
+special files, or files replaced or modified while hashing. The local path is
+checked before any artifact byte is read and rechecked after hashing.
 
 ## Canonical serialization
 

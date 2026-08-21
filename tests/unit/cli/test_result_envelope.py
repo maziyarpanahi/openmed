@@ -138,6 +138,29 @@ def test_file_fingerprint_validates_name_before_opening_path(
         ArtifactFingerprint.from_file("not a logical name", "unused")
 
 
+def test_file_fingerprint_rejects_symlink_before_opening_target(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_path = tmp_path / "synthetic-sensitive-target.json"
+    artifact_path = tmp_path / "artifact-link.json"
+    target_path.write_bytes(b'{"synthetic":"sensitive"}\n')
+    try:
+        artifact_path.symlink_to(target_path)
+    except OSError:
+        pytest.skip("symbolic links are unavailable on this platform")
+
+    def unexpected_open(*args: Any, **kwargs: Any) -> int:
+        del args, kwargs
+        raise AssertionError("symbolic-link target must not be opened")
+
+    monkeypatch.setattr(result_envelope_module.os, "open", unexpected_open)
+
+    with pytest.raises(ResultEnvelopeError) as raised:
+        ArtifactFingerprint.from_file("report", artifact_path)
+
+    assert "synthetic-sensitive-target" not in str(raised.value)
+
+
 def test_numeric_wire_values_stay_in_the_interoperable_json_range() -> None:
     with pytest.raises(ResultEnvelopeError, match="bounded non-negative integer"):
         ArtifactFingerprint("report", "a" * 64, MAX_SAFE_INTEGER + 1)

@@ -327,12 +327,22 @@ class ArtifactFingerprint:
         )
         try:
             artifact_path = Path(path)
+            initial_path_stat = os.stat(artifact_path, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(initial_path_stat.st_mode)
+                or initial_path_stat.st_size < 0
+                or initial_path_stat.st_size > MAX_SAFE_INTEGER
+            ):
+                raise OSError
             descriptor = os.open(os.fspath(artifact_path), flags)
             opened_stat = os.fstat(descriptor)
             if (
                 not stat.S_ISREG(opened_stat.st_mode)
                 or opened_stat.st_size < 0
                 or opened_stat.st_size > MAX_SAFE_INTEGER
+                or not os.path.samestat(initial_path_stat, opened_stat)
+                or _portable_stat_state(initial_path_stat)
+                != _portable_stat_state(opened_stat)
             ):
                 raise OSError
 
@@ -349,17 +359,18 @@ class ArtifactFingerprint:
 
             verification_descriptor = os.open(os.fspath(artifact_path), flags)
             verification_stat = os.fstat(verification_descriptor)
-            path_stat = os.stat(artifact_path, follow_symlinks=False)
+            final_path_stat = os.stat(artifact_path, follow_symlinks=False)
             if (
                 not stat.S_ISREG(verification_stat.st_mode)
-                or not stat.S_ISREG(path_stat.st_mode)
+                or not stat.S_ISREG(final_path_stat.st_mode)
                 or not os.path.samestat(opened_stat, verification_stat)
-                or not os.path.samestat(verification_stat, path_stat)
+                or not os.path.samestat(verification_stat, final_path_stat)
                 or _stable_stat_state(final_descriptor_stat)
                 != _stable_stat_state(opened_stat)
                 or _stable_stat_state(verification_stat)
                 != _stable_stat_state(opened_stat)
-                or _portable_stat_state(path_stat) != _portable_stat_state(opened_stat)
+                or _portable_stat_state(final_path_stat)
+                != _portable_stat_state(opened_stat)
                 or size_bytes != opened_stat.st_size
             ):
                 raise OSError
