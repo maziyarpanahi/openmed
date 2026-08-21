@@ -49,30 +49,10 @@ are deterministic for the same input and configuration. A partition replay
 recreates the worker from the same serialized settings; callers supplying a
 custom worker factory must keep that factory deterministic as well.
 
-For a local contract test, use `redact_partition` with a synthetic worker
-factory. The factory is called once per partition attempt and can be tested
-without a Spark installation:
-
-```python
-from openmed.interop.spark import SparkRedactionConfig, redact_partition
-
-config = SparkRedactionConfig(columns=["note"], method="mask")
-
-def worker_factory():
-    def redact(text, **kwargs):
-        return text.replace("synthetic-person-001@example.test", "[EMAIL]")
-
-    return redact
-
-rows = [{"note": "synthetic-person-001@example.test", "kind": "fixture"}]
-redacted_rows = list(
-    redact_partition(rows, config, deidentifier_factory=worker_factory)
-)
-```
-
-`deidentifier_factory` is an explicit test or advanced-runtime seam. If it is
-used with a real Spark DataFrame, it must be serializable by the Spark worker
-runtime and must not capture driver-owned mutable state.
+For offline contract tests, call `redact_partition` with a synthetic worker
+factory. The factory runs once per partition attempt. A factory used with a
+real DataFrame must be serializable and must not capture driver-owned mutable
+state.
 
 ## Failure and privacy boundary
 
