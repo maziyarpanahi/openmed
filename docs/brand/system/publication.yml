@@ -126,6 +126,7 @@ classification:
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md
     - offline-install.md
+    - install/standalone.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
@@ -141,6 +142,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - models/bundled-offline.md
+    - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
@@ -345,6 +347,7 @@ classification:
     - compliance/model-card-eu-ai-act-fields.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
+    - demo/browser-egress.md
     - i18n/glossary.md
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md

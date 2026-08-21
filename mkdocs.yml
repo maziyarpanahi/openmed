@@ -51,6 +51,7 @@ nav:
       - Hardened Service Image: deploy/hardened-image.md
       - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
+      - Standalone Local Redactor Manifest: install/standalone.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
@@ -66,6 +67,7 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
