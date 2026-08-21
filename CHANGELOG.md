@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
+- Added a deterministic offline installation smoke check with a clean
+  temporary home, selected-environment entry-point and package-version proof,
+  bundled-manifest validation, repeatable synthetic redaction hashes, and
+  value-free failure reports (#2378).
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).
