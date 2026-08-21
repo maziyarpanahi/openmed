@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a canonical, lockfile-backed uv contributor workflow with an explicitly
+  pinned CI frontend, frozen optional-extra installs, uv-native package builds,
+  and documented pip and Nix fallback paths (#2339).
 - Added deterministic counts-only comparator reports with fixed metric
   definitions, bounded aggregate failure accounting, hashed custom identifiers,
   immutable sanitized state, environment fingerprints, and value-free JSON,

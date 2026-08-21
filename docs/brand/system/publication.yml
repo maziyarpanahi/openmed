@@ -237,6 +237,7 @@ classification:
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/dbt.md
     - integrations/postgres.md
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
