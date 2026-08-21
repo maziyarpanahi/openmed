@@ -13,9 +13,9 @@ exception details, or record-level values.
 | Outcome | Command path | Exit code | Error code |
 | --- | --- | ---: | --- |
 | Success | `models list` | `0` | — |
-| Validation failure | `risk discover` | `2` | `invalid_argument` |
+| Validation failure | `risk discover` | `2` | `invalid_discovery_config` |
 | Offline failure | `models pull` | `1` | `offline_unavailable` |
-| Privacy-policy failure | `risk assess` | `1` | `privacy_policy_failed` |
+| Privacy-policy failure | `risk assess` | `1` | `release_policy_failed` |
 
 The canonical definitions live in
 `openmed/cli/contract.py`. They are rendered through the shared output helpers,

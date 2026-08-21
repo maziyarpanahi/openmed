@@ -23,9 +23,17 @@ from ._output import (
     emit_error,
 )
 
-VALIDATION_ERROR_CODE = "invalid_argument"
+VALIDATION_ERROR_CODE = "invalid_discovery_config"
+VALIDATION_ERROR_MESSAGE = (
+    "The structured discovery configuration does not match the input schema."
+)
 OFFLINE_ERROR_CODE = "offline_unavailable"
-PRIVACY_POLICY_ERROR_CODE = "privacy_policy_failed"
+OFFLINE_ERROR_MESSAGE = "The requested operation requires a local model cache."
+PRIVACY_POLICY_ERROR_CODE = "release_policy_failed"
+PRIVACY_POLICY_ERROR_MESSAGE = (
+    "Structured release does not meet the configured privacy policy; "
+    "the aggregate assessment was written to the requested output."
+)
 
 
 @dataclass(frozen=True)
@@ -153,7 +161,7 @@ VALIDATION_FAILURE_FIXTURE = CliContractFixture(
     command="risk discover",
     expected_exit_code=EXIT_USAGE,
     error_code=VALIDATION_ERROR_CODE,
-    error_message="The supplied arguments are not valid.",
+    error_message=VALIDATION_ERROR_MESSAGE,
 )
 
 OFFLINE_FAILURE_FIXTURE = CliContractFixture(
@@ -161,7 +169,7 @@ OFFLINE_FAILURE_FIXTURE = CliContractFixture(
     command="models pull",
     expected_exit_code=EXIT_ERROR,
     error_code=OFFLINE_ERROR_CODE,
-    error_message="The requested operation requires a local model cache.",
+    error_message=OFFLINE_ERROR_MESSAGE,
 )
 
 PRIVACY_POLICY_FAILURE_FIXTURE = CliContractFixture(
@@ -169,7 +177,7 @@ PRIVACY_POLICY_FAILURE_FIXTURE = CliContractFixture(
     command="risk assess",
     expected_exit_code=EXIT_ERROR,
     error_code=PRIVACY_POLICY_ERROR_CODE,
-    error_message="The configured privacy policy was not satisfied.",
+    error_message=PRIVACY_POLICY_ERROR_MESSAGE,
 )
 
 CONTRACT_FIXTURES = (
@@ -183,11 +191,14 @@ CONTRACT_FIXTURES = (
 __all__ = [
     "CONTRACT_FIXTURES",
     "OFFLINE_ERROR_CODE",
+    "OFFLINE_ERROR_MESSAGE",
     "OFFLINE_FAILURE_FIXTURE",
     "PRIVACY_POLICY_ERROR_CODE",
+    "PRIVACY_POLICY_ERROR_MESSAGE",
     "PRIVACY_POLICY_FAILURE_FIXTURE",
     "SUCCESS_FIXTURE",
     "VALIDATION_ERROR_CODE",
+    "VALIDATION_ERROR_MESSAGE",
     "VALIDATION_FAILURE_FIXTURE",
     "CliContractFixture",
     "CliContractResult",
