@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
 
+import openmed.interop.artifact_inventory as artifact_inventory_module
 from openmed.interop.artifact_inventory import (
     ArtifactInventory,
     ArtifactInventoryEntry,
@@ -121,6 +123,53 @@ def test_symlink_escape_is_rejected(tmp_path: Path):
         build_artifact_inventory(["linked.json"], root=root)
 
 
+def test_symlink_swap_is_rejected_before_external_content_is_fingerprinted(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    root = tmp_path / "synthetic-artifacts"
+    artifact = root / "artifact.json"
+    held_artifact = root / "held-artifact.json"
+    outside = tmp_path / "outside.json"
+    original_content = b"synthetic original fixture"
+    outside_content = b"synthetic external secret"
+    _write(artifact, original_content)
+    _write(outside, outside_content)
+    swapped = False
+    original_path_open = Path.open
+    original_os_open = os.open
+
+    def swap_artifact() -> None:
+        nonlocal swapped
+        if swapped:
+            return
+        swapped = True
+        artifact.rename(held_artifact)
+        artifact.symlink_to(outside)
+
+    def swapping_path_open(self: Path, *args, **kwargs):
+        if self == artifact:
+            swap_artifact()
+        return original_path_open(self, *args, **kwargs)
+
+    def swapping_os_open(path, flags, mode=0o777, *, dir_fd=None):
+        if Path(path) == artifact:
+            swap_artifact()
+        if dir_fd is None:
+            return original_os_open(path, flags, mode)
+        return original_os_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(Path, "open", swapping_path_open)
+    monkeypatch.setattr(artifact_inventory_module.os, "open", swapping_os_open)
+
+    with pytest.raises(UnreadableArtifactError) as excinfo:
+        build_artifact_inventory(["artifact.json"], root=root)
+
+    assert "external secret" not in str(excinfo.value)
+    assert held_artifact.read_bytes() == original_content
+    assert outside.read_bytes() == outside_content
+
+
 def test_duplicate_normalized_paths_are_rejected(tmp_path: Path):
     root = tmp_path / "synthetic-artifacts"
     _write(root / "artifact.json", b"{}")
@@ -135,14 +184,16 @@ def test_unreadable_entries_are_sanitized(
     root = tmp_path / "synthetic-artifacts"
     unreadable = root / "synthetic-sensitive-value.json"
     _write(unreadable, b"synthetic content")
-    original_open = Path.open
+    original_open = os.open
 
-    def fail_open(self: Path, *args, **kwargs):
-        if self == unreadable:
+    def fail_open(path, flags, mode=0o777, *, dir_fd=None):
+        if Path(path) == unreadable:
             raise PermissionError("synthetic-sensitive-value.json contents")
-        return original_open(self, *args, **kwargs)
+        if dir_fd is None:
+            return original_open(path, flags, mode)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(Path, "open", fail_open)
+    monkeypatch.setattr(artifact_inventory_module.os, "open", fail_open)
     with pytest.raises(UnreadableArtifactError) as excinfo:
         build_artifact_inventory([unreadable], root=root)
 
@@ -227,6 +278,24 @@ def test_report_options_reject_caller_injected_values():
     assert sensitive_value not in str(flag_excinfo.value)
 
 
+def test_report_write_replaces_symlink_without_following_it(tmp_path: Path):
+    inventory = ArtifactInventory()
+    external_path = tmp_path / "external.txt"
+    output_path = tmp_path / "inventory.json"
+    external_path.write_text("keep external content", encoding="utf-8")
+    try:
+        output_path.symlink_to(external_path)
+    except OSError:
+        pytest.skip("symbolic links are not available on this filesystem")
+
+    written = inventory.write_json(output_path)
+
+    assert written == output_path
+    assert not output_path.is_symlink()
+    assert json.loads(output_path.read_text(encoding="utf-8"))["artifact_count"] == 0
+    assert external_path.read_text(encoding="utf-8") == "keep external content"
+
+
 def test_report_write_failures_do_not_leak_output_paths(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -237,11 +306,12 @@ def test_report_write_failures_do_not_leak_output_paths(
     def fail_write(*args, **kwargs):
         raise OSError(str(output_path))
 
-    monkeypatch.setattr(Path, "write_text", fail_write)
+    monkeypatch.setattr(artifact_inventory_module.os, "replace", fail_write)
     with pytest.raises(ArtifactInventoryError) as excinfo:
         inventory.write_json(output_path)
 
     assert sensitive_value not in str(excinfo.value)
+    assert not list(output_path.parent.glob(".inventory.json.*.tmp"))
 
 
 def test_artifact_count_is_bounded_before_file_access(tmp_path: Path):

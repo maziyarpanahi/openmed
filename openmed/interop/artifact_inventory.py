@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import stat
+import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import islice
@@ -305,29 +306,50 @@ class ArtifactInventory:
         """Write a deterministic JSON report and return its output path."""
 
         report = self.to_json(indent=indent, counts_only=counts_only) + "\n"
-        try:
-            output_path = Path(path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(report, encoding="utf-8")
-        except Exception:
-            raise ArtifactInventoryError(
-                "artifact inventory report could not be written"
-            ) from None
-        return output_path
+        return _write_report(path, report)
 
     def write_markdown(self, path: str | Path, *, counts_only: bool = True) -> Path:
         """Write a deterministic Markdown report and return its output path."""
 
         report = self.to_markdown(counts_only=counts_only)
-        try:
-            output_path = Path(path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(report, encoding="utf-8")
-        except Exception:
-            raise ArtifactInventoryError(
-                "artifact inventory report could not be written"
-            ) from None
+        return _write_report(path, report)
+
+
+def _write_report(path: str | Path, report: str) -> Path:
+    descriptor: int | None = None
+    temporary_path: Path | None = None
+    try:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            dir=output_path.parent,
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            descriptor = None
+            stream.write(report)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, output_path)
+        temporary_path = None
         return output_path
+    except Exception:
+        raise ArtifactInventoryError(
+            "artifact inventory report could not be written"
+        ) from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,19 +618,54 @@ def _validate_path(path: Path, context: _PathContext, index: int) -> _ValidatedP
 def _read_fingerprint(path: Path, index: int) -> tuple[int, str]:
     digest = hashlib.sha256()
     byte_count = 0
+    descriptor: int | None = None
     try:
-        mode = path.stat().st_mode
-        if not mode & (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH):
+        before_open = path.lstat()
+        if not stat.S_ISREG(before_open.st_mode):
+            raise OSError
+        if not before_open.st_mode & (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH):
             raise PermissionError
-        with path.open("rb") as stream:
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not _same_file_snapshot(
+            before_open, opened
+        ):
+            raise OSError
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = None
             while chunk := stream.read(_CHUNK_SIZE):
                 byte_count += len(chunk)
                 digest.update(chunk)
+            after_read = os.fstat(stream.fileno())
+        after_path = path.lstat()
+        if not _same_file_snapshot(opened, after_read) or not _same_file_snapshot(
+            after_read, after_path
+        ):
+            raise OSError
     except (OSError, ValueError, TypeError):
         raise UnreadableArtifactError(
             f"artifact entry {index + 1} could not be read"
         ) from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     return byte_count, f"{_FINGERPRINT_PREFIX}{digest.hexdigest()}"
+
+
+def _same_file_snapshot(first: os.stat_result, second: os.stat_result) -> bool:
+    return (
+        stat.S_ISREG(first.st_mode)
+        and stat.S_ISREG(second.st_mode)
+        and first.st_dev == second.st_dev
+        and first.st_ino == second.st_ino
+        and first.st_size == second.st_size
+        and first.st_mtime_ns == second.st_mtime_ns
+    )
 
 
 def _media_type_for_path(path: str) -> str:
