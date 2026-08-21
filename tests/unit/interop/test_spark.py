@@ -235,3 +235,16 @@ def test_apply_uses_map_partitions_without_importing_pyspark() -> None:
         "rows": [[{"id": 1, "note": "[EMAIL]", "status": "ok"}]],
         "schema": "synthetic-schema",
     }
+
+
+def test_dataframe_contract_failure_does_not_expose_source_value() -> None:
+    class ExplodingDataFrame:
+        @property
+        def columns(self):
+            raise RuntimeError(f"driver detail: {_SYNTHETIC_VALUE}")
+
+    with pytest.raises(TypeError) as exc_info:
+        SparkRedactionTransform(columns=["note"]).apply(ExplodingDataFrame())
+
+    assert _SYNTHETIC_VALUE not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None

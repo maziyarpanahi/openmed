@@ -271,10 +271,16 @@ class SparkRedactionTransform:
         """
 
         _validate_dataframe_columns(dataframe, self.columns)
-        rdd = getattr(dataframe, "rdd", None)
-        map_with_index = getattr(rdd, "mapPartitionsWithIndex", None)
-        session = getattr(dataframe, "sparkSession", None)
-        create_dataframe = getattr(session, "createDataFrame", None)
+        try:
+            rdd = getattr(dataframe, "rdd", None)
+            map_with_index = getattr(rdd, "mapPartitionsWithIndex", None)
+            session = getattr(dataframe, "sparkSession", None)
+            create_dataframe = getattr(session, "createDataFrame", None)
+        except Exception:
+            raise TypeError(
+                "dataframe must expose rdd.mapPartitionsWithIndex() and "
+                "sparkSession.createDataFrame()"
+            ) from None
         if not callable(map_with_index) or not callable(create_dataframe):
             raise TypeError(
                 "dataframe must expose rdd.mapPartitionsWithIndex() and "
@@ -402,8 +408,8 @@ def _normalize_columns(columns: Sequence[str] | None) -> tuple[str, ...]:
         raise TypeError("columns must be a sequence of column names")
     try:
         values = tuple(columns)
-    except TypeError as exc:
-        raise TypeError("columns must be a sequence of column names") from exc
+    except Exception:
+        raise TypeError("columns must be a sequence of column names") from None
     if not values:
         raise ValueError("columns must contain at least one column")
 
@@ -430,8 +436,13 @@ def _normalize_extra_kwargs(
     if not isinstance(values, Mapping):
         raise TypeError("extra kwargs must be a mapping")
 
+    try:
+        supplied_items = tuple(values.items())
+    except Exception:
+        raise TypeError("extra kwargs could not be read") from None
+
     normalized: list[tuple[str, bytes]] = []
-    for key, value in values.items():
+    for key, value in supplied_items:
         if not isinstance(key, str) or not key:
             raise TypeError("extra kwargs keys must be non-empty strings")
         if key in _RESERVED_KWARGS:
@@ -452,14 +463,21 @@ def _validate_partition_id(partition_id: int) -> None:
 
 
 def _validate_dataframe_columns(dataframe: Any, columns: Sequence[str]) -> None:
-    available = getattr(dataframe, "columns", None)
+    try:
+        available = getattr(dataframe, "columns", None)
+    except Exception:
+        raise TypeError("dataframe must expose a sequence of columns") from None
     if isinstance(available, (str, bytes)) or available is None:
         raise TypeError("dataframe must expose a sequence of columns")
     try:
         available_set = set(available)
-    except TypeError as exc:
-        raise TypeError("dataframe must expose a sequence of columns") from exc
-    if any(column not in available_set for column in columns):
+    except Exception:
+        raise TypeError("dataframe must expose a sequence of columns") from None
+    try:
+        missing_column = any(column not in available_set for column in columns)
+    except Exception:
+        raise TypeError("dataframe must expose a sequence of columns") from None
+    if missing_column:
         raise SparkRedactionError("dataframe is missing a configured text column")
 
 
