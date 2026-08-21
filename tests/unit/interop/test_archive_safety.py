@@ -61,7 +61,7 @@ def test_traversal_and_links_are_rejected_without_echoing_member_names():
     assert sensitive_name not in repr(traversal)
 
 
-def test_duplicates_and_expansion_limits_are_quarantined():
+def test_duplicates_are_rejected_even_with_resource_limit_findings():
     policy = ArchiveSafetyPolicy(
         max_entries=5,
         max_member_uncompressed_bytes=500,
@@ -77,7 +77,7 @@ def test_duplicates_and_expansion_limits_are_quarantined():
 
     report = inspect_archive_members(members, policy)
 
-    assert report.decision is ArchiveDecision.QUARANTINE
+    assert report.decision is ArchiveDecision.REJECT
     assert report.reason_counts["duplicate_path"] == 1
     assert report.reason_counts["expansion_ratio"] == 1
     assert report.reason_counts["total_size_limit"] == 1
@@ -134,6 +134,42 @@ def test_malformed_sizes_are_rejected_without_raw_values_in_errors():
     assert "unsupported-kind" not in repr(report)
 
 
+def test_conflicting_metadata_aliases_fail_closed_without_echoing_values():
+    sensitive_name = "../synthetic-sensitive-placeholder"
+
+    report = inspect_archive_members(
+        [
+            {
+                "path": "records/safe.txt",
+                "name": sensitive_name,
+                "compressed_size": 10,
+                "uncompressed_size": 20,
+            }
+        ]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+    assert "synthetic-sensitive-placeholder" not in repr(report.to_dict())
+
+
+@pytest.mark.parametrize("link_flag", [1, "false", None])
+def test_non_boolean_link_flags_are_invalid(link_flag: object):
+    report = inspect_archive_members(
+        [
+            {
+                "path": "records/item.txt",
+                "compressed_size": 10,
+                "uncompressed_size": 20,
+                "is_link": link_flag,
+            }
+        ]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
 def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
     marker = "synthetic-archive-hook-value-733"
 
@@ -158,6 +194,8 @@ def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
     "path",
     [
         "records/CON.txt",
+        "records/CONIN$.txt",
+        "records/CONOUT$.txt",
         "records/item.txt:stream",
         "records/trailing.",
         "records/hidden\u202efile.txt",

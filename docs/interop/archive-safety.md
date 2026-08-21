@@ -12,10 +12,11 @@ decisions:
 
 - `allow`: the supplied metadata is within policy and has no structural
   findings.
-- `quarantine`: resource or ambiguity limits were exceeded. A separate review
-  must approve the archive before extraction.
-- `reject`: traversal, links, malformed metadata, or another structural safety
-  finding was detected. The archive must not be extracted.
+- `quarantine`: resource limits were exceeded. A separate review must approve
+  the archive before extraction.
+- `reject`: traversal, links, duplicate normalized paths, malformed metadata,
+  or another structural safety finding was detected. The archive must not be
+  extracted.
 
 Diagnostics contain reason codes and counts only. Member paths and link targets
 are not copied into reports, serialized output, or exception messages.

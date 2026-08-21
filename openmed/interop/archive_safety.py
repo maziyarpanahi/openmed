@@ -49,6 +49,8 @@ _WINDOWS_RESERVED_NAMES = frozenset(
         "aux",
         "clock$",
         "con",
+        "conin$",
+        "conout$",
         "nul",
         "prn",
         *(f"com{index}" for index in range(1, 10)),
@@ -140,10 +142,14 @@ class ArchiveMember:
                 ("link_target", "target"),
                 default=None,
             )
-            link_flag = any(
-                metadata.get(key) is True
-                for key in ("is_link", "is_symlink", "is_hardlink")
-            )
+            link_flags: list[bool] = []
+            for key in ("is_link", "is_symlink", "is_hardlink"):
+                if key in metadata:
+                    value = metadata[key]
+                    if type(value) is not bool:
+                        raise ValueError
+                    link_flags.append(value)
+            link_flag = any(link_flags)
         except (KeyboardInterrupt, SystemExit):
             raise
         except BaseException:
@@ -466,9 +472,17 @@ def _first_value(
     *,
     default: Any = _MISSING,
 ) -> Any:
+    values: list[Any] = []
     for key in keys:
         if key in metadata:
-            return metadata[key]
+            values.append(metadata[key])
+    if values:
+        first = values[0]
+        if any(
+            type(value) is not type(first) or value != first for value in values[1:]
+        ):
+            raise ValueError
+        return first
     if default is not _MISSING:
         return default
     return None
@@ -586,6 +600,7 @@ def _decision_for(reason_counts: Mapping[str, int]) -> ArchiveDecision:
         ArchiveSafetyReason.PATH_TRAVERSAL.value,
         ArchiveSafetyReason.PATH_TOO_LONG.value,
         ArchiveSafetyReason.LINK.value,
+        ArchiveSafetyReason.DUPLICATE_PATH.value,
     )
     if any(reason_counts.get(reason, 0) for reason in structural):
         return ArchiveDecision.REJECT
