@@ -65,6 +65,7 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
