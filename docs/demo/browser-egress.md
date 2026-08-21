@@ -42,6 +42,10 @@ requires a fixed cache query, allowlist that complete asset URL instead. A
 request to an API, analytics endpoint, CDN, websocket, or other remote data
 service will raise `NetworkEgressViolation`.
 
+Every network request must also expose an explicit `GET` method. A URL-only
+trace entry cannot prove its method or absence of an upload body, so it fails
+closed even when the URL matches a configured model asset.
+
 The same flow can be used with a synthetic event source in an offline unit
 test:
 

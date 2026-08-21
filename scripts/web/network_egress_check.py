@@ -253,8 +253,10 @@ class NetworkEgressProbe:
         """Record one browser request event without inspecting its payload.
 
         ``request`` may be a Playwright request object, a mapping containing a
-        ``url`` field, or a URL string. Headers and bodies are intentionally
-        ignored so a trace cannot accidentally collect sensitive data.
+        ``url`` field, or a URL string. URL-only network entries fail closed
+        because they cannot prove the request method. Headers and bodies are
+        intentionally ignored so a trace cannot accidentally collect sensitive
+        data.
         """
 
         if len(self._requests) >= _MAX_REQUESTS:
@@ -364,7 +366,7 @@ def assert_no_unexpected_requests(
 def _coerce_request(request: Any) -> _ObservedRequest:
     if isinstance(request, str):
         url: Any = request
-        method: Any = "GET"
+        method: Any = None
         resource_type: Any = "other"
     else:
         url = _request_value(request, "url")

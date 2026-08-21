@@ -220,6 +220,19 @@ def test_model_asset_request_requires_an_explicit_get_method() -> None:
     assert report.unexpected_request_count == 1
 
 
+def test_url_only_model_asset_request_fails_closed() -> None:
+    """A URL string cannot prove that an allowlisted request used GET."""
+
+    report = check_network_egress(
+        [f"{MODEL_ROOT}model.onnx"],
+        allowed_model_assets=(MODEL_ROOT,),
+    )
+
+    assert report.allowed_model_asset_count == 0
+    assert report.requests[0].method == "UNKNOWN"
+    assert report.unexpected_request_count == 1
+
+
 def test_internal_browser_schemes_are_not_network_egress() -> None:
     """Data and blob URLs used inside the page do not count as remote calls."""
 
