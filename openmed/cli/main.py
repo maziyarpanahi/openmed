@@ -62,7 +62,7 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
-from .benchmark import add_generalization_command
+from .benchmark import add_cost_command, add_generalization_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
 from .redact_files import add_redact_files_command
@@ -2838,6 +2838,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Trim rendered context windows to this many characters around a span.",
     )
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
+    add_cost_command(benchmark_sub)
     add_generalization_command(benchmark_sub)
 
 
