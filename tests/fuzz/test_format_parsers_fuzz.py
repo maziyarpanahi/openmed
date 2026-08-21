@@ -17,6 +17,7 @@ import importlib.util
 import multiprocessing
 import os
 import queue
+import sys
 import tempfile
 import time
 import traceback
@@ -45,10 +46,13 @@ from . import conftest as _fuzz_conftest  # noqa: F401  (import for side effects
 pytestmark = pytest.mark.fuzz
 
 _SEED_DIR = Path(__file__).with_name("seeds")
-# Windows filesystem and antivirus hooks can make even the tiny valid EPUB
-# fixture exceed the Unix budget on a shared runner. Keep execution bounded,
-# but use a platform default that measures parser hangs rather than host noise.
-_DEFAULT_PARSER_TIMEOUT_SECONDS = 2.0 if os.name == "nt" else 0.5
+# Windows filesystem and antivirus hooks, plus macOS framework startup and
+# filesystem contention, can make tiny valid fixtures exceed the Linux budget
+# on shared runners. Keep execution bounded, but use a platform default that
+# measures parser hangs rather than host noise.
+_DEFAULT_PARSER_TIMEOUT_SECONDS = (
+    2.0 if os.name == "nt" or sys.platform == "darwin" else 0.5
+)
 _PARSER_TIMEOUT_SECONDS = float(
     os.environ.get(
         "OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS",
