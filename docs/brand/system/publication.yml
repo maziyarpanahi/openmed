@@ -255,6 +255,7 @@ classification:
     - integrations/warehouse-remote-function.md
     - spark-deidentification.md
     - prefect-integration.md
+    - integrations/airflow.md
     - spacy-component.md
     - hl7v2-deidentification.md
     - interop/hl7v2-narrative-extraction.md
