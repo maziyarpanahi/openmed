@@ -109,6 +109,42 @@ def test_verified_checksum_is_pass_and_tampering_is_not_ready(tmp_path: Path) ->
     assert str(cache_dir) not in bootstrap_check.render_json(tampered)
 
 
+def test_deeply_nested_manifest_fails_closed_without_leaking_values(
+    tmp_path: Path,
+) -> None:
+    """A manifest decoder recursion failure becomes a value-free diagnostic."""
+
+    cache_dir = tmp_path / "synthetic-cache"
+    _write_snapshot(cache_dir)
+    manifest = cache_dir / "integrity" / "synthetic" / "hostile.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        '{"model_id":"OpenMed/synthetic-model","nested":'
+        + "[" * 2_000
+        + "0"
+        + "]" * 2_000
+        + "}",
+        encoding="utf-8",
+    )
+
+    report = bootstrap_check.run_bootstrap_check(
+        cache_dir=cache_dir,
+        model_id="OpenMed/synthetic-model",
+        require_checksum=True,
+    )
+
+    assert report.ready is False
+    assert report.categories["checksum"].reason == "checksum_mismatch"
+    assert report.categories["checksum"].to_dict() == {
+        "status": "fail",
+        "reason": "checksum_mismatch",
+        "manifests_checked": 1,
+        "verified": 0,
+        "failed": 1,
+    }
+    assert str(cache_dir) not in bootstrap_check.render_json(report)
+
+
 def test_required_extra_and_offline_policy_fail_without_leaking_values(
     monkeypatch,
     tmp_path: Path,

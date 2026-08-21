@@ -665,6 +665,7 @@ def _check_checksum(
         except (
             ModelIntegrityError,
             OSError,
+            RecursionError,
             TypeError,
             ValueError,
             json.JSONDecodeError,
@@ -940,7 +941,7 @@ def _integrity_manifests(
 def _manifest_matches_model(path: Path, model_id: str) -> bool:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, RecursionError, TypeError, ValueError, json.JSONDecodeError):
         return True
     if not isinstance(payload, Mapping):
         return True
