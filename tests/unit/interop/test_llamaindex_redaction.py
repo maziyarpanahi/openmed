@@ -433,6 +433,16 @@ def test_ingestion_transform_exposes_counts_only_audit_metadata(monkeypatch) -> 
     assert "555-0100" not in repr(audit)
 
 
+def test_audit_collapses_untrusted_entity_labels_without_exposing_them() -> None:
+    sensitive_label = "SYNTHETIC_SENSITIVE_VALUE"
+    audit = llamaindex_adapter.LlamaIndexRedactionAudit(
+        entity_counts={sensitive_label: 2}
+    ).to_dict()
+
+    assert audit["entity_counts"] == {"OTHER": 2}
+    assert sensitive_label not in repr(audit)
+
+
 def test_ingestion_transform_keeps_source_ids_stable_across_calls(monkeypatch) -> None:
     monkeypatch.setattr(llamaindex_adapter, "_import_module", fake_import)
     transform = llamaindex_adapter.create_redaction_transform(

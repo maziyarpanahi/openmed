@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
@@ -15,6 +14,7 @@ from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from openmed.core.capabilities import raise_missing_backend
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.interop.function_tools import (
     RuntimeProvider,
     create_tool_callable,
@@ -24,16 +24,16 @@ from openmed.mcp.tool_registry import render_adapter_tool_definitions
 
 Deidentifier = Callable[..., Any]
 _NODE_ID_NAMESPACE = uuid5(NAMESPACE_URL, "https://openmed.ai/llamaindex-redaction")
-_AUDIT_LABEL_RE = re.compile(r"^[A-Z0-9][A-Z0-9_:-]{0,63}$")
 
 
 def _safe_audit_label(value: Any) -> str:
     """Return a bounded category name safe for counts-only metadata."""
 
-    label = str(value or "").strip().upper()
-    if len(label) > 2 and label[1] == "-" and label[0] in "BIES":
-        label = label[2:]
-    return label if _AUDIT_LABEL_RE.fullmatch(label) else "UNKNOWN"
+    try:
+        label = normalize_label(str(value or ""))
+    except Exception:  # noqa: BLE001 - untrusted detector label object
+        return "OTHER"
+    return label if label in CANONICAL_LABELS else "OTHER"
 
 
 @dataclass(frozen=True)
