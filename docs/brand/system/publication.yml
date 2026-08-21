@@ -344,6 +344,7 @@ classification:
     - compliance/model-card-eu-ai-act-fields.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
+    - demo/browser-egress.md
     - i18n/glossary.md
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md
