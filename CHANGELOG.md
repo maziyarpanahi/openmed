@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic offline bootstrap diagnostics for cache readiness,
   integrity manifests, optional dependencies, and local-only configuration,
   with stable exit codes and value-free human and JSON reports (#2376).
+- Added a deterministic standalone local-redactor manifest with a synchronized
+  package/dependency boundary, permissive-license enforcement, explicit opt-in
+  integrations, and excluded restricted dependencies and assets (#2377).
 - Added metadata-only local agent trace-store discovery with platform-aware
   defaults, explicit opt-out, no content reads or symlink following, PHI-free
   store labels, and aggregate counts and byte sizes (#2279).
