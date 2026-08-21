@@ -180,3 +180,72 @@ def test_expanded_markdown_escapes_html_looking_paths():
 
     assert "<synthetic>" not in report
     assert "reports/&lt;synthetic&gt;&amp;summary.txt" in report
+
+
+def test_path_iterable_failures_do_not_leak_caller_values():
+    sensitive_value = "synthetic-patient-iterator-value"
+
+    class FailingPaths:
+        def __iter__(self):
+            raise RuntimeError(sensitive_value)
+
+    with pytest.raises(TypeError) as excinfo:
+        build_artifact_inventory(FailingPaths())  # type: ignore[arg-type]
+
+    assert sensitive_value not in str(excinfo.value)
+
+
+def test_inventory_entry_iterable_failures_do_not_leak_caller_values():
+    sensitive_value = "synthetic-patient-entry-value"
+
+    class FailingEntries:
+        def __iter__(self):
+            raise RuntimeError(sensitive_value)
+
+    with pytest.raises(TypeError) as excinfo:
+        ArtifactInventory(entries=FailingEntries())  # type: ignore[arg-type]
+
+    assert sensitive_value not in str(excinfo.value)
+
+
+def test_report_options_reject_caller_injected_values():
+    inventory = ArtifactInventory()
+    sensitive_value = "synthetic-patient-report-value"
+
+    with pytest.raises(ArtifactInventoryError) as indent_excinfo:
+        inventory.to_json(indent=sensitive_value)  # type: ignore[arg-type]
+    assert sensitive_value not in str(indent_excinfo.value)
+
+    class FailingFlag:
+        def __bool__(self):
+            raise RuntimeError(sensitive_value)
+
+    with pytest.raises(TypeError) as flag_excinfo:
+        inventory.to_markdown(  # type: ignore[arg-type]
+            counts_only=FailingFlag()
+        )
+    assert sensitive_value not in str(flag_excinfo.value)
+
+
+def test_report_write_failures_do_not_leak_output_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    inventory = ArtifactInventory()
+    sensitive_value = "synthetic-patient-report-path"
+    output_path = tmp_path / sensitive_value / "inventory.json"
+
+    def fail_write(*args, **kwargs):
+        raise OSError(str(output_path))
+
+    monkeypatch.setattr(Path, "write_text", fail_write)
+    with pytest.raises(ArtifactInventoryError) as excinfo:
+        inventory.write_json(output_path)
+
+    assert sensitive_value not in str(excinfo.value)
+
+
+def test_artifact_count_is_bounded_before_file_access(tmp_path: Path):
+    paths = ("artifact.json" for _ in range(10_001))
+
+    with pytest.raises(ArtifactInventoryError, match="entry limit"):
+        build_artifact_inventory(paths, root=tmp_path)

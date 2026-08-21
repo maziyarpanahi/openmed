@@ -25,7 +25,9 @@ inventory = build_artifact_inventory(
 Traversal (`..`), duplicate normalized paths, symlink escapes, directories,
 missing files, and read failures are rejected. Error messages contain only an
 input entry number and a safe reason, so a failed run does not echo a caller's
-path or file contents.
+path or file contents. An inventory accepts at most 10,000 entries; larger or
+non-terminating caller iterables are stopped at that boundary before file
+access.
 
 ## Counts-only reports
 
@@ -45,4 +47,6 @@ markdown_text = render_artifact_inventory_markdown(inventory)
 When a local review needs the metadata index as well, pass
 `counts_only=False`. The expanded form still includes metadata only, never
 artifact bytes or decoded content. Use `inventory.write_json(...)` or
-`inventory.write_markdown(...)` to persist either form locally.
+`inventory.write_markdown(...)` to persist either form locally. JSON
+indentation accepts `None` or an integer from 0 through 8, preventing report
+formatting from becoming a channel for caller-injected values.

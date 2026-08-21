@@ -15,12 +15,15 @@ import os
 import stat
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from typing import Final
 
 SCHEMA_VERSION: Final = "openmed.interop.artifact_inventory.v1"
 _CHUNK_SIZE: Final = 1024 * 1024
 _FINGERPRINT_PREFIX: Final = "sha256:"
+_MAX_ARTIFACTS: Final = 10_000
+_MAX_JSON_INDENT: Final = 8
 
 # A small explicit mapping keeps media type output independent of the host's
 # optional ``mimetypes`` database.  Unknown extensions are deliberately
@@ -88,24 +91,20 @@ class ArtifactInventoryEntry:
     def __post_init__(self) -> None:
         """Validate the serialized metadata without echoing caller values."""
 
-        if not isinstance(self.path, str) or not self.path or self.path.startswith("/"):
+        if type(self.path) is not str or not self.path or self.path.startswith("/"):
             raise ArtifactPathError("artifact paths must be non-empty and relative")
         if "\\" in self.path or any(ord(character) < 32 for character in self.path):
             raise ArtifactPathError("artifact paths must use safe relative separators")
         if any(part in {"", ".", ".."} for part in self.path.split("/")):
             raise ArtifactPathError("artifact paths must be normalized")
-        if (
-            not isinstance(self.byte_count, int)
-            or isinstance(self.byte_count, bool)
-            or self.byte_count < 0
-        ):
+        if type(self.byte_count) is not int or self.byte_count < 0:
             raise ArtifactInventoryError("artifact byte counts must be non-negative")
         if (
-            not isinstance(self.media_type, str)
+            type(self.media_type) is not str
             or self.media_type not in _SUPPORTED_MEDIA_TYPES
         ):
             raise ArtifactInventoryError("artifact media type is unsupported")
-        if not isinstance(self.fingerprint, str) or not self.fingerprint.startswith(
+        if type(self.fingerprint) is not str or not self.fingerprint.startswith(
             _FINGERPRINT_PREFIX
         ):
             raise ArtifactInventoryError("artifact fingerprints must use SHA-256")
@@ -167,10 +166,22 @@ class ArtifactInventory:
     def __post_init__(self) -> None:
         """Normalize direct construction to the same stable order as indexing."""
 
-        if self.schema_version != SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not str
+            or self.schema_version != SCHEMA_VERSION
+        ):
             raise ArtifactInventoryError("unsupported artifact inventory schema")
-        entries = tuple(self.entries)
-        if not all(isinstance(entry, ArtifactInventoryEntry) for entry in entries):
+        try:
+            entries = tuple(islice(iter(self.entries), _MAX_ARTIFACTS + 1))
+        except Exception:
+            raise TypeError(
+                "inventory entries must be an iterable of artifact entries"
+            ) from None
+        if len(entries) > _MAX_ARTIFACTS:
+            raise ArtifactInventoryError(
+                "artifact inventory exceeds the supported entry limit"
+            )
+        if not all(type(entry) is ArtifactInventoryEntry for entry in entries):
             raise TypeError("inventory entries must be ArtifactInventoryEntry values")
         paths = [entry.path for entry in entries]
         if len(paths) != len(set(paths)):
@@ -242,6 +253,7 @@ class ArtifactInventory:
                 still never includes file contents.
         """
 
+        _require_bool(counts_only, "counts_only")
         payload = self.to_counts_dict()
         if not counts_only:
             payload["artifacts"] = [entry.to_dict() for entry in self.entries]
@@ -250,16 +262,18 @@ class ArtifactInventory:
     def to_json(self, *, indent: int | None = 2, counts_only: bool = True) -> str:
         """Render deterministic JSON, using an aggregate-only report by default."""
 
+        validated_indent = _validate_json_indent(indent)
         return json.dumps(
             self.to_dict(counts_only=counts_only),
             ensure_ascii=False,
-            indent=indent,
+            indent=validated_indent,
             sort_keys=True,
         )
 
     def to_markdown(self, *, counts_only: bool = True) -> str:
         """Render deterministic Markdown, using aggregate counts by default."""
 
+        _require_bool(counts_only, "counts_only")
         lines = _counts_markdown_lines(self)
         if not counts_only:
             lines.extend(
@@ -290,23 +304,29 @@ class ArtifactInventory:
     ) -> Path:
         """Write a deterministic JSON report and return its output path."""
 
-        output_path = Path(path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            self.to_json(indent=indent, counts_only=counts_only) + "\n",
-            encoding="utf-8",
-        )
+        report = self.to_json(indent=indent, counts_only=counts_only) + "\n"
+        try:
+            output_path = Path(path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(report, encoding="utf-8")
+        except Exception:
+            raise ArtifactInventoryError(
+                "artifact inventory report could not be written"
+            ) from None
         return output_path
 
     def write_markdown(self, path: str | Path, *, counts_only: bool = True) -> Path:
         """Write a deterministic Markdown report and return its output path."""
 
-        output_path = Path(path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            self.to_markdown(counts_only=counts_only),
-            encoding="utf-8",
-        )
+        report = self.to_markdown(counts_only=counts_only)
+        try:
+            output_path = Path(path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(report, encoding="utf-8")
+        except Exception:
+            raise ArtifactInventoryError(
+                "artifact inventory report could not be written"
+            ) from None
         return output_path
 
 
@@ -348,6 +368,7 @@ def index_artifacts(
         UnreadableArtifactError: If a root or file cannot be read.
     """
 
+    candidates: tuple[str | os.PathLike[str], ...]
     if isinstance(paths, (str, os.PathLike)):
         candidate = _coerce_path(paths, 0)
         try:
@@ -358,10 +379,7 @@ def index_artifacts(
             return inventory_directory(candidate)
         candidates = (candidate,)
     else:
-        try:
-            candidates = tuple(paths)
-        except TypeError:
-            raise TypeError("paths must be a path or an iterable of paths") from None
+        candidates = _materialize_paths(paths)
 
     raw_paths = tuple(
         _coerce_path(value, index) for index, value in enumerate(candidates)
@@ -408,12 +426,18 @@ def inventory_directory(root: str | os.PathLike[str]) -> ArtifactInventory:
     try:
         if not root_path.is_dir():
             raise UnreadableArtifactError("artifact root is not a readable directory")
-        relative_paths = tuple(
-            child.relative_to(root_path).as_posix()
-            for child in sorted(root_path.rglob("*"), key=lambda item: item.as_posix())
-            if child.is_file() or child.is_symlink()
-        )
+        relative_paths_list: list[str] = []
+        for child in root_path.rglob("*"):
+            if child.is_file() or child.is_symlink():
+                relative_paths_list.append(child.relative_to(root_path).as_posix())
+                if len(relative_paths_list) > _MAX_ARTIFACTS:
+                    raise ArtifactInventoryError(
+                        "artifact inventory exceeds the supported entry limit"
+                    )
+        relative_paths = tuple(sorted(relative_paths_list))
     except UnreadableArtifactError:
+        raise
+    except ArtifactInventoryError:
         raise
     except (OSError, RuntimeError, ValueError):
         raise UnreadableArtifactError("artifact root cannot be read") from None
@@ -475,6 +499,20 @@ def _coerce_path(value: str | os.PathLike[str], index: int) -> Path:
         raise ArtifactPathError(
             f"artifact entry {index + 1} has an invalid path"
         ) from None
+
+
+def _materialize_paths(
+    values: Iterable[str | os.PathLike[str]],
+) -> tuple[str | os.PathLike[str], ...]:
+    try:
+        candidates = tuple(islice(iter(values), _MAX_ARTIFACTS + 1))
+    except Exception:
+        raise TypeError("paths must be a path or an iterable of paths") from None
+    if len(candidates) > _MAX_ARTIFACTS:
+        raise ArtifactInventoryError(
+            "artifact inventory exceeds the supported entry limit"
+        )
+    return candidates
 
 
 def _validate_raw_path(path: Path, index: int) -> None:
@@ -622,8 +660,23 @@ def _markdown_cell(value: str) -> str:
 
 
 def _require_inventory(value: ArtifactInventory) -> None:
-    if not isinstance(value, ArtifactInventory):
+    if type(value) is not ArtifactInventory:
         raise TypeError("inventory must be an ArtifactInventory")
+
+
+def _require_bool(value: bool, name: str) -> None:
+    if type(value) is not bool:
+        raise TypeError(f"{name} must be a boolean")
+
+
+def _validate_json_indent(value: int | None) -> int | None:
+    if value is None:
+        return None
+    if type(value) is not int or not 0 <= value <= _MAX_JSON_INDENT:
+        raise ArtifactInventoryError(
+            "JSON indentation must be an integer between 0 and 8"
+        )
+    return value
 
 
 __all__ = [
