@@ -2,8 +2,10 @@
 
 from .capability_probe import (
     CAPABILITY_PROBE_SCHEMA_VERSION,
+    MAX_CAPABILITY_ADAPTERS,
     CapabilityAdapter,
     CapabilityCheck,
+    CapabilityProbeError,
     CapabilityProbeReport,
     CapabilityStatus,
     probe_capabilities,
@@ -79,8 +81,10 @@ from .stream_processor import (
 
 __all__ = [
     "CAPABILITY_PROBE_SCHEMA_VERSION",
+    "MAX_CAPABILITY_ADAPTERS",
     "CapabilityAdapter",
     "CapabilityCheck",
+    "CapabilityProbeError",
     "CapabilityProbeReport",
     "CapabilityStatus",
     "ColumnarProgress",

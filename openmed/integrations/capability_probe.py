@@ -13,12 +13,19 @@ import json
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any, NoReturn, TypeAlias, cast
 
 CAPABILITY_PROBE_SCHEMA_VERSION = "openmed.integrations.capability_probe.v1"
 """Stable schema identifier for :class:`CapabilityProbeReport`."""
 
+MAX_CAPABILITY_ADAPTERS = 10_000
+"""Maximum number of declarations accepted by one bounded report."""
+
+_MAX_SOURCE_TEXT_LENGTH = 16_384
+_MAX_REASON_LENGTH = 256
+
 _SAFE_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
+_GENERATED_IDENTIFIER_RE = re.compile(r"(?:capability|extra)-[0-9a-f]{16}")
 _MISSING_EXTRA_REASONS = frozenset(
     {"missing_dependency", "missing_extra", "not_installed", "unavailable_extra"}
 )
@@ -31,11 +38,46 @@ _UNAVAILABLE_REASONS = frozenset(
     }
 )
 _PROBE_ERROR_REASONS = frozenset({"error", "exception", "probe_error"})
+_SAFE_REASONS = frozenset(
+    {"available", "invalid_result", "missing_extra", "probe_error", "unavailable"}
+)
+_SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}")
+_UUID_RE = re.compile(
+    r"(?<![a-z0-9])[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![a-z0-9])"
+)
+_NUMERIC_IDENTIFIER_RE = re.compile(r"(?<![a-z0-9])\d{6,}(?![a-z0-9])")
+_NAMED_IDENTIFIER_RE = re.compile(
+    r"(?:^|[_.:-])(?:account|case|encounter|member|mrn|patient|record|subject)"
+    r"[_.:-]?(?:\d{2,}|[a-f0-9]{8,})(?:$|[_.:-])"
+)
+_DECLARATION_FIELDS = frozenset(
+    {
+        "available",
+        "capability",
+        "check",
+        "extra",
+        "is_available",
+        "name",
+        "probe",
+        "provider",
+        "version",
+    }
+)
+_RESULT_FIELDS = frozenset({"available", "ok", "reason", "status"})
 
 ProbeCallable: TypeAlias = Callable[[], Any]
 
 
-@dataclass(frozen=True)
+class CapabilityProbeError(ValueError):
+    """Raised when declarations cannot be inspected safely and deterministically."""
+
+
+def _fail(reason: str) -> NoReturn:
+    raise CapabilityProbeError(reason) from None
+
+
+@dataclass(frozen=True, slots=True, repr=False)
 class CapabilityAdapter:
     """Declaration for one locally probed optional capability.
 
@@ -60,8 +102,10 @@ class CapabilityAdapter:
     version: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
+        if type(self.name) is not str or not self.name.strip():
             raise ValueError("capability adapter name must be a non-empty string")
+        if len(self.name) > _MAX_SOURCE_TEXT_LENGTH:
+            raise ValueError("capability adapter name exceeds the safe length limit")
         if not callable(self.probe):
             raise TypeError("capability adapter probe must be callable")
         for value, field_name in (
@@ -69,11 +113,24 @@ class CapabilityAdapter:
             (self.extra, "extra"),
             (self.version, "version"),
         ):
-            if value is not None and not isinstance(value, str):
-                raise TypeError(f"capability adapter {field_name} must be a string")
+            if value is not None:
+                if type(value) is not str:
+                    raise TypeError(f"capability adapter {field_name} must be a string")
+                if len(value) > _MAX_SOURCE_TEXT_LENGTH:
+                    raise ValueError(
+                        f"capability adapter {field_name} exceeds the safe length limit"
+                    )
+
+    def __repr__(self) -> str:
+        """Render the declaration without raw names, providers, or versions."""
+
+        return (
+            "CapabilityAdapter(name=<redacted>, probe=<callable>, "
+            "provider=<redacted>, extra=<redacted>, version=<redacted>)"
+        )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class CapabilityCheck:
     """Optional structured return value for an adapter probe."""
 
@@ -83,9 +140,20 @@ class CapabilityCheck:
     def __post_init__(self) -> None:
         if type(self.available) is not bool:
             raise TypeError("capability availability must be a boolean")
+        if self.reason is not None:
+            if type(self.reason) is not str:
+                raise TypeError("capability reason must be a string")
+            if len(self.reason) > _MAX_REASON_LENGTH:
+                raise ValueError("capability reason exceeds the safe length limit")
+
+    def __repr__(self) -> str:
+        """Render availability without retaining a caller-supplied reason."""
+
+        reason = "<classified>" if self.reason is not None else "None"
+        return f"CapabilityCheck(available={self.available!r}, reason={reason})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CapabilityStatus:
     """Safe, serializable result for one capability declaration."""
 
@@ -94,6 +162,31 @@ class CapabilityStatus:
     reason: str
     extra: str | None
     provider_fingerprint: str | None
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.name) is not str
+            or _SAFE_IDENTIFIER_RE.fullmatch(self.name) is None
+            or _safe_identifier(self.name, prefix="capability") != self.name
+        ):
+            raise ValueError("capability status name must be a safe identifier")
+        if type(self.available) is not bool:
+            raise TypeError("capability status availability must be a boolean")
+        if type(self.reason) is not str or self.reason not in _SAFE_REASONS:
+            raise ValueError("capability status reason is not supported")
+        if self.available != (self.reason == "available"):
+            raise ValueError("capability status availability and reason disagree")
+        if self.extra is not None and (
+            type(self.extra) is not str
+            or _SAFE_IDENTIFIER_RE.fullmatch(self.extra) is None
+            or _safe_identifier(self.extra, prefix="extra") != self.extra
+        ):
+            raise ValueError("capability status extra must be a safe identifier")
+        if self.provider_fingerprint is not None and (
+            type(self.provider_fingerprint) is not str
+            or _SHA256_RE.fullmatch(self.provider_fingerprint) is None
+        ):
+            raise ValueError("provider_fingerprint must be a SHA-256 digest")
 
     @property
     def status(self) -> str:
@@ -122,7 +215,7 @@ class CapabilityStatus:
     to_dict = as_dict
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CapabilityProbeReport:
     """Deterministic aggregate of locally probed capability statuses."""
 
@@ -130,7 +223,33 @@ class CapabilityProbeReport:
     schema_version: str = CAPABILITY_PROBE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "capabilities", tuple(self.capabilities))
+        if (
+            type(self.schema_version) is not str
+            or self.schema_version != CAPABILITY_PROBE_SCHEMA_VERSION
+        ):
+            raise ValueError("capability report schema_version is not supported")
+        capabilities = _bounded_tuple(
+            self.capabilities,
+            label="capability statuses",
+            maximum=MAX_CAPABILITY_ADAPTERS,
+        )
+        if any(type(status) is not CapabilityStatus for status in capabilities):
+            raise TypeError("capability reports require CapabilityStatus entries")
+        validated = tuple(
+            CapabilityStatus(
+                name=status.name,
+                available=status.available,
+                reason=status.reason,
+                extra=status.extra,
+                provider_fingerprint=status.provider_fingerprint,
+            )
+            for status in cast(tuple[CapabilityStatus, ...], capabilities)
+        )
+        ordered = tuple(sorted(validated, key=_status_key))
+        names = tuple(status.name for status in ordered)
+        if len(names) != len(set(names)):
+            raise CapabilityProbeError("capability declarations must have unique names")
+        object.__setattr__(self, "capabilities", ordered)
 
     @property
     def entries(self) -> tuple[CapabilityStatus, ...]:
@@ -203,16 +322,25 @@ class CapabilityProbeReport:
     def to_json(self, *, indent: int | None = 2) -> str:
         """Serialize the report with stable key ordering."""
 
-        kwargs: dict[str, object] = {
-            "allow_nan": False,
-            "ensure_ascii": True,
-            "sort_keys": True,
-        }
         if indent is None:
-            kwargs["separators"] = (",", ":")
-        else:
-            kwargs["indent"] = indent
-        return json.dumps(self.as_dict(), **kwargs)
+            return json.dumps(
+                self.as_dict(),
+                allow_nan=False,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        if type(indent) is not int:
+            raise TypeError("indent must be an integer or None")
+        if not 0 <= indent <= 8:
+            raise ValueError("indent must be between 0 and 8")
+        return json.dumps(
+            self.as_dict(),
+            allow_nan=False,
+            ensure_ascii=True,
+            indent=indent,
+            sort_keys=True,
+        )
 
 
 def provider_fingerprint(
@@ -225,11 +353,22 @@ def provider_fingerprint(
     appear in a report, exception, or log produced by this module.
     """
 
-    if provider is None or not isinstance(provider, str) or not provider.strip():
+    if provider is None:
+        return None
+    if type(provider) is not str:
+        raise TypeError("provider must be a string or None")
+    if len(provider) > _MAX_SOURCE_TEXT_LENGTH:
+        _fail("provider exceeds the safe length limit")
+    if not provider.strip():
         return None
     canonical = provider.strip().casefold()
-    if version is not None and isinstance(version, str) and version.strip():
-        canonical = f"{canonical}\x00{version.strip().casefold()}"
+    if version is not None:
+        if type(version) is not str:
+            raise TypeError("version must be a string or None")
+        if len(version) > _MAX_SOURCE_TEXT_LENGTH:
+            _fail("version exceeds the safe length limit")
+        if version.strip():
+            canonical = f"{canonical}\x00{version.strip().casefold()}"
     return _sha256_text(canonical)
 
 
@@ -254,16 +393,7 @@ def probe_capabilities(
     local registries.
     """
 
-    statuses = [_probe_adapter(adapter) for adapter in _iter_adapters(adapters)]
-    statuses.sort(
-        key=lambda status: (
-            status.name,
-            status.provider_fingerprint or "",
-            status.extra or "",
-            status.reason,
-            status.available,
-        )
-    )
+    statuses = [_probe_adapter(adapter) for adapter in _collect_adapters(adapters)]
     return CapabilityProbeReport(tuple(statuses))
 
 
@@ -275,58 +405,153 @@ def probe_capability(
     return probe_capabilities((adapter,)).capabilities[0]
 
 
-def _iter_adapters(adapters: Any) -> Iterable[Any]:
+def _status_key(status: CapabilityStatus) -> tuple[str, str, str, str, bool]:
+    return (
+        status.name,
+        status.provider_fingerprint or "",
+        status.extra or "",
+        status.reason,
+        status.available,
+    )
+
+
+def _bounded_tuple(value: Any, *, label: str, maximum: int) -> tuple[Any, ...]:
+    try:
+        iterator = iter(value)
+    except Exception:
+        _fail(f"{label} must be a bounded iterable")
+    collected: list[Any] = []
+    for _ in range(maximum + 1):
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return tuple(collected)
+        except Exception:
+            _fail(f"{label} iteration failed")
+        if len(collected) == maximum:
+            _fail(f"{label} exceed the limit of {maximum}")
+        collected.append(item)
+    raise AssertionError("unreachable")
+
+
+def _snapshot_mapping(
+    value: Mapping[Any, Any],
+    *,
+    maximum: int,
+    allowed: frozenset[str] | None = None,
+) -> dict[Any, Any]:
+    pairs = _bounded_tuple(value, label="mapping keys", maximum=maximum)
+    snapshot: dict[Any, Any] = {}
+    for key in pairs:
+        if allowed is not None and (type(key) is not str or key not in allowed):
+            _fail("mapping contains unsupported fields")
+        try:
+            if key in snapshot:
+                _fail("mapping contains duplicate fields")
+            snapshot[key] = value[key]
+        except CapabilityProbeError:
+            raise
+        except Exception:
+            _fail("mapping could not be read safely")
+    return snapshot
+
+
+def _collect_adapters(adapters: Any) -> tuple[Any, ...]:
     if adapters is None:
         return ()
     if isinstance(adapters, CapabilityAdapter) or callable(adapters):
         return (adapters,)
     if isinstance(adapters, Mapping):
-        declaration_keys = {"name", "capability", "probe", "check", "is_available"}
-        if declaration_keys.intersection(adapters):
-            return (adapters,)
-        return (_with_default_name(value, name) for name, value in adapters.items())
-    return adapters
+        snapshot = _snapshot_mapping(
+            adapters,
+            maximum=MAX_CAPABILITY_ADAPTERS,
+        )
+        probe_fields = {"available", "check", "is_available", "probe"}
+        if probe_fields.intersection(snapshot):
+            return (snapshot,)
+        return tuple(
+            _with_default_name(value, name) for name, value in snapshot.items()
+        )
+    return _bounded_tuple(
+        adapters,
+        label="capability declarations",
+        maximum=MAX_CAPABILITY_ADAPTERS,
+    )
 
 
 def _with_default_name(value: Any, name: Any) -> Any:
     if isinstance(value, Mapping):
-        return {"name": name, **dict(value)}
+        fields = _snapshot_mapping(
+            value,
+            maximum=len(_DECLARATION_FIELDS),
+            allowed=_DECLARATION_FIELDS,
+        )
+        if "name" not in fields and "capability" not in fields:
+            fields["name"] = name
+        return fields
     return {"name": name, "probe": value}
 
 
 def _coerce_adapter(raw: Any) -> CapabilityAdapter:
     if isinstance(raw, CapabilityAdapter):
-        return raw
+        try:
+            return CapabilityAdapter(
+                name=raw.name,
+                probe=raw.probe,
+                provider=raw.provider,
+                extra=raw.extra,
+                version=raw.version,
+            )
+        except Exception:
+            return _invalid_adapter()
 
     if isinstance(raw, Mapping):
-        name = raw.get("name", raw.get("capability", "capability-unknown"))
-        probe = raw.get("probe", raw.get("check", raw.get("is_available")))
-        if probe is None and type(raw.get("available")) is bool:
-            declared_available = raw["available"]
+        try:
+            fields = _snapshot_mapping(
+                raw,
+                maximum=len(_DECLARATION_FIELDS),
+                allowed=_DECLARATION_FIELDS,
+            )
+        except CapabilityProbeError:
+            return _invalid_adapter()
+        if sum(key in fields for key in ("name", "capability")) > 1:
+            return _invalid_adapter()
+        if sum(key in fields for key in ("probe", "check", "is_available")) > 1:
+            return _invalid_adapter()
+        if "available" in fields and any(
+            key in fields for key in ("probe", "check", "is_available")
+        ):
+            return _invalid_adapter()
+        name = fields.get("name", fields.get("capability", "capability-unknown"))
+        probe = fields.get("probe", fields.get("check", fields.get("is_available")))
+        if probe is None and type(fields.get("available")) is bool:
+            declared_available = fields["available"]
             probe = lambda: declared_available
         return _make_adapter(
             name=name,
             probe=probe,
-            provider=raw.get("provider"),
-            extra=raw.get("extra"),
-            version=raw.get("version"),
+            provider=fields.get("provider"),
+            extra=fields.get("extra"),
+            version=fields.get("version"),
         )
 
-    name = _read_attribute(raw, "name") or _read_attribute(raw, "capability")
+    name = _read_attribute(raw, "name")
+    if name is None:
+        name = _read_attribute(raw, "capability")
     probe = _read_attribute(raw, "probe")
     if probe is None:
         probe = _read_attribute(raw, "check")
     if probe is None:
         probe = _read_attribute(raw, "is_available")
-    if probe is None and type(_read_attribute(raw, "available")) is bool:
-        declared_available = _read_attribute(raw, "available")
+    declared_available = _read_attribute(raw, "available")
+    if probe is None and type(declared_available) is bool:
         probe = lambda: declared_available
     if probe is None and callable(raw):
         probe = raw
     if name is None and callable(raw):
         name = _read_attribute(raw, "__name__")
     return _make_adapter(
-        name=name or "capability-unknown",
+        name=name if name is not None else "capability-unknown",
         probe=probe,
         provider=_read_attribute(raw, "provider"),
         extra=_read_attribute(raw, "extra"),
@@ -342,14 +567,21 @@ def _make_adapter(
     extra: Any,
     version: Any,
 ) -> CapabilityAdapter:
-    safe_name = name if isinstance(name, str) and name.strip() else "capability-unknown"
-    safe_provider = provider if isinstance(provider, str) else None
-    safe_extra = extra if isinstance(extra, str) else None
-    safe_version = version if isinstance(version, str) else None
+    safe_name = name if type(name) is str and name.strip() else "capability-unknown"
+    safe_provider = provider if type(provider) is str else None
+    safe_extra = extra if type(extra) is str else None
+    safe_version = version if type(version) is str else None
+    if len(safe_name) > _MAX_SOURCE_TEXT_LENGTH:
+        safe_name = "capability-unknown"
+    if safe_provider is not None and len(safe_provider) > _MAX_SOURCE_TEXT_LENGTH:
+        safe_provider = None
+    if safe_extra is not None and len(safe_extra) > _MAX_SOURCE_TEXT_LENGTH:
+        safe_extra = None
+    if safe_version is not None and len(safe_version) > _MAX_SOURCE_TEXT_LENGTH:
+        safe_version = None
     if not callable(probe):
-        return CapabilityAdapter(
+        return _invalid_adapter(
             name=safe_name,
-            probe=lambda: CapabilityCheck(False, "invalid_result"),
             provider=safe_provider,
             extra=safe_extra,
             version=safe_version,
@@ -363,9 +595,25 @@ def _make_adapter(
     )
 
 
+def _invalid_adapter(
+    *,
+    name: str = "capability-unknown",
+    provider: str | None = None,
+    extra: str | None = None,
+    version: str | None = None,
+) -> CapabilityAdapter:
+    return CapabilityAdapter(
+        name=name,
+        probe=lambda: CapabilityCheck(False, "invalid_result"),
+        provider=provider,
+        extra=extra,
+        version=version,
+    )
+
+
 def _probe_adapter(raw: Any) -> CapabilityStatus:
     adapter = _coerce_adapter(raw)
-    name = _safe_identifier(adapter.name, prefix="capability")
+    name = _safe_identifier(adapter.name, prefix="capability") or "capability-unknown"
     extra = _safe_identifier(adapter.extra, prefix="extra")
     fingerprint = provider_fingerprint(adapter.provider, version=adapter.version)
 
@@ -388,7 +636,10 @@ def _probe_adapter(raw: Any) -> CapabilityStatus:
             provider_fingerprint=fingerprint,
         )
 
-    available, reason = _interpret_result(result, has_extra=extra is not None)
+    try:
+        available, reason = _interpret_result(result, has_extra=extra is not None)
+    except Exception:
+        available, reason = False, "invalid_result"
     return CapabilityStatus(
         name=name,
         available=available,
@@ -399,17 +650,30 @@ def _probe_adapter(raw: Any) -> CapabilityStatus:
 
 
 def _interpret_result(result: Any, *, has_extra: bool) -> tuple[bool, str]:
-    if isinstance(result, CapabilityCheck):
+    if type(result) is CapabilityCheck:
         available = result.available
         raw_reason = result.reason
     elif type(result) is bool:
         available = result
         raw_reason = None
     elif isinstance(result, Mapping):
-        available = result.get("available", result.get("ok"))
-        raw_reason = result.get("reason", result.get("status"))
-        if type(available) is not bool:
+        try:
+            fields = _snapshot_mapping(
+                result,
+                maximum=len(_RESULT_FIELDS),
+                allowed=_RESULT_FIELDS,
+            )
+        except CapabilityProbeError:
             return False, "invalid_result"
+        if "available" in fields and "ok" in fields:
+            return False, "invalid_result"
+        if "reason" in fields and "status" in fields:
+            return False, "invalid_result"
+        raw_available = fields.get("available", fields.get("ok"))
+        raw_reason = fields.get("reason", fields.get("status"))
+        if type(raw_available) is not bool:
+            return False, "invalid_result"
+        available = cast(bool, raw_available)
     else:
         available = _read_attribute(result, "available")
         raw_reason = _read_attribute(result, "reason")
@@ -422,12 +686,14 @@ def _interpret_result(result: Any, *, has_extra: bool) -> tuple[bool, str]:
 
 
 def _safe_reason(raw_reason: Any, *, has_extra: bool) -> str:
-    if isinstance(raw_reason, str):
+    if type(raw_reason) is str and len(raw_reason) <= _MAX_REASON_LENGTH:
         normalized = raw_reason.strip().casefold().replace("-", "_").replace(" ", "_")
         if normalized in _MISSING_EXTRA_REASONS:
             return "missing_extra" if has_extra else "unavailable"
         if normalized in _PROBE_ERROR_REASONS:
             return "probe_error"
+        if normalized == "invalid_result":
+            return "invalid_result"
         if normalized in _UNAVAILABLE_REASONS:
             return "unavailable"
     return "missing_extra" if has_extra else "unavailable"
@@ -440,35 +706,48 @@ def _read_attribute(value: Any, name: str) -> Any:
         return None
 
 
-def _safe_identifier(value: str | None, *, prefix: str) -> str | None:
-    if value is None or not isinstance(value, str) or not value.strip():
+def _safe_identifier(value: Any, *, prefix: str) -> str | None:
+    if value is None or type(value) is not str or not value.strip():
         return None if prefix == "extra" else f"{prefix}-unknown"
     normalized = value.strip().casefold()
-    if _SAFE_IDENTIFIER_RE.fullmatch(normalized):
+    if _GENERATED_IDENTIFIER_RE.fullmatch(normalized):
+        return normalized
+    looks_sensitive = bool(
+        _UUID_RE.search(normalized)
+        or _NUMERIC_IDENTIFIER_RE.search(normalized)
+        or _NAMED_IDENTIFIER_RE.search(normalized)
+    )
+    if _SAFE_IDENTIFIER_RE.fullmatch(normalized) and not looks_sensitive:
         return normalized
     digest = _sha256_text(normalized).split(":", 1)[1]
     return f"{prefix}-{digest[:16]}"
 
 
 def _sha256_text(value: str) -> str:
-    return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
+    encoded = value.encode("utf-8", errors="surrogatepass")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _sha256_json(value: Any) -> str:
-    encoded = json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=True,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
+    try:
+        encoded = json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except Exception:
+        _fail("capability report could not be serialized safely")
     return _sha256_text(encoded)
 
 
 __all__ = [
     "CAPABILITY_PROBE_SCHEMA_VERSION",
+    "MAX_CAPABILITY_ADAPTERS",
     "CapabilityAdapter",
     "CapabilityCheck",
+    "CapabilityProbeError",
     "CapabilityProbeReport",
     "CapabilityStatus",
     "probe_capabilities",

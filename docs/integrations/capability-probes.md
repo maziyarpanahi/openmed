@@ -46,6 +46,12 @@ report = probe_capabilities(
 )
 ```
 
+Probes are synchronous, caller-controlled code. OpenMed does not discover or
+import optional providers on their behalf, and it cannot make an arbitrary
+callable network-safe. Applications must inject trusted local-only probes. One
+report accepts at most 10,000 declarations and rejects duplicate normalized
+capability names.
+
 ## Safe report fields
 
 Reports sort capability entries by their normalized names and expose stable
@@ -58,7 +64,9 @@ Provider identifiers and versions are never serialized. Each is represented by
 a deterministic `sha256:` provider fingerprint, allowing comparisons across
 reports without placing configuration, tokens, or other sensitive values in
 logs or artifacts. Capability names and extra names should therefore be
-non-sensitive identifiers such as package or integration labels.
+non-sensitive identifiers such as package or integration labels. Values shaped
+like direct identifiers are fingerprinted before reporting, and raw declaration
+objects use value-free representations.
 
 The overall report also has a stable fingerprint and can be serialized with
 `report.to_json(indent=None)` for compact JSON. The report is diagnostic only;
