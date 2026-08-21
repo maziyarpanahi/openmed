@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from openmed.interop.archive_safety import (
     ArchiveDecision,
     ArchiveMember,
     ArchiveSafetyPolicy,
+    ArchiveSafetyReport,
     assess_archive_members,
     inspect_archive_members,
 )
@@ -129,3 +132,83 @@ def test_malformed_sizes_are_rejected_without_raw_values_in_errors():
     assert report.reason_counts["invalid_metadata"] == 2
     assert "records/invalid.bin" not in repr(report)
     assert "unsupported-kind" not in repr(report)
+
+
+def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
+    marker = "synthetic-archive-hook-value-733"
+
+    class HostileMapping(dict):
+        def __contains__(self, key):
+            del key
+            raise RuntimeError(marker)
+
+    def failing_members():
+        yield HostileMapping()
+        raise RuntimeError(marker)
+
+    report = inspect_archive_members(failing_members())
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 2}
+    assert marker not in repr(report)
+    assert marker not in repr(report.to_dict())
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "records/CON.txt",
+        "records/item.txt:stream",
+        "records/trailing.",
+        "records/hidden\u202efile.txt",
+    ],
+)
+def test_cross_platform_ambiguous_paths_are_rejected(path: str):
+    report = inspect_archive_members([member(path)])
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
+def test_path_limit_is_rechecked_after_unicode_normalization():
+    policy = ArchiveSafetyPolicy(max_path_length=1)
+
+    report = inspect_archive_members([member("Ⅳ")], policy)
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"path_too_long": 1}
+
+
+def test_policy_limits_can_only_be_tightened():
+    defaults = ArchiveSafetyPolicy()
+
+    with pytest.raises(ValueError, match="safe bounds"):
+        ArchiveSafetyPolicy(max_entries=defaults.max_entries + 1)
+    with pytest.raises(ValueError, match="safe bounds"):
+        ArchiveSafetyPolicy(
+            max_expansion_ratio=defaults.max_expansion_ratio + 1,
+        )
+
+
+def test_public_report_rejects_arbitrary_reason_metadata():
+    marker = "synthetic-report-reason-value-448"
+
+    with pytest.raises(ValueError, match="reasons are invalid") as raised:
+        ArchiveSafetyReport(
+            decision=ArchiveDecision.ALLOW,
+            entry_count=0,
+            total_compressed_bytes=0,
+            total_uncompressed_bytes=0,
+            reason_counts={marker: 1},
+        )
+
+    assert marker not in str(raised.value)
+
+
+def test_extreme_sizes_fail_closed_without_float_overflow():
+    report = inspect_archive_members(
+        [member("records/large.bin", compressed=1, uncompressed=10**400)]
+    )
+
+    assert report.decision is ArchiveDecision.QUARANTINE
+    assert report.reason_counts["expansion_ratio"] == 1

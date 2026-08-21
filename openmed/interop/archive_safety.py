@@ -44,6 +44,17 @@ DEFAULT_MAX_EXPANSION_RATIO: Final = 100.0
 DEFAULT_MAX_PATH_LENGTH: Final = 4_096
 
 _DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:")
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {
+        "aux",
+        "clock$",
+        "con",
+        "nul",
+        "prn",
+        *(f"com{index}" for index in range(1, 10)),
+        *(f"lpt{index}" for index in range(1, 10)),
+    }
+)
 _MISSING = object()
 
 
@@ -113,27 +124,30 @@ class ArchiveMember:
 
         if not isinstance(metadata, Mapping):
             raise TypeError("archive member metadata must be a mapping")
-
-        path = _first_value(metadata, ("path", "name"))
-        compressed_size = _first_value(
-            metadata,
-            ("compressed_size", "compressed_bytes", "compressed"),
-        )
-        uncompressed_size = _first_value(
-            metadata,
-            ("uncompressed_size", "uncompressed_bytes", "size"),
-        )
-        kind = _first_value(metadata, ("kind", "type"), default="file")
-        link_target = _first_value(
-            metadata,
-            ("link_target", "target"),
-            default=None,
-        )
-
-        link_flag = any(
-            metadata.get(key) is True
-            for key in ("is_link", "is_symlink", "is_hardlink")
-        )
+        try:
+            path = _first_value(metadata, ("path", "name"))
+            compressed_size = _first_value(
+                metadata,
+                ("compressed_size", "compressed_bytes", "compressed"),
+            )
+            uncompressed_size = _first_value(
+                metadata,
+                ("uncompressed_size", "uncompressed_bytes", "size"),
+            )
+            kind = _first_value(metadata, ("kind", "type"), default="file")
+            link_target = _first_value(
+                metadata,
+                ("link_target", "target"),
+                default=None,
+            )
+            link_flag = any(
+                metadata.get(key) is True
+                for key in ("is_link", "is_symlink", "is_hardlink")
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("archive member metadata could not be read") from None
         if link_flag:
             kind = "link"
 
@@ -163,21 +177,28 @@ class ArchiveSafetyPolicy:
     max_path_length: int = DEFAULT_MAX_PATH_LENGTH
 
     def __post_init__(self) -> None:
-        for value in (
-            self.max_entries,
-            self.max_total_uncompressed_bytes,
-            self.max_member_uncompressed_bytes,
-            self.max_path_length,
-        ):
-            if not _is_nonnegative_int(value):
-                raise ValueError("archive safety limits must be non-negative integers")
+        integer_limits = {
+            "max_entries": DEFAULT_MAX_ENTRIES,
+            "max_total_uncompressed_bytes": DEFAULT_MAX_TOTAL_UNCOMPRESSED_BYTES,
+            "max_member_uncompressed_bytes": DEFAULT_MAX_MEMBER_UNCOMPRESSED_BYTES,
+            "max_path_length": DEFAULT_MAX_PATH_LENGTH,
+        }
+        for field_name, upper_bound in integer_limits.items():
+            value = getattr(self, field_name)
+            if type(value) is not int or value < 0 or value > upper_bound:
+                raise ValueError("archive safety limits must stay within safe bounds")
         if (
-            isinstance(self.max_expansion_ratio, bool)
-            or not isinstance(self.max_expansion_ratio, (int, float))
+            type(self.max_expansion_ratio) not in {int, float}
             or not math.isfinite(float(self.max_expansion_ratio))
             or self.max_expansion_ratio <= 0
+            or self.max_expansion_ratio > DEFAULT_MAX_EXPANSION_RATIO
         ):
-            raise ValueError("max_expansion_ratio must be a finite positive number")
+            raise ValueError("max_expansion_ratio must stay within safe bounds")
+        object.__setattr__(
+            self,
+            "max_expansion_ratio",
+            float(self.max_expansion_ratio),
+        )
 
     @property
     def max_total_size(self) -> int:
@@ -203,13 +224,44 @@ class ArchiveSafetyReport:
     reason_counts: Mapping[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if not isinstance(self.decision, ArchiveDecision):
-            object.__setattr__(self, "decision", ArchiveDecision(self.decision))
-        counts = {
-            str(reason): int(count)
-            for reason, count in self.reason_counts.items()
-            if int(count) > 0
-        }
+        decision = self.decision
+        if type(decision) is str:
+            try:
+                decision = ArchiveDecision(decision)
+            except ValueError:
+                raise ValueError("archive report decision is invalid") from None
+        elif type(decision) is not ArchiveDecision:
+            raise ValueError("archive report decision is invalid")
+        for value in (
+            self.entry_count,
+            self.total_compressed_bytes,
+            self.total_uncompressed_bytes,
+        ):
+            if type(value) is not int or value < 0:
+                raise ValueError(
+                    "archive report aggregates must be non-negative integers"
+                )
+        try:
+            items = list(self.reason_counts.items())
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("archive report reasons are invalid") from None
+        safe_reasons = {reason.value for reason in ArchiveSafetyReason}
+        counts: dict[str, int] = {}
+        for reason, count in items:
+            if (
+                type(reason) is not str
+                or reason not in safe_reasons
+                or type(count) is not int
+                or count < 0
+            ):
+                raise ValueError("archive report reasons are invalid")
+            if count > 0:
+                counts[reason] = count
+        if decision is not _decision_for(counts):
+            raise ValueError("archive report decision is inconsistent")
+        object.__setattr__(self, "decision", decision)
         object.__setattr__(
             self,
             "reason_counts",
@@ -280,12 +332,14 @@ def inspect_archive_members(
         other member-provided strings.
     """
 
-    active_policy = policy or ArchiveSafetyPolicy()
-    if not isinstance(active_policy, ArchiveSafetyPolicy):
+    active_policy = ArchiveSafetyPolicy() if policy is None else policy
+    if type(active_policy) is not ArchiveSafetyPolicy:
         raise TypeError("policy must be an ArchiveSafetyPolicy")
     try:
         iterator = iter(members)
-    except TypeError:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise TypeError("members must be an iterable of archive metadata") from None
 
     reason_counts = {reason.value: 0 for reason in ArchiveSafetyReason}
@@ -294,7 +348,16 @@ def inspect_archive_members(
     entry_count = 0
     seen_paths: set[str] = set()
 
-    for raw_member in iterator:
+    while True:
+        try:
+            raw_member = next(iterator)
+        except StopIteration:
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            reason_counts[ArchiveSafetyReason.INVALID_METADATA.value] += 1
+            break
         entry_count += 1
         if entry_count > active_policy.max_entries:
             reason_counts[ArchiveSafetyReason.ENTRY_LIMIT.value] = 1
@@ -385,12 +448,14 @@ def check_archive_safety(
 
 
 def _coerce_member(raw_member: Any) -> ArchiveMember | None:
-    if isinstance(raw_member, ArchiveMember):
+    if type(raw_member) is ArchiveMember:
         return raw_member
     if isinstance(raw_member, Mapping):
         try:
             return ArchiveMember.from_mapping(raw_member)
-        except (TypeError, ValueError):
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             return None
     return None
 
@@ -414,12 +479,20 @@ def _canonical_path(
     *,
     max_path_length: int,
 ) -> tuple[str | None, tuple[ArchiveSafetyReason, ...]]:
-    if not isinstance(path, str) or not path:
+    if type(path) is not str or not path:
         return None, (ArchiveSafetyReason.INVALID_METADATA,)
     if len(path) > max_path_length:
         return None, (ArchiveSafetyReason.PATH_TOO_LONG,)
-    normalized = unicodedata.normalize("NFKC", path).replace("\\", "/")
-    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in normalized):
+    try:
+        normalized = unicodedata.normalize("NFKC", path).replace("\\", "/")
+    except (TypeError, ValueError):
+        return None, (ArchiveSafetyReason.INVALID_METADATA,)
+    if len(normalized) > max_path_length:
+        return None, (ArchiveSafetyReason.PATH_TOO_LONG,)
+    if any(
+        unicodedata.category(character) in {"Cc", "Cf", "Cs"}
+        for character in normalized
+    ):
         return None, (ArchiveSafetyReason.INVALID_METADATA,)
 
     reasons: list[ArchiveSafetyReason] = []
@@ -434,7 +507,18 @@ def _canonical_path(
     safe_segments = [segment for segment in segments if segment not in {"", "."}]
     if not safe_segments:
         return None, (ArchiveSafetyReason.INVALID_METADATA,)
+    if any(_unsafe_cross_platform_segment(segment) for segment in safe_segments):
+        return None, (ArchiveSafetyReason.INVALID_METADATA,)
     return "/".join(safe_segments), ()
+
+
+def _unsafe_cross_platform_segment(segment: str) -> bool:
+    """Reject names that Windows filesystems can reinterpret or alias."""
+
+    if ":" in segment or segment.endswith((" ", ".")):
+        return True
+    stem = segment.split(".", 1)[0].rstrip(" .").casefold()
+    return stem in _WINDOWS_RESERVED_NAMES
 
 
 def _valid_sizes(compressed_size: Any, uncompressed_size: Any) -> bool:
@@ -444,11 +528,11 @@ def _valid_sizes(compressed_size: Any, uncompressed_size: Any) -> bool:
 
 
 def _is_nonnegative_int(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    return type(value) is int and value >= 0
 
 
 def _valid_kind(kind: Any) -> bool:
-    if not isinstance(kind, str):
+    if type(kind) is not str:
         return False
     return kind.strip().lower().replace("_", "-") in {
         "file",
@@ -465,13 +549,13 @@ def _valid_kind(kind: Any) -> bool:
 
 
 def _valid_link_target(link_target: Any) -> bool:
-    return link_target is None or isinstance(link_target, str)
+    return link_target is None or type(link_target) is str
 
 
 def _is_link(member: ArchiveMember) -> bool:
     if member.link_target is not None:
         return True
-    if not isinstance(member.kind, str):
+    if type(member.kind) is not str:
         return False
     return member.kind.strip().lower().replace("_", "-") in {
         "symlink",
@@ -489,7 +573,10 @@ def _exceeds_expansion_ratio(
 ) -> bool:
     if compressed_size == 0:
         return uncompressed_size > 0
-    return (uncompressed_size / compressed_size) > max_expansion_ratio
+    try:
+        return (uncompressed_size / compressed_size) > max_expansion_ratio
+    except OverflowError:
+        return True
 
 
 def _decision_for(reason_counts: Mapping[str, int]) -> ArchiveDecision:
