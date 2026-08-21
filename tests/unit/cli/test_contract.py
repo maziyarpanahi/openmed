@@ -207,6 +207,33 @@ def test_models_pull_success_emits_one_value_free_json_document(
     assert local_path not in captured.out
 
 
+def test_models_pull_generic_failure_is_value_free_in_json(monkeypatch, capsys) -> None:
+    import openmed.core.hf_hub as hf_hub
+
+    sensitive_detail = "/synthetic/private/cache/credential-value"
+
+    def fail_prefetch(*_args, **_kwargs):
+        raise RuntimeError(sensitive_detail)
+
+    monkeypatch.setattr(hf_hub, "prefetch_model", fail_prefetch)
+
+    exit_code = cli_main(["models", "pull", "synthetic-model", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload == {
+        "ok": False,
+        "command": "models pull",
+        "error": {
+            "code": "model_pull_failed",
+            "message": "Failed to pull the requested model.",
+        },
+    }
+    assert sensitive_detail not in captured.out
+    assert captured.err == ""
+
+
 def test_risk_discover_validation_failure_matches_contract(
     monkeypatch, capsys, tmp_path
 ) -> None:

@@ -7072,7 +7072,11 @@ def _handle_models_list(args: argparse.Namespace) -> int:
 
 
 def _handle_models_pull(args: argparse.Namespace) -> int:
-    from ..core.hf_hub import DownloadProgress, prefetch_model
+    from ..core.hf_hub import (
+        DownloadIntegrityError,
+        DownloadProgress,
+        prefetch_model,
+    )
 
     config = _load_and_apply_config(args)
     completed_files = 0
@@ -7105,6 +7109,12 @@ def _handle_models_pull(args: argparse.Namespace) -> int:
         raise CliError(
             OFFLINE_ERROR_MESSAGE,
             code=OFFLINE_ERROR_CODE,
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except DownloadIntegrityError as exc:
+        raise CliError(
+            "Model integrity verification failed after a forced re-fetch.",
+            code="model_pull_failed",
             exit_code=EXIT_ERROR,
         ) from exc
     except Exception as exc:  # pragma: no cover - exact failures tested in helper
