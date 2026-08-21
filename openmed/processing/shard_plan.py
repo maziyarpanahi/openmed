@@ -154,14 +154,14 @@ class FileShard:
 
     def __post_init__(self) -> None:
         _validate_nonnegative_int(self.shard_id, "shard_id")
-        try:
-            entries = tuple(self.entries)
-        except Exception:
-            raise TypeError("entries must contain FileShardEntry values") from None
-        if any(type(entry) is not FileShardEntry for entry in entries):
-            raise TypeError("entries must contain FileShardEntry values")
-        if len(entries) > _MAX_FILE_DESCRIPTORS:
-            raise ValueError("entries exceed the file descriptor limit")
+        entries = _bounded_tuple(
+            self.entries,
+            item_type=FileShardEntry,
+            field="entries",
+        )
+        for entry in entries:
+            _validate_digest(entry.path_fingerprint, "path_fingerprint")
+            _normalize_size(entry.size_bytes)
         entries = tuple(sorted(entries, key=lambda entry: entry.path_fingerprint))
         if len({entry.path_fingerprint for entry in entries}) != len(entries):
             raise ValueError("entries must have unique path fingerprints")
@@ -200,11 +200,17 @@ class FileShard:
 
     def to_counts_dict(self) -> dict[str, int | str]:
         """Return counts and a digest, without serializing file membership."""
+        validated = FileShard(
+            shard_id=self.shard_id,
+            entries=self.entries,
+            total_bytes=self.total_bytes,
+            fingerprint=self.fingerprint,
+        )
         return {
-            "shard_id": self.shard_id,
-            "file_count": self.file_count,
-            "total_bytes": self.total_bytes,
-            "fingerprint": self.fingerprint,
+            "shard_id": validated.shard_id,
+            "file_count": validated.file_count,
+            "total_bytes": validated.total_bytes,
+            "fingerprint": validated.fingerprint,
         }
 
 
@@ -221,17 +227,35 @@ class FileShardPlan:
     def __post_init__(self) -> None:
         if type(self.limits) is not ShardLimits:
             raise TypeError("limits must be a ShardLimits instance")
+        limits = ShardLimits(
+            max_bytes=self.limits.max_bytes,
+            max_files=self.limits.max_files,
+        )
+        shards = _bounded_tuple(
+            self.shards,
+            item_type=FileShard,
+            field="shards",
+        )
         try:
-            shards = tuple(self.shards)
-        except Exception:
-            raise TypeError("shards must contain FileShard values") from None
-        if any(type(shard) is not FileShard for shard in shards):
-            raise TypeError("shards must contain FileShard values")
+            shards = tuple(
+                FileShard(
+                    shard_id=shard.shard_id,
+                    entries=shard.entries,
+                    total_bytes=shard.total_bytes,
+                    fingerprint=shard.fingerprint,
+                )
+                for shard in shards
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("shards contain invalid metadata") from None
+        if any(not shard.entries for shard in shards):
+            raise ValueError("shards must not be empty")
         if tuple(shard.shard_id for shard in shards) != tuple(range(len(shards))):
             raise ValueError("shard identifiers must be contiguous and ordered")
         if any(
-            shard.total_bytes > self.limits.max_bytes
-            or shard.file_count > self.limits.max_files
+            shard.total_bytes > limits.max_bytes or shard.file_count > limits.max_files
             for shard in shards
         ):
             raise ValueError("shard contents exceed the declared limits")
@@ -250,8 +274,9 @@ class FileShardPlan:
         ):
             raise ValueError("schema_version is not supported")
         _validate_digest(self.fingerprint, "fingerprint")
-        if self.fingerprint != _plan_fingerprint(self.limits, shards):
+        if self.fingerprint != _plan_fingerprint(limits, shards):
             raise ValueError("fingerprint does not match plan contents")
+        object.__setattr__(self, "limits", limits)
         object.__setattr__(self, "shards", shards)
 
     @property
@@ -282,18 +307,25 @@ class FileShardPlan:
         rebuild the plan from the original descriptors; a durable plan report
         should not become a path inventory.
         """
+        validated = FileShardPlan(
+            limits=self.limits,
+            shards=self.shards,
+            fingerprint=self.fingerprint,
+            algorithm=self.algorithm,
+            schema_version=self.schema_version,
+        )
         return {
-            "algorithm": self.algorithm,
-            "file_count": self.file_count,
-            "fingerprint": self.fingerprint,
+            "algorithm": validated.algorithm,
+            "file_count": validated.file_count,
+            "fingerprint": validated.fingerprint,
             "limits": {
-                "max_bytes": self.limits.max_bytes,
-                "max_files": self.limits.max_files,
+                "max_bytes": validated.limits.max_bytes,
+                "max_files": validated.limits.max_files,
             },
-            "schema_version": self.schema_version,
-            "shard_count": self.shard_count,
-            "shards": [shard.to_counts_dict() for shard in self.shards],
-            "total_bytes": self.total_bytes,
+            "schema_version": validated.schema_version,
+            "shard_count": validated.shard_count,
+            "shards": [shard.to_counts_dict() for shard in validated.shards],
+            "total_bytes": validated.total_bytes,
         }
 
     def to_json(self) -> str:
@@ -349,7 +381,9 @@ def plan_file_shards(
 
     try:
         descriptor_iterator = iter(descriptors)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise InvalidFileDescriptorError(
             "File descriptors must be a bounded iterable"
         ) from None
@@ -362,7 +396,9 @@ def plan_file_shards(
             raw_descriptor = next(descriptor_iterator)
         except StopIteration:
             break
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             raise InvalidFileDescriptorError(
                 f"File descriptor iteration failed at index {index}"
             ) from None
@@ -438,7 +474,7 @@ def plan_file_shards(
 
 def serialize_shard_plan(plan: FileShardPlan) -> str:
     """Return the canonical counts-only JSON representation of ``plan``."""
-    if not isinstance(plan, FileShardPlan):
+    if type(plan) is not FileShardPlan:
         raise TypeError("plan must be a FileShardPlan")
     return plan.to_json()
 
@@ -460,9 +496,9 @@ def _resolve_limits(
     if limits is not None and any(value is not None for value in supplied_keywords):
         raise TypeError("provide either limits or limit keywords, not both")
     if limits is not None:
-        if not isinstance(limits, ShardLimits):
+        if type(limits) is not ShardLimits:
             raise TypeError("limits must be a ShardLimits instance")
-        return limits
+        return ShardLimits(max_bytes=limits.max_bytes, max_files=limits.max_files)
 
     if max_bytes is not None and max_shard_bytes is not None:
         raise TypeError("provide only one byte limit keyword")
@@ -483,7 +519,9 @@ def _coerce_descriptor(raw: Any, *, index: int) -> FileDescriptor:
     if type(raw) is FileDescriptor:
         try:
             return FileDescriptor(raw.path, raw.size_bytes)
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             raise InvalidFileDescriptorError(
                 f"File descriptor at index {index} has invalid metadata"
             ) from None
@@ -503,7 +541,9 @@ def _coerce_descriptor(raw: Any, *, index: int) -> FileDescriptor:
                 for name in ("size_bytes", "byte_size", "size")
                 if (value := getattr(raw, name, _MISSING)) is not _MISSING
             ]
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise InvalidFileDescriptorError(
             f"File descriptor at index {index} could not be read safely"
         ) from None
@@ -522,16 +562,53 @@ def _coerce_descriptor(raw: Any, *, index: int) -> FileDescriptor:
         )
     try:
         return FileDescriptor(path, sizes[0])
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise InvalidFileDescriptorError(
             f"File descriptor at index {index} has invalid metadata"
         ) from None
 
 
 def _mapping_value(mapping: Mapping[str, Any], key: str) -> Any:
-    if key not in mapping:
+    try:
+        return mapping[key]
+    except KeyError:
         return _MISSING
-    return mapping[key]
+
+
+def _bounded_tuple(
+    values: Any,
+    *,
+    item_type: type[Any],
+    field: str,
+) -> tuple[Any, ...]:
+    """Snapshot a public iterable without allowing unbounded materialization."""
+    try:
+        iterator = iter(values)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise TypeError(f"{field} must contain {item_type.__name__} values") from None
+
+    snapshot: list[Any] = []
+    for _ in range(_MAX_FILE_DESCRIPTORS + 1):
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return tuple(snapshot)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise TypeError(
+                f"{field} must contain {item_type.__name__} values"
+            ) from None
+        if len(snapshot) >= _MAX_FILE_DESCRIPTORS:
+            raise ValueError(f"{field} exceed the file descriptor limit")
+        if type(item) is not item_type:
+            raise TypeError(f"{field} must contain {item_type.__name__} values")
+        snapshot.append(item)
+    raise AssertionError("bounded iteration must return or raise")
 
 
 def _build_shard(
@@ -602,16 +679,14 @@ def _digest(value: str) -> str:
 def _normalize_path(path: str | os.PathLike[str]) -> str:
     try:
         raw_path = os.fspath(path)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise ValueError("path must be a string or path-like value") from None
-    if isinstance(raw_path, bytes):
+    if type(raw_path) is bytes:
         raise ValueError("path must be text, not bytes")
-    if not isinstance(raw_path, str):
+    if type(raw_path) is not str:
         raise ValueError("path must be a string or path-like value")
-    try:
-        raw_path = str(raw_path)
-    except Exception:
-        raise ValueError("path could not be normalized") from None
     if not raw_path or "\x00" in raw_path or len(raw_path) > _MAX_PATH_CHARACTERS:
         raise ValueError("path must be usable bounded text without NUL characters")
 
@@ -621,7 +696,9 @@ def _normalize_path(path: str | os.PathLike[str]) -> str:
     try:
         portable_path = raw_path.replace("\\", "/")
         normalized = posixpath.normpath(unicodedata.normalize("NFC", portable_path))
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise ValueError("path could not be normalized") from None
     if normalized == "." and portable_path not in (".", "./"):
         raise ValueError("path must contain a usable path value")

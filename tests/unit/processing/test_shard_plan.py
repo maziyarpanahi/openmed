@@ -13,7 +13,9 @@ import pytest
 from openmed.processing.shard_plan import (
     DuplicateFileDescriptorError,
     FileDescriptor,
+    FileShard,
     FileShardEntry,
+    FileShardPlan,
     FileTooLargeError,
     InvalidFileDescriptorError,
     ShardLimits,
@@ -155,9 +157,12 @@ def test_invalid_descriptor_metadata_is_rejected_without_raw_values() -> None:
 def test_descriptor_iterator_failure_is_value_free() -> None:
     secret = "raw-sensitive-iterator-value"
 
+    class IteratorFailure(BaseException):
+        pass
+
     def broken_descriptors() -> Iterator[dict[str, Any]]:
         yield {"path": "synthetic/first.bin", "size_bytes": 1}
-        raise RuntimeError(secret)
+        raise IteratorFailure(secret)
 
     with pytest.raises(InvalidFileDescriptorError) as exc_info:
         plan_file_shards(
@@ -179,9 +184,12 @@ def test_descriptor_iterator_failure_is_value_free() -> None:
 def test_hostile_mapping_failure_is_value_free() -> None:
     secret = "raw-sensitive-mapping-value"
 
+    class MappingFailure(BaseException):
+        pass
+
     class HostileMapping(Mapping[str, Any]):
         def __getitem__(self, key: str) -> Any:
-            raise RuntimeError(f"{secret}:{key}")
+            raise MappingFailure(f"{secret}:{key}")
 
         def __iter__(self) -> Iterator[str]:
             return iter(("path", "size_bytes"))
@@ -204,6 +212,31 @@ def test_hostile_mapping_failure_is_value_free() -> None:
         )
     )
     assert secret not in rendered
+
+
+def test_mapping_metadata_uses_bounded_direct_lookups() -> None:
+    class LookupOnlyMapping(Mapping[str, Any]):
+        def __getitem__(self, key: str) -> Any:
+            values = {"path": "synthetic/lookup.bin", "size_bytes": 2}
+            return values[key]
+
+        def __iter__(self) -> Iterator[str]:
+            raise AssertionError("descriptor mappings must not be enumerated")
+
+        def __len__(self) -> int:
+            raise AssertionError("descriptor mapping length must not be read")
+
+        def __contains__(self, key: object) -> bool:
+            raise AssertionError("descriptor membership hooks must not be called")
+
+    plan = plan_file_shards(
+        [LookupOnlyMapping()],
+        max_bytes=10,
+        max_files=2,
+    )
+
+    assert plan.file_count == 1
+    assert plan.total_bytes == 2
 
 
 def test_conflicting_size_aliases_are_rejected() -> None:
@@ -235,3 +268,57 @@ def test_safe_plan_entries_require_digest_and_size_metadata() -> None:
         FileShardEntry(path_fingerprint="synthetic/raw-path", size_bytes=1)
     with pytest.raises(ValueError, match="non-negative integer"):
         FileShardEntry(path_fingerprint="0" * 64, size_bytes=-1)
+
+
+def test_public_plan_iterables_are_bounded_before_materialization() -> None:
+    entry = FileShardEntry(path_fingerprint="0" * 64, size_bytes=0)
+
+    class EndlessEntries(Iterator[FileShardEntry]):
+        def __iter__(self) -> EndlessEntries:
+            return self
+
+        def __next__(self) -> FileShardEntry:
+            return entry
+
+    with pytest.raises(ValueError, match="entries exceed"):
+        FileShard(
+            shard_id=0,
+            entries=EndlessEntries(),  # type: ignore[arg-type]
+            total_bytes=0,
+            fingerprint="0" * 64,
+        )
+
+    valid_shard = plan_file_shards(
+        [FileDescriptor("synthetic/one.bin", size_bytes=1)],
+        max_bytes=2,
+        max_files=1,
+    ).shards[0]
+
+    class EndlessShards(Iterator[FileShard]):
+        def __iter__(self) -> EndlessShards:
+            return self
+
+        def __next__(self) -> FileShard:
+            return valid_shard
+
+    with pytest.raises(ValueError, match="shards exceed"):
+        FileShardPlan(
+            limits=ShardLimits(max_bytes=2, max_files=1),
+            shards=EndlessShards(),  # type: ignore[arg-type]
+            fingerprint="0" * 64,
+        )
+
+
+def test_counts_only_serialization_revalidates_tampered_entries() -> None:
+    secret = "synthetic/raw-path-that-must-not-serialize"
+    plan = plan_file_shards(
+        [FileDescriptor("synthetic/one.bin", size_bytes=1)],
+        max_bytes=2,
+        max_files=1,
+    )
+    object.__setattr__(plan.shards[0].entries[0], "path_fingerprint", secret)
+
+    with pytest.raises(ValueError, match="invalid metadata") as exc_info:
+        plan.to_json()
+
+    assert secret not in str(exc_info.value)
