@@ -64,6 +64,14 @@ from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .benchmark import add_generalization_command
 from .calibrate import add_calibrate_command
+from .contract import (
+    OFFLINE_ERROR_CODE,
+    OFFLINE_ERROR_MESSAGE,
+    PRIVACY_POLICY_ERROR_CODE,
+    PRIVACY_POLICY_ERROR_MESSAGE,
+    VALIDATION_ERROR_CODE,
+    VALIDATION_ERROR_MESSAGE,
+)
 from .gates import add_gates_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
@@ -3965,7 +3973,7 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
     if len(role_overrides) != len(args.role):
         raise CliError(
             "Each structured discovery column may have only one role override.",
-            code="invalid_discovery_config",
+            code=VALIDATION_ERROR_CODE,
             exit_code=EXIT_USAGE,
         )
     _preflight_structured_paths(
@@ -4000,8 +4008,8 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
         )
     except DiscoveryConfigurationError as exc:
         raise CliError(
-            "The structured discovery configuration does not match the input schema.",
-            code="invalid_discovery_config",
+            VALIDATION_ERROR_MESSAGE,
+            code=VALIDATION_ERROR_CODE,
             exit_code=EXIT_USAGE,
         ) from exc
     except (ImportError, OSError, TypeError, ValueError) as exc:
@@ -4295,9 +4303,8 @@ def _handle_risk_assess(args: argparse.Namespace) -> int:
             _unlink_path(staged_path, missing_ok=True)
     if not assessment.meets_policy:
         raise CliError(
-            "Structured release does not meet the configured privacy policy; "
-            f"the aggregate assessment was written to {args.output}.",
-            code="release_policy_failed",
+            PRIVACY_POLICY_ERROR_MESSAGE,
+            code=PRIVACY_POLICY_ERROR_CODE,
             exit_code=EXIT_ERROR,
         )
 
@@ -7065,13 +7072,19 @@ def _handle_models_list(args: argparse.Namespace) -> int:
 
 
 def _handle_models_pull(args: argparse.Namespace) -> int:
-    from ..core.hf_hub import DownloadProgress, prefetch_model
+    from ..core.hf_hub import (
+        DownloadIntegrityError,
+        DownloadProgress,
+        prefetch_model,
+    )
 
     config = _load_and_apply_config(args)
     completed_files = 0
 
     def report_progress(progress: DownloadProgress) -> None:
         nonlocal completed_files
+        if wants_json(args):
+            return
         finished = progress.files_done > completed_files
         completed_files = max(completed_files, progress.files_done)
         line_end = "\n" if finished else "\r"
@@ -7092,12 +7105,30 @@ def _handle_models_pull(args: argparse.Namespace) -> int:
             max_bandwidth=args.max_bandwidth,
             progress_callback=report_progress,
         )
+    except OfflineModeError as exc:
+        raise CliError(
+            OFFLINE_ERROR_MESSAGE,
+            code=OFFLINE_ERROR_CODE,
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except DownloadIntegrityError as exc:
+        raise CliError(
+            "Model integrity verification failed after a forced re-fetch.",
+            code="model_pull_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
     except Exception as exc:  # pragma: no cover - exact failures tested in helper
-        sys.stderr.write(f"Failed to pull model: {exc}\n")
-        return 1
+        raise CliError(
+            "Failed to pull the requested model.",
+            code="model_pull_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
 
-    sys.stdout.write(f"Model ready: {path}\n")
-    return 0
+    return emit(
+        args,
+        {"status": "ready"},
+        human=f"Model ready: {path}",
+    )
 
 
 def _handle_models_info(args: argparse.Namespace) -> int:

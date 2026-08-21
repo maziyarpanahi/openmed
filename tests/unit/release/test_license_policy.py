@@ -69,6 +69,17 @@ def test_cryptography_license_is_reviewed_without_installed_metadata(monkeypatch
     assert reason == "permissive license"
 
 
+def test_apache_airflow_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("apache-airflow")
+    allowed, reason = policy.is_allowed_license("apache-airflow", license_text)
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_gitpython_license_is_reviewed_without_installed_metadata(monkeypatch):
     monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
 
