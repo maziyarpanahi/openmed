@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Iterable
 
@@ -50,15 +51,111 @@ def test_config_is_pickle_safe_and_normalizes_selected_columns() -> None:
 
 
 def test_config_snapshots_mutable_extra_kwargs_and_returns_fresh_values() -> None:
-    supplied = {"token_language_tags": ["en"]}
+    supplied = {
+        "token_language_tags": ["en"],
+        "calibration_thresholds_path": Path("synthetic-thresholds.json"),
+        "nested": {"ordered": [1, 2]},
+    }
     config = SparkRedactionConfig(columns=["note"], extra_kwargs=supplied)
 
     supplied["token_language_tags"].append("fr")
+    supplied["nested"]["ordered"].append(3)
     returned = config.extra_kwargs
     returned["token_language_tags"].append("de")
+    returned["nested"]["ordered"].append(4)
 
-    assert config.extra_kwargs == {"token_language_tags": ["en"]}
+    assert config.extra_kwargs == {
+        "calibration_thresholds_path": Path("synthetic-thresholds.json"),
+        "nested": {"ordered": [1, 2]},
+        "token_language_tags": ["en"],
+    }
     assert pickle.loads(pickle.dumps(config)) == config
+
+
+def test_config_snapshot_is_stable_across_nested_mapping_order() -> None:
+    first = SparkRedactionConfig(
+        columns=["note"],
+        extra_kwargs={"nested": {"beta": 2, "alpha": 1}},
+    )
+    second = SparkRedactionConfig(
+        columns=["note"],
+        extra_kwargs={"nested": {"alpha": 1, "beta": 2}},
+    )
+
+    assert first == second
+
+
+def test_config_rejects_executable_or_stateful_extra_options() -> None:
+    reduce_called = False
+
+    class ExecutableValue:
+        def __reduce__(self):
+            nonlocal reduce_called
+            reduce_called = True
+            return (str, ("should-not-run",))
+
+    with pytest.raises(TypeError, match="supported data types"):
+        SparkRedactionConfig(
+            columns=["note"],
+            extra_kwargs={"unsupported": ExecutableValue()},
+        )
+
+    assert reduce_called is False
+
+    for key in (
+        "budget",
+        "custom_recognizer",
+        "lid_model",
+        "transliterated_name_config",
+    ):
+        with pytest.raises(ValueError, match="reserved"):
+            SparkRedactionConfig(columns=["note"], extra_kwargs={key: None})
+
+
+def test_config_rejects_cycles_and_contains_corrupted_snapshot_state() -> None:
+    cyclic: list[Any] = []
+    cyclic.append(cyclic)
+
+    with pytest.raises(TypeError, match="must not contain cycles"):
+        SparkRedactionConfig(columns=["note"], extra_kwargs={"nested": cyclic})
+
+    config = SparkRedactionConfig(columns=["note"])
+    object.__setattr__(
+        config,
+        "_extra_items",
+        (("unsafe", ("serialized", b"not-loaded")),),
+    )
+
+    with pytest.raises(TypeError, match="stored extra kwargs are invalid"):
+        config.extra_kwargs
+
+
+def test_config_validation_does_not_invoke_hostile_string_or_mapping_hooks() -> None:
+    strip_called = False
+
+    class HostileString(str):
+        def strip(self, *args: Any, **kwargs: Any) -> str:
+            nonlocal strip_called
+            strip_called = True
+            raise RuntimeError(f"sensitive detail: {_SYNTHETIC_VALUE}")
+
+    with pytest.raises(ValueError, match="non-empty string names") as exc_info:
+        SparkRedactionConfig(columns=[HostileString("note")])
+
+    assert strip_called is False
+    assert _SYNTHETIC_VALUE not in str(exc_info.value)
+
+    class MalformedMapping(dict[str, Any]):
+        def items(self):
+            return [("malformed",)]
+
+    with pytest.raises(TypeError, match="extra kwargs could not be read") as exc_info:
+        SparkRedactionConfig(
+            columns=["note"],
+            extra_kwargs=MalformedMapping(),
+        )
+
+    assert _SYNTHETIC_VALUE not in str(exc_info.value)
 
 
 def test_transform_serializes_only_immutable_configuration() -> None:

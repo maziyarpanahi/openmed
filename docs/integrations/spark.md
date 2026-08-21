@@ -36,6 +36,12 @@ the driver. Each partition attempt constructs its own worker-local
 deidentifier. Spark retries and speculative attempts therefore receive fresh
 worker state rather than sharing state across executors.
 
+Additional de-identification options are snapshotted as bounded value data:
+nulls, booleans, finite numbers, strings, bytes, paths, and nested lists,
+tuples, or string-keyed dictionaries. Stateful hooks, recognizers, and request
+budgets are rejected from the serialized configuration. Each partition gets a
+fresh copy of the accepted values, without executable deserialization.
+
 The default worker uses OpenMed's cache-only configuration. It does not make a
 mandatory network request, so model artifacts must already be available on
 each worker. `mask`, `hash`, and seeded replacement/date-shift configurations

@@ -19,10 +19,11 @@ only because Spark commonly forwards worker exception text to driver logs.
 
 from __future__ import annotations
 
-import pickle
+import math
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final
+from pathlib import Path
+from typing import Any, Final, TypeAlias
 
 Deidentifier = Callable[..., Any]
 PartitionDeidentifierFactory = Callable[[], Deidentifier]
@@ -31,14 +32,22 @@ _DEFAULT_METHOD: Final[str] = "mask"
 _DEFAULT_POLICY: Final[str] = "hipaa_safe_harbor"
 _DEFAULT_CONFIDENCE_THRESHOLD: Final[float] = 0.7
 _DEFAULT_SEED: Final[int] = 0
+_MAX_EXTRA_DEPTH: Final[int] = 16
+_MAX_EXTRA_ITEMS: Final[int] = 4096
+_MAX_EXTRA_LEAF_SIZE: Final[int] = 1_048_576
+
+_FrozenExtraValue: TypeAlias = tuple[str, Any]
 
 _RESERVED_KWARGS: Final[frozenset[str]] = frozenset(
     {
         "audit",
+        "budget",
         "cache_results",
         "config",
         "consistent",
+        "custom_recognizer",
         "keep_mapping",
+        "lid_model",
         "loader",
         "max_cache_entries",
         "method",
@@ -47,6 +56,7 @@ _RESERVED_KWARGS: Final[frozenset[str]] = frozenset(
         "seed",
         "surrogate_vault",
         "text",
+        "transliterated_name_config",
     }
 )
 
@@ -74,7 +84,7 @@ class SparkRedactionConfig:
         confidence_threshold: Detection threshold forwarded to OpenMed.
         seed: Request seed for deterministic replacement or date shifting.
         consistent: Request stable replacements within each input value.
-        extra_kwargs: Additional serializable options forwarded to OpenMed.
+        extra_kwargs: Additional immutable data options forwarded to OpenMed.
         deidentify_kwargs: Alias for ``extra_kwargs``.
     """
 
@@ -85,7 +95,7 @@ class SparkRedactionConfig:
     confidence_threshold: float
     seed: int
     consistent: bool
-    _extra_items: tuple[tuple[str, bytes], ...] = field(repr=False)
+    _extra_items: tuple[tuple[str, _FrozenExtraValue], ...] = field(repr=False)
 
     def __init__(
         self,
@@ -106,23 +116,21 @@ class SparkRedactionConfig:
         selected = columns if columns is not None else text_columns
         normalized_columns = _normalize_columns(selected)
 
-        if not isinstance(method, str) or not method.strip():
+        if type(method) is not str or not method.strip():
             raise ValueError("method must be a non-empty string")
-        if not isinstance(policy, str) or not policy.strip():
+        if type(policy) is not str or not policy.strip():
             raise ValueError("policy must be a non-empty string")
         if model_name is not None and (
-            not isinstance(model_name, str) or not model_name.strip()
+            type(model_name) is not str or not model_name.strip()
         ):
             raise ValueError("model_name must be a non-empty string")
-        if isinstance(confidence_threshold, bool) or not isinstance(
-            confidence_threshold, (int, float)
-        ):
+        if type(confidence_threshold) not in (int, float):
             raise TypeError("confidence_threshold must be a number")
         if not 0 <= confidence_threshold <= 1:
             raise ValueError("confidence_threshold must be between 0 and 1")
-        if isinstance(seed, bool) or not isinstance(seed, int):
+        if type(seed) is not int:
             raise TypeError("seed must be an integer")
-        if not isinstance(consistent, bool):
+        if type(consistent) is not bool:
             raise TypeError("consistent must be a boolean")
 
         if extra_kwargs is not None and deidentify_kwargs is not None:
@@ -153,7 +161,18 @@ class SparkRedactionConfig:
     def extra_kwargs(self) -> dict[str, Any]:
         """Return a copy of additional deidentifier keyword arguments."""
 
-        return {key: pickle.loads(serialized) for key, serialized in self._extra_items}
+        if type(self._extra_items) is not tuple:
+            raise TypeError("stored extra kwargs are invalid")
+
+        restored: dict[str, Any] = {}
+        for item in self._extra_items:
+            if type(item) is not tuple or len(item) != 2:
+                raise TypeError("stored extra kwargs are invalid")
+            key, frozen = item
+            if type(key) is not str or not key or key in restored:
+                raise TypeError("stored extra kwargs are invalid")
+            restored[key] = _thaw_extra_value(frozen)
+        return restored
 
     def to_deidentify_kwargs(self) -> dict[str, Any]:
         """Return deterministic options for one partition-local worker."""
@@ -416,7 +435,7 @@ def _normalize_columns(columns: Sequence[str] | None) -> tuple[str, ...]:
     normalized: list[str] = []
     seen: set[str] = set()
     for column in values:
-        if not isinstance(column, str) or not column.strip():
+        if type(column) is not str or not column.strip():
             raise ValueError("columns must contain non-empty string names")
         name = column.strip()
         if "\x00" in name:
@@ -430,7 +449,7 @@ def _normalize_columns(columns: Sequence[str] | None) -> tuple[str, ...]:
 
 def _normalize_extra_kwargs(
     values: Mapping[str, Any] | None,
-) -> tuple[tuple[str, bytes], ...]:
+) -> tuple[tuple[str, _FrozenExtraValue], ...]:
     if values is None:
         return ()
     if not isinstance(values, Mapping):
@@ -441,22 +460,152 @@ def _normalize_extra_kwargs(
     except Exception:
         raise TypeError("extra kwargs could not be read") from None
 
-    normalized: list[tuple[str, bytes]] = []
-    for key, value in supplied_items:
-        if not isinstance(key, str) or not key:
+    normalized: list[tuple[str, _FrozenExtraValue]] = []
+    item_budget = [0]
+    for supplied_item in supplied_items:
+        if type(supplied_item) not in (tuple, list) or len(supplied_item) != 2:
+            raise TypeError("extra kwargs could not be read")
+        key, value = supplied_item
+        if type(key) is not str or not key:
             raise TypeError("extra kwargs keys must be non-empty strings")
+        if len(key) > _MAX_EXTRA_LEAF_SIZE:
+            raise TypeError("extra kwargs keys exceed the supported size")
         if key in _RESERVED_KWARGS:
             raise ValueError("extra kwargs must not override reserved keys")
-        try:
-            serialized = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception:
-            raise TypeError("extra kwargs values must be serializable") from None
-        normalized.append((key, serialized))
+        frozen = _freeze_extra_value(
+            value,
+            depth=0,
+            active_ids=set(),
+            item_budget=item_budget,
+        )
+        normalized.append((key, frozen))
     return tuple(sorted(normalized, key=lambda item: item[0]))
 
 
+def _freeze_extra_value(
+    value: Any,
+    *,
+    depth: int,
+    active_ids: set[int],
+    item_budget: list[int],
+) -> _FrozenExtraValue:
+    """Convert supported configuration data to an immutable safe snapshot."""
+
+    item_budget[0] += 1
+    if depth > _MAX_EXTRA_DEPTH or item_budget[0] > _MAX_EXTRA_ITEMS:
+        raise TypeError("extra kwargs values exceed the supported complexity")
+
+    value_type = type(value)
+    if value is None:
+        return ("none", None)
+    if value_type is bool:
+        return ("bool", value)
+    if value_type is int:
+        return ("int", value)
+    if value_type is float:
+        if not math.isfinite(value):
+            raise TypeError("extra kwargs values must contain finite numbers")
+        return ("float", value)
+    if value_type is str:
+        if len(value) > _MAX_EXTRA_LEAF_SIZE:
+            raise TypeError("extra kwargs values exceed the supported size")
+        return ("str", value)
+    if value_type is bytes:
+        if len(value) > _MAX_EXTRA_LEAF_SIZE:
+            raise TypeError("extra kwargs values exceed the supported size")
+        return ("bytes", value)
+    if isinstance(value, Path):
+        try:
+            rendered = str(value)
+        except Exception:
+            raise TypeError("extra kwargs path value could not be read") from None
+        if len(rendered) > _MAX_EXTRA_LEAF_SIZE:
+            raise TypeError("extra kwargs values exceed the supported size")
+        return ("path", rendered)
+
+    if value_type not in (list, tuple, dict):
+        raise TypeError("extra kwargs values must use supported data types")
+
+    object_id = id(value)
+    if object_id in active_ids:
+        raise TypeError("extra kwargs values must not contain cycles")
+    active_ids.add(object_id)
+    try:
+        if value_type in (list, tuple):
+            frozen_values = tuple(
+                _freeze_extra_value(
+                    item,
+                    depth=depth + 1,
+                    active_ids=active_ids,
+                    item_budget=item_budget,
+                )
+                for item in value
+            )
+            return ("list" if value_type is list else "tuple", frozen_values)
+
+        frozen_items: list[tuple[str, _FrozenExtraValue]] = []
+        for key, item in value.items():
+            if type(key) is not str:
+                raise TypeError("nested extra kwargs mappings require string keys")
+            if len(key) > _MAX_EXTRA_LEAF_SIZE:
+                raise TypeError("extra kwargs values exceed the supported size")
+            frozen_items.append(
+                (
+                    key,
+                    _freeze_extra_value(
+                        item,
+                        depth=depth + 1,
+                        active_ids=active_ids,
+                        item_budget=item_budget,
+                    ),
+                )
+            )
+        return ("dict", tuple(sorted(frozen_items, key=lambda item: item[0])))
+    finally:
+        active_ids.remove(object_id)
+
+
+def _thaw_extra_value(frozen: _FrozenExtraValue) -> Any:
+    """Return a fresh value from an internally generated safe snapshot."""
+
+    if type(frozen) is not tuple or len(frozen) != 2:
+        raise TypeError("stored extra kwargs are invalid")
+    tag, payload = frozen
+    if type(tag) is not str:
+        raise TypeError("stored extra kwargs are invalid")
+
+    if tag == "none" and payload is None:
+        return None
+    if tag == "bool" and type(payload) is bool:
+        return payload
+    if tag == "int" and type(payload) is int:
+        return payload
+    if tag == "float" and type(payload) is float and math.isfinite(payload):
+        return payload
+    if tag == "str" and type(payload) is str:
+        return payload
+    if tag == "bytes" and type(payload) is bytes:
+        return payload
+    if tag == "path" and type(payload) is str:
+        return Path(payload)
+    if tag in ("list", "tuple") and type(payload) is tuple:
+        values = tuple(_thaw_extra_value(item) for item in payload)
+        return list(values) if tag == "list" else values
+    if tag == "dict" and type(payload) is tuple:
+        restored: dict[str, Any] = {}
+        for item in payload:
+            if type(item) is not tuple or len(item) != 2:
+                raise TypeError("stored extra kwargs are invalid")
+            key, value = item
+            if type(key) is not str or key in restored:
+                raise TypeError("stored extra kwargs are invalid")
+            restored[key] = _thaw_extra_value(value)
+        return restored
+    raise TypeError("stored extra kwargs are invalid")
+
+
 def _validate_partition_id(partition_id: int) -> None:
-    if isinstance(partition_id, bool) or not isinstance(partition_id, int):
+    if type(partition_id) is not int:
         raise TypeError("partition_id must be an integer")
     if partition_id < 0:
         raise ValueError("partition_id must be non-negative")
