@@ -16,6 +16,9 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
 PORTABILITY_AUDIT_SCHEMA_VERSION = "openmed.path_portability.v1"
+MAX_AUDIT_PATHS = 10_000
+MAX_PATH_CHARACTERS = 4_096
+MAX_PATH_COMPONENTS = 256
 
 ABSOLUTE_ROOT = "absolute_root"
 CASE_FOLD_COLLISION = "case_fold_collision"
@@ -35,9 +38,12 @@ _ISSUE_CATEGORY_ORDER = {
     category: index for index, category in enumerate(ISSUE_CATEGORIES)
 }
 _DRIVE_PREFIX_RE = re.compile(r"^[A-Za-z]:")
+_FINGERPRINT_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_WINDOWS_INVALID_CHARACTERS = frozenset('<>:"|?*')
 _WINDOWS_RESERVED_NAMES = frozenset(
     {
         "aux",
+        "clock$",
         "con",
         "com1",
         "com2",
@@ -81,15 +87,29 @@ class PathPortabilityRecord:
     occurrences: int = 1
 
     def __post_init__(self) -> None:
-        if not re.fullmatch(r"sha256:[0-9a-f]{64}", self.normalized_path_fingerprint):
+        if (
+            type(self.normalized_path_fingerprint) is not str
+            or _FINGERPRINT_RE.fullmatch(self.normalized_path_fingerprint) is None
+        ):
             raise ValueError("normalized_path_fingerprint must be a SHA-256 digest")
-        if any(category not in ISSUE_CATEGORIES for category in self.issue_categories):
+        if (
+            type(self.issue_categories) is not tuple
+            or any(
+                type(category) is not str or category not in ISSUE_CATEGORIES
+                for category in self.issue_categories
+            )
+            or len(set(self.issue_categories)) != len(self.issue_categories)
+        ):
             raise ValueError("issue_categories contains an unknown category")
-        if tuple(self.issue_categories) != tuple(
+        if self.issue_categories != tuple(
             sorted(self.issue_categories, key=_ISSUE_CATEGORY_ORDER.__getitem__)
         ):
             raise ValueError("issue_categories must use the canonical order")
-        if self.occurrences < 1:
+        if (
+            type(self.occurrences) is not int
+            or self.occurrences < 1
+            or self.occurrences > MAX_AUDIT_PATHS
+        ):
             raise ValueError("occurrences must be positive")
 
     @property
@@ -128,10 +148,27 @@ class PathPortabilityReport:
     checked_count: int
 
     def __post_init__(self) -> None:
-        if self.checked_count < 0:
+        if (
+            type(self.records) is not tuple
+            or len(self.records) > MAX_AUDIT_PATHS
+            or any(type(record) is not PathPortabilityRecord for record in self.records)
+        ):
+            raise ValueError("records must be immutable portability records")
+        fingerprints = tuple(
+            record.normalized_path_fingerprint for record in self.records
+        )
+        if fingerprints != tuple(sorted(fingerprints)) or len(set(fingerprints)) != len(
+            fingerprints
+        ):
+            raise ValueError("records must use unique canonical fingerprint order")
+        if (
+            type(self.checked_count) is not int
+            or self.checked_count < 0
+            or self.checked_count > MAX_AUDIT_PATHS
+        ):
             raise ValueError("checked_count must be non-negative")
-        if self.checked_count < sum(record.occurrences for record in self.records):
-            raise ValueError("checked_count cannot be less than recorded occurrences")
+        if self.checked_count != sum(record.occurrences for record in self.records):
+            raise ValueError("checked_count must equal recorded occurrences")
 
     @property
     def findings(self) -> tuple[PathPortabilityRecord, ...]:
@@ -215,21 +252,15 @@ def audit_resource_paths(
     case_fold_groups: dict[str, set[str]] = {}
     checked_count = 0
 
-    try:
-        entries = _as_entries(paths)
-        for entry in entries:
-            raw_path = _coerce_path_text(entry)
-            normalized_path, categories = _normalize_path(raw_path)
-            state = states.setdefault(normalized_path, _PathState(set()))
-            state.categories.update(categories)
-            state.occurrences += 1
-            case_fold_key = _case_fold_key(normalized_path)
-            case_fold_groups.setdefault(case_fold_key, set()).add(normalized_path)
-            checked_count += 1
-    except PathPortabilityInputError:
-        raise
-    except Exception:
-        raise PathPortabilityInputError("path collection could not be read") from None
+    for entry in _bounded_entries(paths):
+        raw_path = _coerce_path_text(entry)
+        normalized_path, categories = _normalize_path(raw_path)
+        state = states.setdefault(normalized_path, _PathState(set()))
+        state.categories.update(categories)
+        state.occurrences += 1
+        case_fold_key = _case_fold_key(normalized_path)
+        case_fold_groups.setdefault(case_fold_key, set()).add(normalized_path)
+        checked_count += 1
 
     for normalized_paths in case_fold_groups.values():
         if len(normalized_paths) < 2:
@@ -269,33 +300,83 @@ def _as_entries(
 ) -> Iterator[str | os.PathLike[str]]:
     if isinstance(paths, (str, os.PathLike)):
         return iter((paths,))
+    if isinstance(paths, (bytes, bytearray, memoryview)):
+        raise PathPortabilityInputError("path collection must be iterable")
     try:
         return iter(paths)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise PathPortabilityInputError("path collection must be iterable") from None
 
 
+def _bounded_entries(
+    paths: Iterable[str | os.PathLike[str]] | str | os.PathLike[str],
+) -> Iterator[str | os.PathLike[str]]:
+    """Yield a bounded collection while containing iterator failures."""
+
+    iterator = _as_entries(paths)
+    for index in range(MAX_AUDIT_PATHS + 1):
+        try:
+            entry = next(iterator)
+        except StopIteration:
+            return
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise PathPortabilityInputError(
+                "path collection could not be read"
+            ) from None
+        if index == MAX_AUDIT_PATHS:
+            raise PathPortabilityInputError(
+                "path collection exceeds the bounded maximum"
+            )
+        yield entry
+
+
 def _coerce_path_text(value: object) -> str:
-    if isinstance(value, str):
-        return value
-    try:
-        path_text = os.fspath(value)
-    except Exception:
-        raise PathPortabilityInputError(
-            "path entries must be text or path-like"
-        ) from None
-    if not isinstance(path_text, str):
-        raise PathPortabilityInputError("path entries must be text or path-like")
+    if type(value) is str:
+        path_text = value
+    else:
+        if not isinstance(value, os.PathLike):
+            raise PathPortabilityInputError("path entries must be text or path-like")
+        try:
+            path_text = os.fspath(value)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise PathPortabilityInputError(
+                "path entries must be text or path-like"
+            ) from None
+        if type(path_text) is not str:
+            raise PathPortabilityInputError("path entries must be text or path-like")
+    if (
+        not path_text
+        or len(path_text) > MAX_PATH_CHARACTERS
+        or any(unicodedata.category(character) == "Cs" for character in path_text)
+    ):
+        raise PathPortabilityInputError("path entries must be bounded valid text")
     return path_text
 
 
 def _normalize_path(raw_path: str) -> tuple[str, set[str]]:
-    normalized = unicodedata.normalize("NFKC", raw_path).replace("\\", "/")
+    try:
+        normalized = unicodedata.normalize("NFKC", raw_path).replace("\\", "/")
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise PathPortabilityInputError(
+            "path entries could not be normalized"
+        ) from None
+    if len(normalized) > MAX_PATH_CHARACTERS:
+        raise PathPortabilityInputError("path entries must be bounded valid text")
     root = _root_marker(normalized)
     remainder = _root_remainder(normalized, root)
     components = [
         component for component in remainder.split("/") if component not in ("", ".")
     ]
+    if len(components) > MAX_PATH_COMPONENTS:
+        raise PathPortabilityInputError("path entries have too many components")
     canonical = _join_normalized_path(root, components)
 
     categories: set[str] = set()
@@ -305,12 +386,14 @@ def _normalize_path(raw_path: str) -> tuple[str, set[str]]:
         categories.add(TRAVERSAL)
     if any(_is_reserved_component(component) for component in components):
         categories.add(RESERVED_COMPONENT)
-    if normalized != canonical:
+    if raw_path != canonical:
         categories.add(NORMALIZATION_DRIFT)
     return canonical, categories
 
 
 def _root_marker(normalized: str) -> str:
+    if normalized.startswith("//"):
+        return "//"
     if normalized.startswith("/"):
         return "/"
     drive = _DRIVE_PREFIX_RE.match(normalized)
@@ -320,7 +403,7 @@ def _root_marker(normalized: str) -> str:
 
 
 def _root_remainder(normalized: str, root: str) -> str:
-    if root == "/":
+    if root in {"/", "//"}:
         return normalized.lstrip("/")
     if root:
         return normalized[len(root) :].lstrip("/")
@@ -329,6 +412,8 @@ def _root_remainder(normalized: str, root: str) -> str:
 
 def _join_normalized_path(root: str, components: list[str]) -> str:
     body = "/".join(components)
+    if root == "//":
+        return "//" + body if body else "//"
     if root == "/":
         return "/" + body if body else "/"
     if root.endswith("/"):
@@ -341,11 +426,19 @@ def _join_normalized_path(root: str, components: list[str]) -> str:
 def _has_absolute_root(normalized: str) -> bool:
     if normalized.startswith("/") or _DRIVE_PREFIX_RE.match(normalized):
         return True
-    return normalized.casefold().startswith(("file:/", "file://"))
+    return normalized.casefold().startswith("file:")
 
 
 def _is_reserved_component(component: str) -> bool:
+    if component == "..":
+        return False
     if component != component.rstrip(" ."):
+        return True
+    if any(
+        character in _WINDOWS_INVALID_CHARACTERS
+        or unicodedata.category(character) in {"Cc", "Cf", "Cs"}
+        for character in component
+    ):
         return True
     windows_name = component.split(".", 1)[0].rstrip(" ").casefold()
     return windows_name in _WINDOWS_RESERVED_NAMES
@@ -364,6 +457,9 @@ __all__ = [
     "ABSOLUTE_ROOT",
     "CASE_FOLD_COLLISION",
     "ISSUE_CATEGORIES",
+    "MAX_AUDIT_PATHS",
+    "MAX_PATH_CHARACTERS",
+    "MAX_PATH_COMPONENTS",
     "NORMALIZATION_DRIFT",
     "PORTABILITY_AUDIT_SCHEMA_VERSION",
     "PathPortabilityInputError",

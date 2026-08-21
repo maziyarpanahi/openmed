@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import pytest
@@ -9,10 +10,15 @@ import pytest
 from openmed.core.path_portability import (
     ABSOLUTE_ROOT,
     CASE_FOLD_COLLISION,
+    MAX_AUDIT_PATHS,
+    MAX_PATH_CHARACTERS,
+    MAX_PATH_COMPONENTS,
     NORMALIZATION_DRIFT,
     RESERVED_COMPONENT,
     TRAVERSAL,
     PathPortabilityInputError,
+    PathPortabilityRecord,
+    PathPortabilityReport,
     audit_path_portability,
     audit_resource_paths,
 )
@@ -125,3 +131,88 @@ def test_duplicate_normalized_paths_are_counted_without_duplicate_records():
     assert report.checked_count == 2
     assert len(report.records) == 1
     assert report.records[0].occurrences == 2
+
+
+def test_unicode_normalization_drift_is_detected_without_other_path_changes():
+    report = audit_resource_paths(["models/Cafe\u0301.json"])
+
+    assert report.records[0].issue_categories == (NORMALIZATION_DRIFT,)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "models/name:stream.json",
+        "models/question?.json",
+        "models/control\x00.json",
+        "models/clock$.txt",
+        "models/COM\u00b9.txt",
+    ],
+)
+def test_cross_platform_invalid_components_are_reserved(path):
+    report = audit_resource_paths([path])
+
+    assert RESERVED_COMPONENT in report.records[0].issue_categories
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        itertools.repeat("models/weights.bin", MAX_AUDIT_PATHS + 1),
+        ["x" * (MAX_PATH_CHARACTERS + 1)],
+        ["/".join(["part"] * (MAX_PATH_COMPONENTS + 1))],
+    ],
+)
+def test_input_work_is_bounded(paths):
+    with pytest.raises(PathPortabilityInputError):
+        audit_resource_paths(paths)
+
+
+def test_hostile_iterator_failures_do_not_echo_source_values():
+    secret_marker = "synthetic-sensitive-iterator-marker"
+
+    class HostilePaths:
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            raise RuntimeError(secret_marker)
+
+    with pytest.raises(PathPortabilityInputError) as exc_info:
+        audit_resource_paths(HostilePaths())
+
+    assert secret_marker not in str(exc_info.value)
+
+
+def test_text_subclasses_and_surrogates_are_rejected_without_source_text():
+    class UnsafeText(str):
+        pass
+
+    for path in (UnsafeText("synthetic-sensitive-path"), "bad\ud800path"):
+        with pytest.raises(PathPortabilityInputError) as exc_info:
+            audit_resource_paths(path)
+
+        assert "synthetic-sensitive-path" not in str(exc_info.value)
+
+
+def test_public_report_state_must_be_exact_immutable_and_consistent():
+    fingerprint = "sha256:" + "a" * 64
+    record = PathPortabilityRecord(fingerprint)
+
+    with pytest.raises(ValueError):
+        PathPortabilityRecord(
+            fingerprint,
+            issue_categories=[TRAVERSAL],  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError):
+        PathPortabilityRecord(
+            fingerprint,
+            issue_categories=(TRAVERSAL, TRAVERSAL),
+        )
+    with pytest.raises(ValueError):
+        PathPortabilityReport(records=(record,), checked_count=2)
+    with pytest.raises(ValueError):
+        PathPortabilityReport(
+            records=[record],  # type: ignore[arg-type]
+            checked_count=1,
+        )

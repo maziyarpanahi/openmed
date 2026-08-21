@@ -8,7 +8,9 @@ normalization differences, or a case-fold collision.
 `openmed.core.path_portability.audit_resource_paths` provides a local-only
 audit for manifest resource paths. It accepts path strings or path-like values,
 normalizes separators and Unicode text in memory, and never resolves or opens a
-path. It performs no network call.
+path. It performs no network call. Each audit accepts at most 10,000 paths;
+each path is limited to 4,096 characters and 256 components. Inputs outside
+those bounds fail with a value-free error.
 
 ```python
 from openmed.core.path_portability import audit_resource_paths
@@ -38,8 +40,8 @@ The supported issue categories are:
 - `traversal`: a `..` component is present.
 - `absolute_root`: a POSIX root, UNC root, drive-qualified path, or `file:`
   root is present.
-- `reserved_component`: a Windows device name or a component with a trailing
-  dot or space is present.
+- `reserved_component`: a Windows device name, invalid character, control
+  character, trailing dot, or trailing space is present.
 - `normalization_drift`: separators, dot components, duplicate separators,
   Unicode compatibility forms, or trailing separators changed during
   normalization.

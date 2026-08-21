@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline resource-path portability audit with bounded
+  inputs; traversal, root, reserved-name, normalization, and case-fold checks;
+  immutable hash-only reports; and value-free failures (#2637).
 - Added deterministic counts-only comparator reports with fixed metric
   definitions, bounded aggregate failure accounting, hashed custom identifiers,
   immutable sanitized state, environment fingerprints, and value-free JSON,
