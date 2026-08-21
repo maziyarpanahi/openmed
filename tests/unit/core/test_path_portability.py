@@ -10,6 +10,7 @@ import pytest
 from openmed.core.path_portability import (
     ABSOLUTE_ROOT,
     CASE_FOLD_COLLISION,
+    ISSUE_CATEGORIES,
     MAX_AUDIT_PATHS,
     MAX_PATH_CHARACTERS,
     MAX_PATH_COMPONENTS,
@@ -210,6 +211,11 @@ def test_public_report_state_must_be_exact_immutable_and_consistent():
         PathPortabilityRecord(
             fingerprint,
             issue_categories=(TRAVERSAL, TRAVERSAL),
+        )
+    with pytest.raises(ValueError):
+        PathPortabilityRecord(
+            fingerprint,
+            issue_categories=(TRAVERSAL,) * (len(ISSUE_CATEGORIES) + 1),
         )
     with pytest.raises(ValueError):
         PathPortabilityReport(records=(record,), checked_count=2)

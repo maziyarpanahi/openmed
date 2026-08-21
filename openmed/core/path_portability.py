@@ -37,6 +37,7 @@ ISSUE_CATEGORIES = (
 _ISSUE_CATEGORY_ORDER = {
     category: index for index, category in enumerate(ISSUE_CATEGORIES)
 }
+_MAX_ISSUE_CATEGORY_LENGTH = max(len(category) for category in ISSUE_CATEGORIES)
 _DRIVE_PREFIX_RE = re.compile(r"^[A-Za-z]:")
 _FINGERPRINT_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _WINDOWS_INVALID_CHARACTERS = frozenset('<>:"|?*')
@@ -91,13 +92,17 @@ class PathPortabilityRecord:
     def __post_init__(self) -> None:
         if (
             type(self.normalized_path_fingerprint) is not str
+            or len(self.normalized_path_fingerprint) != len("sha256:") + 64
             or _FINGERPRINT_RE.fullmatch(self.normalized_path_fingerprint) is None
         ):
             raise ValueError("normalized_path_fingerprint must be a SHA-256 digest")
         if (
             type(self.issue_categories) is not tuple
+            or len(self.issue_categories) > len(ISSUE_CATEGORIES)
             or any(
-                type(category) is not str or category not in ISSUE_CATEGORIES
+                type(category) is not str
+                or len(category) > _MAX_ISSUE_CATEGORY_LENGTH
+                or category not in ISSUE_CATEGORIES
                 for category in self.issue_categories
             )
             or len(set(self.issue_categories)) != len(self.issue_categories)
