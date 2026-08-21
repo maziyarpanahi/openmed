@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 
 from openmed.interop.artifact_inventory import (
+    ArtifactInventory,
+    ArtifactInventoryEntry,
+    ArtifactInventoryError,
     ArtifactPathError,
     DuplicateArtifactError,
     UnreadableArtifactError,
@@ -145,3 +148,35 @@ def test_unreadable_entries_are_sanitized(
 
     assert "synthetic-sensitive-value" not in str(excinfo.value)
     assert "contents" not in str(excinfo.value)
+
+
+def test_counts_only_metadata_labels_cannot_be_caller_injected():
+    digest = "sha256:" + "0" * 64
+    sensitive_label = "application/syntheticpatientsecret"
+
+    with pytest.raises(ArtifactInventoryError) as media_excinfo:
+        ArtifactInventoryEntry(
+            path="artifact.bin",
+            byte_count=1,
+            media_type=sensitive_label,
+            fingerprint=digest,
+        )
+    assert sensitive_label not in str(media_excinfo.value)
+
+    with pytest.raises(ArtifactInventoryError) as schema_excinfo:
+        ArtifactInventory(schema_version="syntheticpatientsecret")
+    assert "syntheticpatientsecret" not in str(schema_excinfo.value)
+
+
+def test_expanded_markdown_escapes_html_looking_paths():
+    entry = ArtifactInventoryEntry(
+        path="reports/<synthetic>&summary.txt",
+        byte_count=1,
+        media_type="text/plain",
+        fingerprint="sha256:" + "0" * 64,
+    )
+
+    report = ArtifactInventory((entry,)).to_markdown(counts_only=False)
+
+    assert "<synthetic>" not in report
+    assert "reports/&lt;synthetic&gt;&amp;summary.txt" in report

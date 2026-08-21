@@ -50,6 +50,9 @@ _MEDIA_TYPES: Final = {
     ".yml": "application/yaml",
     ".zip": "application/zip",
 }
+_SUPPORTED_MEDIA_TYPES: Final = frozenset(
+    {*_MEDIA_TYPES.values(), "application/octet-stream"}
+)
 
 
 class ArtifactInventoryError(ValueError):
@@ -85,19 +88,26 @@ class ArtifactInventoryEntry:
     def __post_init__(self) -> None:
         """Validate the serialized metadata without echoing caller values."""
 
-        if not self.path or self.path.startswith("/"):
+        if not isinstance(self.path, str) or not self.path or self.path.startswith("/"):
             raise ArtifactPathError("artifact paths must be non-empty and relative")
-        if "\\" in self.path or "\x00" in self.path:
+        if "\\" in self.path or any(ord(character) < 32 for character in self.path):
             raise ArtifactPathError("artifact paths must use safe relative separators")
         if any(part in {"", ".", ".."} for part in self.path.split("/")):
             raise ArtifactPathError("artifact paths must be normalized")
-        if self.byte_count < 0:
+        if (
+            not isinstance(self.byte_count, int)
+            or isinstance(self.byte_count, bool)
+            or self.byte_count < 0
+        ):
             raise ArtifactInventoryError("artifact byte counts must be non-negative")
-        if not self.media_type or "/" not in self.media_type:
-            raise ArtifactInventoryError(
-                "artifact media types must be non-empty MIME types"
-            )
-        if not self.fingerprint.startswith(_FINGERPRINT_PREFIX):
+        if (
+            not isinstance(self.media_type, str)
+            or self.media_type not in _SUPPORTED_MEDIA_TYPES
+        ):
+            raise ArtifactInventoryError("artifact media type is unsupported")
+        if not isinstance(self.fingerprint, str) or not self.fingerprint.startswith(
+            _FINGERPRINT_PREFIX
+        ):
             raise ArtifactInventoryError("artifact fingerprints must use SHA-256")
         digest = self.fingerprint.removeprefix(_FINGERPRINT_PREFIX)
         if len(digest) != 64 or any(
@@ -157,6 +167,8 @@ class ArtifactInventory:
     def __post_init__(self) -> None:
         """Normalize direct construction to the same stable order as indexing."""
 
+        if self.schema_version != SCHEMA_VERSION:
+            raise ArtifactInventoryError("unsupported artifact inventory schema")
         entries = tuple(self.entries)
         if not all(isinstance(entry, ArtifactInventoryEntry) for entry in entries):
             raise TypeError("inventory entries must be ArtifactInventoryEntry values")
@@ -599,7 +611,14 @@ def _counts_markdown_lines(inventory: ArtifactInventory) -> list[str]:
 
 
 def _markdown_cell(value: str) -> str:
-    return value.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("|", "\\|")
+        .replace("\n", " ")
+        .replace("\r", " ")
+    )
 
 
 def _require_inventory(value: ArtifactInventory) -> None:
