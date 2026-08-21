@@ -217,6 +217,7 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
             "status_code",
             "le",
             "priority",
+            "queue",
         }
 
 
