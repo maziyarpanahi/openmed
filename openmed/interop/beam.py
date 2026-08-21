@@ -23,7 +23,7 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import Any
+from typing import Any, cast
 
 from openmed.core.policy import canonical_policy_name
 
@@ -44,6 +44,7 @@ _DEFAULT_POLICY = "hipaa_safe_harbor"
 _DEFAULT_METHOD = "mask"
 _DEFAULT_MAX_RECORDS = 10_000
 _DEFAULT_MAX_INPUT_BYTES = 10 * 1024 * 1024
+_DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_RECORD_BYTES = 1024 * 1024
 _DEFAULT_MAX_ATTEMPTS = 3
 _MAX_ATTEMPTS = 10
@@ -151,6 +152,7 @@ class BeamRedactionSpec:
     method: str = _DEFAULT_METHOD
     max_records: int = _DEFAULT_MAX_RECORDS
     max_input_bytes: int = _DEFAULT_MAX_INPUT_BYTES
+    max_output_bytes: int = _DEFAULT_MAX_OUTPUT_BYTES
     max_record_bytes: int = _DEFAULT_MAX_RECORD_BYTES
     max_attempts: int = _DEFAULT_MAX_ATTEMPTS
     retry_backoff_seconds: float = 0.0
@@ -179,6 +181,11 @@ class BeamRedactionSpec:
             self.max_input_bytes,
             "max_input_bytes",
             maximum=_MAX_INPUT_BYTES,
+        )
+        _require_positive_int(
+            self.max_output_bytes,
+            "max_output_bytes",
+            maximum=_MAX_OUTPUT_BYTES,
         )
         _require_positive_int(
             self.max_record_bytes,
@@ -248,6 +255,7 @@ class BeamRedactionSpec:
             "method": self.method,
             "max_records": self.max_records,
             "max_input_bytes": self.max_input_bytes,
+            "max_output_bytes": self.max_output_bytes,
             "max_record_bytes": self.max_record_bytes,
             "max_attempts": self.max_attempts,
             "retry_backoff_seconds": self.retry_backoff_seconds,
@@ -283,7 +291,7 @@ class BeamRedactionSpec:
             return "BeamRedactionSpec(<invalid>)"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BeamRedactionCounters:
     """Aggregate counters safe to expose to Beam metrics or pipeline reports."""
 
@@ -351,9 +359,11 @@ class BeamRedactionState:
 
     max_records: int = _DEFAULT_MAX_RECORDS
     max_input_bytes: int = _DEFAULT_MAX_INPUT_BYTES
+    max_output_bytes: int = _DEFAULT_MAX_OUTPUT_BYTES
     max_record_bytes: int = _DEFAULT_MAX_RECORD_BYTES
     records_seen: int = 0
     input_bytes: int = 0
+    output_bytes: int = 0
 
     def __post_init__(self) -> None:
         """Validate state bounds and counters."""
@@ -369,16 +379,24 @@ class BeamRedactionState:
             maximum=_MAX_INPUT_BYTES,
         )
         _require_positive_int(
+            self.max_output_bytes,
+            "max_output_bytes",
+            maximum=_MAX_OUTPUT_BYTES,
+        )
+        _require_positive_int(
             self.max_record_bytes,
             "max_record_bytes",
             maximum=_MAX_RECORD_BYTES,
         )
         _require_non_negative_int(self.records_seen, "records_seen")
         _require_non_negative_int(self.input_bytes, "input_bytes")
+        _require_non_negative_int(self.output_bytes, "output_bytes")
         if self.records_seen > self.max_records:
             raise ValueError("records_seen exceeds max_records")
         if self.input_bytes > self.max_input_bytes:
             raise ValueError("input_bytes exceeds max_input_bytes")
+        if self.output_bytes > self.max_output_bytes:
+            raise ValueError("output_bytes exceeds max_output_bytes")
 
     def accept(self, serialized_record: bytes) -> None:
         """Account for one serialized record, enforcing all state bounds."""
@@ -395,6 +413,17 @@ class BeamRedactionState:
         self.records_seen += 1
         self.input_bytes += len(serialized_record)
 
+    def accept_output(self, serialized_record: bytes) -> None:
+        """Account for one output record without retaining its value."""
+
+        if type(serialized_record) is not bytes:
+            raise TypeError("serialized output must be bytes")
+        if len(serialized_record) > self.max_record_bytes:
+            raise BeamRedactionError("output record exceeds the configured byte limit")
+        if self.output_bytes + len(serialized_record) > self.max_output_bytes:
+            raise BeamRedactionError("record batch exceeds the configured output limit")
+        self.output_bytes += len(serialized_record)
+
     def to_dict(self) -> dict[str, int]:
         """Return only bounded state counters."""
 
@@ -402,13 +431,15 @@ class BeamRedactionState:
         return {
             "input_bytes": self.input_bytes,
             "max_input_bytes": self.max_input_bytes,
+            "max_output_bytes": self.max_output_bytes,
             "max_record_bytes": self.max_record_bytes,
             "max_records": self.max_records,
+            "output_bytes": self.output_bytes,
             "records_seen": self.records_seen,
         }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BeamRedactionResult:
     """Redacted direct-run output plus a PHI-free aggregate report."""
 
@@ -611,7 +642,7 @@ class _BeamRedactionDoFn(_DoFnBase):  # type: ignore[misc,valid-type]
         self._inc("attempts", attempts)
         self._inc("retries", retries)
         self._inc("spans_redacted", spans)
-        if redacted != normalized:
+        if output_bytes != serialized:
             self._counters.records_changed += 1
             self._inc("records_changed")
         yield redacted
@@ -641,6 +672,7 @@ class BeamRedactionTransform(_PTransformBase):  # type: ignore[misc,valid-type]
         method: str = _DEFAULT_METHOD,
         max_records: int = _DEFAULT_MAX_RECORDS,
         max_input_bytes: int = _DEFAULT_MAX_INPUT_BYTES,
+        max_output_bytes: int = _DEFAULT_MAX_OUTPUT_BYTES,
         max_record_bytes: int = _DEFAULT_MAX_RECORD_BYTES,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         retry_backoff_seconds: float = 0.0,
@@ -671,6 +703,7 @@ class BeamRedactionTransform(_PTransformBase):  # type: ignore[misc,valid-type]
                 method=method,
                 max_records=max_records,
                 max_input_bytes=max_input_bytes,
+                max_output_bytes=max_output_bytes,
                 max_record_bytes=max_record_bytes,
                 max_attempts=max_attempts,
                 retry_backoff_seconds=retry_backoff_seconds,
@@ -716,6 +749,7 @@ def run_synthetic_harness(
     state = BeamRedactionState(
         max_records=resolved_spec.max_records,
         max_input_bytes=resolved_spec.max_input_bytes,
+        max_output_bytes=resolved_spec.max_output_bytes,
         max_record_bytes=resolved_spec.max_record_bytes,
     )
     counters = _CounterAccumulator()
@@ -768,10 +802,18 @@ def run_synthetic_harness(
         counters.retries += retries
         counters.spans_redacted += spans
         counters.output_bytes += len(output)
-        counters.records_changed += int(redacted != normalized)
+        counters.records_changed += int(output != serialized)
 
-    serialized_input = _serialize_lines(input_serialized)
-    serialized_output = _serialize_lines(output_serialized)
+    serialized_input = _serialize_lines(
+        input_serialized,
+        max_records=resolved_spec.max_records,
+        max_bytes=resolved_spec.max_input_bytes + resolved_spec.max_records,
+    )
+    serialized_output = _serialize_lines(
+        output_serialized,
+        max_records=resolved_spec.max_records,
+        max_bytes=resolved_spec.max_output_bytes + resolved_spec.max_records,
+    )
     return BeamRedactionResult(
         redacted_records=tuple(redacted_records),
         counters=counters.freeze(),
@@ -803,7 +845,11 @@ def serialize_records(records: Iterable[Record]) -> bytes:
         if total_bytes > _DEFAULT_MAX_INPUT_BYTES:
             raise BeamRedactionError("record batch exceeds the default byte limit")
         serialized.append(value)
-    return _serialize_lines(serialized)
+    return _serialize_lines(
+        serialized,
+        max_records=_DEFAULT_MAX_RECORDS,
+        max_bytes=_DEFAULT_MAX_INPUT_BYTES,
+    )
 
 
 def _redact_with_retries(
@@ -851,7 +897,9 @@ def _redact_with_retries(
             raise
         except BaseException:
             if attempts >= spec.max_attempts:
-                fingerprint = _digest_bytes(text.encode("utf-8"))
+                fingerprint = _digest_bytes(
+                    text.encode("utf-8", errors="surrogatepass")
+                )
                 raise BeamRedactionError(
                     "redaction failed after the configured attempts; "
                     f"record_fingerprint={fingerprint}"
@@ -862,9 +910,9 @@ def _redact_with_retries(
     else:  # pragma: no cover - loop is bounded by max_attempts
         raise BeamRedactionError("redaction attempts were exhausted") from None
 
-    if isinstance(record, str):
+    if type(record) is str:
         return redacted, spans, attempts, retries
-    output = dict(record)
+    output = dict(cast(Mapping[str, Any], record))
     output[spec.text_field] = redacted
     return output, spans, attempts, retries
 
@@ -892,9 +940,9 @@ def _validate_and_serialize_record(
 
 
 def _record_text(record: Record, text_field: str) -> str | None:
-    if isinstance(record, str):
+    if type(record) is str:
         return record
-    value = record[text_field]
+    value = cast(Mapping[str, Any], record)[text_field]
     return value
 
 
@@ -971,6 +1019,31 @@ def _iter_bounded_records(
         if index == maximum_records:
             raise BeamRedactionError("record batch exceeds the configured limit")
         yield record
+
+
+def _bounded_tuple(value: Any, *, label: str, maximum: int) -> tuple[Any, ...]:
+    """Snapshot at most ``maximum`` items with value-free boundary errors."""
+
+    try:
+        iterator = iter(value)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise BeamRedactionError(f"{label} must be a bounded iterable") from None
+    collected: list[Any] = []
+    for index in range(maximum + 1):
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return tuple(collected)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise BeamRedactionError(f"{label} iteration failed") from None
+        if index == maximum:
+            raise BeamRedactionError(f"{label} exceed the configured limit")
+        collected.append(item)
+    raise AssertionError("unreachable")
 
 
 def _copy_record(record: Any, *, maximum_text_chars: int) -> Record:
@@ -1123,6 +1196,7 @@ def _validate_output_budget(
         _MAX_OUTPUT_RECORD_BYTES,
     )
     maximum_total_bytes = min(
+        spec.max_output_bytes,
         spec.max_input_bytes * _MAX_OUTPUT_EXPANSION,
         _MAX_OUTPUT_BYTES,
     )
@@ -1132,22 +1206,37 @@ def _validate_output_budget(
         raise BeamRedactionError("redacted batch exceeds the output byte limit")
 
 
-def _serialize_lines(records: Iterable[bytes]) -> bytes:
-    values = tuple(records)
+def _serialize_lines(
+    records: Iterable[bytes],
+    *,
+    max_records: int,
+    max_bytes: int,
+) -> bytes:
+    values = _bounded_tuple(records, label="serialized records", maximum=max_records)
+    if any(type(value) is not bytes for value in values):
+        raise TypeError("serialized records must contain bytes")
+    output_size = sum(len(value) + 1 for value in values)
+    if output_size > max_bytes:
+        raise BeamRedactionError("serialized records exceed the configured byte limit")
     return b"\n".join(values) + (b"\n" if values else b"")
 
 
 def _canonical_json(value: Any) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except Exception:
+        raise BeamRedactionError("value is not safely JSON serializable") from None
 
 
 def _digest_bytes(value: bytes) -> str:
+    if type(value) is not bytes:
+        raise TypeError("digest input must be bytes")
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
@@ -1334,6 +1423,7 @@ def _validated_spec(value: Any) -> BeamRedactionSpec:
             method=value.method,
             max_records=value.max_records,
             max_input_bytes=value.max_input_bytes,
+            max_output_bytes=value.max_output_bytes,
             max_record_bytes=value.max_record_bytes,
             max_attempts=value.max_attempts,
             retry_backoff_seconds=value.retry_backoff_seconds,

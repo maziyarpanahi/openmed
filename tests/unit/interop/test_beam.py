@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import pickle
+import traceback
+from collections.abc import Iterator, Mapping
 from importlib import import_module
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -45,6 +48,7 @@ def test_spec_is_explicit_bounded_and_value_free():
     assert spec.to_dict()["max_records"] == 2
     assert spec.to_dict()["extra_key_count"] == 2
     assert spec.to_dict()["extra_keys_fingerprint"].startswith("sha256:")
+    assert "extra_keys" not in spec.to_dict()
     assert _SENSITIVE not in metadata
     assert _SENSITIVE not in repr(spec)
     assert spec.fingerprint().startswith("sha256:")
@@ -353,3 +357,100 @@ def test_callable_contracts_are_validated():
         run_synthetic_harness([], loader_factory=object())
     with pytest.raises(BeamRedactionError, match="worker-local model setup failed"):
         run_synthetic_harness(["synthetic"], loader_factory=lambda: None)
+
+
+def test_output_growth_is_bounded_before_result_publication():
+    with pytest.raises(BeamRedactionError, match="output"):
+        run_synthetic_harness(
+            ["synthetic"],
+            spec=BeamRedactionSpec(
+                max_output_bytes=8,
+                max_record_bytes=64,
+            ),
+            deidentifier=lambda text, **_: text * 8,
+        )
+
+
+def test_reserved_worker_options_cannot_disable_offline_configuration():
+    for key in ("config", "loader", "method", "policy"):
+        with pytest.raises(ValueError, match="reserved worker options"):
+            BeamRedactionSpec(extra_kwargs={key: object()})
+
+
+def test_reported_spec_metadata_rejects_identifier_shaped_values():
+    with pytest.raises(ValueError, match="invalid"):
+        BeamRedactionSpec(policy="patient-482901")
+
+
+def test_mutated_spec_options_are_revalidated_before_execution():
+    spec = BeamRedactionSpec()
+    object.__setattr__(spec, "extra_kwargs", {"config": object()})
+
+    with pytest.raises(ValueError, match="reserved worker options"):
+        run_synthetic_harness(
+            ["synthetic"],
+            spec=spec,
+            deidentifier=lambda text, **_: text,
+        )
+
+
+def test_hostile_record_iteration_failure_is_value_free():
+    secret = "synthetic-sensitive-iterator-value"
+
+    class BrokenRecords:
+        def __iter__(self) -> Iterator[Any]:
+            raise RuntimeError(secret)
+
+    with pytest.raises(BeamRedactionError) as error:
+        run_synthetic_harness(BrokenRecords(), deidentifier=lambda text, **_: text)
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(error.value), error.value, error.value.__traceback__
+        )
+    )
+    assert secret not in rendered
+
+
+def test_hostile_record_mapping_failure_is_value_free():
+    secret = "synthetic-sensitive-mapping-value"
+
+    class HostileRecord(Mapping[str, Any]):
+        def __getitem__(self, key: str) -> Any:
+            raise RuntimeError(f"{secret}:{key}")
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(("text",))
+
+        def __len__(self) -> int:
+            return 1
+
+    with pytest.raises(BeamRedactionError) as error:
+        run_synthetic_harness(
+            [HostileRecord()],
+            deidentifier=lambda text, **_: text,
+        )
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(error.value), error.value, error.value.__traceback__
+        )
+    )
+    assert secret not in rendered
+
+
+def test_loader_initialization_failure_is_value_free():
+    secret = "synthetic-sensitive-loader-value"
+
+    def broken_loader():
+        raise RuntimeError(secret)
+
+    with pytest.raises(BeamRedactionError) as error:
+        run_synthetic_harness(["synthetic"], loader_factory=broken_loader)
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(error.value), error.value, error.value.__traceback__
+        )
+    )
+    assert secret not in rendered
