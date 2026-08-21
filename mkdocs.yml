@@ -12,32 +12,60 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
+      - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
+      - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
       - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - African Developer Onboarding: africa-onboarding.md
       - Low-Bandwidth & Proxy Install: low-bandwidth-install.md
       - Persona Quickstarts: quickstarts.md
+      - Project Scaffold CLI: cli/openmed-init.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Skill Installation: agent-skills/install.md
+      - Agent Skill Validation: agent-skills/validation.md
+      - De-identification Policy Setup: agent-skills/setup.md
+      - Agent Skill Packs: agent-skills/packs.md
+      - Agent Skill Router: agent-skills/router.md
+      - Local Trace-Store Discovery: guides/trace-discovery.md
+      - JSONL Trace Content Walker: reference/trace-jsonl.md
+      - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
+      - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
+      - Parallel Trace Shards: guides/parallel-traces.md
+      - Streaming Trace Redaction: guides/streaming-traces.md
+      - Read-only Trace Scan Report: guides/trace-audit.md
+      - Trace Replay Fidelity: reference/trace-fidelity.md
       - Serving Resilience: serving/resilience.md
+      - Serving Backpressure: serving/backpressure.md
+      - KServe & Triton Model Repositories: serving/kserve-triton.md
       - Hardened Service Image: deploy/hardened-image.md
+      - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
+      - GraphQL Service: serving/graphql.md
       - REST Authentication: serving/authentication.md
+      - Service Load Testing & Latency SLOs: serving/load-testing.md
+      - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
+      - Kubernetes Model Operator: deploy/operator.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
+      - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
@@ -45,11 +73,21 @@ nav:
       - Indic NER Checkpoint Compatibility: indic-ner-checkpoints.md
       - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
+      - Cross-format Offset Properties: structured/offset-properties.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+      - Offline Terminology Grounding: grounding.md
+      - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
+      - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
+      - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - Medication Reconciliation: clinical/medication-reconciliation.md
+      - Clinical Event Timeline Assembler: clinical/event-timeline.md
+      - Terminology Snapshot Provenance: clinical/terminology-provenance.md
+      - Consent Cache Invalidation: clinical/consent-cache.md
+      - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
@@ -60,23 +98,40 @@ nav:
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
+      - Batch Processing How-To: batch-howto.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
+      - Core Pipeline Observability: core-observability.md
       - Low-resource Benchmark: benchmarks/low-resource.md
       - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
+      - Example Notebooks Gallery: examples/notebook-gallery.md
       - Document Adapter Provenance: document-adapter-provenance.md
+      - Chat Message Schema: reference/chat-schema.md
+      - Training Schema Registry: reference/training-schemas.md
+      - Preference Pair Schema: reference/preference-schema.md
+      - PDF Reading Order: multimodal/pdf-reading-order.md
+      - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
+      - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
+      - ODT/ODF Text Extraction: multimodal/odt-extraction.md
+      - PPTX Redaction: multimodal/pptx-redaction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Comparator Reports: evaluation/comparator-reports.md
+      - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
+      - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
+      - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
+      - WebGPU Token-Classification Runtime: runtimes/webgpu.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
@@ -84,7 +139,11 @@ nav:
       - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - Structured Public Errors: api/errors.md
+      - Service API Compatibility Gate: api/compatibility-gate.md
+      - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
+      - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
@@ -93,20 +152,33 @@ nav:
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Secret Token Detection: security/secret-detection.md
+      - In-place Trace Redaction: guides/in-place-redaction.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
+      - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - Spark Redaction Transform: integrations/spark.md
+      - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
+      - Ray Data Batch De-identification: integrations/ray-map-batches.md
+      - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
+      - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
+      - HL7 v2 Narrative Extraction: interop/hl7v2-narrative-extraction.md
+      - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Compliance Posture: compliance.md
+      - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
@@ -119,12 +191,21 @@ nav:
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
+      - FHIR Reference Integrity Reports: fhir/reference-integrity.md
+      - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
+      - FHIR OperationOutcome Reports: fhir/operation-outcome.md
+      - FHIR SDC Privacy Projection: fhir/sdc-privacy.md
+      - Document Intake Quarantine: fhir/document-intake-quarantine.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
+      - FHIR Clinical Exchange Workbench: interop/fhir-profiles.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - Export Format Support Matrix: export-matrix.md
+      - Maple Preview on Device: maple-on-device.md
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
@@ -133,6 +214,7 @@ nav:
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
+      - Android Integration & Model Catalog: android-integration.md
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
@@ -155,6 +237,10 @@ nav:
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
+      - MCP Prompt Injection Guard: security/prompt-injection-guard.md
+      - MCP Consent Receipts: security/mcp-consent-receipts.md
+      - MCP Authorization Matrix: security/mcp-authorization-matrix.md
+      - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
@@ -163,6 +249,8 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 2.1 to 2.2: migration/2.1-to-2.2.md
+      - Migrate from 2.0 to 2.1: migration/2.0-to-2.1.md
       - Migrate from 1.9 to 2.0: migration/1.9-to-2.0.md
       - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
@@ -348,5 +436,7 @@ exclude_docs: |
   __pycache__/**
   overrides/**
   demo/web/README.md
+  demo/web/models/**
+  demo/web/vendor/**
   website/**
   brand/**
