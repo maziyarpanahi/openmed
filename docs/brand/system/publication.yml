@@ -175,6 +175,7 @@ classification:
     - configuration.md
     - profiles.md
     - plugin-sdk.md
+    - skills/bundle-integrity.md
     - batch-processing.md
     - batch-howto.md
     - legacy-indic-encoding.md
