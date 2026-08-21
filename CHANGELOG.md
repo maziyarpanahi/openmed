@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the local-first `setup-openmed` skill and versioned de-identification
+  policy template for collecting five bounded privacy decisions, producing a
+  deterministic atomically written review draft with path-free status output,
+  and stopping at an explicit human approval gate before the policy can control
+  a run (#2305).
 - Added an offline-first self-hosted Compose bundle with loopback-only default
   publishing, a hardened non-root runtime, persistent cache and read-only model
   mounts, an internal network, bounded logs and processes, a readiness probe,
