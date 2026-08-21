@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import socket
+from collections.abc import Sequence
 from types import SimpleNamespace
 
 import pytest
@@ -130,22 +131,32 @@ def test_missing_fields_can_be_ignored_without_network_egress(monkeypatch) -> No
 def test_default_deidentifier_is_configured_cache_only(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_default_deidentifier(text: str, **kwargs):
+    def fake_deidentify(text: str, **kwargs):
         captured.update(kwargs)
         return text.replace("Synthetic Person", "[PERSON]")
 
     monkeypatch.setattr(
         opensearch_adapter,
         "_default_deidentifier",
-        fake_default_deidentifier,
+        lambda: fake_deidentify,
     )
 
-    redacted = OpenSearchRedactionProcessor().process({"text": "Synthetic Person"})
+    redacted = OpenSearchRedactionProcessor(
+        deidentify_kwargs={
+            "audit": True,
+            "config": object(),
+            "keep_mapping": True,
+            "use_safety_sweep": False,
+        }
+    ).process({"text": "Synthetic Person"})
 
     assert redacted == {"text": "[PERSON]"}
     assert captured["policy"] == "hipaa_safe_harbor"
     assert captured["method"] == "mask"
     assert getattr(captured["config"], "local_only") is True
+    assert captured["audit"] is False
+    assert captured["keep_mapping"] is False
+    assert captured["use_safety_sweep"] is True
 
 
 def test_selected_non_text_values_raise_safe_error() -> None:
@@ -158,3 +169,139 @@ def test_selected_non_text_values_raise_safe_error() -> None:
         OpenSearchRedactionError, match="selected field must contain text"
     ):
         processor.process({"message": {"raw": "Synthetic Person"}})
+
+
+def test_nested_selected_sequences_are_rejected() -> None:
+    processor = OpenSearchRedactionProcessor(
+        field="message",
+        deidentifier=fake_deidentifier,
+    )
+
+    with pytest.raises(
+        OpenSearchRedactionError, match="selected field must contain text"
+    ):
+        processor.process({"message": [["Synthetic Person"]]})
+
+
+def test_selected_values_are_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(opensearch_adapter, "_MAX_SELECTED_VALUES", 2)
+    processor = OpenSearchRedactionProcessor(
+        field="message",
+        deidentifier=fake_deidentifier,
+    )
+
+    with pytest.raises(OpenSearchRedactionError, match="too many values"):
+        processor.process({"message": ["one", "two", "three"]})
+
+
+def test_document_copy_is_bounded_and_rejects_cycles(monkeypatch) -> None:
+    monkeypatch.setattr(opensearch_adapter, "_MAX_DOCUMENT_ITEMS", 2)
+    processor = OpenSearchRedactionProcessor(
+        ignore_missing=True,
+        deidentifier=fake_deidentifier,
+    )
+
+    with pytest.raises(OpenSearchRedactionError, match="document could not be copied"):
+        processor.process({"one": 1, "two": 2, "three": 3})
+
+    cyclic: dict[str, object] = {}
+    cyclic["self"] = cyclic
+    with pytest.raises(OpenSearchRedactionError, match="document could not be copied"):
+        processor.process(cyclic)
+
+
+def test_fields_and_deidentifier_options_are_bounded() -> None:
+    class EndlessFields(Sequence[str]):
+        def __getitem__(self, index):
+            return f"field_{index}"
+
+        def __len__(self):
+            raise AssertionError("length must not be trusted")
+
+    with pytest.raises(OpenSearchRedactionError, match="too many fields"):
+        OpenSearchRedactionProcessor(fields=EndlessFields())
+
+    options = {f"option_{index}": index for index in range(65)}
+    with pytest.raises(OpenSearchRedactionError, match="too many entries"):
+        OpenSearchRedactionProcessor(deidentify_kwargs=options)
+
+
+def test_hostile_boundary_failures_are_value_free() -> None:
+    source = "Synthetic Person has synthetic-555-0100"
+
+    class HostileBoundary(BaseException):
+        pass
+
+    class HostileDocument(dict):
+        def items(self):
+            raise HostileBoundary(source)
+
+    def aborting_deidentifier(text: str, **kwargs):
+        del text, kwargs
+        raise HostileBoundary(source)
+
+    processor = OpenSearchRedactionProcessor(
+        field="message",
+        deidentifier=aborting_deidentifier,
+    )
+
+    with pytest.raises(OpenSearchRedactionError) as error:
+        processor.process({"message": source})
+
+    assert str(error.value) == "redaction failed"
+    assert source not in str(error.value)
+
+    with pytest.raises(OpenSearchRedactionError) as copy_error:
+        processor.process(HostileDocument(message=source))
+
+    assert str(copy_error.value) == "document could not be copied"
+    assert source not in str(copy_error.value)
+
+
+def test_default_loader_failure_is_value_free(monkeypatch) -> None:
+    source = "Synthetic Person has synthetic-555-0100"
+
+    class LoaderFailure(BaseException):
+        pass
+
+    def fail_loader():
+        raise LoaderFailure(source)
+
+    monkeypatch.setattr(opensearch_adapter, "_default_deidentifier", fail_loader)
+
+    with pytest.raises(OpenSearchRedactionError) as error:
+        OpenSearchRedactionProcessor().process({"text": source})
+
+    assert str(error.value) == "redaction failed"
+    assert source not in str(error.value)
+
+
+@pytest.mark.parametrize("fatal_error", [KeyboardInterrupt, SystemExit])
+def test_process_preserves_interpreter_control_exceptions(fatal_error) -> None:
+    def aborting_deidentifier(text: str, **kwargs):
+        del text, kwargs
+        raise fatal_error
+
+    processor = OpenSearchRedactionProcessor(
+        field="message",
+        deidentifier=aborting_deidentifier,
+    )
+
+    with pytest.raises(fatal_error):
+        processor.process({"message": "Synthetic Person"})
+
+
+def test_redaction_output_expansion_is_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(opensearch_adapter, "_MIN_OUTPUT_CHARS", 4)
+
+    def expanding_deidentifier(text: str, **kwargs):
+        del text, kwargs
+        return "x" * 9
+
+    processor = OpenSearchRedactionProcessor(
+        field="message",
+        deidentifier=expanding_deidentifier,
+    )
+
+    with pytest.raises(OpenSearchRedactionError, match="redaction failed"):
+        processor.process({"message": "x"})
