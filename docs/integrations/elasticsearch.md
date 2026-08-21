@@ -44,7 +44,8 @@ array selectors, and empty path segments are rejected. A local processing call
 also rejects a selected mapping, list, or other non-string value rather than
 walking dynamic data or coercing it to text. Missing, null, and empty selected
 fields are skipped when `ignore_missing=True` (the default); unselected fields
-are preserved.
+are preserved. Configuration field and pattern collections are bounded, as are
+pipeline names, markers, and JSON indentation.
 
 For local execution, supply a caller-owned redactor. This keeps model loading,
 offline policy, and network policy outside the adapter:
@@ -59,7 +60,9 @@ redacted_document = result.document
 
 The native Elasticsearch pipeline performs the actual server-side redaction;
 the injected callable is only for applications that redact before indexing or
-for offline tests.
+for offline tests. Local input documents must contain bounded, JSON-compatible
+mappings, lists, tuples, scalar values, and string keys. Cyclic or oversized
+documents fail with a stable error before the redactor is called.
 
 ## Diagnostics
 
@@ -77,7 +80,8 @@ for offline tests.
 }
 ```
 
-The diagnostic summary does not include source text, document identifiers,
-field values, exception details from the redactor, or mappings. Keep request
-and response-body logging disabled at the Elasticsearch gateway when ingest
-documents may contain sensitive text.
+The diagnostic summary and result representation do not include source text,
+document identifiers, field values, exception details from the redactor, or
+mappings. The redacted document remains available explicitly through
+`result.document`. Keep request and response-body logging disabled at the
+Elasticsearch gateway when ingest documents may contain sensitive text.

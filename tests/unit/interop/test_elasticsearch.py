@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from openmed.interop import elasticsearch as elasticsearch_adapter
 from openmed.interop.elasticsearch import (
     DEFAULT_ELASTICSEARCH_GROK_PATTERNS,
     ElasticsearchProcessorDiagnostics,
@@ -167,3 +168,166 @@ def test_builder_and_selected_fields_alias_are_equivalent() -> None:
         build_ingest_pipeline(["message"], patterns=["%{EMAILADDRESS:email}"])
         == config.to_pipeline()
     )
+
+
+def test_configuration_and_serialization_are_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(elasticsearch_adapter, "_MAX_FIELDS", 2)
+    with pytest.raises(ValueError, match="too many entries"):
+        ElasticsearchRedactionConfig(fields=["one", "two", "three"])
+
+    monkeypatch.setattr(elasticsearch_adapter, "_MAX_PATTERNS_PER_FIELD", 2)
+    with pytest.raises(ValueError, match="too many entries"):
+        ElasticsearchRedactionConfig(
+            fields=["message"],
+            patterns=["one", "two", "three"],
+        )
+
+    config = ElasticsearchRedactionConfig(fields=["message"], patterns=["one"])
+    with pytest.raises(ValueError, match="indent must be bounded"):
+        config.to_json(indent=True)
+    with pytest.raises(ValueError, match="indent must be bounded"):
+        config.to_json(indent=17)
+
+
+def test_document_copy_is_bounded_and_rejects_cycles(monkeypatch) -> None:
+    monkeypatch.setattr(elasticsearch_adapter, "_MAX_DOCUMENT_ITEMS", 2)
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    with pytest.raises(
+        ElasticsearchRedactionError,
+        match="failed to copy the ingest document",
+    ):
+        processor.diagnose({"one": 1, "two": 2, "three": 3})
+
+    cyclic: dict[str, object] = {}
+    cyclic["self"] = cyclic
+    with pytest.raises(
+        ElasticsearchRedactionError,
+        match="failed to copy the ingest document",
+    ):
+        processor.diagnose(cyclic)
+
+
+def test_result_representation_hides_document_values() -> None:
+    document = {"message": _SYNTHETIC_VALUE, "unselected": _SYNTHETIC_VALUE}
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    result = processor.process(document, redactor=_fake_redactor)
+
+    assert _SYNTHETIC_VALUE not in repr(result)
+    assert result.document["unselected"] == _SYNTHETIC_VALUE
+
+
+def test_hostile_boundary_failures_are_value_free() -> None:
+    class SensitiveAbort(BaseException):
+        pass
+
+    class HostileDocument(dict):
+        def items(self):
+            raise SensitiveAbort(_SYNTHETIC_VALUE)
+
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    with pytest.raises(ElasticsearchRedactionError) as copy_error:
+        processor.diagnose(HostileDocument(message=_SYNTHETIC_VALUE))
+    assert str(copy_error.value) == "failed to copy the ingest document"
+    assert _SYNTHETIC_VALUE not in str(copy_error.value)
+
+    def aborting_redactor(text: str):
+        raise SensitiveAbort(text)
+
+    with pytest.raises(ElasticsearchRedactionError) as redact_error:
+        processor.process(
+            {"message": _SYNTHETIC_VALUE},
+            redactor=aborting_redactor,
+        )
+    assert str(redact_error.value) == "failed to redact a configured ingest field"
+    assert _SYNTHETIC_VALUE not in str(redact_error.value)
+
+    def spoofed_adapter_error(text: str):
+        raise ElasticsearchRedactionError(text)
+
+    with pytest.raises(ElasticsearchRedactionError) as spoofed_error:
+        processor.process(
+            {"message": _SYNTHETIC_VALUE},
+            redactor=spoofed_adapter_error,
+        )
+    assert str(spoofed_error.value) == "failed to redact a configured ingest field"
+    assert _SYNTHETIC_VALUE not in str(spoofed_error.value)
+
+
+@pytest.mark.parametrize("fatal_error", [KeyboardInterrupt, SystemExit])
+def test_process_preserves_interpreter_control_exceptions(fatal_error) -> None:
+    def aborting_redactor(text: str):
+        del text
+        raise fatal_error
+
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    with pytest.raises(fatal_error):
+        processor.process(
+            {"message": _SYNTHETIC_VALUE},
+            redactor=aborting_redactor,
+        )
+
+
+def test_optional_entity_metadata_failure_does_not_expose_source() -> None:
+    class SensitiveAbort(BaseException):
+        pass
+
+    class RedactionResult:
+        deidentified_text = "[REDACTED]"
+
+        @property
+        def pii_entities(self):
+            raise SensitiveAbort(_SYNTHETIC_VALUE)
+
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+    result = processor.process(
+        {"message": _SYNTHETIC_VALUE},
+        redactor=lambda text: RedactionResult(),
+    )
+
+    assert result.document["message"] == "[REDACTED]"
+    assert result.diagnostics.spans_redacted == 1
+
+
+def test_redactor_output_and_span_diagnostics_are_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(elasticsearch_adapter, "_MIN_OUTPUT_CHARS", 4)
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    with pytest.raises(
+        ElasticsearchRedactionError,
+        match="failed to redact a configured ingest field",
+    ):
+        processor.process(
+            {"message": "x"},
+            redactor=lambda text: "x" * 9,
+        )
+
+    monkeypatch.setattr(elasticsearch_adapter, "_MAX_SPANS_PER_FIELD", 2)
+    result = processor.process(
+        {"message": "x"},
+        redactor=lambda text: SimpleNamespace(
+            deidentified_text="[R]",
+            pii_entities=[object(), object(), object()],
+        ),
+    )
+    assert result.diagnostics.spans_redacted == 2
+
+    unchanged = processor.process(
+        {"message": "x"},
+        redactor=lambda text: SimpleNamespace(
+            deidentified_text=text,
+            pii_entities=[object(), object(), object()],
+        ),
+    )
+    assert unchanged.diagnostics.fields_redacted == 0
+    assert unchanged.diagnostics.spans_redacted == 0
+
+
+def test_process_rejects_a_non_callable_redactor() -> None:
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    with pytest.raises(TypeError, match="redactor must be callable"):
+        processor.process({"message": _SYNTHETIC_VALUE}, redactor=object())

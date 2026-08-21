@@ -14,10 +14,9 @@ and redactor exception details never enter diagnostics or adapter exceptions.
 
 from __future__ import annotations
 
-import copy
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
 DEFAULT_ELASTICSEARCH_GROK_PATTERNS = (
@@ -32,15 +31,26 @@ DEFAULT_PIPELINE_ID = "openmed-redaction"
 DEFAULT_PROCESSOR_TAG = "openmed-redaction"
 
 TextRedactor: TypeAlias = Callable[[str], Any]
-FieldSelection: TypeAlias = (
-    Sequence[str]
-    | Mapping[str, Sequence[str] | str]
-    | Sequence["ElasticsearchFieldRule"]
-)
 
 _MISSING = object()
 _NO_DEFAULT = object()
 _DYNAMIC_PATH_MARKERS = frozenset("*?[]{}")
+_MAX_DOCUMENT_DEPTH = 32
+_MAX_DOCUMENT_ITEMS = 10_000
+_MAX_DOCUMENT_KEY_CHARS = 4_096
+_MAX_FIELDS = 64
+_MAX_FIELD_PATH_CHARS = 512
+_MAX_FIELD_SEGMENTS = 32
+_MAX_FIELD_SEGMENT_CHARS = 128
+_MAX_JSON_INDENT = 16
+_MAX_MARKER_CHARS = 1_024
+_MAX_NAME_CHARS = 255
+_MAX_OUTPUT_EXPANSION = 8
+_MIN_OUTPUT_CHARS = 4_096
+_MAX_PATTERNS_PER_FIELD = 64
+_MAX_PATTERN_CHARS = 4_096
+_MAX_SPANS_PER_FIELD = 10_000
+_MAX_TEXT_CHARS = 10 * 1024 * 1024
 
 
 class ElasticsearchRedactionError(RuntimeError):
@@ -49,6 +59,10 @@ class ElasticsearchRedactionError(RuntimeError):
 
 class UnsupportedDynamicFieldError(ElasticsearchRedactionError, ValueError):
     """Raised when a dynamic field path or value is encountered."""
+
+
+class _BoundaryError(Exception):
+    """Internal marker for a rejected untrusted input boundary."""
 
 
 @dataclass(frozen=True)
@@ -79,6 +93,15 @@ class ElasticsearchFieldRule:
         }
 
 
+FieldSelection: TypeAlias = (
+    ElasticsearchFieldRule
+    | Sequence[str]
+    | Mapping[str, Sequence[str] | str | ElasticsearchFieldRule]
+    | Sequence[ElasticsearchFieldRule]
+)
+
+
+@dataclass(frozen=True, init=False)
 class ElasticsearchRedactionConfig:
     """Configuration for a deterministic Elasticsearch ingest pipeline.
 
@@ -90,6 +113,15 @@ class ElasticsearchRedactionConfig:
     network operation.  Use :meth:`to_ingest_pipeline` to obtain the body for
     the Elasticsearch ingest-pipeline API.
     """
+
+    _fields: tuple[str, ...]
+    _patterns: tuple[str, ...]
+    _rules: tuple[ElasticsearchFieldRule, ...]
+    ignore_missing: bool
+    pipeline_id: str
+    prefix: str
+    processor_tag: str
+    suffix: str
 
     def __init__(
         self,
@@ -192,6 +224,11 @@ class ElasticsearchRedactionConfig:
     def to_json(self, *, indent: int | None = None) -> str:
         """Serialize the ingest pipeline deterministically as JSON."""
 
+        if indent is not None and (
+            type(indent) is not int or indent < 0 or indent > _MAX_JSON_INDENT
+        ):
+            raise ValueError("indent must be bounded and non-negative")
+
         return json.dumps(
             self.to_ingest_pipeline(),
             ensure_ascii=False,
@@ -224,7 +261,7 @@ class ElasticsearchProcessorDiagnostics:
             "dynamic_fields_rejected",
         ):
             value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, int):
+            if type(value) is not int:
                 raise TypeError(f"{name} must be an integer")
             if value < 0:
                 raise ValueError(f"{name} must not be negative")
@@ -252,7 +289,7 @@ class ElasticsearchProcessorDiagnostics:
 class ElasticsearchRedactionResult:
     """Redacted document plus a count-only diagnostic summary."""
 
-    document: dict[str, Any]
+    document: dict[str, Any] = field(repr=False)
     diagnostics: ElasticsearchProcessorDiagnostics
 
     def to_dict(self) -> dict[str, int]:
@@ -352,7 +389,8 @@ class ElasticsearchRedactionProcessor:
         if not isinstance(document, Mapping):
             raise TypeError("ingest document must be a mapping")
 
-        counts = self._inspect_document(document)
+        inspected_document = _copy_ingest_document(document)
+        counts = self._inspect_document(inspected_document)
         return ElasticsearchProcessorDiagnostics(
             documents_processed=1,
             fields_configured=len(self.config.field_rules),
@@ -386,13 +424,10 @@ class ElasticsearchRedactionProcessor:
             raise ElasticsearchRedactionError(
                 "a local redactor callback is required for process()"
             )
+        if not callable(callback):
+            raise TypeError("redactor must be callable")
 
-        try:
-            output = copy.deepcopy(dict(document))
-        except Exception:
-            raise ElasticsearchRedactionError(
-                "failed to copy the ingest document"
-            ) from None
+        output = _copy_ingest_document(document)
 
         counts = self._inspect_document(output)
         fields_redacted = 0
@@ -410,20 +445,27 @@ class ElasticsearchRedactionProcessor:
             value = _get_path(output, path)
             if value is None or value == "":
                 continue
-            if not isinstance(value, str):
+            if type(value) is not str:
                 raise UnsupportedDynamicFieldError(
                     "dynamic or non-string configured fields are unsupported"
                 )
 
             try:
                 redaction_result = callback(value)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException:
+                raise ElasticsearchRedactionError(
+                    "failed to redact a configured ingest field"
+                ) from None
+            try:
                 redacted_text, span_count = _coerce_redacted_result(
                     redaction_result,
-                    changed=value,
+                    original=value,
                 )
-            except ElasticsearchRedactionError:
+            except (KeyboardInterrupt, SystemExit):
                 raise
-            except Exception:
+            except BaseException:
                 raise ElasticsearchRedactionError(
                     "failed to redact a configured ingest field"
                 ) from None
@@ -466,7 +508,7 @@ class ElasticsearchRedactionProcessor:
             if value is None or value == "":
                 fields_skipped += 1
                 continue
-            if not isinstance(value, str):
+            if type(value) is not str:
                 dynamic_fields_rejected += 1
                 raise UnsupportedDynamicFieldError(
                     "dynamic or non-string configured fields are unsupported"
@@ -538,18 +580,57 @@ def _normalize_field_rules(
     default_patterns: tuple[str, ...],
     ignore_missing: bool,
 ) -> tuple[ElasticsearchFieldRule, ...]:
+    iterator: Any
     if isinstance(fields, ElasticsearchFieldRule):
-        raw_items = ((fields, default_patterns),)
+        iterator = iter(((fields, default_patterns),))
+        mapping_entries = True
     elif isinstance(fields, Mapping):
-        raw_items = tuple(fields.items())
+        try:
+            iterator = iter(fields.items())
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("fields could not be inspected") from None
+        mapping_entries = True
     else:
-        if isinstance(fields, (str, bytes)):
+        if isinstance(fields, (str, bytes, bytearray)) or not isinstance(
+            fields, Sequence
+        ):
             raise TypeError("fields must be a sequence or mapping of explicit paths")
-        raw_items = tuple((item, default_patterns) for item in fields)
+        try:
+            iterator = iter(fields)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("fields could not be inspected") from None
+        mapping_entries = False
 
     rules: list[ElasticsearchFieldRule] = []
     seen: set[str] = set()
-    for raw_field, raw_patterns in raw_items:
+    for index in range(_MAX_FIELDS + 1):
+        try:
+            entry = next(iterator)
+        except StopIteration:
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("fields could not be inspected") from None
+        if index == _MAX_FIELDS:
+            raise ValueError("fields contain too many entries")
+        raw_field: Any
+        raw_patterns: Any
+        if mapping_entries:
+            try:
+                raw_field, raw_patterns = entry
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException:
+                raise ValueError("fields could not be inspected") from None
+        else:
+            raw_field = entry
+            raw_patterns = default_patterns
+
         if isinstance(raw_field, ElasticsearchFieldRule):
             rule = raw_field
         else:
@@ -580,13 +661,21 @@ def _normalize_field_rules(
 
 
 def _normalize_field_path(field: Any) -> str:
-    if not isinstance(field, str):
+    if type(field) is not str:
         raise TypeError("selected fields must contain strings")
     normalized = field.strip()
     if not normalized:
         raise ValueError("selected field paths must not be empty")
-    if any(not part for part in normalized.split(".")):
-        raise ValueError("selected field paths must use non-empty segments")
+    parts = normalized.split(".")
+    if (
+        len(normalized) > _MAX_FIELD_PATH_CHARS
+        or len(parts) > _MAX_FIELD_SEGMENTS
+        or any(
+            not part or len(part) > _MAX_FIELD_SEGMENT_CHARS or not part.isprintable()
+            for part in parts
+        )
+    ):
+        raise ValueError("selected field paths must use bounded literal segments")
     if any(marker in normalized for marker in _DYNAMIC_PATH_MARKERS):
         raise UnsupportedDynamicFieldError(
             "dynamic field paths are unsupported; use explicit field paths"
@@ -595,36 +684,183 @@ def _normalize_field_path(field: Any) -> str:
 
 
 def _normalize_patterns(patterns: Sequence[str] | str) -> tuple[str, ...]:
-    raw_patterns = (patterns,) if isinstance(patterns, str) else tuple(patterns)
+    if type(patterns) is str:
+        iterator = iter((patterns,))
+    elif isinstance(patterns, (bytes, bytearray)) or not isinstance(patterns, Sequence):
+        raise TypeError("redaction patterns must be a string or sequence")
+    else:
+        try:
+            iterator = iter(patterns)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("redaction patterns could not be inspected") from None
+
     normalized: list[str] = []
-    for pattern in raw_patterns:
-        if not isinstance(pattern, str):
+    seen: set[str] = set()
+    for index in range(_MAX_PATTERNS_PER_FIELD + 1):
+        try:
+            pattern = next(iterator)
+        except StopIteration:
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise ValueError("redaction patterns could not be inspected") from None
+        if index == _MAX_PATTERNS_PER_FIELD:
+            raise ValueError("redaction patterns contain too many entries")
+        if type(pattern) is not str:
             raise TypeError("redaction patterns must contain strings")
         pattern = pattern.strip()
-        if not pattern:
-            raise ValueError("redaction patterns must not be empty")
-        if pattern not in normalized:
+        if (
+            not pattern
+            or len(pattern) > _MAX_PATTERN_CHARS
+            or not pattern.isprintable()
+        ):
+            raise ValueError("redaction patterns must contain bounded text")
+        if pattern not in seen:
             normalized.append(pattern)
+            seen.add(pattern)
     if not normalized:
         raise ValueError("redaction patterns must include at least one pattern")
     return tuple(normalized)
 
 
 def _normalize_name(value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("pipeline names and processor tags must be non-empty strings")
-    return value.strip()
+    if type(value) is not str:
+        raise ValueError("pipeline names and processor tags must be bounded strings")
+    normalized = value.strip()
+    if (
+        not normalized
+        or len(normalized) > _MAX_NAME_CHARS
+        or not normalized.isprintable()
+    ):
+        raise ValueError("pipeline names and processor tags must be bounded strings")
+    return normalized
 
 
 def _normalize_marker(value: Any, name: str) -> str:
-    if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
+    if (
+        type(value) is not str
+        or len(value) > _MAX_MARKER_CHARS
+        or (value and not value.isprintable())
+    ):
+        raise TypeError(f"{name} must be a bounded string")
     return value
 
 
 def _require_bool(value: Any, name: str) -> None:
-    if not isinstance(value, bool):
+    if type(value) is not bool:
         raise TypeError(f"{name} must be a boolean")
+
+
+def _copy_ingest_document(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a bounded, detached copy of one JSON-compatible document."""
+
+    try:
+        copied = _copy_document_value(
+            document,
+            depth=0,
+            item_count=[0],
+            active_containers=set(),
+        )
+        if type(copied) is not dict:
+            raise _BoundaryError
+        return copied
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ElasticsearchRedactionError(
+            "failed to copy the ingest document"
+        ) from None
+
+
+def _copy_document_value(
+    value: Any,
+    *,
+    depth: int,
+    item_count: list[int],
+    active_containers: set[int],
+) -> Any:
+    if value is None or type(value) in (bool, int, float):
+        return value
+    if type(value) is str:
+        if len(value) > _MAX_TEXT_CHARS:
+            raise _BoundaryError
+        return value
+    if depth > _MAX_DOCUMENT_DEPTH:
+        raise _BoundaryError
+
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in active_containers:
+            raise _BoundaryError
+        active_containers.add(marker)
+        try:
+            try:
+                iterator = iter(value.items())
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException as error:
+                raise _BoundaryError from error
+            copied_mapping: dict[str, Any] = {}
+            while True:
+                try:
+                    entry = next(iterator)
+                except StopIteration:
+                    return copied_mapping
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except BaseException as error:
+                    raise _BoundaryError from error
+                if item_count[0] >= _MAX_DOCUMENT_ITEMS:
+                    raise _BoundaryError
+                item_count[0] += 1
+                try:
+                    key, item = entry
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except BaseException as error:
+                    raise _BoundaryError from error
+                if (
+                    type(key) is not str
+                    or len(key) > _MAX_DOCUMENT_KEY_CHARS
+                    or key in copied_mapping
+                ):
+                    raise _BoundaryError
+                copied_mapping[key] = _copy_document_value(
+                    item,
+                    depth=depth + 1,
+                    item_count=item_count,
+                    active_containers=active_containers,
+                )
+        finally:
+            active_containers.discard(marker)
+
+    if type(value) in (list, tuple):
+        marker = id(value)
+        if marker in active_containers:
+            raise _BoundaryError
+        if len(value) > _MAX_DOCUMENT_ITEMS - item_count[0]:
+            raise _BoundaryError
+        active_containers.add(marker)
+        try:
+            copied_values = []
+            for item in value:
+                item_count[0] += 1
+                copied_values.append(
+                    _copy_document_value(
+                        item,
+                        depth=depth + 1,
+                        item_count=item_count,
+                        active_containers=active_containers,
+                    )
+                )
+        finally:
+            active_containers.discard(marker)
+        return tuple(copied_values) if type(value) is tuple else copied_values
+
+    raise _BoundaryError
 
 
 def _resolve_document_path(
@@ -679,29 +915,54 @@ def _set_path(document: dict[str, Any], path: Sequence[str], value: str) -> None
     current[path[-1]] = value
 
 
-def _coerce_redacted_result(result: Any, *, changed: str) -> tuple[str, int]:
-    if isinstance(result, str):
+def _coerce_redacted_result(result: Any, *, original: str) -> tuple[str, int]:
+    redacted_text: Any
+    entities: Any
+    if type(result) is str:
         redacted_text = result
-        entities: Any = None
+        entities = None
     elif isinstance(result, Mapping):
         redacted_text = result.get("deidentified_text")
-        entities = result.get("pii_entities", result.get("entities"))
+        entities = _result_entities(result)
     else:
         redacted_text = getattr(result, "deidentified_text", None)
-        entities = getattr(result, "pii_entities", getattr(result, "entities", None))
+        entities = _result_entities(result)
 
-    if not isinstance(redacted_text, str):
+    if type(redacted_text) is not str:
         raise ElasticsearchRedactionError(
             "redactor must return text or deidentified_text"
         )
+    maximum_output_chars = min(
+        _MAX_TEXT_CHARS,
+        max(_MIN_OUTPUT_CHARS, len(original) * _MAX_OUTPUT_EXPANSION),
+    )
+    if len(redacted_text) > maximum_output_chars:
+        raise ElasticsearchRedactionError("redactor output exceeds the size limit")
 
-    try:
-        span_count = len(entities) if entities is not None else 0
-    except TypeError:
+    if redacted_text == original:
+        return redacted_text, 0
+    if isinstance(entities, (list, tuple)) and type(entities) in (list, tuple):
+        span_count = min(len(entities), _MAX_SPANS_PER_FIELD)
+    else:
         span_count = 0
-    if span_count == 0 and redacted_text != changed:
+    if span_count == 0:
         span_count = 1
     return redacted_text, span_count
+
+
+def _result_entities(result: Any) -> Any:
+    """Return optional entity metadata without trusting fallback accessors."""
+
+    try:
+        if isinstance(result, Mapping):
+            entities = result.get("pii_entities", _MISSING)
+            return result.get("entities") if entities is _MISSING else entities
+        entities = getattr(result, "pii_entities", _MISSING)
+        return getattr(result, "entities", None) if entities is _MISSING else entities
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return None
 
 
 __all__ = [
