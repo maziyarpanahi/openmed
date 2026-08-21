@@ -1,0 +1,52 @@
+name: Agent Skills validation
+
+on:
+  pull_request:
+    paths:
+      - ".claude-plugin/marketplace.json"
+      - ".github/workflows/skills.yml"
+      - "docs/agent-skills/**"
+      - "scripts/skills/**"
+      - "skills/**"
+      - "tests/unit/skills/**"
+  push:
+    branches: [master]
+    paths:
+      - ".claude-plugin/marketplace.json"
+      - ".github/workflows/skills.yml"
+      - "docs/agent-skills/**"
+      - "scripts/skills/**"
+      - "skills/**"
+      - "tests/unit/skills/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate skills offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install focused test dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check executable helper help
+        run: python scripts/skills/validate.py --help
+
+      - name: Validate the local skill catalog
+        run: python scripts/skills/validate.py
+
+      - name: Run focused skill tests
+        run: python -m pytest tests/unit/skills -q

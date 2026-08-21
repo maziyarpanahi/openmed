@@ -57,6 +57,50 @@ def test_main_fails_for_tracked_ignored_files(monkeypatch, capsys):
     assert "PLANS/V2/example.md" in captured.err
 
 
+def test_tracked_dua_relation_payloads_are_detected(monkeypatch):
+    monkeypatch.setattr(
+        repo_policy,
+        "git_ls_files",
+        lambda pattern: (
+            [
+                "openmed/eval/fixtures/BioRED/train.xml",
+                "openmed/eval/fixtures/BioRED.zip",
+                "openmed/eval/fixtures/n2c2-2022/record.ann",
+                "openmed/eval/fixtures/shac/record.txt",
+                "openmed/eval/datasets/i2b2.py",
+                "docs/n2c2.md",
+            ]
+            if pattern == "."
+            else []
+        ),
+    )
+
+    assert repo_policy.tracked_dua_relation_corpus_files() == [
+        "openmed/eval/fixtures/BioRED/train.xml",
+        "openmed/eval/fixtures/BioRED.zip",
+        "openmed/eval/fixtures/n2c2-2022/record.ann",
+        "openmed/eval/fixtures/shac/record.txt",
+    ]
+
+
+def test_main_fails_for_tracked_dua_relation_payload(monkeypatch, capsys):
+    monkeypatch.setattr(
+        repo_policy,
+        "git_ls_files",
+        lambda pattern: (
+            ["openmed/eval/fixtures/n2c2-2018/record.ann"] if pattern == "." else []
+        ),
+    )
+    monkeypatch.setattr(repo_policy, "git_deleted_files", lambda pattern: set())
+    monkeypatch.setattr(repo_policy, "git_tracked_ignored_files", lambda: [])
+
+    assert repo_policy.main() == 1
+
+    captured = capsys.readouterr()
+    assert "relation corpus text and annotations" in captured.err
+    assert "record.ann" in captured.err
+
+
 def test_current_repo_has_no_tracked_ignored_files():
     deleted_files = repo_policy.git_deleted_files(".")
 
