@@ -35,11 +35,18 @@ Only the configured text field is transformed in structured records. Other
 fields are copied as part of the requested output and should be selected with
 the same privacy review as any other workflow output.
 
+File and sidecar reads require stable regular files. Final symlinks, special
+files, and files replaced or modified while they are being read fail closed.
+Output size is limited to eight times the configured input-byte bound so a
+faulty injected redactor cannot create an unbounded task artifact.
+
 ## Record batches
 
 Record batches may contain strings or mappings. Mappings must contain the
 configured text field. An output path is always required so Airflow's task
 result and XCom contain only counts and fingerprints, never record content.
+For production PHI, stage a bounded file on the worker rather than embedding
+record values in a serialized DAG definition or other control-plane metadata.
 
 ```python
 redact_batch = OpenMedRedactionOperator(
@@ -63,6 +70,11 @@ byte sizes. On a retry, a matching input/configuration fingerprint and a
 verified output fingerprint produce a `status="skipped"` result without
 running the redactor again. A mismatched existing sidecar fails closed rather
 than overwriting an output belonging to another run.
+
+Additional deidentifier options are snapshotted when the operator is created
+and restored afresh for every value. The retry fingerprint covers that exact
+snapshot plus the callback code and serializable captured state, so changing
+a custom redactor or its configuration cannot silently reuse an older output.
 
 Task results, XCom, logs, and failure messages contain only operation metadata
 and fingerprints; they do not include paths, input values, output text, or the

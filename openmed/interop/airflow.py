@@ -17,7 +17,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import marshal
 import os
+import pickle
+import stat
 import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -47,6 +50,7 @@ _DEFAULT_MAX_INPUT_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_RECORDS = 10_000
 _MANIFEST_SCHEMA_VERSION = 1
 _MAX_MANIFEST_BYTES = 64 * 1024
+_MAX_OUTPUT_EXPANSION = 8
 _JSONL_SUFFIXES: Final[frozenset[str]] = frozenset({".jsonl", ".ndjson"})
 
 Deidentifier = Callable[..., Any]
@@ -181,9 +185,21 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         self.max_records = max_records
         self._deidentifier = deidentifier
         try:
-            self._deidentify_kwargs = dict(deidentify_kwargs or {})
+            self._deidentifier_identity = _callable_identity(deidentifier)
         except Exception:
-            raise ValueError("deidentify_kwargs could not be copied") from None
+            raise ValueError("deidentifier identity could not be captured") from None
+        try:
+            options = dict(deidentify_kwargs or {})
+            if any(not isinstance(key, str) or not key for key in options):
+                raise TypeError
+            self._deidentify_kwargs_payload = pickle.dumps(
+                options,
+                protocol=pickle.HIGHEST_PROTOCOL,
+            )
+        except Exception:
+            raise ValueError(
+                "deidentify_kwargs must contain serializable string-keyed options"
+            ) from None
 
         if input_path is not None and output_path is not None:
             if _same_path(input_path, output_path):
@@ -241,6 +257,11 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
                 output_path=self.output_path,
             )
 
+        if len(output_bytes) > self.max_input_bytes * _MAX_OUTPUT_EXPANSION:
+            raise RedactionOperatorError(
+                "redaction output exceeds the configured expansion bound"
+            )
+
         output_fingerprint = _digest_bytes(output_bytes)
         if self.output_path is not None:
             _atomic_write(self.output_path, output_bytes)
@@ -294,7 +315,7 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             _validate_records(records, text_field=self.text_field)
             try:
                 input_bytes = _serialize_canonical(records)
-            except (TypeError, ValueError, OverflowError):
+            except Exception:
                 raise RedactionOperatorError(
                     "record batch is not JSON serializable"
                 ) from None
@@ -433,8 +454,6 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
                 span_count = len(entities)
             else:
                 span_count = int(redacted != text)
-        except RedactionOperatorError:
-            raise
         except Exception:
             raise RedactionOperatorError(
                 f"redaction failed; input_fingerprint={input_fingerprint}"
@@ -442,7 +461,14 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         return redacted, span_count
 
     def _deidentifier_options(self) -> dict[str, Any]:
-        options = dict(self._deidentify_kwargs)
+        try:
+            options = pickle.loads(self._deidentify_kwargs_payload)
+        except Exception:
+            raise RedactionOperatorError(
+                "redaction options could not be restored"
+            ) from None
+        if not isinstance(options, dict):
+            raise RedactionOperatorError("redaction options are invalid")
         options.setdefault("method", self.method)
         options.setdefault("policy", self.policy)
         if self._deidentifier is None and "config" not in options:
@@ -457,12 +483,13 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
                 "mode": "records" if self._records_source is not None else "file",
                 "input_format": input_format,
                 "text_field": self.text_field,
-                "options": _fingerprint_value(self._deidentifier_options()),
-                "deidentifier": _callable_identity(self._deidentifier),
+                "options_snapshot": _digest_bytes(self._deidentify_kwargs_payload),
+                "method": self.method,
+                "policy": self.policy,
+                "default_offline_config": self._deidentifier is None,
+                "deidentifier": self._deidentifier_identity,
             }
             return _digest_bytes(_serialize_canonical(payload))
-        except RedactionOperatorError:
-            raise
         except Exception:
             raise RedactionOperatorError(
                 "redaction configuration could not be fingerprinted"
@@ -493,12 +520,20 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             raise RedactionOperatorError(
                 "existing output fingerprint does not match this run"
             )
-        try:
-            output_fingerprint = _digest_file(output_path)
-        except (OSError, ValueError):
-            raise RedactionOperatorError(
-                "fingerprint manifest exists but output is unavailable"
-            ) from None
+        output_size = _manifest_size(
+            manifest,
+            "output_size",
+            maximum=self.max_input_bytes * _MAX_OUTPUT_EXPANSION,
+        )
+        output_bytes = _read_stable_regular_file(
+            output_path,
+            output_size,
+            read_error="fingerprint manifest exists but output is unavailable",
+            too_large_error="existing output exceeds the configured expansion bound",
+        )
+        if len(output_bytes) != output_size:
+            raise RedactionOperatorError("existing output size is invalid")
+        output_fingerprint = _digest_bytes(output_bytes)
         if output_fingerprint != manifest.get("output_fingerprint"):
             raise RedactionOperatorError("existing output fingerprint is invalid")
 
@@ -508,7 +543,7 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             payload=payload,
             configuration_fingerprint=configuration_fingerprint,
             output_fingerprint=output_fingerprint,
-            output_size=_manifest_size(manifest, "output_size"),
+            output_size=output_size,
             stats=stats,
         )
         return result
@@ -608,15 +643,12 @@ def _validate_records(records: Sequence[Record], *, text_field: str) -> None:
         if not isinstance(record, Mapping):
             raise TypeError("records must contain strings or mappings")
         try:
-            if text_field not in record:
-                raise RedactionOperatorError(
-                    "record is missing the configured text field"
-                )
-            value = record[text_field]
-        except RedactionOperatorError:
-            raise
+            field_present = text_field in record
+            value = record[text_field] if field_present else None
         except Exception:
             raise RedactionOperatorError("unable to read record metadata") from None
+        if not field_present:
+            raise RedactionOperatorError("record is missing the configured text field")
         if value is not None and not isinstance(value, str):
             raise TypeError("configured record field must contain text or null")
 
@@ -634,7 +666,7 @@ def _parse_json_lines(payload: bytes, max_records: int) -> list[Record]:
             raise RedactionOperatorError("record batch exceeds the configured limit")
         try:
             record = json.loads(line)
-        except (TypeError, ValueError, json.JSONDecodeError):
+        except Exception:
             raise RedactionOperatorError("input JSON Lines file is invalid") from None
         records.append(record)
     return records
@@ -643,7 +675,7 @@ def _parse_json_lines(payload: bytes, max_records: int) -> list[Record]:
 def _parse_json_document(payload: bytes, max_records: int) -> list[Record]:
     try:
         document = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, TypeError, ValueError, json.JSONDecodeError):
+    except Exception:
         raise RedactionOperatorError("input JSON file is invalid") from None
     if isinstance(document, list):
         if len(document) > max_records:
@@ -669,7 +701,7 @@ def _serialize_records(
         if not records:
             return b""
         return b"".join(_serialize_canonical(record) + b"\n" for record in records)
-    except (TypeError, ValueError, OverflowError):
+    except Exception:
         raise RedactionOperatorError(
             "redacted records are not JSON serializable"
         ) from None
@@ -711,17 +743,22 @@ def _manifest_payload(
 
 def _load_existing_manifest(path: Path) -> Mapping[str, Any] | None:
     try:
-        if not path.exists():
-            return None
-        with path.open("rb") as handle:
-            payload = handle.read(_MAX_MANIFEST_BYTES + 1)
+        os.lstat(path)
+    except FileNotFoundError:
+        return None
     except (OSError, ValueError):
         raise RedactionOperatorError("unable to read fingerprint manifest") from None
-    if len(payload) > _MAX_MANIFEST_BYTES:
-        raise RedactionOperatorError("fingerprint manifest exceeds the size bound")
+    payload = _read_stable_regular_file(
+        path,
+        _MAX_MANIFEST_BYTES,
+        read_error="unable to read fingerprint manifest",
+        too_large_error="fingerprint manifest exceeds the size bound",
+    )
+    if not payload:
+        raise RedactionOperatorError("fingerprint manifest is invalid")
     try:
         manifest = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, TypeError, ValueError, json.JSONDecodeError):
+    except Exception:
         raise RedactionOperatorError("fingerprint manifest is invalid") from None
     if not isinstance(manifest, Mapping):
         raise RedactionOperatorError("fingerprint manifest is invalid")
@@ -736,24 +773,98 @@ def _stats_from_manifest(manifest: Mapping[str, Any]) -> _RedactionStats:
     )
 
 
-def _manifest_size(manifest: Mapping[str, Any], key: str) -> int:
+def _manifest_size(
+    manifest: Mapping[str, Any],
+    key: str,
+    *,
+    maximum: int | None = None,
+) -> int:
     value = manifest.get(key)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or (maximum is not None and value > maximum)
+    ):
         raise RedactionOperatorError("fingerprint manifest contains invalid counts")
     return value
 
 
-def _read_bounded_file(path: Path, max_bytes: int) -> bytes:
-    """Read at most one byte beyond the configured input bound."""
+class _FileTooLargeError(Exception):
+    """Signal a bounded file exceeded its accepted size."""
 
+
+def _read_stable_regular_file(
+    path: Path,
+    max_bytes: int,
+    *,
+    read_error: str,
+    too_large_error: str,
+) -> bytes:
+    """Read one stable regular file without following a final symlink."""
+
+    descriptor: int | None = None
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     try:
-        with path.open("rb") as handle:
-            payload = handle.read(max_bytes + 1)
-    except (OSError, ValueError):
-        raise RedactionOperatorError("unable to read input file") from None
-    if len(payload) > max_bytes:
-        raise RedactionOperatorError("input file exceeds the configured byte bound")
-    return payload
+        descriptor = os.open(os.fspath(path), flags)
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise OSError
+        if opened_stat.st_size > max_bytes:
+            raise _FileTooLargeError
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = None
+            payload = handle.read(opened_stat.st_size + 1)
+            final_stat = os.fstat(handle.fileno())
+            path_stat = os.stat(path, follow_symlinks=False)
+        if len(payload) > max_bytes:
+            raise _FileTooLargeError
+        if (
+            not stat.S_ISREG(path_stat.st_mode)
+            or not os.path.samestat(opened_stat, path_stat)
+            or _stable_stat_state(opened_stat) != _stable_stat_state(final_stat)
+            or len(payload) != opened_stat.st_size
+        ):
+            raise OSError
+        return payload
+    except _FileTooLargeError:
+        raise RedactionOperatorError(too_large_error) from None
+    except Exception:
+        raise RedactionOperatorError(read_error) from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def _stable_stat_state(source_stat: os.stat_result) -> tuple[int, ...]:
+    return (
+        source_stat.st_dev,
+        source_stat.st_ino,
+        source_stat.st_size,
+        source_stat.st_mtime_ns,
+        source_stat.st_ctime_ns,
+        source_stat.st_mode,
+    )
+
+
+def _read_bounded_file(path: Path, max_bytes: int) -> bytes:
+    """Read a bounded stable regular input file."""
+
+    return _read_stable_regular_file(
+        path,
+        max_bytes,
+        read_error="unable to read input file",
+        too_large_error="input file exceeds the configured byte bound",
+    )
 
 
 def _atomic_write(path_value: str | Path, payload: bytes) -> None:
@@ -796,39 +907,101 @@ def _digest_bytes(payload: bytes) -> str:
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def _digest_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
+def _callable_identity(value: Any) -> str:
+    if value is None:
+        return "default"
+    module = getattr(value, "__module__", type(value).__module__)
+    qualname = getattr(value, "__qualname__", type(value).__qualname__)
+    target = getattr(value, "__func__", value)
+    owner = getattr(value, "__self__", None)
+    code = getattr(target, "__code__", None)
+    if code is None:
+        call = getattr(value, "__call__", None)
+        target = getattr(call, "__func__", call)
+        code = getattr(target, "__code__", None)
+        if code is not None:
+            owner = value
+    if code is None:
+        state = _callable_state_value(value)
+        state_digest = _digest_bytes(_serialize_canonical(state))
+        return f"{module}.{qualname}:{state_digest}"
+
+    digest = hashlib.sha256(marshal.dumps(code))
+    defaults = getattr(target, "__defaults__", None)
+    keyword_defaults = getattr(target, "__kwdefaults__", None)
+    closure = getattr(target, "__closure__", None) or ()
+    closure_values: list[Any] = []
+    for cell in closure:
+        try:
+            closure_values.append(_callable_state_value(cell.cell_contents))
+        except ValueError:
+            closure_values.append({"type": "empty-cell"})
+    state = {
+        "defaults": _callable_state_value(defaults),
+        "keyword_defaults": _callable_state_value(keyword_defaults),
+        "closure": closure_values,
+        "owner": _callable_owner_state(owner),
+    }
+    digest.update(_serialize_canonical(state))
+    return f"{module}.{qualname}:{digest.hexdigest()}"
 
 
-def _fingerprint_value(value: Any) -> Any:
+def _callable_owner_state(value: Any) -> Any:
+    """Return stable state for a bound method or callable object."""
+
+    if value is None:
+        return None
+    try:
+        return _callable_state_value(value)
+    except TypeError:
+        try:
+            attributes = dict(vars(value))
+        except (TypeError, ValueError):
+            raise TypeError("callback owner state must be serializable") from None
+        return {
+            "type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "attributes": _callable_state_value(attributes),
+        }
+
+
+def _callable_state_value(value: Any) -> Any:
+    """Return a value-free digest of callback state captured at construction."""
+
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, bytes):
         return {"type": "bytes", "sha256": _digest_bytes(value)}
     if isinstance(value, Path):
         return {"type": "path", "sha256": _digest_bytes(str(value).encode())}
-    if isinstance(value, Mapping):
+    if isinstance(value, type):
+        digest = hashlib.sha256(
+            f"{value.__module__}.{value.__qualname__}".encode("utf-8")
+        )
+        for name, member in sorted(vars(value).items()):
+            target = member.fget if isinstance(member, property) else member
+            code = getattr(target, "__code__", None)
+            if code is not None:
+                digest.update(name.encode("utf-8"))
+                digest.update(marshal.dumps(code))
+            elif target is None or isinstance(target, (bool, int, float, str)):
+                digest.update(
+                    _serialize_canonical(
+                        {"name": name, "value": target},
+                    )
+                )
         return {
-            str(key): _fingerprint_value(item)
-            for key, item in sorted(value.items(), key=lambda item: str(item[0]))
+            "type": "class",
+            "identity": f"{value.__module__}.{value.__qualname__}",
+            "sha256": digest.hexdigest(),
         }
-    if isinstance(value, (list, tuple)):
-        return [_fingerprint_value(item) for item in value]
-    if callable(value):
-        return {"type": "callable", "identity": _callable_identity(value)}
-    return {"type": type(value).__name__}
-
-
-def _callable_identity(value: Any) -> str:
-    if value is None:
-        return "default"
-    module = getattr(value, "__module__", type(value).__module__)
-    qualname = getattr(value, "__qualname__", type(value).__qualname__)
-    return f"{module}.{qualname}"
+    try:
+        payload = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception:
+        raise TypeError("callback captured state must be serializable") from None
+    return {
+        "type": f"{type(value).__module__}.{type(value).__qualname__}",
+        "sha256": _digest_bytes(payload),
+    }
 
 
 def _coerce_path(value: str | Path | None, field_name: str) -> Path:

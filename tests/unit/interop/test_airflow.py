@@ -128,6 +128,84 @@ def test_matching_output_fingerprint_makes_retries_idempotent(tmp_path: Path):
     assert second["status"] == "skipped"
 
 
+def test_retry_fingerprint_distinguishes_callback_closure_state(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    output = tmp_path / "notes.redacted.txt"
+    source.write_text("synthetic note", encoding="utf-8")
+
+    def make_deidentifier(replacement: str):
+        def deidentifier(text: str, **kwargs):
+            del text, kwargs
+            return replacement
+
+        return deidentifier
+
+    OpenMedRedactionOperator(
+        input_path=source,
+        output_path=output,
+        deidentifier=make_deidentifier("[FIRST]"),
+    ).execute({})
+
+    with pytest.raises(RedactionOperatorError, match="does not match this run"):
+        OpenMedRedactionOperator(
+            input_path=source,
+            output_path=output,
+            deidentifier=make_deidentifier("[SECOND]"),
+        ).execute({})
+
+
+def test_retry_fingerprint_distinguishes_callable_object_state(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    output = tmp_path / "notes.redacted.txt"
+    source.write_text("synthetic note", encoding="utf-8")
+
+    class Replacer:
+        def __init__(self, replacement: str) -> None:
+            self.replacement = replacement
+
+        def __call__(self, text: str, **kwargs):
+            del text, kwargs
+            return self.replacement
+
+    OpenMedRedactionOperator(
+        input_path=source,
+        output_path=output,
+        deidentifier=Replacer("[FIRST]"),
+    ).execute({})
+
+    with pytest.raises(RedactionOperatorError, match="does not match this run"):
+        OpenMedRedactionOperator(
+            input_path=source,
+            output_path=output,
+            deidentifier=Replacer("[SECOND]"),
+        ).execute({})
+
+
+def test_deidentifier_options_are_snapshotted_and_fresh_per_record(
+    tmp_path: Path,
+) -> None:
+    supplied_tags = ["en"]
+    observed_tags: list[list[str]] = []
+
+    def mutating_deidentifier(text: str, **kwargs):
+        tags = kwargs["token_language_tags"]
+        observed_tags.append(list(tags))
+        tags.append("mutated")
+        return text
+
+    operator = OpenMedRedactionOperator(
+        records=["first", "second"],
+        output_path=tmp_path / "redacted.jsonl",
+        deidentifier=mutating_deidentifier,
+        deidentify_kwargs={"token_language_tags": supplied_tags},
+    )
+    supplied_tags.append("fr")
+
+    operator.execute({})
+
+    assert observed_tags == [["en"], ["en"]]
+
+
 def test_record_batch_writes_output_and_returns_only_phi_free_counts(
     tmp_path: Path,
 ):
@@ -199,6 +277,22 @@ def test_record_batch_bound_and_deidentifier_failures_are_value_free(
             deidentifier=broken_deidentifier,
         ).execute({})
     assert _SYNTHETIC_VALUE not in str(redaction_error.value)
+
+
+def test_deidentifier_cannot_inject_a_public_contract_error(tmp_path: Path) -> None:
+    def broken_deidentifier(text: str, **kwargs):
+        del kwargs
+        raise RedactionOperatorError(f"leaked value: {text}")
+
+    with pytest.raises(RedactionOperatorError) as redaction_error:
+        OpenMedRedactionOperator(
+            records=[_SYNTHETIC_VALUE],
+            output_path=tmp_path / "failed-public-error.jsonl",
+            deidentifier=broken_deidentifier,
+        ).execute({})
+
+    assert _SYNTHETIC_VALUE not in str(redaction_error.value)
+    assert str(redaction_error.value).startswith("redaction failed; input_fingerprint=")
 
 
 def test_result_metadata_failure_is_value_free(tmp_path: Path) -> None:
@@ -296,6 +390,55 @@ def test_file_read_is_bounded_before_loading_the_complete_input(
             max_input_bytes=32,
             deidentifier=_fake_deidentifier,
         ).execute({})
+
+
+def test_file_input_rejects_final_symlinks(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    link = tmp_path / "notes-link.txt"
+    source.write_text(_SYNTHETIC_VALUE, encoding="utf-8")
+    try:
+        link.symlink_to(source)
+    except (NotImplementedError, OSError):
+        pytest.skip("symlinks are unavailable")
+
+    with pytest.raises(RedactionOperatorError, match="unable to read input file"):
+        OpenMedRedactionOperator(
+            input_path=link,
+            output_path=tmp_path / "redacted.txt",
+            deidentifier=_fake_deidentifier,
+        ).execute({})
+
+
+def test_output_expansion_is_bounded(tmp_path: Path) -> None:
+    source = tmp_path / "one-byte.txt"
+    source.write_bytes(b"x")
+
+    with pytest.raises(RedactionOperatorError, match="expansion bound"):
+        OpenMedRedactionOperator(
+            input_path=source,
+            output_path=tmp_path / "expanded.txt",
+            max_input_bytes=1,
+            deidentifier=lambda text, **kwargs: "x" * 9,
+        ).execute({})
+
+
+def test_retry_rejects_an_unbounded_manifest_output_size(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    output = tmp_path / "notes.redacted.txt"
+    source.write_text(_SYNTHETIC_VALUE, encoding="utf-8")
+    operator = OpenMedRedactionOperator(
+        input_path=source,
+        output_path=output,
+        deidentifier=_fake_deidentifier,
+    )
+    operator.execute({})
+    manifest_path = Path(f"{output}.openmed-fingerprint.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["output_size"] = operator.max_input_bytes * 9
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(RedactionOperatorError, match="invalid counts"):
+        operator.execute({})
 
 
 def test_fingerprint_path_cannot_overwrite_the_input(tmp_path: Path) -> None:
