@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Kubernetes HPA reference for aggregate queue-depth and in-flight
+  request metrics, with CPU fallback, deterministic load-to-replica guidance,
+  Prometheus Adapter wiring, and PHI-safe metric tests (#831).
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).
