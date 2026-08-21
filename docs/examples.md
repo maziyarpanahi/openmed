@@ -8,6 +8,11 @@ examples use synthetic data and are safe to run during release review.
 
 For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
 
+For an install-free demonstration, open the
+**[browser privacy playground](/docs/demo/privacy-playground/)**. Its bundled rules
+redact bounded synthetic text in the current tab and expose aggregate counts
+plus the active browser network boundary.
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |

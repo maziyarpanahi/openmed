@@ -15,6 +15,7 @@ expected_routes:
   - docs/hi/onboarding-india/index.html
   - docs/eval/benchmark-leaderboard/index.html
   - docs/demo/web/index.html
+  - docs/demo/privacy-playground/index.html
   - docs/demo/rtl/index.html
 
 expected_assets:
@@ -61,6 +62,7 @@ expected_assets:
   - docs/eval/benchmark-leaderboard/reports/golden.report.json
   - docs/demo/web/app.js
   - docs/demo/web/styles.css
+  - docs/demo/privacy-playground/app.js
 
 translation_groups:
   documentation_home:
@@ -236,6 +238,8 @@ classification:
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/dbt.md
+    - integrations/postgres.md
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
