@@ -189,6 +189,66 @@ def test_modernbert_load_model_matches_hf_logits(tmp_path):
 
 
 @pytest.mark.skipif(
+    not _MLX_AVAILABLE,
+    reason="MLX is required for quantized artifact tests",
+)
+def test_modernbert_fp_and_int8_artifacts_preserve_output_shape(tmp_path):
+    """ModernBERT FP and INT8 artifacts keep the token-classification shape."""
+    import mlx.core as mx
+    from mlx.utils import tree_flatten
+
+    from openmed.mlx.convert import save_mlx_model
+    from openmed.mlx.models import build_model, load_model, normalize_model_config
+
+    config = normalize_model_config(
+        {
+            "model_type": "modernbert",
+            "vocab_size": 64,
+            "hidden_size": 32,
+            "intermediate_size": 64,
+            "num_hidden_layers": 2,
+            "num_attention_heads": 4,
+            "max_position_embeddings": 32,
+            "local_attention": 8,
+            "global_attn_every_n_layers": 2,
+            "num_labels": 3,
+            "pad_token_id": 0,
+        }
+    )
+    config.update(
+        {
+            "_mlx_family": "modernbert",
+            "_mlx_model_type": "modernbert",
+            "_mlx_task": "token-classification",
+        }
+    )
+    model = build_model(config)
+    weights = dict(tree_flatten(model.parameters()))
+    input_ids = mx.array([[1, 2, 3, 4, 5]], dtype=mx.int32)
+    attention_mask = mx.ones(input_ids.shape, dtype=mx.float32)
+
+    fp_artifact = save_mlx_model(weights, config, tmp_path / "fp")
+    fp_model = load_model(fp_artifact)
+    fp_logits = fp_model(input_ids, attention_mask=attention_mask)
+    mx.eval(fp_logits)
+
+    int8_artifact = save_mlx_model(
+        weights,
+        config,
+        tmp_path / "int8",
+        quantize_bits=8,
+        quantize_group_size=32,
+    )
+    int8_model = load_model(int8_artifact)
+    int8_logits = int8_model(input_ids, attention_mask=attention_mask)
+    mx.eval(int8_logits)
+
+    expected_shape = (1, input_ids.shape[1], config["num_labels"])
+    assert tuple(fp_logits.shape) == expected_shape
+    assert tuple(int8_logits.shape) == expected_shape
+
+
+@pytest.mark.skipif(
     not (_MLX_AVAILABLE and _HF_AVAILABLE),
     reason="MLX, PyTorch, and Transformers are required for parity tests",
 )
