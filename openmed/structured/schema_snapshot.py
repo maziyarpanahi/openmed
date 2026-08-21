@@ -11,6 +11,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import islice
 from typing import Any, Final
 
 SCHEMA_SNAPSHOT_FORMAT_VERSION: Final = 1
@@ -28,6 +29,49 @@ _TYPE_ALIASES: Final[Mapping[str, str]] = {
     "list": "array",
 }
 _TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_.-]*$")
+_MAX_FIELDS: Final = 10_000
+_MAX_FIELD_PATH_LENGTH: Final = 1_024
+_MAX_TYPE_MEMBERS: Final = 128
+_MAX_TYPE_NAME_LENGTH: Final = 128
+_MAX_VERSION_LENGTH: Final = 64
+_CHANGE_KINDS: Final = frozenset({"added", "removed", "changed"})
+_CHANGE_REASONS: Final = frozenset(
+    {
+        "field_became_optional",
+        "field_became_required",
+        "field_removed",
+        "optional_field_added",
+        "required_field_added",
+        "type_changed",
+        "type_widened",
+    }
+)
+_REASONS_BY_KIND: Final[Mapping[str, frozenset[str]]] = {
+    "added": frozenset({"optional_field_added", "required_field_added"}),
+    "removed": frozenset({"field_removed"}),
+    "changed": frozenset(
+        {
+            "field_became_optional",
+            "field_became_required",
+            "type_changed",
+            "type_widened",
+        }
+    ),
+}
+_BREAKING_REASONS: Final = frozenset(
+    {
+        "field_became_required",
+        "field_removed",
+        "required_field_added",
+        "type_changed",
+    }
+)
+_VIOLATIONS: Final = frozenset(
+    {
+        "breaking_change_requires_major_version_bump",
+        "schema_version_regressed",
+    }
+)
 
 __all__ = [
     "COMPATIBILITY_RULES_VERSION",
@@ -53,14 +97,14 @@ class _Version:
 
 
 def _parse_version(value: Any) -> _Version:
-    if isinstance(value, bool):
-        raise TypeError("schema version must be an integer or semantic version")
-    if isinstance(value, int):
+    if type(value) is int:
         if value < 0:
             raise ValueError("schema version must be non-negative")
         return _Version(value, 0, 0)
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError("schema version must be an integer or semantic version")
+    if len(value) > _MAX_VERSION_LENGTH:
+        raise ValueError("schema version is too long")
 
     match = _SEMVER_PATTERN.fullmatch(value.strip())
     if match is None:
@@ -80,28 +124,41 @@ def _validate_rules_version(value: Any) -> int:
 
 
 def _normalize_path(value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if type(value) is not str or not value.strip():
         raise ValueError("schema field path must be a non-empty string")
     normalized = value.strip()
-    if "\x00" in normalized:
+    if len(normalized) > _MAX_FIELD_PATH_LENGTH:
+        raise ValueError("schema field path is too long")
+    if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
         raise ValueError("schema field path contains an invalid character")
     return normalized
 
 
 def _normalize_type(value: Any) -> tuple[str, bool]:
     nullable = False
-    if isinstance(value, str):
-        members: Sequence[Any] = value.split("|")
+    if type(value) is str:
+        members = tuple(value.split("|"))
+    elif isinstance(value, str):
+        raise TypeError("schema field type must use plain strings")
     elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
-        members = value
+        members = _bounded_tuple(
+            value,
+            limit=_MAX_TYPE_MEMBERS,
+            type_error="schema field type sequence could not be read",
+            limit_error="schema field type has too many members",
+        )
     else:
         raise TypeError("schema field type must be a string or sequence of strings")
+    if len(members) > _MAX_TYPE_MEMBERS:
+        raise ValueError("schema field type has too many members")
 
     normalized_members: set[str] = set()
     for member in members:
-        if not isinstance(member, str) or not member.strip():
+        if type(member) is not str or not member.strip():
             raise ValueError("schema field type members must be non-empty strings")
         normalized = member.strip().casefold()
+        if len(normalized) > _MAX_TYPE_NAME_LENGTH:
+            raise ValueError("schema field type name is too long")
         if normalized == "null":
             nullable = True
             continue
@@ -113,6 +170,34 @@ def _normalize_type(value: Any) -> tuple[str, bool]:
     if not normalized_members:
         normalized_members.add("null")
     return "|".join(sorted(normalized_members)), nullable
+
+
+def _bounded_tuple(
+    values: Any,
+    *,
+    limit: int,
+    type_error: str,
+    limit_error: str,
+) -> tuple[Any, ...]:
+    try:
+        result = tuple(islice(iter(values), limit + 1))
+    except Exception:
+        raise TypeError(type_error) from None
+    if len(result) > limit:
+        raise ValueError(limit_error)
+    return result
+
+
+def _mapping_entry(
+    payload: Mapping[str, Any],
+    key: str,
+) -> tuple[bool, Any]:
+    try:
+        if key not in payload:
+            return False, _MISSING
+        return True, payload[key]
+    except Exception:
+        raise TypeError("schema metadata mapping could not be read") from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,57 +245,81 @@ class SchemaField:
         copied into the field or a later report.
         """
 
-        if isinstance(payload, cls):
+        if type(payload) is cls:
             if path is not None and payload.path != _normalize_path(path):
                 raise ValueError("schema field path is inconsistent")
             return payload
-        if isinstance(payload, str):
+        if type(payload) is str:
             if path is None:
                 raise ValueError("schema field path is required")
             return cls(path=path, type=payload)
         if not isinstance(payload, Mapping):
             raise TypeError("schema field must be metadata mapping")
 
-        if path is not None and "path" in payload:
-            if _normalize_path(payload["path"]) != _normalize_path(path):
+        has_payload_path, payload_path = _mapping_entry(payload, "path")
+        if path is not None and has_payload_path:
+            if _normalize_path(payload_path) != _normalize_path(path):
                 raise ValueError("schema field path is inconsistent")
-        field_path = payload.get("path", path)
-        raw_type = payload.get("type", payload.get("field_type", _MISSING))
+        field_path = payload_path if has_payload_path else path
+        has_type, type_value = _mapping_entry(payload, "type")
+        has_field_type, field_type_value = _mapping_entry(payload, "field_type")
+        raw_type = type_value if has_type else field_type_value
         if field_path is None or raw_type is _MISSING:
             raise ValueError("schema field metadata requires path and type")
-        if "type" in payload and "field_type" in payload:
-            if _normalize_type(payload["type"]) != _normalize_type(
-                payload["field_type"]
-            ):
+        normalized_type, type_nullable = _normalize_type(raw_type)
+        if has_type and has_field_type:
+            if _normalize_type(type_value) != _normalize_type(field_type_value):
                 raise ValueError("schema field type aliases are inconsistent")
 
         optionality: list[bool] = []
         for key in ("optional", "nullable"):
-            if key in payload:
-                value = payload[key]
+            has_value, value = _mapping_entry(payload, key)
+            if has_value:
                 if type(value) is not bool:
                     raise TypeError("schema field optionality must be a boolean")
                 optionality.append(value)
-        if "required" in payload:
-            required = payload["required"]
+        has_required, required = _mapping_entry(payload, "required")
+        if has_required:
             if type(required) is not bool:
                 raise TypeError("schema field requiredness must be a boolean")
             optionality.append(not required)
         if len(set(optionality)) > 1:
             raise ValueError("schema field optionality aliases are inconsistent")
-        optional = optionality[0] if optionality else False
-        return cls(path=field_path, type=raw_type, optional=optional)
+        if optionality and not optionality[0] and type_nullable:
+            raise ValueError("schema field optionality aliases are inconsistent")
+        optional = (optionality[0] if optionality else False) or type_nullable
+        return cls(path=field_path, type=normalized_type, optional=optional)
 
 
 def _normalize_fields(
     fields: Mapping[str, Any] | Sequence[Any],
 ) -> tuple[SchemaField, ...]:
     if isinstance(fields, Mapping):
-        entries = ((path, payload) for path, payload in fields.items())
+        try:
+            items = fields.items()
+        except Exception:
+            raise TypeError("schema fields mapping could not be read") from None
+        raw_entries = _bounded_tuple(
+            items,
+            limit=_MAX_FIELDS,
+            type_error="schema fields mapping could not be read",
+            limit_error="schema snapshot has too many fields",
+        )
+        entries: list[tuple[Any, Any]] = []
+        for item in raw_entries:
+            if type(item) is not tuple or len(item) != 2:
+                raise TypeError("schema fields mapping contains an invalid entry")
+            entries.append((item[0], item[1]))
     elif isinstance(fields, Sequence) and not isinstance(
         fields, (str, bytes, bytearray)
     ):
-        entries = ((None, payload) for payload in fields)
+        payloads = _bounded_tuple(
+            fields,
+            limit=_MAX_FIELDS,
+            type_error="schema fields sequence could not be read",
+            limit_error="schema snapshot has too many fields",
+        )
+        entries = [(None, payload) for payload in payloads]
     else:
         raise TypeError("schema fields must be a mapping or sequence")
 
@@ -244,13 +353,13 @@ class SchemaSnapshot:
         rules_version: int = COMPATIBILITY_RULES_VERSION,
         schema_version: str | int | None = None,
     ) -> None:
-        if schema_version is not None:
-            if version != "1.0.0" and _parse_version(version) != _parse_version(
-                schema_version
-            ):
-                raise ValueError("schema version aliases are inconsistent")
-            version = schema_version
+        version_uses_default = type(version) is str and version == "1.0.0"
         parsed_version = _parse_version(version)
+        if schema_version is not None:
+            parsed_schema_version = _parse_version(schema_version)
+            if not version_uses_default and parsed_version != parsed_schema_version:
+                raise ValueError("schema version aliases are inconsistent")
+            parsed_version = parsed_schema_version
         object.__setattr__(self, "version", _version_string(parsed_version))
         object.__setattr__(self, "fields", _normalize_fields(fields))
         object.__setattr__(
@@ -305,17 +414,36 @@ class SchemaSnapshot:
         if not isinstance(payload, Mapping):
             raise TypeError("schema snapshot must be a mapping")
 
-        format_version = payload.get("format_version", SCHEMA_SNAPSHOT_FORMAT_VERSION)
+        has_format_version, format_version = _mapping_entry(payload, "format_version")
+        if not has_format_version:
+            format_version = SCHEMA_SNAPSHOT_FORMAT_VERSION
         if (
             type(format_version) is not int
             or format_version != SCHEMA_SNAPSHOT_FORMAT_VERSION
         ):
             raise ValueError("unsupported schema snapshot format version")
 
-        if "fields" in payload:
-            fields = payload["fields"]
-            version = payload.get("version", payload.get("schema_version", "1.0.0"))
-            rules_version = payload.get("rules_version", COMPATIBILITY_RULES_VERSION)
+        has_fields, fields = _mapping_entry(payload, "fields")
+        if has_fields:
+            has_version, version = _mapping_entry(payload, "version")
+            has_schema_version, schema_version = _mapping_entry(
+                payload, "schema_version"
+            )
+            if not has_version:
+                version = "1.0.0"
+            elif has_schema_version and _parse_version(version) != _parse_version(
+                schema_version
+            ):
+                raise ValueError("schema version aliases are inconsistent")
+            has_rules_version, rules_version = _mapping_entry(payload, "rules_version")
+            if not has_rules_version:
+                rules_version = COMPATIBILITY_RULES_VERSION
+            return cls(
+                version=version,
+                fields=fields,
+                rules_version=rules_version,
+                schema_version=schema_version if has_schema_version else None,
+            )
         else:
             fields = payload
             version = "1.0.0"
@@ -337,13 +465,38 @@ class SchemaChange:
     breaking: bool
 
     def __post_init__(self) -> None:
-        if self.kind not in {"added", "removed", "changed"}:
+        if type(self.kind) is not str or self.kind not in _CHANGE_KINDS:
             raise ValueError("schema change kind is unsupported")
         object.__setattr__(self, "path", _normalize_path(self.path))
-        if not self.reasons:
+        if type(self.before) is not SchemaField and self.before is not None:
+            raise TypeError("schema change before field is invalid")
+        if type(self.after) is not SchemaField and self.after is not None:
+            raise TypeError("schema change after field is invalid")
+        if self.kind == "added" and (self.before is not None or self.after is None):
+            raise ValueError("added schema changes require only an after field")
+        if self.kind == "removed" and (self.before is None or self.after is not None):
+            raise ValueError("removed schema changes require only a before field")
+        if self.kind == "changed" and (self.before is None or self.after is None):
+            raise ValueError("changed schema changes require before and after fields")
+        if self.before is not None and self.before.path != self.path:
+            raise ValueError("schema change before path is inconsistent")
+        if self.after is not None and self.after.path != self.path:
+            raise ValueError("schema change after path is inconsistent")
+        if type(self.reasons) is not tuple or not self.reasons:
             raise ValueError("schema change must have at least one reason")
+        if any(
+            type(reason) is not str or reason not in _CHANGE_REASONS
+            for reason in self.reasons
+        ):
+            raise ValueError("schema change reason is unsupported")
+        if len(set(self.reasons)) != len(self.reasons):
+            raise ValueError("schema change reasons must be unique")
+        if any(reason not in _REASONS_BY_KIND[self.kind] for reason in self.reasons):
+            raise ValueError("schema change reason does not match its kind")
         if type(self.breaking) is not bool:
             raise TypeError("schema change breaking flag must be a boolean")
+        if self.breaking != any(reason in _BREAKING_REASONS for reason in self.reasons):
+            raise ValueError("schema change breaking flag is inconsistent")
 
     @property
     def reason(self) -> str:
@@ -396,6 +549,27 @@ class SchemaChange:
         return result
 
 
+def _validate_change_collection(
+    value: tuple[SchemaChange, ...],
+    name: str,
+    *,
+    kind: str | None = None,
+) -> None:
+    if type(value) is not tuple:
+        raise TypeError(f"schema report {name} must be a tuple")
+    if len(value) > 2 * _MAX_FIELDS:
+        raise ValueError(f"schema report {name} contains too many changes")
+    if any(type(change) is not SchemaChange for change in value):
+        raise TypeError(f"schema report {name} contains an invalid change")
+    if kind is not None and any(change.kind != kind for change in value):
+        raise ValueError(f"schema report {name} contains the wrong change kind")
+    paths = [change.path for change in value]
+    if len(paths) != len(set(paths)):
+        raise ValueError(f"schema report {name} contains duplicate paths")
+    if kind is not None and paths != sorted(paths):
+        raise ValueError(f"schema report {name} must use stable path order")
+
+
 @dataclass(frozen=True, slots=True)
 class SchemaCompatibilityReport:
     """Deterministic compatibility evidence for two schema snapshots.
@@ -416,6 +590,54 @@ class SchemaCompatibilityReport:
     compatible: bool
     version_bump_satisfies_rules: bool
     violations: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        before_version = _parse_version(self.before_version)
+        after_version = _parse_version(self.after_version)
+        object.__setattr__(self, "before_version", _version_string(before_version))
+        object.__setattr__(self, "after_version", _version_string(after_version))
+        _validate_rules_version(self.rules_version)
+
+        _validate_change_collection(self.additions, "additions", kind="added")
+        _validate_change_collection(self.removals, "removals", kind="removed")
+        _validate_change_collection(self.changes, "changes", kind="changed")
+        _validate_change_collection(
+            self.incompatible_changes,
+            "incompatible changes",
+        )
+        expected_incompatible = tuple(
+            change
+            for change in (*self.additions, *self.removals, *self.changes)
+            if change.breaking
+        )
+        if self.incompatible_changes != expected_incompatible:
+            raise ValueError("incompatible schema changes are inconsistent")
+
+        if type(self.compatible) is not bool:
+            raise TypeError("schema compatibility flag must be a boolean")
+        if type(self.version_bump_satisfies_rules) is not bool:
+            raise TypeError("schema version-rule flag must be a boolean")
+        if type(self.violations) is not tuple or any(
+            type(violation) is not str or violation not in _VIOLATIONS
+            for violation in self.violations
+        ):
+            raise ValueError("schema compatibility violation is unsupported")
+        if len(set(self.violations)) != len(self.violations):
+            raise ValueError("schema compatibility violations must be unique")
+
+        expected_violations: list[str] = []
+        if after_version < before_version:
+            expected_violations.append("schema_version_regressed")
+        if expected_incompatible and after_version.major <= before_version.major:
+            expected_violations.append("breaking_change_requires_major_version_bump")
+        if self.violations != tuple(expected_violations):
+            raise ValueError("schema compatibility violations are inconsistent")
+        expected_compatible = not expected_violations
+        if (
+            self.compatible != expected_compatible
+            or self.version_bump_satisfies_rules != expected_compatible
+        ):
+            raise ValueError("schema compatibility flags are inconsistent")
 
     @property
     def breaking_changes(self) -> tuple[SchemaChange, ...]:
@@ -508,7 +730,7 @@ def build_schema_snapshot(
 
 
 def _coerce_snapshot(value: SchemaSnapshot | Mapping[str, Any]) -> SchemaSnapshot:
-    if isinstance(value, SchemaSnapshot):
+    if type(value) is SchemaSnapshot:
         return value
     if isinstance(value, Mapping):
         return SchemaSnapshot.from_mapping(value)

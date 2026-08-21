@@ -37,6 +37,14 @@ the same `to_dict()` and `to_json()` output regardless of input mapping order.
 Common type aliases (`int`, `float`, `bool`, `list`, and `dict`) are normalized
 to `integer`, `number`, `boolean`, `array`, and `object`. A type union may be a
 pipe-delimited string or a sequence; including `null` marks the field optional.
+An explicit `optional=False`, `nullable=False`, or `required=True` therefore
+cannot be combined with a nullable type.
+
+Snapshot inputs are bounded before metadata is inspected: a snapshot accepts
+at most 10,000 fields, a type union accepts at most 128 members, field paths
+are limited to 1,024 characters, and versions are limited to 64 characters.
+Unreadable caller mappings and sequences fail with value-free errors rather
+than forwarding their exception text.
 
 ## Compatibility rules
 
@@ -57,4 +65,6 @@ The report separates `additions`, `removals`, and `changes`, and exposes
 `incompatible_changes` with only the breaking field records. Every record
 contains schema metadata and rule reasons; example payload values are not
 serialized. `report.to_json()` emits canonical JSON for a local release
-artifact and performs no network access.
+artifact and performs no network access. Public change and report objects
+accept only the fixed rule-reason and violation vocabulary, so caller-provided
+strings cannot be injected into release evidence through those fields.

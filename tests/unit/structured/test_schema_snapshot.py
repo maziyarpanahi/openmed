@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -226,3 +227,99 @@ def test_conflicting_field_aliases_are_rejected_without_echoing_values(
         SchemaSnapshot(fields={sensitive_path: field_metadata})
 
     assert sensitive_path not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "field_metadata",
+    [
+        {"type": ["null", "string"], "required": True},
+        {"type": "null|string", "optional": False},
+        {"type": ["null", "string"], "nullable": False},
+    ],
+)
+def test_nullable_types_cannot_contradict_requiredness_aliases(
+    field_metadata: dict[str, object],
+) -> None:
+    sensitive_path = "synthetic.secret.nullable.path"
+
+    with pytest.raises(ValueError, match="optionality aliases") as exc_info:
+        SchemaSnapshot(fields={sensitive_path: field_metadata})
+
+    assert sensitive_path not in str(exc_info.value)
+
+
+def test_hostile_field_mappings_do_not_leak_caller_values() -> None:
+    sensitive_value = "SYNTHETIC-MAPPING-FAILURE-CANARY"
+
+    class FailingFields(dict[str, object]):
+        def items(self):
+            raise RuntimeError(sensitive_value)
+
+    with pytest.raises(TypeError) as fields_exc_info:
+        SchemaSnapshot(fields=FailingFields())
+    assert sensitive_value not in str(fields_exc_info.value)
+
+    class FailingMetadata(dict[str, object]):
+        def __contains__(self, key: object) -> bool:
+            raise RuntimeError(sensitive_value)
+
+    with pytest.raises(TypeError) as metadata_exc_info:
+        SchemaSnapshot(fields={"safe.path": FailingMetadata()})
+    assert sensitive_value not in str(metadata_exc_info.value)
+
+
+def test_hostile_version_and_type_inputs_are_rejected_without_callbacks() -> None:
+    sensitive_value = "SYNTHETIC-VERSION-TYPE-CANARY"
+
+    class FailingVersion(str):
+        def strip(self, *args, **kwargs):
+            raise RuntimeError(sensitive_value)
+
+    with pytest.raises(TypeError) as version_exc_info:
+        SchemaSnapshot(version=FailingVersion("1.0.0"))
+    assert sensitive_value not in str(version_exc_info.value)
+
+    with pytest.raises(ValueError, match="too many members"):
+        SchemaSnapshot(fields={"safe.path": {"type": ("string",) * 129}})
+
+
+def test_version_aliases_are_consistent_and_value_free() -> None:
+    with pytest.raises(ValueError, match="version aliases"):
+        SchemaSnapshot(version=1, schema_version=2)
+
+    with pytest.raises(ValueError, match="version aliases"):
+        SchemaSnapshot.from_mapping(
+            {
+                "version": "1.0.0",
+                "schema_version": "2.0.0",
+                "fields": {},
+            }
+        )
+
+    snapshot = SchemaSnapshot.from_mapping({"schema_version": "2.0.0", "fields": {}})
+    assert snapshot.version == "2.0.0"
+
+
+def test_schema_field_count_is_bounded_before_metadata_access() -> None:
+    fields = [{}] * 10_001
+
+    with pytest.raises(ValueError, match="too many fields"):
+        SchemaSnapshot(fields=fields)
+
+
+def test_public_evidence_objects_reject_caller_injected_reason_strings() -> None:
+    sensitive_value = "SYNTHETIC-REPORT-REASON-CANARY"
+    before = SchemaSnapshot(version="1.0.0", fields={})
+    after = SchemaSnapshot(
+        version="1.1.0",
+        fields={"safe.path": {"type": "string", "optional": True}},
+    )
+    report = compare_schema_snapshots(before, after)
+
+    with pytest.raises(ValueError) as change_exc_info:
+        replace(report.additions[0], reasons=(sensitive_value,))
+    assert sensitive_value not in str(change_exc_info.value)
+
+    with pytest.raises(ValueError) as report_exc_info:
+        replace(report, violations=(sensitive_value,))
+    assert sensitive_value not in str(report_exc_info.value)
