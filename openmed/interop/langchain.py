@@ -269,9 +269,7 @@ class OpenMedRedactionTransform:
             }
 
         if self.input_key not in payload:
-            raise KeyError(
-                f"input key {self.input_key!r} not found in LangChain payload"
-            )
+            raise KeyError("configured input key not found in LangChain payload")
 
         target_key = self.output_key or self.input_key
         payload[target_key] = self._redact_value(payload[self.input_key])

@@ -118,6 +118,20 @@ def test_deidentifier_failure_does_not_expose_input_text() -> None:
     assert "ValueError" in str(error.value)
 
 
+def test_missing_input_key_does_not_expose_the_configured_key() -> None:
+    sensitive_key = "synthetic-sensitive-input-key"
+    transform = langchain_adapter.create_redaction_transform(
+        input_key=sensitive_key,
+        deidentifier=fake_deidentify,
+    )
+
+    with pytest.raises(KeyError) as error:
+        transform.invoke({"safe_key": "synthetic fixture"})
+
+    assert sensitive_key not in str(error.value)
+    assert "configured input key" in str(error.value)
+
+
 def test_redaction_node_requires_langchain_extra(monkeypatch) -> None:
     def missing_dependency(name: str):
         raise ImportError(name)
