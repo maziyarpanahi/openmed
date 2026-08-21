@@ -45,6 +45,8 @@ _WINDOWS_RESERVED_NAMES = frozenset(
         "aux",
         "clock$",
         "con",
+        "conin$",
+        "conout$",
         "com1",
         "com2",
         "com3",

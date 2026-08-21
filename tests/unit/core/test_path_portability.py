@@ -146,6 +146,8 @@ def test_unicode_normalization_drift_is_detected_without_other_path_changes():
         "models/question?.json",
         "models/control\x00.json",
         "models/clock$.txt",
+        "models/CONIN$.txt",
+        "models/CONOUT$.txt",
         "models/COM\u00b9.txt",
     ],
 )
