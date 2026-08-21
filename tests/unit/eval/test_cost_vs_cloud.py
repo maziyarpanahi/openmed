@@ -63,6 +63,18 @@ def test_cost_report_computes_local_cloud_and_breakeven_math():
     assert row.breakeven_characters == 10000028
 
 
+def test_breakeven_beyond_hardware_useful_life_is_never():
+    hardware = _hardware_cost_model()
+    hardware["useful_life_hours"] = 1.0
+    prices = _prices()
+    prices["prices"][0]["price_per_1000_characters_usd"] = 0.000001
+
+    report = cost_vs_cloud_report(_perf_report(), prices, hardware)
+
+    assert report.comparisons[0].breakeven_characters is None
+    assert "| never |" in report.to_markdown()
+
+
 def test_cost_report_is_deterministic_and_aggregate_only():
     first = cost_vs_cloud_report(_perf_report(), _prices(), _hardware_cost_model())
     second = cost_vs_cloud_report(_perf_report(), _prices(), _hardware_cost_model())

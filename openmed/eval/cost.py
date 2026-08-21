@@ -233,6 +233,7 @@ def cost_vs_cloud_report(
     energy_cost_per_hour = power_watts / 1000.0 * electricity_rate
     amortized_cost_per_hour = purchase_price / useful_life_hours + energy_cost_per_hour
     chars_per_hour = chars_per_second * 3600.0
+    lifetime_character_capacity = chars_per_hour * useful_life_hours
     local_cost_per_million = (
         amortized_cost_per_hour / chars_per_hour * MILLION_CHARACTERS
     )
@@ -244,11 +245,11 @@ def cost_vs_cloud_report(
         cloud_cost_per_million = row["price_per_1000_characters_usd"] * 1000.0
         cloud_cost_per_character = cloud_cost_per_million / MILLION_CHARACTERS
         contribution_margin = cloud_cost_per_character - energy_cost_per_character
-        breakeven = (
-            None
-            if contribution_margin <= 0.0
-            else math.ceil(purchase_price / contribution_margin)
-        )
+        breakeven = None
+        if contribution_margin > 0.0:
+            candidate = math.ceil(purchase_price / contribution_margin)
+            if candidate <= lifetime_character_capacity:
+                breakeven = candidate
         comparisons.append(
             CloudCostComparison(
                 provider=row["provider"],

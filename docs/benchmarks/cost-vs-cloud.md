@@ -27,7 +27,8 @@ For each paid cloud tier, the benchmark reports:
   life and adding electricity;
 - savings per million characters; and
 - the character volume at which purchase price is recovered versus the
-  cloud tier after marginal electricity cost.
+  cloud tier after marginal electricity cost, or `never` when that crossover
+  would fall beyond the hardware's declared useful life.
 
 The formulas use measured characters per second. Free tiers, taxes, support
 plans, negotiated discounts, storage, data transfer, operator time, request
