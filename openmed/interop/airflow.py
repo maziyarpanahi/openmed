@@ -77,9 +77,10 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
     """Redact one bounded local file or one bounded record batch.
 
     Exactly one of ``input_path`` and ``records`` (or one of its aliases) is
-    required.  File input requires ``output_path``.  Record batches may return
-    redacted records directly when no output path is supplied; providing an
-    output path writes JSON or JSON Lines according to its suffix.
+    required.  Every run requires ``output_path`` so Airflow receives only a
+    counts-and-fingerprints task result instead of redacted records through
+    XCom. Record batches are written as JSON or JSON Lines according to the
+    output suffix.
 
     The default redactor is OpenMed's local de-identification function.  A
     caller may inject ``deidentifier`` for a preloaded model or an offline
@@ -91,8 +92,8 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         records: Bounded sequence of strings or mappings containing
             ``text_field``.  ``input_records`` and ``record_batch`` are
             accepted as explicit aliases.
-        output_path: Destination for the redacted file or serialized record
-            batch.  File input always requires this argument.
+        output_path: Required destination for the redacted file or serialized
+            record batch.
         fingerprint_path: Optional PHI-free sidecar location.  When omitted,
             file outputs use ``<output>.openmed-fingerprint.json``.
         text_field: Mapping field to redact in record batches.
@@ -150,10 +151,8 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             raise ValueError("provide either input_path or one record batch")
         if input_path is None and len(sources) != 1:
             raise ValueError("provide exactly one input_path or record batch")
-        if input_path is not None and output_path is None:
-            raise ValueError("output_path is required for file input")
-        if fingerprint_path is not None and output_path is None:
-            raise ValueError("fingerprint_path requires output_path")
+        if output_path is None:
+            raise ValueError("output_path is required")
         if not isinstance(text_field, str) or not text_field:
             raise ValueError("text_field must be a non-empty string")
         if not isinstance(policy, str) or not policy:
@@ -189,6 +188,17 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         if output_path is not None and fingerprint_path is not None:
             if _same_path(output_path, fingerprint_path):
                 raise ValueError("fingerprint path must differ from output path")
+        if input_path is not None and output_path is not None:
+            manifest_candidate = fingerprint_path
+            if manifest_candidate is None and isinstance(output_path, (str, Path)):
+                candidate = Path(output_path)
+                manifest_candidate = candidate.with_name(
+                    candidate.name + ".openmed-fingerprint.json"
+                )
+            if manifest_candidate is not None and _same_path(
+                input_path, manifest_candidate
+            ):
+                raise ValueError("input and fingerprint paths must differ")
 
     def execute(self, context: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """Run one bounded redaction and return a PHI-free summary.
@@ -198,6 +208,7 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
         """
 
         del context
+        self._validate_runtime_paths()
         payload = self._load_payload()
         configuration_fingerprint = self._configuration_fingerprint(
             payload.input_format
@@ -252,10 +263,27 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             output_size=len(output_bytes),
             stats=stats,
         )
-        if payload.records is not None and self.output_path is None:
-            result["redacted_records"] = redacted_records
         self._log_result(result)
         return result
+
+    def _validate_runtime_paths(self) -> None:
+        """Reject path collisions after Airflow template rendering."""
+
+        output_path = _coerce_path(self.output_path, "output_path")
+        manifest_path = self._manifest_path()
+        if manifest_path is None:
+            raise RedactionOperatorError("fingerprint path is required")
+        if _same_path(output_path, manifest_path):
+            raise RedactionOperatorError(
+                "fingerprint path must differ from output path"
+            )
+        if self.input_path is None:
+            return
+        input_path = _coerce_path(self.input_path, "input_path")
+        if _same_path(input_path, output_path):
+            raise RedactionOperatorError("input and output paths must differ")
+        if _same_path(input_path, manifest_path):
+            raise RedactionOperatorError("input and fingerprint paths must differ")
 
     def _load_payload(self) -> _InputPayload:
         if self._records_source is not None:
@@ -280,12 +308,7 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             )
 
         path = _coerce_path(self.input_path, "input_path")
-        try:
-            input_bytes = path.read_bytes()
-        except (OSError, ValueError):
-            raise RedactionOperatorError("unable to read input file") from None
-        if len(input_bytes) > self.max_input_bytes:
-            raise RedactionOperatorError("input file exceeds the configured byte bound")
+        input_bytes = _read_bounded_file(path, self.max_input_bytes)
 
         suffix = path.suffix.lower()
         if suffix in _JSONL_SUFFIXES:
@@ -490,11 +513,6 @@ class OpenMedRedactionOperator(_AirflowBaseOperator):
             "records_redacted": stats.records_redacted,
             "spans_redacted": stats.spans_redacted,
         }
-        if self.output_path is not None:
-            result["output_path"] = str(self.output_path)
-            manifest_path = self._manifest_path()
-            if manifest_path is not None:
-                result["fingerprint_path"] = str(manifest_path)
         return result
 
     def _log_result(self, result: Mapping[str, Any]) -> None:
@@ -687,6 +705,19 @@ def _manifest_size(manifest: Mapping[str, Any], key: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise RedactionOperatorError("fingerprint manifest contains invalid counts")
     return value
+
+
+def _read_bounded_file(path: Path, max_bytes: int) -> bytes:
+    """Read at most one byte beyond the configured input bound."""
+
+    try:
+        with path.open("rb") as handle:
+            payload = handle.read(max_bytes + 1)
+    except (OSError, ValueError):
+        raise RedactionOperatorError("unable to read input file") from None
+    if len(payload) > max_bytes:
+        raise RedactionOperatorError("input file exceeds the configured byte bound")
+    return payload
 
 
 def _atomic_write(path_value: str | Path, payload: bytes) -> None:

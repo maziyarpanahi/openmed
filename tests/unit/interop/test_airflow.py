@@ -128,12 +128,16 @@ def test_matching_output_fingerprint_makes_retries_idempotent(tmp_path: Path):
     assert second["status"] == "skipped"
 
 
-def test_record_batch_returns_redacted_records_without_writing_raw_values():
+def test_record_batch_writes_output_and_returns_only_phi_free_counts(
+    tmp_path: Path,
+):
+    output = tmp_path / f"{_SYNTHETIC_VALUE}.redacted.jsonl"
     operator = OpenMedRedactionOperator(
         records=[
             {"text": _SYNTHETIC_VALUE, "kind": "synthetic"},
             {"text": None, "kind": "empty"},
         ],
+        output_path=output,
         deidentifier=_fake_deidentifier,
     )
 
@@ -142,7 +146,9 @@ def test_record_batch_returns_redacted_records_without_writing_raw_values():
     assert result["mode"] == "records"
     assert result["records_processed"] == 2
     assert result["records_redacted"] == 1
-    assert result["redacted_records"] == [
+    assert "redacted_records" not in result
+    assert _SYNTHETIC_VALUE not in json.dumps(result)
+    assert [json.loads(line) for line in output.read_text().splitlines()] == [
         {"text": "[EMAIL]", "kind": "synthetic"},
         {"text": None, "kind": "empty"},
     ]
@@ -170,10 +176,13 @@ def test_jsonl_file_input_writes_a_bounded_record_output(tmp_path: Path):
     }
 
 
-def test_record_batch_bound_and_deidentifier_failures_are_value_free():
+def test_record_batch_bound_and_deidentifier_failures_are_value_free(
+    tmp_path: Path,
+):
     with pytest.raises(RedactionOperatorError, match="configured limit") as limit_error:
         OpenMedRedactionOperator(
             records=["one", "two"],
+            output_path=tmp_path / "bounded.jsonl",
             max_records=1,
             deidentifier=_fake_deidentifier,
         ).execute({})
@@ -186,12 +195,16 @@ def test_record_batch_bound_and_deidentifier_failures_are_value_free():
     with pytest.raises(RedactionOperatorError) as redaction_error:
         OpenMedRedactionOperator(
             records=[_SYNTHETIC_VALUE],
+            output_path=tmp_path / "failed.jsonl",
             deidentifier=broken_deidentifier,
         ).execute({})
     assert _SYNTHETIC_VALUE not in str(redaction_error.value)
 
 
-def test_default_deidentifier_is_configured_cache_only(monkeypatch):
+def test_default_deidentifier_is_configured_cache_only(
+    monkeypatch,
+    tmp_path: Path,
+):
     captured: dict[str, object] = {}
 
     def fake_default(text: str, **kwargs):
@@ -199,7 +212,10 @@ def test_default_deidentifier_is_configured_cache_only(monkeypatch):
         return text
 
     monkeypatch.setattr(airflow_adapter, "_default_deidentifier", fake_default)
-    operator = OpenMedRedactionOperator(records=["synthetic note"])
+    operator = OpenMedRedactionOperator(
+        records=["synthetic note"],
+        output_path=tmp_path / "redacted.jsonl",
+    )
 
     operator.execute({})
 
@@ -207,6 +223,36 @@ def test_default_deidentifier_is_configured_cache_only(monkeypatch):
     assert getattr(config, "local_only") is True
     assert captured["method"] == "mask"
     assert captured["policy"] == "hipaa_safe_harbor"
+
+
+def test_file_read_is_bounded_before_loading_the_complete_input(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "oversized.txt"
+    source.write_bytes(b"x" * 33)
+
+    with pytest.raises(RedactionOperatorError, match="byte bound"):
+        OpenMedRedactionOperator(
+            input_path=source,
+            output_path=tmp_path / "redacted.txt",
+            max_input_bytes=32,
+            deidentifier=_fake_deidentifier,
+        ).execute({})
+
+
+def test_fingerprint_path_cannot_overwrite_the_input(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    source.write_text(_SYNTHETIC_VALUE, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="input and fingerprint paths"):
+        OpenMedRedactionOperator(
+            input_path=source,
+            output_path=tmp_path / "redacted.txt",
+            fingerprint_path=source,
+            deidentifier=_fake_deidentifier,
+        )
+
+    assert source.read_text(encoding="utf-8") == _SYNTHETIC_VALUE
 
 
 def test_get_adapter_loads_airflow_module_without_requiring_airflow_extra():

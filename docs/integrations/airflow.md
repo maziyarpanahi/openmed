@@ -38,14 +38,14 @@ the same privacy review as any other workflow output.
 ## Record batches
 
 Record batches may contain strings or mappings. Mappings must contain the
-configured text field. Without an output path, the operator returns the
-redacted batch through the normal Airflow task result; for durable task
-artifacts, provide an output path.
+configured text field. An output path is always required so Airflow's task
+result and XCom contain only counts and fingerprints, never record content.
 
 ```python
 redact_batch = OpenMedRedactionOperator(
     task_id="redact_batch",
     records=[{"text": "synthetic note"}, {"text": "another note"}],
+    output_path="staged/batch.redacted.jsonl",
     text_field="text",
 )
 ```
@@ -64,6 +64,6 @@ verified output fingerprint produce a `status="skipped"` result without
 running the redactor again. A mismatched existing sidecar fails closed rather
 than overwriting an output belonging to another run.
 
-Task logs and failure messages contain only operation metadata and fingerprints;
-they do not include input values, output text, or the original exception text
-from a deidentifier.
+Task results, XCom, logs, and failure messages contain only operation metadata
+and fingerprints; they do not include paths, input values, output text, or the
+original exception text from a deidentifier.
