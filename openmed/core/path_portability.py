@@ -38,6 +38,7 @@ _ISSUE_CATEGORY_ORDER = {
     category: index for index, category in enumerate(ISSUE_CATEGORIES)
 }
 _MAX_ISSUE_CATEGORY_LENGTH = max(len(category) for category in ISSUE_CATEGORIES)
+_MAX_PORTABLE_COMPONENT_BYTES = 255
 _DRIVE_PREFIX_RE = re.compile(r"^[A-Za-z]:")
 _FINGERPRINT_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _WINDOWS_INVALID_CHARACTERS = frozenset('<>:"|?*')
@@ -441,9 +442,11 @@ def _is_reserved_component(component: str) -> bool:
         return False
     if component != component.rstrip(" ."):
         return True
+    if len(component.encode("utf-8")) > _MAX_PORTABLE_COMPONENT_BYTES:
+        return True
     if any(
         character in _WINDOWS_INVALID_CHARACTERS
-        or unicodedata.category(character) in {"Cc", "Cf", "Cs"}
+        or unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"}
         for character in component
     ):
         return True
@@ -452,7 +455,7 @@ def _is_reserved_component(component: str) -> bool:
 
 
 def _case_fold_key(normalized_path: str) -> str:
-    return unicodedata.normalize("NFKC", normalized_path).casefold()
+    return unicodedata.normalize("NFKC", normalized_path.casefold())
 
 
 def _fingerprint(normalized_path: str) -> str:

@@ -146,16 +146,27 @@ def test_unicode_normalization_drift_is_detected_without_other_path_changes():
         "models/name:stream.json",
         "models/question?.json",
         "models/control\x00.json",
+        "models/line\u2028separator.json",
+        "models/paragraph\u2029separator.json",
         "models/clock$.txt",
         "models/CONIN$.txt",
         "models/CONOUT$.txt",
         "models/COM\u00b9.txt",
+        "models/" + ("a" * 256),
+        "models/" + ("é" * 128),
     ],
 )
 def test_cross_platform_invalid_components_are_reserved(path):
     report = audit_resource_paths([path])
 
     assert RESERVED_COMPONENT in report.records[0].issue_categories
+
+
+@pytest.mark.parametrize("component", ["a" * 255, ("é" * 127) + "a"])
+def test_component_at_portable_byte_limit_remains_clean(component):
+    report = audit_resource_paths([f"models/{component}"])
+
+    assert report.is_clean
 
 
 @pytest.mark.parametrize(

@@ -41,7 +41,8 @@ The supported issue categories are:
 - `absolute_root`: a POSIX root, UNC root, drive-qualified path, or `file:`
   root is present.
 - `reserved_component`: a Windows device name, invalid character, control
-  character, trailing dot, or trailing space is present.
+  character, line separator, trailing dot or space, or cross-platform-unsafe
+  component longer than 255 UTF-8 bytes is present.
 - `normalization_drift`: separators, dot components, duplicate separators,
   Unicode compatibility forms, or trailing separators changed during
   normalization.
