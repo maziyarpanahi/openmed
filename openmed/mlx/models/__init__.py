@@ -86,7 +86,11 @@ def resolve_artifact_family(
         family = normalize_model_type(manifest.get("family"))
         if family in _CUSTOM_FAMILIES:
             return family
-        resolved_family = _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+        resolved_family = (
+            _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+            if family is not None
+            else None
+        )
         if resolved_family is not None:
             return resolved_family
 
@@ -95,7 +99,11 @@ def resolve_artifact_family(
         family = normalize_model_type(config.get("_mlx_family"))
         if family in _CUSTOM_FAMILIES:
             return family
-        resolved_family = _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+        resolved_family = (
+            _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+            if family is not None
+            else None
+        )
         if resolved_family is not None:
             return resolved_family
 
@@ -110,7 +118,11 @@ def resolve_artifact_family(
         model_type = config
 
     normalized = normalize_model_type(model_type)
-    resolved = _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(normalized)
+    resolved = (
+        _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(normalized)
+        if normalized is not None
+        else None
+    )
     if resolved is None:
         supported = ", ".join(
             sorted(_CUSTOM_FAMILIES | set(_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES))
@@ -290,17 +302,19 @@ def normalize_model_config(
                 if isinstance(rope_parameters, dict)
                 else None
             )
+            global_rope_theta = normalized.get(
+                "global_rope_theta", shared_theta or 160000.0
+            )
+            if global_rope_theta is None:
+                global_rope_theta = shared_theta or 160000.0
+            local_rope_theta = normalized.get(
+                "local_rope_theta", shared_theta or 10000.0
+            )
+            if local_rope_theta is None:
+                local_rope_theta = shared_theta or 10000.0
             normalized["rope_parameters"] = {
-                "full_attention": {
-                    "rope_theta": float(
-                        normalized.get("global_rope_theta", shared_theta or 160000.0)
-                    )
-                },
-                "sliding_attention": {
-                    "rope_theta": float(
-                        normalized.get("local_rope_theta", shared_theta or 10000.0)
-                    )
-                },
+                "full_attention": {"rope_theta": float(global_rope_theta)},
+                "sliding_attention": {"rope_theta": float(local_rope_theta)},
             }
     elif family == "longformer":
         normalized.setdefault("type_vocab_size", 2)

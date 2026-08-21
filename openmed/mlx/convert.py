@@ -465,10 +465,14 @@ def save_mlx_model(
         logger.info("Quantizing to %d bits ...", quantize_bits)
         model = build_model(config)
         model.load_weights(list(mlx_weights.items()))
-        quantize_kwargs = {"bits": quantize_bits}
-        if quantize_group_size is not None:
-            quantize_kwargs["group_size"] = quantize_group_size
-        nn.quantize(model, **quantize_kwargs)
+        if quantize_group_size is None:
+            nn.quantize(model, bits=quantize_bits)
+        else:
+            nn.quantize(
+                model,
+                group_size=quantize_group_size,
+                bits=quantize_bits,
+            )
         mlx_weights = dict(tree_flatten(model.parameters()))
         config_to_save["_mlx_quantization"] = {
             "bits": quantize_bits,
