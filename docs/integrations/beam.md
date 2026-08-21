@@ -50,7 +50,10 @@ overridden through that mapping.
 not override `config`, `loader`, `method`, or `policy`, so they cannot replace
 the worker-local loader or the cache-only default configuration. Reports expose
 only the option count and a fingerprint of option keys, never raw keys or
-values.
+values. Options must be data-only values: nulls, booleans, finite numbers,
+strings, bytes, and bounded nested lists, tuples, or string-keyed dictionaries.
+The snapshot accepts at most 128 top-level options, 4,096 nested values, and
+4 MiB of aggregate key, string, and byte data.
 
 ## Direct synthetic harness
 

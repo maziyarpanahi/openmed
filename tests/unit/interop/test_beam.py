@@ -394,12 +394,35 @@ def test_mutated_spec_options_are_revalidated_before_execution():
         )
 
 
+def test_spec_deep_copies_data_only_options_and_is_pickle_safe():
+    supplied = {"nested": {"values": [1]}, "enabled": True}
+    spec = BeamRedactionSpec(extra_kwargs=supplied)
+
+    supplied["nested"]["values"].append(2)
+    returned = spec.to_deidentify_kwargs()
+    returned["nested"]["values"].append(3)
+    restored = pickle.loads(pickle.dumps(spec))
+
+    assert spec.to_deidentify_kwargs()["nested"] == {"values": [1]}
+    assert restored.to_deidentify_kwargs() == spec.to_deidentify_kwargs()
+
+    class ExecutableOption:
+        def __reduce__(self):
+            raise AssertionError("unsupported options must not be serialized")
+
+    with pytest.raises((BeamRedactionError, ValueError), match="unsupported"):
+        BeamRedactionSpec(extra_kwargs={"unsafe": ExecutableOption()})
+
+
 def test_hostile_record_iteration_failure_is_value_free():
     secret = "synthetic-sensitive-iterator-value"
 
+    class IteratorFailure(BaseException):
+        pass
+
     class BrokenRecords:
         def __iter__(self) -> Iterator[Any]:
-            raise RuntimeError(secret)
+            raise IteratorFailure(secret)
 
     with pytest.raises(BeamRedactionError) as error:
         run_synthetic_harness(BrokenRecords(), deidentifier=lambda text, **_: text)
@@ -415,9 +438,12 @@ def test_hostile_record_iteration_failure_is_value_free():
 def test_hostile_record_mapping_failure_is_value_free():
     secret = "synthetic-sensitive-mapping-value"
 
+    class MappingFailure(BaseException):
+        pass
+
     class HostileRecord(Mapping[str, Any]):
         def __getitem__(self, key: str) -> Any:
-            raise RuntimeError(f"{secret}:{key}")
+            raise MappingFailure(f"{secret}:{key}")
 
         def __iter__(self) -> Iterator[str]:
             return iter(("text",))
@@ -442,8 +468,11 @@ def test_hostile_record_mapping_failure_is_value_free():
 def test_loader_initialization_failure_is_value_free():
     secret = "synthetic-sensitive-loader-value"
 
+    class LoaderFailure(BaseException):
+        pass
+
     def broken_loader():
-        raise RuntimeError(secret)
+        raise LoaderFailure(secret)
 
     with pytest.raises(BeamRedactionError) as error:
         run_synthetic_harness(["synthetic"], loader_factory=broken_loader)
@@ -454,3 +483,34 @@ def test_loader_initialization_failure_is_value_free():
         )
     )
     assert secret not in rendered
+
+
+def test_deidentifier_base_exception_and_tampered_result_are_value_free():
+    secret = "synthetic-sensitive-result-value"
+
+    class RedactionFailure(BaseException):
+        pass
+
+    with pytest.raises(BeamRedactionError) as failure:
+        run_synthetic_harness(
+            [_SENSITIVE],
+            spec=BeamRedactionSpec(max_attempts=1),
+            deidentifier=lambda text, **kwargs: (_ for _ in ()).throw(
+                RedactionFailure(f"{secret}:{text}")
+            ),
+        )
+
+    assert secret not in str(failure.value)
+    assert _SENSITIVE not in str(failure.value)
+
+    result = run_synthetic_harness(
+        ["synthetic"],
+        deidentifier=lambda text, **kwargs: text,
+    )
+    object.__setattr__(result, "input_fingerprint", secret)
+
+    with pytest.raises(ValueError, match="SHA-256") as report_error:
+        result.report()
+
+    assert secret not in str(report_error.value)
+    assert secret not in repr(result)

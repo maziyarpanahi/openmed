@@ -416,6 +416,7 @@ class BeamRedactionState:
     def accept_output(self, serialized_record: bytes) -> None:
         """Account for one output record without retaining its value."""
 
+        self.__post_init__()
         if type(serialized_record) is not bytes:
             raise TypeError("serialized output must be bytes")
         if len(serialized_record) > self.max_record_bytes:
@@ -1230,7 +1231,9 @@ def _canonical_json(value: Any) -> bytes:
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise BeamRedactionError("value is not safely JSON serializable") from None
 
 
