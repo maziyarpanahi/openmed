@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import openmed.multimodal.trace_recovery as trace_recovery_module
 from openmed.multimodal import (
     TraceRecoveryError,
     recover_trace_redaction,
@@ -267,3 +268,116 @@ def test_hardlinked_target_is_rejected_without_leaving_raw_alias(tmp_path: Path)
     assert excinfo.value.reason == "hardlink_target_unsupported"
     assert trace_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE
     assert alias_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+
+
+def test_target_symlink_swap_is_rejected_before_external_content_is_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    trace_path = tmp_path / "synthetic-trace.jsonl"
+    held_path = tmp_path / "held-trace.jsonl"
+    external_path = tmp_path / "external.jsonl"
+    trace_path.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    external_value = "SYNTHETIC-EXTERNAL-SECRET"
+    external_path.write_text(external_value, encoding="utf-8")
+    redactor_inputs: list[str] = []
+    swapped = False
+    original_path_open = Path.open
+    original_os_open = os.open
+
+    def swap_target() -> None:
+        nonlocal swapped
+        if swapped:
+            return
+        swapped = True
+        trace_path.rename(held_path)
+        trace_path.symlink_to(external_path)
+
+    def swapping_path_open(self: Path, *args, **kwargs):
+        if self == trace_path:
+            swap_target()
+        return original_path_open(self, *args, **kwargs)
+
+    def swapping_os_open(path, flags, mode=0o777, *, dir_fd=None):
+        if Path(path) == trace_path:
+            swap_target()
+        if dir_fd is None:
+            return original_os_open(path, flags, mode)
+        return original_os_open(path, flags, mode, dir_fd=dir_fd)
+
+    def recording_redactor(text: str) -> str:
+        redactor_inputs.append(text)
+        return _redact(text)
+
+    monkeypatch.setattr(Path, "open", swapping_path_open)
+    monkeypatch.setattr(trace_recovery_module.os, "open", swapping_os_open)
+
+    with pytest.raises(TraceRecoveryError) as excinfo:
+        redact_trace_file(trace_path, recording_redactor)
+
+    assert excinfo.value.reason == "target_read_failed"
+    assert redactor_inputs == []
+    assert held_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+    assert external_path.read_text(encoding="utf-8") == external_value
+
+
+def test_staging_symlink_swap_cannot_replace_target_with_external_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    trace_path = tmp_path / "synthetic-trace.jsonl"
+    journal_path = tmp_path / "trace-recovery.json"
+    original = f"event {SYNTHETIC_VALUE}\n"
+    expected = original.replace(SYNTHETIC_VALUE, SYNTHETIC_REPLACEMENT)
+    trace_path.write_text(original, encoding="utf-8")
+
+    with pytest.raises(InjectedCrash):
+        redact_trace_file(
+            trace_path,
+            _redact,
+            journal_path=journal_path,
+            phase_hook=_crash_after_staging,
+        )
+
+    stage_path = next(tmp_path.glob(".openmed-trace-stage-*.bin"))
+    held_stage_path = tmp_path / "held-stage.bin"
+    external_path = tmp_path / "external-redacted.jsonl"
+    external_path.write_text(expected, encoding="utf-8")
+    swapped = False
+    original_path_open = Path.open
+    original_os_open = os.open
+
+    def swap_stage() -> None:
+        nonlocal swapped
+        if swapped:
+            return
+        swapped = True
+        stage_path.rename(held_stage_path)
+        stage_path.symlink_to(external_path)
+
+    def swapping_path_open(self: Path, *args, **kwargs):
+        if self == stage_path:
+            swap_stage()
+        return original_path_open(self, *args, **kwargs)
+
+    def swapping_os_open(path, flags, mode=0o777, *, dir_fd=None):
+        if Path(path) == stage_path:
+            swap_stage()
+        if dir_fd is None:
+            return original_os_open(path, flags, mode)
+        return original_os_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(Path, "open", swapping_path_open)
+    monkeypatch.setattr(trace_recovery_module.os, "open", swapping_os_open)
+
+    with pytest.raises(TraceRecoveryError) as excinfo:
+        recover_trace_redaction(trace_path, journal_path=journal_path)
+
+    assert excinfo.value.reason in {
+        "owned_artifact_conflict",
+        "owned_artifact_unreadable",
+    }
+    assert not trace_path.is_symlink()
+    assert trace_path.read_text(encoding="utf-8") == original
+    assert held_stage_path.read_text(encoding="utf-8") == expected
+    assert external_path.read_text(encoding="utf-8") == expected

@@ -530,11 +530,30 @@ def _commit_staging(
 
     if _file_fingerprint(target, max_bytes) != journal.input_fingerprint:
         raise TraceRecoveryError("target_changed")
+    staging_metadata = _ensure_owned_staging(
+        staging,
+        journal.output_fingerprint,
+        max_bytes,
+    )
     try:
         os.replace(staging, target)
         _fsync_directory(target.parent)
     except OSError:
         raise TraceRecoveryError("commit_failed") from None
+
+    try:
+        committed_metadata = target.lstat()
+        _validate_regular_metadata(
+            committed_metadata,
+            invalid_reason="output_verification_failed",
+            require_single_link=True,
+        )
+    except TraceRecoveryError:
+        raise
+    except OSError:
+        raise TraceRecoveryError("output_verification_failed") from None
+    if not _same_file_identity(staging_metadata, committed_metadata):
+        raise TraceRecoveryError("output_verification_failed")
 
     if _file_fingerprint(target, max_bytes) != journal.output_fingerprint:
         raise TraceRecoveryError("output_verification_failed")
@@ -607,20 +626,46 @@ def _write_staging(
         return
 
     file_descriptor: int | None = None
-    created = False
+    created_identity: tuple[int, int] | None = None
     try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags |= getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
         file_descriptor = os.open(
             path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            flags,
             0o600,
         )
-        created = True
+        created_metadata = os.fstat(file_descriptor)
+        _validate_regular_metadata(
+            created_metadata,
+            invalid_reason="owned_artifact_conflict",
+            require_single_link=True,
+        )
+        created_identity = _metadata_identity(created_metadata)
         with os.fdopen(file_descriptor, "wb") as handle:
             file_descriptor = None
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(path, mode)
+            fchmod = getattr(os, "fchmod", None)
+            if fchmod is not None:
+                fchmod(handle.fileno(), mode)
+            written_metadata = os.fstat(handle.fileno())
+            _validate_regular_metadata(
+                written_metadata,
+                invalid_reason="owned_artifact_conflict",
+                require_single_link=True,
+            )
+            path_metadata = path.lstat()
+            _validate_regular_metadata(
+                path_metadata,
+                invalid_reason="owned_artifact_conflict",
+                require_single_link=True,
+            )
+            if not _same_file_identity(written_metadata, path_metadata):
+                raise TraceRecoveryError("owned_artifact_conflict")
+        _ensure_owned_staging(path, expected_fingerprint, max_bytes)
         _fsync_directory(path.parent)
     except FileExistsError:
         if allow_existing:
@@ -635,27 +680,38 @@ def _write_staging(
                 os.close(file_descriptor)
             except OSError:
                 pass
-        if created and _path_exists(path):
+        if created_identity is not None:
             try:
-                if _file_fingerprint(path, max_bytes) != expected_fingerprint:
-                    path.unlink()
+                if _path_exists(path):
+                    payload, _ = _read_regular_file(
+                        path,
+                        max_bytes,
+                        invalid_reason="owned_artifact_conflict",
+                        unreadable_reason="owned_artifact_unreadable",
+                        size_reason="owned_artifact_conflict",
+                        require_single_link=True,
+                    )
+                    if _digest(payload) != expected_fingerprint:
+                        _unlink_if_same_identity(path, created_identity)
             except (OSError, TraceRecoveryError):
                 pass
 
 
 def _ensure_owned_staging(
     path: Path, expected_fingerprint: str, max_bytes: int
-) -> None:
-    try:
-        if path.is_symlink() or not path.is_file():
-            raise TraceRecoveryError("owned_artifact_conflict")
-        actual = _file_fingerprint(path, max_bytes)
-    except TraceRecoveryError:
-        raise
-    except OSError:
-        raise TraceRecoveryError("owned_artifact_unreadable") from None
+) -> os.stat_result:
+    payload, metadata = _read_regular_file(
+        path,
+        max_bytes,
+        invalid_reason="owned_artifact_conflict",
+        unreadable_reason="owned_artifact_unreadable",
+        size_reason="owned_artifact_conflict",
+        require_single_link=True,
+    )
+    actual = _digest(payload)
     if actual != expected_fingerprint:
         raise TraceRecoveryError("owned_artifact_conflict")
+    return metadata
 
 
 def _remove_owned_staging(
@@ -668,18 +724,23 @@ def _remove_owned_staging(
     if not _path_exists(path):
         return
     if verify_fingerprint:
-        _ensure_owned_staging(path, expected_fingerprint, max_bytes)
+        metadata = _ensure_owned_staging(path, expected_fingerprint, max_bytes)
     else:
-        try:
-            if path.is_symlink() or not path.is_file():
-                raise TraceRecoveryError("owned_artifact_conflict")
-        except TraceRecoveryError:
-            raise
-        except OSError:
-            raise TraceRecoveryError("owned_artifact_unreadable") from None
+        metadata = _checked_regular_metadata(
+            path,
+            invalid_reason="owned_artifact_conflict",
+            unreadable_reason="owned_artifact_unreadable",
+            require_single_link=True,
+        )
     try:
-        path.unlink()
+        _unlink_checked(
+            path,
+            metadata,
+            invalid_reason="owned_artifact_conflict",
+        )
         _fsync_directory(path.parent)
+    except TraceRecoveryError:
+        raise
     except OSError:
         raise TraceRecoveryError("staging_cleanup_failed") from None
 
@@ -882,14 +943,202 @@ def _staging_path(target: Path, output_fingerprint: str) -> Path:
     )
 
 
-def _read_file(path: Path, max_bytes: int) -> bytes:
+def _metadata_identity(metadata: os.stat_result) -> tuple[int, int]:
+    return metadata.st_dev, metadata.st_ino
+
+
+def _same_file_identity(
+    first: os.stat_result,
+    second: os.stat_result,
+) -> bool:
+    return _metadata_identity(first) == _metadata_identity(second)
+
+
+def _same_file_snapshot(
+    first: os.stat_result,
+    second: os.stat_result,
+) -> bool:
+    return (
+        _same_file_identity(first, second)
+        and stat.S_IFMT(first.st_mode) == stat.S_IFMT(second.st_mode)
+        and first.st_nlink == second.st_nlink
+        and first.st_size == second.st_size
+        and first.st_mtime_ns == second.st_mtime_ns
+    )
+
+
+def _validate_regular_metadata(
+    metadata: os.stat_result,
+    *,
+    invalid_reason: str,
+    require_single_link: bool,
+) -> None:
+    if not stat.S_ISREG(metadata.st_mode):
+        raise TraceRecoveryError(invalid_reason)
+    if require_single_link and metadata.st_nlink != 1:
+        raise TraceRecoveryError(invalid_reason)
+
+
+def _open_checked_regular(
+    path: Path,
+    *,
+    invalid_reason: str,
+    unreadable_reason: str,
+    require_single_link: bool,
+) -> tuple[int, os.stat_result]:
+    descriptor: int | None = None
     try:
-        with path.open("rb") as handle:
+        before_open = path.lstat()
+        _validate_regular_metadata(
+            before_open,
+            invalid_reason=invalid_reason,
+            require_single_link=require_single_link,
+        )
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        _validate_regular_metadata(
+            opened,
+            invalid_reason=invalid_reason,
+            require_single_link=require_single_link,
+        )
+        after_open = path.lstat()
+        _validate_regular_metadata(
+            after_open,
+            invalid_reason=invalid_reason,
+            require_single_link=require_single_link,
+        )
+        if not _same_file_snapshot(before_open, opened) or not _same_file_snapshot(
+            opened, after_open
+        ):
+            raise TraceRecoveryError(invalid_reason)
+        return descriptor, opened
+    except TraceRecoveryError:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        raise
+    except (OSError, ValueError):
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        raise TraceRecoveryError(unreadable_reason) from None
+
+
+def _checked_regular_metadata(
+    path: Path,
+    *,
+    invalid_reason: str,
+    unreadable_reason: str,
+    require_single_link: bool,
+) -> os.stat_result:
+    descriptor, metadata = _open_checked_regular(
+        path,
+        invalid_reason=invalid_reason,
+        unreadable_reason=unreadable_reason,
+        require_single_link=require_single_link,
+    )
+    try:
+        return metadata
+    finally:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+
+
+def _read_regular_file(
+    path: Path,
+    max_bytes: int,
+    *,
+    invalid_reason: str,
+    unreadable_reason: str,
+    size_reason: str,
+    require_single_link: bool,
+) -> tuple[bytes, os.stat_result]:
+    descriptor, opened = _open_checked_regular(
+        path,
+        invalid_reason=invalid_reason,
+        unreadable_reason=unreadable_reason,
+        require_single_link=require_single_link,
+    )
+    try:
+        if opened.st_size > max_bytes:
+            raise TraceRecoveryError(size_reason)
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
             payload = handle.read(max_bytes + 1)
-    except OSError:
-        raise TraceRecoveryError("target_read_failed") from None
+            after_read = os.fstat(handle.fileno())
+        path_metadata = path.lstat()
+        _validate_regular_metadata(
+            after_read,
+            invalid_reason=invalid_reason,
+            require_single_link=require_single_link,
+        )
+        _validate_regular_metadata(
+            path_metadata,
+            invalid_reason=invalid_reason,
+            require_single_link=require_single_link,
+        )
+        if not _same_file_snapshot(opened, after_read) or not _same_file_snapshot(
+            after_read, path_metadata
+        ):
+            raise TraceRecoveryError(invalid_reason)
+    except TraceRecoveryError:
+        raise
+    except (OSError, ValueError):
+        raise TraceRecoveryError(unreadable_reason) from None
+    finally:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     if len(payload) > max_bytes:
-        raise TraceRecoveryError("trace_size_limit")
+        raise TraceRecoveryError(size_reason)
+    return payload, after_read
+
+
+def _unlink_checked(
+    path: Path,
+    expected: os.stat_result,
+    *,
+    invalid_reason: str,
+) -> None:
+    try:
+        current = path.lstat()
+    except OSError:
+        raise TraceRecoveryError(invalid_reason) from None
+    _validate_regular_metadata(
+        current,
+        invalid_reason=invalid_reason,
+        require_single_link=True,
+    )
+    if not _same_file_snapshot(expected, current):
+        raise TraceRecoveryError(invalid_reason)
+    path.unlink()
+
+
+def _unlink_if_same_identity(path: Path, expected: tuple[int, int]) -> None:
+    metadata = path.lstat()
+    if stat.S_ISREG(metadata.st_mode) and _metadata_identity(metadata) == expected:
+        path.unlink()
+
+
+def _read_file(path: Path, max_bytes: int) -> bytes:
+    payload, _ = _read_regular_file(
+        path,
+        max_bytes,
+        invalid_reason="target_read_failed",
+        unreadable_reason="target_read_failed",
+        size_reason="trace_size_limit",
+        require_single_link=True,
+    )
     return payload
 
 
@@ -902,10 +1151,13 @@ def _file_size(path: Path, max_bytes: int) -> int:
 
 
 def _file_mode(path: Path) -> int:
-    try:
-        return stat.S_IMODE(path.stat().st_mode)
-    except OSError:
-        raise TraceRecoveryError("target_stat_failed") from None
+    metadata = _checked_regular_metadata(
+        path,
+        invalid_reason="target_stat_failed",
+        unreadable_reason="target_stat_failed",
+        require_single_link=True,
+    )
+    return stat.S_IMODE(metadata.st_mode)
 
 
 def _path_exists(path: Path) -> bool:
