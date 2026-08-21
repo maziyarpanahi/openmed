@@ -149,6 +149,45 @@ def test_clean_surfaces_have_zero_exit_code() -> None:
     assert report.changed == ()
 
 
+def test_alias_addition_is_one_changed_option() -> None:
+    baseline = [{"command": "reports", "options": [{"flags": ["--format", "-f"]}]}]
+    candidate = [
+        {
+            "command": "reports",
+            "options": [{"flags": ["--encoding", "--format", "-f"]}],
+        }
+    ]
+
+    report = compare_help_surfaces(baseline, candidate)
+
+    assert report.category is DriftCategory.CHANGED
+    assert report.added == ()
+    assert report.removed == ()
+    assert [change.option for change in report.changed] == ["--format"]
+
+
+def test_duplicate_option_aliases_are_rejected() -> None:
+    surface = [
+        {
+            "command": "reports",
+            "options": [
+                {"flags": ["--format", "-f"]},
+                {"flags": ["--force", "-f"]},
+            ],
+        }
+    ]
+
+    with pytest.raises(HelpDriftError, match="duplicate option alias"):
+        normalize_help_records(surface)
+
+
+def test_explicit_single_arity_matches_the_default() -> None:
+    baseline = [{"command": "reports", "options": [{"flags": "--format"}]}]
+    candidate = [{"command": "reports", "options": [{"flags": "--format", "nargs": 1}]}]
+
+    assert compare_help_surfaces(baseline, candidate).is_clean
+
+
 def test_invalid_shape_does_not_echo_input_values() -> None:
     with pytest.raises(HelpDriftError) as exc_info:
         normalize_help_records(

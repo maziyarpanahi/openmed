@@ -83,6 +83,12 @@ class OptionSignature:
     arity: str
     repeatable: bool
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "flags", _normalize_flags(self.flags))
+        if type(self.required) is not bool or type(self.repeatable) is not bool:
+            raise HelpDriftError("option shape flags must be boolean")
+        object.__setattr__(self, "arity", _canonical_arity(self.arity))
+
     @property
     def identifier(self) -> str:
         """Return the stable comparison key for this option."""
@@ -114,6 +120,22 @@ class CommandSignature:
     command: tuple[str, ...]
     options: tuple[OptionSignature, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "command", _normalize_command_path(self.command))
+        options = tuple(self.options)
+        if not all(isinstance(option, OptionSignature) for option in options):
+            raise HelpDriftError("command options must be option signatures")
+        seen_flags: set[str] = set()
+        for option in options:
+            if seen_flags.intersection(option.flags):
+                raise HelpDriftError("duplicate option alias in command record")
+            seen_flags.update(option.flags)
+        object.__setattr__(
+            self,
+            "options",
+            tuple(sorted(options, key=lambda item: (item.identifier, item.flags))),
+        )
+
     @property
     def path(self) -> tuple[str, ...]:
         """Alias for the command path."""
@@ -135,6 +157,19 @@ class HelpSurfaceSignature:
 
     commands: tuple[CommandSignature, ...]
     schema_version: str = SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != SCHEMA_VERSION:
+            raise HelpDriftError("help surface schema version is unsupported")
+        commands = tuple(self.commands)
+        if not all(isinstance(command, CommandSignature) for command in commands):
+            raise HelpDriftError("help surface commands must be command signatures")
+        command_paths = [command.command for command in commands]
+        if len(command_paths) != len(set(command_paths)):
+            raise HelpDriftError("duplicate command record")
+        object.__setattr__(
+            self, "commands", tuple(sorted(commands, key=lambda item: item.command))
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a stable JSON-ready signature."""
@@ -365,41 +400,63 @@ def compare_help_surfaces(baseline: Any, candidate: Any) -> HelpDriftReport:
             )
 
     for command_path in sorted(set(baseline_commands) & set(candidate_commands)):
-        baseline_options = {
-            option.identifier: option
-            for option in baseline_commands[command_path].options
+        baseline_options = baseline_commands[command_path].options
+        candidate_options = candidate_commands[command_path].options
+        baseline_links = {
+            before_index: {
+                after_index
+                for after_index, after in enumerate(candidate_options)
+                if set(before.flags).intersection(after.flags)
+            }
+            for before_index, before in enumerate(baseline_options)
         }
-        candidate_options = {
-            option.identifier: option
-            for option in candidate_commands[command_path].options
+        candidate_links = {
+            after_index: {
+                before_index
+                for before_index, before in enumerate(baseline_options)
+                if set(before.flags).intersection(after.flags)
+            }
+            for after_index, after in enumerate(candidate_options)
         }
+        matched = {
+            (before_index, next(iter(after_indexes)))
+            for before_index, after_indexes in baseline_links.items()
+            if len(after_indexes) == 1
+            and len(candidate_links[next(iter(after_indexes))]) == 1
+        }
+        matched_before = {before_index for before_index, _ in matched}
+        matched_after = {after_index for _, after_index in matched}
 
-        for option_name in sorted(set(candidate_options) - set(baseline_options)):
+        for after_index, after in enumerate(candidate_options):
+            if after_index in matched_after:
+                continue
             added.append(
                 OptionChange(
                     command=command_path,
-                    option=option_name,
+                    option=after.identifier,
                     before=None,
-                    after=candidate_options[option_name],
+                    after=after,
                 )
             )
-        for option_name in sorted(set(baseline_options) - set(candidate_options)):
+        for before_index, before in enumerate(baseline_options):
+            if before_index in matched_before:
+                continue
             removed.append(
                 OptionChange(
                     command=command_path,
-                    option=option_name,
-                    before=baseline_options[option_name],
+                    option=before.identifier,
+                    before=before,
                     after=None,
                 )
             )
-        for option_name in sorted(set(baseline_options) & set(candidate_options)):
-            before = baseline_options[option_name]
-            after = candidate_options[option_name]
+        for before_index, after_index in sorted(matched):
+            before = baseline_options[before_index]
+            after = candidate_options[after_index]
             if before != after:
                 changed.append(
                     OptionChange(
                         command=command_path,
-                        option=option_name,
+                        option=_shared_option_identifier(before, after),
                         before=before,
                         after=after,
                     )
@@ -662,7 +719,28 @@ def _normalize_arity(option: Mapping[str, Any], *, action: Any) -> str:
 def _fixed_arity(count: int) -> str:
     if count <= 0:
         return "none"
+    if count == 1:
+        return "one"
     return f"fixed:{count}"
+
+
+def _canonical_arity(value: Any) -> str:
+    if not isinstance(value, str):
+        raise HelpDriftError("option arity must use a supported category")
+    if value in {"none", "one", "optional", "zero_or_more", "one_or_more"}:
+        return value
+    prefix = "fixed:"
+    if value.startswith(prefix) and value.removeprefix(prefix).isdigit():
+        return _fixed_arity(int(value.removeprefix(prefix)))
+    raise HelpDriftError("option arity must use a supported category")
+
+
+def _shared_option_identifier(before: OptionSignature, after: OptionSignature) -> str:
+    shared = tuple(
+        sorted(set(before.flags).intersection(after.flags), key=_stable_text)
+    )
+    long_flags = tuple(flag for flag in shared if flag.startswith("--"))
+    return long_flags[0] if long_flags else shared[0]
 
 
 def _stable_text(value: Any) -> tuple[str, str]:
@@ -694,8 +772,8 @@ def _load_json(path: Path) -> Any:
     try:
         with path.open(encoding="utf-8") as handle:
             return json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise HelpDriftError("could not read help surface input") from exc
+    except (OSError, json.JSONDecodeError):
+        raise HelpDriftError("could not read help surface input") from None
 
 
 def _render_text(report: HelpDriftReport) -> str:
