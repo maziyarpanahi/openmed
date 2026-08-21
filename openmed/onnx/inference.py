@@ -115,7 +115,7 @@ class OnnxModel:
         tokenizer: Any | None = None,
         session: Any | None = None,
     ) -> None:
-        np, ort, auto_tokenizer, _ = _load_runtime_dependencies()
+        np, ort, auto_tokenizer = _load_runtime_dependencies()
         self._np = np
         self.artifact_dir = Path(artifact_dir).expanduser().resolve()
         self.model_path, self.variant = _resolve_model_path(
@@ -184,7 +184,7 @@ class OnnxModel:
             else:
                 artifact_dir = path.resolve()
         else:
-            _, _, _, snapshot_download = _load_runtime_dependencies()
+            snapshot_download = _load_snapshot_download()
             artifact_dir = _download_artifact(
                 snapshot_download,
                 model_id=str(model_id),
@@ -477,18 +477,30 @@ def _flush_entity(
     return None
 
 
-def _load_runtime_dependencies() -> tuple[Any, Any, Any, Any]:
+def _load_runtime_dependencies() -> tuple[Any, Any, Any]:
     try:
         import numpy as np
         import onnxruntime as ort
-        from huggingface_hub import snapshot_download
         from tokenizers import Tokenizer
     except ImportError as exc:
         raise ImportError(
             "OpenMed ONNX inference requires the ONNX Runtime extra. "
-            "Install with: pip install 'openmed[onnx-runtime]'"
+            "Install with: pip install 'openmed[edge-sbc]' for local artifacts "
+            "or pip install 'openmed[onnx-runtime]' for Hub downloads"
         ) from exc
-    return np, ort, _TokenizersTokenizerFactory(Tokenizer), snapshot_download
+    return np, ort, _TokenizersTokenizerFactory(Tokenizer)
+
+
+def _load_snapshot_download() -> Any:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise ImportError(
+            "Remote ONNX model downloads require the ONNX Runtime download "
+            "profile. Install with: pip install 'openmed[onnx-runtime]', or "
+            "copy a local artifact directory and use 'openmed[edge-sbc]'"
+        ) from exc
+    return snapshot_download
 
 
 __all__ = ["OnnxEntity", "OnnxModel", "load_onnx_model"]
