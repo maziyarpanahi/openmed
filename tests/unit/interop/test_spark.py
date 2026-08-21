@@ -271,6 +271,45 @@ def test_partition_failure_does_not_expose_source_value() -> None:
     assert str(exc_info.value) == "partition deidentifier failed"
 
 
+def test_partition_normalizes_external_contract_errors() -> None:
+    def leaking_factory():
+        raise SparkRedactionError(f"factory detail: {_SYNTHETIC_VALUE}")
+
+    with pytest.raises(SparkRedactionError) as factory_error:
+        list(
+            redact_partition(
+                [],
+                SparkRedactionConfig(columns=["note"]),
+                deidentifier_factory=leaking_factory,
+            )
+        )
+
+    assert str(factory_error.value) == (
+        "Spark partition redaction failed for the configured columns"
+    )
+    assert _SYNTHETIC_VALUE not in str(factory_error.value)
+    assert factory_error.value.__cause__ is None
+
+    def leaking_rows():
+        raise SparkRedactionError(f"iterator detail: {_SYNTHETIC_VALUE}")
+        yield {}
+
+    with pytest.raises(SparkRedactionError) as iterator_error:
+        list(
+            redact_partition(
+                leaking_rows(),
+                SparkRedactionConfig(columns=["note"]),
+                deidentifier_factory=lambda: _fake_deidentifier,
+            )
+        )
+
+    assert str(iterator_error.value) == (
+        "Spark partition redaction failed for the configured columns"
+    )
+    assert _SYNTHETIC_VALUE not in str(iterator_error.value)
+    assert iterator_error.value.__cause__ is None
+
+
 def test_partition_rejects_missing_or_non_string_selected_columns() -> None:
     config = SparkRedactionConfig(columns=["note"])
 
@@ -343,5 +382,24 @@ def test_dataframe_contract_failure_does_not_expose_source_value() -> None:
     with pytest.raises(TypeError) as exc_info:
         SparkRedactionTransform(columns=["note"]).apply(ExplodingDataFrame())
 
+    assert _SYNTHETIC_VALUE not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+
+
+def test_dataframe_normalizes_external_contract_errors() -> None:
+    class LeakingRDD:
+        def mapPartitionsWithIndex(self, function):
+            raise SparkRedactionError(f"driver detail: {_SYNTHETIC_VALUE}")
+
+    class LeakingDataFrame:
+        columns = ["note"]
+        schema = "synthetic-schema"
+        rdd = LeakingRDD()
+        sparkSession = _FakeSparkSession()
+
+    with pytest.raises(SparkRedactionError) as exc_info:
+        SparkRedactionTransform(columns=["note"]).apply(LeakingDataFrame())
+
+    assert str(exc_info.value) == "Spark DataFrame redaction failed"
     assert _SYNTHETIC_VALUE not in str(exc_info.value)
     assert exc_info.value.__cause__ is None

@@ -65,6 +65,30 @@ class SparkRedactionError(RuntimeError):
     """Raised when a Spark redaction contract cannot be completed."""
 
 
+_VALUE_FREE_SPARK_ERROR_MESSAGES: Final[frozenset[str]] = frozenset(
+    {
+        "Spark DataFrame redaction failed",
+        "Spark partition redaction failed for the configured columns",
+        "Spark row is missing a configured text column",
+        "configured Spark columns must contain strings or nulls",
+        "dataframe is missing a configured text column",
+        "deidentifier must return text or deidentified_text",
+        "partition deidentifier failed",
+    }
+)
+
+
+def _is_value_free_spark_error(error: SparkRedactionError) -> bool:
+    """Return whether an exact contract error contains one approved message."""
+
+    return (
+        type(error) is SparkRedactionError
+        and len(error.args) == 1
+        and type(error.args[0]) is str
+        and error.args[0] in _VALUE_FREE_SPARK_ERROR_MESSAGES
+    )
+
+
 @dataclass(frozen=True, init=False)
 class SparkRedactionConfig:
     """Immutable settings shipped to every Spark partition.
@@ -322,8 +346,10 @@ class SparkRedactionTransform:
         try:
             redacted_rdd = map_with_index(_map_partition)
             return create_dataframe(redacted_rdd, schema=dataframe.schema)
-        except SparkRedactionError:
-            raise
+        except SparkRedactionError as error:
+            if _is_value_free_spark_error(error):
+                raise
+            raise SparkRedactionError("Spark DataFrame redaction failed") from None
         except Exception:
             raise SparkRedactionError("Spark DataFrame redaction failed") from None
 
@@ -385,8 +411,12 @@ def redact_partition(
                 result = _invoke_worker(worker, value, deidentify_kwargs)
                 output[column] = _result_text(result)
             yield output
-    except SparkRedactionError:
-        raise
+    except SparkRedactionError as error:
+        if _is_value_free_spark_error(error):
+            raise
+        raise SparkRedactionError(
+            "Spark partition redaction failed for the configured columns"
+        ) from None
     except Exception:
         raise SparkRedactionError(
             "Spark partition redaction failed for the configured columns"
