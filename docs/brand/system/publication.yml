@@ -99,11 +99,16 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent-skills/validation.md
+    - agent-skills/setup.md
+    - agent-skills/packs.md
+    - agent-skills/router.md
     - guides/trace-discovery.md
     - reference/trace-jsonl.md
     - reference/trace-tool-calls.md
     - analyze-text.md
     - rest-service.md
+    - service/self-hosted-redaction.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
@@ -111,10 +116,12 @@ classification:
     - guides/parallel-traces.md
     - guides/streaming-traces.md
     - guides/trace-audit.md
+    - reference/trace-fidelity.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
+    - deploy/self-hosted-compose.md
     - offline-install.md
     - serving/async-jobs.md
     - serving/request-signing.md
