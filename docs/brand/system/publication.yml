@@ -232,6 +232,7 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md
+    - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
     - integrations-llamaindex.md
