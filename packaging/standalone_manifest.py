@@ -18,6 +18,7 @@ value, so malformed metadata cannot echo source text into an exception.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol, TypeVar
@@ -30,6 +31,8 @@ STANDALONE_LICENSE: Final = "Apache-2.0"
 PLATFORM_ANY: Final = "any"
 _MAX_TEXT_LENGTH: Final = 512
 _MAX_PLATFORMS: Final = 16
+_MAX_COLLECTION_ENTRIES: Final = 256
+_MAX_VALIDATION_ISSUES: Final = 1024
 
 # These are the only licenses admitted to the default bundle.  The list is
 # deliberately explicit: an unknown license must not silently become part of a
@@ -57,6 +60,66 @@ _REQUIRED_REQUIREMENTS: Final = {
     "pysbd": "pysbd>=0.3.4,<0.4",
     "pyyaml": "pyyaml>=6.0",
 }
+_OPTIONAL_BOUNDARY: Final = {
+    "huggingface-hub": ("huggingface-hub>=0.30", "Apache-2.0", True),
+    "presidio-analyzer": ("presidio-analyzer>=2.2.354,<3", "MIT", False),
+    "spacy": ("spacy>=3.8.9", "MIT", False),
+    "torch": ("torch>=2.0", "BSD-3-Clause", False),
+    "transformers": ("transformers>=4.50", "Apache-2.0", True),
+}
+_RESTRICTED_DEPENDENCY_BOUNDARY: Final = {
+    "extract-msg": ("extract-msg>=0.56,<0.57", "GPL-3.0-only", False),
+    "sdcmicro": (
+        "external R package, not a Python dependency",
+        "GPL-2.0-or-later",
+        False,
+    ),
+}
+_RESTRICTED_ASSET_BOUNDARY: Final = {
+    "cpt": "Proprietary",
+    "i2b2": "DUA-restricted",
+    "mimic": "DUA-restricted",
+    "n2c2": "DUA-restricted",
+    "snomed ct": "Proprietary",
+    "umls": "DUA-restricted",
+}
+_ISSUE_REASONS: Final = frozenset(
+    {
+        "asset must be excluded",
+        "at least one component is required",
+        "component boundary differs from the approved standalone surface",
+        "component version differs from package version",
+        "default and opt-in entries overlap",
+        "default component must be offline",
+        "default dependency must be offline",
+        "default manifest must be offline",
+        "default requirements differ from the approved project boundary",
+        "duplicate entry",
+        "entry has an unsupported type",
+        "entry must be platform-neutral",
+        "license is not in the approved manifest policy",
+        "manifest must be platform-neutral",
+        "optional and restricted entries overlap",
+        "optional dependency metadata differs from the approved opt-in boundary",
+        "package license is out of sync",
+        "package version is out of sync",
+        "Python requirement is out of sync",
+        "restricted asset metadata differs from the approved exclusion boundary",
+        "restricted dependency metadata differs from the approved exclusion boundary",
+        "unsupported package name",
+        "unsupported schema version",
+        "value has an unsupported type",
+    }
+)
+_ISSUE_PATH_RE: Final = re.compile(
+    r"^(?:"
+    r"manifest|schema_version|name|version|license|python_requires|platforms|"
+    r"network_egress|components(?:\[[0-9]{1,6}\](?:\.(?:network_egress|license|version))?)?|"
+    r"dependencies(?:\.(?:required|optional|restricted)(?:\[[0-9]{1,6}\]"
+    r"(?:\.(?:license|network_egress))?)?)?|"
+    r"restricted_assets(?:\[[0-9]{1,6}\](?:\.(?:bundled|license))?)?"
+    r")$"
+)
 
 
 def _text(value: object, field_name: str) -> str:
@@ -197,6 +260,15 @@ class ManifestIssue:
     path: str
     reason: str
 
+    def __post_init__(self) -> None:
+        if (
+            type(self.path) is not str
+            or _ISSUE_PATH_RE.fullmatch(self.path) is None
+            or type(self.reason) is not str
+            or self.reason not in _ISSUE_REASONS
+        ):
+            raise ValueError("manifest issue must use fixed safe metadata")
+
     def __str__(self) -> str:
         return f"{self.path}: {self.reason}"
 
@@ -205,7 +277,31 @@ class ManifestValidationError(ValueError):
     """Raised when a standalone manifest fails its structural safety checks."""
 
     def __init__(self, issues: Iterable[ManifestIssue]) -> None:
-        self.issues = tuple(issues)
+        collected_items: list[ManifestIssue] = []
+        invalid = False
+        try:
+            iterator = iter(issues)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            invalid = True
+        else:
+            for index in range(_MAX_VALIDATION_ISSUES + 1):
+                try:
+                    issue = next(iterator)
+                except StopIteration:
+                    break
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except BaseException:
+                    invalid = True
+                    break
+                if index == _MAX_VALIDATION_ISSUES or type(issue) is not ManifestIssue:
+                    invalid = True
+                    break
+                collected_items.append(issue)
+        collected = () if invalid else tuple(collected_items)
+        self.issues = collected
         if self.issues:
             detail = "; ".join(str(issue) for issue in self.issues)
             message = f"standalone manifest validation failed: {detail}"
@@ -266,6 +362,8 @@ class StandalonePackageManifest:
             values = getattr(self, field_name)
             if type(values) is not tuple:
                 raise TypeError(f"{field_name} must be a tuple")
+            if len(values) > _MAX_COLLECTION_ENTRIES:
+                raise ValueError(f"{field_name} contains too many entries")
             if any(type(entry) is not expected_type for entry in values):
                 raise TypeError(f"{field_name} contains an unsupported entry")
             object.__setattr__(
@@ -405,6 +503,22 @@ def _validate_entry_collection(
     return names
 
 
+def _dependency_boundary(
+    entries: Sequence[DependencySpec],
+) -> dict[str, tuple[str, str, bool]]:
+    """Return the exact non-sensitive dependency metadata boundary."""
+
+    return {
+        entry.name.casefold(): (
+            entry.requirement,
+            entry.license,
+            entry.network_egress,
+        )
+        for entry in entries
+        if type(entry) is DependencySpec
+    }
+
+
 def validate_manifest(
     manifest: StandalonePackageManifest,
 ) -> tuple[ManifestIssue, ...]:
@@ -442,6 +556,28 @@ def validate_manifest(
     )
     if not component_names:
         issues.append(_issue("components", "at least one component is required"))
+    component_boundary = {
+        component.name.casefold(): (
+            component.version,
+            component.license,
+            component.network_egress,
+        )
+        for component in manifest.components
+        if type(component) is ComponentSpec
+    }
+    if component_boundary != {
+        "local-redactor": (
+            STANDALONE_PACKAGE_VERSION,
+            STANDALONE_LICENSE,
+            False,
+        )
+    }:
+        issues.append(
+            _issue(
+                "components",
+                "component boundary differs from the approved standalone surface",
+            )
+        )
     for index, component in enumerate(manifest.components):
         if isinstance(component, ComponentSpec):
             if component.network_egress:
@@ -487,6 +623,24 @@ def validate_manifest(
         issues.append(_issue("dependencies", "default and opt-in entries overlap"))
     if optional_names & restricted_names:
         issues.append(_issue("dependencies", "optional and restricted entries overlap"))
+
+    if _dependency_boundary(manifest.optional_dependencies) != _OPTIONAL_BOUNDARY:
+        issues.append(
+            _issue(
+                "dependencies.optional",
+                "optional dependency metadata differs from the approved opt-in boundary",
+            )
+        )
+    if (
+        _dependency_boundary(manifest.restricted_dependencies)
+        != _RESTRICTED_DEPENDENCY_BOUNDARY
+    ):
+        issues.append(
+            _issue(
+                "dependencies.restricted",
+                "restricted dependency metadata differs from the approved exclusion boundary",
+            )
+        )
 
     required_requirements = {
         dependency.name.casefold(): dependency.requirement
@@ -537,6 +691,22 @@ def validate_manifest(
         issues,
         RestrictedAssetSpec,
     )
+    restricted_asset_boundary = {
+        asset.name.casefold(): (asset.license, asset.bundled, asset.source)
+        for asset in manifest.restricted_assets
+        if type(asset) is RestrictedAssetSpec
+    }
+    expected_asset_boundary = {
+        name: (license_name, False, "user-supplied local asset")
+        for name, license_name in _RESTRICTED_ASSET_BOUNDARY.items()
+    }
+    if restricted_asset_boundary != expected_asset_boundary:
+        issues.append(
+            _issue(
+                "restricted_assets",
+                "restricted asset metadata differs from the approved exclusion boundary",
+            )
+        )
     for index, asset in enumerate(manifest.restricted_assets):
         if isinstance(asset, RestrictedAssetSpec):
             asset_path = f"restricted_assets[{index}]"

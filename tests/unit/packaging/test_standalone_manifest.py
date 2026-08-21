@@ -131,7 +131,7 @@ def test_manifest_module_imports_no_network_or_package_discovery_modules() -> No
         ):
             imported_roots.add(node.module.split(".")[0])
 
-    assert imported_roots == {"collections", "dataclasses", "json", "typing"}
+    assert imported_roots == {"collections", "dataclasses", "json", "re", "typing"}
 
 
 def test_manifest_tracks_project_version_and_base_dependencies() -> None:
@@ -172,6 +172,62 @@ def test_requirement_drift_fails_without_echoing_the_requirement() -> None:
 
     assert marker not in str(caught.value)
     assert "approved project boundary" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("field", "expected_path"),
+    [
+        ("components", "components"),
+        ("optional_dependencies", "dependencies.optional"),
+        ("restricted_dependencies", "dependencies.restricted"),
+        ("restricted_assets", "restricted_assets"),
+    ],
+)
+def test_declared_boundaries_cannot_be_silently_removed(
+    field: str,
+    expected_path: str,
+) -> None:
+    """Validation requires every approved opt-in and exclusion record."""
+
+    invalid = replace(manifest_module.STANDALONE_MANIFEST, **{field: ()})
+
+    issues = manifest_module.validate_manifest(invalid)
+
+    assert expected_path in {issue.path for issue in issues}
+    with pytest.raises(manifest_module.ManifestValidationError):
+        manifest_module.assert_valid_manifest(invalid)
+
+
+def test_optional_network_metadata_cannot_understate_egress() -> None:
+    """Hub-capable optional runtimes must remain marked network-capable."""
+
+    changed = replace(
+        manifest_module.STANDALONE_MANIFEST.optional_dependencies[0],
+        network_egress=False,
+    )
+    invalid = replace(
+        manifest_module.STANDALONE_MANIFEST,
+        optional_dependencies=(
+            changed,
+            *manifest_module.STANDALONE_MANIFEST.optional_dependencies[1:],
+        ),
+    )
+
+    assert "approved opt-in boundary" in str(
+        manifest_module.ManifestValidationError(
+            manifest_module.validate_manifest(invalid)
+        )
+    )
+
+
+def test_public_validation_issues_reject_arbitrary_text() -> None:
+    """Exported error types cannot be used to relay caller-provided values."""
+
+    marker = "synthetic-validation-value-554"
+    with pytest.raises(ValueError, match="fixed safe metadata") as raised:
+        manifest_module.ManifestIssue(path=marker, reason=marker)
+
+    assert marker not in str(raised.value)
 
 
 def test_hostile_text_and_collection_hooks_cannot_run() -> None:
