@@ -19,6 +19,7 @@ on:
       - "scripts/i18n/**"
       - "js/openmedkit-web/**"
       - "tests/browser/brand/**"
+      - "tests/browser/privacy-playground.spec.ts"
       - "tests/web/**"
       - "tests/unit/test_brand_system.py"
       - "tests/unit/test_docs_publication.py"
