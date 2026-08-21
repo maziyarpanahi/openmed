@@ -122,11 +122,6 @@ def test_rollback_removes_only_owned_staging_artifact(tmp_path: Path):
             phase_hook=_crash_after_staging,
         )
 
-    # A hard stop during the staging write may leave a partial owned artifact.
-    next(tmp_path.glob(".openmed-trace-stage-*.bin")).write_text(
-        "synthetic partial stage",
-        encoding="utf-8",
-    )
     rolled_back = recover_trace_redaction(
         trace_path,
         journal_path=journal_path,
@@ -139,6 +134,36 @@ def test_rollback_removes_only_owned_staging_artifact(tmp_path: Path):
     assert trace_path.read_text(encoding="utf-8") == original
     assert unrelated.read_text(encoding="utf-8") == "keep me"
     assert not list(tmp_path.glob(".openmed-trace-stage-*.bin"))
+
+
+def test_rollback_rejects_tampered_staging_without_deleting_it(tmp_path: Path):
+    trace_path = tmp_path / "synthetic-trace.jsonl"
+    journal_path = tmp_path / "trace-recovery.json"
+    original = f"keep {SYNTHETIC_VALUE}\n"
+    trace_path.write_text(original, encoding="utf-8")
+
+    with pytest.raises(InjectedCrash):
+        redact_trace_file(
+            trace_path,
+            _redact,
+            journal_path=journal_path,
+            phase_hook=_crash_after_staging,
+        )
+
+    stage_path = next(tmp_path.glob(".openmed-trace-stage-*.bin"))
+    tampered = "synthetic partial stage"
+    stage_path.write_text(tampered, encoding="utf-8")
+
+    with pytest.raises(TraceRecoveryError) as excinfo:
+        recover_trace_redaction(
+            trace_path,
+            journal_path=journal_path,
+            decision="rollback",
+        )
+
+    assert excinfo.value.reason == "owned_artifact_conflict"
+    assert trace_path.read_text(encoding="utf-8") == original
+    assert stage_path.read_text(encoding="utf-8") == tampered
 
 
 def test_recovery_is_bounded_and_rejects_tampered_owned_artifact(tmp_path: Path):

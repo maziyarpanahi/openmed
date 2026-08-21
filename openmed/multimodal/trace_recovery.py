@@ -378,7 +378,6 @@ def _recover_transaction(
             staging,
             journal.output_fingerprint,
             max_bytes,
-            verify_fingerprint=False,
         )
         rolled_back = replace(
             journal,
@@ -452,7 +451,6 @@ def _recover_transaction(
             staging,
             journal.output_fingerprint,
             max_bytes,
-            verify_fingerprint=False,
         )
         rolled_back = replace(
             pending,
@@ -728,20 +726,10 @@ def _remove_owned_staging(
     path: Path,
     expected_fingerprint: str,
     max_bytes: int = DEFAULT_MAX_TRACE_BYTES,
-    *,
-    verify_fingerprint: bool = True,
 ) -> None:
     if not _path_exists(path):
         return
-    if verify_fingerprint:
-        metadata = _ensure_owned_staging(path, expected_fingerprint, max_bytes)
-    else:
-        metadata = _checked_regular_metadata(
-            path,
-            invalid_reason="owned_artifact_conflict",
-            unreadable_reason="owned_artifact_unreadable",
-            require_single_link=True,
-        )
+    metadata = _ensure_owned_staging(path, expected_fingerprint, max_bytes)
     try:
         _unlink_checked(
             path,
