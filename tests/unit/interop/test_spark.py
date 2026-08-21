@@ -49,6 +49,18 @@ def test_config_is_pickle_safe_and_normalizes_selected_columns() -> None:
     }
 
 
+def test_config_snapshots_mutable_extra_kwargs_and_returns_fresh_values() -> None:
+    supplied = {"token_language_tags": ["en"]}
+    config = SparkRedactionConfig(columns=["note"], extra_kwargs=supplied)
+
+    supplied["token_language_tags"].append("fr")
+    returned = config.extra_kwargs
+    returned["token_language_tags"].append("de")
+
+    assert config.extra_kwargs == {"token_language_tags": ["en"]}
+    assert pickle.loads(pickle.dumps(config)) == config
+
+
 def test_transform_serializes_only_immutable_configuration() -> None:
     transform = SparkRedactionTransform(
         columns=["note"],

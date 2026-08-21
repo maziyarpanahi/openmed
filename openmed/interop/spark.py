@@ -85,7 +85,7 @@ class SparkRedactionConfig:
     confidence_threshold: float
     seed: int
     consistent: bool
-    _extra_items: tuple[tuple[str, Any], ...] = field(repr=False)
+    _extra_items: tuple[tuple[str, bytes], ...] = field(repr=False)
 
     def __init__(
         self,
@@ -153,7 +153,7 @@ class SparkRedactionConfig:
     def extra_kwargs(self) -> dict[str, Any]:
         """Return a copy of additional deidentifier keyword arguments."""
 
-        return dict(self._extra_items)
+        return {key: pickle.loads(serialized) for key, serialized in self._extra_items}
 
     def to_deidentify_kwargs(self) -> dict[str, Any]:
         """Return deterministic options for one partition-local worker."""
@@ -424,23 +424,23 @@ def _normalize_columns(columns: Sequence[str] | None) -> tuple[str, ...]:
 
 def _normalize_extra_kwargs(
     values: Mapping[str, Any] | None,
-) -> tuple[tuple[str, Any], ...]:
+) -> tuple[tuple[str, bytes], ...]:
     if values is None:
         return ()
     if not isinstance(values, Mapping):
         raise TypeError("extra kwargs must be a mapping")
 
-    normalized: list[tuple[str, Any]] = []
+    normalized: list[tuple[str, bytes]] = []
     for key, value in values.items():
         if not isinstance(key, str) or not key:
             raise TypeError("extra kwargs keys must be non-empty strings")
         if key in _RESERVED_KWARGS:
-            raise ValueError(f"extra kwargs must not override reserved key {key!r}")
+            raise ValueError("extra kwargs must not override reserved keys")
         try:
-            pickle.dumps(value)
+            serialized = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
         except Exception:
             raise TypeError("extra kwargs values must be serializable") from None
-        normalized.append((key, value))
+        normalized.append((key, serialized))
     return tuple(sorted(normalized, key=lambda item: item[0]))
 
 
