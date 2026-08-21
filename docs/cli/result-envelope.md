@@ -25,8 +25,9 @@ Every result contains the same six top-level fields:
 `input`, `validation`, `configuration`, `runtime`, or `integrity` categories.
 The category is a code, not a human-written explanation.
 
-`counters` is an object whose keys are lowercase logical identifiers and whose
-values are non-negative integers. Keys are sorted during serialization. The
+`counters` is an object of at most 128 entries whose keys are lowercase logical
+identifiers and whose values are non-negative integers. Keys are sorted during
+serialization. An envelope can include at most 64 artifact fingerprints. The
 envelope does not accept arbitrary `data`, `message`, `details`, or other
 free-text fields.
 
@@ -81,4 +82,5 @@ print(result.to_json())
 terminal-width, timestamp, host, or path fields. `write_json(stream)` adds one
 newline for a CLI stream. The module uses only the standard library and does
 not make network calls; `.from_file()` reads only the caller-provided local
-file.
+file. `from_json()` rejects duplicate keys, non-standard numeric constants, and
+documents larger than 1,048,576 characters.

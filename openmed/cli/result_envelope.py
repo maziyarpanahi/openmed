@@ -20,6 +20,9 @@ from typing import IO, Any, TypeVar
 
 SCHEMA_VERSION = 1
 MAX_REMEDIATION_CODES = 3
+MAX_COUNTERS = 128
+MAX_ARTIFACTS = 64
+MAX_JSON_CHARS = 1_048_576
 
 _IDENTIFIER = re.compile(r"[a-z0-9](?:[a-z0-9_.-]{0,63})\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -79,13 +82,17 @@ def _invalid(message: str) -> ResultEnvelopeError:
 
 
 def _is_identifier(value: Any) -> bool:
-    return isinstance(value, str) and _IDENTIFIER.fullmatch(value) is not None
+    return type(value) is str and _IDENTIFIER.fullmatch(value) is not None
 
 
-def _coerce_enum(value: Any, enum_type: type[Enum], message: str) -> Enum:
-    if isinstance(value, enum_type):
+_ValueT = TypeVar("_ValueT")
+_EnumT = TypeVar("_EnumT", bound=Enum)
+
+
+def _coerce_enum(value: Any, enum_type: type[_EnumT], message: str) -> _EnumT:
+    if type(value) is enum_type:
         return value
-    if isinstance(value, str):
+    if type(value) is str:
         try:
             return enum_type(value)
         except ValueError:
@@ -93,29 +100,91 @@ def _coerce_enum(value: Any, enum_type: type[Enum], message: str) -> Enum:
     raise _invalid(message)
 
 
+def _bounded_values(
+    values: Iterable[_ValueT],
+    *,
+    maximum: int,
+    message: str,
+) -> tuple[_ValueT, ...]:
+    """Copy at most ``maximum`` values without relaying iterator failures."""
+
+    try:
+        iterator = iter(values)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise _invalid(message) from None
+
+    copied: list[_ValueT] = []
+    for index in range(maximum + 1):
+        try:
+            value = next(iterator)
+        except StopIteration:
+            return tuple(copied)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise _invalid(message) from None
+        if index == maximum:
+            raise _invalid(message)
+        copied.append(value)
+    raise AssertionError("bounded iteration did not terminate")
+
+
+def _copy_wire_mapping(
+    payload: Mapping[str, Any],
+    expected_keys: frozenset[str],
+    message: str,
+) -> dict[str, Any]:
+    """Copy an exact wire object while containing hostile mapping hooks."""
+
+    if not isinstance(payload, Mapping):
+        raise _invalid(message)
+    keys = _bounded_values(payload, maximum=len(expected_keys), message=message)
+    if (
+        any(type(key) is not str for key in keys)
+        or len(set(keys)) != len(keys)
+        or frozenset(keys) != expected_keys
+    ):
+        raise _invalid(message)
+    try:
+        return {key: payload[key] for key in expected_keys}
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise _invalid(message) from None
+
+
 def _normalize_counters(
     counters: Mapping[str, int] | Iterable[tuple[str, int]] | None,
 ) -> tuple[tuple[str, int], ...]:
     if counters is None:
         return ()
+    source: Iterable[tuple[str, int]]
     if isinstance(counters, Mapping):
-        entries = list(counters.items())
-    else:
         try:
-            entries = list(counters)
-        except (TypeError, ValueError):
-            raise _invalid("counters must be a mapping of non-negative integers")
+            source = counters.items()
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise _invalid("counters must be a bounded mapping of integers") from None
+    else:
+        source = counters
+    entries = _bounded_values(
+        source,
+        maximum=MAX_COUNTERS,
+        message="counters must be a bounded mapping of integers",
+    )
 
     normalized: list[tuple[str, int]] = []
     seen: set[str] = set()
     for entry in entries:
         if (
-            not isinstance(entry, (tuple, list))
+            type(entry) not in {tuple, list}
             or len(entry) != 2
             or not _is_identifier(entry[0])
             or entry[0] in seen
-            or isinstance(entry[1], bool)
-            or not isinstance(entry[1], int)
+            or type(entry[1]) is not int
             or entry[1] < 0
         ):
             raise _invalid("counters must be a mapping of non-negative integers")
@@ -130,15 +199,16 @@ def _normalize_artifacts(
 ) -> tuple["ArtifactFingerprint", ...]:
     if artifacts is None:
         return ()
-    try:
-        entries = list(artifacts)
-    except (TypeError, ValueError):
-        raise _invalid("artifacts must be a sequence of fingerprints")
+    entries = _bounded_values(
+        artifacts,
+        maximum=MAX_ARTIFACTS,
+        message="artifacts must be a bounded sequence of fingerprints",
+    )
 
     normalized: list[ArtifactFingerprint] = []
     seen: set[str] = set()
     for entry in entries:
-        if isinstance(entry, ArtifactFingerprint):
+        if type(entry) is ArtifactFingerprint:
             artifact = entry
         elif isinstance(entry, Mapping):
             artifact = ArtifactFingerprint.from_dict(entry)
@@ -158,10 +228,11 @@ def _normalize_remediation_codes(
         return ()
     if isinstance(codes, (str, bytes)):
         raise _invalid("remediation_codes must be a sequence of bounded codes")
-    try:
-        entries = list(codes)
-    except (TypeError, ValueError):
-        raise _invalid("remediation_codes must be a sequence of bounded codes")
+    entries = _bounded_values(
+        codes,
+        maximum=MAX_REMEDIATION_CODES,
+        message="remediation_codes must be a sequence of bounded codes",
+    )
 
     normalized = {
         _coerce_enum(
@@ -171,12 +242,10 @@ def _normalize_remediation_codes(
         )
         for entry in entries
     }
-    if len(normalized) > MAX_REMEDIATION_CODES:
-        raise _invalid("remediation_codes exceed the bounded maximum")
     return tuple(sorted(normalized, key=lambda code: code.value))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ArtifactFingerprint:
     """A hash-only description of one named local artifact.
 
@@ -192,13 +261,9 @@ class ArtifactFingerprint:
     def __post_init__(self) -> None:
         if not _is_identifier(self.name):
             raise _invalid("artifact names must be lowercase logical identifiers")
-        if not isinstance(self.sha256, str) or _SHA256.fullmatch(self.sha256) is None:
+        if type(self.sha256) is not str or _SHA256.fullmatch(self.sha256) is None:
             raise _invalid("artifact sha256 must be lowercase hexadecimal")
-        if (
-            isinstance(self.size_bytes, bool)
-            or not isinstance(self.size_bytes, int)
-            or self.size_bytes < 0
-        ):
+        if type(self.size_bytes) is not int or self.size_bytes < 0:
             raise _invalid("artifact size_bytes must be a non-negative integer")
 
     @classmethod
@@ -209,12 +274,14 @@ class ArtifactFingerprint:
     ) -> "ArtifactFingerprint":
         """Return a fingerprint for in-memory artifact bytes."""
 
-        if not isinstance(content, (bytes, bytearray, memoryview)):
+        if type(content) not in {bytes, bytearray, memoryview}:
             raise _invalid("artifact content must be bytes")
         try:
             payload = bytes(content)
-        except (TypeError, ValueError):
-            raise _invalid("artifact content must be bytes")
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise _invalid("artifact content must be bytes") from None
         return cls(
             name=name,
             sha256=hashlib.sha256(payload).hexdigest(),
@@ -232,20 +299,25 @@ class ArtifactFingerprint:
                 for chunk in iter(lambda: handle.read(_HASH_CHUNK_SIZE), b""):
                     digest.update(chunk)
                     size_bytes += len(chunk)
-        except (OSError, TypeError, ValueError):
-            raise _invalid("artifact file could not be fingerprinted")
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise _invalid("artifact file could not be fingerprinted") from None
         return cls(name=name, sha256=digest.hexdigest(), size_bytes=size_bytes)
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ArtifactFingerprint":
         """Parse the exact wire representation of a fingerprint."""
 
-        if not isinstance(payload, Mapping) or set(payload) != _ARTIFACT_KEYS:
-            raise _invalid("artifact fingerprint has an unsupported shape")
+        values = _copy_wire_mapping(
+            payload,
+            _ARTIFACT_KEYS,
+            "artifact fingerprint has an unsupported shape",
+        )
         return cls(
-            name=payload["name"],
-            sha256=payload["sha256"],
-            size_bytes=payload["size_bytes"],
+            name=values["name"],
+            sha256=values["sha256"],
+            size_bytes=values["size_bytes"],
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -258,43 +330,50 @@ class ArtifactFingerprint:
         }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, init=False)
 class ResultEnvelope:
     """Versioned JSON result with only bounded, audit-safe fields."""
 
-    status: ResultStatus | str
-    category: ResultCategory | str
-    counters: Mapping[str, int] | Iterable[tuple[str, int]] = ()
-    artifacts: Iterable[ArtifactFingerprint | Mapping[str, Any]] = ()
-    remediation_codes: Iterable[RemediationCode | str] = ()
+    status: ResultStatus
+    category: ResultCategory
+    counters: tuple[tuple[str, int], ...]
+    artifacts: tuple[ArtifactFingerprint, ...]
+    remediation_codes: tuple[RemediationCode, ...]
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        status: ResultStatus | str,
+        category: ResultCategory | str,
+        counters: Mapping[str, int] | Iterable[tuple[str, int]] | None = None,
+        artifacts: (Iterable[ArtifactFingerprint | Mapping[str, Any]] | None) = None,
+        remediation_codes: Iterable[RemediationCode | str] | None = None,
+    ) -> None:
         status = _coerce_enum(
-            self.status,
+            status,
             ResultStatus,
             "status must be success or failure",
         )
         category = _coerce_enum(
-            self.category,
+            category,
             ResultCategory,
             "category is not supported",
         )
-        counters = _normalize_counters(self.counters)
-        artifacts = _normalize_artifacts(self.artifacts)
-        remediation_codes = _normalize_remediation_codes(self.remediation_codes)
+        normalized_counters = _normalize_counters(counters)
+        normalized_artifacts = _normalize_artifacts(artifacts)
+        normalized_codes = _normalize_remediation_codes(remediation_codes)
 
         if status is ResultStatus.SUCCESS and category is not ResultCategory.SUCCESS:
             raise _invalid("successful envelopes must use the success category")
         if status is ResultStatus.FAILURE and category is ResultCategory.SUCCESS:
             raise _invalid("failed envelopes must use a failure category")
-        if status is ResultStatus.SUCCESS and remediation_codes:
+        if status is ResultStatus.SUCCESS and normalized_codes:
             raise _invalid("successful envelopes cannot include remediation codes")
 
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "category", category)
-        object.__setattr__(self, "counters", counters)
-        object.__setattr__(self, "artifacts", artifacts)
-        object.__setattr__(self, "remediation_codes", remediation_codes)
+        object.__setattr__(self, "counters", normalized_counters)
+        object.__setattr__(self, "artifacts", normalized_artifacts)
+        object.__setattr__(self, "remediation_codes", normalized_codes)
 
     def to_dict(self) -> dict[str, Any]:
         """Return the complete stable wire representation."""
@@ -329,39 +408,65 @@ class ResultEnvelope:
     def from_dict(cls, payload: Mapping[str, Any]) -> "ResultEnvelope":
         """Parse and validate the exact envelope wire representation."""
 
-        if not isinstance(payload, Mapping) or set(payload) != _ENVELOPE_KEYS:
-            raise _invalid("result envelope has an unsupported shape")
+        values = _copy_wire_mapping(
+            payload,
+            _ENVELOPE_KEYS,
+            "result envelope has an unsupported shape",
+        )
         if (
-            isinstance(payload["schema_version"], bool)
-            or not isinstance(payload["schema_version"], int)
-            or payload["schema_version"] != SCHEMA_VERSION
+            type(values["schema_version"]) is not int
+            or values["schema_version"] != SCHEMA_VERSION
         ):
             raise _invalid("result envelope schema version is unsupported")
-        if not isinstance(payload["counters"], Mapping):
+        if not isinstance(values["counters"], Mapping):
             raise _invalid("result envelope counters must be an object")
-        if not isinstance(payload["artifacts"], list):
+        if type(values["artifacts"]) is not list:
             raise _invalid("result envelope artifacts must be an array")
-        if not isinstance(payload["remediation_codes"], list):
+        if type(values["remediation_codes"]) is not list:
             raise _invalid("result envelope remediation_codes must be an array")
         return cls(
-            status=payload["status"],
-            category=payload["category"],
-            counters=payload["counters"],
-            artifacts=payload["artifacts"],
-            remediation_codes=payload["remediation_codes"],
+            status=values["status"],
+            category=values["category"],
+            counters=values["counters"],
+            artifacts=values["artifacts"],
+            remediation_codes=values["remediation_codes"],
         )
 
     @classmethod
     def from_json(cls, document: str) -> "ResultEnvelope":
         """Parse one JSON document without echoing malformed input."""
 
-        if not isinstance(document, str):
+        if type(document) is not str or len(document) > MAX_JSON_CHARS:
             raise _invalid("result envelope JSON must be text")
         try:
-            payload = json.loads(document)
-        except (TypeError, ValueError):
-            raise _invalid("result envelope JSON is invalid")
+            payload = json.loads(
+                document,
+                object_pairs_hook=_unique_json_object,
+                parse_constant=_reject_json_constant,
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise _invalid("result envelope JSON is invalid") from None
         return cls.from_dict(payload)
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate object keys instead of silently taking the last."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> Any:
+    """Reject non-standard NaN and infinity constants."""
+
+    del value
+    raise ValueError("non-standard JSON constant")
 
 
 # The CLI-specific name is useful to callers while ResultEnvelope remains the
@@ -402,13 +507,10 @@ def create_failure_envelope(
     )
 
 
-_EnvelopeT = TypeVar("_EnvelopeT", bound=ResultEnvelope)
-
-
-def serialize_envelope(envelope: _EnvelopeT) -> str:
+def serialize_envelope(envelope: ResultEnvelope) -> str:
     """Serialize an envelope after checking its concrete type."""
 
-    if not isinstance(envelope, ResultEnvelope):
+    if type(envelope) is not ResultEnvelope:
         raise _invalid("value must be a result envelope")
     return envelope.to_json()
 
@@ -416,6 +518,9 @@ def serialize_envelope(envelope: _EnvelopeT) -> str:
 __all__ = [
     "ArtifactFingerprint",
     "CliResultEnvelope",
+    "MAX_ARTIFACTS",
+    "MAX_COUNTERS",
+    "MAX_JSON_CHARS",
     "MAX_REMEDIATION_CODES",
     "RemediationCode",
     "ResultCategory",

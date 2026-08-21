@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a canonical CLI result envelope with bounded counters, artifact
+  fingerprints, and remediation codes; strict JSON parsing; immutable state;
+  and free-text-free failures (#2636).
 - Added deterministic counts-only comparator reports with fixed metric
   definitions, bounded aggregate failure accounting, hashed custom identifiers,
   immutable sanitized state, environment fingerprints, and value-free JSON,

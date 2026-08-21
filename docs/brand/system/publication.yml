@@ -96,6 +96,7 @@ classification:
     - low-bandwidth-install.md
     - quickstarts.md
     - cli/openmed-init.md
+    - cli/result-envelope.md
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md

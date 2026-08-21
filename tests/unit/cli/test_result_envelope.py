@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import io
+import itertools
 import json
+from collections.abc import Iterator, Mapping
+from typing import Any
 
 import pytest
 
 from openmed.cli.result_envelope import (
+    MAX_ARTIFACTS,
+    MAX_COUNTERS,
+    MAX_JSON_CHARS,
     MAX_REMEDIATION_CODES,
     ArtifactFingerprint,
     RemediationCode,
@@ -20,6 +26,18 @@ from openmed.cli.result_envelope import (
     create_success_envelope,
     serialize_envelope,
 )
+
+
+class _HostileMapping(Mapping[str, Any]):
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("synthetic sensitive mapping value")
+
+    def __len__(self) -> int:
+        return 6
+
+    def __getitem__(self, key: str) -> Any:
+        del key
+        raise RuntimeError("synthetic sensitive mapping value")
 
 
 def test_success_envelope_has_a_complete_canonical_wire_shape() -> None:
@@ -192,3 +210,70 @@ def test_malformed_json_is_not_reflected_in_the_exception() -> None:
         ResultEnvelope.from_json(malformed)
 
     assert "synthetic rejected input" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        '{"status":"success","status":"failure"}',
+        '{"counter":NaN}',
+        "x" * (MAX_JSON_CHARS + 1),
+    ],
+)
+def test_json_parser_rejects_ambiguous_or_oversized_documents(document: str) -> None:
+    with pytest.raises(ResultEnvelopeError) as raised:
+        ResultEnvelope.from_json(document)
+
+    assert document not in str(raised.value)
+
+
+def test_wire_mapping_failures_are_contained_without_echoing_values() -> None:
+    with pytest.raises(ResultEnvelopeError) as raised:
+        ResultEnvelope.from_dict(_HostileMapping())
+
+    assert "synthetic sensitive mapping value" not in str(raised.value)
+
+
+def test_iterator_failures_are_contained_without_echoing_values() -> None:
+    def poisoned_counters() -> Iterator[tuple[str, int]]:
+        yield ("processed", 1)
+        raise RuntimeError("synthetic sensitive counter value")
+
+    with pytest.raises(ResultEnvelopeError) as raised:
+        create_success_envelope(counters=poisoned_counters())
+
+    assert "synthetic sensitive counter value" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"counters": itertools.repeat(("processed", 1), MAX_COUNTERS + 1)},
+        {
+            "artifacts": itertools.repeat(
+                ArtifactFingerprint("report", "a" * 64, 1),
+                MAX_ARTIFACTS + 1,
+            )
+        },
+    ],
+)
+def test_collection_limits_are_enforced_before_normalization(
+    kwargs: dict[str, Any],
+) -> None:
+    with pytest.raises(ResultEnvelopeError):
+        create_success_envelope(**kwargs)
+
+
+def test_serializer_rejects_subclasses_without_dispatching_overrides() -> None:
+    marker = "synthetic sensitive serialized value"
+
+    class UnsafeEnvelope(ResultEnvelope):
+        def to_json(self) -> str:
+            return marker
+
+    envelope = UnsafeEnvelope(ResultStatus.SUCCESS, ResultCategory.SUCCESS)
+
+    with pytest.raises(ResultEnvelopeError) as raised:
+        serialize_envelope(envelope)
+
+    assert marker not in str(raised.value)
