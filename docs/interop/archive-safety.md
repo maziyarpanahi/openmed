@@ -54,4 +54,6 @@ The evaluator treats both `/` and `\\` as archive separators, rejects
 absolute and parent-traversal paths, detects normalized duplicate paths,
 rejects symbolic and hard links, and quarantines entry-count, size, and
 expansion-ratio limit breaches. The default limits are intentionally bounded;
-callers may tighten them for a specific workflow.
+callers may tighten them for a specific workflow. Size metadata is restricted
+to unsigned 64-bit values, and report aggregates are bounded, so hostile Python
+integers cannot make diagnostics or later serialization unbounded.

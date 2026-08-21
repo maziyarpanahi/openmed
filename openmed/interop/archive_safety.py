@@ -44,6 +44,9 @@ DEFAULT_MAX_EXPANSION_RATIO: Final = 100.0
 DEFAULT_MAX_PATH_LENGTH: Final = 4_096
 
 _DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:")
+_MAX_ARCHIVE_SIZE: Final = (1 << 64) - 1
+_MAX_REPORT_REASON_COUNT: Final = (2 * DEFAULT_MAX_ENTRIES) + 1
+_MAX_REPORT_TOTAL_BYTES: Final = DEFAULT_MAX_ENTRIES * _MAX_ARCHIVE_SIZE
 _MAX_KIND_LENGTH: Final = 32
 _REGULAR_KINDS = frozenset(
     {
@@ -77,6 +80,7 @@ _WINDOWS_RESERVED_NAMES = frozenset(
         *(f"lpt{index}" for index in range(1, 10)),
     }
 )
+_WINDOWS_INVALID_PATH_CHARACTERS = frozenset('<>:"|?*')
 _MISSING = object()
 
 
@@ -213,17 +217,18 @@ class ArchiveSafetyPolicy:
             value = getattr(self, field_name)
             if type(value) is not int or value < 0 or value > upper_bound:
                 raise ValueError("archive safety limits must stay within safe bounds")
+        ratio = self.max_expansion_ratio
         if (
-            type(self.max_expansion_ratio) not in {int, float}
-            or not math.isfinite(float(self.max_expansion_ratio))
-            or self.max_expansion_ratio <= 0
-            or self.max_expansion_ratio > DEFAULT_MAX_EXPANSION_RATIO
+            type(ratio) not in {int, float}
+            or ratio <= 0
+            or ratio > DEFAULT_MAX_EXPANSION_RATIO
+            or not math.isfinite(ratio)
         ):
             raise ValueError("max_expansion_ratio must stay within safe bounds")
         object.__setattr__(
             self,
             "max_expansion_ratio",
-            float(self.max_expansion_ratio),
+            float(ratio),
         )
 
     @property
@@ -258,14 +263,14 @@ class ArchiveSafetyReport:
                 raise ValueError("archive report decision is invalid") from None
         elif type(decision) is not ArchiveDecision:
             raise ValueError("archive report decision is invalid")
-        for value in (
-            self.entry_count,
-            self.total_compressed_bytes,
-            self.total_uncompressed_bytes,
+        for value, upper_bound in (
+            (self.entry_count, DEFAULT_MAX_ENTRIES + 1),
+            (self.total_compressed_bytes, _MAX_REPORT_TOTAL_BYTES),
+            (self.total_uncompressed_bytes, _MAX_REPORT_TOTAL_BYTES),
         ):
-            if type(value) is not int or value < 0:
+            if type(value) is not int or value < 0 or value > upper_bound:
                 raise ValueError(
-                    "archive report aggregates must be non-negative integers"
+                    "archive report aggregates must stay within safe bounds"
                 )
         items = _bounded_reason_items(self.reason_counts)
         safe_reasons = {reason.value for reason in ArchiveSafetyReason}
@@ -278,6 +283,7 @@ class ArchiveSafetyReport:
                 or reason in seen_reasons
                 or type(count) is not int
                 or count < 0
+                or count > _MAX_REPORT_REASON_COUNT
             ):
                 raise ValueError("archive report reasons are invalid")
             seen_reasons.add(reason)
@@ -547,7 +553,7 @@ def _canonical_path(
     if len(normalized) > max_path_length:
         return None, (ArchiveSafetyReason.PATH_TOO_LONG,)
     if any(
-        unicodedata.category(character) in {"Cc", "Cf", "Cs"}
+        unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"}
         for character in normalized
     ):
         return None, (ArchiveSafetyReason.INVALID_METADATA,)
@@ -572,20 +578,20 @@ def _canonical_path(
 def _unsafe_cross_platform_segment(segment: str) -> bool:
     """Reject names that Windows filesystems can reinterpret or alias."""
 
-    if ":" in segment or segment.endswith((" ", ".")):
+    if any(character in _WINDOWS_INVALID_PATH_CHARACTERS for character in segment):
+        return True
+    if segment.endswith((" ", ".")):
         return True
     stem = segment.split(".", 1)[0].rstrip(" .").casefold()
     return stem in _WINDOWS_RESERVED_NAMES
 
 
 def _valid_sizes(compressed_size: Any, uncompressed_size: Any) -> bool:
-    return _is_nonnegative_int(compressed_size) and _is_nonnegative_int(
-        uncompressed_size
-    )
+    return _is_archive_size(compressed_size) and _is_archive_size(uncompressed_size)
 
 
-def _is_nonnegative_int(value: Any) -> bool:
-    return type(value) is int and value >= 0
+def _is_archive_size(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= _MAX_ARCHIVE_SIZE
 
 
 def _valid_kind(kind: Any) -> bool:
@@ -616,10 +622,8 @@ def _exceeds_expansion_ratio(
 ) -> bool:
     if compressed_size == 0:
         return uncompressed_size > 0
-    try:
-        return (uncompressed_size / compressed_size) > max_expansion_ratio
-    except OverflowError:
-        return True
+    ratio_numerator, ratio_denominator = max_expansion_ratio.as_integer_ratio()
+    return uncompressed_size * ratio_denominator > compressed_size * ratio_numerator
 
 
 def _decision_for(reason_counts: Mapping[str, int]) -> ArchiveDecision:

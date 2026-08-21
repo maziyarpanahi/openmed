@@ -5,6 +5,7 @@ from collections.abc import Iterator, Mapping
 import pytest
 
 from openmed.interop.archive_safety import (
+    DEFAULT_MAX_ENTRIES,
     ArchiveDecision,
     ArchiveMember,
     ArchiveSafetyPolicy,
@@ -193,6 +194,21 @@ def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
     assert marker not in repr(report.to_dict())
 
 
+def test_maximum_invalid_metadata_count_stays_bounded_and_constructible():
+    invalid_member = member("records/unsafe\x00name", kind="unsupported")
+
+    def failing_members():
+        for _ in range(DEFAULT_MAX_ENTRIES):
+            yield invalid_member
+        raise RuntimeError("synthetic iterator failure")
+
+    report = inspect_archive_members(failing_members())
+
+    assert report.entry_count == DEFAULT_MAX_ENTRIES
+    assert report.reason_counts == {"invalid_metadata": 20_001}
+    assert report.decision is ArchiveDecision.REJECT
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -200,7 +216,14 @@ def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
         "records/CONIN$.txt",
         "records/CONOUT$.txt",
         "records/item.txt:stream",
+        'records/unsafe"name.txt',
+        "records/unsafe<name>.txt",
+        "records/unsafe|name.txt",
+        "records/unsafe?name.txt",
+        "records/unsafe*name.txt",
         "records/trailing.",
+        "records/line\u2028separator.txt",
+        "records/paragraph\u2029separator.txt",
         "records/hidden\u202efile.txt",
     ],
 )
@@ -229,6 +252,8 @@ def test_policy_limits_can_only_be_tightened():
         ArchiveSafetyPolicy(
             max_expansion_ratio=defaults.max_expansion_ratio + 1,
         )
+    with pytest.raises(ValueError, match="safe bounds"):
+        ArchiveSafetyPolicy(max_expansion_ratio=10**400)
 
 
 def test_public_report_rejects_arbitrary_reason_metadata():
@@ -244,6 +269,31 @@ def test_public_report_rejects_arbitrary_reason_metadata():
         )
 
     assert marker not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"entry_count": 10_002},
+        {"total_compressed_bytes": 10**400},
+        {"total_uncompressed_bytes": 10**400},
+        {"reason_counts": {"invalid_metadata": 20_002}},
+    ],
+)
+def test_public_report_rejects_unbounded_aggregates(
+    overrides: dict[str, object],
+):
+    values: dict[str, object] = {
+        "decision": ArchiveDecision.ALLOW,
+        "entry_count": 0,
+        "total_compressed_bytes": 0,
+        "total_uncompressed_bytes": 0,
+        "reason_counts": {},
+    }
+    values.update(overrides)
+
+    with pytest.raises(ValueError, match="safe bounds|reasons are invalid"):
+        ArchiveSafetyReport(**values)  # type: ignore[arg-type]
 
 
 def test_public_report_bounds_hostile_reason_iteration():
@@ -293,5 +343,34 @@ def test_extreme_sizes_fail_closed_without_float_overflow():
         [member("records/large.bin", compressed=1, uncompressed=10**400)]
     )
 
-    assert report.decision is ArchiveDecision.QUARANTINE
-    assert report.reason_counts["expansion_ratio"] == 1
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
+def test_expansion_ratio_comparison_is_exact_for_large_archive_sizes():
+    compressed_size = 10_000_000_000_000_000
+    policy = ArchiveSafetyPolicy(max_expansion_ratio=1.1)
+
+    at_limit = inspect_archive_members(
+        [
+            member(
+                "records/at-limit.bin",
+                compressed=compressed_size,
+                uncompressed=11_000_000_000_000_000,
+            )
+        ],
+        policy,
+    )
+    above_limit = inspect_archive_members(
+        [
+            member(
+                "records/above-limit.bin",
+                compressed=compressed_size,
+                uncompressed=11_000_000_000_000_002,
+            )
+        ],
+        policy,
+    )
+
+    assert "expansion_ratio" not in at_limit.reason_counts
+    assert above_limit.reason_counts["expansion_ratio"] == 1
