@@ -215,9 +215,11 @@ def test_mobile_command_default_workload_writes_report_to_stdout(
 
 
 def test_mobile_command_archive_writes_device_matrix(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.setattr(harness, "_peak_rss_bytes", lambda: None)
     result = main_module.main(
         [
             "benchmark",
@@ -253,7 +255,9 @@ def test_mobile_command_archive_writes_device_matrix(
     assert report["docs_per_second"] > 0
     assert report["p50_ms"] >= 0
     assert report["p95_ms"] >= report["p50_ms"]
-    assert report["peak_rss_mib"] is not None
+    peak_rss_mib = report["peak_rss_mib"]
+    assert peak_rss_mib == report["resources"]["peak_rss_mib"]
+    assert peak_rss_mib is None
 
 
 def test_latency_command_emits_offline_int8_json_and_blocks_sockets(
