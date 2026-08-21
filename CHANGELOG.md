@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added fail-fast JSON Schema validation for `OpenMedConfig`, TOML files, and
+  custom profiles, with aggregated value-free diagnostics, an installed schema
+  path helper, and complete remote-backend field coverage (#2264).
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).
