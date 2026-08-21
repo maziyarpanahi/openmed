@@ -165,6 +165,8 @@ nav:
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - dbt Privacy-Safe Text Projection: integrations/dbt.md
+      - PostgreSQL Redaction Adapter: integrations/postgres.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
@@ -230,7 +232,7 @@ nav:
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
       - Model Release Queue: model-release-queue.md
-      - Nix Development: development.md
+      - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
