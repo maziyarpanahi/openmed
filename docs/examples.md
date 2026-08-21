@@ -4,6 +4,10 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+If you already know the outcome you want, use the
+**[Task-oriented Cookbook](./cookbook.md)** to jump directly from that goal to
+the matching script, notebook, or REST recipe.
+
 ## Curated Notebook Gallery
 
 For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
