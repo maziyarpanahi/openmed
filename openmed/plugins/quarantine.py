@@ -15,25 +15,28 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Final
 
-PLUGIN_API_VERSION: Final = "1.0.0"
-SUPPORTED_PLUGIN_API_MAJOR: Final = 1
+from .protocols import (
+    COMPONENT_ANONYMIZER_PROVIDER,
+    COMPONENT_EXPORTER,
+    COMPONENT_INTEROP_ADAPTER,
+    COMPONENT_LANGUAGE_PACK,
+    COMPONENT_RECOGNIZER,
+    PLUGIN_COMPONENT_KINDS,
+    PLUGIN_SDK_MAJOR,
+    PLUGIN_SDK_VERSION,
+)
+
+PLUGIN_API_VERSION: Final = PLUGIN_SDK_VERSION
+SUPPORTED_PLUGIN_API_MAJOR: Final = PLUGIN_SDK_MAJOR
 PLUGIN_API_MAJOR: Final = SUPPORTED_PLUGIN_API_MAJOR
 
-CAPABILITY_RECOGNIZER: Final = "recognizer"
-CAPABILITY_ANONYMIZER_PROVIDER: Final = "anonymizer_provider"
-CAPABILITY_EXPORTER: Final = "exporter"
-CAPABILITY_INTEROP_ADAPTER: Final = "interop_adapter"
-CAPABILITY_LANGUAGE_PACK: Final = "language_pack"
+CAPABILITY_RECOGNIZER: Final = COMPONENT_RECOGNIZER
+CAPABILITY_ANONYMIZER_PROVIDER: Final = COMPONENT_ANONYMIZER_PROVIDER
+CAPABILITY_EXPORTER: Final = COMPONENT_EXPORTER
+CAPABILITY_INTEROP_ADAPTER: Final = COMPONENT_INTEROP_ADAPTER
+CAPABILITY_LANGUAGE_PACK: Final = COMPONENT_LANGUAGE_PACK
 
-SUPPORTED_CAPABILITIES: Final = frozenset(
-    {
-        CAPABILITY_RECOGNIZER,
-        CAPABILITY_ANONYMIZER_PROVIDER,
-        CAPABILITY_EXPORTER,
-        CAPABILITY_INTEROP_ADAPTER,
-        CAPABILITY_LANGUAGE_PACK,
-    }
-)
+SUPPORTED_CAPABILITIES: Final = PLUGIN_COMPONENT_KINDS
 
 CATEGORY_AVAILABLE: Final = "available"
 CATEGORY_DISABLED: Final = "disabled"
@@ -52,7 +55,10 @@ REASON_UNSUPPORTED_CAPABILITY: Final = "unsupported_capability"
 # A plugin name is normally a public distribution identifier.  Names outside
 # this compact identifier shape are still accepted, but are represented by a
 # digest in reports so a malformed value cannot become a log or report leak.
-_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_SAFE_NAME_RE = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
+    r"(?::[A-Za-z0-9][A-Za-z0-9._-]{0,63})?$"
+)
 _SAFE_CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _API_VERSION_RE = re.compile(
     r"^(?P<major>0|[1-9]\d*)"
@@ -60,9 +66,13 @@ _API_VERSION_RE = re.compile(
     r"(?:\.(?P<patch>0|[1-9]\d*))?"
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
+_MAX_METADATA_RECORDS = 10_000
+_MAX_CAPABILITY_DECLARATIONS = 64
 
 _MISSING = object()
 _READ_ERROR = object()
+_ITERATION_ERROR = object()
+_RECORD_LIMIT_EXCEEDED = object()
 
 
 @dataclass(frozen=True)
@@ -204,11 +214,11 @@ def build_quarantine_report(
     """Evaluate injected plugin metadata without loading plugin code.
 
     Args:
-        metadata: One metadata mapping or an iterable of mappings.  Supported
-            fields are ``name`` (with ``plugin_id``/``component_id`` aliases),
-            ``api_version`` (with ``sdk_version`` as a compatibility alias),
-            ``capabilities`` (with ``kind`` as a compatibility alias), and the
-            boolean ``disabled``/``enabled`` state fields.
+        metadata: One metadata mapping or an iterable of mappings. Supported
+            fields are ``name`` or the stable ``plugin_id``/``component_id``
+            pair, ``api_version`` (with ``sdk_version`` as a compatibility
+            alias), ``capabilities`` (with ``kind`` as a compatibility alias),
+            and the boolean ``disabled``/``enabled`` state fields.
         supported_api_major: API major accepted by this process.
         supported_capabilities: Optional allow-list.  The OpenMed plugin
             capability kinds are used by default.
@@ -258,16 +268,13 @@ def build_quarantine_report(
     for indices in groups.values():
         if len(indices) < 2:
             continue
-        ordered = sorted(
-            indices, key=lambda index: _candidate_sort_key(evaluated[index])
-        )
-        for duplicate_index in ordered[1:]:
+        for duplicate_index in indices:
             candidate = evaluated[duplicate_index]
             evaluated[duplicate_index] = _with_reason(
                 candidate,
                 category=CATEGORY_QUARANTINED,
                 reason=REASON_DUPLICATE_NAME,
-                message="plugin name duplicates another available plugin",
+                message="plugin name is declared by multiple available plugins",
             )
 
     statuses = tuple(
@@ -321,11 +328,10 @@ def _normalize_supported_capabilities(
         return SUPPORTED_CAPABILITIES
     if isinstance(capabilities, (str, bytes, Mapping)):
         raise ValueError("supported_capabilities must be an iterable of strings")
-    try:
-        values = tuple(capabilities)
-    except Exception:
+    values = _bounded_values(capabilities, _MAX_CAPABILITY_DECLARATIONS)
+    if values is None:
         raise ValueError(
-            "supported_capabilities must be an iterable of strings"
+            "supported_capabilities must be a bounded iterable of strings"
         ) from None
     normalized: set[str] = set()
     for value in values:
@@ -349,9 +355,21 @@ def _metadata_items(
     if metadata is None or isinstance(metadata, (str, bytes)):
         return (metadata,)
     try:
-        return tuple(metadata)
+        iterator = iter(metadata)
     except Exception:
-        return (metadata,)
+        return (_ITERATION_ERROR,)
+    items: list[Any] = []
+    while len(items) <= _MAX_METADATA_RECORDS:
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return tuple(items)
+        except Exception:
+            return (_ITERATION_ERROR,)
+        if len(items) == _MAX_METADATA_RECORDS:
+            return (_RECORD_LIMIT_EXCEEDED,)
+        items.append(item)
+    return (_RECORD_LIMIT_EXCEEDED,)
 
 
 def _evaluate_metadata(
@@ -360,12 +378,14 @@ def _evaluate_metadata(
     supported_api_major: int,
     supported_capabilities: frozenset[str],
 ) -> _EvaluatedMetadata:
+    if item is _ITERATION_ERROR:
+        return _fallback_invalid_status("metadata records could not be read safely")
+    if item is _RECORD_LIMIT_EXCEEDED:
+        return _fallback_invalid_status("metadata record limit exceeded")
     if not isinstance(item, Mapping):
         return _fallback_invalid_status("metadata record is not a mapping")
 
-    name_value = _first_value(
-        item, "name", "plugin_name", "plugin_id", "id", "component_id"
-    )
+    name_value = _metadata_name(item)
     if name_value is _READ_ERROR:
         return _fallback_invalid_status("metadata could not be read safely")
     name, name_key, valid_name = _name_details(name_value)
@@ -405,8 +425,8 @@ def _evaluate_metadata(
             reason=REASON_INVALID_API_VERSION,
             message="plugin API version is missing or malformed",
         )
-    api_version, api_major = _normalize_api_version(api_value)
-    if api_version is None or api_major is None:
+    api_version, api_major, api_fingerprint = _normalize_api_version(api_value)
+    if api_version is None or api_major is None or api_fingerprint is None:
         return _make_evaluated(
             name=name,
             name_key=name_key,
@@ -422,6 +442,7 @@ def _evaluate_metadata(
             reason=REASON_UNSUPPORTED_API_VERSION,
             message="plugin API major version is not supported",
             api_version=api_version,
+            fingerprint_values=(api_fingerprint,),
         )
 
     capability_reason, capabilities, capability_fingerprint = _capability_details(
@@ -437,7 +458,7 @@ def _evaluate_metadata(
             message=_CAPABILITY_MESSAGES[capability_reason],
             api_version=api_version,
             capabilities=capabilities,
-            fingerprint_values=capability_fingerprint,
+            fingerprint_values=(api_fingerprint, *capability_fingerprint),
         )
 
     return _make_evaluated(
@@ -448,7 +469,7 @@ def _evaluate_metadata(
         message="plugin metadata accepted",
         api_version=api_version,
         capabilities=capabilities,
-        fingerprint_values=capability_fingerprint,
+        fingerprint_values=(api_fingerprint, *capability_fingerprint),
         eligible_for_duplicate_check=True,
     )
 
@@ -521,9 +542,8 @@ def _capability_details(
 
     if isinstance(raw_capabilities, (str, bytes, Mapping)):
         return REASON_INVALID_CAPABILITIES, (), ("invalid_shape",)
-    try:
-        values = tuple(raw_capabilities)
-    except Exception:
+    values = _bounded_values(raw_capabilities, _MAX_CAPABILITY_DECLARATIONS)
+    if values is None:
         return REASON_INVALID_CAPABILITIES, (), ("unreadable",)
     if not values:
         return REASON_MISSING_CAPABILITIES, (), ()
@@ -551,27 +571,67 @@ def _normalize_capability(value: Any) -> str | None:
     return token
 
 
-def _normalize_api_version(value: Any) -> tuple[str | None, int | None]:
+def _bounded_values(value: Iterable[Any], maximum: int) -> tuple[Any, ...] | None:
+    """Materialize at most ``maximum`` values, returning ``None`` on failure."""
+
+    try:
+        iterator = iter(value)
+    except Exception:
+        return None
+    values: list[Any] = []
+    while len(values) <= maximum:
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return tuple(values)
+        except Exception:
+            return None
+        if len(values) == maximum:
+            return None
+        values.append(item)
+    return None
+
+
+def _normalize_api_version(
+    value: Any,
+) -> tuple[str | None, int | None, str | None]:
     if isinstance(value, bool):
-        return None, None
+        return None, None, None
     if isinstance(value, int):
         if value < 0:
-            return None, None
-        return f"{value}.0.0", value
+            return None, None, None
+        normalized = f"{value}.0.0"
+        return normalized, value, _sha256_text(normalized)
     if not isinstance(value, str):
-        return None, None
+        return None, None, None
     text = value.strip()
     match = _API_VERSION_RE.fullmatch(text)
     if match is None:
-        return None, None
+        return None, None, None
     major = int(match.group("major"))
     minor = int(match.group("minor") or 0)
     patch = int(match.group("patch") or 0)
-    suffix_start = text.find("-")
-    if suffix_start == -1:
-        suffix_start = text.find("+")
-    suffix = text[suffix_start:] if suffix_start != -1 else ""
-    return f"{major}.{minor}.{patch}{suffix}", major
+    return f"{major}.{minor}.{patch}", major, _sha256_text(text)
+
+
+def _metadata_name(item: Mapping[str, Any]) -> Any:
+    """Prefer stable plugin/component identifiers over a display name."""
+
+    plugin_id = _first_value(item, "plugin_id", "plugin")
+    component_id = _first_value(item, "component_id")
+    if plugin_id is _READ_ERROR or component_id is _READ_ERROR:
+        return _READ_ERROR
+    if plugin_id is not _MISSING and component_id is not _MISSING:
+        if not isinstance(plugin_id, str) or not isinstance(component_id, str):
+            return _READ_ERROR
+        plugin_text = plugin_id.strip()
+        component_text = component_id.strip()
+        if not plugin_text or not component_text:
+            return _READ_ERROR
+        return f"{plugin_text}:{component_text}"
+    if plugin_id is not _MISSING:
+        return plugin_id
+    return _first_value(item, "name", "plugin_name", "id", "component_id")
 
 
 def _name_details(value: Any) -> tuple[str, str, bool]:
@@ -697,17 +757,6 @@ def _metadata_hash(
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
-
-
-def _candidate_sort_key(candidate: _EvaluatedMetadata) -> tuple[Any, ...]:
-    status = candidate.status
-    return (
-        status.metadata_hash,
-        status.name.casefold(),
-        status.name,
-        status.api_version or "",
-        status.capabilities,
-    )
 
 
 def _status_sort_key(status: PluginStatus) -> tuple[Any, ...]:

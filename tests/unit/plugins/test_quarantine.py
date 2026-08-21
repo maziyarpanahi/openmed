@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
 import socket
+import subprocess
+import sys
+import textwrap
 
+from openmed.plugins import PluginComponentMetadata
 from openmed.plugins.quarantine import (
     CATEGORY_AVAILABLE,
     CATEGORY_DISABLED,
@@ -44,6 +48,29 @@ def test_report_does_not_enumerate_or_load_entry_points(monkeypatch) -> None:
 
     assert [record.name for record in report.available] == ["local-recognizer"]
     assert report.quarantined == ()
+
+
+def test_module_import_does_not_trigger_entry_point_discovery() -> None:
+    code = """
+    import importlib.metadata
+
+    def fail_entry_points(*args, **kwargs):
+        raise AssertionError("module import enumerated entry points")
+
+    importlib.metadata.entry_points = fail_entry_points
+
+    import openmed.plugins.quarantine
+    """
+
+    result = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        check=False,
+        cwd=".",
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_api_and_capability_failures_are_safe_categories() -> None:
@@ -103,9 +130,26 @@ def test_duplicate_resolution_is_independent_of_input_order() -> None:
     reverse = build_quarantine_report([exporter, recognizer])
 
     assert forward.to_json() == reverse.to_json()
-    assert len(forward.available) == 1
-    assert len(forward.quarantined) == 1
-    assert forward.quarantined[0].reason == REASON_DUPLICATE_NAME
+    assert forward.available == ()
+    assert len(forward.quarantined) == 2
+    assert all(record.reason == REASON_DUPLICATE_NAME for record in forward.quarantined)
+
+
+def test_existing_component_metadata_uses_stable_qualified_id() -> None:
+    secret_display_name = "sensitive human display value"
+    metadata = PluginComponentMetadata(
+        plugin_id="example-plugin",
+        component_id="local-exporter",
+        kind="exporter",
+        name=secret_display_name,
+    ).to_dict()
+
+    report = build_quarantine_report(metadata)
+
+    assert len(report.available) == 1
+    assert report.available[0].name == "example-plugin:local-exporter"
+    assert report.available[0].capabilities == ("exporter",)
+    assert secret_display_name not in report.to_json()
 
 
 def test_compatibility_aliases_and_normalization_are_supported() -> None:
@@ -141,6 +185,16 @@ def test_malformed_metadata_never_echoes_sensitive_values() -> None:
     assert secret not in report.to_json()
 
 
+def test_api_version_suffix_is_not_echoed() -> None:
+    secret = "private-build-label"
+    report = build_quarantine_report(
+        {**_plugin("versioned-plugin"), "api_version": f"1.0.0-{secret}"}
+    )
+
+    assert report.available[0].api_version == "1.0.0"
+    assert secret not in report.to_json()
+
+
 def test_report_serialization_is_detached_and_categories_are_counted() -> None:
     payload = [_plugin("zeta"), {**_plugin("alpha"), "disabled": True}]
     report = build_quarantine_report(payload)
@@ -164,3 +218,27 @@ def test_invalid_record_is_structured_instead_of_raising() -> None:
     assert all(
         record.reason == REASON_INVALID_METADATA for record in report.quarantined
     )
+
+
+def test_metadata_and_capability_iterables_are_bounded() -> None:
+    def unbounded_records():
+        while True:
+            yield _plugin("repeated")
+
+    def unbounded_capabilities():
+        while True:
+            yield "recognizer"
+
+    record_report = build_quarantine_report(unbounded_records())
+    capability_report = build_quarantine_report(
+        {
+            "name": "bounded-plugin",
+            "api_version": "1.0.0",
+            "capabilities": unbounded_capabilities(),
+        }
+    )
+
+    assert record_report.available == ()
+    assert record_report.quarantined[0].reason == REASON_INVALID_METADATA
+    assert capability_report.available == ()
+    assert capability_report.quarantined[0].reason == "invalid_capabilities"
