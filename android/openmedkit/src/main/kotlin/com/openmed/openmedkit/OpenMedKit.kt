@@ -1,11 +1,20 @@
 package com.openmed.openmedkit
 
 import com.openmed.openmedkit.policy.PolicyProfiles
+import com.openmed.openmedkit.util.SafeLog
+import com.openmed.openmedkit.util.SafeLogOperation
+import com.openmed.openmedkit.util.toSafeLogSpan
 import java.io.Closeable
 import java.io.File
 
 /**
  * OpenMedKit public Kotlin facade for on-device clinical NLP.
+ *
+ * Inference uses caller-supplied local model assets and performs no library
+ * network access. Telemetry is disabled by default, and internal diagnostics
+ * contain labels, offsets, and hashes rather than raw span text. Results are
+ * assistive software output, not diagnosis, treatment advice, or a medical
+ * device decision.
  */
 class OpenMedKit(
     private val classifier: OnnxTokenClassifier,
@@ -36,9 +45,14 @@ class OpenMedKit(
             "confidenceThreshold must be between 0.0 and 1.0"
         }
         val predictions = classifier.predict(text)
-        return decoder.decode(predictions, text)
+        val entities = decoder.decode(predictions, text)
             .filter { it.confidence >= confidenceThreshold }
             .sortedByOffset()
+        SafeLog.record(
+            SafeLogOperation.ANALYZE_TEXT,
+            entities.map { it.toSafeLogSpan() },
+        )
+        return entities
     }
 
     /**
@@ -53,11 +67,16 @@ class OpenMedKit(
             analyzeText(text, confidenceThreshold),
             text,
         )
-        return if (useSmartMerging) {
+        val entities = if (useSmartMerging) {
             merger.merge(repaired, text)
         } else {
             repaired.sortedByOffset()
         }
+        SafeLog.record(
+            SafeLogOperation.EXTRACT_PII,
+            entities.map { it.toSafeLogSpan() },
+        )
+        return entities
     }
 
     /**
@@ -91,11 +110,16 @@ class OpenMedKit(
             deduplicateOverlappingEntities(chunkEntities),
             text,
         )
-        return if (useSmartMerging) {
+        val entities = if (useSmartMerging) {
             deduplicateOverlappingEntities(merger.merge(repaired, text))
         } else {
             deduplicateOverlappingEntities(repaired)
         }
+        SafeLog.record(
+            SafeLogOperation.EXTRACT_PII_CHUNKED,
+            entities.map { it.toSafeLogSpan() },
+        )
+        return entities
     }
 
     /**
@@ -128,7 +152,12 @@ class OpenMedKit(
     ): PolicyDeidentificationResult {
         val profile = PolicyProfiles.load(policy)
         val entities = extractPii(text, confidenceThreshold, useSmartMerging)
-        return deidentifyEngine.deidentify(text, entities, profile)
+        val result = deidentifyEngine.deidentify(text, entities, profile)
+        SafeLog.record(
+            SafeLogOperation.DEIDENTIFY,
+            entities.map { it.toSafeLogSpan() },
+        )
+        return result
     }
 
     override fun close() {
@@ -176,7 +205,7 @@ class OpenMedKit(
     )
 
     companion object {
-        const val VERSION = "2.0.0"
+        const val VERSION = "2.2.0"
 
         /**
          * Load an exported OpenMed ONNX directory for local Android inference.
@@ -297,7 +326,12 @@ class OpenMed(
             null -> LocalPiiRecognizer.detect(text)
             else -> LocalPiiRecognizer.detect(text)
         }
-        return entities.filter { it.confidence >= confidenceThreshold }
+        val filtered = entities.filter { it.confidence >= confidenceThreshold }
+        SafeLog.record(
+            SafeLogOperation.ANALYZE_TEXT,
+            filtered.map { it.toSafeLogSpan() },
+        )
+        return filtered
     }
 
     /**
@@ -309,7 +343,12 @@ class OpenMed(
         useSmartMerging: Boolean = true,
     ): List<EntityPrediction> {
         val entities = analyzeText(text, confidenceThreshold)
-        return if (useSmartMerging) entities else entities
+        val extracted = if (useSmartMerging) entities else entities
+        SafeLog.record(
+            SafeLogOperation.EXTRACT_PII,
+            extracted.map { it.toSafeLogSpan() },
+        )
+        return extracted
     }
 
     /**
