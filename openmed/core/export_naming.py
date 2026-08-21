@@ -121,7 +121,9 @@ def _normalise_schema_version(value: object) -> str:
         raise TypeError("schema_version must be a string or integer")
     try:
         rendered = str(value)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         _fail("schema_version", "could not be normalized")
     return _normalise_component(rendered, "schema_version")
 
@@ -133,6 +135,8 @@ def _normalise_extension(value: object, format_name: str) -> str:
         return format_name
     if type(value) is not str:
         raise TypeError("extension must be a string")
+    if len(value) > _MAX_COMPONENT_INPUT_LENGTH:
+        _fail("extension", "is too long")
     candidate = value[1:] if value.startswith(".") else value
     if not candidate:
         _fail("extension", "must not be empty")
@@ -147,7 +151,9 @@ def _normalise_fingerprint(value: object) -> str:
     elif type(value) in (bytearray, memoryview):
         try:
             raw = bytes(cast(bytearray | memoryview, value))
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             _fail("fingerprint", "could not be read safely")
     else:
         raw = None
@@ -193,7 +199,9 @@ def _format_datetime(value: datetime) -> str:
             suffix = "z"
         fraction = f"{resolved.microsecond:06d}" if resolved.microsecond else ""
         return resolved.strftime("%Y%m%dt%H%M%S") + fraction + suffix
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         _fail("explicit_timestamp", "could not be normalized")
 
 
@@ -236,7 +244,9 @@ def _canonical_json(value: Any) -> bytes:
             separators=(",", ":"),
             sort_keys=True,
         )
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         raise ExportNamingError(
             "fingerprint source must be finite and JSON-serializable"
         ) from None
@@ -253,7 +263,9 @@ def fingerprint_for(value: Any) -> str:
     if type(value) in (bytes, bytearray, memoryview):
         try:
             raw = bytes(value)
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             _fail("fingerprint source", "could not be read safely")
     else:
         raw = _canonical_json(value)
@@ -336,7 +348,9 @@ def _snapshot_metadata_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
 
     try:
         iterator = iter(value)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
         _fail("metadata", "could not be read safely")
 
     snapshot: dict[str, Any] = {}
@@ -345,7 +359,9 @@ def _snapshot_metadata_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
             key = next(iterator)
         except StopIteration:
             return snapshot
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             _fail("metadata", "could not be read safely")
         if type(key) is not str or key not in _ALLOWED_METADATA_FIELDS:
             _fail("metadata", "contains unsupported fields")
@@ -353,7 +369,9 @@ def _snapshot_metadata_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
             _fail("metadata", "contains duplicate fields")
         try:
             snapshot[key] = value[key]
-        except Exception:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
             _fail("metadata", "could not be read safely")
     _fail("metadata", "contains unsupported fields")
 

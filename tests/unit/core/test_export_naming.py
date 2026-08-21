@@ -177,9 +177,12 @@ def test_unsupported_metadata_fields_are_rejected_without_serializing_values() -
 def test_hostile_mapping_failure_is_value_free() -> None:
     secret = "synthetic-sensitive-mapping-482901"
 
+    class MappingFailure(BaseException):
+        pass
+
     class HostileMapping(Mapping[str, Any]):
         def __getitem__(self, key: str) -> Any:
-            raise RuntimeError(f"{secret}:{key}")
+            raise MappingFailure(f"{secret}:{key}")
 
         def __iter__(self) -> Iterator[str]:
             return iter(("artifact_type",))
@@ -201,9 +204,12 @@ def test_hostile_mapping_failure_is_value_free() -> None:
 def test_serialization_failure_does_not_retain_exception_context() -> None:
     secret = "synthetic-sensitive-serialization-482901"
 
+    class SerializationFailure(BaseException):
+        pass
+
     class ExplodingKey(str):
         def __lt__(self, other: object) -> bool:
-            raise RuntimeError(secret)
+            raise SerializationFailure(secret)
 
     with pytest.raises(ExportNamingError) as error:
         fingerprint_for({ExplodingKey("first"): 1, ExplodingKey("second"): 2})
