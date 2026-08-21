@@ -237,7 +237,7 @@ classification:
     - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
-    - integrations-llamaindex.md
+    - integrations/llamaindex.md
     - integrations/columnar-redactor.md
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
@@ -348,6 +348,7 @@ classification:
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
     - demo/browser-egress.md
+    - integrations-llamaindex.md
     - i18n/glossary.md
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md
