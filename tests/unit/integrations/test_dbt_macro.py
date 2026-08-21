@@ -55,9 +55,9 @@ def _render(call: str, **context: object) -> str:
     return template.render(**context).strip()
 
 
-def _render_compiler_error(call: str) -> str:
+def _render_compiler_error(call: str, **context: object) -> str:
     with pytest.raises(_CompilerError) as excinfo:
-        _render(call, exceptions=_Exceptions())
+        _render(call, exceptions=_Exceptions(), **context)
     return str(excinfo.value)
 
 
@@ -67,6 +67,12 @@ def test_redact_renders_deterministic_parameterized_default_call() -> None:
 
     assert _render(call) == expected
     assert _render(call) == expected
+
+
+def test_redact_accepts_a_qualified_explicit_identifier() -> None:
+    assert _render("redact('source.clinical_note')") == (
+        "openmed_deidentify(source.clinical_note, 'hipaa_safe_harbor')"
+    )
 
 
 @pytest.mark.parametrize("policy", _CANONICAL_POLICIES)
@@ -108,6 +114,29 @@ def test_invalid_policy_fails_without_echoing_the_supplied_value() -> None:
 
     assert "policy" in error.lower()
     assert "not_a_policy" not in error
+
+
+@pytest.mark.parametrize(
+    "column",
+    (
+        "clinical note",
+        "clinical-note",
+        "clinical_note || 'synthetic-sensitive-value'",
+        "coalesce(clinical_note, 'synthetic-sensitive-value')",
+        "'synthetic-sensitive-value'",
+        "schema.table.extra",
+        ".clinical_note",
+        "clinical_note.",
+        "1clinical_note",
+    ),
+)
+def test_sql_fragments_fail_closed_without_echoing_the_supplied_value(
+    column: str,
+) -> None:
+    error = _render_compiler_error("redact(candidate)", candidate=column)
+
+    assert "explicit column" in error
+    assert column not in error
 
 
 @pytest.mark.parametrize(

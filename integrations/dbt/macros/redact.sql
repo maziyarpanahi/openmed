@@ -50,20 +50,33 @@
         ) }}
     {%- endif -%}
     {%- set normalized_column = column | trim -%}
-    {%- if not normalized_column
-        or normalized_column[:1] == '*'
-        or normalized_column[-2:] == '.*'
-        or ',' in normalized_column
-        or ';' in normalized_column
-        or '--' in normalized_column
-        or '/*' in normalized_column
-        or '*/' in normalized_column
-    -%}
+    {%- set identifier_start = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_' -%}
+    {%- set identifier_body = identifier_start ~ '0123456789' -%}
+    {%- set identifier_parts = normalized_column.split('.') -%}
+    {%- set validation = namespace(valid=true) -%}
+    {%- if not normalized_column or identifier_parts | length > 2 -%}
+        {%- set validation.valid = false -%}
+    {%- endif -%}
+    {%- for part in identifier_parts -%}
+        {%- if not part -%}
+            {%- set validation.valid = false -%}
+        {%- else -%}
+            {%- if part[0] not in identifier_start -%}
+                {%- set validation.valid = false -%}
+            {%- endif -%}
+            {%- for character in part -%}
+                {%- if character not in identifier_body -%}
+                    {%- set validation.valid = false -%}
+                {%- endif -%}
+            {%- endfor -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {%- if not validation.valid -%}
         {{ exceptions.raise_compiler_error(
             'OpenMed redaction accepts one explicit column, not a wildcard or SQL fragment.'
         ) }}
     {%- endif -%}
-    {%- if require_bare and '.' in normalized_column -%}
+    {%- if require_bare and identifier_parts | length != 1 -%}
         {{ exceptions.raise_compiler_error(
             'redact_columns() requires bare column names so each output is explicitly aliased.'
         ) }}
