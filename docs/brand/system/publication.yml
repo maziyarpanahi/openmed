@@ -176,6 +176,7 @@ classification:
     - configuration/precedence-audit.md
     - profiles.md
     - plugin-sdk.md
+    - plugins/quarantine-report.md
     - batch-processing.md
     - batch-howto.md
     - legacy-indic-encoding.md
