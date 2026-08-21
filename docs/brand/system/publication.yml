@@ -126,6 +126,7 @@ classification:
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md
     - offline-install.md
+    - install/standalone.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
@@ -140,6 +141,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - models/bundled-offline.md
+    - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
@@ -231,6 +233,7 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md
+    - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
     - integrations/llamaindex.md
@@ -343,6 +346,7 @@ classification:
     - compliance/model-card-eu-ai-act-fields.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
+    - demo/browser-egress.md
     - integrations-llamaindex.md
     - i18n/glossary.md
     - leaderboard/index.md
