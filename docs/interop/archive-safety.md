@@ -20,6 +20,8 @@ decisions:
 
 Diagnostics contain reason codes and counts only. Member paths and link targets
 are not copied into reports, serialized output, or exception messages.
+Report reason iteration and member kind normalization are bounded before
+caller-controlled values are processed.
 
 ```python
 from openmed.interop.archive_safety import (

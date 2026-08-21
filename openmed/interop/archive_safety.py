@@ -44,6 +44,26 @@ DEFAULT_MAX_EXPANSION_RATIO: Final = 100.0
 DEFAULT_MAX_PATH_LENGTH: Final = 4_096
 
 _DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:")
+_MAX_KIND_LENGTH: Final = 32
+_REGULAR_KINDS = frozenset(
+    {
+        "file",
+        "regular",
+        "regular-file",
+        "directory",
+        "dir",
+    }
+)
+_LINK_KINDS = frozenset(
+    {
+        "symlink",
+        "symbolic-link",
+        "hardlink",
+        "hard-link",
+        "link",
+    }
+)
+_VALID_KINDS = _REGULAR_KINDS | _LINK_KINDS
 _WINDOWS_RESERVED_NAMES = frozenset(
     {
         "aux",
@@ -247,22 +267,20 @@ class ArchiveSafetyReport:
                 raise ValueError(
                     "archive report aggregates must be non-negative integers"
                 )
-        try:
-            items = list(self.reason_counts.items())
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except BaseException:
-            raise ValueError("archive report reasons are invalid") from None
+        items = _bounded_reason_items(self.reason_counts)
         safe_reasons = {reason.value for reason in ArchiveSafetyReason}
         counts: dict[str, int] = {}
+        seen_reasons: set[str] = set()
         for reason, count in items:
             if (
                 type(reason) is not str
                 or reason not in safe_reasons
+                or reason in seen_reasons
                 or type(count) is not int
                 or count < 0
             ):
                 raise ValueError("archive report reasons are invalid")
+            seen_reasons.add(reason)
             if count > 0:
                 counts[reason] = count
         if decision is not _decision_for(counts):
@@ -466,6 +484,31 @@ def _coerce_member(raw_member: Any) -> ArchiveMember | None:
     return None
 
 
+def _bounded_reason_items(reason_counts: Any) -> list[tuple[Any, Any]]:
+    """Snapshot at most one item beyond the finite reason-code vocabulary."""
+
+    if not isinstance(reason_counts, Mapping):
+        raise ValueError("archive report reasons are invalid")
+    try:
+        iterator = iter(reason_counts.items())
+        items: list[tuple[Any, Any]] = []
+        for _ in range(len(ArchiveSafetyReason) + 1):
+            try:
+                item = next(iterator)
+            except StopIteration:
+                break
+            if type(item) is not tuple or len(item) != 2:
+                raise ValueError
+            items.append(item)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ValueError("archive report reasons are invalid") from None
+    if len(items) > len(ArchiveSafetyReason):
+        raise ValueError("archive report reasons are invalid")
+    return items
+
+
 def _first_value(
     metadata: Mapping[str, Any],
     keys: tuple[str, ...],
@@ -546,20 +589,14 @@ def _is_nonnegative_int(value: Any) -> bool:
 
 
 def _valid_kind(kind: Any) -> bool:
-    if type(kind) is not str:
-        return False
-    return kind.strip().lower().replace("_", "-") in {
-        "file",
-        "regular",
-        "regular-file",
-        "directory",
-        "dir",
-        "symlink",
-        "symbolic-link",
-        "hardlink",
-        "hard-link",
-        "link",
-    }
+    normalized = _normalize_kind(kind)
+    return normalized in _VALID_KINDS
+
+
+def _normalize_kind(kind: Any) -> str | None:
+    if type(kind) is not str or len(kind) > _MAX_KIND_LENGTH:
+        return None
+    return kind.strip().lower().replace("_", "-")
 
 
 def _valid_link_target(link_target: Any) -> bool:
@@ -569,15 +606,7 @@ def _valid_link_target(link_target: Any) -> bool:
 def _is_link(member: ArchiveMember) -> bool:
     if member.link_target is not None:
         return True
-    if type(member.kind) is not str:
-        return False
-    return member.kind.strip().lower().replace("_", "-") in {
-        "symlink",
-        "symbolic-link",
-        "hardlink",
-        "hard-link",
-        "link",
-    }
+    return _normalize_kind(member.kind) in _LINK_KINDS
 
 
 def _exceeds_expansion_ratio(

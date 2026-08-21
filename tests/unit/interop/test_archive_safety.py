@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
+
 import pytest
 
 from openmed.interop.archive_safety import (
     ArchiveDecision,
     ArchiveMember,
     ArchiveSafetyPolicy,
+    ArchiveSafetyReason,
     ArchiveSafetyReport,
     assess_archive_members,
     inspect_archive_members,
@@ -241,6 +244,48 @@ def test_public_report_rejects_arbitrary_reason_metadata():
         )
 
     assert marker not in str(raised.value)
+
+
+def test_public_report_bounds_hostile_reason_iteration():
+    class RepeatingReasons(Mapping[str, int]):
+        emitted = 0
+
+        def __getitem__(self, key: str) -> int:
+            del key
+            return 1
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(())
+
+        def __len__(self) -> int:
+            return 1
+
+        def items(self):
+            for _ in range(100):
+                self.emitted += 1
+                yield (ArchiveSafetyReason.INVALID_METADATA.value, 1)
+
+    reasons = RepeatingReasons()
+
+    with pytest.raises(ValueError, match="reasons are invalid"):
+        ArchiveSafetyReport(
+            decision=ArchiveDecision.REJECT,
+            entry_count=1,
+            total_compressed_bytes=0,
+            total_uncompressed_bytes=0,
+            reason_counts=reasons,
+        )
+
+    assert reasons.emitted == len(ArchiveSafetyReason) + 1
+
+
+def test_oversized_kind_metadata_is_rejected_before_normalization():
+    report = inspect_archive_members(
+        [member("records/item.txt", kind=(" " * 4_096) + "file")]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
 
 
 def test_extreme_sizes_fail_closed_without_float_overflow():
