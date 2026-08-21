@@ -78,7 +78,7 @@ class CliContractFixture:
             raise ValueError("failed fixtures must provide an error")
 
         if self.data is not None:
-            json.dumps(self.data, sort_keys=True, ensure_ascii=False)
+            _copy_json_object(self.data)
         else:
             if not self.error_code or not self.error_code.strip():
                 raise ValueError("failed fixtures must provide an error code")
@@ -95,7 +95,7 @@ class CliContractFixture:
             return {
                 "ok": True,
                 "command": self.command,
-                "data": dict(self.data),
+                "data": _copy_json_object(self.data),
             }
         return {
             "ok": False,
@@ -129,7 +129,7 @@ def render_contract_fixture(fixture: CliContractFixture) -> CliContractResult:
     args = argparse.Namespace(json_output=True, command_path=fixture.command)
     stream = StringIO()
     if fixture.data is not None:
-        exit_code = emit(args, fixture.data, stream=stream)
+        exit_code = emit(args, _copy_json_object(fixture.data), stream=stream)
     else:
         error = CliError(
             fixture.error_message or "Contract fixture failed.",
@@ -147,6 +147,22 @@ def render_contract_fixture(fixture: CliContractFixture) -> CliContractResult:
         payload=payload,
         json_text=json_text,
     )
+
+
+def _copy_json_object(value: dict[str, Any]) -> dict[str, Any]:
+    try:
+        serialized = json.dumps(
+            value,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+        )
+        restored = json.loads(serialized)
+    except (TypeError, ValueError):
+        raise ValueError("fixture data must be a finite JSON object") from None
+    if type(restored) is not dict:
+        raise ValueError("fixture data must be a finite JSON object")
+    return restored
 
 
 SUCCESS_FIXTURE = CliContractFixture(

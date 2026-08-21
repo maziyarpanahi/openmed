@@ -18,6 +18,7 @@ from openmed.cli.contract import (
     SUCCESS_FIXTURE,
     VALIDATION_ERROR_CODE,
     VALIDATION_ERROR_MESSAGE,
+    CliContractFixture,
     render_contract_fixture,
 )
 from openmed.core.offline import OfflineModeError
@@ -77,6 +78,21 @@ def test_contract_rendering_is_deterministic() -> None:
         second = render_contract_fixture(fixture)
         assert first.exit_code == second.exit_code
         assert first.json_text == second.json_text
+
+
+def test_expected_payload_returns_a_deep_json_copy() -> None:
+    fixture = CliContractFixture(
+        name="nested_success",
+        command="models list",
+        expected_exit_code=0,
+        data={"nested": {"items": []}},
+    )
+
+    payload = fixture.expected_payload
+    payload["data"]["nested"]["items"].append("caller mutation")
+
+    assert fixture.expected_payload["data"] == {"nested": {"items": []}}
+    assert render_contract_fixture(fixture).payload["data"] == {"nested": {"items": []}}
 
 
 def test_models_list_success_matches_contract(monkeypatch, capsys) -> None:
