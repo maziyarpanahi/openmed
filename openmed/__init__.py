@@ -34,6 +34,10 @@ if TYPE_CHECKING:
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {
+    "aanalyze_text": ".aio",
+    "abatch": ".aio",
+    "adeidentify": ".aio",
+    "aextract_pii": ".aio",
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
     "ModelCachePolicy": ".core",

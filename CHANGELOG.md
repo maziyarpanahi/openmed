@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added lazy async wrappers for PII extraction, de-identification, text
+  analysis, and batch processing that offload the established synchronous APIs
+  without importing asyncio or creating an event loop during base package
+  import (#2338).
 - Added a bounded zero-upload browser privacy playground with deterministic
   local rules, trusted same-origin adapter support, aggregate-only status,
   source-safe labels, and explicit network-boundary controls (#2373).

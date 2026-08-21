@@ -35,6 +35,7 @@ nav:
       - JSONL Trace Content Walker: reference/trace-jsonl.md
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
+      - Async Python API: async-api.md
       - REST Service (MVP): rest-service.md
       - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
