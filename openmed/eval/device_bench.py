@@ -1095,7 +1095,9 @@ def _atomic_write_text(path: Path, content: str) -> None:
     temporary_path = Path(temporary_name)
     descriptor_open = True
     try:
-        os.fchmod(descriptor, 0o600)
+        set_descriptor_mode = getattr(os, "fchmod", None)
+        if set_descriptor_mode is not None:
+            set_descriptor_mode(descriptor, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             descriptor_open = False
             handle.write(content)

@@ -245,7 +245,11 @@ def test_device_benchmark_archive_rejects_unknown_raw_fields(tmp_path: Path) -> 
         load_device_benchmark_archive(archive_path)
 
 
-def test_device_benchmark_archive_write_is_atomic(tmp_path: Path) -> None:
+def test_device_benchmark_archive_write_is_atomic_without_fchmod(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(device_bench_module.os, "fchmod", raising=False)
     archive_path = write_device_benchmark_archive(_run_result(), tmp_path)
 
     assert archive_path.exists()
