@@ -30,7 +30,9 @@ in the least-loaded shard that satisfies both limits; a new shard is created
 when no existing shard can accept it. This makes the result independent of
 input iteration order while keeping every shard within its declared bounds.
 A descriptor larger than `max_bytes` is rejected, and normalized duplicate
-paths are rejected before a plan is returned.
+paths are rejected before a plan is returned. A plan accepts at most 10,000
+descriptors, at most 10,000 files per shard, and 63-bit non-negative declared
+byte sizes; larger metadata fails closed before serialization.
 
 Path normalization is lexical and platform-independent. It does not call
 `Path.resolve()`, `stat()`, or `open()`. The planner therefore works with

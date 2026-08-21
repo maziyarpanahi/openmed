@@ -102,6 +102,7 @@ nav:
       - Extension Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Batch Processing How-To: batch-howto.md
+      - Offline File Shard Plans: processing/shard-plans.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Core Pipeline Observability: core-observability.md

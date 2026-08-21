@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import traceback
+from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from openmed.processing.shard_plan import (
     DuplicateFileDescriptorError,
     FileDescriptor,
+    FileShardEntry,
     FileTooLargeError,
     InvalidFileDescriptorError,
     ShardLimits,
@@ -146,3 +150,88 @@ def test_invalid_descriptor_metadata_is_rejected_without_raw_values() -> None:
     assert "invalid metadata" in message
     assert "synthetic" not in message
     assert "bad.bin" not in message
+
+
+def test_descriptor_iterator_failure_is_value_free() -> None:
+    secret = "raw-sensitive-iterator-value"
+
+    def broken_descriptors() -> Iterator[dict[str, Any]]:
+        yield {"path": "synthetic/first.bin", "size_bytes": 1}
+        raise RuntimeError(secret)
+
+    with pytest.raises(InvalidFileDescriptorError) as exc_info:
+        plan_file_shards(
+            broken_descriptors(),
+            max_bytes=10,
+            max_files=2,
+        )
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(exc_info.value),
+            exc_info.value,
+            exc_info.value.__traceback__,
+        )
+    )
+    assert secret not in rendered
+
+
+def test_hostile_mapping_failure_is_value_free() -> None:
+    secret = "raw-sensitive-mapping-value"
+
+    class HostileMapping(Mapping[str, Any]):
+        def __getitem__(self, key: str) -> Any:
+            raise RuntimeError(f"{secret}:{key}")
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(("path", "size_bytes"))
+
+        def __len__(self) -> int:
+            return 2
+
+    with pytest.raises(InvalidFileDescriptorError) as exc_info:
+        plan_file_shards(
+            [HostileMapping()],
+            max_bytes=10,
+            max_files=2,
+        )
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(exc_info.value),
+            exc_info.value,
+            exc_info.value.__traceback__,
+        )
+    )
+    assert secret not in rendered
+
+
+def test_conflicting_size_aliases_are_rejected() -> None:
+    with pytest.raises(InvalidFileDescriptorError, match="conflicting size fields"):
+        plan_file_shards(
+            [
+                {
+                    "path": "synthetic/conflict.bin",
+                    "size_bytes": 1,
+                    "byte_size": 2,
+                }
+            ],
+            max_bytes=10,
+            max_files=2,
+        )
+
+
+def test_descriptor_count_is_bounded() -> None:
+    descriptors = (
+        {"path": f"synthetic/{index}.bin", "size_bytes": 0} for index in range(10_001)
+    )
+
+    with pytest.raises(InvalidFileDescriptorError, match="limit of 10000 exceeded"):
+        plan_file_shards(descriptors, max_bytes=1, max_files=10_000)
+
+
+def test_safe_plan_entries_require_digest_and_size_metadata() -> None:
+    with pytest.raises(ValueError, match="lowercase SHA-256"):
+        FileShardEntry(path_fingerprint="synthetic/raw-path", size_bytes=1)
+    with pytest.raises(ValueError, match="non-negative integer"):
+        FileShardEntry(path_fingerprint="0" * 64, size_bytes=-1)

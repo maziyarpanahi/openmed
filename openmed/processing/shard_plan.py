@@ -23,6 +23,10 @@ SHARD_PLAN_ALGORITHM = "sha256-path-balanced-v1"
 _PATH_FINGERPRINT_NAMESPACE = "openmed.processing.shard-plan:path:v1"
 _PLAN_FINGERPRINT_NAMESPACE = "openmed.processing.shard-plan:plan:v1"
 _SHARD_FINGERPRINT_NAMESPACE = "openmed.processing.shard-plan:shard:v1"
+_MAX_FILE_DESCRIPTORS = 10_000
+_MAX_PATH_CHARACTERS = 16_384
+_MAX_DECLARED_BYTES = (1 << 63) - 1
+_MISSING = object()
 
 
 class ShardPlanningError(ValueError):
@@ -124,6 +128,10 @@ class FileShardEntry:
     path_fingerprint: str
     size_bytes: int
 
+    def __post_init__(self) -> None:
+        _validate_digest(self.path_fingerprint, "path_fingerprint")
+        _normalize_size(self.size_bytes)
+
     @property
     def fingerprint(self) -> str:
         """Return the path fingerprint using the shorter spelling."""
@@ -143,6 +151,27 @@ class FileShard:
     entries: tuple[FileShardEntry, ...]
     total_bytes: int
     fingerprint: str
+
+    def __post_init__(self) -> None:
+        _validate_nonnegative_int(self.shard_id, "shard_id")
+        try:
+            entries = tuple(self.entries)
+        except Exception:
+            raise TypeError("entries must contain FileShardEntry values") from None
+        if any(type(entry) is not FileShardEntry for entry in entries):
+            raise TypeError("entries must contain FileShardEntry values")
+        if len(entries) > _MAX_FILE_DESCRIPTORS:
+            raise ValueError("entries exceed the file descriptor limit")
+        entries = tuple(sorted(entries, key=lambda entry: entry.path_fingerprint))
+        if len({entry.path_fingerprint for entry in entries}) != len(entries):
+            raise ValueError("entries must have unique path fingerprints")
+        total_bytes = _normalize_size(self.total_bytes)
+        if total_bytes != sum(entry.size_bytes for entry in entries):
+            raise ValueError("total_bytes must equal the sum of entry sizes")
+        _validate_digest(self.fingerprint, "fingerprint")
+        if self.fingerprint != _shard_fingerprint(self.shard_id, entries):
+            raise ValueError("fingerprint does not match shard contents")
+        object.__setattr__(self, "entries", entries)
 
     @property
     def files(self) -> tuple[FileShardEntry, ...]:
@@ -188,6 +217,42 @@ class FileShardPlan:
     fingerprint: str
     algorithm: str = SHARD_PLAN_ALGORITHM
     schema_version: int = SHARD_PLAN_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if type(self.limits) is not ShardLimits:
+            raise TypeError("limits must be a ShardLimits instance")
+        try:
+            shards = tuple(self.shards)
+        except Exception:
+            raise TypeError("shards must contain FileShard values") from None
+        if any(type(shard) is not FileShard for shard in shards):
+            raise TypeError("shards must contain FileShard values")
+        if tuple(shard.shard_id for shard in shards) != tuple(range(len(shards))):
+            raise ValueError("shard identifiers must be contiguous and ordered")
+        if any(
+            shard.total_bytes > self.limits.max_bytes
+            or shard.file_count > self.limits.max_files
+            for shard in shards
+        ):
+            raise ValueError("shard contents exceed the declared limits")
+        path_fingerprints = [
+            entry.path_fingerprint for shard in shards for entry in shard.entries
+        ]
+        if len(path_fingerprints) > _MAX_FILE_DESCRIPTORS:
+            raise ValueError("plan exceeds the file descriptor limit")
+        if len(path_fingerprints) != len(set(path_fingerprints)):
+            raise ValueError("plan contains duplicate path fingerprints")
+        if type(self.algorithm) is not str or self.algorithm != SHARD_PLAN_ALGORITHM:
+            raise ValueError("algorithm is not supported")
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != SHARD_PLAN_SCHEMA_VERSION
+        ):
+            raise ValueError("schema_version is not supported")
+        _validate_digest(self.fingerprint, "fingerprint")
+        if self.fingerprint != _plan_fingerprint(self.limits, shards):
+            raise ValueError("fingerprint does not match plan contents")
+        object.__setattr__(self, "shards", shards)
 
     @property
     def shard_count(self) -> int:
@@ -282,9 +347,29 @@ def plan_file_shards(
         max_files_per_shard=max_files_per_shard,
     )
 
+    try:
+        descriptor_iterator = iter(descriptors)
+    except Exception:
+        raise InvalidFileDescriptorError(
+            "File descriptors must be a bounded iterable"
+        ) from None
+
     normalized: list[FileShardEntry] = []
     seen_fingerprints: dict[str, int] = {}
-    for index, raw_descriptor in enumerate(descriptors):
+    index = 0
+    while True:
+        try:
+            raw_descriptor = next(descriptor_iterator)
+        except StopIteration:
+            break
+        except Exception:
+            raise InvalidFileDescriptorError(
+                f"File descriptor iteration failed at index {index}"
+            ) from None
+        if index >= _MAX_FILE_DESCRIPTORS:
+            raise InvalidFileDescriptorError(
+                f"File descriptor limit of {_MAX_FILE_DESCRIPTORS} exceeded"
+            )
         descriptor = _coerce_descriptor(raw_descriptor, index=index)
         path_fingerprint = descriptor.path_fingerprint
         if path_fingerprint in seen_fingerprints:
@@ -304,6 +389,7 @@ def plan_file_shards(
                 size_bytes=descriptor.size_bytes,
             )
         )
+        index += 1
 
     ordered_entries = sorted(
         normalized,
@@ -394,43 +480,58 @@ def _resolve_limits(
 
 
 def _coerce_descriptor(raw: Any, *, index: int) -> FileDescriptor:
-    if isinstance(raw, FileDescriptor):
-        return raw
-
-    if isinstance(raw, Mapping):
-        path = raw.get("path")
-        if "size_bytes" in raw:
-            size = raw["size_bytes"]
-        elif "byte_size" in raw:
-            size = raw["byte_size"]
-        elif "size" in raw:
-            size = raw["size"]
-        else:
+    if type(raw) is FileDescriptor:
+        try:
+            return FileDescriptor(raw.path, raw.size_bytes)
+        except Exception:
             raise InvalidFileDescriptorError(
-                f"File descriptor at index {index} has no declared size"
-            )
-    else:
-        path = getattr(raw, "path", None)
-        size = getattr(raw, "size_bytes", None)
-        if size is None:
-            size = getattr(raw, "byte_size", None)
-        if size is None:
-            size = getattr(raw, "size", None)
+                f"File descriptor at index {index} has invalid metadata"
+            ) from None
 
-    if path is None:
+    try:
+        if isinstance(raw, Mapping):
+            path = _mapping_value(raw, "path")
+            sizes = [
+                value
+                for key in ("size_bytes", "byte_size", "size")
+                if (value := _mapping_value(raw, key)) is not _MISSING
+            ]
+        else:
+            path = getattr(raw, "path", _MISSING)
+            sizes = [
+                value
+                for name in ("size_bytes", "byte_size", "size")
+                if (value := getattr(raw, name, _MISSING)) is not _MISSING
+            ]
+    except Exception:
+        raise InvalidFileDescriptorError(
+            f"File descriptor at index {index} could not be read safely"
+        ) from None
+
+    if path is _MISSING or path is None:
         raise InvalidFileDescriptorError(
             f"File descriptor at index {index} has no path"
         )
-    if size is None:
+    if not sizes or sizes[0] is None:
         raise InvalidFileDescriptorError(
             f"File descriptor at index {index} has no declared size"
         )
+    if len(sizes) != 1:
+        raise InvalidFileDescriptorError(
+            f"File descriptor at index {index} has conflicting size fields"
+        )
     try:
-        return FileDescriptor(path, size)
-    except (TypeError, ValueError) as exc:
+        return FileDescriptor(path, sizes[0])
+    except Exception:
         raise InvalidFileDescriptorError(
             f"File descriptor at index {index} has invalid metadata"
-        ) from exc
+        ) from None
+
+
+def _mapping_value(mapping: Mapping[str, Any], key: str) -> Any:
+    if key not in mapping:
+        return _MISSING
+    return mapping[key]
 
 
 def _build_shard(
@@ -501,32 +602,56 @@ def _digest(value: str) -> str:
 def _normalize_path(path: str | os.PathLike[str]) -> str:
     try:
         raw_path = os.fspath(path)
-    except TypeError as exc:
-        raise ValueError("path must be a string or path-like value") from exc
+    except Exception:
+        raise ValueError("path must be a string or path-like value") from None
     if isinstance(raw_path, bytes):
         raise ValueError("path must be text, not bytes")
-    if not isinstance(raw_path, str) or not raw_path or "\x00" in raw_path:
-        raise ValueError("path must be non-empty text without NUL characters")
+    if not isinstance(raw_path, str):
+        raise ValueError("path must be a string or path-like value")
+    try:
+        raw_path = str(raw_path)
+    except Exception:
+        raise ValueError("path could not be normalized") from None
+    if not raw_path or "\x00" in raw_path or len(raw_path) > _MAX_PATH_CHARACTERS:
+        raise ValueError("path must be usable bounded text without NUL characters")
 
     # Lexical normalization avoids platform-dependent fingerprints and does
     # not access the filesystem.  NFC gives equivalent Unicode spellings one
     # stable identity while preserving case and relative/absolute semantics.
-    portable_path = raw_path.replace("\\", "/")
-    normalized = posixpath.normpath(unicodedata.normalize("NFC", portable_path))
+    try:
+        portable_path = raw_path.replace("\\", "/")
+        normalized = posixpath.normpath(unicodedata.normalize("NFC", portable_path))
+    except Exception:
+        raise ValueError("path could not be normalized") from None
     if normalized == "." and portable_path not in (".", "./"):
         raise ValueError("path must contain a usable path value")
     return normalized
 
 
 def _normalize_size(value: Any) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if type(value) is not int or value < 0 or value > _MAX_DECLARED_BYTES:
         raise ValueError("declared size must be a non-negative integer")
     return value
 
 
 def _validate_positive_limit(value: Any, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+    maximum = _MAX_FILE_DESCRIPTORS if name == "max_files" else _MAX_DECLARED_BYTES
+    if type(value) is not int or value < 1 or value > maximum:
         raise ValueError(f"{name} must be a positive integer")
+
+
+def _validate_nonnegative_int(value: Any, name: str) -> None:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+
+
+def _validate_digest(value: Any, name: str) -> None:
+    if (
+        type(value) is not str
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{name} must be a lowercase SHA-256 digest")
 
 
 # These aliases keep the public surface discoverable for callers that phrase
