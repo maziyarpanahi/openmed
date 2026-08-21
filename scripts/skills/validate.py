@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT_NAME = "skills"
 MARKETPLACE_PATH = Path(".claude-plugin") / "marketplace.json"
 HELPER_ROOTS = (Path("skills"), Path("scripts") / "skills")
-FOCUSED_TEST_PATH = Path("tests/unit/skills/test_validation.py")
+FOCUSED_TEST_PATH = Path("tests/unit/skills/test_agent_skill_validation.py")
 HELPER_TEST_OVERRIDES = {
     Path("skills") / "build_catalog.py": Path("tests/unit/test_skills_catalog.py"),
     Path("scripts") / "skills" / "build_packs.py": Path(

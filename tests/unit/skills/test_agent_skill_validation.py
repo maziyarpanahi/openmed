@@ -1,4 +1,8 @@
-"""Focused offline tests for the repository Agent Skills validation gate."""
+"""Focused offline tests for the repository Agent Skills validation gate.
+
+The module name is intentionally unique so pytest import-mode collection cannot
+collide with validation tests in other test directories.
+"""
 
 from __future__ import annotations
 
