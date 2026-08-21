@@ -111,10 +111,8 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
 ]
 
 _MODERNBERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
-    ("model.layers.", "encoder.layers."),
-    ("model.embeddings.tok_embeddings.", "embeddings.word_embeddings."),
-    ("model.embeddings.norm.", "embeddings.norm."),
-    ("model.final_norm.", "final_norm."),
+    ("model.layers.", "model.encoder.layers."),
+    ("model.embeddings.tok_embeddings.", "model.embeddings.word_embeddings."),
     (".attn.Wqkv.", ".attention.qkv_proj."),
     (".attn.Wo.", ".attention.out_proj."),
     (".mlp.Wi.", ".mlp.wi_proj."),
@@ -122,14 +120,8 @@ _MODERNBERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
 ]
 
 _LONGFORMER_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
-    ("longformer.encoder.layer.", "encoder.layers."),
-    ("longformer.embeddings.word_embeddings.", "embeddings.word_embeddings."),
-    ("longformer.embeddings.position_embeddings.", "embeddings.position_embeddings."),
-    (
-        "longformer.embeddings.token_type_embeddings.",
-        "embeddings.token_type_embeddings.",
-    ),
-    ("longformer.embeddings.LayerNorm.", "embeddings.norm."),
+    ("longformer.encoder.layer.", "longformer.encoder.layers."),
+    ("longformer.embeddings.LayerNorm.", "longformer.embeddings.norm."),
     (".attention.self.query_global.", ".attention.query_global_proj."),
     (".attention.self.key_global.", ".attention.key_global_proj."),
     (".attention.self.value_global.", ".attention.value_global_proj."),

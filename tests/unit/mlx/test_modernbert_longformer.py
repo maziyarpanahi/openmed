@@ -77,18 +77,20 @@ def test_modernbert_weight_keys_remap_to_mlx_namespace():
 
     assert (
         remap_key("model.embeddings.tok_embeddings.weight", "modernbert")
-        == "embeddings.word_embeddings.weight"
+        == "model.embeddings.word_embeddings.weight"
     )
     assert (
         remap_key("model.layers.0.attn.Wqkv.weight", "modernbert")
-        == "encoder.layers.0.attention.qkv_proj.weight"
+        == "model.encoder.layers.0.attention.qkv_proj.weight"
     )
     assert (
         remap_key("model.layers.0.mlp.Wi.bias", "modernbert")
-        == "encoder.layers.0.mlp.wi_proj.bias"
+        == "model.encoder.layers.0.mlp.wi_proj.bias"
     )
-    assert remap_key("model.final_norm.weight", "modernbert") == "final_norm.weight"
-    assert remap_key("model.final_norm.weight") == "final_norm.weight"
+    assert (
+        remap_key("model.final_norm.weight", "modernbert") == "model.final_norm.weight"
+    )
+    assert remap_key("model.final_norm.weight") == "model.final_norm.weight"
 
 
 def test_longformer_weight_keys_remap_global_projections():
@@ -100,17 +102,17 @@ def test_longformer_weight_keys_remap_global_projections():
             "longformer.encoder.layer.0.attention.self.query_global.weight",
             "longformer",
         )
-        == "encoder.layers.0.attention.query_global_proj.weight"
+        == "longformer.encoder.layers.0.attention.query_global_proj.weight"
     )
     assert (
         remap_key(
             "longformer.encoder.layer.0.attention.self.query.weight", "longformer"
         )
-        == "encoder.layers.0.attention.query_proj.weight"
+        == "longformer.encoder.layers.0.attention.query_proj.weight"
     )
     assert (
         remap_key("longformer.embeddings.LayerNorm.bias", "longformer")
-        == "embeddings.norm.bias"
+        == "longformer.embeddings.norm.bias"
     )
 
 
@@ -142,6 +144,11 @@ def test_modernbert_load_model_matches_hf_logits(tmp_path):
         mlp_dropout=0.0,
         classifier_dropout=0.0,
         num_labels=3,
+        pad_token_id=0,
+        bos_token_id=1,
+        eos_token_id=2,
+        cls_token_id=1,
+        sep_token_id=2,
     )
     hf_config._attn_implementation = "eager"
     torch.manual_seed(167)
@@ -157,6 +164,7 @@ def test_modernbert_load_model_matches_hf_logits(tmp_path):
             "_mlx_family": "modernbert",
             "_mlx_model_type": "modernbert",
             "_mlx_task": "token-classification",
+            "num_labels": hf_config.num_labels,
         }
     )
     weights = {
@@ -225,6 +233,7 @@ def test_longformer_load_model_matches_hf_logits_with_global_attention(tmp_path)
             "_mlx_family": "longformer",
             "_mlx_model_type": "longformer",
             "_mlx_task": "token-classification",
+            "num_labels": hf_config.num_labels,
         }
     )
     weights = {

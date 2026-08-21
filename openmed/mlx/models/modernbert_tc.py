@@ -73,14 +73,14 @@ def _rotary_embeddings(
     inverse_frequency = 1.0 / mx.power(theta, frequencies / float(head_dim))
     positions = position_ids.astype(mx.float32)[..., None]
     angles = positions * inverse_frequency[None, None, :]
-    angles = mx.concatenate((angles, angles), axis=-1)
+    angles = mx.concatenate([angles, angles], axis=-1)
     return mx.cos(angles), mx.sin(angles)
 
 
 def _rotate_half(x: mx.array) -> mx.array:
     """Rotate the final dimension by half, matching Hugging Face RoPE."""
     half = x.shape[-1] // 2
-    return mx.concatenate((-x[..., half:], x[..., :half]), axis=-1)
+    return mx.concatenate([-x[..., half:], x[..., :half]], axis=-1)
 
 
 def _apply_rotary(x: mx.array, cos: mx.array, sin: mx.array) -> mx.array:

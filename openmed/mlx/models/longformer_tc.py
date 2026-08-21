@@ -60,6 +60,7 @@ class LongformerEmbeddings(nn.Module):
         inputs_embeds: Optional[mx.array],
     ) -> mx.array:
         if input_ids is None:
+            assert inputs_embeds is not None
             batch_size, seq_len = inputs_embeds.shape[:2]
             positions = mx.arange(
                 self.padding_idx + 1,
@@ -68,7 +69,7 @@ class LongformerEmbeddings(nn.Module):
             )
             return mx.broadcast_to(positions[None, :], (batch_size, seq_len))
 
-        non_padding = input_ids != self.padding_idx
+        non_padding = mx.not_equal(input_ids, self.padding_idx)
         incremental = mx.cumsum(non_padding.astype(mx.int32), axis=1)
         return incremental * non_padding.astype(mx.int32) + self.padding_idx
 
