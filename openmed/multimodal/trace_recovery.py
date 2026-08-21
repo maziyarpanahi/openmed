@@ -392,7 +392,14 @@ def _recover_transaction(
     if journal.phase == "rolled_back":
         if current_fingerprint != journal.input_fingerprint:
             raise TraceRecoveryError("target_changed")
-        return _result_from_journal(journal, resumed=False, output_size=0)
+        complete = replace(
+            journal,
+            recovery_decision="already_rolled_back",
+        )
+        if complete != journal:
+            _write_journal(journal_path, complete)
+            _call_hook(phase_hook, complete)
+        return _result_from_journal(complete, resumed=False, output_size=0)
 
     if (
         journal.phase == "committed"
@@ -581,7 +588,10 @@ def _result_from_journal(
         recovery_decision=journal.recovery_decision,
         recovery_attempts=journal.recovery_attempts,
         resumed=resumed,
-        changed=journal.input_fingerprint != journal.output_fingerprint,
+        changed=(
+            journal.phase == "committed"
+            and journal.input_fingerprint != journal.output_fingerprint
+        ),
         output_size=output_size,
     )
 

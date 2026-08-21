@@ -135,6 +135,7 @@ def test_rollback_removes_only_owned_staging_artifact(tmp_path: Path):
 
     assert rolled_back.phase == "rolled_back"
     assert rolled_back.recovery_decision == "rollback"
+    assert rolled_back.changed is False
     assert trace_path.read_text(encoding="utf-8") == original
     assert unrelated.read_text(encoding="utf-8") == "keep me"
     assert not list(tmp_path.glob(".openmed-trace-stage-*.bin"))
@@ -210,6 +211,8 @@ def test_recovery_is_bounded_and_rejects_tampered_owned_artifact(tmp_path: Path)
         max_recovery_attempts=2,
     )
     assert repeated.phase == "rolled_back"
+    assert repeated.recovery_decision == "already_rolled_back"
+    assert repeated.changed is False
     assert trace_path.read_text(encoding="utf-8") == original
 
 
