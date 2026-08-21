@@ -62,7 +62,10 @@ The native Elasticsearch pipeline performs the actual server-side redaction;
 the injected callable is only for applications that redact before indexing or
 for offline tests. Local input documents must contain bounded, JSON-compatible
 mappings, lists, tuples, scalar values, and string keys. Cyclic or oversized
-documents fail with a stable error before the redactor is called.
+documents fail with a stable error before the redactor is called. The boundary
+accepts at most 10,000 container items, 32 levels, 32 MiB of UTF-8 key and
+string payload, and signed 64-bit finite numeric values. The completed redacted
+document is checked against the same bounds before it is returned.
 
 ## Diagnostics
 

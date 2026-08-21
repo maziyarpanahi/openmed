@@ -10,6 +10,7 @@ import pytest
 from openmed.interop import elasticsearch as elasticsearch_adapter
 from openmed.interop.elasticsearch import (
     DEFAULT_ELASTICSEARCH_GROK_PATTERNS,
+    ElasticsearchFieldRule,
     ElasticsearchProcessorDiagnostics,
     ElasticsearchRedactionConfig,
     ElasticsearchRedactionError,
@@ -331,3 +332,103 @@ def test_process_rejects_a_non_callable_redactor() -> None:
 
     with pytest.raises(TypeError, match="redactor must be callable"):
         processor.process({"message": _SYNTHETIC_VALUE}, redactor=object())
+
+
+def test_prebuilt_rules_and_configs_are_snapshotted() -> None:
+    rule = ElasticsearchFieldRule(
+        field="message",
+        patterns=("%{EMAILADDRESS:email}",),
+    )
+    config = ElasticsearchRedactionConfig(fields=[rule])
+    processor = ElasticsearchRedactionProcessor(config)
+
+    object.__setattr__(rule, "field", _SYNTHETIC_VALUE)
+    object.__setattr__(config, "_fields", (_SYNTHETIC_VALUE,))
+
+    assert processor.fields == ("message",)
+    assert processor.to_ingest_pipeline()["processors"][0]["redact"]["field"] == (
+        "message"
+    )
+
+
+def test_runtime_configuration_is_snapshotted_before_callbacks() -> None:
+    processor = ElasticsearchRedactionProcessor(fields=["message", "note"])
+    calls = 0
+
+    def mutating_redactor(text: str) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            object.__setattr__(processor.config, "_rules", ())
+        return "[REDACTED]"
+
+    result = processor.process(
+        {"message": _SYNTHETIC_VALUE, "note": _SYNTHETIC_VALUE},
+        redactor=mutating_redactor,
+    )
+
+    assert result.document == {
+        "message": "[REDACTED]",
+        "note": "[REDACTED]",
+    }
+    assert calls == 2
+    with pytest.raises(
+        ElasticsearchRedactionError, match="processor configuration is invalid"
+    ):
+        processor.diagnose({"message": _SYNTHETIC_VALUE})
+
+
+def test_corrupted_metadata_fails_without_echoing_values() -> None:
+    config = ElasticsearchRedactionConfig(fields=["message"])
+    object.__setattr__(config, "_fields", (_SYNTHETIC_VALUE,))
+    with pytest.raises(ValueError) as config_error:
+        config.to_dict()
+    assert str(config_error.value) == "Elasticsearch configuration is invalid"
+    assert _SYNTHETIC_VALUE not in str(config_error.value)
+
+    diagnostics = ElasticsearchProcessorDiagnostics(
+        documents_processed=1,
+        fields_configured=1,
+        fields_processed=1,
+    )
+    object.__setattr__(diagnostics, "spans_redacted", _SYNTHETIC_VALUE)
+    with pytest.raises(ValueError) as diagnostics_error:
+        diagnostics.to_dict()
+    assert str(diagnostics_error.value) == "processor diagnostics are invalid"
+    assert _SYNTHETIC_VALUE not in str(diagnostics_error.value)
+
+
+def test_document_requires_bounded_json_scalars(monkeypatch) -> None:
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+    for value in (float("nan"), float("inf"), 1 << 80):
+        with pytest.raises(
+            ElasticsearchRedactionError,
+            match="failed to copy the ingest document",
+        ):
+            processor.diagnose({"metadata": value})
+
+    monkeypatch.setattr(elasticsearch_adapter, "_MAX_DOCUMENT_TOTAL_BYTES", 8)
+    with pytest.raises(
+        ElasticsearchRedactionError,
+        match="failed to copy the ingest document",
+    ):
+        processor.diagnose({"metadata": "123456789"})
+
+
+def test_redacted_document_aggregate_size_is_revalidated(monkeypatch) -> None:
+    monkeypatch.setattr(elasticsearch_adapter, "_MAX_DOCUMENT_TOTAL_BYTES", 20)
+    processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+    with pytest.raises(
+        ElasticsearchRedactionError,
+        match="failed to copy the ingest document",
+    ):
+        processor.process(
+            {"message": "x"},
+            redactor=lambda text: "y" * 21,
+        )
+
+
+def test_duplicate_field_paths_are_rejected() -> None:
+    with pytest.raises(ValueError, match="duplicate paths"):
+        ElasticsearchRedactionConfig(fields=["message", "message"])
