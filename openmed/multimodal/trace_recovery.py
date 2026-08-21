@@ -554,18 +554,25 @@ def _result_from_journal(
 
 def _redact_bytes(source: bytes, redactor: TraceRedactor, encoding: str) -> bytes:
     try:
-        redacted = redactor(source.decode(encoding))
-    except TraceRecoveryError:
-        raise
+        source_text = source.decode(encoding)
+    except (LookupError, UnicodeError):
+        raise TraceRecoveryError("trace_encoding_invalid") from None
+    try:
+        redacted = redactor(source_text)
     except Exception:
         raise TraceRecoveryError("redactor_failed") from None
     if isinstance(redacted, str):
         try:
             return redacted.encode(encoding)
-        except UnicodeError:
+        except (LookupError, UnicodeError):
             raise TraceRecoveryError("redactor_result_invalid") from None
     if isinstance(redacted, (bytes, bytearray, memoryview)):
-        return bytes(redacted)
+        payload = bytes(redacted)
+        try:
+            payload.decode(encoding)
+        except (LookupError, UnicodeError):
+            raise TraceRecoveryError("redactor_result_invalid") from None
+        return payload
     raise TraceRecoveryError("redactor_result_invalid")
 
 

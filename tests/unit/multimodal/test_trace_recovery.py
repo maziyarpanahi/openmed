@@ -203,3 +203,29 @@ def test_redactor_errors_are_safe_to_log(tmp_path: Path):
 
     assert excinfo.value.reason == "redactor_failed"
     assert SYNTHETIC_VALUE not in str(excinfo.value)
+
+
+def test_redactor_trace_recovery_errors_are_wrapped(tmp_path: Path):
+    trace_path = tmp_path / "synthetic-trace.jsonl"
+    trace_path.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    sensitive_reason = "syntheticpatientsecret"
+
+    def failing_redactor(_text: str) -> str:
+        raise TraceRecoveryError(sensitive_reason)
+
+    with pytest.raises(TraceRecoveryError) as excinfo:
+        redact_trace_file(trace_path, failing_redactor)
+
+    assert excinfo.value.reason == "redactor_failed"
+    assert sensitive_reason not in str(excinfo.value)
+
+
+def test_redactor_bytes_must_match_the_declared_encoding(tmp_path: Path):
+    trace_path = tmp_path / "synthetic-trace.jsonl"
+    trace_path.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+
+    with pytest.raises(TraceRecoveryError) as excinfo:
+        redact_trace_file(trace_path, lambda _text: b"\xff")
+
+    assert excinfo.value.reason == "redactor_result_invalid"
+    assert trace_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE
