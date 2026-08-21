@@ -58,7 +58,10 @@ audit = redaction_transform.audit_metadata
 The summary contains node, changed-value, entity-category, and identifier
 pseudonymization counts. It contains no source identifiers, offsets, input
 text, replacement values, or arbitrary deidentifier metadata, and it is not
-added to node metadata or sent to the embedding model.
+added to node metadata or sent to the embedding model. Category counts are
+copied into immutable validated state. Optional detector entity metadata is
+bounded to 10,000 observations per redacted value; malformed metadata is
+ignored and cannot make redaction fail.
 
 Use `LlamaIndexRedactionConfig` to tune the local OpenMed de-identification
 method, language, confidence threshold, policy, and safety sweep. LlamaIndex

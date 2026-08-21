@@ -92,6 +92,20 @@ def fake_deidentify_with_entities(text: str, **kwargs):
     )
 
 
+class ExplodingEntityMetadata:
+    def __iter__(self):
+        yield SimpleNamespace(canonical_label="PERSON")
+        raise RuntimeError("SYNTHETIC_SENSITIVE_VALUE")
+
+
+def fake_deidentify_with_exploding_entities(text: str, **kwargs):
+    del kwargs
+    return SimpleNamespace(
+        deidentified_text=text.replace("Jane Roe", "[PERSON]"),
+        pii_entities=ExplodingEntityMetadata(),
+    )
+
+
 def test_registry_loads_llamaindex_redaction_adapter_lazily() -> None:
     for name in list(sys.modules):
         if name == "llama_index" or name.startswith("llama_index."):
@@ -441,6 +455,36 @@ def test_audit_collapses_untrusted_entity_labels_without_exposing_them() -> None
 
     assert audit["entity_counts"] == {"OTHER": 2}
     assert sensitive_label not in repr(audit)
+
+
+def test_audit_freezes_and_sanitizes_caller_owned_counts() -> None:
+    sensitive_label = "SYNTHETIC_SENSITIVE_VALUE"
+    source_counts = {sensitive_label: 2, "PERSON": -1, "EMAIL": True}
+    audit = llamaindex_adapter.LlamaIndexRedactionAudit(
+        nodes_processed=sensitive_label,  # type: ignore[arg-type]
+        entity_counts=source_counts,
+    )
+    source_counts[sensitive_label] = 99
+
+    rendered = audit.to_dict()
+
+    assert rendered["nodes_processed"] == 0
+    assert rendered["entity_counts"] == {"OTHER": 2}
+    assert sensitive_label not in repr(audit)
+    assert sensitive_label not in repr(rendered)
+
+
+def test_audit_contains_optional_detector_metadata_failures(monkeypatch) -> None:
+    monkeypatch.setattr(llamaindex_adapter, "_import_module", fake_import)
+    transform = llamaindex_adapter.create_redaction_transform(
+        deidentifier=fake_deidentify_with_exploding_entities,
+    )
+
+    transformed = transform([FixtureNode("Jane Roe", {}, id_="stable-source")])
+
+    assert transformed[0].text == "[PERSON]"
+    assert transform.audit_metadata["entity_counts"] == {"PERSON": 1}
+    assert "SYNTHETIC_SENSITIVE_VALUE" not in repr(transform.last_audit)
 
 
 def test_ingestion_transform_keeps_source_ids_stable_across_calls(monkeypatch) -> None:

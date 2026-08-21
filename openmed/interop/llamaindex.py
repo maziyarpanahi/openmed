@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 from importlib import import_module as _import_module
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
@@ -24,6 +25,8 @@ from openmed.mcp.tool_registry import render_adapter_tool_definitions
 
 Deidentifier = Callable[..., Any]
 _NODE_ID_NAMESPACE = uuid5(NAMESPACE_URL, "https://openmed.ai/llamaindex-redaction")
+_MAX_AUDIT_ENTITIES_PER_VALUE = 10_000
+_MAX_AUDIT_ENTITY_CATEGORIES = len(CANONICAL_LABELS) + 1
 
 
 def _safe_audit_label(value: Any) -> str:
@@ -34,6 +37,41 @@ def _safe_audit_label(value: Any) -> str:
     except Exception:  # noqa: BLE001 - untrusted detector label object
         return "OTHER"
     return label if label in CANONICAL_LABELS else "OTHER"
+
+
+def _safe_nonnegative_count(value: Any) -> int:
+    """Return a validated count without invoking caller-controlled coercion."""
+
+    return value if type(value) is int and value > 0 else 0
+
+
+def _normalize_audit_counts(value: Any) -> dict[str, int]:
+    """Return bounded canonical counts without retaining caller-owned state."""
+
+    if not isinstance(value, Mapping):
+        return {}
+    try:
+        iterator = iter(value.items())
+    except Exception:  # noqa: BLE001 - untrusted mapping implementation
+        return {}
+
+    counts: dict[str, int] = {}
+    for _ in range(_MAX_AUDIT_ENTITY_CATEGORIES):
+        try:
+            entry = next(iterator)
+        except StopIteration:
+            break
+        except Exception:  # noqa: BLE001 - optional audit metadata must not fail
+            break
+        try:
+            label, count = entry
+        except Exception:  # noqa: BLE001 - malformed mapping entry
+            continue
+        safe_count = _safe_nonnegative_count(count)
+        if safe_count:
+            safe_label = _safe_audit_label(label)
+            counts[safe_label] = counts.get(safe_label, 0) + safe_count
+    return dict(sorted(counts.items()))
 
 
 @dataclass(frozen=True)
@@ -53,23 +91,35 @@ class LlamaIndexRedactionAudit:
     source_ids_pseudonymized: int = 0
     numeric_metadata_pseudonymized: int = 0
 
+    def __post_init__(self) -> None:
+        """Freeze validated counts so public audit state stays content-free."""
+
+        for name in (
+            "nodes_processed",
+            "nodes_changed",
+            "text_values_redacted",
+            "metadata_values_redacted",
+            "source_ids_pseudonymized",
+            "numeric_metadata_pseudonymized",
+        ):
+            object.__setattr__(self, name, _safe_nonnegative_count(getattr(self, name)))
+        object.__setattr__(
+            self,
+            "entity_counts",
+            MappingProxyType(_normalize_audit_counts(self.entity_counts)),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, counts-only mapping."""
 
-        counts: dict[str, int] = {}
-        for label, count in self.entity_counts.items():
-            safe_label = _safe_audit_label(label)
-            counts[safe_label] = counts.get(safe_label, 0) + max(0, int(count))
         return {
-            "nodes_processed": max(0, int(self.nodes_processed)),
-            "nodes_changed": max(0, int(self.nodes_changed)),
-            "text_values_redacted": max(0, int(self.text_values_redacted)),
-            "metadata_values_redacted": max(0, int(self.metadata_values_redacted)),
-            "entity_counts": dict(sorted(counts.items())),
-            "source_ids_pseudonymized": max(0, int(self.source_ids_pseudonymized)),
-            "numeric_metadata_pseudonymized": max(
-                0, int(self.numeric_metadata_pseudonymized)
-            ),
+            "nodes_processed": self.nodes_processed,
+            "nodes_changed": self.nodes_changed,
+            "text_values_redacted": self.text_values_redacted,
+            "metadata_values_redacted": self.metadata_values_redacted,
+            "entity_counts": dict(self.entity_counts),
+            "source_ids_pseudonymized": self.source_ids_pseudonymized,
+            "numeric_metadata_pseudonymized": self.numeric_metadata_pseudonymized,
         }
 
 
@@ -100,19 +150,38 @@ class _RedactionAuditAccumulator:
             else:
                 self.text_values_redacted += 1
             self.changed = True
-        entities = getattr(result, "pii_entities", ())
+        try:
+            entities = getattr(result, "pii_entities", ())
+        except Exception:  # noqa: BLE001 - optional detector metadata
+            return
         if isinstance(entities, (str, bytes, bytearray, Mapping)):
             return
         try:
             iterator = iter(entities)
-        except TypeError:
+        except Exception:  # noqa: BLE001 - optional detector metadata
             return
-        for entity in iterator:
-            label = (
-                getattr(entity, "canonical_label", None)
-                or getattr(entity, "entity_type", None)
-                or getattr(entity, "label", None)
-            )
+        for _ in range(_MAX_AUDIT_ENTITIES_PER_VALUE):
+            try:
+                entity = next(iterator)
+            except StopIteration:
+                break
+            except Exception:  # noqa: BLE001 - optional detector metadata
+                break
+            try:
+                if isinstance(entity, Mapping):
+                    label = (
+                        entity.get("canonical_label")
+                        or entity.get("entity_type")
+                        or entity.get("label")
+                    )
+                else:
+                    label = (
+                        getattr(entity, "canonical_label", None)
+                        or getattr(entity, "entity_type", None)
+                        or getattr(entity, "label", None)
+                    )
+            except Exception:  # noqa: BLE001 - untrusted entity object
+                continue
             self.entity_counts[_safe_audit_label(label)] += 1
 
     def merge_node(self, node_audit: "_RedactionAuditAccumulator") -> None:
@@ -432,7 +501,7 @@ def create_redaction_postprocessor(
         storage_safe=False,
     )
 
-    class OpenMedRedactionPostprocessor(base):
+    class OpenMedRedactionPostprocessor(base):  # type: ignore[misc,valid-type]
         @classmethod
         def class_name(cls) -> str:
             return "OpenMedRedactionPostprocessor"
@@ -490,7 +559,7 @@ def create_redaction_transform(
         deidentifier,
     )
 
-    class OpenMedRedactionTransform(base):
+    class OpenMedRedactionTransform(base):  # type: ignore[misc,valid-type]
         @classmethod
         def class_name(cls) -> str:
             return "OpenMedRedactionTransform"

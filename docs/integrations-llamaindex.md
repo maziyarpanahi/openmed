@@ -102,7 +102,9 @@ The summary contains node, changed-value, entity-category, and identifier
 pseudonymization counts only. It never contains source identifiers, offsets,
 input text, replacement values, or arbitrary deidentifier metadata. The
 summary describes that invocation; it is not added to node metadata or sent to
-the embedding model.
+the embedding model. Category counts are copied into immutable validated state.
+Optional detector entity metadata is bounded to 10,000 observations per
+redacted value; malformed metadata is ignored and cannot make redaction fail.
 
 The transform also copies nodes before changing their text and string metadata.
 For storage safety, it replaces node and relationship ids with deterministic
