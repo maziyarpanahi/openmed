@@ -63,10 +63,18 @@ artifacts/grounding-gguf/
 └── gguf-grounding-benchmark.json
 ```
 
-`openmed-gguf.json` records `Q4_K_M`, the G4 verdict, the recall delta, and
-the report path. The benchmark report records synthetic top-k overlap,
-determinism, F16 and Q4_K_M latency, and the Q4_K_M file size. It contains no
-clinical terminology, patient text, or raw input prompts.
+`openmed-gguf.json` records `Q4_K_M`, the G4 verdict, the recall delta, the
+report path, and the certified artifact's size and SHA-256 digest. The
+benchmark report records the same artifact identity alongside synthetic top-k
+overlap, determinism, F16 and Q4_K_M latency, and footprint. Loading recomputes
+the digest and rejects inconsistent evidence or an artifact that no longer
+matches its recorded digest. Reports contain no clinical terminology, patient
+text, or raw input prompts.
+
+Publication rechecks output conflicts after certification. With
+`overwrite=True`, existing bundle files are held for rollback until every
+staged file has been placed, so a failed replacement restores the previous
+outputs.
 
 ## Run the local runtime
 
@@ -85,7 +93,9 @@ vectors = embedder.encode(["synthetic mention", "synthetic concept label"])
 
 Loading validates the local manifest and the passing G4 report before starting
 the executable. A failed or missing certificate cannot be bypassed by the
-runtime. llama.cpp remains a user-built, out-of-process dependency; no
+runtime. Runtime requests are bounded to 256 texts, 32,768 characters per
+text, and 65,536 vector dimensions; malformed or oversized executable output
+is rejected. llama.cpp remains a user-built, out-of-process dependency; no
 llama.cpp source or binary is included in OpenMed.
 
 All examples use synthetic offline data. Grounding suggestions are assistive
