@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+import openmed.processing.shard_plan as shard_plan_module
 from openmed.processing.shard_plan import (
     DuplicateFileDescriptorError,
     FileDescriptor,
@@ -268,6 +269,13 @@ def test_safe_plan_entries_require_digest_and_size_metadata() -> None:
         FileShardEntry(path_fingerprint="synthetic/raw-path", size_bytes=1)
     with pytest.raises(ValueError, match="non-negative integer"):
         FileShardEntry(path_fingerprint="0" * 64, size_bytes=-1)
+    with pytest.raises(ValueError, match="bounded non-negative integer"):
+        FileShard(
+            shard_id=10_000,
+            entries=(),
+            total_bytes=0,
+            fingerprint="0" * 64,
+        )
 
 
 def test_public_plan_iterables_are_bounded_before_materialization() -> None:
@@ -322,3 +330,25 @@ def test_counts_only_serialization_revalidates_tampered_entries() -> None:
         plan.to_json()
 
     assert secret not in str(exc_info.value)
+
+
+def test_shards_copy_entries_and_plan_enforces_a_cumulative_file_bound() -> None:
+    original = FileShardEntry(path_fingerprint="0" * 64, size_bytes=1)
+    shard = shard_plan_module._build_shard(0, [original], total_bytes=1)
+    object.__setattr__(original, "path_fingerprint", "synthetic/raw-path")
+
+    assert shard.entries[0].path_fingerprint == "0" * 64
+
+    entries = [
+        FileShardEntry(path_fingerprint=f"{index:064x}", size_bytes=0)
+        for index in range(10_001)
+    ]
+    first = shard_plan_module._build_shard(0, entries[:5_001], total_bytes=0)
+    second = shard_plan_module._build_shard(1, entries[5_001:], total_bytes=0)
+
+    with pytest.raises(ValueError, match="plan exceeds the file descriptor limit"):
+        FileShardPlan(
+            limits=ShardLimits(max_bytes=1, max_files=10_000),
+            shards=(first, second),
+            fingerprint="0" * 64,
+        )

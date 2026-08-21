@@ -159,9 +159,13 @@ class FileShard:
             item_type=FileShardEntry,
             field="entries",
         )
-        for entry in entries:
-            _validate_digest(entry.path_fingerprint, "path_fingerprint")
-            _normalize_size(entry.size_bytes)
+        entries = tuple(
+            FileShardEntry(
+                path_fingerprint=entry.path_fingerprint,
+                size_bytes=entry.size_bytes,
+            )
+            for entry in entries
+        )
         entries = tuple(sorted(entries, key=lambda entry: entry.path_fingerprint))
         if len({entry.path_fingerprint for entry in entries}) != len(entries):
             raise ValueError("entries must have unique path fingerprints")
@@ -231,27 +235,37 @@ class FileShardPlan:
             max_bytes=self.limits.max_bytes,
             max_files=self.limits.max_files,
         )
-        shards = _bounded_tuple(
+        supplied_shards = _bounded_tuple(
             self.shards,
             item_type=FileShard,
             field="shards",
         )
-        try:
-            shards = tuple(
-                FileShard(
+        validated_shards: list[FileShard] = []
+        path_fingerprints: set[str] = set()
+        file_count = 0
+        for shard in supplied_shards:
+            try:
+                validated_shard = FileShard(
                     shard_id=shard.shard_id,
                     entries=shard.entries,
                     total_bytes=shard.total_bytes,
                     fingerprint=shard.fingerprint,
                 )
-                for shard in shards
-            )
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except BaseException:
-            raise ValueError("shards contain invalid metadata") from None
-        if any(not shard.entries for shard in shards):
-            raise ValueError("shards must not be empty")
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException:
+                raise ValueError("shards contain invalid metadata") from None
+            if not validated_shard.entries:
+                raise ValueError("shards must not be empty")
+            file_count += len(validated_shard.entries)
+            if file_count > _MAX_FILE_DESCRIPTORS:
+                raise ValueError("plan exceeds the file descriptor limit")
+            for entry in validated_shard.entries:
+                if entry.path_fingerprint in path_fingerprints:
+                    raise ValueError("plan contains duplicate path fingerprints")
+                path_fingerprints.add(entry.path_fingerprint)
+            validated_shards.append(validated_shard)
+        shards = tuple(validated_shards)
         if tuple(shard.shard_id for shard in shards) != tuple(range(len(shards))):
             raise ValueError("shard identifiers must be contiguous and ordered")
         if any(
@@ -259,13 +273,6 @@ class FileShardPlan:
             for shard in shards
         ):
             raise ValueError("shard contents exceed the declared limits")
-        path_fingerprints = [
-            entry.path_fingerprint for shard in shards for entry in shard.entries
-        ]
-        if len(path_fingerprints) > _MAX_FILE_DESCRIPTORS:
-            raise ValueError("plan exceeds the file descriptor limit")
-        if len(path_fingerprints) != len(set(path_fingerprints)):
-            raise ValueError("plan contains duplicate path fingerprints")
         if type(self.algorithm) is not str or self.algorithm != SHARD_PLAN_ALGORITHM:
             raise ValueError("algorithm is not supported")
         if (
@@ -718,8 +725,12 @@ def _validate_positive_limit(value: Any, name: str) -> None:
 
 
 def _validate_nonnegative_int(value: Any, name: str) -> None:
-    if type(value) is not int or value < 0:
-        raise ValueError(f"{name} must be a non-negative integer")
+    if (
+        type(value) is not int
+        or value < 0
+        or (name == "shard_id" and value >= _MAX_FILE_DESCRIPTORS)
+    ):
+        raise ValueError(f"{name} must be a bounded non-negative integer")
 
 
 def _validate_digest(value: Any, name: str) -> None:
