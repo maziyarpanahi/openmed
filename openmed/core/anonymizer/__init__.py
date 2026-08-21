@@ -31,6 +31,7 @@ from .locales import LANG_TO_LOCALE, resolve_locale
 from .providers.clinical_ids import IndiaSurrogateProvider
 from .registry import (
     LABEL_GENERATORS,
+    PROVIDER_ENTRY_POINT_GROUP,
     Generator,
     discover_anonymizer_provider_plugins,
     register_label_generator,
@@ -59,6 +60,7 @@ __all__ = [
     "LABEL_GENERATORS",
     "LANG_TO_LOCALE",
     "LanguagePack",
+    "PROVIDER_ENTRY_POINT_GROUP",
     "discover_anonymizer_provider_plugins",
     "register_clinical_provider",
     "register_language_pack",

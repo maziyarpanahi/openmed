@@ -14,6 +14,7 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 
 from __future__ import annotations
 
+import importlib.metadata as importlib_metadata
 import json
 import logging
 import re
@@ -42,10 +43,14 @@ from .locales import ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
+PROVIDER_ENTRY_POINT_GROUP = "openmed.providers"
+"""Compatibility entry-point group for anonymizer provider registrars."""
+
 logger = logging.getLogger(__name__)
 
 _PLUGIN_DISCOVERY_LOCK = RLock()
 _PLUGIN_DISCOVERY_COMPLETE = False
+_LEGACY_PROVIDER_DISCOVERY_COMPLETE = False
 _PLUGIN_PROVIDER_IDS: set[str] = set()
 _PLUGIN_PROVIDERS_BY_LABEL: Dict[str, list[Any]] = {}
 _PLUGIN_PROVIDER_FALLBACKS: Dict[str, Generator] = {}
@@ -1382,8 +1387,17 @@ def discover_anonymizer_provider_plugins(
         allow_network_egress or allow_non_permissive_licenses or tuple(opt_in_plugins)
     )
     with _PLUGIN_DISCOVERY_LOCK:
-        if default_policy and _PLUGIN_DISCOVERY_COMPLETE:
+        if (
+            default_policy
+            and _PLUGIN_DISCOVERY_COMPLETE
+            and _LEGACY_PROVIDER_DISCOVERY_COMPLETE
+        ):
             return tuple(sorted(_PLUGIN_PROVIDER_IDS))
+
+        # Load the original registrar-style compatibility group first. A
+        # validated SDK component can then wrap that generator as its fallback
+        # while retaining SDK policy, provenance, and locale routing.
+        _discover_legacy_provider_plugins()
 
         try:
             plugin_registry = import_module("openmed.plugins.registry")
@@ -1419,6 +1433,83 @@ def discover_anonymizer_provider_plugins(
         if default_policy:
             _PLUGIN_DISCOVERY_COMPLETE = True
         return tuple(sorted(_PLUGIN_PROVIDER_IDS))
+
+
+def _discover_legacy_provider_plugins() -> None:
+    """Load ``openmed.providers`` registrars once for compatibility.
+
+    The preferred contract is the validated ``openmed.plugins`` SDK. This
+    bridge preserves the original provider-only entry-point contract: an entry
+    point may expose a zero-argument registrar using ``register_*`` APIs or a
+    Faker ``BaseProvider`` subclass. Failures are isolated and logged without
+    exception text so plugin-controlled values cannot leak into logs.
+    """
+
+    global _LEGACY_PROVIDER_DISCOVERY_COMPLETE
+
+    if _LEGACY_PROVIDER_DISCOVERY_COMPLETE:
+        return
+    # Mark complete before loading third-party code so a registrar that reaches
+    # the anonymizer registry cannot recursively enumerate entry points.
+    _LEGACY_PROVIDER_DISCOVERY_COMPLETE = True
+    try:
+        entry_points = _entry_points_for_group(PROVIDER_ENTRY_POINT_GROUP)
+    except Exception as exc:  # pragma: no cover - metadata API boundary
+        logger.warning(
+            "Failed to enumerate OpenMed anonymizer provider plugins: %s",
+            exc.__class__.__name__,
+        )
+        return
+
+    for entry_point in sorted(entry_points, key=_entry_point_name):
+        entry_name = _entry_point_name(entry_point)
+        try:
+            loaded = entry_point.load()
+            if _is_faker_provider_class(loaded):
+                from . import register_clinical_provider
+
+                register_clinical_provider(loaded)
+            elif callable(loaded):
+                loaded()
+            else:
+                raise TypeError(
+                    "entry point must load a registrar or Faker BaseProvider"
+                )
+        except Exception as exc:  # noqa: BLE001 - isolate third-party plugins
+            logger.warning(
+                "Failed to load OpenMed anonymizer provider plugin %s: %s",
+                entry_name,
+                exc.__class__.__name__,
+            )
+
+
+def _entry_points_for_group(group: str) -> Sequence[Any]:
+    """Return entry points for ``group`` across metadata API versions."""
+
+    try:
+        return tuple(importlib_metadata.entry_points(group=group))
+    except TypeError:
+        entry_points = importlib_metadata.entry_points()
+        if hasattr(entry_points, "select"):
+            return tuple(entry_points.select(group=group))
+        return tuple(entry_points.get(group, ()))
+
+
+def _entry_point_name(entry_point: Any) -> str:
+    try:
+        name = getattr(entry_point, "name")
+    except Exception:  # pragma: no cover - malformed third-party object
+        return "<unknown>"
+    return name if isinstance(name, str) and name else "<unknown>"
+
+
+def _is_faker_provider_class(value: Any) -> bool:
+    try:
+        from faker.providers import BaseProvider
+
+        return isinstance(value, type) and issubclass(value, BaseProvider)
+    except (ImportError, TypeError):  # pragma: no cover - Faker is a hard dep
+        return False
 
 
 def register_anonymizer_provider_plugins(
@@ -1567,7 +1658,7 @@ def _safe_plugin_registration_id(registration: Any) -> str:
 
 
 def _reset_anonymizer_provider_plugins_for_tests() -> None:
-    global _PLUGIN_DISCOVERY_COMPLETE
+    global _LEGACY_PROVIDER_DISCOVERY_COMPLETE, _PLUGIN_DISCOVERY_COMPLETE
 
     with _PLUGIN_DISCOVERY_LOCK:
         for canonical_label, dispatcher in _PLUGIN_PROVIDER_DISPATCHERS.items():
@@ -1580,6 +1671,7 @@ def _reset_anonymizer_provider_plugins_for_tests() -> None:
         _PLUGIN_PROVIDER_FALLBACKS.clear()
         _PLUGIN_PROVIDER_DISPATCHERS.clear()
         _PLUGIN_DISCOVERY_COMPLETE = False
+        _LEGACY_PROVIDER_DISCOVERY_COMPLETE = False
 
 
 def register_label_generator(
@@ -1719,6 +1811,7 @@ __all__ = [
     "Generator",
     "LANGUAGE_PACK_GENERATORS",
     "LABEL_GENERATORS",
+    "PROVIDER_ENTRY_POINT_GROUP",
     "discover_anonymizer_provider_plugins",
     "register_india_label_generators",
     "register_anonymizer_provider_plugins",

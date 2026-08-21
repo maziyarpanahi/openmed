@@ -124,6 +124,49 @@ surface. Exceptions and invalid replacements produce a PHI-safe warning and
 fall back to the built-in generator. When multiple accepted providers cover
 the same label and locale, the lowest qualified component id wins.
 
+### Provider registrar compatibility
+
+Provider-only packages may use the original `openmed.providers` entry-point
+group when they already integrate through the public anonymizer registration
+APIs. The target is either a zero-argument registrar or a Faker
+`BaseProvider` subclass:
+
+```toml
+[project.entry-points."openmed.providers"]
+acme_ids = "acme_openmed_provider:register"
+```
+
+```python
+from faker.providers import BaseProvider
+
+from openmed.core.anonymizer import (
+    register_clinical_provider,
+    register_label_generator,
+)
+
+
+class AcmeIdProvider(BaseProvider):
+    def acme_id(self) -> str:
+        return self.generator.numerify("ACME-#####")
+
+
+def generate_acme_id(faker, original: str, *, locale: str) -> str:
+    del original, locale
+    return faker.acme_id()
+
+
+def register() -> None:
+    register_clinical_provider(AcmeIdProvider)
+    register_label_generator("ID_NUM", generate_acme_id)
+```
+
+This compatibility group is discovered lazily and once per process before the
+first anonymizer generator lookup. A failing registrar emits a warning with
+only its entry-point name and exception type, then built-in anonymization
+continues. New packages should prefer `openmed.plugins`: its metadata,
+protocol-version, label, license, and network-policy checks run before a
+component reaches the anonymizer runtime.
+
 ## Discovery, quarantine, and policy opt-in
 
 Call `openmed.plugins.discover_plugins()` to receive a
