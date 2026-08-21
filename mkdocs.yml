@@ -157,6 +157,7 @@ nav:
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
