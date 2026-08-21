@@ -372,7 +372,22 @@ def _recover_transaction(
     current_fingerprint = _file_fingerprint(target, max_bytes)
 
     if journal.phase == "blocked":
-        raise TraceRecoveryError("recovery_blocked")
+        if decision != "rollback" or current_fingerprint != journal.input_fingerprint:
+            raise TraceRecoveryError("recovery_blocked")
+        _remove_owned_staging(
+            staging,
+            journal.output_fingerprint,
+            max_bytes,
+            verify_fingerprint=False,
+        )
+        rolled_back = replace(
+            journal,
+            phase="rolled_back",
+            recovery_decision="rollback",
+        )
+        _write_journal(journal_path, rolled_back)
+        _call_hook(phase_hook, rolled_back)
+        return _result_from_journal(rolled_back, resumed=True, output_size=0)
 
     if journal.phase == "rolled_back":
         if current_fingerprint != journal.input_fingerprint:
@@ -711,18 +726,41 @@ def _write_journal(path: Path, journal: TraceRecoveryJournal) -> None:
 
 
 def _load_journal(path: Path) -> TraceRecoveryJournal | None:
-    if not _path_exists(path):
-        return None
     try:
-        if path.is_symlink() or not path.is_file():
-            raise TraceRecoveryError("journal_conflict")
-        if path.stat().st_size > MAX_JOURNAL_BYTES:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise TraceRecoveryError("journal_invalid") from None
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise TraceRecoveryError("journal_conflict")
+    if metadata.st_size > MAX_JOURNAL_BYTES:
+        raise TraceRecoveryError("journal_too_large")
+
+    descriptor: int | None = None
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = None
+            opened_metadata = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened_metadata.st_mode):
+                raise TraceRecoveryError("journal_conflict")
+            raw_payload = handle.read(MAX_JOURNAL_BYTES + 1)
+        if len(raw_payload) > MAX_JOURNAL_BYTES:
             raise TraceRecoveryError("journal_too_large")
-        payload = json.loads(path.read_text(encoding="ascii"))
+        payload = json.loads(raw_payload.decode("ascii"))
     except TraceRecoveryError:
         raise
     except (OSError, UnicodeError, json.JSONDecodeError):
         raise TraceRecoveryError("journal_invalid") from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     if not isinstance(payload, dict):
         raise TraceRecoveryError("journal_invalid")
     return TraceRecoveryJournal.from_dict(payload)
@@ -802,12 +840,15 @@ def _validate_recovery_options(
 def _prepare_target(path: str | Path) -> Path:
     try:
         target = Path(path).expanduser().absolute()
-        if target.is_symlink():
+        metadata = target.lstat()
+        if stat.S_ISLNK(metadata.st_mode):
             raise TraceRecoveryError("symlink_target_unsupported")
-        if not target.exists():
-            raise TraceRecoveryError("target_missing")
-        if not target.is_file():
+        if not stat.S_ISREG(metadata.st_mode):
             raise TraceRecoveryError("target_not_regular")
+        if metadata.st_nlink != 1:
+            raise TraceRecoveryError("hardlink_target_unsupported")
+    except FileNotFoundError:
+        raise TraceRecoveryError("target_missing") from None
     except TraceRecoveryError:
         raise
     except (OSError, RuntimeError, TypeError, ValueError):

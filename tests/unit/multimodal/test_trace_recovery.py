@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -190,6 +191,26 @@ def test_recovery_is_bounded_and_rejects_tampered_owned_artifact(tmp_path: Path)
     assert journal["phase"] == "blocked"
     assert trace_path.read_text(encoding="utf-8") == original
 
+    rolled_back = recover_trace_redaction(
+        trace_path,
+        journal_path=journal_path,
+        decision="rollback",
+        max_recovery_attempts=2,
+    )
+    assert rolled_back.phase == "rolled_back"
+    assert rolled_back.recovery_decision == "rollback"
+    assert trace_path.read_text(encoding="utf-8") == original
+    assert not stage_path.exists()
+
+    repeated = recover_trace_redaction(
+        trace_path,
+        journal_path=journal_path,
+        decision="rollback",
+        max_recovery_attempts=2,
+    )
+    assert repeated.phase == "rolled_back"
+    assert trace_path.read_text(encoding="utf-8") == original
+
 
 def test_redactor_errors_are_safe_to_log(tmp_path: Path):
     trace_path = tmp_path / "synthetic-trace.jsonl"
@@ -229,3 +250,20 @@ def test_redactor_bytes_must_match_the_declared_encoding(tmp_path: Path):
 
     assert excinfo.value.reason == "redactor_result_invalid"
     assert trace_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+
+
+def test_hardlinked_target_is_rejected_without_leaving_raw_alias(tmp_path: Path):
+    trace_path = tmp_path / "synthetic-trace.jsonl"
+    alias_path = tmp_path / "synthetic-trace-alias.jsonl"
+    trace_path.write_text(SYNTHETIC_VALUE, encoding="utf-8")
+    try:
+        os.link(trace_path, alias_path)
+    except OSError:
+        pytest.skip("hard links are not available on this filesystem")
+
+    with pytest.raises(TraceRecoveryError) as excinfo:
+        redact_trace_file(trace_path, _redact)
+
+    assert excinfo.value.reason == "hardlink_target_unsupported"
+    assert trace_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE
+    assert alias_path.read_text(encoding="utf-8") == SYNTHETIC_VALUE

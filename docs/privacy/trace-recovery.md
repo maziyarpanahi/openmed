@@ -23,6 +23,10 @@ into the journal. The default sidecar journal name is derived from a
 fingerprint of the target path, so it does not disclose the target filename.
 Pass `journal_path` to place the journal at a controlled local path.
 
+The target must be a regular file with exactly one hard link. Rejecting
+hard-linked inputs prevents atomic replacement of one directory entry from
+leaving the original unredacted trace reachable through another name.
+
 ## Recovery
 
 The journal is atomically written JSON with a bounded size and at most three
@@ -54,8 +58,9 @@ provided redactor and returns a completed transaction without invoking that
 redactor again. Repeated recovery is therefore idempotent. If the target or
 staging fingerprint does not match the journal, recovery fails closed without
 replacing the target or touching an unknown artifact. A target mismatch marks
-the journal blocked; an operator can explicitly roll back a regular partial
-staging file owned by the journal before retrying.
+the journal blocked. An attempt-limited transaction can be explicitly rolled
+back when the target still matches its journaled input; a target-mismatch block
+remains fail-closed.
 
 `TraceRecoveryError` messages contain only stable reason codes. Audit reports
 from `TraceRedactionResult.to_audit_report()` and
