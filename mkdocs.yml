@@ -27,6 +27,7 @@ nav:
   - Core Guides:
       - Building with an Agent: agent-usage.md
       - Agent Skill Packs: agent-skills/packs.md
+      - Agent Skill Router: agent-skills/router.md
       - Local Trace-Store Discovery: guides/trace-discovery.md
       - JSONL Trace Content Walker: reference/trace-jsonl.md
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
