@@ -126,6 +126,7 @@ classification:
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md
     - offline-install.md
+    - install/standalone.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
