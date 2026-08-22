@@ -44,6 +44,7 @@ _PROTECTED_EXTRA_OPTIONS = frozenset(
         "--hf-file",
         "--hf-repo",
         "--log-file",
+        "--log-prompts-dir",
         "--model",
         "--model-url",
         "--no-display-prompt",
@@ -52,6 +53,7 @@ _PROTECTED_EXTRA_OPTIONS = frozenset(
         "--prompt-cache-all",
         "--prompt-cache-ro",
         "--random-prompt",
+        "--rpc",
         "--verbose-prompt",
         "-bf",
         "-f",
@@ -163,6 +165,7 @@ class LlamaCppEmbeddingRuntime:
             completed = subprocess.run(
                 command,
                 check=False,
+                env=_subprocess_environment(),
                 input=text,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -292,6 +295,21 @@ def _stdin_prompt_path() -> str:
     raise GgufEmbeddingRuntimeError(
         "privacy-safe llama.cpp prompt transport is unavailable on this platform"
     )
+
+
+def _subprocess_environment() -> dict[str, str]:
+    """Return an environment without llama.cpp argument overrides.
+
+    Runtime options are supplied explicitly so inherited ``LLAMA_ARG_*``
+    values cannot enable RPC, model downloads, prompt logging, or other
+    behavior that would violate the local-only execution contract.
+    """
+
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("LLAMA_ARG_")
+    }
 
 
 def _parse_embedding_output(output: str) -> list[float]:

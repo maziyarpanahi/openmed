@@ -101,6 +101,11 @@ text, and 65,536 vector dimensions; malformed or oversized executable output
 is rejected. llama.cpp remains a user-built, out-of-process dependency; no
 llama.cpp source or binary is included in OpenMed.
 
+The bridge removes inherited `LLAMA_ARG_*` overrides and rejects RPC, prompt
+logging, prompt-cache, remote-model, and model-replacement arguments. Runtime
+configuration therefore cannot silently turn the local embedding call into a
+networked or raw-prompt-persisting operation.
+
 The direct `llama-embedding` bridge requires a POSIX-compatible `/dev/stdin`.
 It fails closed on platforms without that private pipe transport instead of
 placing patient text in command-line arguments or temporary files.

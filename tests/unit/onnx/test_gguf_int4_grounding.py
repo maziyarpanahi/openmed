@@ -556,6 +556,9 @@ def test_runtime_rejects_args_that_can_bypass_model_or_prompt(
         ["--model=other.gguf"],
         ["--prompt", "other text"],
         ["--log-file", "prompt.log"],
+        ["--log-prompts-dir", "prompt-logs"],
+        ["--rpc", "remote.example:50052"],
+        ["--rpc=remote.example:50052"],
         ["--"],
     ):
         with pytest.raises(ValueError, match="protected option"):
@@ -564,6 +567,35 @@ def test_runtime_rejects_args_that_can_bypass_model_or_prompt(
                 executable,
                 extra_args=extra_args,
             )
+
+
+def test_runtime_removes_inherited_llama_argument_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _runtime_module()
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF")
+    executable = tmp_path / "llama-embedding"
+    executable.write_bytes(b"stub")
+    captured_environment: dict[str, str] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        environment = kwargs["env"]
+        assert isinstance(environment, dict)
+        captured_environment.update(environment)
+        return subprocess.CompletedProcess(command, 0, stdout="1 2", stderr="")
+
+    monkeypatch.setenv("OPENMED_GGUF_TEST_MARKER", "preserved")
+    monkeypatch.setenv("LLAMA_ARG_RPC", "remote.example:50052")
+    monkeypatch.setenv("LLAMA_ARG_LOG_FILE", str(tmp_path / "prompt.log"))
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "_stdin_prompt_path", lambda: "/dev/stdin")
+
+    module.LlamaCppEmbeddingRuntime(model, executable).embed("synthetic")
+
+    assert captured_environment["OPENMED_GGUF_TEST_MARKER"] == "preserved"
+    assert not any(key.startswith("LLAMA_ARG_") for key in captured_environment)
 
 
 def test_runtime_rejects_inconsistent_vector_dimensions(
