@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-free Elasticsearch ingest redaction processor with
+  explicit static field rules, deterministic pipeline serialization, injected
+  local redaction, and counts-only value-free diagnostics (#2388).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
