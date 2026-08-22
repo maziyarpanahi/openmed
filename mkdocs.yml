@@ -137,8 +137,10 @@ nav:
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
+      - TensorRT Runtime: runtimes/tensorrt.md
       - WebGPU Token-Classification Runtime: runtimes/webgpu.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
+      - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added device-specific TensorRT engine export for ONNX token classifiers with
+  bounded dynamic shape profiles, FP16 and fail-closed INT8 calibration,
+  per-family G4 recall evidence, finite synthetic parity checks, rollback-safe
+  engine and metadata publication, trusted-engine logits inference, and
+  device-tier benchmark records (#834).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
@@ -16,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
   and egress coverage (#823).
+- Added a local Q4_K_M GGUF grounding runtime with private stdin prompt
+  transport, subprocess-only llama.cpp integration, deterministic top-k recall
+  certification, artifact-bound SHA-256 evidence, and fail-closed loading
+  (#904).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
