@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded, metadata-only archive extraction safety policy with
   cross-platform traversal and link rejection, normalized duplicate detection,
   expansion limits, and immutable counts-only decisions (#2635).
+- Added a deterministic export filename policy derived from validated artifact
+  metadata, schema versions, and short provenance fingerprints, with path,
+  raw-identifier, clock-derived, and value-leaking input rejection (#2584).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
