@@ -188,6 +188,7 @@ def test_subprocess_runtime_rejects_nul_text_and_oversized_output(
             stderr="",
         ),
     )
+    monkeypatch.setattr(module, "_stdin_prompt_path", lambda: "/dev/stdin")
     with pytest.raises(module.GgufEmbeddingRuntimeError, match="finite vector"):
         runtime.embed("synthetic prompt")
 
