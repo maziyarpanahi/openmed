@@ -1,0 +1,151 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-synthetic-001",
+        "name": [
+          {
+            "family": "Synthetic",
+            "given": ["Fixture"]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-synthetic-001",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/patient-synthetic-001"
+        },
+        "period": {
+          "start": "2026-01-02T09:00:00Z",
+          "end": "2026-01-02T10:00:00Z"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-synthetic-001",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "73211009",
+              "display": "Diabetes mellitus"
+            }
+          ],
+          "text": "Diabetes mellitus"
+        },
+        "subject": {
+          "reference": "Patient/patient-synthetic-001"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-synthetic-001"
+        },
+        "onsetDateTime": "2026-01-02"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-synthetic-001",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4",
+              "display": "Hemoglobin A1c"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-synthetic-001"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-synthetic-001"
+        },
+        "effectiveDateTime": "2026-01-02",
+        "valueQuantity": {
+          "value": 8.2,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medication-synthetic-001",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "860975",
+              "display": "Synthetic aspirin tablet"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-synthetic-001"
+        },
+        "authoredOn": "2026-01-02"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "procedure-synthetic-001",
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "80146002",
+              "display": "Appendectomy"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-synthetic-001"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-synthetic-001"
+        },
+        "performedDateTime": "2026-01-02"
+      }
+    }
+  ]
+}

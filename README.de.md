@@ -24,7 +24,7 @@ Die lokale Kernlaufzeit von OpenMed führt Extraktion und De-Identifikation aus,
 </p>
 
 <p>
-  <b>Local-First-Laufzeit</b> &nbsp;·&nbsp; <b>34 modellgestützte PII-Sprachen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Local-First-Laufzeit</b> &nbsp;·&nbsp; <b>33 modellgestützte PII-Sprachen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -102,7 +102,7 @@ Auf unterstützter Apple-Hardware kann OpenMed **MLX** und **[OpenMedKit](swift/
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Auf Nicht-Apple-Silicon-Hosts werden MLX-Modellnamen automatisch durch den passe
 
 ---
 
-## Mehrsprachige PII (35 unterstützte Routen; 34 modellgestützt)
+## Mehrsprachige PII (35 unterstützte Routen; 33 modellgestützt)
 
 Extraktion und De-Identifikation in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` und `tr`, insgesamt **der registrierte PII-Modellkatalog**.
 

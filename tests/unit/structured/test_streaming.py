@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 import openmed.structured.streaming as streaming
-from openmed.risk import kanon_report
+from openmed.risk import KAnonymityEngine, kanon_report
 from openmed.structured import read_table, write_table
 from openmed.structured.streaming import (
     MemoryCeilingError,
@@ -21,6 +21,7 @@ from openmed.structured.streaming import (
 )
 
 pa = pytest.importorskip("pyarrow")
+pq = pytest.importorskip("pyarrow.parquet")
 
 
 def _tag_deidentifier(text: str, **_kwargs: object) -> str:
@@ -217,11 +218,21 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
 # ---------------------------------------------------------------------------
 
 
-def test_streamed_k_equals_in_memory_reference(tmp_path: Path) -> None:
-    """Chunked global k matches the all-at-once (single-batch) reference."""
+def test_streamed_output_equals_in_memory_reference(tmp_path: Path) -> None:
+    """Chunked global decisions match the materialized suppression engine."""
 
     source = tmp_path / "in.csv"
-    _write_csv(source, _synthetic_rows(200))
+    _write_csv(
+        source,
+        [
+            {"age": 30, "zip": 10_000, "note": "a"},
+            {"age": 40, "zip": 20_000, "note": "b"},
+            {"age": 30, "zip": 10_000, "note": "c"},
+            {"age": 50, "zip": 30_000, "note": "d"},
+            {"age": 40, "zip": 20_000, "note": "e"},
+            {"age": 30, "zip": 10_000, "note": "f"},
+        ],
+    )
 
     chunked = tmp_path / "chunked.csv"
     reference = tmp_path / "reference.csv"
@@ -229,33 +240,30 @@ def test_streamed_k_equals_in_memory_reference(tmp_path: Path) -> None:
         source,
         chunked,
         quasi_identifiers=["age", "zip"],
-        free_text_columns=["note"],
-        target_k=3,
-        chunk_size=7,
-        deidentifier=_tag_deidentifier,
+        target_k=2,
+        chunk_size=2,
+        remove_direct_identifiers=False,
         overwrite=True,
     )
-    reference_report = stream_deidentify_table(
-        source,
+    source_rows = read_table(source)
+    reference_rows = KAnonymityEngine(
+        ["age", "zip"],
+        target_k=2,
+    ).suppress(source_rows)
+    _write_csv(
         reference,
-        quasi_identifiers=["age", "zip"],
-        free_text_columns=["note"],
-        target_k=3,
-        chunk_size=10_000,  # whole file in one batch == in-memory path
-        deidentifier=_tag_deidentifier,
-        overwrite=True,
+        reference_rows,
     )
 
     released_k = kanon_report(read_table(chunked), quasi_identifiers=["age", "zip"])[
         "k"
     ]
-    reference_k = kanon_report(read_table(reference), quasi_identifiers=["age", "zip"])[
-        "k"
-    ]
+    reference_k = kanon_report(reference_rows, quasi_identifiers=["age", "zip"])["k"]
     assert released_k == reference_k
     assert released_k == chunked_report["decision"]["released_k"]
-    assert released_k >= 3
-    assert chunked_report["decision"] == reference_report["decision"]
+    assert released_k >= 2
+    assert chunked_report["decision"]["suppressed_count"] == 1
+    assert chunked.read_bytes() == reference.read_bytes()
 
 
 def test_chunk_boundaries_produce_byte_identical_output(tmp_path: Path) -> None:
@@ -419,6 +427,38 @@ def test_parquet_row_group_streaming_matches_csv_reference(tmp_path: Path) -> No
     ]
     assert normalized == read_table(csv_out)
     assert kanon_report(parquet_rows, quasi_identifiers=["age", "zip"])["k"] >= 2
+
+
+def test_parquet_boundaries_produce_byte_identical_output(tmp_path: Path) -> None:
+    """Input row groups and processing chunks do not affect Parquet bytes."""
+
+    rows = _synthetic_rows(streaming.DEFAULT_CHUNK_SIZE + 104)
+    table = pa.Table.from_pylist(rows)
+    outputs = []
+    output_row_group_counts = []
+    for source_row_group_size, chunk_size in (
+        (17, 7),
+        (511, 113),
+        (len(rows), len(rows)),
+    ):
+        source = tmp_path / f"in_{source_row_group_size}.parquet"
+        target = tmp_path / f"out_{chunk_size}.parquet"
+        pq.write_table(table, source, row_group_size=source_row_group_size)
+        stream_deidentify_table(
+            source,
+            target,
+            quasi_identifiers=["age", "zip"],
+            free_text_columns=["note"],
+            target_k=2,
+            chunk_size=chunk_size,
+            deidentifier=_tag_deidentifier,
+            overwrite=True,
+        )
+        outputs.append(target.read_bytes())
+        output_row_group_counts.append(pq.ParquetFile(target).num_row_groups)
+
+    assert len(set(outputs)) == 1
+    assert set(output_row_group_counts) == {2}
 
 
 # ---------------------------------------------------------------------------
