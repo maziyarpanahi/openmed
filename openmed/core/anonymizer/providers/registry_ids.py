@@ -29,6 +29,8 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_bangladesh_nid,
+    validate_belgian_rrn,
     validate_bulgarian_egn,
     validate_chinese_passport,
     validate_chinese_resident_id,
@@ -83,6 +85,7 @@ from openmed.core.pii_i18n import (
     validate_spanish_dni,
     validate_spanish_nie,
     validate_swedish_personnummer,
+    validate_swiss_ahv,
     validate_taiwan_compatriot_permit,
     validate_tanzania_nida,
     validate_thai_national_id,
@@ -105,7 +108,9 @@ from .clinical_ids import (
     AfricanPhoneProvider,
     AustralianMedicareProvider,
     AustralianTFNProvider,
+    BangladeshNIDProvider,
     BCPHNProvider,
+    BelgianRRNProvider,
     BulgarianEgnProvider,
     CanadianSINProvider,
     ChineseIdentifierProvider,
@@ -141,6 +146,7 @@ from .clinical_ids import (
     SouthAfricanIdProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
+    SwissAHVProvider,
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
@@ -418,6 +424,20 @@ def _register_builtin_specs() -> None:
         faker_provider=EastAfricanIdProvider,
     )
     _register_aliases(
+        ("be", "fr_BE", "nl_BE", "de_BE"),
+        id_type="rrn",
+        validate=validate_belgian_rrn,
+        faker_method="belgian_rrn",
+        faker_provider=BelgianRRNProvider,
+    )
+    _register_aliases(
+        ("ch", "fr_CH", "de_CH", "it_CH"),
+        id_type="ahv",
+        validate=validate_swiss_ahv,
+        faker_method="swiss_ahv",
+        faker_provider=SwissAHVProvider,
+    )
+    _register_aliases(
         ("fr", "fr_FR"),
         id_type="nir",
         validate=validate_french_nir,
@@ -457,11 +477,29 @@ def _register_builtin_specs() -> None:
         faker_method="ssn",
     )
     _register_aliases(
-        ("in", "india", "en", "hi", "te", "en_IN", "hi_IN", "te_IN"),
+        (
+            "in",
+            "india",
+            "en",
+            "hi",
+            "te",
+            "bn",
+            "en_IN",
+            "hi_IN",
+            "te_IN",
+            "bn_BD",
+        ),
         id_type="aadhaar",
         validate=validate_aadhaar,
         faker_method="aadhaar",
         faker_provider=AadhaarProvider,
+    )
+    _register_aliases(
+        ("bd", "bn", "bn_BD"),
+        id_type="bangladesh_nid",
+        validate=validate_bangladesh_nid,
+        faker_method="bangladesh_nid",
+        faker_provider=BangladeshNIDProvider,
     )
     for id_type, validate, faker_method in (
         ("abha_number", validate_abha_number, "abha_number"),

@@ -160,6 +160,7 @@ from .text import (
     normalize_indic_text,
     postprocess_text,
     preprocess_text,
+    resolve_sections,
 )
 from .tokenization import (
     DEFAULT_DICTIONARY_LIMITS,
@@ -250,6 +251,7 @@ __all__ = [
     "unicode_to_iscii",
     "preprocess_text",
     "postprocess_text",
+    "resolve_sections",
     "TokenizationHelper",
     "infer_tokenizer_max_length",
     "DEFAULT_DICTIONARY_LIMITS",
