@@ -9,6 +9,11 @@ on:
         description: 'UTC weekday override (monday through friday)'
         required: false
         type: string
+      throttle_on_over:
+        description: 'Limit an over-budget batch to one reviewed candidate'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -62,6 +67,21 @@ jobs:
           fi
           echo "weekday=$weekday" >> "$GITHUB_OUTPUT"
 
+      - name: Check rolling release compute budget
+        id: budget_preflight
+        continue-on-error: true
+        env:
+          THROTTLE_ON_OVER: ${{ inputs.throttle_on_over }}
+        run: |
+          throttle_args=()
+          if [ "${THROTTLE_ON_OVER:-false}" = "true" ]; then
+            throttle_args+=(--throttle-on-over)
+          fi
+          python scripts/release/budget_report.py status \
+            --ledger gates/budget_ledger.jsonl \
+            --github-output "$GITHUB_OUTPUT" \
+            "${throttle_args[@]}"
+
       - name: Run fail-closed release batch
         id: orchestrate
         continue-on-error: true
@@ -77,9 +97,29 @@ jobs:
             --git-sha "${{ github.sha }}" \
             --ledger gates/release_runs.jsonl \
             --reports-dir gates/release_reports \
+            --budget-timings "gates/release_reports/${{ github.run_id }}-${{ github.run_attempt }}/budget-stage-timings.json" \
+            --max-candidates "${{ steps.budget_preflight.outputs.max_candidates || '0' }}" \
             --manifest models.jsonl \
             --registry-state gates/registry_state.json \
             --baseline gates/baseline.json
+
+      - name: Record advisory release compute budget
+        id: budget
+        if: always() && !cancelled()
+        continue-on-error: true
+        run: |
+          timings="gates/release_reports/${{ github.run_id }}-${{ github.run_attempt }}/budget-stage-timings.json"
+          report="gates/release_reports/${{ github.run_id }}-${{ github.run_attempt }}/budget-report.json"
+          if [ ! -f "$timings" ]; then
+            echo "::warning title=Release budget unavailable::No stage timing artifact was produced."
+            exit 0
+          fi
+          python scripts/release/budget_report.py record \
+            --timings "$timings" \
+            --ledger gates/budget_ledger.jsonl \
+            --orchestrator-ledger gates/release_runs.jsonl \
+            --output "$report" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Upload complete local audit state
         if: always() && !cancelled()
@@ -89,6 +129,7 @@ jobs:
           if-no-files-found: warn
           path: |
             gates/release_runs.jsonl
+            gates/budget_ledger.jsonl
             gates/release_reports/
             gates/registry_state.json
             models.jsonl
@@ -106,6 +147,7 @@ jobs:
             and manifest outcome for nightly run `${{ github.run_id }}-${{ github.run_attempt }}`.
           add-paths: |
             gates/release_runs.jsonl
+            gates/budget_ledger.jsonl
             gates/release_reports/
             gates/registry_state.json
             models.jsonl
