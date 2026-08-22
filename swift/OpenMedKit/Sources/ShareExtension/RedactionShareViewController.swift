@@ -12,7 +12,8 @@
         private let redactButton = UIButton(type: .system)
         private let cancelButton = UIButton(type: .system)
         private let policies = Policy.bundledProfileNames
-        private var inputText = ""
+        private var inputTexts: [String] = []
+        private var redactionTask: Task<Void, Never>?
 
         public final override func viewDidLoad() {
             super.viewDidLoad()
@@ -82,8 +83,8 @@
                 let texts = try await ExtensionItemCodec.plainText(
                     from: extensionContext?.inputItems ?? []
                 )
-                inputText = texts.joined(separator: "\n\n")
-                textView.text = inputText
+                inputTexts = texts
+                textView.text = texts.joined(separator: "\n\n")
                 statusLabel.text = "Choose a bundled policy profile. Processing stays on this device."
                 redactButton.isEnabled = true
             } catch {
@@ -93,27 +94,35 @@
 
         @objc private func redactSelection() {
             let policyName = policies[policyPicker.selectedRow(inComponent: 0)]
-            let text = inputText
+            let texts = inputTexts
             redactButton.isEnabled = false
             statusLabel.text = "Redacting with the local Nano model…"
 
-            Task {
+            redactionTask = Task {
+                defer { redactionTask = nil }
                 do {
                     let configuration = try NanoModelConfiguration.bundled()
-                    let output = try await Task.detached(priority: .userInitiated) {
-                        let result: ExtensionRedactionOutput
-                        do {
-                            let handler = try ExtensionRedactionHandler(configuration: configuration)
-                            result = try handler.redact(text, policyName: policyName)
+                    let worker = Task.detached(priority: .userInitiated) {
+                        defer { OpenMed.clearRuntimeMemoryCache() }
+                        let handler = try ExtensionRedactionHandler(configuration: configuration)
+                        return try texts.map {
+                            try handler.redact($0, policyName: policyName).redactedText
                         }
-                        OpenMed.clearRuntimeMemoryCache()
-                        return result
-                    }.value
-                    textView.text = output.redactedText
+                    }
+                    let redactedTexts = try await withTaskCancellationHandler {
+                        try await worker.value
+                    } onCancel: {
+                        worker.cancel()
+                    }
+                    try Task.checkCancellation()
+                    let redactedText = redactedTexts.joined(separator: "\n\n")
+                    inputTexts.removeAll(keepingCapacity: false)
+                    textView.text = redactedText
                     extensionContext?.completeRequest(
-                        returningItems: ExtensionItemCodec.extensionItems(for: [output.redactedText])
+                        returningItems: ExtensionItemCodec.extensionItems(for: [redactedText])
                     )
                 } catch {
+                    guard !Task.isCancelled else { return }
                     show(error)
                     redactButton.isEnabled = true
                 }
@@ -121,6 +130,9 @@
         }
 
         @objc private func cancelRequest() {
+            redactionTask?.cancel()
+            inputTexts.removeAll(keepingCapacity: false)
+            textView.text = ""
             extensionContext?.cancelRequest(withError: ExtensionRedactionError.emptyInput)
         }
 

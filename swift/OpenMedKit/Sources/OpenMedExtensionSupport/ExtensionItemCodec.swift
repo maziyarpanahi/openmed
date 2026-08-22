@@ -7,17 +7,28 @@
     public enum ExtensionItemCodec {
         /// Load every plain-text attachment supplied by the host app.
         public static func plainText(from inputItems: [Any]) async throws -> [String] {
-            var texts: [String] = []
+            var providers: [NSItemProvider] = []
             for item in inputItems.compactMap({ $0 as? NSExtensionItem }) {
                 for provider in item.attachments ?? []
                 where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                    texts.append(try await plainText(from: provider))
+                    providers.append(provider)
+                    guard providers.count <= ExtensionRedactionHandler.maximumInputItems else {
+                        throw ExtensionRedactionError.tooManyInputItems(
+                            actual: providers.count,
+                            limit: ExtensionRedactionHandler.maximumInputItems
+                        )
+                    }
                 }
             }
 
-            guard !texts.isEmpty else {
-                throw ExtensionRedactionError.missingPlainTextInput
+            var texts: [String] = []
+            for provider in providers {
+                let text = try await plainText(from: provider)
+                texts.append(text)
+                try ExtensionRedactionHandler.validateInputs(texts)
             }
+
+            try ExtensionRedactionHandler.validateInputs(texts)
             return texts
         }
 
@@ -48,11 +59,20 @@
                         continuation.resume(returning: text as String)
                         return
                     }
-                    if let data = item as? Data,
-                        let text = String(data: data, encoding: .utf8)
-                    {
-                        continuation.resume(returning: text)
-                        return
+                    if let data = item as? Data {
+                        guard data.count <= ExtensionRedactionHandler.maximumInputUTF8Bytes else {
+                            continuation.resume(
+                                throwing: ExtensionRedactionError.inputBytesTooLarge(
+                                    actual: data.count,
+                                    limit: ExtensionRedactionHandler.maximumInputUTF8Bytes
+                                )
+                            )
+                            return
+                        }
+                        if let text = String(data: data, encoding: .utf8) {
+                            continuation.resume(returning: text)
+                            return
+                        }
                     }
                     continuation.resume(throwing: ExtensionRedactionError.missingPlainTextInput)
                 }

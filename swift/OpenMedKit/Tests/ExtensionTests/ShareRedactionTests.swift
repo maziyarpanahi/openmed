@@ -142,6 +142,143 @@ final class ShareRedactionTests: XCTestCase {
         }
     }
 
+    func testUTF8AndBatchBudgetsCannotBeBypassedByGraphemeClustering() {
+        let oversizedGrapheme =
+            "a"
+            + String(
+                repeating: "\u{0301}",
+                count: ExtensionRedactionHandler.maximumInputUTF8Bytes
+            )
+        XCTAssertLessThanOrEqual(
+            oversizedGrapheme.count,
+            ExtensionRedactionHandler.maximumInputCharacters
+        )
+        XCTAssertThrowsError(
+            try ExtensionRedactionHandler.validateInput(oversizedGrapheme)
+        ) { error in
+            guard case ExtensionRedactionError.inputBytesTooLarge = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertThrowsError(
+            try ExtensionRedactionHandler.validateInputs(
+                Array(
+                    repeating: "synthetic",
+                    count: ExtensionRedactionHandler.maximumInputItems + 1
+                )
+            )
+        ) { error in
+            guard case ExtensionRedactionError.tooManyInputItems = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        let boundedItem = String(repeating: "é", count: 16_000)
+        XCTAssertThrowsError(
+            try ExtensionRedactionHandler.validateInputs(
+                Array(repeating: boundedItem, count: 5)
+            )
+        ) { error in
+            guard case ExtensionRedactionError.aggregateInputTooLarge = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testInvalidRuntimeOutputFailsClosed() throws {
+        let wrongPolicyHandler = ExtensionRedactionHandler { text, _ in
+            PolicyDeidentificationResult(
+                redactedText: text,
+                policyName: "unexpected_policy",
+                actions: []
+            )
+        }
+
+        XCTAssertThrowsError(try wrongPolicyHandler.redact("Synthetic text")) { error in
+            XCTAssertEqual(error as? ExtensionRedactionError, .invalidRedactionOutput)
+        }
+
+        let invalidSpanHandler = ExtensionRedactionHandler { text, policy in
+            PolicyDeidentificationResult(
+                redactedText: text,
+                policyName: policy.name,
+                actions: [
+                    DeidentifiedSpanAction(
+                        label: "NAME",
+                        canonicalLabel: "PERSON",
+                        action: .mask,
+                        start: 0,
+                        end: text.unicodeScalars.count + 1,
+                        confidence: .nan,
+                        replacement: "[NAME]"
+                    )
+                ]
+            )
+        }
+
+        XCTAssertThrowsError(try invalidSpanHandler.redact("Synthetic text")) { error in
+            XCTAssertEqual(error as? ExtensionRedactionError, .invalidRedactionOutput)
+        }
+    }
+
+    func testNanoAssetConfigurationRejectsSymlinksAndWrongTypes() throws {
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: UUID().uuidString,
+            directoryHint: .isDirectory
+        )
+        let model = root.appending(path: "OpenMedPIINano.mlmodelc", directoryHint: .isDirectory)
+        let labels = root.appending(path: "id2label.json")
+        let tokenizer = root.appending(path: "tokenizer", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: model, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Data("model".utf8).write(to: model.appending(path: "weights.bin"))
+        try Data("{}".utf8).write(to: labels)
+        let tokenizerJSON = tokenizer.appending(path: "tokenizer.json")
+        try Data("{}".utf8).write(to: tokenizerJSON)
+        try Data("{}".utf8).write(to: tokenizer.appending(path: "tokenizer_config.json"))
+
+        XCTAssertNoThrow(
+            try NanoModelConfiguration(
+                modelURL: model,
+                id2labelURL: labels,
+                tokenizerFolderURL: tokenizer
+            )
+        )
+
+        try FileManager.default.removeItem(at: tokenizerJSON)
+        try FileManager.default.createSymbolicLink(at: tokenizerJSON, withDestinationURL: labels)
+        XCTAssertThrowsError(
+            try NanoModelConfiguration(
+                modelURL: model,
+                id2labelURL: labels,
+                tokenizerFolderURL: tokenizer
+            )
+        ) { error in
+            guard case ExtensionRedactionError.invalidAsset = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        try FileManager.default.removeItem(at: tokenizerJSON)
+        try Data("{}".utf8).write(to: tokenizerJSON)
+        try FileManager.default.removeItem(at: labels)
+        try FileManager.default.createDirectory(at: labels, withIntermediateDirectories: false)
+        XCTAssertThrowsError(
+            try NanoModelConfiguration(
+                modelURL: model,
+                id2labelURL: labels,
+                tokenizerFolderURL: tokenizer
+            )
+        ) { error in
+            guard case ExtensionRedactionError.invalidAsset = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
     func testPolicyPickerUsesEveryBundledProfile() throws {
         XCTAssertTrue(Policy.bundledProfileNames.contains(Policy.defaultName))
         for profile in Policy.bundledProfileNames {

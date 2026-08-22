@@ -40,9 +40,11 @@ package's conservative 120 MiB extension envelope. Model loading fails before
 inference when the asset budget is exceeded.
 
 `NanoModelConfiguration` accepts only local `file:` URLs and verifies that the
-compiled model, label map, and required tokenizer files exist. The runtime uses
-the tokenizer folder with `allowNetworkAccess: false`, so missing assets fail
-closed instead of falling back to a download.
+compiled model and tokenizer are directories, the label map and required
+tokenizer files are regular files, and no asset is a symbolic link. Hidden
+files count toward the asset budget. The runtime uses the tokenizer folder with
+`allowNetworkAccess: false`, so missing assets fail closed instead of falling
+back to a download.
 
 ## Add the Share extension
 
@@ -94,11 +96,12 @@ input item's `OpenMedPolicyProfile` user-info value.
   `NWConnection`, or a network-client entitlement, and a runtime test verifies
   that missing tokenizer assets fail closed.
 - Remote model URLs are rejected even if the host app passes one accidentally.
-- Input is limited to 16,384 characters. Image and PDF attachments are not
-  accepted.
+- Each input is limited to 16,384 characters and 64 KiB of UTF-8, with at most
+  eight text attachments and 128 KiB across one request. Image and PDF
+  attachments are not accepted.
 - Raw input and detected span text are not logged or written to audit artifacts.
 - The model runtime is released after each request and OpenMedKit clears unused
-  runtime buffers before the extension exits.
+  runtime buffers on both success and failure before the extension exits.
 
 Run the extension contract tests with:
 

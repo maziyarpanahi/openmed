@@ -5,11 +5,17 @@ import OpenMedKit
 public enum ExtensionRedactionError: Error, Equatable, LocalizedError, Sendable {
     case emptyInput
     case inputTooLarge(actual: Int, limit: Int)
+    case inputBytesTooLarge(actual: Int, limit: Int)
+    case tooManyInputItems(actual: Int, limit: Int)
+    case aggregateInputTooLarge(actual: Int, limit: Int)
     case missingPlainTextInput
     case nonLocalAsset(URL)
     case missingAsset(String)
+    case invalidAsset(String)
+    case tooManyAssetFiles(limit: Int)
     case unsupportedModelFormat(String)
     case modelAssetsTooLarge(actual: Int64, limit: Int64)
+    case invalidRedactionOutput
 
     public var errorDescription: String? {
         switch self {
@@ -17,16 +23,28 @@ public enum ExtensionRedactionError: Error, Equatable, LocalizedError, Sendable 
             return "The extension did not receive any text to redact."
         case .inputTooLarge(let actual, let limit):
             return "The selected text has \(actual) characters; the extension limit is \(limit)."
+        case .inputBytesTooLarge(let actual, let limit):
+            return "The selected text uses \(actual) UTF-8 bytes; the extension limit is \(limit)."
+        case .tooManyInputItems(let actual, let limit):
+            return "The host supplied \(actual) text items; the extension limit is \(limit)."
+        case .aggregateInputTooLarge(let actual, let limit):
+            return "The selected text items use \(actual) UTF-8 bytes; the extension limit is \(limit)."
         case .missingPlainTextInput:
             return "The host app did not provide a plain-text extension item."
         case .nonLocalAsset(let url):
             return "Extension model assets must be local files, not \(url.scheme ?? "unknown") URLs."
         case .missingAsset(let path):
             return "A required extension model asset is missing at \(path)."
+        case .invalidAsset(let name):
+            return "A required extension model asset has an invalid type: \(name)."
+        case .tooManyAssetFiles(let limit):
+            return "The extension model assets contain more than \(limit) files."
         case .unsupportedModelFormat(let fileName):
             return "The extension requires a precompiled .mlmodelc model; received \(fileName)."
         case .modelAssetsTooLarge(let actual, let limit):
             return "The Nano model assets use \(actual) bytes; the extension limit is \(limit)."
+        case .invalidRedactionOutput:
+            return "The local redaction runtime returned invalid output."
         }
     }
 }
@@ -54,12 +72,18 @@ public struct NanoModelMemoryBudget: Equatable, Sendable {
     }
 
     public init(modelAssetBytes: Int64) throws {
-        guard modelAssetBytes >= 0,
-            modelAssetBytes <= Self.maximumModelAssetBytes,
-            modelAssetBytes + Self.runtimeHeadroomBytes <= Self.maximumEstimatedPeakBytes
-        else {
+        guard modelAssetBytes >= 0, modelAssetBytes <= Self.maximumModelAssetBytes else {
             throw ExtensionRedactionError.modelAssetsTooLarge(
                 actual: modelAssetBytes,
+                limit: Self.maximumModelAssetBytes
+            )
+        }
+        let (estimatedPeak, overflow) = modelAssetBytes.addingReportingOverflow(
+            Self.runtimeHeadroomBytes
+        )
+        guard !overflow, estimatedPeak <= Self.maximumEstimatedPeakBytes else {
+            throw ExtensionRedactionError.modelAssetsTooLarge(
+                actual: overflow ? Int64.max : estimatedPeak,
                 limit: Self.maximumModelAssetBytes
             )
         }
@@ -72,6 +96,7 @@ public struct NanoModelConfiguration: Sendable {
     public static let resourceDirectoryName = "OpenMedPIINano"
     public static let compiledModelName = "OpenMedPIINano"
     public static let maximumSequenceLength = 256
+    public static let maximumAssetFileCount = 4_096
 
     public let modelURL: URL
     public let id2labelURL: URL
@@ -83,43 +108,68 @@ public struct NanoModelConfiguration: Sendable {
         id2labelURL: URL,
         tokenizerFolderURL: URL
     ) throws {
-        let assetURLs = [modelURL, id2labelURL, tokenizerFolderURL]
-        for url in assetURLs {
+        for url in [modelURL, id2labelURL, tokenizerFolderURL] {
             guard url.isFileURL else {
                 throw ExtensionRedactionError.nonLocalAsset(url)
             }
         }
+        let standardizedModelURL = modelURL.standardizedFileURL
+        let standardizedID2LabelURL = id2labelURL.standardizedFileURL
+        let standardizedTokenizerURL = tokenizerFolderURL.standardizedFileURL
+        let assetURLs = [
+            standardizedModelURL,
+            standardizedID2LabelURL,
+            standardizedTokenizerURL,
+        ]
 
-        guard modelURL.pathExtension == "mlmodelc" else {
-            throw ExtensionRedactionError.unsupportedModelFormat(modelURL.lastPathComponent)
+        guard standardizedModelURL.pathExtension == "mlmodelc" else {
+            throw ExtensionRedactionError.unsupportedModelFormat(
+                standardizedModelURL.lastPathComponent
+            )
         }
 
         let fileManager = FileManager.default
         for url in assetURLs where !fileManager.fileExists(atPath: url.path) {
-            throw ExtensionRedactionError.missingAsset(url.path)
+            throw ExtensionRedactionError.missingAsset(url.lastPathComponent)
         }
+        try Self.validateAssetType(at: standardizedModelURL, directory: true)
+        try Self.validateAssetType(at: standardizedID2LabelURL, directory: false)
+        try Self.validateAssetType(at: standardizedTokenizerURL, directory: true)
 
         for fileName in ["tokenizer.json", "tokenizer_config.json"] {
-            let url = tokenizerFolderURL.appending(path: fileName)
+            let url = standardizedTokenizerURL.appending(path: fileName)
             guard fileManager.fileExists(atPath: url.path) else {
-                throw ExtensionRedactionError.missingAsset(url.path)
+                throw ExtensionRedactionError.missingAsset(url.lastPathComponent)
             }
+            try Self.validateAssetType(at: url, directory: false)
         }
 
-        let assetBytes = try assetURLs.reduce(Int64(0)) { total, url in
-            try total + Self.logicalFileSize(at: url, fileManager: fileManager)
+        var assetBytes: Int64 = 0
+        for url in assetURLs {
+            let size = try Self.logicalFileSize(at: url, fileManager: fileManager)
+            guard size > 0 else {
+                throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+            }
+            let (next, overflow) = assetBytes.addingReportingOverflow(size)
+            guard !overflow, next <= NanoModelMemoryBudget.maximumModelAssetBytes else {
+                throw ExtensionRedactionError.modelAssetsTooLarge(
+                    actual: overflow ? Int64.max : next,
+                    limit: NanoModelMemoryBudget.maximumModelAssetBytes
+                )
+            }
+            assetBytes = next
         }
 
-        self.modelURL = modelURL.standardizedFileURL
-        self.id2labelURL = id2labelURL.standardizedFileURL
-        self.tokenizerFolderURL = tokenizerFolderURL.standardizedFileURL
+        self.modelURL = standardizedModelURL
+        self.id2labelURL = standardizedID2LabelURL
+        self.tokenizerFolderURL = standardizedTokenizerURL
         self.memoryBudget = try NanoModelMemoryBudget(modelAssetBytes: assetBytes)
     }
 
     /// Resolve the expected pre-bundled Nano Core ML model and tokenizer assets.
     public static func bundled(in bundle: Bundle = .main) throws -> Self {
         guard let resources = bundle.resourceURL else {
-            throw ExtensionRedactionError.missingAsset(bundle.bundlePath)
+            throw ExtensionRedactionError.missingAsset(bundle.bundleURL.lastPathComponent)
         }
         let directory = resources.appending(
             path: resourceDirectoryName,
@@ -155,30 +205,93 @@ public struct NanoModelConfiguration: Sendable {
         at url: URL,
         fileManager: FileManager
     ) throws -> Int64 {
-        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+        let keys: Set<URLResourceKey> = [
+            .fileSizeKey,
+            .isDirectoryKey,
+            .isRegularFileKey,
+            .isSymbolicLinkKey,
+        ]
+        let values = try url.resourceValues(forKeys: keys)
+        guard values.isSymbolicLink != true else {
+            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+        }
         guard values.isDirectory == true else {
-            return Int64(values.fileSize ?? 0)
+            return try regularFileSize(values, at: url)
         }
 
-        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
+        var enumerationError: Error?
         guard
             let enumerator = fileManager.enumerator(
                 at: url,
-                includingPropertiesForKeys: keys,
-                options: [.skipsHiddenFiles]
+                includingPropertiesForKeys: Array(keys),
+                options: [],
+                errorHandler: { _, error in
+                    enumerationError = error
+                    return false
+                }
             )
         else {
-            throw ExtensionRedactionError.missingAsset(url.path)
+            throw ExtensionRedactionError.missingAsset(url.lastPathComponent)
         }
 
         var total: Int64 = 0
+        var fileCount = 0
         for case let childURL as URL in enumerator {
-            let childValues = try childURL.resourceValues(forKeys: Set(keys))
+            let childValues = try childURL.resourceValues(forKeys: keys)
+            guard childValues.isSymbolicLink != true else {
+                throw ExtensionRedactionError.invalidAsset(childURL.lastPathComponent)
+            }
             if childValues.isRegularFile == true {
-                total += Int64(childValues.fileSize ?? 0)
+                fileCount += 1
+                guard fileCount <= maximumAssetFileCount else {
+                    throw ExtensionRedactionError.tooManyAssetFiles(
+                        limit: maximumAssetFileCount
+                    )
+                }
+                let size = try regularFileSize(childValues, at: childURL)
+                let (next, overflow) = total.addingReportingOverflow(size)
+                guard
+                    !overflow,
+                    next <= NanoModelMemoryBudget.maximumModelAssetBytes
+                else {
+                    throw ExtensionRedactionError.modelAssetsTooLarge(
+                        actual: overflow ? Int64.max : next,
+                        limit: NanoModelMemoryBudget.maximumModelAssetBytes
+                    )
+                }
+                total = next
+            } else if childValues.isDirectory != true {
+                throw ExtensionRedactionError.invalidAsset(childURL.lastPathComponent)
             }
         }
+        if enumerationError != nil {
+            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+        }
         return total
+    }
+
+    private static func validateAssetType(at url: URL, directory: Bool) throws {
+        let values = try url.resourceValues(
+            forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]
+        )
+        guard values.isSymbolicLink != true,
+            directory ? values.isDirectory == true : values.isRegularFile == true
+        else {
+            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+        }
+    }
+
+    private static func regularFileSize(
+        _ values: URLResourceValues,
+        at url: URL
+    ) throws -> Int64 {
+        guard values.isRegularFile == true,
+            let fileSize = values.fileSize,
+            fileSize >= 0
+        else {
+            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+        }
+        return Int64(fileSize)
     }
 }
 
@@ -231,6 +344,10 @@ public struct ExtensionRedactionOutput: Equatable, Sendable {
 /// Applies OpenMedKit policy redaction to plain text supplied by a host app.
 public final class ExtensionRedactionHandler {
     public static let maximumInputCharacters = 16_384
+    public static let maximumInputUTF8Bytes = 64 * 1_024
+    public static let maximumInputItems = 8
+    public static let maximumAggregateInputUTF8Bytes = 128 * 1_024
+    public static let maximumOutputUTF8Bytes = 256 * 1_024
 
     public typealias Redact = (String, Policy) throws -> PolicyDeidentificationResult
 
@@ -254,18 +371,11 @@ public final class ExtensionRedactionHandler {
         _ text: String,
         policyName: String = Policy.defaultName
     ) throws -> ExtensionRedactionOutput {
-        guard !text.isEmpty else {
-            throw ExtensionRedactionError.emptyInput
-        }
-        guard text.count <= Self.maximumInputCharacters else {
-            throw ExtensionRedactionError.inputTooLarge(
-                actual: text.count,
-                limit: Self.maximumInputCharacters
-            )
-        }
+        try Self.validateInput(text)
 
         let policy = try Policy(named: policyName)
         let result = try redactWithPolicy(text, policy)
+        try Self.validateResult(result, for: text, policy: policy)
         let spans = result.actions.map { action in
             ExtensionRedactedSpan(
                 label: action.label,
@@ -282,5 +392,87 @@ public final class ExtensionRedactionHandler {
             policyName: result.policyName,
             spans: spans
         )
+    }
+
+    /// Validate one host-provided text before model loading or inference.
+    public static func validateInput(_ text: String) throws {
+        guard !text.isEmpty else {
+            throw ExtensionRedactionError.emptyInput
+        }
+        let characterCount = text.count
+        guard characterCount <= maximumInputCharacters else {
+            throw ExtensionRedactionError.inputTooLarge(
+                actual: characterCount,
+                limit: maximumInputCharacters
+            )
+        }
+        let utf8Count = text.utf8.count
+        guard utf8Count <= maximumInputUTF8Bytes else {
+            throw ExtensionRedactionError.inputBytesTooLarge(
+                actual: utf8Count,
+                limit: maximumInputUTF8Bytes
+            )
+        }
+    }
+
+    /// Validate a bounded batch of host-provided text attachments.
+    public static func validateInputs(_ texts: [String]) throws {
+        guard !texts.isEmpty else {
+            throw ExtensionRedactionError.missingPlainTextInput
+        }
+        guard texts.count <= maximumInputItems else {
+            throw ExtensionRedactionError.tooManyInputItems(
+                actual: texts.count,
+                limit: maximumInputItems
+            )
+        }
+
+        var aggregateBytes = 0
+        for text in texts {
+            try validateInput(text)
+            let (nextBytes, overflow) = aggregateBytes.addingReportingOverflow(
+                text.utf8.count
+            )
+            guard !overflow, nextBytes <= maximumAggregateInputUTF8Bytes else {
+                throw ExtensionRedactionError.aggregateInputTooLarge(
+                    actual: overflow ? Int.max : nextBytes,
+                    limit: maximumAggregateInputUTF8Bytes
+                )
+            }
+            aggregateBytes = nextBytes
+        }
+    }
+
+    private static func validateResult(
+        _ result: PolicyDeidentificationResult,
+        for text: String,
+        policy: Policy
+    ) throws {
+        let scalarCount = text.unicodeScalars.count
+        guard result.policyName == policy.name,
+            result.redactedText.utf8.count <= maximumOutputUTF8Bytes,
+            result.actions.count <= scalarCount
+        else {
+            throw ExtensionRedactionError.invalidRedactionOutput
+        }
+
+        var previousEnd = 0
+        for action in result.actions {
+            guard !action.label.isEmpty,
+                !action.canonicalLabel.isEmpty,
+                action.label.utf8.count <= 256,
+                action.canonicalLabel.utf8.count <= 256,
+                action.start >= previousEnd,
+                action.end > action.start,
+                action.end <= scalarCount,
+                action.confidence.isFinite,
+                action.confidence >= 0,
+                action.confidence <= 1,
+                (action.replacement?.utf8.count ?? 0) <= maximumOutputUTF8Bytes
+            else {
+                throw ExtensionRedactionError.invalidRedactionOutput
+            }
+            previousEnd = action.end
+        }
     }
 }

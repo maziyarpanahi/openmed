@@ -14,15 +14,11 @@
                     let policyName = Self.policyName(from: context.inputItems)
                     let configuration = try NanoModelConfiguration.bundled()
                     let redactedTexts = try await Task.detached(priority: .userInitiated) {
-                        let results: [String]
-                        do {
-                            let handler = try ExtensionRedactionHandler(configuration: configuration)
-                            results = try texts.map {
-                                try handler.redact($0, policyName: policyName).redactedText
-                            }
+                        defer { OpenMed.clearRuntimeMemoryCache() }
+                        let handler = try ExtensionRedactionHandler(configuration: configuration)
+                        return try texts.map {
+                            try handler.redact($0, policyName: policyName).redactedText
                         }
-                        OpenMed.clearRuntimeMemoryCache()
-                        return results
                     }.value
                     context.completeRequest(
                         returningItems: ExtensionItemCodec.extensionItems(for: redactedTexts)
