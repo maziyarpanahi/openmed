@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a locked Pixi Python 3.12 workflow for Linux x86_64, Intel macOS, and
+  Apple Silicon macOS, with environments mirroring the development,
+  documentation, Hugging Face, service, and MLX extras (#2348).
+
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
