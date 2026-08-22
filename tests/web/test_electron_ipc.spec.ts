@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import dgram from "node:dgram";
+import dns from "node:dns";
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import http from "node:http";
@@ -18,10 +20,14 @@ import {
 import {
   ElectronDeidentifyService,
   OPENMED_DEIDENTIFY_CHANNEL,
+  OPENMED_ELECTRON_MAX_TEXT_LENGTH,
+  OPENMED_ELECTRON_SCHEMA_VERSION,
   createElectronDeidentifyClient,
   redactTextWithSpans,
   registerElectronDeidentifyIpc,
   type IpcMainLike,
+  type ElectronDeidentifyRequest,
+  type ElectronDeidentifyServiceOptions,
   type RendererOpenMedSpan,
   type UtilityProcessLike,
   type UtilityProcessModuleLike,
@@ -29,6 +35,7 @@ import {
 import {
   createUtilityDeidentifyHandler,
   installOfflineNetworkGuard,
+  modelPathFromUtilityArguments,
 } from "../../js/openmedkit-electron/src/utility-process";
 
 const rootDir = fileURLToPath(new URL("../..", import.meta.url));
@@ -39,6 +46,24 @@ const fixturePath = join(
   "fixtures",
   "npm_deidentify_golden.json",
 );
+const syntheticNote =
+  "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.";
+
+test("Electron renderer export is free of Node and model-runtime imports", async () => {
+  const packageDir = join(rootDir, "js", "openmedkit-electron");
+  const manifest = JSON.parse(
+    await readFile(join(packageDir, "package.json"), "utf8"),
+  ) as { exports?: Record<string, unknown> };
+  assert.ok(manifest.exports?.["./renderer"]);
+
+  for (const filename of ["ipc.js", "ipc.cjs"]) {
+    const bundle = await readFile(join(packageDir, "dist", filename), "utf8");
+    assert.doesNotMatch(
+      bundle,
+      /from ["'](?:node:|openmed["'])|require\(["'](?:node:|openmed["'])/,
+    );
+  }
+});
 
 test("Electron IPC returns only renderer-safe spans matching the golden", async () => {
   const golden = JSON.parse(
@@ -47,7 +72,15 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
   const mainLogs: unknown[] = [];
   const rendererLogs: unknown[] = [];
   let modelLoadCount = 0;
+  const modelPath = join(
+    rootDir,
+    "tests",
+    "web",
+    "fixtures",
+    "local-model-cache",
+  );
   const handler = createUtilityDeidentifyHandler({
+    modelPath,
     loadPipeline: async () => {
       modelLoadCount += 1;
       return fixturePipeline;
@@ -72,16 +105,22 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
       "dist",
       "utility-process.js",
     ),
-    modelPath: join(rootDir, "tests", "web", "fixtures", "local-model-cache"),
+    modelPath,
     logger: (entry) => mainLogs.push(entry),
   });
   const ipcMain = new FakeIpcMain();
-  const unregister = registerElectronDeidentifyIpc(ipcMain, service);
+  const allowedSenderIds = new Set([101, 102]);
+  const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
+    authorizeSender: (event) => allowedSenderIds.has(event.sender.id),
+  });
   const firstWindow = createElectronDeidentifyClient(
-    ipcMain.createRenderer(rendererLogs),
+    ipcMain.createRenderer(rendererLogs, 101),
   );
   const secondWindow = createElectronDeidentifyClient(
-    ipcMain.createRenderer(rendererLogs),
+    ipcMain.createRenderer(rendererLogs, 102),
+  );
+  const unauthorizedWindow = createElectronDeidentifyClient(
+    ipcMain.createRenderer(rendererLogs, 999),
   );
   const restoreNetwork = installOfflineNetworkGuard();
   const restoreConsole = captureConsole(rendererLogs);
@@ -107,6 +146,24 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
       () => tls.connect(443, "example.invalid"),
       /Network access is disabled/,
     );
+    assert.throws(
+      () => dns.lookup("example.invalid", () => undefined),
+      /Network access is disabled/,
+    );
+    assert.throws(
+      () => dgram.createSocket("udp4"),
+      /Network access is disabled/,
+    );
+    assert.throws(
+      () => dns.promises.lookup("example.invalid"),
+      /Network access is disabled/,
+    );
+
+    await assert.rejects(
+      unauthorizedWindow.deidentify(golden.text),
+      /Unauthorized OpenMed Electron IPC sender/,
+    );
+    assert.equal(utilityProcess.forkCount, 0);
 
     const first = await firstWindow.deidentify(golden.text);
     const second = await secondWindow.deidentify(golden.text);
@@ -122,11 +179,20 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
     assert.equal(utilityProcess.forkCount, 1);
     assert.equal(utilityProcess.lastFork?.workerPath.endsWith("utility-process.js"), true);
     assert.equal(utilityProcess.lastFork?.options?.stdio, "ignore");
+    assert.deepEqual(utilityProcess.lastFork?.args, [
+      "--openmed-model-path",
+      modelPath,
+    ]);
     assert.deepEqual(utilityProcess.lastFork?.options?.env, {
       HF_HUB_OFFLINE: "1",
       TRANSFORMERS_OFFLINE: "1",
     });
     assert.equal(JSON.stringify(utilityProcess.lastFork).includes("Alice"), false);
+    assert.equal(
+      JSON.stringify(utilityProcess.lastMessage).includes(modelPath),
+      false,
+      "the model cache path must not be renderer-controlled message data",
+    );
     assert.equal(modelLoadCount, 1, "model cache must be shared across windows");
 
     for (const span of first.spans) {
@@ -153,25 +219,224 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
   }
 });
 
+test("Electron IPC rejects unauthorized, oversized, and overlapping data", async () => {
+  let invokeCount = 0;
+  const oversizedClient = createElectronDeidentifyClient({
+    invoke: async () => {
+      invokeCount += 1;
+      return undefined;
+    },
+  });
+  await assert.rejects(
+    oversizedClient.deidentify("x".repeat(OPENMED_ELECTRON_MAX_TEXT_LENGTH + 1)),
+    /Invalid OpenMed Electron request text/,
+  );
+  assert.equal(invokeCount, 0, "oversized text must not cross IPC");
+
+  const invalidResponseClient = createElectronDeidentifyClient({
+    invoke: async (_channel, request) => {
+      const typedRequest = request as ElectronDeidentifyRequest;
+      return {
+        schemaVersion: OPENMED_ELECTRON_SCHEMA_VERSION,
+        requestId: typedRequest.requestId,
+        spans: [rendererSpan(0, 99)],
+      };
+    },
+  });
+  await assert.rejects(
+    invalidResponseClient.deidentify("short"),
+    /Invalid OpenMed Electron renderer spans/,
+  );
+
+  assert.throws(
+    () => redactTextWithSpans("abcdef", [rendererSpan(0, 4), rendererSpan(3, 6)]),
+    /Invalid OpenMed Electron renderer spans/,
+  );
+});
+
+test("Electron service bounds pending work and replaces timed-out workers", async () => {
+  const utilityProcess = new FakeUtilityProcessModule(
+    async () => new Promise<never>(() => undefined),
+  );
+  const service = createService(utilityProcess, {
+    requestTimeoutMs: 10,
+    maxPendingRequests: 1,
+  });
+
+  try {
+    const first = service.deidentify(request("first", "synthetic one"));
+    await assert.rejects(
+      service.deidentify(request("second", "synthetic two")),
+      /service is busy/,
+    );
+    await assert.rejects(first, /timed out/);
+    assert.equal(utilityProcess.forkCount, 1);
+    assert.equal(utilityProcess.killCount, 1);
+  } finally {
+    service.dispose();
+  }
+});
+
+test("a stale utility exit cannot reject a replacement worker request", async () => {
+  const modelPath = join(rootDir, "tests", "web", "fixtures", "local-model-cache");
+  const realHandler = createUtilityDeidentifyHandler({
+    modelPath,
+    loadPipeline: async () => fixturePipeline,
+  });
+  let releaseReplacement: (() => void) | undefined;
+  const replacementGate = new Promise<void>((resolve) => {
+    releaseReplacement = resolve;
+  });
+  const utilityProcess = new FakeUtilityProcessModule(async (message) => {
+    const requestId = (message as { requestId?: unknown }).requestId;
+    if (requestId === "first") {
+      return new Promise<never>(() => undefined);
+    }
+    await replacementGate;
+    return realHandler(message);
+  });
+  utilityProcess.suppressNextKillExit();
+  const service = createService(utilityProcess, { requestTimeoutMs: 25 });
+
+  try {
+    await assert.rejects(
+      service.deidentify(request("first", syntheticNote)),
+      /timed out/,
+    );
+    const replacement = service.deidentify(request("second", syntheticNote));
+    assert.equal(utilityProcess.children.length, 2);
+    utilityProcess.children[0]?.emit("exit", 0);
+    releaseReplacement?.();
+    assert.equal((await replacement).requestId, "second");
+  } finally {
+    service.dispose();
+  }
+});
+
+test("Electron service cleans up a synchronous utility send failure", async () => {
+  const modelPath = join(rootDir, "tests", "web", "fixtures", "local-model-cache");
+  const handler = createUtilityDeidentifyHandler({
+    modelPath,
+    loadPipeline: async () => fixturePipeline,
+  });
+  const utilityProcess = new FakeUtilityProcessModule(handler);
+  utilityProcess.failNextPost();
+  const service = createService(utilityProcess);
+
+  try {
+    await assert.rejects(
+      service.deidentify(request("first", syntheticNote)),
+      /communication failed/,
+    );
+    const response = await service.deidentify(request("second", syntheticNote));
+    assert.equal(response.requestId, "second");
+    assert.equal(utilityProcess.forkCount, 2);
+  } finally {
+    service.dispose();
+  }
+});
+
+test("Electron utility pins one local model and serializes inference", async () => {
+  const modelPath = join(rootDir, "tests", "web", "fixtures", "local-model-cache");
+  let loadedPath = "";
+  let loadCount = 0;
+  let active = 0;
+  let maximumActive = 0;
+  const handler = createUtilityDeidentifyHandler({
+    modelPath,
+    loadPipeline: async (requestedPath) => {
+      loadedPath = requestedPath;
+      loadCount += 1;
+      return async (text) => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const result = fixturePipeline(text);
+        active -= 1;
+        return result;
+      };
+    },
+  });
+
+  const firstRequest = {
+    ...request("first", syntheticNote),
+    type: "deidentify" as const,
+    modelPath: "/renderer-controlled/path",
+  };
+  const secondRequest = {
+    ...request("second", syntheticNote),
+    type: "deidentify" as const,
+  };
+  const [first, second] = await Promise.all([
+    handler(firstRequest),
+    handler(secondRequest),
+  ]);
+
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  assert.equal(loadedPath, modelPath);
+  assert.equal(loadCount, 1);
+  assert.equal(maximumActive, 1);
+  assert.equal(
+    modelPathFromUtilityArguments([
+      "electron-helper",
+      "utility-process.js",
+      "--openmed-model-path",
+      modelPath,
+    ]),
+    modelPath,
+  );
+  assert.equal(
+    modelPathFromUtilityArguments([
+      "--openmed-model-path",
+      modelPath,
+      "--openmed-model-path",
+      "/unexpected",
+    ]),
+    "",
+  );
+
+  const invalid = await handler({
+    type: "deidentify",
+    schemaVersion: OPENMED_ELECTRON_SCHEMA_VERSION,
+    requestId: "Alice Nguyen",
+    text: "synthetic",
+  });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.requestId, "invalid-request");
+});
+
 class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
   constructor(
     private readonly handler: (message: unknown) => Promise<unknown>,
+    private readonly onPost: (message: unknown) => void,
+    private readonly onKill: () => void,
+    private readonly emitExitOnKill: boolean,
   ) {
     super();
   }
 
   postMessage(message: unknown): void {
+    this.onPost(message);
     void this.handler(message).then((response) => this.emit("message", response));
   }
 
   kill(): boolean {
-    this.emit("exit", 0);
+    this.onKill();
+    if (this.emitExitOnKill) {
+      this.emit("exit", 0);
+    }
     return true;
   }
 }
 
 class FakeUtilityProcessModule implements UtilityProcessModuleLike {
   forkCount = 0;
+  killCount = 0;
+  lastMessage: unknown;
+  readonly children: FakeUtilityProcess[] = [];
+  private postFailures = 0;
+  private suppressedKillExits = 0;
   lastFork:
     | {
         workerPath: string;
@@ -188,6 +453,14 @@ class FakeUtilityProcessModule implements UtilityProcessModuleLike {
     private readonly handler: (message: unknown) => Promise<unknown>,
   ) {}
 
+  failNextPost(): void {
+    this.postFailures += 1;
+  }
+
+  suppressNextKillExit(): void {
+    this.suppressedKillExits += 1;
+  }
+
   fork(
     workerPath: string,
     args: string[] = [],
@@ -201,7 +474,26 @@ class FakeUtilityProcessModule implements UtilityProcessModuleLike {
     this.lastFork = options
       ? { workerPath, args, options }
       : { workerPath, args };
-    return new FakeUtilityProcess(this.handler);
+    const emitExitOnKill = this.suppressedKillExits === 0;
+    if (!emitExitOnKill) {
+      this.suppressedKillExits -= 1;
+    }
+    const child = new FakeUtilityProcess(
+      this.handler,
+      (message) => {
+        if (this.postFailures > 0) {
+          this.postFailures -= 1;
+          throw new Error("synthetic post failure");
+        }
+        this.lastMessage = message;
+      },
+      () => {
+        this.killCount += 1;
+      },
+      emitExitOnKill,
+    );
+    this.children.push(child);
+    return child;
   }
 }
 
@@ -222,18 +514,65 @@ class FakeIpcMain implements IpcMainLike {
     this.handlers.delete(channel);
   }
 
-  createRenderer(logs: unknown[]) {
+  createRenderer(logs: unknown[], senderId: number) {
     return {
       invoke: async (channel: string, request: unknown): Promise<unknown> => {
         assert.equal(channel, OPENMED_DEIDENTIFY_CHANNEL);
         const handler = this.handlers.get(channel);
         assert.ok(handler);
-        const response = await handler({ sender: "synthetic-window" }, request);
+        const response = await handler({ sender: { id: senderId } }, request);
         logs.push({ event: "deidentify_completed" });
         return response;
       },
     };
   }
+}
+
+function createService(
+  utilityProcess: UtilityProcessModuleLike,
+  options: Pick<
+    ElectronDeidentifyServiceOptions,
+    "requestTimeoutMs" | "maxPendingRequests"
+  > = {},
+): ElectronDeidentifyService {
+  return new ElectronDeidentifyService({
+    utilityProcess,
+    workerPath: join(
+      rootDir,
+      "js",
+      "openmedkit-electron",
+      "dist",
+      "utility-process.js",
+    ),
+    modelPath: join(
+      rootDir,
+      "tests",
+      "web",
+      "fixtures",
+      "local-model-cache",
+    ),
+    ...options,
+  });
+}
+
+function request(requestId: string, text: string): ElectronDeidentifyRequest {
+  return {
+    schemaVersion: OPENMED_ELECTRON_SCHEMA_VERSION,
+    requestId,
+    text,
+  };
+}
+
+function rendererSpan(start: number, end: number): RendererOpenMedSpan {
+  return {
+    schema_version: 1,
+    start,
+    end,
+    entity_type: "B-NAME",
+    canonical_label: "PERSON",
+    policy_label: "DIRECT_IDENTIFIER",
+    score: 0.99,
+  };
 }
 
 function projectGoldenSpan(span: OpenMedSpan): RendererOpenMedSpan {

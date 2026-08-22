@@ -7,6 +7,9 @@ export {
 } from "./main-service";
 export {
   OPENMED_DEIDENTIFY_CHANNEL,
+  OPENMED_ELECTRON_MAX_SPANS,
+  OPENMED_ELECTRON_MAX_TEXT_BYTES,
+  OPENMED_ELECTRON_MAX_TEXT_LENGTH,
   OPENMED_ELECTRON_SCHEMA_VERSION,
   createElectronDeidentifyClient,
   redactTextWithSpans,
@@ -14,7 +17,9 @@ export {
   type ElectronDeidentifyRequest,
   type ElectronDeidentifyResponse,
   type ElectronDeidentifyServiceLike,
+  type ElectronIpcInvokeEventLike,
   type IpcMainLike,
   type IpcRendererLike,
+  type RegisterElectronDeidentifyIpcOptions,
   type RendererOpenMedSpan,
 } from "./ipc";

@@ -41,15 +41,21 @@ const service = new ElectronDeidentifyService({
     "privacy-filter-transformersjs",
   ),
 });
-const unregister = registerElectronDeidentifyIpc(ipcMain, service);
-
 const window = new BrowserWindow({
   webPreferences: {
     contextIsolation: true,
     nodeIntegration: false,
+    sandbox: true,
     preload: join(__dirname, "preload.cjs"),
   },
 });
+const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
+  authorizeSender: (event) =>
+    event.sender.id === window.webContents.id &&
+    event.senderFrame === window.webContents.mainFrame,
+});
+window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+window.webContents.on("will-frame-navigate", (event) => event.preventDefault());
 await window.loadFile("index.html");
 
 app.once("before-quit", () => {
@@ -58,14 +64,17 @@ app.once("before-quit", () => {
 });
 ```
 
-Create the service once, outside the window factory. Every window then shares
-the same utility process and its in-memory pipeline cache.
+Create the service once, outside the window factory. Every trusted window then
+shares the same utility process and its in-memory pipeline cache. For multiple
+windows, maintain an allowlist of their `webContents.id` values, require
+`event.senderFrame` to equal the corresponding `mainFrame`, and remove an ID as
+soon as that window is destroyed. Never authorize by URL alone.
 
 ## Preload
 
 ```ts
 import { contextBridge, ipcRenderer } from "electron/renderer";
-import { createElectronDeidentifyClient } from "@openmed/openmedkit-electron";
+import { createElectronDeidentifyClient } from "@openmed/openmedkit-electron/renderer";
 
 contextBridge.exposeInMainWorld(
   "openmed",
@@ -96,3 +105,9 @@ Patient [PERSON], DOB [DATE_OF_BIRTH], email [EMAIL].
 Do not log the request, the source note, rejected inference values, or model
 errors. The service logger emits only fixed event names, safe error codes, and
 span counts.
+
+Serve the renderer with a restrictive Content Security Policy (for example,
+`default-src 'self'; connect-src 'none'`) and do not load remote content into an
+authorized window. The client, main service, and utility process enforce text,
+span, pending-request, and timeout limits; a timeout terminates the worker so a
+stalled inference cannot retain clinical text indefinitely.

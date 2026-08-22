@@ -18,6 +18,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./renderer": {
+      "import": {
+        "types": "./dist/ipc.d.ts",
+        "default": "./dist/ipc.js"
+      },
+      "require": {
+        "types": "./dist/ipc.d.cts",
+        "default": "./dist/ipc.cjs"
+      }
+    },
     "./utility-process": {
       "import": {
         "types": "./dist/utility-process.d.ts",
@@ -33,9 +43,13 @@
     "dist",
     "src"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/utility-process.ts",
+    "./dist/utility-process.js",
+    "./dist/utility-process.cjs"
+  ],
   "scripts": {
-    "build": "tsup src/index.ts src/utility-process.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
+    "build": "tsup src/index.ts src/ipc.ts src/utility-process.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run typecheck && npm run test:node",
     "test:node": "tsx --test ../../tests/web/test_electron_ipc.spec.ts"
