@@ -48,6 +48,18 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "airflow": AdapterSpec(
+        name="airflow",
+        module="openmed.interop.airflow",
+        extra="airflow",
+        description="Airflow operator for bounded local redaction",
+    ),
+    "beam": AdapterSpec(
+        name="beam",
+        module="openmed.interop.beam_transform",
+        extra="beam",
+        description="Apache Beam PTransform for worker-local de-identification",
+    ),
     "cda": AdapterSpec(
         name="cda",
         module="openmed.interop.cda",
@@ -150,6 +162,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="pydeid",
         description="pyDeid PHI span adapter",
     ),
+    "ray": AdapterSpec(
+        name="ray",
+        module="openmed.interop.ray_data",
+        extra="ray",
+        description="Ray Data actor operator for batch column de-identification",
+    ),
     "scrubadub": AdapterSpec(
         name="scrubadub",
         module="openmed.interop.scrubadub",
@@ -209,6 +227,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.openmrs",
         extra="openmrs",
         description="Local-first OpenMRS REST and FHIR2 de-identification adapter",
+    ),
+    "fhir_server": AdapterSpec(
+        name="fhir_server",
+        module="openmed.interop.fhir_server",
+        extra="fhir",
+        description="FHIR R4 server narrative de-identification connector",
     ),
 }
 

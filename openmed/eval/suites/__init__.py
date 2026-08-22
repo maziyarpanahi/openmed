@@ -39,11 +39,18 @@ from openmed.eval.datasets.drugprot import (
     load_drugprot_fixtures,
 )
 from openmed.eval.datasets.i2b2 import (
+    BIORED,
     I2B2,
     I2B2_PATH_ENV,
     I2B2_YEAR_ENV,
+    N2C2_2018,
+    N2C2_2022,
+    dua_relation_suite_metadata,
     i2b2_suite_metadata,
+    load_biored_relation_fixtures,
     load_i2b2_deid,
+    load_n2c2_2018_relation_fixtures,
+    load_n2c2_2022_relation_fixtures,
 )
 from openmed.eval.datasets.masakhaner import (
     MASAKHANER,
@@ -56,6 +63,12 @@ from openmed.eval.datasets.multilingual_ner import (
     load_multilingual_ner_fixtures,
     multilingual_ner_suite_metadata,
 )
+from openmed.eval.datasets.n2c2_2018 import (
+    N2C2,
+    N2C2_PATH_ENV,
+    load_n2c2_2018_deid,
+    n2c2_suite_metadata,
+)
 from openmed.eval.datasets.naamapadam import (
     NAAMAPADAM_PATH_ENV,
     configured_naamapadam_path,
@@ -65,6 +78,11 @@ from openmed.eval.datasets.naamapadam import (
 )
 from openmed.eval.datasets.naamapadam import (
     naamapadam_suite_metadata as naamapadam_corpus_suite_metadata,
+)
+from openmed.eval.domain_coverage import (
+    CLINICAL_DOMAIN_COVERAGE,
+    domain_coverage_metadata,
+    run_domain_coverage,
 )
 from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
@@ -278,7 +296,11 @@ from openmed.eval.suites.temporal_tlinks import (
 
 GOLDEN = "golden"
 GROUNDING_CALIBRATION = "grounding_calibration"
-N2C2 = "n2c2"
+PROMOTION_ONLY_RELATION_SUITES: tuple[str, ...] = (
+    BIORED,
+    N2C2_2018,
+    N2C2_2022,
+)
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
@@ -302,13 +324,18 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIA_CLINICAL_PHI_LEAKAGE,
     INDIA_SURROGATE_CONSISTENCY,
 )
-SUPPORTED_SUITES: tuple[str, ...] = DEFAULT_SUITES + (GROUNDING_CALIBRATION,)
+SUPPORTED_SUITES: tuple[str, ...] = (
+    DEFAULT_SUITES
+    + PROMOTION_ONLY_RELATION_SUITES
+    + (GROUNDING_CALIBRATION, CLINICAL_DOMAIN_COVERAGE)
+)
+REGISTERED_EVAL_SUITES: tuple[str, ...] = SUPPORTED_SUITES
 
 
 def validate_suite_name(name: str) -> str:
     """Return *name* if it is one of the scaffolded benchmark suites."""
-    if name not in SUPPORTED_SUITES:
-        allowed = ", ".join(SUPPORTED_SUITES)
+    if name not in REGISTERED_EVAL_SUITES:
+        allowed = ", ".join(REGISTERED_EVAL_SUITES)
         raise ValueError(
             f"unknown benchmark suite {name!r}; expected one of: {allowed}"
         )
@@ -318,6 +345,11 @@ def validate_suite_name(name: str) -> str:
 def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     """Load benchmark fixtures for a named suite."""
     suite = validate_suite_name(name)
+    if suite == CLINICAL_DOMAIN_COVERAGE:
+        raise ValueError(
+            "clinical domain coverage is an aggregate gate; "
+            "call run_domain_coverage instead of loading model fixtures"
+        )
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
     if suite == GROUNDING_CALIBRATION:
@@ -332,6 +364,14 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
             path=kwargs.get("path"),
             year=kwargs.get("year", kwargs.get("corpus_year")),
         )
+    if suite == BIORED:
+        return load_biored_relation_fixtures(kwargs.get("path"))
+    if suite == N2C2_2018:
+        return load_n2c2_2018_relation_fixtures(kwargs.get("path"))
+    if suite == N2C2_2022:
+        return load_n2c2_2022_relation_fixtures(kwargs.get("path"))
+    if suite == N2C2:
+        return load_n2c2_2018_deid(path=kwargs.get("path"))
     if suite == SHIELD:
         return load_shield_fixtures(**kwargs)
     if suite == DRUGPROT:
@@ -386,10 +426,18 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
 def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
+    if suite == CLINICAL_DOMAIN_COVERAGE:
+        return domain_coverage_metadata()
     if suite == I2B2:
         metadata = i2b2_suite_metadata()
         metadata["path_config"] = kwargs.get("path_config", I2B2_PATH_ENV)
         metadata["year_config"] = kwargs.get("year_config", I2B2_YEAR_ENV)
+        return metadata
+    if suite in PROMOTION_ONLY_RELATION_SUITES:
+        return dua_relation_suite_metadata(suite)
+    if suite == N2C2:
+        metadata = n2c2_suite_metadata()
+        metadata["path_config"] = kwargs.get("path_config", N2C2_PATH_ENV)
         return metadata
     if suite == SHIELD:
         return shield_suite_metadata(**kwargs)
@@ -531,13 +579,17 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "BIORED",
     "GOLDEN",
     "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
+    "N2C2_2018",
+    "N2C2_2022",
     "SHIELD",
     "DRUGPROT",
     "POLICY_COMPLIANCE",
+    "PROMOTION_ONLY_RELATION_SUITES",
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
     "MASAKHANER",
@@ -590,16 +642,25 @@ __all__ = [
     "scan_restricted_corpus_markers",
     "DEFAULT_SUITES",
     "SUPPORTED_SUITES",
+    "REGISTERED_EVAL_SUITES",
+    "CLINICAL_DOMAIN_COVERAGE",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
+    "run_domain_coverage",
     "run_comparator_matrix",
     "run_indic_encoder_recall_delta",
     "evaluate_chinese_terminology_leakage",
     "run_script_ner_benchmark",
     "load_i2b2_deid",
+    "load_biored_relation_fixtures",
+    "load_n2c2_2018_relation_fixtures",
+    "load_n2c2_2022_relation_fixtures",
     "i2b2_suite_metadata",
+    "dua_relation_suite_metadata",
+    "load_n2c2_2018_deid",
+    "n2c2_suite_metadata",
     "biomedical_ner_suite_metadata",
     "multilingual_ner_suite_metadata",
     "masakhaner_suite_metadata",

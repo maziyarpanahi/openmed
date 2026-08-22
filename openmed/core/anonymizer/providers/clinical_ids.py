@@ -19,6 +19,7 @@ deterministic:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Bangladesh NID structural formats with 10, 13, or 17 digits
   - ABDM identifiers: 14-digit ABHA numbers, ABHA addresses,
     PAN-shaped tax identifiers, and synthetic HPR/HFR registry identifiers
   - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
@@ -30,6 +31,7 @@ deterministic:
   - East African national IDs for Tanzania, Uganda, Rwanda, and Ethiopia
   - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
+  - Belgian Rijksregister (RRN) and Swiss AHV/AVS national identifiers
   - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
@@ -698,6 +700,47 @@ class AadhaarProvider(BaseProvider):
 
     def aadhaar(self) -> str:
         return generate_aadhaar(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Bangladesh National ID (10, 13, or 17 digits; structural validation only)
+# ---------------------------------------------------------------------------
+def generate_bangladesh_nid(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structural Bangladesh NID, preserving a valid source length."""
+
+    from openmed.core.pii_i18n import (
+        normalize_bengali_assamese_digits,
+        validate_bangladesh_nid,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+
+    if original is not None and validate_bangladesh_nid(original):
+        normalized = normalize_bengali_assamese_digits(original).strip()
+
+    length = len(normalized) if normalized else source.choice((10, 13, 17))
+    candidate = ""
+
+    for _ in range(20):
+        candidate = str(source.randint(1, 9)) + "".join(
+            str(source.randint(0, 9)) for _ in range(length - 1)
+        )
+        if candidate != normalized:
+            return candidate
+
+    return candidate
+
+
+class BangladeshNIDProvider(BaseProvider):
+    """Generate structural Bangladesh National ID surrogates."""
+
+    def bangladesh_nid(self, original: str | None = None) -> str:
+        return generate_bangladesh_nid(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2904,6 +2947,70 @@ class PhilippinesIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Belgian Rijksregister (YYMMDD-SSS-CC, modulo-97 with post-2000 prefix)
+# ---------------------------------------------------------------------------
+
+
+def generate_belgian_rrn(*, rng: random.Random | None = None) -> str:
+    """Generate a Belgian RRN accepted by ``validate_belgian_rrn``."""
+    source = rng or random.Random()
+    today = date.today()
+    birth_date = date.fromordinal(
+        source.randint(date(1900, 1, 1).toordinal(), today.toordinal())
+    )
+    sequence = source.randint(1, 998)
+    body = (
+        f"{birth_date.year % 100:02d}{birth_date.month:02d}"
+        f"{birth_date.day:02d}{sequence:03d}"
+    )
+    checksum_input = f"2{body}" if birth_date.year >= 2000 else body
+    control = 97 - (int(checksum_input) % 97)
+    candidate = f"{body[:2]}.{body[2:4]}.{body[4:6]}-{body[6:9]}.{control:02d}"
+
+    from openmed.core.pii_i18n import validate_belgian_rrn
+
+    if not validate_belgian_rrn(candidate):  # pragma: no cover
+        raise RuntimeError("generated Belgian RRN failed checksum validation")
+    return candidate
+
+
+class BelgianRRNProvider(BaseProvider):
+    """Generates checksum-valid Belgian Rijksregister numbers."""
+
+    def belgian_rrn(self) -> str:
+        return generate_belgian_rrn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Swiss AHV / AVS (756 prefix, EAN-13 modulo-10 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_swiss_ahv(*, rng: random.Random | None = None) -> str:
+    """Generate a Swiss AHV/AVS number accepted by ``validate_swiss_ahv``."""
+    source = rng or random.Random()
+    body = "756" + "".join(str(source.randint(0, 9)) for _ in range(9))
+    weighted_sum = sum(
+        int(digit) * (1 if index % 2 == 0 else 3) for index, digit in enumerate(body)
+    )
+    digits = body + str((10 - weighted_sum % 10) % 10)
+    candidate = f"{digits[:3]}.{digits[3:7]}.{digits[7:11]}.{digits[11:]}"
+
+    from openmed.core.pii_i18n import validate_swiss_ahv
+
+    if not validate_swiss_ahv(candidate):  # pragma: no cover
+        raise RuntimeError("generated Swiss AHV failed checksum validation")
+    return candidate
+
+
+class SwissAHVProvider(BaseProvider):
+    """Generates checksum-valid Swiss AHV/AVS identifiers."""
+
+    def swiss_ahv(self) -> str:
+        return generate_swiss_ahv(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Danish CPR / personnummer (DDMMYY-SSSS with century digit)
 # ---------------------------------------------------------------------------
 
@@ -3836,6 +3943,8 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BangladeshNIDProvider",
+    "BelgianRRNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
     "ChineseIdentifierProvider",
@@ -3884,6 +3993,7 @@ __all__ = [
     "SpanishDNIProvider",
     "PortugueseNIFProvider",
     "SpanishNIEProvider",
+    "SwissAHVProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
     "UkrainianRnokppProvider",
@@ -3891,8 +4001,10 @@ __all__ = [
     "generate_australian_tfn",
     "generate_aadhaar",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bc_phn",
     "generate_bic",
+    "generate_belgian_rrn",
     "generate_bulgarian_egn",
     "generate_canadian_sin",
     "generate_chinese_bank_card",
@@ -3951,6 +4063,7 @@ __all__ = [
     "generate_south_african_id",
     "generate_spanish_nie",
     "generate_ssn",
+    "generate_swiss_ahv",
     "generate_za_id_number",
     "generate_za_mobile_number",
     "generate_thai_national_id",

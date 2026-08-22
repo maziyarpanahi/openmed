@@ -110,6 +110,7 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
     "as_IN": "bn_BD",
+    "de_BE": "de_DE",
     "en_ET": "en_US",
     "en_TZ": "en_US",
     "en_UG": "en_US",

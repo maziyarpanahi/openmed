@@ -74,11 +74,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Add the OpenMed `v2.0.0` release to the app module:
+Add the OpenMed `v2.2.0` release to the app module:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.2.0")
 }
 ```
 
@@ -183,6 +183,32 @@ Building the actual Android AAR is a separate Android-module task; this export
 only writes the model and operator/type configuration consumed by that build.
 
 ## Mobile Compatibility Metadata
+
+Published Android rows in `models.jsonl` can describe their deployment contract
+with the canonical `formats` list and four optional top-level fields:
+
+```json
+{
+  "formats": ["onnx-android", "onnx-int8", "ort-android"],
+  "nnapi_compatible": true,
+  "min_sdk": 27,
+  "execution_providers": ["NNAPI", "XNNPACK"],
+  "tokenizer_assets": ["tokenizer.json", "tokenizer_config.json"]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `formats` | Android artifacts present in the model repository. Use `onnx-android` for the fp32/fp16 graphs, `onnx-int8` for the dynamic INT8 graph, and `ort-android` for the ORT Mobile model. |
+| `nnapi_compatible` | Whether the published graph is compatible with the Android NNAPI execution provider. |
+| `min_sdk` | Lowest supported Android SDK/API level as a positive integer. |
+| `execution_providers` | Ordered runtime provider hints, such as `NNAPI` and `XNNPACK`. Availability still depends on the target device and runtime build. |
+| `tokenizer_assets` | Repository-relative tokenizer files bundled with the artifacts. |
+
+The four Android metadata fields are optional. Existing manifest rows validate
+unchanged when they are absent. When at least one is present, the generated
+model card includes an Android metadata section and the autonomous-clinical-
+decision disclaimer.
 
 `openmed-onnx.json` records the Android artifacts with the format string
 `onnx-android` for fp32/fp16 and `onnx-int8` for the dynamic INT8 graph. When
