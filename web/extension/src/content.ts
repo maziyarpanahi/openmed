@@ -68,21 +68,44 @@ function installPageListeners(): void {
   document.addEventListener("input", handleEditableEvent, true);
   document.addEventListener("focusin", handleEditableEvent, true);
   document.addEventListener("submit", handleSubmit, true);
-  ui.toggle.addEventListener("click", () => void toggleSite());
-  ui.mask.addEventListener("click", maskActiveEditable);
-  ui.policy.addEventListener("change", () => void changePolicy());
+  ui.toggle.addEventListener("click", (event) => {
+    if (event.isTrusted) {
+      void toggleSite();
+    }
+  });
+  ui.mask.addEventListener("click", (event) => {
+    if (event.isTrusted) {
+      maskActiveEditable();
+    }
+  });
+  ui.policy.addEventListener("change", (event) => {
+    if (!event.isTrusted) {
+      ui.policy.value = currentPolicy;
+      return;
+    }
+    void changePolicy();
+  });
 
   const observer = new MutationObserver((records) => {
     if (!enabled) {
       return;
     }
+    pruneDisconnectedTextRedactions();
     for (const record of records) {
+      if (record.type === "characterData" && record.target instanceof Text) {
+        void scanTextNode(record.target);
+        continue;
+      }
       for (const node of record.addedNodes) {
         scanNodeTree(node);
       }
     }
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    characterData: true,
+    childList: true,
+    subtree: true,
+  });
 }
 
 function handleEditableEvent(event: Event): void {
@@ -386,6 +409,14 @@ function restoreTextRedactions(): void {
     }
   }
   textRedactions.clear();
+}
+
+function pruneDisconnectedTextRedactions(): void {
+  for (const wrapper of textRedactions.keys()) {
+    if (!wrapper.isConnected) {
+      textRedactions.delete(wrapper);
+    }
+  }
 }
 
 function renderEnabledState(): void {

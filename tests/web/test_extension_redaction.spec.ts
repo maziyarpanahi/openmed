@@ -130,6 +130,13 @@ test("extension matches local model spans, masks without network, and honors sit
     await expect(page.locator("#submit-count")).toHaveText("0");
     expect(outboundRequests).toEqual([]);
 
+    await mask.evaluate((element) => {
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error("Synthetic fixture is missing the mask button");
+      }
+      element.click();
+    });
+    await expect(note).toHaveValue(syntheticNote);
     await mask.click();
     await expect(note).toHaveValue(
       "Patient [PERSON], DOB [DATE_OF_BIRTH], email [EMAIL].",
@@ -139,8 +146,16 @@ test("extension matches local model spans, masks without network, and honors sit
     await page.locator("button[type='submit']").click();
     await expect(page.locator("#submit-count")).toHaveText("1");
 
+    await page.locator("#copy").evaluate((element) => {
+      element.textContent = "No identifiers here.";
+    });
+    await page.waitForTimeout(200);
     await page.locator("#copy").evaluate((element, text) => {
-      element.textContent = text;
+      const node = element.firstChild;
+      if (!(node instanceof Text)) {
+        throw new Error("Synthetic fixture is missing its text node");
+      }
+      node.data = text;
     }, syntheticNote);
     const textMarks = page.locator(
       "[data-openmed-text-redaction] mark[data-openmed-phi]",
@@ -149,6 +164,13 @@ test("extension matches local model spans, masks without network, and honors sit
     await expect(page.locator("#copy")).toContainText("[PERSON]");
     expect(outboundRequests).toEqual([]);
 
+    await toggle.evaluate((element) => {
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error("Synthetic fixture is missing the site toggle");
+      }
+      element.click();
+    });
+    await expect(toggle).toHaveAttribute("data-enabled", "true");
     await toggle.click();
     await expect(status).toContainText("disabled on this site");
     await expect(page.locator("[data-openmed-text-redaction]")).toHaveCount(0);
@@ -169,12 +191,22 @@ test("extension matches local model spans, masks without network, and honors sit
 
     await toggle.click();
     await expect(status).toContainText("ready");
-    await policy.selectOption("clinical_minimal_redaction");
+    await policy.evaluate((element) => {
+      if (!(element instanceof HTMLSelectElement)) {
+        throw new Error("Synthetic fixture is missing the policy selector");
+      }
+      element.value = "strict_no_leak";
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(policy).toHaveValue("hipaa_safe_harbor");
+    await policy.press("c");
+    await expect(policy).toHaveValue("clinical_minimal_redaction");
     await note.fill("Seen on 2026-07-19.");
     await expect(note).toHaveAttribute("data-openmed-phi-count", "0");
     await expect(status).toContainText("No PHI detected");
 
-    await policy.selectOption("hipaa_safe_harbor");
+    await policy.press("h");
+    await expect(policy).toHaveValue("hipaa_safe_harbor");
     await expect(note).toHaveAttribute("data-openmed-phi-count", "1");
     expect(outboundRequests).toEqual([]);
   } finally {
