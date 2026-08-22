@@ -225,6 +225,7 @@ nav:
       - Android Quickstart: android-quickstart.md
       - Android Integration & Model Catalog: android-integration.md
       - Android ONNX Export: export-onnx-android.md
+      - Android QNN and NNAPI: runtimes/android-accelerators.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - On-device Segmenters: on-device-segmenters.md

@@ -20,7 +20,9 @@ model from the catalog, and redact a synthetic clinical note.
 The library performs inference on device via ONNX Runtime Mobile. See
 [Android ONNX Export](export-onnx-android.md) for producing a compatible model
 artifact and [Android Span Parity](android-parity.md) for the cross-platform
-span guarantees.
+span guarantees. See [Android QNN and NNAPI Acceleration](runtimes/android-accelerators.md)
+for execution-provider selection, operator coverage, and deterministic CPU
+fallback.
 
 ## Install
 
@@ -139,4 +141,5 @@ Two runnable Android demos exercise the on-device path end to end:
 - [Swift Package (OpenMedKit)](swift-openmedkit.md) — the Apple-platform counterpart.
 - [Swift-Kotlin API Parity](swift-kotlin-parity.md) — cross-platform API alignment.
 - [Android ONNX Export](export-onnx-android.md) — producing a compatible on-device model.
+- [Android QNN and NNAPI Acceleration](runtimes/android-accelerators.md) — configuring delegate selection and CPU fallback.
 - [Model Manifest](model-manifest.md) — the model catalog and reproducibility metadata.
