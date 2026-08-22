@@ -333,6 +333,7 @@ def test_malformed_json_is_not_reflected_in_the_exception() -> None:
         '{"counter":NaN}',
         "x" * (MAX_JSON_CHARS + 1),
     ],
+    ids=("duplicate-key", "nonfinite-number", "oversized"),
 )
 def test_json_parser_rejects_ambiguous_or_oversized_documents(document: str) -> None:
     with pytest.raises(ResultEnvelopeError) as raised:
