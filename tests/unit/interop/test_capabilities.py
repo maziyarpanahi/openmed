@@ -139,10 +139,10 @@ def test_invalid_matrix_reports_structural_errors() -> None:
 
 
 def test_unknown_capability_errors_do_not_echo_caller_input() -> None:
-    secret = "synthetic-patient-482901"
+    test_marker = "synthetic-patient-482901"
 
     with pytest.raises(KeyError) as exc_info:
-        CAPABILITY_MATRIX.get(secret)
+        CAPABILITY_MATRIX.get(test_marker)
 
     rendered = "".join(
         traceback.format_exception(
@@ -151,7 +151,7 @@ def test_unknown_capability_errors_do_not_echo_caller_input() -> None:
             exc_info.value.__traceback__,
         )
     )
-    assert secret not in rendered
+    assert test_marker not in rendered
 
 
 def test_capability_sequences_are_bounded_without_string_hooks() -> None:
@@ -197,30 +197,30 @@ def test_matrix_iterables_are_bounded_and_fatal_failures_are_sanitized() -> None
     with pytest.raises(ValueError, match="capabilities exceed"):
         CapabilityMatrix(EndlessCapabilities())  # type: ignore[arg-type]
 
-    secret = "synthetic-sensitive-iterator-hook"
+    test_marker = "synthetic-sensitive-iterator-hook"
 
     class IteratorFailure(BaseException):
         pass
 
     class BrokenCapabilities:
         def __iter__(self) -> Iterator[Any]:
-            raise IteratorFailure(secret)
+            raise IteratorFailure(test_marker)
 
     with pytest.raises(TypeError) as exc_info:
         validate_capability_matrix(BrokenCapabilities())  # type: ignore[arg-type]
 
-    assert secret not in str(exc_info.value)
+    assert test_marker not in str(exc_info.value)
 
 
 def test_report_surfaces_revalidate_tampered_metadata_and_indent() -> None:
-    secret = "synthetic-patient-482901"
+    test_marker = "synthetic-patient-482901"
     entry = replace(CAPABILITY_MATRIX[0])
-    object.__setattr__(entry, "name", secret)
+    object.__setattr__(entry, "name", test_marker)
 
     with pytest.raises(ValueError, match="serialized safely") as exc_info:
         entry.to_dict()
 
-    assert secret not in str(exc_info.value)
+    assert test_marker not in str(exc_info.value)
     with pytest.raises(ValueError, match="between 0 and 8"):
         CAPABILITY_MATRIX.to_json(indent=9)
     with pytest.raises(ValueError, match="between 0 and 8"):
@@ -228,9 +228,9 @@ def test_report_surfaces_revalidate_tampered_metadata_and_indent() -> None:
 
 
 def test_capability_properties_revalidate_tampered_requirements() -> None:
-    secret = "synthetic-patient-482901"
+    test_marker = "synthetic-patient-482901"
     entry = replace(CAPABILITY_MATRIX[0])
-    object.__setattr__(entry, "optional_dependencies", (f"safe>=1`{secret}",))
+    object.__setattr__(entry, "optional_dependencies", (f"safe>=1`{test_marker}",))
 
     for accessor in (
         lambda: entry.dependency_names,
@@ -239,11 +239,11 @@ def test_capability_properties_revalidate_tampered_requirements() -> None:
     ):
         with pytest.raises(ValueError) as exc_info:
             accessor()
-        assert secret not in str(exc_info.value)
+        assert test_marker not in str(exc_info.value)
 
 
 def test_matrix_report_surfaces_reject_corrupted_state() -> None:
-    secret = "synthetic-patient-482901"
+    test_marker = "synthetic-patient-482901"
     matrix = CapabilityMatrix((CAPABILITY_MATRIX[0],))
     object.__setattr__(matrix, "schema_version", 2)
 
@@ -255,13 +255,13 @@ def test_matrix_report_surfaces_reject_corrupted_state() -> None:
         with pytest.raises(ValueError) as exc_info:
             accessor()
         assert str(exc_info.value) == "capability matrix cannot be reported safely"
-        assert secret not in str(exc_info.value)
+        assert test_marker not in str(exc_info.value)
 
 
 def test_capabilities_returns_detached_canonical_records() -> None:
-    secret = "synthetic-patient-482901"
+    test_marker = "synthetic-patient-482901"
     returned = capabilities()
-    object.__setattr__(returned[0], "name", secret)
+    object.__setattr__(returned[0], "name", test_marker)
 
     assert capabilities()[0].name == "airflow"
     assert capability("airflow").name == "airflow"
