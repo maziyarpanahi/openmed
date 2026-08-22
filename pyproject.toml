@@ -47,11 +47,13 @@ dev = [
   "pytest-timeout>=2.3",
   "huggingface-hub>=0.30",
   "jsonschema>=4.0",
+  "mcp>=1.27,<2",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
   "Pillow==12.3.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
+  "openpyxl>=3.1,<4",
   "fastapi>=0.110",
   "httpx>=0.27",
   "dask[dataframe]>=2024.8",
@@ -68,7 +70,12 @@ dev = [
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.22",
+  "strawberry-graphql[fastapi]>=0.316,<1",
+  "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
+  "nbclient>=0.8.0",
+  "nbformat>=5.9.0",
+  "ipykernel>=6.0",
 ]
 
 cli = [
@@ -89,6 +96,10 @@ lid = [
 ]
 
 openmrs = [
+  "httpx>=0.27",
+]
+
+fhir = [
   "httpx>=0.27",
 ]
 
@@ -124,6 +135,14 @@ dask = [
   "dask[dataframe]>=2024.8",
 ]
 
+dagster = [
+  "dagster>=1.8,<2",
+]
+
+sqlalchemy = [
+  "sqlalchemy>=2.0,<3",
+]
+
 spacy = [
   "click>=8.0",
   "spacy>=3.8.9",
@@ -147,11 +166,24 @@ quickumls = [
   "quickumls>=1.4,<2",
 ]
 
+# sdcMicro and R are installed separately under GPL-2.0. This explicit extra
+# opts into the subprocess-only bridge without adding GPL code or dependencies.
+interop-gpl = []
+
+# extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
+# stdin/stdout subprocess bridge. This explicit extra keeps GPL code out of the
+# base and general multimodal environments.
+email-msg-gpl = [
+  "extract-msg>=0.56,<0.57",
+]
+
 multimodal = [
   "numpy>=1.26",
+  "openpyxl>=3.1,<4",
   "onnx>=1.21",
   "pdfplumber>=0.11",
   "python-docx>=1.1",
+  "python-pptx>=1.0",
   "Pillow>=10.0",
   "python-doctr>=1.0",
   "piexif>=1.1",
@@ -213,6 +245,14 @@ agents = [
   "llama-index-core>=0.10,<1",
 ]
 
+beam = [
+  "apache-beam>=2.73,<3",
+]
+
+airflow = [
+  "apache-airflow>=3.2.2,<4",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -234,7 +274,7 @@ cloud = [
 ]
 
 ray = [
-  "ray>=2.30,<3",
+  "ray[data]>=2.30,<3",
 ]
 
 spark = [
@@ -250,7 +290,15 @@ hf = [
   "tokenizers>=0.15"
 ]
 
+# Core pipeline observability. The SDK enables caller-owned in-process
+# providers and test exporters; no network exporter is included or configured.
+otel = [
+  "opentelemetry-api>=1.26,<2",
+  "opentelemetry-sdk>=1.26,<2",
+]
+
 service = [
+  "cryptography>=50,<51",
   "fastapi>=0.110",
   "grpcio>=1.64",
   "httpx>=0.27",
@@ -258,7 +306,21 @@ service = [
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "protobuf>=5.26,<7",
+  "strawberry-graphql[fastapi]>=0.316,<1",
   "uvicorn[standard]>=0.29",
+]
+
+# Client libraries only. OpenMed never installs Triton or KServe servers.
+triton = [
+  "grpcio>=1.64",
+  "httpx>=0.27",
+  "numpy>=1.26",
+  "protobuf>=5.26,<7",
+  "transformers>=4.50",
+]
+
+operator = [
+  "kopf>=1.44.6,<2",
 ]
 
 gliner = [
@@ -270,6 +332,7 @@ mlx = [
   "mlx>=0.22",
   "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
+  "Pillow>=10.0",
   "transformers>=4.50",
   "tokenizers>=0.15",
   "safetensors>=0.4",
@@ -298,6 +361,15 @@ onnx-runtime = [
   "tokenizers>=0.15",
 ]
 
+# Minimal, local-artifact ONNX Runtime profile for aarch64 SBCs. It excludes
+# graph-building, Torch, and Transformers dependencies; use onnx-runtime when
+# the application also needs OpenMed's Hub download path.
+edge-sbc = [
+  "numpy>=1.26",
+  "onnxruntime>=1.16",
+  "tokenizers>=0.15",
+]
+
 openvino = [
   "openvino>=2024.0",
   "nncf>=2.10",
@@ -312,21 +384,36 @@ docs = [
   "mkdocs-llmstxt>=0.5.0,<1",
   "mkdocs-minify-plugin>=0.8.0",
   "mkdocs-static-i18n>=1.3,<2",
-  "pymdown-extensions>=10.8",
+  "pymdown-extensions>=11.0.1,<12",
+  "gitpython>=3.1.58,<4",
   "mkdocstrings[python]",
   "griffe",
 ]
 
 yasbd = [
-  "yasbd-lib>=0.13.1,<0.14",
+  "yasbd-lib>=0.14.0,<0.15",
 ]
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-executable-udf = "openmed.integrations.executable_udf:main"
 openmed-mcp = "openmed.mcp.server:main"
 
 [tool.uv]
+constraint-dependencies = [
+  "betterproto==2.0.0b6; python_version >= '3.11'",
+]
+override-dependencies = [
+  # Beam 2.75 caps these below their patched releases even though its
+  # DirectRunner remains compatible with the secure versions.
+  "cryptography>=50,<51",
+  "httplib2>=0.32",
+]
 conflicts = [
+  [
+    { extra = "airflow" },
+    { extra = "ocr-paddle" },
+  ],
   [
     { extra = "awq" },
     { extra = "gliner" },
@@ -359,6 +446,12 @@ include = [
   "/README.md",
   "/pyproject.toml"
 ]
+
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.wheel]
+core-metadata-version = "2.4"
 
 [tool.hatch.build.targets.wheel.force-include]
 "eval/redteam/corpus/adversarial_phi.jsonl" = "openmed/eval/data/adversarial_phi.jsonl"
