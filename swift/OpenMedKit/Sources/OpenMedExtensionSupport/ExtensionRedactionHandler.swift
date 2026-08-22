@@ -188,18 +188,20 @@ public struct NanoModelConfiguration: Sendable {
         )
     }
 
-    fileprivate func makeRuntime() throws -> OpenMed {
-        try OpenMed(
-            backend: .coreML(
-                modelURL: modelURL,
-                id2labelURL: id2labelURL,
-                tokenizerName: Self.compiledModelName,
-                tokenizerFolderURL: tokenizerFolderURL
-            ),
-            maxSeqLength: Self.maximumSequenceLength,
-            allowNetworkAccess: ExtensionSecurityPolicy.allowsNetworkAccess
-        )
-    }
+    #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        fileprivate func makeRuntime() throws -> OpenMed {
+            try OpenMed(
+                backend: .coreML(
+                    modelURL: modelURL,
+                    id2labelURL: id2labelURL,
+                    tokenizerName: Self.compiledModelName,
+                    tokenizerFolderURL: tokenizerFolderURL
+                ),
+                maxSeqLength: Self.maximumSequenceLength,
+                allowNetworkAccess: ExtensionSecurityPolicy.allowsNetworkAccess
+            )
+        }
+    #endif
 
     private static func logicalFileSize(
         at url: URL,
@@ -358,13 +360,15 @@ public final class ExtensionRedactionHandler {
         self.redactWithPolicy = redact
     }
 
-    /// Load one validated Nano runtime for the lifetime of this handler.
-    public convenience init(configuration: NanoModelConfiguration) throws {
-        let runtime = try configuration.makeRuntime()
-        self.init { text, policy in
-            try runtime.deidentify(text, policy: policy)
+    #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        /// Load one validated Nano runtime for the lifetime of this handler.
+        public convenience init(configuration: NanoModelConfiguration) throws {
+            let runtime = try configuration.makeRuntime()
+            self.init { text, policy in
+                try runtime.deidentify(text, policy: policy)
+            }
         }
-    }
+    #endif
 
     /// Redact a selected text item with a bundled policy profile.
     public func redact(

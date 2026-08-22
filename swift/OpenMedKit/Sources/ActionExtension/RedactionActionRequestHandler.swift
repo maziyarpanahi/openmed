@@ -1,4 +1,4 @@
-#if canImport(UIKit)
+#if os(iOS) && canImport(UIKit)
     import OpenMedExtensionSupport
     import OpenMedKit
     import UIKit
