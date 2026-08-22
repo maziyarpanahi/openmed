@@ -42,6 +42,7 @@ let currentPolicy: PolicyName = DEFAULT_POLICY;
 let activeEditable: EditableElement | null = null;
 let settingsGeneration = 0;
 
+installPageListeners();
 void initialize();
 
 async function initialize(): Promise<void> {
@@ -58,7 +59,6 @@ async function initialize(): Promise<void> {
     : DEFAULT_POLICY;
   ui.policy.value = currentPolicy;
   renderEnabledState();
-  installPageListeners();
   if (enabled) {
     scanExistingPage();
   }

@@ -53,7 +53,21 @@ test("extension matches local model spans, masks without network, and honors sit
         `--load-extension=${extensionDir}`,
       ],
     });
-    await waitForExtensionWorker(context);
+    const extensionWorker = await waitForExtensionWorker(context);
+    await extensionWorker.evaluate(() => {
+      const storage = chrome.storage.local as unknown as {
+        get: (keys?: unknown) => Promise<Record<string, unknown>>;
+      };
+      const originalGet = storage.get.bind(storage);
+      let firstRead = true;
+      storage.get = async (keys?: unknown) => {
+        if (firstRead) {
+          firstRead = false;
+          await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+        }
+        return originalGet(keys);
+      };
+    });
 
     const page = await context.newPage();
     await page.goto(server.url);
@@ -63,6 +77,16 @@ test("extension matches local model spans, masks without network, and honors sit
     const toggle = panel.locator("[data-testid='openmed-site-toggle']");
     const policy = panel.locator("[data-testid='openmed-policy']");
     const note = page.locator("#clinical-note");
+    await expect(panel).toBeAttached();
+    await note.evaluate((element, text) => {
+      if (!(element instanceof HTMLTextAreaElement)) {
+        throw new Error("Synthetic fixture is missing its textarea");
+      }
+      element.value = text;
+      element.form?.requestSubmit();
+    }, syntheticNote);
+    await expect(page.locator("#submit-count")).toHaveText("0");
+    await note.fill("");
     await expect(status).toHaveText("OpenMed PHI Guard is ready.");
     await expect(mask).toBeDisabled();
 
@@ -160,11 +184,14 @@ test("extension matches local model spans, masks without network, and honors sit
   }
 });
 
-async function waitForExtensionWorker(context: BrowserContext): Promise<void> {
-  if (context.serviceWorkers().length > 0) {
-    return;
+async function waitForExtensionWorker(
+  context: BrowserContext,
+): Promise<ReturnType<BrowserContext["serviceWorkers"]>[number]> {
+  const existing = context.serviceWorkers()[0];
+  if (existing !== undefined) {
+    return existing;
   }
-  await context.waitForEvent("serviceworker");
+  return context.waitForEvent("serviceworker");
 }
 
 async function startFixtureServer(): Promise<{
