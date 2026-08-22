@@ -519,6 +519,19 @@ def test_truncated_seeds_do_not_crash_registered_parsers() -> None:
                 _assert_no_crash(worker, parser_target, seed[: max(cutoff, 0)])
 
 
+def test_malformed_email_address_header_does_not_crash_registered_parser() -> None:
+    parser_target = next(
+        target for target in _TARGETS if target.key == "document:eml:.eml"
+    )
+    with _ParserWorker() as worker:
+        status = _assert_no_crash(
+            worker,
+            parser_target,
+            b"From: Synthetic Clinic <clinic@",
+        )
+    assert status == "ok"
+
+
 def test_registered_format_parsers_resist_mutated_input() -> None:
     with _ParserWorker() as worker:
 
