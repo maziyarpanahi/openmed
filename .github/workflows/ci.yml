@@ -391,6 +391,31 @@ jobs:
       run: |
         uv run pytest tests/unit/interop/test_spacy_component.py -q
 
+  browser-extension:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/extension/package-lock.json
+
+    - name: Install extension dependencies
+      working-directory: web/extension
+      run: npm ci
+
+    - name: Install headless Chromium
+      working-directory: web/extension
+      run: npx playwright install --with-deps chromium
+
+    - name: Test browser extension
+      working-directory: web/extension
+      run: npm test
+
   yasbd-integration:
     needs: [repo-policy, lint]
     runs-on: ubuntu-latest
@@ -465,6 +490,7 @@ jobs:
     - spacy-integration
     - yasbd-integration
     - i18n-cjk-indic
+    - browser-extension
     if: >-
       always() &&
       needs.repo-policy.result == 'success' &&
@@ -473,6 +499,7 @@ jobs:
       needs.security.result == 'success' &&
       needs.spacy-integration.result == 'success' &&
       needs.yasbd-integration.result == 'success' &&
+      needs.browser-extension.result == 'success' &&
       (
         needs.i18n-cjk-indic.result == 'success' ||
         needs.i18n-cjk-indic.result == 'skipped'
