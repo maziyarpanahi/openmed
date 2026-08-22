@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline file-sharding planner that balances declared
+  local file metadata under byte and file-count limits, fingerprints normalized
+  paths, rejects duplicates, and emits counts-only plans without reading files
+  (#2639).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
