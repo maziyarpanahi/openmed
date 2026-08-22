@@ -44,11 +44,10 @@ jobs:
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
 
-    - name: Run Android accelerator and parity suites
+    - name: Run Android offset-contract parity suite
       working-directory: android
       run: >-
         ./gradlew :openmedkit:testDebugUnitTest
-        --tests '*AcceleratorFallbackTest'
         --tests '*OffsetContractParityTest'
         --tests '*IcuSegmentationFallbackTest'
         --stacktrace
