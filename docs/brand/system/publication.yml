@@ -240,6 +240,7 @@ classification:
     - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
+    - integrations/opensearch.md
     - integrations/llamaindex.md
     - integrations/columnar-redactor.md
     - reference/columnar-traces.md
