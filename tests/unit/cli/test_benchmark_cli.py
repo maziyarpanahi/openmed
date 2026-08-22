@@ -214,6 +214,52 @@ def test_mobile_command_default_workload_writes_report_to_stdout(
     assert payload["slo_results"]["p95_latency_ms"]["passed"] is True
 
 
+def test_mobile_command_archive_writes_device_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(harness, "_peak_rss_bytes", lambda: None)
+    result = main_module.main(
+        [
+            "benchmark",
+            "mobile",
+            "--models",
+            "synthetic-one-page-note-runner",
+            "--device",
+            "cpu",
+            "--tier",
+            "base",
+            "--format",
+            "int8",
+            "--sequence-lengths",
+            "4,8",
+            "--batch-sizes",
+            "1",
+            "2",
+            "--archive",
+            str(tmp_path),
+        ]
+    )
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "Mobile device benchmark archives written" in captured.out
+    assert captured.err == ""
+    archive_path = tmp_path / "INT8-cpu-Base.json"
+    payload = json.loads(archive_path.read_text(encoding="utf-8"))
+    report = payload["results"]["synthetic-one-page-note-runner"]
+    assert report["format"] == "INT8"
+    assert report["device"] == "cpu"
+    assert report["tier"] == "base"
+    assert report["docs_per_second"] > 0
+    assert report["p50_ms"] >= 0
+    assert report["p95_ms"] >= report["p50_ms"]
+    peak_rss_mib = report["peak_rss_mib"]
+    assert peak_rss_mib == report["resources"]["peak_rss_mib"]
+    assert peak_rss_mib is None
+
+
 def test_latency_command_emits_offline_int8_json_and_blocks_sockets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
