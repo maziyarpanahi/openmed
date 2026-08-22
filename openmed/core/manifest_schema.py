@@ -40,10 +40,19 @@ OPTIONAL_ENRICHMENT_FIELDS = frozenset(
         "recommended_tier",
         "script_coverage",
         "script_eval",
+        "training_data_licenses",
         "training_provenance",
     }
 )
-MANIFEST_FIELDS = REQUIRED_FIELDS | OPTIONAL_ENRICHMENT_FIELDS
+OPTIONAL_ANDROID_FIELDS = frozenset(
+    {
+        "execution_providers",
+        "min_sdk",
+        "nnapi_compatible",
+        "tokenizer_assets",
+    }
+)
+MANIFEST_FIELDS = REQUIRED_FIELDS | OPTIONAL_ENRICHMENT_FIELDS | OPTIONAL_ANDROID_FIELDS
 BENCHMARK_FIELDS = frozenset({"dataset", "micro_f1", "recall"})
 BENCHMARK_SUITE_FIELDS = frozenset(
     {"suite", "dataset", "micro_f1", "recall", "leakage"}
@@ -71,6 +80,10 @@ TRAINING_PROVENANCE_OPTIONAL_FIELDS = frozenset(
 TRAINING_PROVENANCE_FIELDS = (
     TRAINING_PROVENANCE_REQUIRED_FIELDS | TRAINING_PROVENANCE_OPTIONAL_FIELDS
 )
+TRAINING_DATA_LICENSE_REQUIRED_FIELDS = frozenset(
+    {"name", "license", "redistributable", "role"}
+)
+TRAINING_DATA_LICENSE_ROLES = ("train", "eval")
 
 ALLOWED_TIERS = ("Tiny", "Small", "Base", "Medium", "Large", "XLarge")
 ALLOWED_FORMATS = (
@@ -78,6 +91,7 @@ ALLOWED_FORMATS = (
     "mlx-fp",
     "mlx-8bit",
     "mlx-4bit",
+    "mlx-2bit",
     "onnx",
     "onnx-android",
     "onnx-int8",
@@ -91,7 +105,18 @@ ALLOWED_FORMATS = (
     "gguf",
     "unknown",
 )
-ALLOWED_LICENSES = ("apache-2.0", "other")
+ALLOWED_LICENSES = (
+    "apache-2.0",
+    "bsd-2-clause",
+    "bsd-3-clause",
+    "cc-by-3.0",
+    "cc-by-4.0",
+    "cc0-1.0",
+    "isc",
+    "mit",
+    "unlicense",
+    "other",
+)
 ALLOWED_RECOMMENDED_TIERS = ("phone", "laptop", "workstation", "server")
 SCRIPT_COVERAGE_TARGETS = (
     "han_simplified",
@@ -415,6 +440,34 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
             row.get("reproducibility_hash"),
         )
 
+    if "training_data_licenses" in row:
+        _validate_training_data_licenses(
+            violations,
+            line_number,
+            row["training_data_licenses"],
+        )
+
+    if "nnapi_compatible" in row and not isinstance(row["nnapi_compatible"], bool):
+        violations.append(
+            ManifestViolation(line_number, "nnapi_compatible must be a boolean")
+        )
+
+    if "min_sdk" in row:
+        value = row["min_sdk"]
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            violations.append(
+                ManifestViolation(line_number, "min_sdk must be a positive integer")
+            )
+
+    for field in ("execution_providers", "tokenizer_assets"):
+        if field in row:
+            _validate_non_empty_string_list(
+                violations,
+                line_number,
+                row[field],
+                field,
+            )
+
     return violations
 
 
@@ -469,6 +522,28 @@ def _validate_string_list(
         if not isinstance(item, str):
             violations.append(
                 ManifestViolation(line_number, f"{field}[{index}] must be a string")
+            )
+
+
+def _validate_non_empty_string_list(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    field: str,
+) -> None:
+    if not isinstance(value, list) or not value:
+        violations.append(
+            ManifestViolation(line_number, f"{field} must be a non-empty list")
+        )
+        return
+
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field}[{index}] must be a non-empty string",
+                )
             )
 
 
@@ -952,6 +1027,64 @@ def _validate_training_provenance(
                 "reproducibility_hash",
             )
         )
+
+
+def _validate_training_data_licenses(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+) -> None:
+    if not isinstance(value, list):
+        violations.append(
+            ManifestViolation(line_number, "training_data_licenses must be a list")
+        )
+        return
+
+    for index, entry in enumerate(value):
+        field = f"training_data_licenses[{index}]"
+        if not isinstance(entry, Mapping):
+            violations.append(
+                ManifestViolation(line_number, f"{field} must be an object")
+            )
+            continue
+
+        fields = set(entry)
+        for key in sorted(TRAINING_DATA_LICENSE_REQUIRED_FIELDS - fields):
+            violations.append(
+                ManifestViolation(line_number, f"{field} missing required key: {key}")
+            )
+        for key in sorted(fields - TRAINING_DATA_LICENSE_REQUIRED_FIELDS):
+            violations.append(
+                ManifestViolation(line_number, f"{field} has unexpected key: {key}")
+            )
+
+        for key in ("name", "license"):
+            if key in entry and (
+                not isinstance(entry[key], str) or not entry[key].strip()
+            ):
+                violations.append(
+                    ManifestViolation(
+                        line_number, f"{field}.{key} must be a non-empty string"
+                    )
+                )
+
+        if "redistributable" in entry and not isinstance(
+            entry["redistributable"], bool
+        ):
+            violations.append(
+                ManifestViolation(
+                    line_number, f"{field}.redistributable must be a boolean"
+                )
+            )
+
+        if "role" in entry and entry["role"] not in TRAINING_DATA_LICENSE_ROLES:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field}.role must be one of: "
+                    f"{_allowed(TRAINING_DATA_LICENSE_ROLES)}",
+                )
+            )
 
 
 def _validate_metric(

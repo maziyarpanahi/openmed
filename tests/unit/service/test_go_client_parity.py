@@ -23,11 +23,13 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 # Every OpenAPI operation maps to exactly one exported Go client method.
 CLIENT_METHOD_BY_OPERATION = {
     ("post", "/analyze"): "Analyze",
+    ("post", "/cohort/resolve"): "ResolveCohort",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
         "SMARTBackendIngestionSummary"
     ),
+    ("post", "/ground"): "Ground",
     ("get", "/health"): "Health",
     ("post", "/jobs"): "CreateJob",
     ("get", "/jobs/{job_id}"): "GetJob",
@@ -36,6 +38,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/models/unload"): "UnloadModels",
     ("post", "/omop/load"): "LoadOMOP",
     ("post", "/pii/deidentify"): "Deidentify",
+    ("post", "/pii/deidentify/stream"): "DeidentifyStream",
     ("post", "/pii/extract"): "ExtractPII",
     ("post", "/pii/extract/stream"): "ExtractPIIStream",
     ("post", "/privacy-gateway/complete"): "PrivacyGateway",
@@ -44,12 +47,16 @@ CLIENT_METHOD_BY_OPERATION = {
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
     "AnalyzeRequest": "AnalyzeRequest",
+    "CohortResolveRequest": "CohortResolveRequest",
+    "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
+    "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",
     "OmopLoadRequest": "OMOPLoadRequest",
     "PIIDeidentifyRequest": "PIIDeidentifyRequest",
+    "PIIDeidentifyStreamRequest": "PIIDeidentifyStreamRequest",
     "PIIExtractRequest": "PIIExtractRequest",
     "PIIExtractStreamRequest": "PIIExtractStreamRequest",
     "PrivacyGatewayRequest": "PrivacyGatewayRequest",
@@ -420,6 +427,7 @@ def _go_type_matches_schema(go_type: str, schema: dict[str, Any]) -> bool:
         "boolean": {"bool"},
         "integer": {"int"},
         "number": {"float64"},
+        "object": {"JSONObject"},
         "string": {
             "string",
             "AggregationStrategy",
