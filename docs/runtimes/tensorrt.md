@@ -61,7 +61,8 @@ for profile behavior and memory tradeoffs.
 INT8 always uses OpenMed's shared deterministic synthetic clinical calibration
 loader unless `calibration_texts` is explicitly supplied. The tokenizer converts
 those texts to fixed optimum-profile shapes. Raw calibration text is never
-written into the engine metadata.
+written into the engine metadata. Custom calibration text must also be synthetic;
+do not use PHI for calibration.
 
 Every INT8 build is fail-closed: per-family recall evidence must pass the G4
 INT8 recall-delta limit before calibration or engine construction begins.
@@ -90,8 +91,10 @@ The build metadata records `gate: G4`, the per-label gate result, the calibratio
 digest, and the TensorRT version.
 
 TensorRT 10 and earlier may reuse a local calibration cache with
-`calibration_cache_path`. Reuse the cache only when the ONNX graph, calibration
-set, TensorRT version, and target device are unchanged.
+`calibration_cache_path`. OpenMed reuses that cache only when both
+`expected_build_input_sha256` and `expected_engine_sha256` are supplied, so a
+stale or cross-device cache cannot silently publish a different engine. Without
+both pins, calibration reruns and atomically refreshes the cache.
 
 ## Synthetic ONNX Parity
 
@@ -114,9 +117,12 @@ result = build_tensorrt_engine(
 ```
 
 The verifier requires matching output shapes, logits within tolerance, and
-identical decoded token spans. A failure raises `TensorRTVerificationError` and
-does not replace the destination engine. The GPU parity test skips with a clear
-message on runners without TensorRT or CUDA.
+identical decoded token spans. Empty, non-finite, or multi-batch parity evidence
+is rejected. Metadata stores only the SHA-256 digest of the synthetic note, not
+the note text. A failure raises `TensorRTVerificationError` and does not replace
+the destination engine. The engine and its metadata sidecar are published as a
+rollback-safe pair. The GPU parity test skips with a clear message on runners
+without TensorRT or CUDA.
 
 ## Reproducibility Hashes
 

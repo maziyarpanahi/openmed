@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added device-specific TensorRT engine export for ONNX token classifiers with
+  bounded dynamic shape profiles, FP16 and fail-closed INT8 calibration,
+  per-family G4 recall evidence, finite synthetic parity checks, rollback-safe
+  engine and metadata publication, trusted-engine logits inference, and
+  device-tier benchmark records (#834).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
+import sys
 import types
 from contextlib import nullcontext
 from pathlib import Path
@@ -64,6 +66,12 @@ def test_shape_profile_validates_and_serializes_ranges() -> None:
             min_sequence_length=128,
             opt_sequence_length=64,
         )
+    with pytest.raises(TypeError, match="max_sequence_length"):
+        module.TensorRTShapeProfile(max_sequence_length=512.5)
+    with pytest.raises(TypeError, match="max_batch_size"):
+        module.TensorRTShapeProfile(max_batch_size=True)
+    with pytest.raises(ValueError, match="2147483647"):
+        module.TensorRTShapeProfile(max_sequence_length=2**31)
 
 
 def test_optimization_profile_covers_dynamic_token_inputs() -> None:
@@ -247,6 +255,49 @@ def test_certify_tensorrt_reference_rejects_span_change() -> None:
         )
 
 
+@pytest.mark.parametrize("invalid_value", [np.nan, np.inf, -np.inf])
+def test_certify_tensorrt_reference_rejects_non_finite_logits(
+    invalid_value: float,
+) -> None:
+    module = _export_module()
+    reference = np.array([[[0.9, 0.1]]], dtype=np.float32)
+    candidate = reference.copy()
+    candidate[0, 0, 0] = invalid_value
+
+    with pytest.raises(module.TensorRTVerificationError, match="finite"):
+        module.certify_tensorrt_reference(
+            reference_logits=reference,
+            tensorrt_logits=candidate,
+            id2label={0: "O", 1: "B-NAME"},
+        )
+
+
+def test_certify_tensorrt_reference_rejects_invalid_evidence_shape_and_tolerance() -> (
+    None
+):
+    module = _export_module()
+
+    with pytest.raises(module.TensorRTVerificationError, match="must not be empty"):
+        module.certify_tensorrt_reference(
+            reference_logits=np.empty((0, 2), dtype=np.float32),
+            tensorrt_logits=np.empty((0, 2), dtype=np.float32),
+            id2label={0: "O", 1: "B-NAME"},
+        )
+    with pytest.raises(module.TensorRTVerificationError, match="one rank-three batch"):
+        module.certify_tensorrt_reference(
+            reference_logits=np.zeros((2, 1, 2), dtype=np.float32),
+            tensorrt_logits=np.zeros((2, 1, 2), dtype=np.float32),
+            id2label={0: "O", 1: "B-NAME"},
+        )
+    with pytest.raises(ValueError, match="finite non-negative"):
+        module.certify_tensorrt_reference(
+            reference_logits=np.zeros((1, 2), dtype=np.float32),
+            tensorrt_logits=np.zeros((1, 2), dtype=np.float32),
+            id2label={0: "O", 1: "B-NAME"},
+            tolerance=float("nan"),
+        )
+
+
 def test_build_fp16_engine_writes_hashes_and_verification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -288,6 +339,11 @@ def test_build_fp16_engine_writes_hashes_and_verification(
     assert metadata["build_input_sha256"] == result.build_input_sha256
     assert metadata["engine_sha256"] == result.engine_sha256
     assert metadata["synthetic_verification"]["passed"] is True
+    assert (
+        metadata["synthetic_verification"]["sample_text_sha256"]
+        == hashlib.sha256(module.SYNTHETIC_NOTE.encode("utf-8")).hexdigest()
+    )
+    assert "sample_text" not in metadata["synthetic_verification"]
     assert serialize_calls[0][1]["shape_profile"].maximum == (1, 512)
 
 
@@ -316,6 +372,126 @@ def test_reproducibility_hash_rejects_engine_before_publish(
         )
 
     assert not output_path.exists()
+
+    with pytest.raises(module.TensorRTReproducibilityError, match="64-character"):
+        module.build_tensorrt_engine(
+            onnx_path,
+            output_path,
+            family="bert",
+            precision="fp32",
+            expected_build_input_sha256="not-a-digest",
+            trt_module=_legacy_trt_module(),
+        )
+
+
+def test_build_rejects_empty_engine_before_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _export_module()
+    onnx_path = tmp_path / "model.onnx"
+    onnx_path.write_bytes(b"onnx")
+    output_path = tmp_path / "model.engine"
+    monkeypatch.setattr(
+        module,
+        "_serialize_tensorrt_engine",
+        lambda *args, **kwargs: b"",
+    )
+
+    with pytest.raises(module.TensorRTBuildError, match="empty serialized engine"):
+        module.build_tensorrt_engine(
+            onnx_path,
+            output_path,
+            family="bert",
+            precision="fp32",
+            trt_module=_legacy_trt_module(),
+        )
+
+    assert not output_path.exists()
+
+
+def test_build_rejects_source_and_output_path_collisions(tmp_path: Path) -> None:
+    module = _export_module()
+    source_path = tmp_path / "model.engine"
+    source_path.write_bytes(b"onnx")
+
+    with pytest.raises(ValueError, match="must differ"):
+        module.build_tensorrt_engine(
+            source_path,
+            source_path,
+            family="bert",
+            precision="fp32",
+            trt_module=_legacy_trt_module(),
+        )
+
+    metadata_source = tmp_path / "other.engine.build.json"
+    metadata_source.write_bytes(b"onnx")
+    with pytest.raises(ValueError, match="must differ"):
+        module.build_tensorrt_engine(
+            metadata_source,
+            tmp_path / "other.engine",
+            family="bert",
+            precision="fp32",
+            trt_module=_legacy_trt_module(),
+        )
+
+    hard_link_output = tmp_path / "hard-link.engine"
+    hard_link_output.hardlink_to(source_path)
+    with pytest.raises(ValueError, match="must differ"):
+        module.build_tensorrt_engine(
+            source_path,
+            hard_link_output,
+            family="bert",
+            precision="fp32",
+            trt_module=_legacy_trt_module(),
+        )
+
+
+def test_engine_bundle_publication_rolls_back_both_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _export_module()
+    onnx_path = tmp_path / "model.onnx"
+    onnx_path.write_bytes(b"onnx")
+    output_path = tmp_path / "model.engine"
+    metadata_path = tmp_path / "model.engine.build.json"
+    output_path.write_bytes(b"old-engine")
+    metadata_path.write_text('{"state": "old"}\n', encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "_serialize_tensorrt_engine",
+        lambda *args, **kwargs: b"new-engine",
+    )
+    real_replace = module._atomic_replace
+    failed = False
+
+    def fail_metadata_publish(source: Path, destination: Path) -> None:
+        nonlocal failed
+        if (
+            not failed
+            and destination == metadata_path
+            and source.name.endswith(".staging")
+        ):
+            failed = True
+            raise OSError("simulated metadata publication failure")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(module, "_atomic_replace", fail_metadata_publish)
+
+    with pytest.raises(OSError, match="metadata publication failure"):
+        module.build_tensorrt_engine(
+            onnx_path,
+            output_path,
+            family="bert",
+            precision="fp32",
+            trt_module=_legacy_trt_module(),
+        )
+
+    assert output_path.read_bytes() == b"old-engine"
+    assert metadata_path.read_text(encoding="utf-8") == '{"state": "old"}\n'
+    assert not list(tmp_path.glob("*.backup"))
+    assert not list(tmp_path.glob("*.staging"))
 
 
 def test_int8_build_uses_shared_calibration_and_passing_g4_gate(
@@ -416,6 +592,168 @@ def test_int8_gate_rejects_before_optional_runtime_import(
     assert rejected.value.gate.source == "missing_evidence"
 
 
+def test_entropy_calibrator_uses_and_validates_optimum_batch_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _export_module()
+    observed_batches = []
+    device_tensors = []
+
+    class FakeDeviceTensor:
+        def __init__(self, array):
+            self.array = np.asarray(array)
+            device_tensors.append(self)
+
+        def contiguous(self):
+            return self
+
+        def data_ptr(self):
+            return id(self)
+
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: True),
+        as_tensor=lambda array, device: FakeDeviceTensor(array),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    def tokenizer(texts, **kwargs):
+        observed_batches.append(list(texts))
+        return {
+            "input_ids": np.ones((len(texts), 8), dtype=np.int64),
+            "attention_mask": np.ones((len(texts), 8), dtype=np.int64),
+        }
+
+    inputs = [
+        types.SimpleNamespace(name="input_ids", shape=(-1, -1), dtype="int32"),
+        types.SimpleNamespace(
+            name="attention_mask",
+            shape=(-1, -1),
+            dtype="int32",
+        ),
+    ]
+    network = types.SimpleNamespace(
+        num_inputs=len(inputs),
+        get_input=lambda index: inputs[index],
+    )
+    fake_trt = types.SimpleNamespace(
+        IInt8EntropyCalibrator2=object,
+        nptype=lambda dtype: np.dtype(dtype),
+    )
+    cache_path = tmp_path / "calibration.cache"
+    cache_path.write_bytes(b"stale-cache")
+    profile = module.TensorRTShapeProfile(
+        opt_batch_size=2,
+        max_batch_size=2,
+        min_sequence_length=8,
+        opt_sequence_length=8,
+        max_sequence_length=8,
+    )
+    calibrator = module._create_entropy_calibrator(
+        fake_trt,
+        network,
+        module._CalibrationSpec(
+            tokenizer=tokenizer,
+            texts=("one", "two", "three"),
+            cache_path=cache_path,
+        ),
+        profile,
+    )
+
+    assert calibrator.get_batch_size() == 2
+    assert calibrator.read_calibration_cache() is None
+    assert len(calibrator.get_batch(["input_ids", "attention_mask"])) == 2
+    assert len(calibrator.get_batch(["input_ids", "attention_mask"])) == 2
+    assert calibrator.get_batch(["input_ids", "attention_mask"]) is None
+    assert observed_batches == [["one", "two"], ["three", "three"]]
+    assert all(tensor.array.shape == (2, 8) for tensor in device_tensors)
+    calibrator.write_calibration_cache(b"refreshed-cache")
+    assert cache_path.read_bytes() == b"refreshed-cache"
+
+    pinned_calibrator = module._create_entropy_calibrator(
+        fake_trt,
+        network,
+        module._CalibrationSpec(
+            tokenizer=tokenizer,
+            texts=("one",),
+            cache_path=cache_path,
+            allow_cache_read=True,
+        ),
+        profile,
+    )
+    assert pinned_calibrator.read_calibration_cache() == b"refreshed-cache"
+
+
+def test_entropy_calibrator_rejects_tokenizer_shape_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _export_module()
+
+    class FakeDeviceTensor:
+        def contiguous(self):
+            return self
+
+        def data_ptr(self):
+            return 1
+
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: True),
+        as_tensor=lambda array, device: FakeDeviceTensor(),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    network_input = types.SimpleNamespace(
+        name="input_ids",
+        shape=(-1, -1),
+        dtype="int32",
+    )
+    network = types.SimpleNamespace(
+        num_inputs=1,
+        get_input=lambda index: network_input,
+    )
+    fake_trt = types.SimpleNamespace(
+        IInt8EntropyCalibrator2=object,
+        nptype=lambda dtype: np.dtype(dtype),
+    )
+    calibrator = module._create_entropy_calibrator(
+        fake_trt,
+        network,
+        module._CalibrationSpec(
+            tokenizer=lambda texts, **kwargs: {
+                "input_ids": np.ones((1, 7), dtype=np.int64)
+            },
+            texts=("one",),
+            cache_path=None,
+        ),
+        module.TensorRTShapeProfile(
+            min_sequence_length=8,
+            opt_sequence_length=8,
+            max_sequence_length=8,
+        ),
+    )
+
+    with pytest.raises(module.TensorRTBuildError, match="unsafe shape"):
+        calibrator.get_batch(["input_ids"])
+
+    overflow_calibrator = module._create_entropy_calibrator(
+        fake_trt,
+        network,
+        module._CalibrationSpec(
+            tokenizer=lambda texts, **kwargs: {
+                "input_ids": np.full((1, 8), 2**40, dtype=np.int64)
+            },
+            texts=("one",),
+            cache_path=None,
+        ),
+        module.TensorRTShapeProfile(
+            min_sequence_length=8,
+            opt_sequence_length=8,
+            max_sequence_length=8,
+        ),
+    )
+    with pytest.raises(module.TensorRTBuildError, match="dtype range"):
+        overflow_calibrator.get_batch(["input_ids"])
+
+
 def test_trt11_int8_uses_modelopt_explicit_quantization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -466,6 +804,7 @@ def test_tensorrt_benchmark_report_records_device_tier(tmp_path: Path) -> None:
                 device="Orin AGX",
                 precision="fp16",
                 latency_ms=4.0,
+                p95_latency_ms=6.0,
                 throughput_items_per_second=250.0,
                 sample_count=3,
                 sequence_length=128,
@@ -478,7 +817,95 @@ def test_tensorrt_benchmark_report_records_device_tier(tmp_path: Path) -> None:
     assert payload["suite"] == "tensorrt-runtime"
     assert metrics["device_tier"] == "jetson-orin"
     assert metrics["latency"]["p50_ms"] == 4.0
+    assert metrics["latency"]["p95_ms"] == 6.0
     assert metrics["throughput"]["items_per_second"] == 250.0
+
+
+def test_tensorrt_latency_measurement_records_distinct_p50_and_p95(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _export_module()
+    timestamps = iter(
+        [
+            0.0,
+            0.001,
+            1.0,
+            1.002,
+            2.0,
+            2.003,
+            3.0,
+            3.004,
+            4.0,
+            4.010,
+        ]
+    )
+    monkeypatch.setattr(module, "perf_counter", lambda: next(timestamps))
+    session = types.SimpleNamespace(run=lambda **inputs: None)
+
+    record = module.measure_tensorrt_latency(
+        session,
+        {
+            "input_ids": np.ones((1, 8), dtype=np.int32),
+            "attention_mask": np.ones((1, 8), dtype=np.int32),
+        },
+        device_tier="jetson-orin",
+        device="Orin AGX",
+        precision="fp16",
+    )
+
+    assert record.latency_ms == pytest.approx(3.0)
+    assert record.p95_latency_ms == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("latency_ms", float("nan")),
+        ("latency_ms", 0.0),
+        ("p95_latency_ms", 3.0),
+        ("throughput_items_per_second", -1.0),
+        ("sample_count", 0),
+        ("batch_size", 0),
+        ("sequence_length", 0),
+    ],
+)
+def test_tensorrt_benchmark_record_rejects_invalid_metrics(
+    field: str,
+    value: object,
+) -> None:
+    module = _export_module()
+    kwargs = {
+        "device_tier": "jetson-orin",
+        "device": "Orin AGX",
+        "precision": "fp16",
+        "latency_ms": 4.0,
+        "throughput_items_per_second": 250.0,
+        "sample_count": 3,
+        "batch_size": 1,
+        "sequence_length": 128,
+    }
+    kwargs[field] = value
+
+    with pytest.raises((TypeError, ValueError)):
+        module.TensorRTBenchmarkRecord(**kwargs)
+
+
+def test_tensorrt_benchmark_report_rejects_duplicate_device_tiers() -> None:
+    module = _export_module()
+    record = module.TensorRTBenchmarkRecord(
+        device_tier="jetson-orin",
+        device="Orin AGX",
+        precision="fp16",
+        latency_ms=4.0,
+        throughput_items_per_second=250.0,
+        sample_count=3,
+    )
+
+    with pytest.raises(ValueError, match="must be unique"):
+        module.build_tensorrt_benchmark_report(
+            model_name="OpenMed/test-model",
+            records=[record, record],
+        )
 
 
 def test_named_io_session_loads_engine_and_returns_logits(tmp_path: Path) -> None:
@@ -597,6 +1024,21 @@ def test_named_io_session_loads_engine_and_returns_logits(tmp_path: Path) -> Non
 
     assert logits.shape == (1, 2, 2)
     assert np.all(logits == np.float32(0.5))
+
+
+def test_session_rejects_unsafe_input_arrays_before_cuda_copy() -> None:
+    module = _session_module()
+
+    with pytest.raises(module.TensorRTSessionError, match="rank-two"):
+        module._as_contiguous_array([1, 2], np.dtype("int32"))
+    with pytest.raises(module.TensorRTSessionError, match="finite"):
+        module._as_contiguous_array([[1.0, np.nan]], np.dtype("int32"))
+    with pytest.raises(module.TensorRTSessionError, match="fractional"):
+        module._as_contiguous_array([[1.5, 2.0]], np.dtype("int32"))
+    with pytest.raises(module.TensorRTSessionError, match="dtype range"):
+        module._as_contiguous_array([[2**40]], np.dtype("int32"))
+    with pytest.raises(module.TensorRTSessionError, match="dtype range"):
+        module._as_contiguous_array([[1e100]], np.dtype("float32"))
 
 
 def test_gpu_built_engine_matches_onnx_reference_spans(tmp_path: Path) -> None:

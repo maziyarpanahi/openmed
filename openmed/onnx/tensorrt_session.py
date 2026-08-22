@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Lock
 from typing import Any, Mapping
 
 
@@ -62,6 +63,7 @@ class TensorRTTokenClassificationSession:
         self.context = self.engine.create_execution_context()
         if self.context is None:
             raise TensorRTSessionError("TensorRT could not create an execution context")
+        self._run_lock = Lock()
 
     def run(
         self,
@@ -93,10 +95,11 @@ class TensorRTTokenClassificationSession:
         if token_type_ids is not None:
             inputs["token_type_ids"] = token_type_ids
 
-        if hasattr(self.engine, "num_io_tensors"):
-            outputs = self._run_named_io(inputs)
-        else:
-            outputs = self._run_legacy_bindings(inputs)
+        with self._run_lock:
+            if hasattr(self.engine, "num_io_tensors"):
+                outputs = self._run_named_io(inputs)
+            else:
+                outputs = self._run_legacy_bindings(inputs)
         return _extract_logits(outputs)
 
     def _run_named_io(self, inputs: Mapping[str, Any]) -> dict[str, Any]:
@@ -208,11 +211,18 @@ class TensorRTTokenClassificationSession:
             )
 
         prepared: dict[str, Any] = {}
+        expected_shape: tuple[int, int] | None = None
         for name in required_names:
             dtype = self._numpy_dtype(
                 name, named_io=hasattr(self.engine, "num_io_tensors")
             )
             array = _as_contiguous_array(inputs[name], dtype)
+            if expected_shape is None:
+                expected_shape = array.shape
+            elif array.shape != expected_shape:
+                raise TensorRTSessionError(
+                    "TensorRT token-classification inputs must share one shape"
+                )
             prepared[name] = self.torch.as_tensor(
                 array,
                 device=self.device,
@@ -247,7 +257,53 @@ class TensorRTTokenClassificationSession:
 def _as_contiguous_array(value: Any, dtype: Any) -> Any:
     import numpy as np
 
-    return np.ascontiguousarray(np.asarray(value, dtype=dtype))
+    try:
+        array = np.asarray(value)
+    except (TypeError, ValueError) as exc:
+        raise TensorRTSessionError("TensorRT inputs must be numeric arrays") from exc
+    if array.ndim != 2 or any(dimension < 1 for dimension in array.shape):
+        raise TensorRTSessionError(
+            "TensorRT token-classification inputs must be non-empty rank-two arrays"
+        )
+    if not (
+        np.issubdtype(array.dtype, np.integer)
+        or np.issubdtype(array.dtype, np.floating)
+    ) or not bool(np.all(np.isfinite(array))):
+        raise TensorRTSessionError(
+            "TensorRT token-classification inputs must contain finite numeric values"
+        )
+    target_dtype = np.dtype(dtype)
+    if np.issubdtype(target_dtype, np.integer):
+        if np.issubdtype(array.dtype, np.floating) and not bool(
+            np.all(array == np.trunc(array))
+        ):
+            raise TensorRTSessionError(
+                "TensorRT integer inputs must not contain fractional values"
+            )
+        integer_limits = np.iinfo(target_dtype)
+        if bool(np.any(array < integer_limits.min)) or bool(
+            np.any(array > integer_limits.max)
+        ):
+            raise TensorRTSessionError("TensorRT inputs exceed the engine dtype range")
+    elif np.issubdtype(target_dtype, np.floating):
+        floating_limits = np.finfo(target_dtype)
+        if bool(np.any(array < -floating_limits.max)) or bool(
+            np.any(array > floating_limits.max)
+        ):
+            raise TensorRTSessionError("TensorRT inputs exceed the engine dtype range")
+    else:
+        raise TensorRTSessionError("TensorRT engine input dtype must be numeric")
+    try:
+        converted = np.ascontiguousarray(array, dtype=target_dtype)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise TensorRTSessionError(
+            "TensorRT inputs could not be converted to the engine dtype"
+        ) from exc
+    if not bool(np.all(np.isfinite(converted))):
+        raise TensorRTSessionError(
+            "TensorRT inputs exceed the finite engine dtype range"
+        )
+    return converted
 
 
 def _extract_logits(outputs: Mapping[str, Any]) -> Any:
