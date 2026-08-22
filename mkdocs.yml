@@ -112,6 +112,7 @@ nav:
       - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
+      - Task-oriented Cookbook: cookbook.md
       - Examples & Copy/Paste Recipes: examples.md
       - Example Notebooks Gallery: examples/notebook-gallery.md
       - Document Adapter Provenance: document-adapter-provenance.md
