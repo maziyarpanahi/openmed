@@ -18,6 +18,7 @@ import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from typing import Any, Final
 
 from ..labels import supports_name_boundary_refinement
@@ -516,15 +517,33 @@ def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
     if start == end:
         return start, end
 
-    clusters = list(iter_grapheme_cluster_spans(text))
-    selected = [
-        cluster for cluster in clusters if cluster[0] >= start and cluster[1] <= end
-    ]
+    # Snapped boundaries are cluster boundaries, so the clusters of
+    # interest partition exactly [start, end). Walk only that window instead
+    # of materializing every cluster in the document (the previous behavior,
+    # which rescanned the whole text once per span).
+    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
 
-    while selected and _cluster_is_whitespace(text[slice(*selected[0])]):
-        start = selected.pop(0)[1]
-    while selected and _cluster_is_whitespace(text[slice(*selected[-1])]):
-        end = selected.pop()[0]
+    def has_break(index: int) -> bool:
+        if ids_internal_boundaries:
+            return _has_grapheme_break_at(text, index, ids_internal_boundaries)
+        return _has_grapheme_break(text, index)
+
+    while start < end:
+        cluster_end = start + 1
+        while cluster_end < end and not has_break(cluster_end):
+            cluster_end += 1
+        if not _cluster_is_whitespace(text[start:cluster_end]):
+            break
+        start = cluster_end
+
+    while end > start:
+        cluster_start = end - 1
+        while cluster_start > start and not has_break(cluster_start):
+            cluster_start -= 1
+        if not _cluster_is_whitespace(text[cluster_start:end]):
+            break
+        end = cluster_start
+
     return start, end
 
 
@@ -938,7 +957,14 @@ def _has_grapheme_break_at(
     return _has_grapheme_break(text, index)
 
 
+@lru_cache(maxsize=4096)
 def _grapheme_break_class(char: str) -> str:
+    """Return the UAX #29 extended-grapheme-break class of a single character.
+
+    Results are memoized per code point: decode paths classify the same
+    characters repeatedly across spans, and a lone code point carries no
+    document content.
+    """
     codepoint = ord(char)
     if char == "\r":
         return "CR"
@@ -1005,6 +1031,7 @@ def _continues_indic_conjunct(text: str, index: int) -> bool:
     return False
 
 
+@lru_cache(maxsize=4096)
 def _is_indic_consonant(char: str) -> bool:
     return _in_ranges(ord(char), _INDIC_CONSONANT_RANGES)
 
@@ -1027,7 +1054,10 @@ def _is_extended_pictographic(codepoint: int) -> bool:
 
 
 def _in_ranges(codepoint: int, ranges: tuple[tuple[int, int], ...]) -> bool:
-    return any(start <= codepoint <= end for start, end in ranges)
+    for start, end in ranges:
+        if start <= codepoint <= end:
+            return True
+    return False
 
 
 def _byte_offset(text: str, char_offset: int) -> int:

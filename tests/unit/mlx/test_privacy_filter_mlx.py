@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
 from unittest.mock import patch
@@ -250,16 +251,23 @@ def test_privacy_filter_grouped_decode_handles_bioes():
     }
     pipeline.label_info = build_label_info(pipeline.id2label)
 
-    probs = [
-        [0.0, 0.9, 0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.8, 0.0, 0.0],
-        [0.0, 0.0, 0.0, 0.7, 0.0],
-        [0.9, 0.0, 0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0, 0.0, 0.95],
+    # _decode_grouped receives per-token log-probabilities; token scores are
+    # recovered as exp(log_prob) for the predicted label.
+    log_probs = [
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
     ]
+    log_probs[0][1] = math.log(0.9)
+    log_probs[1][2] = math.log(0.8)
+    log_probs[2][3] = math.log(0.7)
+    log_probs[3][0] = math.log(0.9)
+    log_probs[4][4] = math.log(0.95)
     result = pipeline._decode_grouped(
         [1, 2, 3, 0, 4],
-        probs,
+        log_probs,
         [0, 4, 8, 9, 10],
         [4, 8, 9, 10, 27],
         "John Doe, alice@example.com",

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import os
 import re
 from bisect import bisect_left, bisect_right
 from pathlib import Path
@@ -381,6 +383,24 @@ _trim_span_whitespace = trim_span_whitespace
 _refine_privacy_filter_span = refine_privacy_filter_span
 
 
+def _resolve_compile_forward(compile_forward: bool | None) -> bool:
+    """Resolve the opt-in ``mx.compile`` fast-path request.
+
+    Compilation fuses the elementwise chains (RMSNorm, SwiGLU, RoPE) into
+    fewer Metal kernels. It is off by default because fused kernels may
+    differ from the eager graph at float ulp level; enable explicitly via
+    ``compile_forward=True`` or ``OPENMED_MLX_COMPILE=1``.
+    """
+    if compile_forward is not None:
+        return bool(compile_forward)
+    return os.environ.get("OPENMED_MLX_COMPILE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 class PrivacyFilterMLXPipeline:
     """OpenAI Privacy Filter inference with tiktoken offsets and BIOES Viterbi."""
 
@@ -389,6 +409,8 @@ class PrivacyFilterMLXPipeline:
         model_path: str | Path,
         tokenizer_name: Optional[str] = None,
         aggregation_strategy: Optional[str] = "simple",
+        *,
+        compile_forward: bool | None = None,
     ) -> None:
         if not MLX_AVAILABLE:
             raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
@@ -397,6 +419,8 @@ class PrivacyFilterMLXPipeline:
 
         self.model_path = Path(model_path)
         self.model = load_model(self.model_path)
+        if _resolve_compile_forward(compile_forward):
+            self.model = mx.compile(self.model)
         self.aggregation_strategy = aggregation_strategy
         self.manifest, self.config = load_artifact_config(self.model_path)
         self.id2label: dict[int, str] = {
@@ -446,12 +470,10 @@ class PrivacyFilterMLXPipeline:
 
         logits = logits.astype(mx.float32)
         log_probs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
-        probs = mx.exp(log_probs)
         return self._decode_prediction(
             token_ids,
             text,
             log_probs.tolist()[0],
-            probs.tolist()[0],
         )
 
     def _predict_batch(self, texts: list[str]) -> list[list[dict[str, Any]]]:
@@ -483,9 +505,7 @@ class PrivacyFilterMLXPipeline:
 
         logits = logits.astype(mx.float32)
         log_probs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
-        probs = mx.exp(log_probs)
         log_probs_py = log_probs.tolist()
-        probs_py = probs.tolist()
 
         for batch_index, (original_index, item, token_ids) in enumerate(encoded):
             token_count = len(token_ids)
@@ -493,7 +513,6 @@ class PrivacyFilterMLXPipeline:
                 token_ids,
                 item,
                 log_probs_py[batch_index][:token_count],
-                probs_py[batch_index][:token_count],
             )
         return results
 
@@ -502,7 +521,6 @@ class PrivacyFilterMLXPipeline:
         token_ids: list[int],
         text: str,
         log_probs_py: list[list[float]],
-        probs_py: list[list[float]],
     ) -> list[dict[str, Any]]:
         pred_ids = viterbi_decode(
             log_probs_py,
@@ -517,16 +535,16 @@ class PrivacyFilterMLXPipeline:
 
         if self.aggregation_strategy is None:
             return self._decode_raw(
-                pred_ids, probs_py, char_starts, char_ends, source_text
+                pred_ids, log_probs_py, char_starts, char_ends, source_text
             )
         return self._decode_grouped(
-            pred_ids, probs_py, char_starts, char_ends, source_text
+            pred_ids, log_probs_py, char_starts, char_ends, source_text
         )
 
     def _decode_raw(
         self,
         pred_ids: list[int],
-        probs: list[list[float]],
+        log_probs: list[list[float]],
         char_starts: list[int],
         char_ends: list[int],
         text: str,
@@ -543,7 +561,7 @@ class PrivacyFilterMLXPipeline:
             results.append(
                 {
                     "entity": label,
-                    "score": probs[index][label_id],
+                    "score": math.exp(log_probs[index][label_id]),
                     "word": text[start:end],
                     "start": start,
                     "end": end,
@@ -555,7 +573,7 @@ class PrivacyFilterMLXPipeline:
     def _decode_grouped(
         self,
         pred_ids: list[int],
-        probs: list[list[float]],
+        log_probs: list[list[float]],
         char_starts: list[int],
         char_ends: list[int],
         text: str,
@@ -580,9 +598,9 @@ class PrivacyFilterMLXPipeline:
                 else f"label_{span_label}"
             )
             token_scores = [
-                probs[index][pred_ids[index]]
+                math.exp(log_probs[index][pred_ids[index]])
                 for index in range(token_start, token_end)
-                if 0 <= index < len(probs)
+                if 0 <= index < len(log_probs)
             ]
             start, end = _refine_privacy_filter_span(label, start, end, text)
             if end <= start:
