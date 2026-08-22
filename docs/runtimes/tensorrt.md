@@ -27,6 +27,9 @@ python -m pip install "nvidia-modelopt[all]"
 ```
 
 Model Optimizer is optional and is not installed or distributed by OpenMed.
+OpenMed runs it with a bounded timeout, captures only a bounded error tail, and
+publishes a derived ONNX graph only after Model Optimizer has produced a valid,
+non-empty file.
 
 ## Build an Engine
 
@@ -52,7 +55,9 @@ print(result.metadata_path)
 TensorRT optimization profiles define the minimum, optimum, and maximum batch
 and sequence shapes accepted by dynamic rank-two inputs such as `input_ids`,
 `attention_mask`, and `token_type_ids`. Runtime input shapes outside this range
-are rejected by TensorRT. See NVIDIA's
+are rejected. OpenMed also applies batch, sequence, token, workspace, engine,
+and allocation limits before asking TensorRT or CUDA to reserve resources. See
+NVIDIA's
 [dynamic-shape guide](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/work-with-dynamic-shapes.html)
 for profile behavior and memory tradeoffs.
 
@@ -86,12 +91,15 @@ result = build_tensorrt_engine(
 
 Missing evidence, an empty calibration set, or a recall loss at or above the
 INT8 threshold raises `TensorRTQuantizationRejected`. No engine is published.
-The build metadata records `gate: G4`, the per-label gate result, the calibration
-digest, and the TensorRT version.
+The build metadata records `gate: G4`, the bounded per-label gate result, the
+raw calibration-set digest, the digest of the exact tokenized arrays, and the
+TensorRT version. Recall values must be finite and bounded; malformed evidence
+is rejected instead of being omitted from the gate.
 
 TensorRT 10 and earlier may reuse a local calibration cache with
 `calibration_cache_path`. Reuse the cache only when the ONNX graph, calibration
-set, TensorRT version, and target device are unchanged.
+When a cache is reused, its input SHA-256 is included in the build-input hash so
+stale cache content cannot masquerade as the same reproducible build.
 
 ## Synthetic ONNX Parity
 
@@ -114,9 +122,14 @@ result = build_tensorrt_engine(
 ```
 
 The verifier requires matching output shapes, logits within tolerance, and
-identical decoded token spans. A failure raises `TensorRTVerificationError` and
-does not replace the destination engine. The GPU parity test skips with a clear
-message on runners without TensorRT or CUDA.
+identical decoded token spans. Logits, masks, label maps, and emitted span
+evidence are finite and bounded. Metadata stores only the sample note's SHA-256
+and UTF-8 length—not the note text. Build metadata also omits user-controlled
+local paths and filenames. A failure raises
+`TensorRTVerificationError` and does not replace the destination engine. The
+engine and its build metadata are staged and published as one recoverable pair,
+so a metadata-write failure preserves the previous pair. The GPU parity test
+skips with a clear message on runners without TensorRT or CUDA.
 
 ## Reproducibility Hashes
 
@@ -124,6 +137,7 @@ Each `.engine.build.json` records two reproducibility checks:
 
 - `build_input_sha256` covers the source and effective ONNX digests, family,
   precision, shape profile, workspace limit, TensorRT version, calibration
+  text digest, exact tokenized calibration-input digest, reused cache-input
   digest, and G4 evidence.
 - `engine_sha256` covers the serialized engine bytes.
 
@@ -158,7 +172,9 @@ logits = session.run(
 
 The session supports TensorRT's named-I/O execution API and the older binding
 API. It allocates CUDA buffers with PyTorch, resolves dynamic output shapes, and
-returns logits as a NumPy array.
+returns logits as a NumPy array. It accepts CUDA device selectors only, rejects
+lossy token-ID casts and non-finite logits, and validates both individual and
+aggregate host/GPU allocation sizes before allocating output buffers.
 
 ## Device-Tier Benchmarks
 
