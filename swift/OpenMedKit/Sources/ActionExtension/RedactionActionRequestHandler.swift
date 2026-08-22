@@ -15,9 +15,7 @@
                     let redactedTexts = try await Task.detached(priority: .userInitiated) {
                         try ExtensionRedactionHandler.withRuntime(configuration: configuration) {
                             handler in
-                            try texts.map {
-                                try handler.redact($0, policyName: policyName).redactedText
-                            }
+                            try handler.redact(texts, policyName: policyName).map(\.redactedText)
                         }
                     }.value
                     context.completeRequest(

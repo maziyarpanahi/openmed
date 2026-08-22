@@ -176,6 +176,10 @@
         }
 
         func testAggregateInputBudgetRejectsTooManyAndOversizedItems() {
+            XCTAssertThrowsError(try ExtensionInputBudget.validate([])) { error in
+                XCTAssertEqual(error as? ExtensionRedactionError, .missingPlainTextInput)
+            }
+
             let tooMany = Array(
                 repeating: "synthetic",
                 count: ExtensionInputBudget.maximumItems + 1
@@ -202,6 +206,27 @@
                 XCTAssertEqual(actual, ExtensionInputBudget.maximumAggregateUTF8Bytes + 1)
                 XCTAssertEqual(limit, ExtensionInputBudget.maximumAggregateUTF8Bytes)
             }
+        }
+
+        func testMultiItemRequestRedactsEachItemWithinItsOwnInferenceBudget() throws {
+            let policy = try Policy(named: Policy.defaultName)
+            let reference = OpenMed.deidentify("synthetic", entities: [], policy: policy)
+            var receivedByteCounts: [Int] = []
+            let handler = ExtensionRedactionHandler { text, _ in
+                receivedByteCounts.append(text.utf8.count)
+                return reference
+            }
+            let item = String(repeating: "🩺", count: 10_000)
+            let texts = [item, item]
+
+            XCTAssertGreaterThan(
+                texts.reduce(0) { $0 + $1.utf8.count },
+                ExtensionRedactionHandler.maximumInputUTF8Bytes
+            )
+            let outputs = try handler.redact(texts)
+
+            XCTAssertEqual(outputs.count, texts.count)
+            XCTAssertEqual(receivedByteCounts, texts.map { $0.utf8.count })
         }
 
         func testRuntimeCleanupRunsAfterSuccessAndFailure() throws {

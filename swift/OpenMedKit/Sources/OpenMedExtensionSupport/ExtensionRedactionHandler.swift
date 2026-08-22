@@ -47,6 +47,9 @@ public enum ExtensionInputBudget {
 
     /// Validate a bounded collection before retaining or redacting it.
     public static func validate(_ texts: [String]) throws {
+        guard !texts.isEmpty else {
+            throw ExtensionRedactionError.missingPlainTextInput
+        }
         guard texts.count <= maximumItems else {
             throw ExtensionRedactionError.tooManyInputItems(
                 actual: texts.count,
@@ -387,5 +390,14 @@ public final class ExtensionRedactionHandler {
             policyName: result.policyName,
             spans: spans
         )
+    }
+
+    /// Redact a bounded extension request one item at a time.
+    public func redact(
+        _ texts: [String],
+        policyName: String = Policy.defaultName
+    ) throws -> [ExtensionRedactionOutput] {
+        try ExtensionInputBudget.validate(texts)
+        return try texts.map { try redact($0, policyName: policyName) }
     }
 }

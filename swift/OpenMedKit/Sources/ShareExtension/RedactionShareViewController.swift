@@ -12,6 +12,7 @@
         private let redactButton = UIButton(type: .system)
         private let cancelButton = UIButton(type: .system)
         private let policies = Policy.bundledProfileNames
+        private var inputTexts: [String] = []
         private var inputText = ""
 
         public final override func viewDidLoad() {
@@ -82,6 +83,7 @@
                 let texts = try await ExtensionItemCodec.plainText(
                     from: extensionContext?.inputItems ?? []
                 )
+                inputTexts = texts
                 inputText = texts.joined(separator: "\n\n")
                 textView.text = inputText
                 statusLabel.text = "Choose a bundled policy profile. Processing stays on this device."
@@ -93,7 +95,7 @@
 
         @objc private func redactSelection() {
             let policyName = policies[policyPicker.selectedRow(inComponent: 0)]
-            let text = inputText
+            let texts = inputTexts
             redactButton.isEnabled = false
             statusLabel.text = "Redacting with the local Nano model…"
 
@@ -103,12 +105,16 @@
                     let output = try await Task.detached(priority: .userInitiated) {
                         try ExtensionRedactionHandler.withRuntime(configuration: configuration) {
                             handler in
-                            try handler.redact(text, policyName: policyName)
+                            try handler.redact(texts, policyName: policyName)
                         }
                     }.value
-                    textView.text = output.redactedText
+                    let redactedText =
+                        output
+                        .map(\.redactedText)
+                        .joined(separator: "\n\n")
+                    textView.text = redactedText
                     extensionContext?.completeRequest(
-                        returningItems: ExtensionItemCodec.extensionItems(for: [output.redactedText])
+                        returningItems: ExtensionItemCodec.extensionItems(for: [redactedText])
                     )
                 } catch {
                     show(error)
