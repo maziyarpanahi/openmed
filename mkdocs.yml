@@ -22,27 +22,39 @@ nav:
       - Low-Bandwidth & Proxy Install: low-bandwidth-install.md
       - Persona Quickstarts: quickstarts.md
       - Project Scaffold CLI: cli/openmed-init.md
+      - Machine-readable CLI Contract: cli/machine-contract.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Skill Installation: agent-skills/install.md
+      - Agent Skill Validation: agent-skills/validation.md
+      - De-identification Policy Setup: agent-skills/setup.md
+      - Agent Skill Packs: agent-skills/packs.md
+      - Agent Skill Router: agent-skills/router.md
       - Local Trace-Store Discovery: guides/trace-discovery.md
       - JSONL Trace Content Walker: reference/trace-jsonl.md
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
       - Async API: async-api.md
       - REST Service (MVP): rest-service.md
+      - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Parallel Trace Shards: guides/parallel-traces.md
       - Streaming Trace Redaction: guides/streaming-traces.md
+      - Read-only Trace Scan Report: guides/trace-audit.md
+      - Trace Replay Fidelity: reference/trace-fidelity.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
       - Hardened Service Image: deploy/hardened-image.md
+      - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
+      - Standalone Local Redactor Manifest: install/standalone.md
+      - Offline Install Smoke Check: install/smoke-check.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
@@ -56,6 +68,8 @@ nav:
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
+      - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
@@ -86,8 +100,10 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
+      - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
+      - Plugin Quarantine Preflight: plugins/quarantine-report.md
       - Batch Processing: batch-processing.md
       - Batch Processing How-To: batch-howto.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
@@ -113,6 +129,8 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Comparator Reports: evaluation/comparator-reports.md
+      - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -142,15 +160,20 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Secret Token Detection: security/secret-detection.md
+      - In-place Trace Redaction: guides/in-place-redaction.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
-      - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
+      - LlamaIndex Redaction Transform: integrations/llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - dbt Privacy-Safe Text Projection: integrations/dbt.md
+      - PostgreSQL Redaction Adapter: integrations/postgres.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
@@ -159,6 +182,7 @@ nav:
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
+      - Airflow Redaction Operator: integrations/airflow.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - HL7 v2 Narrative Extraction: interop/hl7v2-narrative-extraction.md
@@ -216,7 +240,7 @@ nav:
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
       - Model Release Queue: model-release-queue.md
-      - Nix Development: development.md
+      - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
