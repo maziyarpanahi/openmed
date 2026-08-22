@@ -15,6 +15,17 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+private const val MAX_MANIFEST_BYTES = 4L * 1024L * 1024L
+private const val MAX_FAMILY_CHARACTERS = 128
+private const val MAX_OPERATOR_COUNT = 4096
+private const val MAX_OPERATOR_NAME_CHARACTERS = 256
+private const val MAX_QNN_OPTION_COUNT = 64
+private const val MAX_QNN_OPTION_CHARACTERS = 4096
+private const val MAX_INTRA_OP_THREAD_COUNT = 256
+private const val MAX_EVIDENCE_SPAN_COUNT = 100_000
+private const val MAX_BOUNDARY_TOLERANCE_CHARACTERS = 10_000
+private const val MAX_LATENCY_SAMPLE_COUNT = 1_000_000
+
 /** Execution providers supported by the Android accelerator session. */
 public enum class AcceleratorProvider {
     QNN,
@@ -48,13 +59,52 @@ public data class ModelFamilyOperatorCoverage(
     val requiredOperators: Set<String>,
     val supportedOperators: Map<AcceleratorProvider, Set<String>> = emptyMap(),
 ) {
+    internal val stableRequiredOperators: Set<String> = requiredOperators.toSet()
+    internal val stableSupportedOperators: Map<AcceleratorProvider, Set<String>> =
+        supportedOperators.mapValues { (_, operators) -> operators.toSet() }.toMap()
+
     init {
         require(family.isNotBlank()) { "family must not be blank" }
-        require(requiredOperators.none(String::isBlank)) {
+        require(family == family.trim() && family.length <= MAX_FAMILY_CHARACTERS) {
+            "family must be trimmed and at most $MAX_FAMILY_CHARACTERS characters"
+        }
+        require(stableRequiredOperators.isNotEmpty()) {
+            "requiredOperators must not be empty"
+        }
+        require(stableRequiredOperators.size <= MAX_OPERATOR_COUNT) {
+            "requiredOperators must contain at most $MAX_OPERATOR_COUNT names"
+        }
+        require(stableRequiredOperators.none(String::isBlank)) {
             "requiredOperators must not contain blank names"
         }
-        require(supportedOperators.values.flatten().none(String::isBlank)) {
+        require(
+            stableRequiredOperators.all { operator ->
+                operator == operator.trim() &&
+                    operator.length <= MAX_OPERATOR_NAME_CHARACTERS &&
+                    '\u0000' !in operator
+            }
+        ) {
+            "requiredOperators names must be trimmed, bounded, and NUL-free"
+        }
+        require(
+            stableSupportedOperators.values.all { operators ->
+                operators.size <= MAX_OPERATOR_COUNT
+            }
+        ) {
+            "supportedOperators provider sets must contain at most " +
+                "$MAX_OPERATOR_COUNT names"
+        }
+        require(stableSupportedOperators.values.flatten().none(String::isBlank)) {
             "supportedOperators must not contain blank names"
+        }
+        require(
+            stableSupportedOperators.values.flatten().all { operator ->
+                operator == operator.trim() &&
+                    operator.length <= MAX_OPERATOR_NAME_CHARACTERS &&
+                    '\u0000' !in operator
+            }
+        ) {
+            "supportedOperators names must be trimmed, bounded, and NUL-free"
         }
     }
 
@@ -70,8 +120,23 @@ public data class ModelFamilyOperatorCoverage(
             if (!manifestFile.isFile) {
                 throw InferenceError.InvalidInput("ONNX manifest does not exist")
             }
-            if (modelFileName.isBlank()) {
-                throw InferenceError.InvalidInput("modelFileName must not be blank")
+            if (
+                manifestFile.length() <= 0L ||
+                manifestFile.length() > MAX_MANIFEST_BYTES
+            ) {
+                throw InferenceError.InvalidInput(
+                    "ONNX manifest must be between 1 byte and $MAX_MANIFEST_BYTES bytes"
+                )
+            }
+            if (
+                modelFileName.isBlank() ||
+                modelFileName != modelFileName.trim() ||
+                modelFileName.length > MAX_OPERATOR_NAME_CHARACTERS ||
+                '\u0000' in modelFileName
+            ) {
+                throw InferenceError.InvalidInput(
+                    "modelFileName must be trimmed, bounded, and NUL-free"
+                )
             }
 
             val root = try {
@@ -91,9 +156,14 @@ public data class ModelFamilyOperatorCoverage(
                 )
             }
             val artifact = try {
-                root["artifacts"]?.jsonArray
-                    ?.map { it.jsonObject }
-                    ?.firstOrNull { entry ->
+                val artifacts = root["artifacts"]?.jsonArray
+                    ?: throw IllegalArgumentException("missing artifacts")
+                if (artifacts.size > MAX_OPERATOR_COUNT) {
+                    throw IllegalArgumentException("too many artifacts")
+                }
+                artifacts
+                    .map { it.jsonObject }
+                    .firstOrNull { entry ->
                         entry["path"]?.jsonPrimitive?.contentOrNull == modelFileName
                     }
             } catch (error: Exception) {
@@ -104,11 +174,17 @@ public data class ModelFamilyOperatorCoverage(
                 "ONNX manifest does not describe $modelFileName"
             )
             val operators = try {
-                artifact["metadata"]?.jsonObject
+                val values = artifact["metadata"]?.jsonObject
                     ?.get("operators")?.jsonArray
-                    ?.mapNotNull { it.jsonPrimitive.contentOrNull }
-                    ?.toSet()
-                    .orEmpty()
+                    ?: throw IllegalArgumentException("missing operators")
+                if (values.size > MAX_OPERATOR_COUNT) {
+                    throw IllegalArgumentException("too many operators")
+                }
+                values.map { value ->
+                    value.jsonPrimitive.contentOrNull
+                        ?.takeIf(String::isNotBlank)
+                        ?: throw IllegalArgumentException("operator must be text")
+                }.toSet()
             } catch (error: Exception) {
                 throw InferenceError.InvalidInput(
                     "ONNX manifest operators must be an array of strings"
@@ -119,11 +195,17 @@ public data class ModelFamilyOperatorCoverage(
                     "ONNX manifest does not record operators for $modelFileName"
                 )
             }
-            return ModelFamilyOperatorCoverage(
-                family = family,
-                requiredOperators = operators,
-                supportedOperators = supportedOperators,
-            )
+            return try {
+                ModelFamilyOperatorCoverage(
+                    family = family,
+                    requiredOperators = operators,
+                    supportedOperators = supportedOperators,
+                )
+            } catch (error: IllegalArgumentException) {
+                throw InferenceError.InvalidInput(
+                    "ONNX manifest coverage metadata is invalid"
+                )
+            }
         }
     }
 }
@@ -143,15 +225,41 @@ public data class AcceleratorConfig(
     val intraOpThreadCount: Int = 1,
     val modelCoverage: ModelFamilyOperatorCoverage? = null,
 ) {
+    internal val stablePreferredProviders: List<AcceleratorProvider> =
+        preferredProviders.toList()
+    internal val stableQnnOptions: Map<String, String> = qnnOptions.toMap()
+
     init {
-        require(preferredProviders.isNotEmpty()) {
+        require(stablePreferredProviders.isNotEmpty()) {
             "preferredProviders must not be empty"
         }
-        require(qnnOptions.keys.none(String::isBlank)) {
+        require(
+            stablePreferredProviders.size <= AcceleratorProvider.values().size &&
+                stablePreferredProviders.distinct().size == stablePreferredProviders.size
+        ) {
+            "preferredProviders must not contain duplicates"
+        }
+        require(stableQnnOptions.size <= MAX_QNN_OPTION_COUNT) {
+            "qnnOptions must contain at most $MAX_QNN_OPTION_COUNT entries"
+        }
+        require(stableQnnOptions.keys.none(String::isBlank)) {
             "qnnOptions must not contain blank keys"
         }
-        require(intraOpThreadCount > 0) {
-            "intraOpThreadCount must be greater than zero"
+        require(stableQnnOptions.values.none(String::isBlank)) {
+            "qnnOptions must not contain blank values"
+        }
+        require(
+            stableQnnOptions.all { (key, value) ->
+                key == key.trim() && value == value.trim() &&
+                    key.length <= MAX_QNN_OPTION_CHARACTERS &&
+                    value.length <= MAX_QNN_OPTION_CHARACTERS &&
+                    '\u0000' !in key && '\u0000' !in value
+            }
+        ) {
+            "qnnOptions entries must be trimmed, bounded, and NUL-free"
+        }
+        require(intraOpThreadCount in 1..MAX_INTRA_OP_THREAD_COUNT) {
+            "intraOpThreadCount must be between 1 and $MAX_INTRA_OP_THREAD_COUNT"
         }
     }
 
@@ -215,22 +323,25 @@ public data class DeviceTierLatencyRecord(
         require(provider != AcceleratorProvider.CPU) {
             "latency record provider must be QNN or NNAPI"
         }
-        require(cpuP50Milliseconds >= 0.0) {
+        require(cpuP50Milliseconds.isFinite() && cpuP50Milliseconds >= 0.0) {
             "cpuP50Milliseconds must be non-negative"
         }
-        require(delegateP50Milliseconds >= 0.0) {
-            "delegateP50Milliseconds must be non-negative"
+        require(
+            delegateP50Milliseconds.isFinite() && delegateP50Milliseconds > 0.0
+        ) {
+            "delegateP50Milliseconds must be positive and finite"
         }
-        require(sampleCount > 0) { "sampleCount must be greater than zero" }
+        require((cpuP50Milliseconds / delegateP50Milliseconds).isFinite()) {
+            "latency speedup must be finite"
+        }
+        require(sampleCount in 1..MAX_LATENCY_SAMPLE_COUNT) {
+            "sampleCount must be between 1 and $MAX_LATENCY_SAMPLE_COUNT"
+        }
     }
 
     /** CPU latency divided by delegate latency. */
     public val speedup: Double
-        get() = if (delegateP50Milliseconds == 0.0) {
-            Double.POSITIVE_INFINITY
-        } else {
-            cpuP50Milliseconds / delegateP50Milliseconds
-        }
+        get() = cpuP50Milliseconds / delegateP50Milliseconds
 }
 
 /** PHI-free span signature used for CPU/delegate parity evidence. */
@@ -241,6 +352,13 @@ public data class AcceleratorSpanSignature(
 ) {
     init {
         require(label.isNotBlank()) { "label must not be blank" }
+        require(
+            label == label.trim() &&
+                label.length <= MAX_OPERATOR_NAME_CHARACTERS &&
+                '\u0000' !in label
+        ) {
+            "label must be trimmed, bounded, and NUL-free"
+        }
         require(startOffset >= 0) { "startOffset must be non-negative" }
         require(endOffset >= startOffset) {
             "endOffset must be greater than or equal to startOffset"
@@ -263,15 +381,30 @@ public data class AcceleratorValidationRecord(
     val boundaryToleranceCharacters: Int = 0,
     val maxRecallDrop: Double = 0.0,
 ) {
+    private val stableCpuSpans: List<AcceleratorSpanSignature> = cpuSpans.toList()
+    private val stableDelegateSpans: List<AcceleratorSpanSignature> =
+        delegateSpans.toList()
+
     init {
         require(cpuRecall in 0.0..1.0) { "cpuRecall must be between 0 and 1" }
         require(delegateRecall in 0.0..1.0) {
             "delegateRecall must be between 0 and 1"
         }
-        require(boundaryToleranceCharacters >= 0) {
-            "boundaryToleranceCharacters must be non-negative"
+        require(
+            boundaryToleranceCharacters in 0..MAX_BOUNDARY_TOLERANCE_CHARACTERS
+        ) {
+            "boundaryToleranceCharacters must be between 0 and " +
+                "$MAX_BOUNDARY_TOLERANCE_CHARACTERS"
         }
-        require(maxRecallDrop >= 0.0) { "maxRecallDrop must be non-negative" }
+        require(maxRecallDrop.isFinite() && maxRecallDrop in 0.0..1.0) {
+            "maxRecallDrop must be finite and between 0 and 1"
+        }
+        require(
+            stableCpuSpans.size <= MAX_EVIDENCE_SPAN_COUNT &&
+                stableDelegateSpans.size <= MAX_EVIDENCE_SPAN_COUNT
+        ) {
+            "span evidence must contain at most $MAX_EVIDENCE_SPAN_COUNT records"
+        }
     }
 
     /** Delegate recall minus CPU recall. */
@@ -280,8 +413,8 @@ public data class AcceleratorValidationRecord(
 
     /** Whether labels and boundaries match within the configured tolerance. */
     public val spansWithinTolerance: Boolean
-        get() = cpuSpans.size == delegateSpans.size &&
-            cpuSpans.zip(delegateSpans).all { (cpu, delegate) ->
+        get() = stableCpuSpans.size == stableDelegateSpans.size &&
+            stableCpuSpans.zip(stableDelegateSpans).all { (cpu, delegate) ->
                 cpu.label == delegate.label &&
                     abs(cpu.startOffset - delegate.startOffset) <=
                     boundaryToleranceCharacters &&
@@ -542,7 +675,9 @@ private fun selectSession(
     sessionFactory: AcceleratorTokenSessionFactory,
 ): SelectedTokenSession {
     val attempts = mutableListOf<AcceleratorProviderAttempt>()
-    val candidates = (config.preferredProviders + AcceleratorProvider.CPU).distinct()
+    val candidates = (
+        config.stablePreferredProviders + AcceleratorProvider.CPU
+    ).distinct()
 
     candidates.forEach { provider ->
         if (provider !in availableProviders) {
@@ -590,7 +725,7 @@ private fun selectSession(
                 provider,
                 AcceleratorAttemptOutcome.SESSION_CREATION_FAILED,
             )
-        } catch (error: UnsatisfiedLinkError) {
+        } catch (error: LinkageError) {
             if (provider == AcceleratorProvider.CPU) {
                 throw InferenceError.SessionCreation(error)
             }
@@ -609,7 +744,7 @@ private fun operatorCoverage(
     provider: AcceleratorProvider,
 ): AcceleratorOperatorCoverage {
     val family = modelCoverage?.family ?: "unknown"
-    val required = modelCoverage?.requiredOperators.orEmpty()
+    val required = modelCoverage?.stableRequiredOperators.orEmpty()
     if (provider == AcceleratorProvider.CPU) {
         return AcceleratorOperatorCoverage(
             family = family,
@@ -621,7 +756,7 @@ private fun operatorCoverage(
         )
     }
 
-    val support = modelCoverage?.supportedOperators?.get(provider)
+    val support = modelCoverage?.stableSupportedOperators?.get(provider)
         ?: return AcceleratorOperatorCoverage(
             family = family,
             provider = provider,
@@ -641,27 +776,39 @@ private fun operatorCoverage(
     )
 }
 
-private fun AcceleratorConfig.withDiscoveredCoverage(modelFile: File): AcceleratorConfig {
-    if (modelCoverage != null) {
+internal fun AcceleratorConfig.withDiscoveredCoverage(modelFile: File): AcceleratorConfig {
+    if (
+        modelCoverage != null ||
+        stablePreferredProviders.all { provider -> provider == AcceleratorProvider.CPU }
+    ) {
         return this
     }
     val manifestFile = File(modelFile.parentFile, "openmed-onnx.json")
     if (!manifestFile.isFile) {
         return this
     }
-    val discovered = try {
-        ModelFamilyOperatorCoverage.fromManifest(
-            manifestFile = manifestFile,
-            modelFileName = modelFile.name,
-        )
-    } catch (error: InferenceError.InvalidInput) {
-        null
-    }
-    return if (discovered == null) this else copy(modelCoverage = discovered)
+    val discovered = ModelFamilyOperatorCoverage.fromManifest(
+        manifestFile = manifestFile,
+        modelFileName = modelFile.name,
+    )
+    return AcceleratorConfig(
+        preferredProviders = stablePreferredProviders,
+        qnnOptions = stableQnnOptions,
+        nnapiAllowFp16 = nnapiAllowFp16,
+        nnapiUseNchw = nnapiUseNchw,
+        intraOpThreadCount = intraOpThreadCount,
+        modelCoverage = discovered,
+    )
 }
 
 private fun availableAcceleratorProviders(): Set<AcceleratorProvider> {
-    val ortProviders = OrtEnvironment.getAvailableProviders()
+    val ortProviders = try {
+        OrtEnvironment.getAvailableProviders()
+    } catch (error: Exception) {
+        return setOf(AcceleratorProvider.CPU)
+    } catch (error: LinkageError) {
+        return setOf(AcceleratorProvider.CPU)
+    }
     return buildSet {
         add(AcceleratorProvider.CPU)
         if (OrtProvider.QNN in ortProviders) {
@@ -684,7 +831,7 @@ private fun createSessionOptions(
     try {
         options.setIntraOpNumThreads(config.intraOpThreadCount)
         when (provider) {
-            AcceleratorProvider.QNN -> options.addQnn(config.qnnOptions)
+            AcceleratorProvider.QNN -> options.addQnn(config.stableQnnOptions)
             AcceleratorProvider.NNAPI -> options.addNnapi(config.nnapiFlags())
             AcceleratorProvider.CPU -> Unit
         }

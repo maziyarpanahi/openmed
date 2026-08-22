@@ -197,6 +197,85 @@ class AcceleratorFallbackTest {
     }
 
     @Test
+    fun delegateLinkageFailureRetriesCpu() {
+        val created = mutableListOf<AcceleratorProvider>()
+        val session = AcceleratorSession.createForTesting(
+            id2Label = mapOf(0 to "O", 1 to "B-NAME"),
+            config = AcceleratorConfig(
+                preferredProviders = listOf(
+                    AcceleratorProvider.QNN,
+                    AcceleratorProvider.CPU,
+                ),
+            ),
+            availableProviders = setOf(
+                AcceleratorProvider.QNN,
+                AcceleratorProvider.CPU,
+            ),
+            sessionFactory = AcceleratorTokenSessionFactory { provider ->
+                created += provider
+                if (provider == AcceleratorProvider.QNN) {
+                    throw UnsatisfiedLinkError("synthetic missing backend")
+                }
+                StaticTokenSession()
+            },
+        )
+
+        try {
+            assertEquals(AcceleratorProvider.CPU, session.selection.selectedProvider)
+            assertEquals(
+                listOf(AcceleratorProvider.QNN, AcceleratorProvider.CPU),
+                created,
+            )
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun configurationSnapshotsMutableProviderAndCoverageInputs() {
+        val providers = mutableListOf(
+            AcceleratorProvider.QNN,
+            AcceleratorProvider.CPU,
+        )
+        val qnnOptions = mutableMapOf("backend_path" to "libQnnHtp.so")
+        val required = mutableSetOf("MatMul")
+        val supported = mutableSetOf("MatMul")
+        val coverage = ModelFamilyOperatorCoverage(
+            family = "bert",
+            requiredOperators = required,
+            supportedOperators = mapOf(AcceleratorProvider.QNN to supported),
+        )
+        val config = AcceleratorConfig(
+            preferredProviders = providers,
+            qnnOptions = qnnOptions,
+            modelCoverage = coverage,
+        )
+
+        providers.clear()
+        qnnOptions.clear()
+        required.clear()
+        supported.clear()
+
+        val session = AcceleratorSession.createForTesting(
+            id2Label = mapOf(0 to "O", 1 to "B-NAME"),
+            config = config,
+            availableProviders = setOf(
+                AcceleratorProvider.QNN,
+                AcceleratorProvider.CPU,
+            ),
+            sessionFactory = RecordingSessionFactory(),
+        )
+        try {
+            assertEquals(AcceleratorProvider.QNN, session.selection.selectedProvider)
+            assertEquals(setOf("MatMul"), session.selection.operatorCoverage.requiredOperators)
+            assertEquals(setOf("MatMul"), session.selection.operatorCoverage.providerOperators)
+            assertEquals("libQnnHtp.so", config.stableQnnOptions["backend_path"])
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
     fun measuredZeroCoverageSkipsDelegate() {
         val factory = RecordingSessionFactory()
         val session = AcceleratorSession.createForTesting(
@@ -272,6 +351,79 @@ class AcceleratorFallbackTest {
             )
         } finally {
             directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun malformedAdjacentCoverageFailsClosedOnlyWhenAccelerationIsEnabled() {
+        val directory = Files.createTempDirectory("accelerator-invalid-manifest").toFile()
+        try {
+            val model = directory.resolve("model.onnx").apply { writeBytes(byteArrayOf(1)) }
+            directory.resolve("openmed-onnx.json").writeText(
+                """
+                {
+                  "family": "bert",
+                  "artifacts": [
+                    {"path": "model.onnx", "metadata": {"operators": [null]}}
+                  ]
+                }
+                """.trimIndent()
+            )
+
+            assertFailsWith<InferenceError.InvalidInput> {
+                AcceleratorConfig().withDiscoveredCoverage(model)
+            }
+            assertEquals(
+                listOf(AcceleratorProvider.CPU),
+                AcceleratorConfig.cpuOnly()
+                    .withDiscoveredCoverage(model)
+                    .stablePreferredProviders,
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun evidenceAndConfigurationRejectNonFiniteOrUnboundedValues() {
+        assertFailsWith<IllegalArgumentException> {
+            AcceleratorConfig(
+                preferredProviders = listOf(
+                    AcceleratorProvider.QNN,
+                    AcceleratorProvider.QNN,
+                ),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AcceleratorConfig(qnnOptions = mapOf("backend_path" to ""))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ModelFamilyOperatorCoverage("bert", emptySet())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DeviceTierLatencyRecord(
+                deviceTier = AndroidDeviceTier.MID_RANGE,
+                provider = AcceleratorProvider.NNAPI,
+                cpuP50Milliseconds = Double.POSITIVE_INFINITY,
+                delegateP50Milliseconds = 1.0,
+                sampleCount = 1,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AcceleratorValidationRecord(
+                latency = DeviceTierLatencyRecord(
+                    deviceTier = AndroidDeviceTier.MID_RANGE,
+                    provider = AcceleratorProvider.NNAPI,
+                    cpuP50Milliseconds = 2.0,
+                    delegateP50Milliseconds = 1.0,
+                    sampleCount = 1,
+                ),
+                cpuSpans = emptyList(),
+                delegateSpans = emptyList(),
+                cpuRecall = 1.0,
+                delegateRecall = 1.0,
+                maxRecallDrop = Double.POSITIVE_INFINITY,
+            )
         }
     }
 

@@ -161,7 +161,7 @@ class OpenMedKitApiTest {
         assertEquals(File("/models/openmed/tokenizer.json"), backend.tokenizerJson)
         assertEquals("PERSON", backend.id2Label[1])
         assertEquals(
-            listOf("QNN", "NNAPI", "CPU"),
+            listOf("CPU"),
             backend.acceleratorConfig.preferredProviders.map { it.name },
         )
     }

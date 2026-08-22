@@ -22,19 +22,23 @@ Runtime and device expose it.
 
 ## Configure a Session
 
-`OpenMedBackend` uses `AcceleratorConfig()` by default, so the normal
-`OpenMedKit` path automatically probes the provider order above. Use a CPU-only
-configuration for a baseline run:
+`OpenMedBackend` remains CPU-only by default so adding this release cannot
+silently change model outputs on an existing device. Enable delegate probing
+explicitly after the model and device tier pass the parity gate:
 
 ```kotlin
 import com.openmed.openmedkit.OpenMedBackend
 import com.openmed.openmedkit.onnx.AcceleratorConfig
 
-val cpuBackend = OpenMedBackend(
+val acceleratedBackend = OpenMedBackend(
     modelDirectory = modelDirectory,
-    acceleratorConfig = AcceleratorConfig.cpuOnly(),
+    acceleratorConfig = AcceleratorConfig(),
 )
 ```
+
+Use `AcceleratorConfig.cpuOnly()` for an explicit baseline run. Direct
+`AcceleratorSession` construction uses the QNN, NNAPI, CPU order by default;
+the higher-level `OpenMedBackend` facade requires the opt-in shown above.
 
 For a QNN-enabled application, keep the backend library path explicit when it
 differs from the Android default:
@@ -109,6 +113,11 @@ perform its own capability and graph-partitioning pass. A present empty set is
 measured zero coverage and skips that delegate. Partial coverage selects the
 delegate and exposes the remainder through
 `selection.operatorCoverage.cpuFallbackOperators`.
+
+When delegate probing is enabled and an adjacent `openmed-onnx.json` exists,
+malformed or oversized coverage metadata is rejected instead of being treated
+as unknown. Removing the invalid manifest or selecting a CPU-only configuration
+keeps the recovery path explicit.
 
 Do not treat a static operator name alone as certification. NNAPI and QNN may
 place constraints on shapes, data types, quantization, and constant inputs.
