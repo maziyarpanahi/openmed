@@ -276,6 +276,33 @@ class AcceleratorFallbackTest {
     }
 
     @Test
+    fun manifestRejectsNonStringOperatorMetadata() {
+        val directory = Files.createTempDirectory("accelerator-manifest-invalid").toFile()
+        try {
+            val manifest = directory.resolve("openmed-onnx.json")
+            manifest.writeText(
+                """
+                {
+                  "family": "distilbert",
+                  "artifacts": [
+                    {
+                      "path": "model.onnx",
+                      "metadata": {"operators": ["Gather", 7]}
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+
+            assertFailsWith<InferenceError.InvalidInput> {
+                ModelFamilyOperatorCoverage.fromManifest(manifest)
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun recallDeltaOutsideToleranceIsRejected() {
         val evidence = AcceleratorValidationRecord(
             latency = DeviceTierLatencyRecord(
@@ -294,6 +321,35 @@ class AcceleratorFallbackTest {
 
         assertFalse(evidence.recallWithinTolerance)
         assertFailsWith<IllegalStateException> { evidence.requirePassing() }
+    }
+
+    @Test
+    fun evidenceRejectsNonFiniteMeasurementsAndUnboundedTolerance() {
+        assertFailsWith<IllegalArgumentException> {
+            DeviceTierLatencyRecord(
+                deviceTier = AndroidDeviceTier.FLAGSHIP,
+                provider = AcceleratorProvider.QNN,
+                cpuP50Milliseconds = Double.POSITIVE_INFINITY,
+                delegateP50Milliseconds = 1.0,
+                sampleCount = 1,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AcceleratorValidationRecord(
+                latency = DeviceTierLatencyRecord(
+                    deviceTier = AndroidDeviceTier.FLAGSHIP,
+                    provider = AcceleratorProvider.QNN,
+                    cpuP50Milliseconds = 2.0,
+                    delegateP50Milliseconds = 1.0,
+                    sampleCount = 1,
+                ),
+                cpuSpans = emptyList(),
+                delegateSpans = emptyList(),
+                cpuRecall = 1.0,
+                delegateRecall = 0.0,
+                maxRecallDrop = 1.01,
+            )
+        }
     }
 
     private class RecordingSessionFactory(

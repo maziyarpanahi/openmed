@@ -82,9 +82,10 @@ public data class ModelFamilyOperatorCoverage(
                 )
             }
             val family = try {
-                root["family"]?.jsonPrimitive?.contentOrNull
-                    ?.takeIf(String::isNotBlank)
-                    ?: "unknown"
+                root["family"]?.jsonPrimitive?.let { value ->
+                    require(value.isString && value.content.isNotBlank())
+                    value.content
+                } ?: "unknown"
             } catch (error: Exception) {
                 throw InferenceError.InvalidInput(
                     "ONNX manifest family must be a string"
@@ -106,7 +107,11 @@ public data class ModelFamilyOperatorCoverage(
             val operators = try {
                 artifact["metadata"]?.jsonObject
                     ?.get("operators")?.jsonArray
-                    ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    ?.map { element ->
+                        val operator = element.jsonPrimitive
+                        require(operator.isString && operator.content.isNotBlank())
+                        operator.content
+                    }
                     ?.toSet()
                     .orEmpty()
             } catch (error: Exception) {
@@ -215,22 +220,20 @@ public data class DeviceTierLatencyRecord(
         require(provider != AcceleratorProvider.CPU) {
             "latency record provider must be QNN or NNAPI"
         }
-        require(cpuP50Milliseconds >= 0.0) {
-            "cpuP50Milliseconds must be non-negative"
+        require(cpuP50Milliseconds.isFinite() && cpuP50Milliseconds > 0.0) {
+            "cpuP50Milliseconds must be positive and finite"
         }
-        require(delegateP50Milliseconds >= 0.0) {
-            "delegateP50Milliseconds must be non-negative"
+        require(
+            delegateP50Milliseconds.isFinite() && delegateP50Milliseconds > 0.0
+        ) {
+            "delegateP50Milliseconds must be positive and finite"
         }
         require(sampleCount > 0) { "sampleCount must be greater than zero" }
     }
 
     /** CPU latency divided by delegate latency. */
     public val speedup: Double
-        get() = if (delegateP50Milliseconds == 0.0) {
-            Double.POSITIVE_INFINITY
-        } else {
-            cpuP50Milliseconds / delegateP50Milliseconds
-        }
+        get() = cpuP50Milliseconds / delegateP50Milliseconds
 }
 
 /** PHI-free span signature used for CPU/delegate parity evidence. */
@@ -264,14 +267,18 @@ public data class AcceleratorValidationRecord(
     val maxRecallDrop: Double = 0.0,
 ) {
     init {
-        require(cpuRecall in 0.0..1.0) { "cpuRecall must be between 0 and 1" }
-        require(delegateRecall in 0.0..1.0) {
-            "delegateRecall must be between 0 and 1"
+        require(cpuRecall.isFinite() && cpuRecall in 0.0..1.0) {
+            "cpuRecall must be finite and between 0 and 1"
+        }
+        require(delegateRecall.isFinite() && delegateRecall in 0.0..1.0) {
+            "delegateRecall must be finite and between 0 and 1"
         }
         require(boundaryToleranceCharacters >= 0) {
             "boundaryToleranceCharacters must be non-negative"
         }
-        require(maxRecallDrop >= 0.0) { "maxRecallDrop must be non-negative" }
+        require(maxRecallDrop.isFinite() && maxRecallDrop in 0.0..1.0) {
+            "maxRecallDrop must be finite and between 0 and 1"
+        }
     }
 
     /** Delegate recall minus CPU recall. */

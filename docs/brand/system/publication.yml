@@ -298,6 +298,7 @@ classification:
     - android-quickstart.md
     - android-integration.md
     - export-onnx-android.md
+    - runtimes/android-accelerators.md
     - android-tokenization.md
     - android-parity.md
     - on-device-segmenters.md

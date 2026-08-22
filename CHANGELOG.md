@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added configurable Android QNN and NNAPI execution-provider selection with
+  deterministic CPU fallback, per-family operator-coverage reporting, and
+  bounded PHI-free latency, span-parity, and recall evidence (#851).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).

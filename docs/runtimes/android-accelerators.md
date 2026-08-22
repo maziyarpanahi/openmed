@@ -145,8 +145,10 @@ val evidence = AcceleratorValidationRecord(
 
 `requirePassing()` rejects label/boundary drift and recall loss beyond the
 configured CPU-relative budget. `DeviceTierLatencyRecord` reports the CPU and
-delegate p50 values, sample count, and computed speedup. The committed JVM test
-uses `DEVICE_FARM_STUB` to assert delegate selection, partial CPU partitioning,
+delegate p50 values, sample count, and computed speedup. Latencies must be
+positive and finite, while recall values and the maximum recall drop must be
+finite values from zero through one. The committed JVM test uses
+`DEVICE_FARM_STUB` to assert delegate selection, partial CPU partitioning,
 exact span parity, and zero recall delta without requiring Qualcomm hardware in
 CI.
 
