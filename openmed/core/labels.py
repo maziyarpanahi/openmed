@@ -124,7 +124,9 @@ IMAGING_MODALITY: Final = "IMAGING_MODALITY"
 LATERALITY: Final = "LATERALITY"
 MEASUREMENT: Final = "MEASUREMENT"
 
-#: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO)
+#: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO).
+#: Laboratory labels expose only future coding-system intent; no UMLS or LOINC
+#: vocabulary is bundled with OpenMed.
 CONDITION: Final = "CONDITION"
 MEDICATION: Final = "MEDICATION"
 LAB_TEST: Final = "LAB_TEST"
@@ -166,7 +168,9 @@ _BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS: Final[FrozenSet[str]] = BIOMEDICAL_LABELS -
     CONDITION
 }
 
-#: Relation-extraction head and attribute concepts (issue #252)
+#: Relation-extraction and laboratory measurement concepts (issues #252/#2353).
+#: ``LOINC`` in the metadata below documents the intended future linkage for
+#: lab observations; it does not ship a vocabulary or perform grounding.
 PROBLEM: Final = "PROBLEM"
 SEVERITY: Final = "SEVERITY"
 DOSAGE: Final = "DOSAGE"
@@ -180,6 +184,7 @@ LAB_VALUE: Final = "LAB_VALUE"
 UNIT: Final = "UNIT"
 REFERENCE_RANGE: Final = "REFERENCE_RANGE"
 ABNORMAL_FLAG: Final = "ABNORMAL_FLAG"
+SPECIMEN: Final = "SPECIMEN"
 
 #: Stable relation-extraction vocabulary for clinical heads and attributes.
 #: ``MEDICATION`` and ``BODY_SITE`` pre-date issue #252 but belong to the same
@@ -417,6 +422,7 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         CONDITION,
         MEDICATION,
         LAB_TEST,
+        SPECIMEN,
         PROCEDURE,
         BODY_SITE,
         DEVICE,
@@ -698,6 +704,7 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             CONDITION,
             MEDICATION,
             LAB_TEST,
+            SPECIMEN,
             PROCEDURE,
             BODY_SITE,
             DEVICE,
@@ -882,6 +889,7 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         (RXNORM, CHINESE_DRUG, SNOMED),
     ),
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    SPECIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1083,6 +1091,7 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     CONDITION: HIPAA_UNIQUE_IDENTIFIER,
     MEDICATION: HIPAA_UNIQUE_IDENTIFIER,
     LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN: HIPAA_UNIQUE_IDENTIFIER,
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     DEVICE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1226,6 +1235,7 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     CONDITION: POPIA_HEALTH_INFORMATION,
     MEDICATION: POPIA_HEALTH_INFORMATION,
     LAB_TEST: POPIA_HEALTH_INFORMATION,
+    SPECIMEN: POPIA_HEALTH_INFORMATION,
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
     DEVICE: POPIA_HEALTH_INFORMATION,
@@ -1639,6 +1649,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "test": LAB_TEST,
     "lab": LAB_TEST,
     "analyte": LAB_TEST,
+    "specimen": SPECIMEN,
+    "specimensource": SPECIMEN,
     "procedure": PROCEDURE,
     "surgery": PROCEDURE,
     "operation": PROCEDURE,
@@ -2222,6 +2234,7 @@ __all__ = [
     "CONDITION",
     "MEDICATION",
     "LAB_TEST",
+    "SPECIMEN",
     "PROCEDURE",
     "BODY_SITE",
     "DEVICE",

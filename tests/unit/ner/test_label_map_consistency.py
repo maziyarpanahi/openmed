@@ -126,6 +126,74 @@ def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> No
 
 
 # ---------------------------------------------------------------------------
+# Lab-value domain (issue #2353)
+# ---------------------------------------------------------------------------
+
+
+class TestLabDomain:
+    EXPECTED_LABELS = [
+        "LabTest",
+        "LabValue",
+        "Unit",
+        "ReferenceRange",
+        "AbnormalFlag",
+        "Specimen",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "LabTest": "LAB_TEST",
+        "LabValue": "LAB_VALUE",
+        "Unit": "UNIT",
+        "ReferenceRange": "REFERENCE_RANGE",
+        "AbnormalFlag": "ABNORMAL_FLAG",
+        "Specimen": "SPECIMEN",
+    }
+
+    def test_lab_domain_is_available_and_non_empty(self):
+        assert "lab" in available_domains()
+        assert get_default_labels("lab") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_lab_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_lab_category_metadata_matches_domain_labels(self):
+        normalized = [
+            normalize_canonical_label(label) for label in self.EXPECTED_LABELS
+        ]
+        assert normalized == _CATEGORY_ENTITY_TYPES["Lab"]
+
+
+# ---------------------------------------------------------------------------
+# Lab-value routing in model_registry (issue #2353)
+# ---------------------------------------------------------------------------
+
+
+class TestLabRouting:
+    LAB_TEXT = "Hemoglobin 8.1 g/dL, below reference range"
+
+    def test_match_categories_routes_lab(self):
+        categories = [c for c, _ in _match_categories(self.LAB_TEXT)]
+        assert categories[0] == "Lab"
+
+    def test_lab_is_registry_metadata_not_a_live_category(self):
+        assert "Lab" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Lab" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.LAB_TEXT)
+        assert suggestions
+        assert all(info.category != "Lab" for _key, info, _reason in suggestions)
+
+
+# ---------------------------------------------------------------------------
 # Cardiology domain (issue #317)
 # ---------------------------------------------------------------------------
 
