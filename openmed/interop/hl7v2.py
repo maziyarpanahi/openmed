@@ -146,6 +146,13 @@ class HL7Message:
     encoding: HL7V2Encoding
     segment_separator: str = "\r"
     trailing_separator: bool = False
+    blank_line_positions: tuple[int, ...] = ()
+    """Indexes of blank lines in the original segment sequence.
+
+    Blank lines carry no HL7 content, so they are not parsed into segments.
+    Recording where they appeared lets :meth:`serialize` reproduce the source
+    byte-for-byte instead of silently collapsing the message layout.
+    """
 
     @classmethod
     def parse(cls, message: str) -> "HL7Message":
@@ -157,6 +164,9 @@ class HL7Message:
         if trailing_separator:
             raw_segments = raw_segments[:-1]
 
+        blank_line_positions = tuple(
+            index for index, segment in enumerate(raw_segments) if not segment
+        )
         raw_segments = [segment for segment in raw_segments if segment]
         if not raw_segments:
             raise ValueError("empty HL7 v2 message")
@@ -172,14 +182,18 @@ class HL7Message:
             encoding=encoding,
             segment_separator=segment_separator,
             trailing_separator=trailing_separator,
+            blank_line_positions=blank_line_positions,
         )
 
     def serialize(self) -> str:
         """Serialize the message to HL7 v2 pipe-delimited text."""
 
-        rendered = self.segment_separator.join(
-            segment.serialize() for segment in self.segments
-        )
+        parts = [segment.serialize() for segment in self.segments]
+        for position in sorted(set(self.blank_line_positions)):
+            if 0 <= position <= len(parts):
+                parts.insert(position, "")
+
+        rendered = self.segment_separator.join(parts)
         if self.trailing_separator:
             rendered += self.segment_separator
         return rendered
