@@ -305,6 +305,7 @@ classification:
     - coreml-export.md
     - swift-openmedkit.md
     - runtimes/apple-platforms.md
+    - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
     - faq.md
     - troubleshooting.md
