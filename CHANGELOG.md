@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
   and egress coverage (#823).
+- Added a local Q4_K_M GGUF grounding runtime with private stdin prompt
+  transport, subprocess-only llama.cpp integration, deterministic top-k recall
+  certification, artifact-bound SHA-256 evidence, and fail-closed loading
+  (#904).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
