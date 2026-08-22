@@ -13,7 +13,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Final, Sequence
+from typing import Any, Final, Sequence
+
+try:  # Optional fast path; the decoder stays pure-Python without numpy.
+    import numpy as _np
+except ImportError:  # pragma: no cover - numpy ships with the MLX extra
+    _np = None
 
 from .spans import (
     CjkOffsetMap,
@@ -61,6 +66,10 @@ class TokenLabelInfo:
         self.token_boundary_tags: dict[int, str | None] = {}
         self.background_token_label = 0
         self.background_span_label = 0
+        # Cache of ``(start, end, transition)`` tables keyed by resolved
+        # bias tuples; building the O(C^2) transition matrix dominates
+        # decode latency for large label spaces (e.g. 221 PII classes).
+        self._viterbi_table_cache: dict[tuple[float, ...], Any] = {}
 
         for index, label in enumerate(class_names):
             if label == "O":
@@ -193,6 +202,24 @@ def _is_valid_transition(
     return False
 
 
+def _viterbi_tables(
+    label_info: TokenLabelInfo,
+    resolved_biases: dict[str, float],
+) -> tuple[list[float], list[float], list[list[float]]]:
+    """Return cached ``(start, end, transition)`` tables for *label_info*.
+
+    The transition matrix is O(C^2) to construct and identical across
+    decode calls that share a label space and biases, so it is memoized on
+    the ``TokenLabelInfo`` instance.
+    """
+    cache_key = tuple(resolved_biases[key] for key in VITERBI_BIAS_KEYS)
+    cached = label_info._viterbi_table_cache.get(cache_key)
+    if cached is None:
+        cached = _build_viterbi_scores(label_info, resolved_biases)
+        label_info._viterbi_table_cache[cache_key] = cached
+    return cached
+
+
 def _build_viterbi_scores(
     label_info: TokenLabelInfo,
     biases: dict[str, float],
@@ -283,11 +310,15 @@ def viterbi_decode_incremental(
     committed token boundary. Supplying it lets callers decode only the newly
     affected suffix instead of replaying tokens from zero. The returned path
     contains labels only for ``token_logprobs``.
+
+    When numpy is importable the O(T·C^2) dynamic program runs as vectorized
+    matrix operations; otherwise it falls back to the pure-Python loop.
+    Both paths share identical transition semantics and first-max
+    tie-breaking.
     """
     resolved_biases = resolve_viterbi_biases(biases)
-    start_scores, end_scores, transition_scores = _build_viterbi_scores(
-        label_info,
-        resolved_biases,
+    start_scores, end_scores, transition_scores = _viterbi_tables(
+        label_info, resolved_biases
     )
 
     num_classes = len(label_info.token_to_span_label)
@@ -308,6 +339,55 @@ def viterbi_decode_incremental(
             "token_logprobs has fewer classes than the configured label space"
         )
 
+    backpointers: list[list[int]] = []
+
+    if _np is not None:
+        emissions = _np.asarray(
+            [row[:num_classes] for row in token_logprobs], dtype=_np.float64
+        )
+        transitions = _np.asarray(transition_scores, dtype=_np.float64)
+        start_vec = _np.asarray(start_scores, dtype=_np.float64)
+        end_vec = _np.asarray(end_scores, dtype=_np.float64)
+
+        if state is None:
+            scores = emissions[0] + start_vec
+            token_count = 1
+        else:
+            candidate = _np.asarray(state.scores, dtype=_np.float64)[:, None] + (
+                transitions
+            )
+            scores = candidate.max(axis=0) + emissions[0]
+            token_count = state.token_count + 1
+
+        for step in range(1, len(token_logprobs)):
+            candidate = scores[:, None] + transitions
+            backpointers.append(candidate.argmax(axis=0).astype(int).tolist())
+            scores = candidate.max(axis=0) + emissions[step]
+            token_count += 1
+
+        final_scores = scores + end_vec
+        next_state = IncrementalViterbiState(
+            token_count=token_count,
+            scores=tuple(float(value) for value in scores),
+            last_backpointer=tuple(backpointers[-1]) if backpointers else (),
+        )
+        if not bool(_np.isfinite(final_scores).any()):
+            return (
+                [
+                    max(range(num_classes), key=lambda idx: row[idx])
+                    for row in token_logprobs
+                ],
+                next_state,
+            )
+
+        last_label = int(final_scores.argmax())
+        path = [last_label]
+        for paths in reversed(backpointers):
+            last_label = paths[last_label]
+            path.append(last_label)
+        path.reverse()
+        return path, next_state
+
     if state is None:
         scores = [
             token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)
@@ -325,8 +405,6 @@ def viterbi_decode_incremental(
             scores.append(best_score + token_logprobs[0][next_idx])
         start_index = 1
         token_count = state.token_count + 1
-
-    backpointers: list[list[int]] = []
 
     for token_scores in token_logprobs[start_index:]:
         next_scores: list[float] = []
