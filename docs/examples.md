@@ -8,6 +8,11 @@ examples use synthetic data and are safe to run during release review.
 
 For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
 
+For an install-free demonstration, open the
+**[browser privacy playground](/docs/demo/privacy-playground/)**. Its bundled rules
+redact bounded synthetic text in the current tab and expose aggregate counts
+plus the active browser network boundary.
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |
@@ -151,7 +156,7 @@ The v1.8 examples and guides focus on cross-platform runtime and production
 deployment paths:
 
 - Android/Kotlin and Swift-Kotlin parity: [Android Span Parity](./android-parity.md), [Android ONNX Export](./export-onnx-android.md), and [Swift-Kotlin API Parity](./swift-kotlin-parity.md).
-- Browser and mobile JavaScript: [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
+- Browser and mobile JavaScript: [Browser Network-Egress Proof](./demo/browser-egress.md), [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
 - Service operations: [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [Serving Resilience](./serving/resilience.md), and [REST Tracing](./serving/tracing.md).
 - Structured-data jobs: [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md), [DuckDB De-identification UDFs](./duckdb-deidentification.md), and `examples/dbt-deidentify/`.
 
