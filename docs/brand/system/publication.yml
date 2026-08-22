@@ -274,6 +274,7 @@ classification:
     - compliance/consent-data-use-tags.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
+    - guides/fhir-omop-interoperability.md
     - fhir-interop.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md

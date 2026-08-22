@@ -103,6 +103,7 @@ content-security policy blocks the optional inline styling.
 | `examples/warehouse-remote-function/` | Deploys a BigQuery remote-function batch handler with no-raw-PHI logging, a container entrypoint, and registration DDL. |
 | `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
+| `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
