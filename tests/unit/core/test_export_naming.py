@@ -202,14 +202,14 @@ def test_hostile_mapping_failure_is_value_free() -> None:
 
 
 def test_serialization_failure_does_not_retain_exception_context() -> None:
-    secret = "synthetic-sensitive-serialization-482901"
+    sensitive_value = "serialization-marker-482901"
 
     class SerializationFailure(BaseException):
         pass
 
     class ExplodingKey(str):
         def __lt__(self, other: object) -> bool:
-            raise SerializationFailure(secret)
+            raise SerializationFailure(sensitive_value)
 
     with pytest.raises(ExportNamingError) as error:
         fingerprint_for({ExplodingKey("first"): 1, ExplodingKey("second"): 2})
@@ -219,7 +219,7 @@ def test_serialization_failure_does_not_retain_exception_context() -> None:
             type(error.value), error.value, error.value.__traceback__
         )
     )
-    assert secret not in rendered
+    assert sensitive_value not in rendered
 
 
 def test_tampered_metadata_is_revalidated_without_echoing_values() -> None:
