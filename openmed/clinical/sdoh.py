@@ -40,6 +40,21 @@ _SUBSTANCE_CLAUSE_BOUNDARY_RE = re.compile(
     r"(?<!\w)(?:but|however|although|whereas)(?!\w)",
     re.IGNORECASE,
 )
+_SUBSTANCE_COORDINATOR_RE = re.compile(
+    r",|(?<!\w)(?:and|or)(?!\w)",
+    re.IGNORECASE,
+)
+_SUBSTANCE_LOCAL_STATUS_RE = re.compile(
+    r"(?<!\w)(?:"
+    r"active|current(?:ly)?|former|ex[-\s]?smoker|quit|stopped|"
+    r"past|remote|history\s+of|hx\s+of|in\s+remission|status\s+post|s/p|"
+    r"den(?:y|ies|ied)|never|none|no|not|without|does\s+not|"
+    r"abstain(?:s|ed|ing)?|abstinent|non[-\s]?smoker|"
+    r"smoker|smoking|uses|drinks?|vapes?|vaping|"
+    r"occasional(?:ly)?|daily|weekly|monthly|rarely"
+    r")(?!\w)",
+    re.IGNORECASE,
+)
 
 _SDOH_SUBSTANCE_STATUS = {
     "current": "current",
@@ -418,20 +433,6 @@ def _load_substance_cues() -> dict[str, tuple[str, ...]]:
     return result
 
 
-def _substance_status_window(
-    text: str,
-    start: int,
-    end: int,
-) -> str:
-    window_start, window_end = _substance_context_bounds(
-        text,
-        start,
-        end,
-    )
-
-    return text[window_start:window_end].strip()
-
-
 def _substance_context_bounds(
     text: str,
     start: int,
@@ -456,7 +457,102 @@ def _substance_context_bounds(
             right = boundary.start()
             break
 
+    return _coordinated_substance_context_bounds(
+        text,
+        start,
+        end,
+        left,
+        right,
+    )
+
+
+def _coordinated_substance_context_bounds(
+    text: str,
+    start: int,
+    end: int,
+    left: int,
+    right: int,
+) -> SpanOffset:
+    """Isolate explicit statuses while preserving shared coordinated cues."""
+
+    coordinators = tuple(_SUBSTANCE_COORDINATOR_RE.finditer(text, left, right))
+    if not coordinators:
+        return left, right
+
+    segments: list[SpanOffset] = []
+    segment_start = left
+    for coordinator in coordinators:
+        segments.append((segment_start, coordinator.start()))
+        segment_start = coordinator.end()
+    segments.append((segment_start, right))
+
+    target_index = next(
+        (
+            index
+            for index, (segment_start, segment_end) in enumerate(segments)
+            if segment_start <= start and end <= segment_end
+        ),
+        None,
+    )
+    if target_index is None:
+        return left, right
+
+    segment_categories = tuple(
+        _substance_categories_in_text(text[segment_start:segment_end])
+        for segment_start, segment_end in segments
+    )
+    categories = set().union(*segment_categories)
+    if len(categories) < 2:
+        return left, right
+
+    local_status = tuple(
+        bool(categories_in_segment)
+        and _has_local_substance_status(
+            text[segment_start:segment_end],
+            categories_in_segment,
+        )
+        for (segment_start, segment_end), categories_in_segment in zip(
+            segments,
+            segment_categories,
+            strict=True,
+        )
+    )
+    if not any(local_status):
+        return left, right
+
+    if local_status[target_index]:
+        left = segments[target_index][0]
+    else:
+        prior_local = [index for index in range(target_index) if local_status[index]]
+        if prior_local:
+            left = segments[prior_local[-1]][0]
+
+    later_local = [
+        index for index in range(target_index + 1, len(segments)) if local_status[index]
+    ]
+    if later_local:
+        right = coordinators[later_local[0] - 1].start()
+
     return left, right
+
+
+def _substance_categories_in_text(text: str) -> frozenset[str]:
+    return frozenset(
+        category
+        for category in _SUBSTANCE_CATEGORIES
+        if _substance_trigger_pattern(category).search(text) is not None
+    )
+
+
+def _has_local_substance_status(
+    text: str,
+    categories: Iterable[str],
+) -> bool:
+    if _SUBSTANCE_LOCAL_STATUS_RE.search(text) is not None:
+        return True
+    return any(
+        _parse_substance_extent(category, text) is not None for category in categories
+    )
 
 
 def _extract_substance_category(
@@ -478,21 +574,19 @@ def _extract_substance_category(
             continue
         seen_windows.add(window)
 
+        window_start, window_end = window
+        context_text = text[window_start:window_end]
         target = {
             "text": match.group(0),
-            "document_text": text,
-            "start": match.start(),
-            "end": match.end(),
+            "document_text": context_text,
+            "start": match.start() - window_start,
+            "end": match.end() - window_start,
         }
 
         negation = resolve_negation(target)
         temporality = resolve_temporality(target)
 
-        status_text = _substance_status_window(
-            text,
-            match.start(),
-            match.end(),
-        )
+        status_text = context_text.strip()
         extent = _parse_substance_extent(
             category,
             status_text,
