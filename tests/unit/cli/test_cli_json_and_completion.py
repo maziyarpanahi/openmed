@@ -68,6 +68,7 @@ def test_completion_emits_a_non_empty_script(shell, capsys):
     assert captured.out.strip()
     assert "openmed" in captured.out
     assert "analyze" in captured.out
+    assert "init" in captured.out
     if shell == "bash":
         assert "complete -F _openmed_completion openmed" in captured.out
         assert "--json" in captured.out

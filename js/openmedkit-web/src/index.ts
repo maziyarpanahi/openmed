@@ -50,6 +50,7 @@ export {
 } from "./model-loader";
 export {
   detectOrtWebCapabilities,
+  probeOrtWebCapabilities,
   selectOrtWebBackend,
 } from "./runtime/capability";
 export type {
@@ -57,7 +58,11 @@ export type {
   OrtCapabilityGlobalScope,
   OrtWebBackend,
   OrtWebBackendChoice,
+  OrtWebCapabilityProbeOptions,
+  OrtWebCapabilityProbeResult,
   OrtWebCapabilityProfile,
+  WebGpuAdapterProbe,
+  WebGpuNavigatorProbe,
 } from "./runtime/capability";
 export {
   assertOfflineAssetPath,
@@ -73,6 +78,7 @@ export type {
   OrtInferenceSession,
   OrtResults,
   OrtSessionCreateOptions,
+  OrtTensorConstructor,
   OrtTensorLike,
   OrtTokenClassificationDecodeContext,
   OrtWebLoadedSession,
@@ -82,6 +88,37 @@ export type {
   OrtWebSessionCache,
   OrtWebTokenClassificationPipelineOptions,
 } from "./runtime/ort-web-loader";
+export {
+  CLASSIFY_WGSL_SOURCE,
+  DEFAULT_WEBGPU_LOGIT_TOLERANCE,
+  DEFAULT_WEBGPU_MAX_RECALL_DELTA,
+  WEBGPU_BENCHMARK_SUITE,
+  WebGpuClassificationHead,
+  WebGpuTokenClassificationSession,
+  WebGpuVerificationError,
+  certifyWebGpuReference,
+  createWebGpuClassificationHead,
+  decodeWebGpuTokenSpans,
+  evaluateWebGpuRecallGate,
+  loadWebGpuTokenClassificationSession,
+} from "./runtime/webgpu-session";
+export type {
+  TokenClassificationLogits,
+  TokenIdData,
+  WebGpuBenchmarkOptions,
+  WebGpuBenchmarkReport,
+  WebGpuClassificationHeadConfig,
+  WebGpuDeviceBenchmarkMetrics,
+  WebGpuInputNames,
+  WebGpuModelPaths,
+  WebGpuRecallGate,
+  WebGpuRecallGateOptions,
+  WebGpuReferenceCertification,
+  WebGpuReferenceCertificationOptions,
+  WebGpuTokenBatch,
+  WebGpuTokenClassificationSessionOptions,
+  WebGpuTokenSpan,
+} from "./runtime/webgpu-session";
 
 const DEFAULT_MODEL_ID = "OpenMed/privacy-filter-transformersjs";
 const DEFAULT_HASH_SECRET = "openmedkit-web";

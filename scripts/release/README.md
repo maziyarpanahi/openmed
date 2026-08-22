@@ -33,10 +33,16 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 3,282,557 bytes. Its maximum is 3,610,813
+The committed wheel baseline is 4,076,360 bytes. Its maximum is 4,483,996
 bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
+
+The v2.2 baseline is the byte-identical result of two clean Metadata 2.4 builds
+after auditing 62,667 added and 786 removed source lines across 169 Python
+files in the v2.1-to-v2.2 range. The payload inspection found source,
+synthetic metadata, and the committed model manifest rather than an unexpected
+binary or restricted vocabulary asset.
 
 The JSON size report records the wheel size plus total site-packages bytes for
 `openmed`, `openmed[zh]`, and `openmed[indic]`. Each language profile includes
