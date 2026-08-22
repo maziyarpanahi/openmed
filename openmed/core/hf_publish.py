@@ -811,6 +811,8 @@ def _format_repo_suffix(format_name: str) -> str:
         return "mlx-8bit"
     if normalized in {"mlx-4bit", "mlx-int4"}:
         return "mlx-4bit"
+    if normalized in {"mlx-2bit", "mlx-int2"}:
+        return "mlx-2bit"
     if normalized == "coreml":
         return "coreml"
     if normalized in _ONNX_FORMAT_ALIASES:
@@ -829,6 +831,8 @@ def _manifest_format_name(format_name: str) -> str:
         return "mlx-8bit"
     if normalized in {"mlx-4bit", "mlx-int4"}:
         return "mlx-4bit"
+    if normalized in {"mlx-2bit", "mlx-int2"}:
+        return "mlx-2bit"
     if normalized in {"onnx-fp32", "onnx-float32"}:
         return "onnx"
     if normalized in {"onnx-webgpu", "webgpu-onnx"}:

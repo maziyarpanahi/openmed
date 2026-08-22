@@ -1,0 +1,35 @@
+name: V2.2 conformance
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  v22-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev --python 3.11
+
+      - name: Run the focused V2.2 conformance gate
+        run: .venv/bin/python -m pytest tests/integration/test_v22_exchange_conformance.py tests/unit/release/test_v22_coverage_matrix.py -q
