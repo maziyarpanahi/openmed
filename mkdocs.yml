@@ -171,6 +171,7 @@ nav:
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Local Capability Probes: integrations/capability-probes.md
       - Integration Capability Matrix: integrations/matrix.md
       - dbt Privacy-Safe Text Projection: integrations/dbt.md
       - PostgreSQL Redaction Adapter: integrations/postgres.md
