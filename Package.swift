@@ -21,11 +21,11 @@ let package = Package(
         ),
         .library(
             name: "OpenMedShareExtension",
-            targets: ["ShareExtension"]
+            targets: ["OpenMedShareExtension"]
         ),
         .library(
             name: "OpenMedActionExtension",
-            targets: ["ActionExtension"]
+            targets: ["OpenMedActionExtension"]
         ),
     ],
     dependencies: [
@@ -78,12 +78,12 @@ let package = Package(
             path: "swift/OpenMedKit/Sources/OpenMedExtensionSupport"
         ),
         .target(
-            name: "ShareExtension",
-            dependencies: ["OpenMedExtensionSupport"],
+            name: "OpenMedShareExtension",
+            dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
             path: "swift/OpenMedKit/Sources/ShareExtension"
         ),
         .target(
-            name: "ActionExtension",
+            name: "OpenMedActionExtension",
             dependencies: ["OpenMedExtensionSupport"],
             path: "swift/OpenMedKit/Sources/ActionExtension"
         ),
@@ -97,8 +97,8 @@ let package = Package(
             dependencies: [
                 "OpenMedKit",
                 "OpenMedExtensionSupport",
-                "ShareExtension",
-                "ActionExtension",
+                "OpenMedShareExtension",
+                "OpenMedActionExtension",
             ],
             path: "swift/OpenMedKit/Tests/ExtensionTests"
         ),

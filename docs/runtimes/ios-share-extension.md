@@ -52,7 +52,7 @@ closed instead of falling back to a download.
    keep `$(PRODUCT_MODULE_NAME).ShareViewController` as the principal class:
 
    ```swift
-   import ShareExtension
+   import OpenMedShareExtension
 
    final class ShareViewController: RedactionShareViewController {}
    ```
@@ -74,7 +74,7 @@ user confirms, and completes the request with a new plain-text attachment.
    keep `$(PRODUCT_MODULE_NAME).ActionRequestHandler` as the principal class:
 
    ```swift
-   import ActionExtension
+   import OpenMedActionExtension
 
    final class ActionRequestHandler: RedactionActionRequestHandler {}
    ```
@@ -94,11 +94,12 @@ input item's `OpenMedPolicyProfile` user-info value.
   `NWConnection`, or a network-client entitlement, and a runtime test verifies
   that missing tokenizer assets fail closed.
 - Remote model URLs are rejected even if the host app passes one accidentally.
-- Input is limited to 16,384 characters. Image and PDF attachments are not
-  accepted.
+- Each input is limited to 16,384 characters and 64 KiB of UTF-8 data. A
+  request may contain at most eight text items and 128 KiB in aggregate. Image
+  and PDF attachments are not accepted.
 - Raw input and detected span text are not logged or written to audit artifacts.
 - The model runtime is released after each request and OpenMedKit clears unused
-  runtime buffers before the extension exits.
+  runtime buffers after both successful and failed redaction.
 
 Run the extension contract tests with:
 

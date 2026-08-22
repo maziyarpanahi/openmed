@@ -1,4 +1,4 @@
-#if canImport(UIKit)
+#if os(iOS) && canImport(UIKit)
     import OpenMedExtensionSupport
     import OpenMedKit
     import UIKit
@@ -101,13 +101,10 @@
                 do {
                     let configuration = try NanoModelConfiguration.bundled()
                     let output = try await Task.detached(priority: .userInitiated) {
-                        let result: ExtensionRedactionOutput
-                        do {
-                            let handler = try ExtensionRedactionHandler(configuration: configuration)
-                            result = try handler.redact(text, policyName: policyName)
+                        try ExtensionRedactionHandler.withRuntime(configuration: configuration) {
+                            handler in
+                            try handler.redact(text, policyName: policyName)
                         }
-                        OpenMed.clearRuntimeMemoryCache()
-                        return result
                     }.value
                     textView.text = output.redactedText
                     extensionContext?.completeRequest(

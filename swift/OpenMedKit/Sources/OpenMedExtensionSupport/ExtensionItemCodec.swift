@@ -1,4 +1,4 @@
-#if canImport(UIKit) && canImport(UniformTypeIdentifiers)
+#if os(iOS) && canImport(UIKit) && canImport(UniformTypeIdentifiers)
     import Foundation
     import UIKit
     import UniformTypeIdentifiers
@@ -12,6 +12,7 @@
                 for provider in item.attachments ?? []
                 where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
                     texts.append(try await plainText(from: provider))
+                    try ExtensionInputBudget.validate(texts)
                 }
             }
 

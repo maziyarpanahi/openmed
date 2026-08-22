@@ -1,6 +1,5 @@
-#if canImport(UIKit)
+#if os(iOS) && canImport(UIKit)
     import OpenMedExtensionSupport
-    import OpenMedKit
     import UIKit
 
     /// Non-UI Action extension handler that returns locally redacted text to its host.
@@ -14,15 +13,12 @@
                     let policyName = Self.policyName(from: context.inputItems)
                     let configuration = try NanoModelConfiguration.bundled()
                     let redactedTexts = try await Task.detached(priority: .userInitiated) {
-                        let results: [String]
-                        do {
-                            let handler = try ExtensionRedactionHandler(configuration: configuration)
-                            results = try texts.map {
+                        try ExtensionRedactionHandler.withRuntime(configuration: configuration) {
+                            handler in
+                            try texts.map {
                                 try handler.redact($0, policyName: policyName).redactedText
                             }
                         }
-                        OpenMed.clearRuntimeMemoryCache()
-                        return results
                     }.value
                     context.completeRequest(
                         returningItems: ExtensionItemCodec.extensionItems(for: redactedTexts)
@@ -39,7 +35,7 @@
                     return value
                 }
             }
-            return Policy.defaultName
+            return ExtensionRedactionHandler.defaultPolicyName
         }
     }
 #endif

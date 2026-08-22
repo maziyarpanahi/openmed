@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added reusable iOS Share and Action extension modules for bounded plain-text
+  redaction with bundled policy selection, local-only Nano Core ML assets,
+  fail-closed tokenizer loading, guaranteed runtime-cache cleanup, and
+  host-returnable output that preserves original span offsets (#835).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
