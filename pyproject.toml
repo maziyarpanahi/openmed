@@ -249,6 +249,10 @@ beam = [
   "apache-beam>=2.73,<3",
 ]
 
+airflow = [
+  "apache-airflow>=3.2.2,<4",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -392,6 +396,7 @@ yasbd = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-sidecar = "openmed.service.sidecar:main"
 openmed-executable-udf = "openmed.integrations.executable_udf:main"
 openmed-mcp = "openmed.mcp.server:main"
 
@@ -406,6 +411,10 @@ override-dependencies = [
   "httplib2>=0.32",
 ]
 conflicts = [
+  [
+    { extra = "airflow" },
+    { extra = "ocr-paddle" },
+  ],
   [
     { extra = "awq" },
     { extra = "gliner" },
