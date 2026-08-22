@@ -18,6 +18,10 @@ openmed = { path = ".", editable = true }
 
 [feature.dev.pypi-dependencies]
 openmed = { path = ".", editable = true, extras = ["dev"] }
+# Keep the Pixi test environment on the dependency lines proven by the
+# canonical uv lock across OpenMed's supported Python versions.
+numpy = ">=1.26,<2"
+pandas = ">=2,<3"
 
 [feature.dev.tasks]
 test = "python -m pytest tests/ -q"

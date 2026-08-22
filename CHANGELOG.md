@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a locked Pixi Python 3.12 workflow for Linux x86_64, Intel macOS, and
+  Apple Silicon macOS, with environments mirroring the development,
+  documentation, Hugging Face, service, and MLX extras (#2348).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).

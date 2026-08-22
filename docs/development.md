@@ -52,8 +52,8 @@ the uv workflow remains the canonical path for contributor and CI commands.
 
 ## Pixi development
 
-Pixi provides a locked Python 3.12 environment for Linux x86_64, Intel Macs,
-and Apple Silicon Macs running macOS 14 or newer. It complements uv for
+Pixi provides a locked Python 3.12 environment for Linux x86_64 and Intel
+macOS, plus Apple Silicon on macOS 14 or newer. It complements uv for
 conda-centric and HPC workflows while installing OpenMed and its Python
 dependencies from the local project. The checked-in `pixi.lock` contains
 resolutions for `linux-64`, `osx-64`, and `osx-arm64`.
@@ -62,10 +62,10 @@ Install Pixi using the instructions for your operating system, then from the
 repository root run:
 
 ```bash
-pixi install
-pixi run test
-pixi run lint
-pixi run docs
+pixi install --locked
+pixi run --locked test
+pixi run --locked lint
+pixi run --locked docs
 ```
 
 The default environment includes the `dev` and `docs` extras. The manifest
@@ -73,15 +73,17 @@ also exposes named environments that mirror the optional-dependency extras in
 `pyproject.toml`:
 
 ```bash
-pixi install --environment hf
-pixi install --environment service
-pixi install --environment mlx  # Apple Silicon only
+pixi install --locked --environment hf
+pixi install --locked --environment service
+pixi install --locked --environment mlx  # Apple Silicon only
 ```
 
 Use `pixi run --environment <name> <command>` to run a command in one of these
 feature environments. Keep `pixi.lock` committed when changing the manifest;
-`pixi lock` refreshes all configured platforms and environments. Pixi's local
-environments live under `.pixi/`, which is intentionally ignored by Git.
+`pixi lock` refreshes all configured platforms and environments, and
+`pixi lock --check` verifies that the committed lock still matches the
+manifest. Pixi's local environments live under `.pixi/`, which is
+intentionally ignored by Git.
 
 ## Nix development
 
