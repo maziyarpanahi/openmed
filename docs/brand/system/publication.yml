@@ -180,6 +180,7 @@ classification:
     - plugins/quarantine-report.md
     - batch-processing.md
     - batch-howto.md
+    - processing/shard-plans.md
     - legacy-indic-encoding.md
     - profiling.md
     - core-observability.md
