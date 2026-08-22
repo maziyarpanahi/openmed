@@ -80,6 +80,7 @@ nav:
       - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Cross-format Offset Properties: structured/offset-properties.md
+      - Schema Snapshot Compatibility: structured/schema-snapshots.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md

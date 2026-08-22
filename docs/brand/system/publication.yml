@@ -155,6 +155,7 @@ classification:
     - model-tokenizer-script-coverage.md
     - output-formatting.md
     - structured/offset-properties.md
+    - structured/schema-snapshots.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - grounding.md
