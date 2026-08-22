@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a canonical CLI result envelope with bounded counters, artifact
   fingerprints, and remediation codes; strict JSON parsing; immutable state;
   and free-text-free failures (#2636).
+- Added a bounded offline JSON-lines de-identification sidecar with a typed
+  Tauri host and frontend bridge, model pinning, serialized process reuse,
+  renderer-safe errors, strict response validation, and synthetic termination
+  and egress coverage (#823).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
