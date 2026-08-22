@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `openmed redact-files` for local-only text and line-delimited file
+  redaction with atomic output, PHI-free JSON summaries, consistent surrogate
+  replacement, and no source overwrite (#2278).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
@@ -323,9 +326,6 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   nonce, and body digest, with client-side header helpers, bounded fail-closed
   replay protection, and verifier-compatible signatures on async job webhooks
   (#849).
-- Added `openmed redact-files` for local-only text and line-delimited file
-  redaction with atomic output, PHI-free JSON summaries, consistent surrogate
-  replacement, and no source overwrite (#2278).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
