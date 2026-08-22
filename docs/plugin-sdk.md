@@ -1,191 +1,212 @@
-# Detector plugin SDK stability policy
+# Extension plugin SDK stability policy
 
-OpenMed detector plugins add span-producing privacy detectors without adding a
-runtime dependency to OpenMed core. This page defines the supported plugin
-contract, its compatibility guarantees, and the rules third-party packages
-must follow.
+OpenMed's extension SDK lets a separately installed Python distribution provide
+recognizers, anonymizer providers, exporters, interop adapters, and language
+packs without a core-code change. The public SDK lives in `openmed.plugins` and
+uses canonical `OpenMedSpan` records at every span-producing boundary.
 
-The public implementation lives in `openmed.core.detector_plugins`. APIs not
-documented on this page remain implementation details.
+Importing `openmed` does not import `openmed.plugins`, enumerate entry points,
+or import plugin dependencies. Discovery is local, lazy, and process-scoped.
+Installing a plugin is a user decision; discovery never downloads or installs
+packages.
 
-## Supported contract
+## Package and entry-point contract
 
-Plugins publish an entry point in the stable `openmed.detectors` group. The
-loaded value may be:
+Plugin distributions publish one or more components through the stable
+`openmed.plugins` entry-point group:
 
-- one `DetectorSpec` instance;
-- a callable that returns a `DetectorSpec`, an iterable of specs, or `None`;
-- an iterable containing supported values from the previous two forms.
+```toml
+[project.entry-points."openmed.plugins"]
+example = "example_openmed_plugin:plugin_components"
+```
 
-Discovery is lazy and process-local. OpenMed loads entry points on the first
-detector lookup, registers valid specs, and logs and skips a plugin that fails
-to load. Plugin packages must not depend on import order or mutate OpenMed's
-internal registry directly.
+The referenced object may be one component, a zero-argument factory, or an
+iterable of components. Each component exposes static `metadata` as a
+`PluginComponentMetadata` instance or mapping. A minimal recognizer factory is:
 
-### Stable `DetectorSpec` fields
+```python
+from openmed.core.schemas.span import OpenMedSpan
+
+
+class ExampleRecognizer:
+    metadata = {
+        "plugin_id": "example-openmed-plugin",
+        "component_id": "example-recognizer",
+        "kind": "recognizer",
+        "sdk_version": "1.0.0",
+        "license": "Apache-2.0",
+        "network_egress": False,
+        "labels": ("PERSON",),
+        "languages": ("en",),
+        "metadata": {"stage": "fast_pii"},
+    }
+
+    def recognize(self, text: str, **kwargs) -> tuple[OpenMedSpan, ...]:
+        return ()
+
+
+def plugin_components() -> tuple[ExampleRecognizer, ...]:
+    return (ExampleRecognizer(),)
+```
+
+### Stable metadata
 
 | Field | Contract |
 |---|---|
-| `name` | Non-empty identifier unique within its stage. A colon is not allowed. |
-| `stage` | One of `deterministic`, `fast_pii`, or `clinical_phi`. |
-| `languages` | A language tag, sequence of tags, or wildcard (`*`, `all`, `any`). Tags are normalized to lowercase BCP 47-style hyphenated values. |
-| `detect` | Callable invoked with normalized text and keyword context including `lang`. It returns a sequence of `OpenMedSpan` records. |
-| `provenance_prefix` | Non-empty prefix used with `name` to produce the stable detector identifier. Defaults to `plugin`. |
-| `covered_labels` | Optional canonical-label declaration used by policy capability checks. Wildcards expand to all canonical labels. |
+| `plugin_id` | Non-empty stable distribution identifier. It must not contain `:`. |
+| `component_id` | Non-empty identifier unique within the plugin. It must not contain `:`. |
+| `kind` | One supported component kind from the table below. |
+| `sdk_version` | Semantic version of the SDK contract targeted by the component. |
+| `license` | SPDX-like license expression. Unknown or restricted expressions require opt-in. |
+| `network_egress` | Boolean declaring whether the component may make network calls. |
+| `labels` | Canonical OpenMed labels emitted or handled by the component. Recognizers must declare at least one. |
+| `languages` | Normalized language tags supported by the component, or `*`. |
+| `name` and `description` | Optional human-readable component information. |
+| `metadata` | Optional static, non-PHI mapping. Recognizers may select `deterministic`, `fast_pii`, or `clinical_phi` with `stage`. |
 
-`DetectorSpec.capability()` and the resulting `DetectorCapability` record are
-also public. A capability is emitted only when `covered_labels` is non-empty.
+The stable qualified identifier is `plugin_id:component_id`. Registry reports,
+detector provenance, interop registrations, and MCP tool documents retain this
+identifier without including input text.
 
-## Component kinds and execution stages
+## Component protocols
 
-The current SDK supports detector plugins only. A detector must select the
-stage that matches its cost and purpose:
+The versioned protocols are defined in `openmed.plugins.protocols`.
 
-- `deterministic` for patterns, validators, and dictionary checks;
-- `fast_pii` for broad PII/PHI detection suitable for the fast privacy pass;
-- `clinical_phi` for clinically specialized PHI detection.
+| Kind | Required public behavior |
+|---|---|
+| `recognizer` | `recognize(text, **kwargs)` returns canonical `OpenMedSpan` values with offsets into `text`. |
+| `anonymizer_provider` | `replacement_for(span, surface, **kwargs)` returns replacement text without retaining or logging `surface`. |
+| `exporter` | `export(spans, **kwargs)` returns text, bytes, or structured records without adding source surfaces. |
+| `interop_adapter` | `to_openmed_spans(payload, **kwargs)` and `from_openmed_spans(spans, **kwargs)` translate through canonical spans. |
+| `language_pack` | `language_code()` and `canonical_labels()` declare routing and span capabilities. |
 
-Other OpenMed extension surfaces are not implicitly detector plugins. Do not
-register model loaders, exporters, anonymizers, service middleware, or network
-clients in `openmed.detectors`.
+Recognizer and interop outputs must use valid character offsets, canonical
+labels, finite scores, and privacy-safe evidence and metadata. Components must
+not persist the source text or raw PHI. OpenMed rewrites document identity,
+text hashes, and recognizer provenance before pipeline arbitration.
 
-## Span and label requirements
+## Discovery, quarantine, and policy opt-in
 
-Detector callables must return `OpenMedSpan` values whose offsets refer to the
-normalized text supplied to the plugin. Spans must satisfy these rules:
+Call `openmed.plugins.discover_plugins()` to receive a
+`PluginDiscoveryResult`. Accepted components appear as `PluginRegistration`
+records. A broken or incompatible component is isolated as a
+`PluginQuarantineRecord`; it does not crash discovery or prevent other plugins
+from loading.
 
-- `start` and `end` are valid character offsets and `start < end`;
-- `entity_type` and `canonical_label` normalize to an OpenMed canonical label;
-- `score` is a finite confidence value appropriate for arbitration;
-- metadata and evidence never contain raw PHI or PII;
-- the detector does not retain input text after the call completes.
+Quarantine records expose a stable `reason`, a safe `message`, entry-point and
+component identifiers when available, and detached static metadata. Reasons
+include invalid metadata or labels, unknown component kinds, duplicate ids,
+load failures, SDK-major mismatches, and local-first policy rejections.
 
-OpenMed rewrites document identity, text hashes, and detector provenance before
-arbitration. Plugins must not rely on placeholder `doc_id` or `text_hash` values
-surviving pipeline execution.
-
-## Minimal package
-
-Declare the entry point in `pyproject.toml`:
-
-```toml
-[project]
-name = "example-openmed-detector"
-dependencies = ["openmed>=1.9,<2"]
-
-[project.entry-points."openmed.detectors"]
-example_mrn = "example_openmed_detector:detector"
-```
-
-Return a `DetectorSpec` from the referenced object:
+The default policy auto-loads only components that declare no network egress
+and whose complete license expression is permissive. Opt-in is explicit and
+local to the call:
 
 ```python
-import re
+from openmed.plugins import discover_plugins
 
-from openmed.core.detector_plugins import DetectorSpec
-from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
-
-_MRN_PATTERN = re.compile(r"\bMRN:\s*([A-Za-z0-9-]+)\b")
-
-
-def detect(text: str, *, lang: str, context=None):
-    match = _MRN_PATTERN.search(text)
-    if match is None:
-        return ()
-
-    start, end = match.span(1)
-    return (
-        OpenMedSpan(
-            doc_id="plugin-placeholder",
-            start=start,
-            end=end,
-            text_hash=hmac_text_hash(text[start:end], "plugin-placeholder"),
-            entity_type="ID_NUM",
-            canonical_label="ID_NUM",
-            score=0.95,
-        ),
-    )
-
-
-def detector() -> DetectorSpec:
-    return DetectorSpec(
-        name="example_mrn",
-        stage="deterministic",
-        languages=("en",),
-        detect=detect,
-        covered_labels=("ID_NUM",),
-    )
+result = discover_plugins(
+    opt_in_plugins=("example-openmed-plugin:remote-exporter",),
+)
 ```
 
-A typical source layout is:
+Callers may instead use `allow_network_egress=True` or
+`allow_non_permissive_licenses=True` when they intentionally accept every
+plugin in that policy class. These flags do not change the safe process
+default.
 
-```text
-example-openmed-detector/
-  pyproject.toml
-  src/example_openmed_detector/__init__.py
-  tests/test_detector.py
-  LICENSE
-  README.md
+## Runtime integration
+
+Validated recognizers are adapted into `DetectorSpec` records on the first
+detector lookup. Their spans run in the declared pipeline stage and participate
+in the same arbitration, provenance rewriting, and privacy-safe metadata
+filtering as first-party spans.
+
+Validated exporters and interop adapters are registered lazily with:
+
+```python
+from openmed.interop import available_adapters, get_adapter
+
+names = available_adapters(include_plugins=True)
+exporter = get_adapter("example-openmed-plugin:example-exporter")
 ```
 
-## Local-first and opt-in rules
+A component may also expose `openmed_tools` declarations built from
+`openmed.mcp.tool_registry.PluginTool`. Valid plugin tools appear beside
+first-party tools on the MCP registry's first lookup, retain plugin provenance
+in rendered tool documents, and route through the registered handler.
 
-Plugin installation is an explicit user opt-in. After installation, plugins
-must preserve OpenMed's local-first guarantees:
+The older `openmed.detectors` / `DetectorSpec` entry point remains a supported
+compatibility surface for detector-only packages. New multi-component packages
+should use `openmed.plugins` so SDK-version, label, license, and network policy
+validation happens before runtime registration.
+
+## Local-first requirements
+
+Every plugin must preserve OpenMed's privacy defaults:
 
 - no telemetry or background network calls by default;
-- no automatic model or dataset download during import or discovery;
-- no raw PHI in logs, exceptions, caches, temporary files, or traces;
-- remote services require explicit configuration and must be disabled by
-  default;
-- restricted datasets and credentials remain user-supplied and are never
-  bundled;
-- core-compatible dependencies use permissive licenses.
+- no automatic model, package, or dataset download during import or discovery;
+- no raw PHI in logs, exceptions, caches, temporary files, traces, or exports;
+- remote services remain disabled until the caller explicitly opts in;
+- credentials and restricted datasets remain user-supplied and are not bundled;
+- optional dependencies fail clearly only when their component is selected.
 
-Heavy runtimes, remote adapters, and license-restricted integrations belong in
-optional extras. A missing optional dependency should produce a clear setup
-error only when the related detector is selected, not when OpenMed discovers
-the package.
+Plugin code executes in the OpenMed process after installation and opt-in. The
+registry validates compatibility and policy declarations; it is not a sandbox
+for untrusted code.
+
+## Conformance kit and example package
+
+`examples/openmed-plugin-example` is a copyable Apache-2.0 distribution with a
+deterministic toy recognizer, a privacy-safe exporter, installed entry-point
+metadata, and synthetic self-certification tests. Run its conformance gate
+offline from the repository root:
+
+```bash
+PYTHONPATH="examples/openmed-plugin-example/src${PYTHONPATH:+:${PYTHONPATH}}" \
+  python -m openmed.plugins.conformance \
+  openmed_example_plugin:plugin_components
+
+PYTHONPATH="examples/openmed-plugin-example/src${PYTHONPATH:+:${PYTHONPATH}}" \
+  python -m pytest \
+  examples/openmed-plugin-example/tests/test_conformance.py -q
+```
+
+The example's malformed synthetic fixture fails with the stable reason
+`invalid_metadata` and message `network_egress must be a boolean`. The
+conformance kit exercises each component protocol with synthetic values and
+does not enumerate installed packages, open sockets, or persist source text.
 
 ## Semantic-versioning policy
 
-The following changes to the documented plugin protocol require an OpenMed
-major release unless an earlier deprecation path preserves compatibility:
+`PLUGIN_SDK_VERSION` follows Semantic Versioning. The registry accepts valid
+plugin SDK versions with the supported major version and quarantines a
+different major as `protocol_version_mismatch`.
 
-- renaming or removing the `openmed.detectors` entry-point group;
-- removing or renaming a stable `DetectorSpec` field;
+The following changes require an SDK major-version increment unless a prior
+deprecation path preserves compatibility:
+
+- renaming or removing the `openmed.plugins` entry-point group;
+- removing or renaming a stable metadata field or component kind;
 - making an optional field required or changing its accepted value shape;
-- removing an execution stage or changing its established meaning;
-- changing the detector callable's required arguments or return type;
-- changing offset interpretation away from normalized-text character offsets;
-- removing a canonical label without a compatibility alias;
-- changing discovery so a previously valid entry-point return shape is rejected;
-- weakening the local-first, no-telemetry, or no-raw-PHI defaults.
+- changing a required component method, arguments, or return contract;
+- changing `OpenMedSpan` offset or canonical-label semantics;
+- rejecting a component shape or policy declaration that was previously valid;
+- removing stable quarantine reason codes or plugin provenance fields;
+- weakening local-first, no-telemetry, or no-raw-PHI defaults.
 
-Additive optional fields with backward-compatible defaults, new canonical
-labels, new stages, and new entry-point return conveniences may ship in a minor
-release. Documentation clarifications and stricter rejection of inputs that
-were already invalid may ship in a patch release.
+Additive component kinds, optional fields with compatible defaults, canonical
+labels, safe return conveniences, and runtime bridges may ship in an SDK minor
+release. Documentation corrections and stricter rejection of inputs that were
+already invalid may ship in a patch release.
 
-Deprecated fields or values remain available for at least two minor releases,
-emit a `DeprecationWarning`, identify their replacement, and appear in the
-changelog before removal.
+Deprecated fields remain available for at least two minor releases, emit a
+`DeprecationWarning`, identify their replacement, and appear in the changelog
+before removal.
 
-## Upgrade and conformance checks
-
-Before widening the supported OpenMed version range, plugin authors should:
-
-1. construct every exported `DetectorSpec` under the oldest and newest
-   supported OpenMed versions;
-2. exercise discovery through installed entry-point metadata, not only direct
-   registration;
-3. run synthetic positive, negative, overlap, Unicode, and invalid-span cases;
-4. verify every declared `covered_labels` value normalizes successfully;
-5. confirm logs and exceptions contain no input surface text;
-6. test with network access disabled unless the user explicitly enables a
-   remote integration.
-
-The repository tests in `tests/unit/core/test_detector_plugins.py` demonstrate
-the current discovery and validation contract. A standalone example plugin and
-published conformance kit are planned; until they are available, use those
-tests and this page as the compatibility baseline.
+Before widening an OpenMed dependency range, plugin authors should run the
+conformance kit against the oldest and newest supported OpenMed releases, test
+installed entry-point discovery, cover positive, negative, overlap, Unicode,
+and invalid-span inputs, and confirm that offline execution emits no source
+surface in logs or artifacts.

@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from openmed.clinical.data.section_loinc_map import (
+    SECTION_LOINC_MAP,
+    section_codes,
+    section_codings,
+    section_loinc_code,
+)
 from openmed.clinical.lexicons import (
     available_section_languages,
     get_section_lexicon,
@@ -18,24 +24,22 @@ UNSECTIONED_SECTION = "unsectioned"
 LIST_BEARING_SECTION_LABELS = frozenset({"allergies", "medications", "problem_list"})
 LIST_SECTION_LOINC_CODES = MappingProxyType(
     {
-        "allergies": "48765-2",
-        "medications": "10160-0",
-        "problem_list": "11450-4",
+        label: SECTION_LOINC_MAP[label]
+        for label in ("allergies", "medications", "problem_list")
     }
 )
 CONTEXT_SECTION_LOINC_CODES = MappingProxyType(
     {
-        "family_history": "10157-6",
-        "past_medical_history": "11348-0",
+        label: SECTION_LOINC_MAP[label]
+        for label in ("family_history", "past_medical_history")
     }
 )
-SECTION_LOINC_CODES = MappingProxyType(
-    {**LIST_SECTION_LOINC_CODES, **CONTEXT_SECTION_LOINC_CODES}
-)
+SECTION_LOINC_CODES = SECTION_LOINC_MAP
 LIST_BEARING_SECTION_LOINC_CODES = frozenset(LIST_SECTION_LOINC_CODES.values())
 _HEADER_DELIMITERS = (":", "：", "﹕", "꞉")
 _UNDERLINE_CHARS = frozenset("-_=~")
 _BULLET_PREFIXES = ("-", "*", "•")
+_LEARNED_REFINEMENT_CONFIDENCE = 0.82
 
 
 class SectionSpan(dict[str, Any]):
@@ -66,6 +70,44 @@ class SectionSpan(dict[str, Any]):
         """Return the exclusive section end offset."""
 
         return int(self["end"])
+
+    @property
+    def source(self) -> str:
+        """Return the detector source, defaulting to the rules stage."""
+
+        return str(self.get("source", "rule"))
+
+    @property
+    def confidence(self) -> float:
+        """Return the bounded section-boundary confidence."""
+
+        try:
+            return min(max(float(self.get("confidence", 0.0)), 0.0), 1.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @property
+    def codes(self) -> list[str]:
+        """Return the LOINC code list for this section."""
+
+        raw_codes = self.get("codes")
+        if isinstance(raw_codes, list):
+            return [
+                code if isinstance(code, str) else str(code["code"])
+                for code in raw_codes
+                if isinstance(code, str)
+                or (isinstance(code, Mapping) and isinstance(code.get("code"), str))
+            ]
+        return section_codes(self.label)
+
+    @property
+    def codings(self) -> list[dict[str, str]]:
+        """Return JSON-ready LOINC codings for this section."""
+
+        raw_codings = self.get("coding")
+        if isinstance(raw_codings, list):
+            return [dict(code) for code in raw_codings if isinstance(code, Mapping)]
+        return section_codings(self.label)
 
 
 @dataclass(frozen=True)
@@ -108,19 +150,62 @@ def detect_sections(
     *,
     language: str | None = None,
     include_unsectioned: bool = True,
+    use_learned: bool = False,
+    learned: bool | None = None,
+    learned_head: Any | None = None,
+    model_path: str | None = None,
 ) -> tuple[SectionSpan, ...]:
-    """Run registered segmenters and assemble canonical section spans.
+    """Run rules-first section detection with optional learned refinement.
 
     Candidate headers from the language-pack lexicon and focused section-family
     segmenters are merged deterministically. Overlapping header matches prefer
     the longest match, then the earliest section start, then registration order
     for an exact tie. Returned spans are sorted and, by default, ``unsectioned``
     spans fill any uncovered ranges so the result covers all of *text*.
+
+    ``use_learned`` is opt-in. The learned stage is invoked only when the rules
+    output contains an unsectioned gap or a low-confidence boundary. A caller
+    may inject a local predictor with ``learned_head`` or point ``model_path``
+    at a local MLX artifact; neither path is loaded at import time. The alias
+    ``learned`` is accepted for concise call sites.
     """
 
     if not text:
         validate_sections(text, ())
         return ()
+
+    if learned is not None:
+        if use_learned and bool(learned) != use_learned:
+            raise ValueError("learned and use_learned disagree")
+        use_learned = bool(learned)
+    if learned_head is not None or model_path is not None:
+        use_learned = True
+
+    result = _detect_sections_rules(
+        text,
+        language=language,
+        include_unsectioned=include_unsectioned,
+    )
+    if not use_learned:
+        return result
+
+    return _refine_sections_with_learned(
+        text,
+        result,
+        language=language,
+        include_unsectioned=include_unsectioned,
+        learned_head=learned_head,
+        model_path=model_path,
+    )
+
+
+def _detect_sections_rules(
+    text: str,
+    *,
+    language: str | None,
+    include_unsectioned: bool,
+) -> tuple[SectionSpan, ...]:
+    """Run only the registered deterministic section segmenters."""
 
     candidates = _section_candidates(text, language)
     result = _assemble_sections(
@@ -134,6 +219,164 @@ def detect_sections(
     else:
         _validate_section_spans(text, result, require_coverage=False)
     return result
+
+
+def _refine_sections_with_learned(
+    text: str,
+    rules: tuple[SectionSpan, ...],
+    *,
+    language: str | None,
+    include_unsectioned: bool,
+    learned_head: Any | None,
+    model_path: str | None,
+) -> tuple[SectionSpan, ...]:
+    """Add learned boundaries only inside rule gaps or weak rule spans."""
+
+    if rules and not any(
+        span.label == UNSECTIONED_SECTION
+        or span.confidence < _LEARNED_REFINEMENT_CONFIDENCE
+        for span in rules
+    ):
+        return rules
+
+    from .learned import predict_section_candidates
+
+    candidates = predict_section_candidates(
+        text,
+        language=language,
+        head=learned_head,
+        model_path=model_path,
+    )
+    accepted: list[SectionSpan] = []
+    for candidate in candidates:
+        start = candidate.get("start")
+        end = candidate.get("end")
+        label = candidate.get("label")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or not isinstance(label, str)
+            or not label
+            or start < 0
+            or end <= start
+            or end > len(text)
+        ):
+            continue
+
+        containing = next(
+            (span for span in rules if span.start <= start < span.end),
+            None,
+        )
+        if containing is not None and (
+            containing.label != UNSECTIONED_SECTION
+            and containing.confidence >= _LEARNED_REFINEMENT_CONFIDENCE
+        ):
+            continue
+
+        accepted.append(
+            SectionSpan(
+                label=label,
+                start=start,
+                end=end,
+                **{
+                    key: value
+                    for key, value in candidate.items()
+                    if key not in {"label", "start", "end"}
+                },
+            )
+        )
+
+    if not accepted:
+        return rules
+
+    boundaries: dict[int, SectionSpan] = {
+        span.start: span for span in rules if span.label != UNSECTIONED_SECTION
+    }
+    for candidate in accepted:
+        previous = boundaries.get(candidate.start)
+        if previous is None or candidate.confidence > previous.confidence:
+            boundaries[candidate.start] = candidate
+
+    ordered = tuple(
+        sorted(boundaries.values(), key=lambda span: (span.start, -span.confidence))
+    )
+    result = _assemble_refined_sections(
+        text,
+        ordered,
+        language=language,
+        include_unsectioned=include_unsectioned,
+    )
+    if include_unsectioned:
+        validate_sections(text, result)
+    else:
+        _validate_section_spans(text, result, require_coverage=False)
+    return result
+
+
+def _assemble_refined_sections(
+    text: str,
+    boundaries: tuple[SectionSpan, ...],
+    *,
+    language: str | None,
+    include_unsectioned: bool,
+) -> tuple[SectionSpan, ...]:
+    """Partition text at reconciled rule and learned boundary candidates."""
+
+    if not boundaries:
+        if not include_unsectioned:
+            return ()
+        return (
+            _section_dict(
+                label=UNSECTIONED_SECTION,
+                start=0,
+                end=len(text),
+                language=language,
+            ),
+        )
+
+    sections: list[SectionSpan] = []
+    cursor = 0
+    for index, boundary in enumerate(boundaries):
+        start = boundary.start
+        if include_unsectioned and cursor < start:
+            sections.append(
+                _section_dict(
+                    label=UNSECTIONED_SECTION,
+                    start=cursor,
+                    end=start,
+                    language=language,
+                )
+            )
+        end = boundaries[index + 1].start if index + 1 < len(boundaries) else len(text)
+        if start >= end:
+            continue
+        metadata = {
+            key: value
+            for key, value in boundary.items()
+            if key not in {"label", "start", "end"}
+        }
+        sections.append(
+            SectionSpan(
+                label=boundary.label,
+                start=start,
+                end=end,
+                **metadata,
+            )
+        )
+        cursor = end
+
+    if include_unsectioned and cursor < len(text):
+        sections.append(
+            _section_dict(
+                label=UNSECTIONED_SECTION,
+                start=cursor,
+                end=len(text),
+                language=language,
+            )
+        )
+    return tuple(sections)
 
 
 def _segment_lexicon_sections(
@@ -259,6 +502,7 @@ def _section_candidates(
                 if isinstance(key, str) and key not in {"label", "start", "end"}
             }
             span = SectionSpan(label=label, start=start, end=end, **metadata)
+            _ensure_section_metadata(span, confidence=_rule_confidence(span))
             header_start, header_end = _candidate_header_bounds(text, span)
             candidates.append(
                 _SectionCandidate(
@@ -833,9 +1077,11 @@ def _section_dict(
         start=int(start),
         end=int(end),
     )
-    loinc_code = SECTION_LOINC_CODES.get(label)
+    loinc_code = section_loinc_code(label)
     if loinc_code is not None:
         section["loinc_code"] = loinc_code
+        section["codes"] = section_codes(label)
+        section["coding"] = section_codings(label)
     if header is not None:
         section.update(
             {
@@ -848,7 +1094,8 @@ def _section_dict(
                     content_start if content_start is not None else start
                 ),
                 "language": language,
-                "source": "section_header_lexicon",
+                "source": "rule",
+                "confidence": 0.9,
             }
         )
     elif language:
@@ -856,11 +1103,36 @@ def _section_dict(
     return section
 
 
+def _rule_confidence(span: Mapping[str, Any]) -> float:
+    raw_confidence = span.get("confidence")
+    if raw_confidence is not None:
+        try:
+            return min(max(float(raw_confidence), 0.0), 1.0)
+        except (TypeError, ValueError):
+            pass
+    if span.get("header_start") is not None:
+        return 0.9
+    return 0.84
+
+
+def _ensure_section_metadata(span: SectionSpan, *, confidence: float) -> None:
+    """Attach the shared source, confidence, and LOINC metadata contract."""
+
+    span.setdefault("source", "rule")
+    span.setdefault("confidence", round(confidence, 6))
+    codings = section_codings(span.label)
+    if codings:
+        span.setdefault("loinc_code", codings[0]["code"])
+        span.setdefault("codes", [codings[0]["code"]])
+        span.setdefault("coding", codings)
+
+
 __all__ = [
     "CONTEXT_SECTION_LOINC_CODES",
     "LIST_BEARING_SECTION_LABELS",
     "LIST_BEARING_SECTION_LOINC_CODES",
     "LIST_SECTION_LOINC_CODES",
+    "SECTION_LOINC_MAP",
     "SECTION_LOINC_CODES",
     "SectionSpan",
     "UNSECTIONED_SECTION",

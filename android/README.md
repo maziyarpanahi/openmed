@@ -2,7 +2,17 @@
 
 This directory contains the Gradle build for the `:openmedkit` Android library.
 
-## Install OpenMedKit 2.0.0
+## Demos
+
+- `OpenMedScanDemo` demonstrates CameraX capture, on-device OCR, and highlighted
+  identifier redaction.
+- [`OpenMedMapleDemo`](OpenMedMapleDemo/README.md) is the offline Maple Clinical
+  Studio for PII redaction, entity extraction, relation extraction, and
+  source-grounded reasoning/chat. It runs without model weights in synthetic
+  preview mode and accepts a pinned, checksummed ONNX Runtime Mobile bundle for
+  real on-device generation.
+
+## Install OpenMedKit 2.2.0
 
 OpenMedKit Android is published from immutable OpenMed release tags through JitPack.
 Add the repository in the consumer application's `settings.gradle.kts`:
@@ -20,15 +30,15 @@ dependencyResolutionManagement {
 }
 ```
 
-Then add the `v2.0.0` coordinate:
+Then add the `v2.2.0` coordinate:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.2.0")
 }
 ```
 
-JitPack resolves the immutable `v2.0.0` tag and publishes the `openmedkit`
+JitPack resolves the immutable `v2.2.0` tag and publishes the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
 credentials. Use a commit coordinate only when intentionally testing an
 unreleased build.
@@ -42,6 +52,19 @@ cd android
 ./gradlew test
 ```
 
+The Android CI gate also builds the release AAR and measures offline library
+initialization (packaged catalog load plus downloader/cache setup):
+
+```bash
+cd android
+./gradlew :openmedkit:verifyAndroidBudgets --continue
+```
+
+Reviewable ceilings live in `gradle/budgets.properties`. Measurements are
+written to `openmedkit/build/reports/budgets/` and published in the GitHub
+Actions job summary. Budget increases should include an explicit review of the
+packaged AAR or cold-start regression that requires the additional headroom.
+
 Dependency resolution is limited to Google Maven, Maven Central, and the scoped
 OpenMed group on JitPack. Dependency and plugin versions are declared in
 `gradle/libs.versions.toml`; avoid hardcoding library versions in module build
@@ -51,6 +74,21 @@ The library currently targets SDK 33 and sets `minSdk` to 26. Android 8.0 is the
 baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
 local-first pipeline.
+
+## R8 And ProGuard
+
+The OpenMedKit AAR includes consumer rules for its ONNX Runtime and DJL native
+bindings, service-loaded tokenizer providers, and model-catalog boundary. R8 and
+ProGuard apply these rules automatically when a consuming application enables
+shrinking or obfuscation; consumers do not need additional OpenMedKit keep rules.
+
+The release packaging check builds the AAR and verifies that every rule from
+`openmedkit/consumer-rules.pro` is present in its packaged `proguard.txt`:
+
+```bash
+cd android
+./gradlew :openmedkit:verifyReleaseConsumerRules
+```
 
 ## Optional Maven Central Publishing
 
