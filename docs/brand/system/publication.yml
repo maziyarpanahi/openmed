@@ -185,6 +185,7 @@ classification:
     - core-observability.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
+    - benchmarks/cost-vs-cloud.md
     - zero-shot-howto.md
     - zero-shot-ner.md
     - examples.md
