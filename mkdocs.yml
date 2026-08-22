@@ -180,6 +180,7 @@ nav:
       - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
       - PySpark De-identification UDFs: spark-deidentification.md
+      - Snowflake Python De-identification UDFs: snowflake-udf.md
       - Prefect Batch De-identification: prefect-integration.md
       - Airflow Redaction Operator: integrations/airflow.md
       - spaCy Pipeline Component: spacy-component.md

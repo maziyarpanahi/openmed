@@ -254,6 +254,7 @@ classification:
     - integrations/distributed-sql-udf.md
     - integrations/warehouse-remote-function.md
     - spark-deidentification.md
+    - snowflake-udf.md
     - prefect-integration.md
     - integrations/airflow.md
     - spacy-component.md
