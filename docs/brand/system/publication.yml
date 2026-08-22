@@ -99,6 +99,7 @@ classification:
     - quickstarts.md
     - cli/openmed-init.md
     - cli/result-envelope.md
+    - cli/machine-contract.md
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
@@ -127,6 +128,8 @@ classification:
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md
     - offline-install.md
+    - install/standalone.md
+    - install/smoke-check.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
@@ -141,6 +144,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - models/bundled-offline.md
+    - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - model-registry.md
     - ner-families.md
@@ -171,8 +175,10 @@ classification:
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
+    - configuration/precedence-audit.md
     - profiles.md
     - plugin-sdk.md
+    - plugins/quarantine-report.md
     - batch-processing.md
     - batch-howto.md
     - legacy-indic-encoding.md
@@ -232,9 +238,10 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md
+    - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
-    - integrations-llamaindex.md
+    - integrations/llamaindex.md
     - integrations/columnar-redactor.md
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
@@ -249,6 +256,7 @@ classification:
     - integrations/warehouse-remote-function.md
     - spark-deidentification.md
     - prefect-integration.md
+    - integrations/airflow.md
     - spacy-component.md
     - hl7v2-deidentification.md
     - interop/hl7v2-narrative-extraction.md
@@ -344,6 +352,8 @@ classification:
     - compliance/model-card-eu-ai-act-fields.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
+    - demo/browser-egress.md
+    - integrations-llamaindex.md
     - i18n/glossary.md
     - leaderboard/index.md
     - model-cards/registry/pii-last-green.md

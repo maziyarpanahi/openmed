@@ -23,6 +23,7 @@ nav:
       - Persona Quickstarts: quickstarts.md
       - Project Scaffold CLI: cli/openmed-init.md
       - CLI Result Envelope: cli/result-envelope.md
+      - Machine-readable CLI Contract: cli/machine-contract.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
@@ -52,6 +53,8 @@ nav:
       - Hardened Service Image: deploy/hardened-image.md
       - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
       - Offline & Air-Gapped Installation: offline-install.md
+      - Standalone Local Redactor Manifest: install/standalone.md
+      - Offline Install Smoke Check: install/smoke-check.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
@@ -66,6 +69,7 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
@@ -96,8 +100,10 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
+      - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
+      - Plugin Quarantine Preflight: plugins/quarantine-report.md
       - Batch Processing: batch-processing.md
       - Batch Processing How-To: batch-howto.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
@@ -158,9 +164,10 @@ nav:
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
-      - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
+      - LlamaIndex Redaction Transform: integrations/llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
@@ -175,6 +182,7 @@ nav:
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
+      - Airflow Redaction Operator: integrations/airflow.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - HL7 v2 Narrative Extraction: interop/hl7v2-narrative-extraction.md
