@@ -65,10 +65,10 @@ def test_probe_is_deterministic_and_reports_stable_counts() -> None:
 
 
 def test_missing_extra_and_probe_errors_are_classified_without_exception_text() -> None:
-    secret = "synthetic-secret-value"
+    test_marker = "synthetic-secret-value"
 
     def failed_probe() -> bool:
-        raise RuntimeError(secret)
+        raise RuntimeError(test_marker)
 
     report = probe_capabilities(
         [
@@ -76,18 +76,18 @@ def test_missing_extra_and_probe_errors_are_classified_without_exception_text() 
                 name="missing-package",
                 provider="synthetic-provider",
                 extra="optional-pack",
-                probe=lambda: (_ for _ in ()).throw(ImportError(secret)),
+                probe=lambda: (_ for _ in ()).throw(ImportError(test_marker)),
             ),
             CapabilityAdapter(
                 name="failed-package",
-                provider=secret,
+                provider=test_marker,
                 probe=failed_probe,
             ),
         ]
     )
 
     payload = report.to_json()
-    assert secret not in payload
+    assert test_marker not in payload
     assert [entry.reason for entry in report.capabilities] == [
         "probe_error",
         "missing_extra",
@@ -131,11 +131,11 @@ def test_report_json_is_json_safe_and_provider_fingerprint_is_one_way() -> None:
 
 
 def test_hostile_declaration_iteration_failure_is_value_free() -> None:
-    secret = "synthetic-sensitive-iterator-value"
+    test_marker = "synthetic-sensitive-iterator-value"
 
     class BrokenDeclarations:
         def __iter__(self) -> Iterator[Any]:
-            raise RuntimeError(secret)
+            raise RuntimeError(test_marker)
 
     with pytest.raises(CapabilityProbeError) as error:
         probe_capabilities(BrokenDeclarations())
@@ -145,24 +145,24 @@ def test_hostile_declaration_iteration_failure_is_value_free() -> None:
             type(error.value), error.value, error.value.__traceback__
         )
     )
-    assert secret not in rendered
+    assert test_marker not in rendered
 
 
 def test_base_exception_failures_are_contained_without_value_leakage() -> None:
-    secret = "synthetic-sensitive-base-exception-value"
+    test_marker = "synthetic-sensitive-base-exception-value"
 
     class ProbeFailure(BaseException):
         pass
 
     def failed_probe() -> bool:
-        raise ProbeFailure(secret)
+        raise ProbeFailure(test_marker)
 
     report = probe_capabilities(
         [CapabilityAdapter(name="local-failure", probe=failed_probe)]
     )
 
     assert report.capabilities[0].reason == "probe_error"
-    assert secret not in report.to_json()
+    assert test_marker not in report.to_json()
 
 
 def test_registry_name_overlapping_a_declaration_field_is_not_ambiguous() -> None:
@@ -173,11 +173,11 @@ def test_registry_name_overlapping_a_declaration_field_is_not_ambiguous() -> Non
 
 
 def test_hostile_probe_result_is_safely_classified() -> None:
-    secret = "synthetic-sensitive-result-value"
+    test_marker = "synthetic-sensitive-result-value"
 
     class HostileResult(Mapping[str, Any]):
         def __getitem__(self, key: str) -> Any:
-            raise RuntimeError(f"{secret}:{key}")
+            raise RuntimeError(f"{test_marker}:{key}")
 
         def __iter__(self) -> Iterator[str]:
             return iter(("available",))
@@ -190,30 +190,32 @@ def test_hostile_probe_result_is_safely_classified() -> None:
     )
 
     assert report.capabilities[0].reason == "invalid_result"
-    assert secret not in report.to_json()
+    assert test_marker not in report.to_json()
 
 
 def test_identifier_shaped_names_are_fingerprinted_before_reporting() -> None:
-    secret = "patient-482901"
+    test_marker = "patient-482901"
 
-    report = probe_capabilities([CapabilityAdapter(name=secret, probe=lambda: True)])
+    report = probe_capabilities(
+        [CapabilityAdapter(name=test_marker, probe=lambda: True)]
+    )
 
     assert report.capabilities[0].name.startswith("capability-")
-    assert secret not in report.to_json()
+    assert test_marker not in report.to_json()
 
 
 def test_raw_declaration_repr_is_value_free() -> None:
-    secret = "synthetic-provider-secret-482901"
+    test_marker = "synthetic-provider-secret-482901"
     adapter = CapabilityAdapter(
         name="local-adapter",
-        provider=secret,
-        version=secret,
+        provider=test_marker,
+        version=test_marker,
         extra="optional-pack",
-        probe=lambda: CapabilityCheck(False, secret),
+        probe=lambda: CapabilityCheck(False, test_marker),
     )
 
-    assert secret not in repr(adapter)
-    assert secret not in repr(adapter.probe())
+    assert test_marker not in repr(adapter)
+    assert test_marker not in repr(adapter.probe())
 
 
 def test_provider_fingerprint_has_unambiguous_structured_components() -> None:
