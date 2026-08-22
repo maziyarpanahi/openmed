@@ -1,8 +1,9 @@
-"""Async wrappers for OpenMed's synchronous text-processing helpers.
+"""Asynchronous wrappers for OpenMed's synchronous public helpers.
 
-The model and PII pipelines remain synchronous. These helpers run those
-pipelines in worker threads so async applications can await them without
-blocking the event loop.
+The wrappers in this module keep inference behavior in the established
+synchronous implementations and move the blocking call to a worker thread.
+Importing :mod:`openmed` does not import this module or :mod:`asyncio`; the
+top-level async helpers are resolved lazily on first access.
 """
 
 from __future__ import annotations
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
     from .core.results import AnalyzeResult
     from .core.surrogate_vault import SurrogateVault
     from .processing.outputs import PredictionResult
-
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _ResultT = TypeVar("_ResultT")
@@ -112,7 +112,7 @@ async def adeidentify(
     text: str | bytes | bytearray | memoryview,
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_PII_MODEL,
-    confidence_threshold: float = 0.7,  # Higher threshold for safety
+    confidence_threshold: float = 0.7,
     keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,

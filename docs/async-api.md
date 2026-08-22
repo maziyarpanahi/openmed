@@ -1,50 +1,67 @@
-# Async API
+# Async Python API
 
-OpenMed's model and PII pipelines are synchronous, while many web applications
-already run an event loop. The async helpers keep that loop responsive by
-delegating each synchronous call to a worker thread:
+OpenMed provides first-class coroutine wrappers for its blocking Python
+helpers. They run the existing synchronous implementation in asyncio's worker
+thread pool, so an application event loop remains responsive while model
+inference or batch processing is in progress.
 
 ```python
-from openmed import aanalyze_text, aextract_pii, adeidentify
+import openmed
 
-analysis = await aanalyze_text(
-    "Synthetic note: Casey Example reports a cough.",
-    model_name="fixture-ner-model",
-)
-entities = await aextract_pii(
-    "Synthetic contact: casey@example.test",
-    model_name="fixture-pii-model",
-)
-redacted = await adeidentify(
-    "Synthetic contact: casey@example.test",
-    model_name="fixture-pii-model",
+result = await openmed.adeidentify(
+    "Synthetic patient Casey Example called 555-0100.",
     method="mask",
 )
+print(result.deidentified_text)
 ```
 
-The wrappers accept the same arguments and return the same result types as
-`analyze_text`, `extract_pii`, and `deidentify`. They do not create an event
-loop when `openmed` is imported, and they do not provide native async model
-inference.
+The lazy top-level exports are:
 
-## FastAPI
+| Async helper | Synchronous implementation |
+| --- | --- |
+| `openmed.aextract_pii(...)` | `openmed.extract_pii(...)` |
+| `openmed.adeidentify(...)` | `openmed.deidentify(...)` |
+| `openmed.aanalyze_text(...)` | `openmed.analyze_text(...)` |
+| `openmed.abatch(...)` | `openmed.process_batch(...)` |
 
-An async route can await a wrapper directly. The following example uses
-synthetic text and returns the typed de-identification payload:
+Each wrapper accepts the same arguments and returns the same result type as its
+synchronous implementation. Exceptions also propagate unchanged. Importing
+`openmed` alone does not import `asyncio` or create an event loop; the async
+module is loaded only when one of these helpers is first accessed.
+
+## FastAPI example
+
+The wrappers are suitable for an async route when inference remains local and
+the caller wants to avoid blocking the server event loop:
 
 ```python
 from fastapi import FastAPI
+from pydantic import BaseModel
 
-from openmed import adeidentify
+import openmed
 
 app = FastAPI()
 
 
+class RedactionRequest(BaseModel):
+    text: str
+
+
 @app.post("/redact")
-async def redact(text: str) -> dict:
-    result = await adeidentify(text, method="mask")
-    return result.to_dict()
+async def redact(request: RedactionRequest) -> dict[str, str]:
+    result = await openmed.adeidentify(
+        request.text,
+        method="mask",
+        use_safety_sweep=True,
+    )
+    return {"text": result.deidentified_text}
 ```
+
+Do not log request text, model outputs, or exceptions containing source values.
+Reuse a warmed loader when traffic is sustained, and apply application-level
+concurrency limits so requests do not create unbounded worker pressure.
+
+## Batch concurrency
 
 For multiple independent inputs, `abatch` preserves input order and can cap
 concurrency:
@@ -69,3 +86,9 @@ results = await abatch(
 
 These helpers only offload work; they do not make clinical decisions. Use the
 same local model and privacy configuration as the synchronous APIs.
+## Cancellation and shutdown
+
+Cancelling the awaiting task stops waiting for the result, but Python cannot
+forcibly stop a synchronous function that is already running in a worker
+thread. Use OpenMed request budgets for bounded work and allow the process to
+finish in-flight worker calls during graceful shutdown.

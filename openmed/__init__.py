@@ -35,6 +35,10 @@ if TYPE_CHECKING:
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {
+    "aanalyze_text": ".aio",
+    "abatch": ".aio",
+    "adeidentify": ".aio",
+    "aextract_pii": ".aio",
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
     "ModelCachePolicy": ".core",
@@ -109,10 +113,6 @@ _LAZY_IMPORTS = {
     "deidentify": ".core.pii",
     "extract_pii": ".core.pii",
     "reidentify": ".core.pii",
-    "aextract_pii": ".aio",
-    "adeidentify": ".aio",
-    "aanalyze_text": ".aio",
-    "abatch": ".aio",
     "PII_PATTERNS": ".core.pii_entity_merger",
     "PIIPattern": ".core.pii_entity_merger",
     "calculate_dominant_label": ".core.pii_entity_merger",
@@ -882,6 +882,7 @@ __all__ = [
     "DatasetRedactionResult",
     "DatasetRedactionSummary",
     "process_batch",
+    "abatch",
     "redact_dataset",
     "AdvancedNERProcessor",
     "StreamingReplayResult",
@@ -914,7 +915,6 @@ __all__ = [
     "get_model_max_length",
     "analyze_text",
     "aanalyze_text",
-    "abatch",
     "explain",
     "ExplainReport",
     "generate_text",
@@ -947,10 +947,10 @@ __all__ = [
     "timed",
     # PII detection and de-identification
     "extract_pii",
-    "deidentify",
-    "reidentify",
     "aextract_pii",
+    "deidentify",
     "adeidentify",
+    "reidentify",
     "PIIEntity",
     "DeidentificationResult",
     # Structured public error taxonomy
