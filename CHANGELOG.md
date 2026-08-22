@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added crash-safe transactional trace redaction with a value-free recovery
+  journal, fingerprint-verified bounded resume and rollback, transaction-owned
+  staging cleanup, and idempotent completed recovery (#2559).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
