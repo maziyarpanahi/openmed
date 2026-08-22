@@ -45,9 +45,10 @@ def test_registry_cards_have_unique_pointer_metadata() -> None:
 def test_runtime_registry_and_i18n_surfaces_include_committed_state() -> None:
     latest = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
 
-    assert OPENMED_MODELS["pii_latest"].model_id == latest
-    assert OPENMED_MODELS["pii_last_green"].model_id == latest
-    assert OPENMED_MODELS["pii_latest"].semantic_version == "1.0.0"
+    assert OPENMED_MODELS["pii_small_mlx_fp_latest"].model_id == latest
+    assert OPENMED_MODELS["pii_small_mlx_fp_last_green"].model_id == latest
+    # Pointer aliases carry the slot's assigned registry version.
+    assert OPENMED_MODELS["pii_small_mlx_fp_latest"].semantic_version == "1.0.0"
     assert SUPPORTED_LANGUAGES == (
         manifest_pii_languages() | set(DEFAULT_MODEL_PLACEHOLDER_LANGUAGES)
     )
