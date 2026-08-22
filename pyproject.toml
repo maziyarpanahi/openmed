@@ -396,6 +396,7 @@ yasbd = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-sidecar = "openmed.service.sidecar:main"
 openmed-executable-udf = "openmed.integrations.executable_udf:main"
 openmed-mcp = "openmed.mcp.server:main"
 
