@@ -1,0 +1,415 @@
+{
+  "glossary": "docs/i18n/glossary.md",
+  "source": "README.md",
+  "translations": {
+    "README.hi.md": {
+      "sections": [
+        {
+          "source_heading": "__preamble__",
+          "source_sha256": "9d1cfa4db05f3ca7ff47531c9a8957482202230c4313ad9fe3c7df7be0f77806",
+          "translation_heading": "__preamble__",
+          "translation_sha256": "76ad3ea08bceb976557ae42bea013329762c647429180564f8f631fbb0ff9f09"
+        },
+        {
+          "source_heading": "See it in action",
+          "source_sha256": "e750e5650722d20a2d01ce6ff1969994eac711aba180012a826aa83efa07515c",
+          "translation_heading": "इसे काम करते देखें",
+          "translation_sha256": "1df9374ce6a8a35846c0c2fe4b36ddb28ea4096086222530d1185f93a38bdfb2"
+        },
+        {
+          "source_heading": "30-second example",
+          "source_sha256": "c94ce4d86734ca10a3bb580a16a20a9fc1b30a42b206991862f98d0eb246b189",
+          "translation_heading": "30 सेकंड का उदाहरण",
+          "translation_sha256": "b5229bedf898ec9ccffb46434b64f4f1d9533ef685262548475026af88b91b24"
+        },
+        {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "एजेंट के साथ बना रहे हैं?",
+          "translation_sha256": "a54a1a7c82c542346fc63658f2f100594b2c5f53d816636c272e71f445381e58"
+        },
+        {
+          "source_heading": "Why OpenMed?",
+          "source_sha256": "2aadfb140bf41b247628c7859534cccf76514ace7cdeee64ca262a9d94f8105b",
+          "translation_heading": "OpenMed क्यों?",
+          "translation_sha256": "5438673af29b83bf4005b1ed8b200620373c55efdf2b71f13400cb70bcc3189e"
+        },
+        {
+          "source_heading": "On-device on Apple: Swift, MLX & iOS",
+          "source_sha256": "0adca61b17aa2d2e8f2a7f1a2ccae1c23075183605996565e0e4cb433eb55904",
+          "translation_heading": "Apple डिवाइस पर: Swift, MLX और iOS",
+          "translation_sha256": "4ea4e4a51b65c0d358fdb0a676e6056269efe37eb28ff01f0bb13ed0932b49b5"
+        },
+        {
+          "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
+          "source_sha256": "71669ec97e2176efe32ab0267dde95f8a18c85870a58121fd62267463d0e5e97",
+          "translation_heading": "Android डिवाइस पर — Kotlin और ONNX Runtime Mobile",
+          "translation_sha256": "614fdcdb619dac56e3b3eac94c3aedcf16966813f49ab088b441367af82f9e79"
+        },
+        {
+          "source_heading": "How it works",
+          "source_sha256": "8e28e12f968847507e8f85476f3a3168f678f1aadab68ef256c64ef723dd7296",
+          "translation_heading": "यह कैसे काम करता है",
+          "translation_sha256": "88908bd470150c047ddac3940eb2b72c0194a88dc8f1e87b35489ae6e25a5330"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — अपने coding agent से OpenMed बनाएं",
+          "translation_sha256": "c4fee3c918be55eaeb309f90805c8e2e37d7a428b486ca3883fdecf72ab1ff43"
+        },
+        {
+          "source_heading": "Quick start",
+          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "translation_heading": "त्वरित शुरुआत",
+          "translation_sha256": "7dee75d9c6c2cdd858481f02fc2d3c36fd02ab9fb70c70632a4595dacf172259"
+        },
+        {
+          "source_heading": "Models",
+          "source_sha256": "1229d2b0c1450109a7a1b541aed17c970807730be5e26645b78ca98b6cb74fa5",
+          "translation_heading": "मॉडल",
+          "translation_sha256": "5c755adc5c51023d88ae67c17beaf1a83a97fbd618f396026fea1da5dfb8b535"
+        },
+        {
+          "source_heading": "Privacy: PII detection & de-identification",
+          "source_sha256": "eccf4ae8dca4be8ac31e22eca79ca4d9871c6425e309f75a8bfa2ab08dbddde5",
+          "translation_heading": "गोपनीयता: PII पहचान और डी-आइडेंटिफिकेशन",
+          "translation_sha256": "903ecbd112324deef7821e67ce8f0dd96a4e683e0cf24322fb43df777d43d8b9"
+        },
+        {
+          "source_heading": "Multilingual PII (35 supported routes; 33 model-backed)",
+          "source_sha256": "1adb69340e95b22a6a931a57ab9af31562218da17bcfe014cc8664778dfc2a12",
+          "translation_heading": "बहुभाषी PII (35 समर्थित रूट; 33 मॉडल-समर्थित)",
+          "translation_sha256": "9b4ae308b42172af074bfadc0832269aef34510e5c10893543b00f6eafdf9f0d"
+        },
+        {
+          "source_heading": "REST API",
+          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "translation_heading": "REST API",
+          "translation_sha256": "2fa58dccd8ed66c654664d0996482be96839d4dc9a72e717ce2ca29db2dc12b2"
+        },
+        {
+          "source_heading": "Documentation",
+          "source_sha256": "33fb2c5c3751d55354af8c482261645c97eea15cd05ae52514703c80885a22ed",
+          "translation_heading": "दस्तावेज़ीकरण",
+          "translation_sha256": "75391f87b0fa4d02adc21f25b5157b36cfc434846a5ce76e8c9c29d355611d5c"
+        },
+        {
+          "source_heading": "Meet the mascot",
+          "source_sha256": "901153cff90aa4f47b6bf3071854a5f43e5be20c0ee00b81bcd255b3d89ce480",
+          "translation_heading": "हमारे शुभंकर से मिलें",
+          "translation_sha256": "76e56743cb6a17697fff46e6ae39bd0c8d9d67b5f269e827ab9bd37f3bde07dc"
+        },
+        {
+          "source_heading": "Contributing",
+          "source_sha256": "90894e9cb31825ac87f839d0ca3d8b5549f098c375603d0c73d8a23be3003b94",
+          "translation_heading": "योगदान",
+          "translation_sha256": "1c9744bed3f7294b0354a091be94366f6fcc0ebdd60c6c695862a8b01b5da663"
+        },
+        {
+          "source_heading": "Security",
+          "source_sha256": "b16e02cc3498ca5578e60392f01f19f06583e0730d56bd000aa33ff68f70cb62",
+          "translation_heading": "सुरक्षा",
+          "translation_sha256": "fd74e9bfd3e487e326e55ae413fe2ecfc5e1790930ff1294e61f2887feffc84e"
+        },
+        {
+          "source_heading": "Credits",
+          "source_sha256": "2feda286eece483cc410b38dc387d6a62848b29c8c4a6e02f8398139dc815b26",
+          "translation_heading": "आभार",
+          "translation_sha256": "3eb187d06331488a7ed9b5baf38843340682a413d2b9bc1e9ef993d331fc4c41"
+        },
+        {
+          "source_heading": "License",
+          "source_sha256": "3376ffa5534d0f64d862de521fedad76833bf0160a82e03564d51e8b3c828c2a",
+          "translation_heading": "लाइसेंस",
+          "translation_sha256": "1b7f00c9a328e4d3170ee61b2b83e263a380614f3db2ae681478d05a9bd816ce"
+        },
+        {
+          "source_heading": "Citation",
+          "source_sha256": "4b8468e240029ca8d98617788a38b5ff5dc8e2011185ff53704883d4638b3d45",
+          "translation_heading": "उद्धरण",
+          "translation_sha256": "7abddb93750a9c289ef63545bc9fee7f278bd2e89e794838c6de3febd3b69b3a"
+        },
+        {
+          "source_heading": "Star History",
+          "source_sha256": "99a6b34eeae29de71318567e0dd385b06c95120e8e372f982c89d7048997fa62",
+          "translation_heading": "स्टार इतिहास",
+          "translation_sha256": "8d7805b9715bb7bdf4930ac6400f5ee884d890f46357a4a5b67c434314f61f44"
+        }
+      ]
+    },
+    "README.sw.md": {
+      "sections": [
+        {
+          "source_heading": "__preamble__",
+          "source_sha256": "9d1cfa4db05f3ca7ff47531c9a8957482202230c4313ad9fe3c7df7be0f77806",
+          "translation_heading": "__preamble__",
+          "translation_sha256": "4e2046f6bc2df227527db478a1516859f4488c8f0abf6401d95f394071c0e45b"
+        },
+        {
+          "source_heading": "See it in action",
+          "source_sha256": "e750e5650722d20a2d01ce6ff1969994eac711aba180012a826aa83efa07515c",
+          "translation_heading": "Ione ikifanya kazi",
+          "translation_sha256": "fe2ac2d5deff72315834f359dc84a909326e610bc2b03513c069cecc89f1a788"
+        },
+        {
+          "source_heading": "30-second example",
+          "source_sha256": "c94ce4d86734ca10a3bb580a16a20a9fc1b30a42b206991862f98d0eb246b189",
+          "translation_heading": "Mfano wa sekunde 30",
+          "translation_sha256": "ef97849c0c8a63162844e4a23b673d5f6d8f3f09f15ab87ea836fb7f9d887572"
+        },
+        {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "Unajenga kwa wakala?",
+          "translation_sha256": "d2017c10380102dd2e94646d3833afc0958068499d5ab0818dec0fcd2b3b90a7"
+        },
+        {
+          "source_heading": "Why OpenMed?",
+          "source_sha256": "2aadfb140bf41b247628c7859534cccf76514ace7cdeee64ca262a9d94f8105b",
+          "translation_heading": "Kwa nini OpenMed?",
+          "translation_sha256": "998984ab8a752282baa12fb4217bd27938a616d93a8129af3572fd0831054f9a"
+        },
+        {
+          "source_heading": "On-device on Apple: Swift, MLX & iOS",
+          "source_sha256": "0adca61b17aa2d2e8f2a7f1a2ccae1c23075183605996565e0e4cb433eb55904",
+          "translation_heading": "Kwenye kifaa cha Apple: Swift, MLX na iOS",
+          "translation_sha256": "0e57a94469b45c9857aba3cc8a7c9709e6336ba8cdba8140fe7374f1e99e1182"
+        },
+        {
+          "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
+          "source_sha256": "71669ec97e2176efe32ab0267dde95f8a18c85870a58121fd62267463d0e5e97",
+          "translation_heading": "Kwenye kifaa cha Android — Kotlin na ONNX Runtime Mobile",
+          "translation_sha256": "929c7552d89fbd6324461d1728903325c45503ce0c9931d4e2f9068d60305321"
+        },
+        {
+          "source_heading": "How it works",
+          "source_sha256": "8e28e12f968847507e8f85476f3a3168f678f1aadab68ef256c64ef723dd7296",
+          "translation_heading": "Jinsi inavyofanya kazi",
+          "translation_sha256": "51f45eb0c9316482ed1e25100f06035fb5213e6e9671d18d5c16b7483f3c94fd"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — jenga OpenMed kupitia wakala wako wa coding",
+          "translation_sha256": "88881391ba28f7acc29e7044090a20d06130c9dadbb298cad5902dbd62cc2cfa"
+        },
+        {
+          "source_heading": "Quick start",
+          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "translation_heading": "Anza haraka",
+          "translation_sha256": "b949670f043de40e9e4893a62e11c0842c028002a7b59ef938d3d6cb049b86ea"
+        },
+        {
+          "source_heading": "Models",
+          "source_sha256": "1229d2b0c1450109a7a1b541aed17c970807730be5e26645b78ca98b6cb74fa5",
+          "translation_heading": "Modeli",
+          "translation_sha256": "3bde636e3adfdcbf5667266e98a9ba00c365084a8ec3229c695b2982a965b3cc"
+        },
+        {
+          "source_heading": "Privacy: PII detection & de-identification",
+          "source_sha256": "eccf4ae8dca4be8ac31e22eca79ca4d9871c6425e309f75a8bfa2ab08dbddde5",
+          "translation_heading": "Faragha: utambuzi wa PII na uondoaji utambulisho",
+          "translation_sha256": "2c16671646ed5d5c9392578dfc826f21b79a7536cef01b40645a6327a851563e"
+        },
+        {
+          "source_heading": "Multilingual PII (35 supported routes; 33 model-backed)",
+          "source_sha256": "1adb69340e95b22a6a931a57ab9af31562218da17bcfe014cc8664778dfc2a12",
+          "translation_heading": "PII ya lugha nyingi (njia 35 zinazotumika; 33 zikitumia modeli)",
+          "translation_sha256": "cdc7bd9aba12b767116b23428013ae57bd1dc887a01e8b4c96269fb651ad0765"
+        },
+        {
+          "source_heading": "REST API",
+          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "translation_heading": "REST API",
+          "translation_sha256": "8b9db8b2bc6373c2722a12316fa61e970fd33934cf148d86ea33a8c40b916c31"
+        },
+        {
+          "source_heading": "Documentation",
+          "source_sha256": "33fb2c5c3751d55354af8c482261645c97eea15cd05ae52514703c80885a22ed",
+          "translation_heading": "Nyaraka",
+          "translation_sha256": "c84a2dbefd1f6c8b778cda11b33ebf935ff5e1ce0adb34bcfe764e3c4c60c4d4"
+        },
+        {
+          "source_heading": "Meet the mascot",
+          "source_sha256": "901153cff90aa4f47b6bf3071854a5f43e5be20c0ee00b81bcd255b3d89ce480",
+          "translation_heading": "Kutana na kinyago",
+          "translation_sha256": "a58baaf43f3ad8897d22fc211779ef61cb55fdeaf16731edd936478398f05ae6"
+        },
+        {
+          "source_heading": "Contributing",
+          "source_sha256": "90894e9cb31825ac87f839d0ca3d8b5549f098c375603d0c73d8a23be3003b94",
+          "translation_heading": "Kuchangia",
+          "translation_sha256": "29eef74a2a9f1c43c99b9a61946afa85a14cd59e2fcb5fe403f98b075acb91b0"
+        },
+        {
+          "source_heading": "Security",
+          "source_sha256": "b16e02cc3498ca5578e60392f01f19f06583e0730d56bd000aa33ff68f70cb62",
+          "translation_heading": "Usalama",
+          "translation_sha256": "b15146639aa41c69d976007eb36936c6ba49a64314b5c9e3d81a91b890aaa420"
+        },
+        {
+          "source_heading": "Credits",
+          "source_sha256": "2feda286eece483cc410b38dc387d6a62848b29c8c4a6e02f8398139dc815b26",
+          "translation_heading": "Shukrani",
+          "translation_sha256": "c01ea1b65cd42a9ee3ebe61ec64825b1606fca2df1c1d29e74d99b7ba6c49a28"
+        },
+        {
+          "source_heading": "License",
+          "source_sha256": "3376ffa5534d0f64d862de521fedad76833bf0160a82e03564d51e8b3c828c2a",
+          "translation_heading": "Leseni",
+          "translation_sha256": "000432f97616b6e81f93465063d3d5997287768859c275543524e3b835c9c6cf"
+        },
+        {
+          "source_heading": "Citation",
+          "source_sha256": "4b8468e240029ca8d98617788a38b5ff5dc8e2011185ff53704883d4638b3d45",
+          "translation_heading": "Nukuu",
+          "translation_sha256": "7ba7ba664df1e0d26a9052f34f765295e736e4b702252b7c3016141156947a79"
+        },
+        {
+          "source_heading": "Star History",
+          "source_sha256": "99a6b34eeae29de71318567e0dd385b06c95120e8e372f982c89d7048997fa62",
+          "translation_heading": "Historia ya nyota",
+          "translation_sha256": "852adb1dd98121fe76c0354c2805eb7068b97736242a50e43fb0704144bdf40c"
+        }
+      ]
+    },
+    "README.zh-CN.md": {
+      "sections": [
+        {
+          "source_heading": "__preamble__",
+          "source_sha256": "9d1cfa4db05f3ca7ff47531c9a8957482202230c4313ad9fe3c7df7be0f77806",
+          "translation_heading": "__preamble__",
+          "translation_sha256": "19cc00e4d9b8529f53135040e5355ec57832dbeefeb343816dad799f1779137f"
+        },
+        {
+          "source_heading": "See it in action",
+          "source_sha256": "e750e5650722d20a2d01ce6ff1969994eac711aba180012a826aa83efa07515c",
+          "translation_heading": "现场演示",
+          "translation_sha256": "dd5d699bbc4712c1444037f8b29a8448574b60b1f368b2f5de7712616cf3916a"
+        },
+        {
+          "source_heading": "30-second example",
+          "source_sha256": "c94ce4d86734ca10a3bb580a16a20a9fc1b30a42b206991862f98d0eb246b189",
+          "translation_heading": "30 秒上手示例",
+          "translation_sha256": "912ba4c4ddc27248b1f6a257ee5d4f389f2f01871fc822857bec869e3be35f25"
+        },
+        {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "使用智能体构建？",
+          "translation_sha256": "94d33c923ba1f13ae959dd894fddd80e3d1b3e6abf2139221ce1c0b8655068af"
+        },
+        {
+          "source_heading": "Why OpenMed?",
+          "source_sha256": "2aadfb140bf41b247628c7859534cccf76514ace7cdeee64ca262a9d94f8105b",
+          "translation_heading": "为什么选择 OpenMed？",
+          "translation_sha256": "c2be92d35ba5df1beec92e7b385c9bc8244288bc377680b9fbf5106a03edbd7f"
+        },
+        {
+          "source_heading": "On-device on Apple: Swift, MLX & iOS",
+          "source_sha256": "0adca61b17aa2d2e8f2a7f1a2ccae1c23075183605996565e0e4cb433eb55904",
+          "translation_heading": "在 Apple 设备上本地运行：Swift、MLX 与 iOS",
+          "translation_sha256": "6a12d71d2f66ff64561b75869f3d77730fcaf91167b9f2f79ebe9295164b9978"
+        },
+        {
+          "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
+          "source_sha256": "71669ec97e2176efe32ab0267dde95f8a18c85870a58121fd62267463d0e5e97",
+          "translation_heading": "在 Android 设备上本地运行：Kotlin 与 ONNX Runtime Mobile",
+          "translation_sha256": "eb220d58c05b1f32252955221e0b31f7370382c24be4bfa005c1c3eace8071e5"
+        },
+        {
+          "source_heading": "How it works",
+          "source_sha256": "8e28e12f968847507e8f85476f3a3168f678f1aadab68ef256c64ef723dd7296",
+          "translation_heading": "工作原理",
+          "translation_sha256": "493676936b56f60fb1c111744e9831b9f5e28b6eaabecf51cff437f19d38520b"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — 使用编码智能体构建 OpenMed",
+          "translation_sha256": "3931ef0664eaebd1336154cf881a496d1dc757cc97e5fb00ec8d7cbef283f459"
+        },
+        {
+          "source_heading": "Quick start",
+          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "translation_heading": "快速开始",
+          "translation_sha256": "6acba51b6a1c22d304b741c4ba1b9338e56af1f741099e7ef8eb1f412c8f8048"
+        },
+        {
+          "source_heading": "Models",
+          "source_sha256": "1229d2b0c1450109a7a1b541aed17c970807730be5e26645b78ca98b6cb74fa5",
+          "translation_heading": "模型",
+          "translation_sha256": "bf0a8f557b393faceabd8e7f110e17e6556608dfa3cd724506c928dd90389b6f"
+        },
+        {
+          "source_heading": "Privacy: PII detection & de-identification",
+          "source_sha256": "eccf4ae8dca4be8ac31e22eca79ca4d9871c6425e309f75a8bfa2ab08dbddde5",
+          "translation_heading": "隐私：PII 检测与去标识化",
+          "translation_sha256": "c86a5f3b107cd56cf58f72bb771934b1b1afc021d24f07f85d5325b14d45b62e"
+        },
+        {
+          "source_heading": "Multilingual PII (35 supported routes; 33 model-backed)",
+          "source_sha256": "1adb69340e95b22a6a931a57ab9af31562218da17bcfe014cc8664778dfc2a12",
+          "translation_heading": "多语言 PII（35 条支持的路由；33 条由模型支持）",
+          "translation_sha256": "f8323da192e3830334567dfe802aa94f114673a68a6744c78628a6489754b8a1"
+        },
+        {
+          "source_heading": "REST API",
+          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "translation_heading": "REST API",
+          "translation_sha256": "d03e9b055db8062d3185ac28786444fad04af083eaa7e8412ef1c6abcc448677"
+        },
+        {
+          "source_heading": "Documentation",
+          "source_sha256": "33fb2c5c3751d55354af8c482261645c97eea15cd05ae52514703c80885a22ed",
+          "translation_heading": "文档",
+          "translation_sha256": "5621961ba12830514da2188d2bf37ea7a35d2550eef8cba6d184f1bb59ea3b1c"
+        },
+        {
+          "source_heading": "Meet the mascot",
+          "source_sha256": "901153cff90aa4f47b6bf3071854a5f43e5be20c0ee00b81bcd255b3d89ce480",
+          "translation_heading": "认识一下我们的吉祥物",
+          "translation_sha256": "edb41a22b7b02372629d8bf7712c564e7b764b2721625660fd70a486595ed6b7"
+        },
+        {
+          "source_heading": "Contributing",
+          "source_sha256": "90894e9cb31825ac87f839d0ca3d8b5549f098c375603d0c73d8a23be3003b94",
+          "translation_heading": "贡献",
+          "translation_sha256": "04ddfba51bcb3a0d87d9b09a4c7cc832c13ed5f6e93160637eb451f9675656b0"
+        },
+        {
+          "source_heading": "Security",
+          "source_sha256": "b16e02cc3498ca5578e60392f01f19f06583e0730d56bd000aa33ff68f70cb62",
+          "translation_heading": "安全",
+          "translation_sha256": "06dd52dfdf9b6183ab9fa888f2c2f85e84cbeb4c8b01a18d6bc5c009de56f92d"
+        },
+        {
+          "source_heading": "Credits",
+          "source_sha256": "2feda286eece483cc410b38dc387d6a62848b29c8c4a6e02f8398139dc815b26",
+          "translation_heading": "致谢",
+          "translation_sha256": "59f2d9de882f1a1085af673c13881a7e9e690d0258aaee57f176f73f2b7bc387"
+        },
+        {
+          "source_heading": "License",
+          "source_sha256": "3376ffa5534d0f64d862de521fedad76833bf0160a82e03564d51e8b3c828c2a",
+          "translation_heading": "许可证",
+          "translation_sha256": "84eaf11eb5571095fbe8cbe0f8d90a8fa274e765daca3eb876a6fe33744186ac"
+        },
+        {
+          "source_heading": "Citation",
+          "source_sha256": "4b8468e240029ca8d98617788a38b5ff5dc8e2011185ff53704883d4638b3d45",
+          "translation_heading": "引用",
+          "translation_sha256": "8eeedcf8e5c3dd4f1b8945fd078d762ed6923b9f138a435cb43b5d41cc77a597"
+        },
+        {
+          "source_heading": "Star History",
+          "source_sha256": "99a6b34eeae29de71318567e0dd385b06c95120e8e372f982c89d7048997fa62",
+          "translation_heading": "Star 历史",
+          "translation_sha256": "b9dc375f56387a63b30560bcc6bef51daae893126db83f154ba822f702518cb7"
+        }
+      ]
+    }
+  },
+  "version": 1
+}

@@ -7,9 +7,13 @@ current platform.
 
 from __future__ import annotations
 
+import json
 import logging
 import platform
+import sys
 import warnings
+from importlib.util import find_spec
+from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -24,6 +28,18 @@ from .offline import configure_offline_mode, is_local_only
 
 logger = logging.getLogger(__name__)
 _warned_substitutions: set[str] = set()
+_MISSING_MODULE = object()
+
+
+def _module_available(module_name: str) -> bool:
+    """Return whether a module is loaded or importable without importing it."""
+    loaded = sys.modules.get(module_name, _MISSING_MODULE)
+    if loaded is not _MISSING_MODULE:
+        return loaded is not None
+    try:
+        return find_spec(module_name) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 @runtime_checkable
@@ -65,7 +81,7 @@ class HuggingFaceBackend:
     def is_available(self) -> bool:
         from openmed.core.models import HF_AVAILABLE
 
-        return HF_AVAILABLE
+        return HF_AVAILABLE and _module_available("torch")
 
     def create_pipeline(
         self,
@@ -92,14 +108,14 @@ class MLXBackend:
         self._config = config
 
     def is_available(self) -> bool:
+        # MLX only runs on Apple Silicon; gate on the platform first, then defer
+        # the import check to the shared capability probe so every seam answers
+        # "is mlx installed?" the same importless way.
         if platform.system() != "Darwin":
             return False
-        try:
-            import mlx.core  # noqa: F401
+        from .capabilities import is_backend_available
 
-            return True
-        except ImportError:
-            return False
+        return is_backend_available("mlx")
 
     def create_pipeline(
         self,
@@ -118,11 +134,142 @@ class MLXBackend:
         )
 
 
+class OnnxTokenClassificationPipeline:
+    """Transform :class:`OnnxModel` output into the standard pipeline schema."""
+
+    def __init__(self, model: Any) -> None:
+        self.model = model
+        self.tokenizer = model.tokenizer
+        self.variant = model.variant
+
+    def __call__(self, inputs: Any, **kwargs: Any) -> Any:
+        """Run one or more inputs without importing a Torch runtime."""
+        threshold = float(kwargs.pop("threshold", 0.0))
+        max_length = kwargs.pop("max_length", None)
+        kwargs.pop("batch_size", None)
+        kwargs.pop("num_workers", None)
+        if kwargs:
+            logger.debug(
+                "Ignoring unsupported ONNX pipeline options: %s", sorted(kwargs)
+            )
+
+        single = isinstance(inputs, str)
+        texts = [inputs] if single else list(inputs)
+        predictions = [
+            [
+                {
+                    "entity_group": entity.label,
+                    "score": entity.score,
+                    "word": entity.text,
+                    "start": entity.start,
+                    "end": entity.end,
+                }
+                for entity in self.model.predict(
+                    text,
+                    threshold=threshold,
+                    max_length=max_length,
+                )
+            ]
+            for text in texts
+        ]
+        return predictions[0] if single else predictions
+
+
+class OnnxBackend:
+    """CPU-only ONNX Runtime backend with an INT8-capable model loader."""
+
+    _RUNTIME_MODULES = ("huggingface_hub", "numpy", "onnxruntime", "tokenizers")
+
+    def __init__(self, config: Any = None) -> None:
+        self._config = config
+
+    def is_available(self) -> bool:
+        return all(_module_available(name) for name in self._RUNTIME_MODULES)
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Callable:
+        """Create a CPU ONNX token-classification pipeline."""
+        del aggregation_strategy
+        if task not in {"ner", "token-classification"}:
+            raise ValueError(
+                "The ONNX backend supports only token-classification tasks"
+            )
+
+        from openmed.onnx.inference import load_onnx_model
+
+        kwargs.pop("use_fast_tokenizer", None)
+        variant = getattr(self._config, "onnx_variant", "auto")
+        threads = getattr(self._config, "onnx_intra_op_num_threads", None)
+        session_options = None
+        if threads is not None:
+            import onnxruntime as ort
+
+            session_options = ort.SessionOptions()
+            session_options.intra_op_num_threads = int(threads)
+            session_options.inter_op_num_threads = 1
+
+        model = load_onnx_model(
+            model_name,
+            variant=variant,
+            revision=getattr(self._config, "pii_model_revision", None) or "main",
+            cache_dir=getattr(self._config, "cache_dir", None),
+            token=getattr(self._config, "hf_token", None),
+            local_files_only=is_local_only(self._config),
+            providers=("CPUExecutionProvider",),
+            session_options=session_options,
+        )
+        if variant == "int8" and model.variant != "int8":
+            raise RuntimeError(
+                f"Low-resource profile requires model_int8.onnx; got {model.variant!r}"
+            )
+        return OnnxTokenClassificationPipeline(model)
+
+
+class RemoteInferenceBackend:
+    """Backend using a user-operated KServe V2 or Triton endpoint."""
+
+    def __init__(self, config: Any = None) -> None:
+        self._config = config
+
+    def is_available(self) -> bool:
+        from openmed.service.backends.remote_inference import (
+            remote_inference_dependencies_available,
+        )
+
+        return remote_inference_dependencies_available(self._config)
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Callable:
+        from openmed.service.backends.remote_inference import (
+            create_remote_inference_pipeline,
+        )
+
+        return create_remote_inference_pipeline(
+            model_name,
+            config=self._config,
+            task=task,
+            aggregation_strategy=aggregation_strategy,
+            **kwargs,
+        )
+
+
 # -- Backend registry and auto-detection ------------------------------------
 
 _BACKENDS: Dict[str, type] = {
     "hf": HuggingFaceBackend,
     "mlx": MLXBackend,
+    "onnx": OnnxBackend,
+    "remote": RemoteInferenceBackend,
 }
 
 
@@ -133,13 +280,19 @@ def get_backend(
     """Return the requested backend, or auto-detect the best available one.
 
     Args:
-        name: ``"hf"``, ``"mlx"``, or ``None`` for auto-detect.
+        name: ``"hf"``, ``"mlx"``, ``"onnx"``, ``"remote"``, or ``None``
+            for auto-detect.
         config: OpenMedConfig to pass to the backend.
 
     Auto-detection order:
         1. MLX — if on Apple Silicon *and* ``mlx`` is importable.
         2. HuggingFace — default fallback.
+        3. ONNX Runtime — CPU fallback when only ``onnx-runtime`` is installed.
     """
+    configured_name = getattr(config, "backend", None)
+    if name is None and configured_name is not None:
+        name = configured_name
+
     if name is not None:
         if name not in _BACKENDS:
             raise ValueError(
@@ -147,13 +300,24 @@ def get_backend(
             )
         backend = _BACKENDS[name](config)
         if not backend.is_available():
+            if name == "onnx":
+                raise RuntimeError(
+                    "Backend 'onnx' is not available. Install the CPU runtime "
+                    "with: pip install 'openmed[onnx-runtime]'. The low_resource "
+                    "profile does not fall back to a Torch backend."
+                )
+            if name == "remote":
+                raise RuntimeError(
+                    "Backend 'remote' is not available. Install its client-only "
+                    "dependencies with: pip install 'openmed[triton]'."
+                )
             raise RuntimeError(
                 f"Backend {name!r} is not available. Install its dependencies first."
             )
         return backend
 
     # Auto-detect: prefer MLX on Apple Silicon
-    for candidate_name in ("mlx", "hf"):
+    for candidate_name in ("mlx", "hf", "onnx"):
         candidate = _BACKENDS[candidate_name](config)
         if candidate.is_available():
             logger.info("Auto-selected inference backend: %s", candidate_name)
@@ -161,7 +325,8 @@ def get_backend(
 
     raise RuntimeError(
         "No inference backend available. "
-        "Install at least one: pip install openmed[hf] or pip install openmed[mlx]"
+        "Install at least one: pip install openmed[hf], openmed[mlx], "
+        "or openmed[onnx-runtime]"
     )
 
 
@@ -197,6 +362,29 @@ def _torch_fallback_for(model_name: str) -> str:
     return PRIVACY_FILTER_TORCH_FALLBACK
 
 
+def _local_artifact_uses_mlx(model_name: str) -> bool:
+    """Return whether an existing local artifact declares the MLX format."""
+    path = Path(model_name).expanduser()
+    if path.is_file():
+        path = path.parent
+    if not path.is_dir():
+        return False
+
+    if (path / "openmed-mlx.json").is_file():
+        return True
+
+    config_path = path / "config.json"
+    if not config_path.is_file():
+        return False
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return bool(config.get("_mlx_model_type")) and bool(
+        config.get("_mlx_weights_format")
+    )
+
+
 def select_privacy_filter_backend(
     model_name: str,
 ) -> Literal["mlx", "torch"]:
@@ -210,17 +398,11 @@ def select_privacy_filter_backend(
     should substitute :data:`PRIVACY_FILTER_TORCH_FALLBACK` for the
     actual download.
     """
-    name_lc = (model_name or "").lower()
-    is_mlx_artifact = "mlx" in name_lc
-
-    if not is_mlx_artifact:
-        # Some artifacts identify as MLX only via their on-disk metadata.
-        try:
-            from .pii import _is_privacy_filter_artifact_path
-
-            is_mlx_artifact = _is_privacy_filter_artifact_path(model_name)
-        except ImportError:  # pragma: no cover
-            is_mlx_artifact = False
+    path = Path(model_name).expanduser()
+    if path.exists():
+        is_mlx_artifact = _local_artifact_uses_mlx(model_name)
+    else:
+        is_mlx_artifact = "mlx" in (model_name or "").lower()
 
     if is_mlx_artifact and MLXBackend().is_available():
         return "mlx"

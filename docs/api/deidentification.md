@@ -18,7 +18,9 @@ entities = result.to_dataframe()
 
 The method imports pandas lazily, so importing `openmed` or
 `openmed.core.pii` does not import pandas. If pandas is not installed, calling
-`to_dataframe()` raises an actionable `ImportError` with the install command.
+`to_dataframe()` raises an actionable `MissingExtraError` with code
+`missing_extra` and the install command. It remains an `ImportError` for
+backward compatibility. See [Structured public errors](errors.md).
 
 The returned DataFrame has one row per detected entity and always uses this
 column order:
@@ -36,3 +38,38 @@ column order:
 
 When no PII entities are present, `to_dataframe()` returns an empty DataFrame
 with the same columns.
+
+## India ABDM and ABHA identifiers
+
+Enable the ABDM recognizer bundle for Indian clinical records to detect and
+replace ABHA numbers and addresses, Aadhaar numbers, PAN values, and contextual
+HPR/HFR registry identifiers:
+
+```python
+from openmed import deidentify
+
+result = deidentify(
+    note,
+    method="replace",
+    lang="en",
+    locale="en_IN",
+    abdm=True,
+)
+```
+
+The bundle also activates automatically for Hindi or Telugu, an India locale,
+or the `india_dpdp_act` policy profile. Pass `abdm=False` to opt out explicitly.
+It is inactive for other languages and locales by default. Recognized source
+labels (`ABHA_NUMBER`, `ABHA_ADDRESS`, `AADHAAR`, `PAN`, `ABDM_HPR_ID`, and
+`ABDM_HFR_ID`) normalize to `ID_NUM` and the `DIRECT_IDENTIFIER` policy class.
+Replacement mode produces synthetic values only; it does not call ABDM, verify
+an identifier, or store or resolve a real ABHA number.
+ABHA numbers are validated by their publicly documented 14-digit shape; the
+public NHA materials do not specify an offline checksum algorithm.
+
+ABHA-linked record sharing requires the individual's informed consent. This
+mode de-identifies recognized identifiers, but it does not collect or record
+consent and does not decide whether a disclosure is permitted. Applications
+must enforce their own consent and disclosure workflow before sharing records.
+See the [official ABDM FAQ](https://abdm.gov.in/FAQ) for the ABHA identity and
+consent model.

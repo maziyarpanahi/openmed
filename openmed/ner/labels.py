@@ -29,16 +29,28 @@ _CLINICAL_DOMAINS_DISCLAIMER = (
 )
 _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "anesthesia": "tests/fixtures/clinical/anesthesia.jsonl",
+    "allergy_intolerance": "tests/fixtures/clinical/allergy_intolerance.jsonl",
     "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
     "gastroenterology": "tests/fixtures/clinical/gastroenterology.jsonl",
     "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
     "immunization": "tests/fixtures/clinical/immunization.jsonl",
     "nephrology_renal": "tests/fixtures/clinical/nephrology_renal.jsonl",
+    "nursing_observation": "tests/fixtures/clinical/nursing_observation.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
+    "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
+    "allergy_intolerance": (
+        "The display labels are shaped for the planned OM-138 FHIR "
+        "AllergyIntolerance exporter: Allergen maps to code, "
+        "ReactionManifestation to reaction.manifestation, ReactionSeverity to "
+        "reaction.severity, Criticality to criticality, AllergyType to type, "
+        "and OnsetContext to onset. This is descriptive extraction metadata "
+        "only; it is not a contraindication check, drug-allergy cross-check, "
+        "recommendation, or clinical decision logic."
+    ),
     "immunization": (
         "The display labels are shaped for the planned OM-138 FHIR Immunization "
         "exporter: VaccineName maps to vaccineCode, DoseNumber to "
@@ -187,6 +199,29 @@ def generate_clinical_domains_markdown() -> str:
                 f"{_markdown_cell(fixture_path)} |"
             )
         sections.append("")
+    sections.extend(
+        [
+            "## Offline Coverage Evaluation",
+            "",
+            (
+                "The fixture-backed clinical domains are checked by the "
+                "aggregate-only `clinical_domain_coverage` suite. Run "
+                "`openmed benchmark domain-coverage --json --output "
+                "domain-coverage.json` from the repository root to verify "
+                "that every shipped display label has a non-empty synthetic "
+                "span and that fixture labels resolve to the canonical label "
+                "catalog."
+            ),
+            "",
+            (
+                "The gate fails on a missing fixture, an orphan label, an "
+                "invalid offset, or a label with no span. Reports contain "
+                "domain names, labels, offsets, and counts only; fixture text "
+                "is never emitted."
+            ),
+            "",
+        ]
+    )
     return "\n".join(sections)
 
 

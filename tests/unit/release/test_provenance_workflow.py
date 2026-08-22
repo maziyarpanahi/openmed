@@ -30,6 +30,12 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     job = jobs["python-distributions"]
 
     assert workflow["on"]["workflow_call"]["inputs"]["distribution-artifact-name"]
+    assert workflow["on"]["workflow_call"]["inputs"]["release-tag"] == {
+        "description": "Immutable vX.Y.Z tag to build during a recovery dispatch.",
+        "required": "false",
+        "type": "string",
+        "default": "",
+    }
     assert job["name"] == "Build, attest, and verify Python distributions"
     assert job["permissions"] == {
         "contents": "read",
@@ -37,8 +43,13 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
         "attestations": "write",
     }
     assert "actions/checkout@v7" in content
-    assert "actions/setup-python@v6" in content
-    assert "python -m build" in content
+    assert "actions/setup-python@v7" in content
+    assert "pip install build twine 'hatchling==1.31.0'" in content
+    assert "python -m build --no-isolation" in content
+    assert "Verify distribution metadata compatibility" in content
+    assert 'expected_metadata_version = "2.4"' in content
+    assert 'wheel_metadata["Metadata-Version"]' in content
+    assert 'sdist_metadata["Metadata-Version"]' in content
     assert "twine check dist/*" in content
     assert "actions/attest@v4" in content
     assert "continue-on-error: true" in content
@@ -51,6 +62,23 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert '--source-digest "$GITHUB_SHA"' in content
     assert '--source-ref "$GITHUB_REF"' in content
     assert "actions/upload-artifact@v7" in content
+    assert "Verify release source ref" in content
+    assert "Checked-out commit $CHECKED_OUT_COMMIT" in content
+    assert '"release_commit": sys.argv[2]' in content
+    assert '"release_tag": sys.argv[1]' in content
+    assert '"workflow_ref": os.environ["GITHUB_REF"]' in content
+    assert '"workflow_sha": os.environ["GITHUB_SHA"]' in content
+    assert "release-source.json" in content
+    assert "--release-version" in content
+    assert "computed next version $COMPUTED_VERSION" not in content
+    assert "WORKFLOW_REVISION: ${{ github.workflow_sha }}" in content
+    assert '"${WORKFLOW_REVISION}:scripts/release/changelog.py"' in content
+    assert '--repo "$GITHUB_WORKSPACE"' in content
+    assert "python scripts/release/changelog.py" not in content
+    assert "Verify API compatibility and migration guide" in content
+    assert "PREVIOUS_TAG=$(git describe --tags --abbrev=0" in content
+    assert 'API_ARGS+=(--check "$MIGRATION_GUIDE")' in content
+    assert 'python scripts/release/api_surface_diff.py "${API_ARGS[@]}"' in content
 
 
 def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
@@ -62,6 +90,7 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
     npm_publish = jobs["npm-publish"]
 
     assert provenance["uses"] == "./.github/workflows/provenance.yml"
+    assert provenance["with"]["release-tag"] == ("${{ inputs.tag || github.ref_name }}")
     assert provenance["permissions"] == {
         "contents": "read",
         "id-token": "write",
@@ -75,7 +104,7 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
     assert "npm publish --ignore-scripts --access public --provenance" in str(
         npm_publish
     )
-    assert "pypa/gh-action-pypi-publish@v1.14.0" in PUBLISH_WORKFLOW.read_text(
+    assert "pypa/gh-action-pypi-publish@v1.14.1" in PUBLISH_WORKFLOW.read_text(
         encoding="utf-8"
     )
 
@@ -134,8 +163,9 @@ def test_evidence_job_attaches_provenance_and_signatures_to_the_release():
         in content
     )
     assert "release-provenance/release-artifact-digests.txt" in content
+    assert "release-provenance/release-source.json" in content
     assert "assets+=(sigstore-bundles/*.sigstore.json)" in content
-    assert 'gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber' in content
+    assert 'gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber' in content
 
     # A partially successful signing run leaves unverified bundles on disk, so
     # signatures are only attached when the whole signing step succeeded.

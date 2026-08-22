@@ -38,6 +38,8 @@ device = "cuda"
 cache_dir = "/mnt/cache/openmed"
 torch_attention_backend = "auto"
 cjk_width_convention = "cjk"
+transliteration_aware_name_matching = false
+indic_name_similarity_threshold = 0.80
 ```
 
 Runtime environment controls can select the config path, provide Hub
@@ -48,6 +50,18 @@ export OPENMED_CONFIG=/etc/openmed/config.toml
 export HF_TOKEN=hf_xxx
 export OPENMED_TORCH_DEVICE=cuda:1
 ```
+
+An explicitly selected `backend="remote"` adds KServe V2 endpoint, model,
+protocol, timeout, TLS, and local-tokenizer settings. It is never selected
+automatically and is incompatible with `local_only` or `OPENMED_OFFLINE`.
+See [KServe and Triton model repositories](serving/kserve-triton.md) for the
+full configuration and deployment boundary.
+
+For Indic personal-name pseudonymization, enable
+`transliteration_aware_name_matching` and reuse the same setting when reopening
+a file-backed surrogate vault. The collision threshold and optional local
+transliterator adapter are described in
+[Transliteration-aware Indic name matching](indic-name-matching.md).
 
 ## CJK width normalization
 
@@ -60,6 +74,52 @@ the returned surface text.
 Set `cjk_width_convention="nfkc"` to apply strict per-character NFKC
 normalization instead. Both modes retain an explicit source map so expanded
 compatibility characters still remap to their original code-point spans.
+
+## Chinese script normalization
+
+Install the optional Apache-2.0 OpenCC integration when clinical text can mix
+Simplified and Traditional Chinese:
+
+```bash
+pip install "openmed[zh]"
+```
+
+Script conversion is disabled by default. Set `chinese_target_script` to
+`"simplified"` or `"traditional"` to canonicalize Chinese variants before PII
+detection and segmentation:
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(chinese_target_script="simplified")
+```
+
+OpenMed keeps a code-point alignment from the converted text to the source, so
+detected PHI spans are projected back to the exact original characters before
+redaction. Context-dependent phrase rewrites map conservatively to their full
+source phrase rather than guessing partial offsets. If OpenCC is absent, the
+pre-pass returns the input unchanged with identity alignment and emits one
+optional-dependency warning.
+
+Chinese numeral helpers do not require the optional script-conversion package.
+They parse everyday and financial forms, return exact source code-point spans,
+and recognize valid year/month/day expressions:
+
+```python
+from openmed.processing import (
+    find_chinese_numbers,
+    normalize_chinese_dates,
+    parse_chinese_numeral,
+)
+
+assert parse_chinese_numeral("一百零一") == 101
+numbers = find_chinese_numbers("剂量三千五百毫升")
+dates = normalize_chinese_dates("出生于一九八五年十二月三日")
+```
+
+When PII detection uses `lang="zh"`, contextual patterns also recognize valid
+Chinese-numeral dates, medical-record identifiers, and clinical quantities.
+Invalid unit sequences and impossible calendar dates are rejected.
 
 ## PyTorch attention backends
 
@@ -113,6 +173,11 @@ message prefix:
 ```text
 OPENMED_OFFLINE/local_only=True blocks outbound network access after model loading.
 ```
+
+For `HF_ENDPOINT`, pip mirror, proxy, retry, and metered-connection setup, see
+the [low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md).
+It includes a cache-warming checklist and the `openmed doctor` fields used to
+confirm the active network environment before switching offline.
 
 ## Validation helpers
 

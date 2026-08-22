@@ -13,13 +13,16 @@ WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PROVENANCE_WORKFLOW = ROOT / ".github" / "workflows" / "provenance.yml"
 IMAGE_SBOM_WORKFLOW = ROOT / ".github" / "workflows" / "sbom-image.yml"
+DOCKERIGNORE = ROOT / ".dockerignore"
 ANDROID_PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "android-publish.yml"
 ANDROID_BUILD = ROOT / "android" / "openmedkit" / "build.gradle.kts"
 ANDROID_README = ROOT / "android" / "README.md"
 JITPACK_CONFIG = ROOT / "jitpack.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
+PYPROJECT = ROOT / "pyproject.toml"
 WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
 WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
+BRAND_CLAIMS = ROOT / "docs" / "brand" / "system" / "claims.yml"
 SWIFT_GUIDE = ROOT / "docs" / "swift-openmedkit.md"
 ANDROID_ONNX_GUIDE = ROOT / "docs" / "export-onnx-android.md"
 SWIFT_PACKAGE = ROOT / "Package.swift"
@@ -104,6 +107,20 @@ def test_only_publish_workflow_uses_pypi_publish_action():
     assert "PYPI_API_TOKEN" in publish_workflow
 
 
+def test_distribution_builder_stays_compatible_with_pypi_publish_action():
+    pyproject = PYPROJECT.read_text(encoding="utf-8")
+    provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'requires = ["hatchling"]' in pyproject
+    assert pyproject.count('core-metadata-version = "2.4"') == 2
+    assert "pip install build twine 'hatchling==1.31.0'" in provenance_workflow
+    assert "python -m build --no-isolation" in provenance_workflow
+    assert "Verify distribution metadata compatibility" in provenance_workflow
+    assert 'expected_metadata_version = "2.4"' in provenance_workflow
+    assert 'wheel_metadata["Metadata-Version"]' in provenance_workflow
+    assert 'sdist_metadata["Metadata-Version"]' in provenance_workflow
+
+
 def test_publish_workflow_keeps_release_gates():
     publish_workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
     provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
@@ -116,10 +133,18 @@ def test_publish_workflow_keeps_release_gates():
     )
 
     assert "tags:\n      - 'v*'" in publish_workflow
-    assert "workflow_dispatch:" not in publish_workflow
+    assert workflow["on"]["workflow_dispatch"]["inputs"]["tag"] == {
+        "description": "Existing immutable vX.Y.Z tag to publish.",
+        "required": "true",
+        "type": "string",
+    }
     assert "pull_request:" not in publish_workflow
+    assert workflow["concurrency"] == {
+        "group": "publish-openmed-${{ inputs.tag || github.ref_name }}",
+        "cancel-in-progress": "false",
+    }
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
-    assert "pypa/gh-action-pypi-publish@v1.14.0" in publish_workflow
+    assert "pypa/gh-action-pypi-publish@v1.14.1" in publish_workflow
     assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in publish_workflow
 
     assert publish_job["environment"]["name"] == "pypi"
@@ -134,9 +159,16 @@ def test_publish_workflow_keeps_release_gates():
     assert "id-token: write" in provenance_workflow
     assert "python scripts/release/check_repo_policy.py" in provenance_workflow
     assert "Compute release metadata" in provenance_workflow
-    assert "python scripts/release/changelog.py" in provenance_workflow
-    assert "steps.release_metadata.outputs.next_version" in provenance_workflow
+    assert 'python "$WORKFLOW_CHANGELOG"' in provenance_workflow
+    assert '"${WORKFLOW_REVISION}:scripts/release/changelog.py"' in provenance_workflow
+    assert "--release-version" in provenance_workflow
+    assert "steps.release_metadata.outputs.next_version" not in provenance_workflow
     assert "Verify version matches tag" in provenance_workflow
+    assert "Verify release source ref" in provenance_workflow
+    assert "Verify API compatibility and migration guide" in provenance_workflow
+    assert "PREVIOUS_TAG=$(git describe --tags --abbrev=0" in provenance_workflow
+    assert "scripts/release/api_surface_diff.py" in provenance_workflow
+    assert 'API_ARGS+=(--check "$MIGRATION_GUIDE")' in provenance_workflow
     assert "twine check dist/*" in provenance_workflow
 
 
@@ -151,9 +183,20 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
         for step in npm_publish["steps"]
         if step.get("name") == "Publish npm package with provenance"
     )
+    existing_release_step = next(
+        step
+        for step in npm_publish["steps"]
+        if step.get("name") == "Check for an existing matching npm release"
+    )
+    credential_step = next(
+        step
+        for step in npm_publish["steps"]
+        if step.get("name") == "Verify npm credentials"
+    )
 
     assert npm_verify["permissions"] == {"contents": "read"}
-    assert "actions/setup-node@v6" in content
+    assert npm_verify["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
+    assert "actions/setup-node@v7" in content
     assert "node-version: '24'" in content
     assert "package-manager-cache: false" in content
     assert "npm audit --audit-level=low" in content
@@ -173,7 +216,16 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
     assert publish_step["run"] == (
         "npm publish --ignore-scripts --access public --provenance"
     )
+    assert existing_release_step["id"] == "npm-release"
+    assert "registry_git_head" in existing_release_step["run"]
+    assert "downloaded_shasum" in existing_release_step["run"]
+    assert "registry_content_digest" in existing_release_step["run"]
+    assert "diff --recursive --brief --no-dereference" in existing_release_step["run"]
+    assert 'echo "exists=true" >> "$GITHUB_OUTPUT"' in existing_release_step["run"]
+    assert credential_step["if"] == "steps.npm-release.outputs.exists != 'true'"
+    assert publish_step["if"] == "steps.npm-release.outputs.exists != 'true'"
     assert publish_step["env"]["NODE_AUTH_TOKEN"] == ("${{ secrets.NPM_ACCESS_TOKEN }}")
+    assert npm_publish["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
     assert sbom["needs"] == ["publish", "npm-publish"]
 
 
@@ -191,6 +243,24 @@ def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
     assert "pkg:deb/" in workflow
     assert "pkg:pypi/" in workflow
     assert "if-no-files-found: error" in workflow
+
+
+def test_docker_context_excludes_generated_and_dependency_artifacts():
+    ignored = {
+        line.strip()
+        for line in DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+    assert {
+        "sbom.cdx.json",
+        "image-sbom.cdx.json",
+        "image-sbom.cdx.json.sha256",
+        "pip-audit-report.json",
+        "vulnerability-reports/",
+        "node_modules/",
+        "**/node_modules/",
+    } <= ignored
 
 
 def test_image_sbom_release_path_attaches_artifact_without_publishing_image():
@@ -402,8 +472,13 @@ def test_documented_model_ids_use_concrete_public_examples():
     )
 
 
-def test_localized_readmes_advertise_current_model_count():
+def test_localized_readmes_omit_unverified_model_count():
     readmes = sorted(ROOT.glob("README*.md"))
+    claims = json.loads(BRAND_CLAIMS.read_text(encoding="utf-8"))["claims"]
 
     assert len(readmes) >= 14
-    assert all("2%2C000+" in path.read_text(encoding="utf-8") for path in readmes)
+    assert claims["broader_compatible_model_count"]["status"] == "unverified"
+    for path in readmes:
+        content = path.read_text(encoding="utf-8")
+        assert "2%2C000+" not in content
+        assert "2,000+ models" not in content

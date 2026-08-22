@@ -111,17 +111,17 @@ def test_model_scorecard_renders_multiple_suite_reports_by_device_tier() -> None
     assert "| Tier Latency Budget p50/p95 ms | `60 / 150` |" in markdown
     assert (
         "| `cpu` | yes | 1 | 2 | 98.00% | n/a | 0.00% | n/a | n/a | n/a | "
-        "11 / 20 | 128 | 64 |"
+        "n/a | 11 / 20 | 128 | 64 |"
     ) in markdown
     assert (
         "| `mlx-fp` | yes | 1 | 3 | 90.00% | n/a | 2.00% | n/a | n/a | n/a | "
-        "8 / 16 | 96 | 61.5 |"
+        "n/a | 8 / 16 | 96 | 61.5 |"
     ) in markdown
     assert (
-        "| `mlx-8bit` | no | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |"
+        "| `mlx-8bit` | no | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |"
     ) in markdown
     assert (
-        "| `coreml` | no | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |"
+        "| `coreml` | no | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |"
     ) in markdown
 
 
@@ -173,7 +173,7 @@ def test_model_scorecard_missing_tier_and_metrics_use_placeholders() -> None:
     assert "| Model Tier | `n/a` |" in markdown
     assert "| Tier RAM Limit MB | n/a |" in markdown
     assert (
-        "| `cpu` | yes | 1 | 1 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |"
+        "| `cpu` | yes | 1 | 1 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |"
     ) in markdown
     assert payload["model_tier"] is None
     assert payload["device_tiers"][0]["recall"] is None

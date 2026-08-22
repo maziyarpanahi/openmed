@@ -86,6 +86,78 @@
     "Outcome",
     "Population"
   ],
+  "disease": [
+    "Disease",
+    "Condition",
+    "Pathology"
+  ],
+  "pharmaceutical": [
+    "Chemical",
+    "Drug",
+    "Medication"
+  ],
+  "oncology": [
+    "SimpleChemical",
+    "Chemical",
+    "AminoAcid",
+    "AnatomicalSystem",
+    "Cancer",
+    "Cell",
+    "GeneOrGeneProduct",
+    "CellularComponent",
+    "DevelopingAnatomicalStructure",
+    "ImmaterialAnatomicalEntity",
+    "MultiTissueStructure",
+    "Organism",
+    "Species",
+    "Organ",
+    "OrganismSubdivision",
+    "OrganismSubstance",
+    "Tissue",
+    "PathologicalFormation"
+  ],
+  "anatomy": [
+    "Organ",
+    "Tissue",
+    "Anatomy"
+  ],
+  "genomics": [
+    "GeneOrGeneProduct",
+    "Gene",
+    "Protein",
+    "DNA",
+    "RNA",
+    "CellLine",
+    "CellType"
+  ],
+  "chemical": [
+    "SimpleChemical",
+    "Chemical",
+    "Drug",
+    "Medication"
+  ],
+  "species": [
+    "Organism",
+    "Species"
+  ],
+  "protein": [
+    "GeneOrGeneProduct",
+    "Protein",
+    "ProteinComplex",
+    "ProteinEnumeration",
+    "ProteinFamilyOrGroup",
+    "ProteinVariant"
+  ],
+  "pathology": [
+    "Disease",
+    "Condition",
+    "Pathology"
+  ],
+  "hematology": [
+    "Cancer",
+    "Disease",
+    "CellLine"
+  ],
   "cardiology": [
     "CardiacFinding",
     "ECGFinding",
@@ -112,6 +184,14 @@
     "VisualAcuity",
     "IntraocularPressure",
     "Anatomy"
+  ],
+  "radiology": [
+    "Finding",
+    "ImagingModality",
+    "Anatomy",
+    "Laterality",
+    "Measurement",
+    "Impression"
   ],
   "generic": [
     "Person",
@@ -171,6 +251,14 @@
     "AdministrationDate",
     "VaccineSeries"
   ],
+  "allergy_intolerance": [
+    "Allergen",
+    "ReactionManifestation",
+    "ReactionSeverity",
+    "Criticality",
+    "AllergyType",
+    "OnsetContext"
+  ],
   "pulmonology": [
     "SpirometryMeasure",
     "OxygenSupport",
@@ -187,5 +275,21 @@
     "DevelopmentalMilestone",
     "FeedingHistory",
     "PediatricFinding"
+  ],
+  "procedures": [
+    "Procedure",
+    "Surgery",
+    "DiagnosticProcedure",
+    "Device",
+    "Approach"
+  ],
+  "nursing_observation": [
+    "IntakeOutput",
+    "LineDrainTube",
+    "RiskScore",
+    "MobilityStatus",
+    "CareIntervention",
+    "PainScore",
+    "SkinAssessment"
   ]
 }

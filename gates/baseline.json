@@ -1,5 +1,95 @@
 {
   "entries": {
+    "i18n-throughput::hi::pattern-only": {
+      "family": "i18n-throughput",
+      "format": "pattern-only",
+      "key": "i18n-throughput::hi::pattern-only",
+      "metadata": {
+        "benchmark_schema_version": 1,
+        "calibration_artifact_set_sha256": "sha256:5c7947070ebaa51b083c518a0c8a5667593f97636c28b11697710fa358be7688",
+        "calibration_method": "median",
+        "calibration_run_ids": [
+          31149389732,
+          31239595555,
+          31295013051,
+          31357054005,
+          31459311593,
+          31565474523
+        ],
+        "calibration_sample_count": 6,
+        "corpus_sha256": "sha256:9f313c5ab3ef3c4fd2fe686cd7fb8e1210b6391209f6ccfb5fe35dc25387abc9",
+        "iterations": 1,
+        "recorded_platform": "GitHub-hosted Ubuntu x86_64",
+        "regression_threshold": 0.2
+      },
+      "metrics": {
+        "deidentify_spans_per_second": 37.4975,
+        "segmentation_chars_per_second": 135093.3405
+      },
+      "reproducibility_hash": "sha256:5c7947070ebaa51b083c518a0c8a5667593f97636c28b11697710fa358be7688",
+      "tier": "hi",
+      "updated_at": "2026-08-12T00:00:00+00:00"
+    },
+    "i18n-throughput::ta::pattern-only": {
+      "family": "i18n-throughput",
+      "format": "pattern-only",
+      "key": "i18n-throughput::ta::pattern-only",
+      "metadata": {
+        "benchmark_schema_version": 1,
+        "calibration_artifact_set_sha256": "sha256:5c7947070ebaa51b083c518a0c8a5667593f97636c28b11697710fa358be7688",
+        "calibration_method": "median",
+        "calibration_run_ids": [
+          31149389732,
+          31239595555,
+          31295013051,
+          31357054005,
+          31459311593,
+          31565474523
+        ],
+        "calibration_sample_count": 6,
+        "corpus_sha256": "sha256:b20317f3979bae316a9f9238e9f090c3f83a1add1f3f25cd6cf48b5928ef94c6",
+        "iterations": 1,
+        "recorded_platform": "GitHub-hosted Ubuntu x86_64",
+        "regression_threshold": 0.2
+      },
+      "metrics": {
+        "deidentify_spans_per_second": 52.22,
+        "segmentation_chars_per_second": 138784.6725
+      },
+      "reproducibility_hash": "sha256:5c7947070ebaa51b083c518a0c8a5667593f97636c28b11697710fa358be7688",
+      "tier": "ta",
+      "updated_at": "2026-08-12T00:00:00+00:00"
+    },
+    "i18n-throughput::zh::pattern-only": {
+      "family": "i18n-throughput",
+      "format": "pattern-only",
+      "key": "i18n-throughput::zh::pattern-only",
+      "metadata": {
+        "benchmark_schema_version": 1,
+        "calibration_artifact_set_sha256": "sha256:5c7947070ebaa51b083c518a0c8a5667593f97636c28b11697710fa358be7688",
+        "calibration_method": "median",
+        "calibration_run_ids": [
+          31149389732,
+          31239595555,
+          31295013051,
+          31357054005,
+          31459311593,
+          31565474523
+        ],
+        "calibration_sample_count": 6,
+        "corpus_sha256": "sha256:eb9a1ff6e480f9e376081cf74f23201bb5b96ca2ae57ae25b569f25b0319ab7e",
+        "iterations": 1,
+        "recorded_platform": "GitHub-hosted Ubuntu x86_64",
+        "regression_threshold": 0.2
+      },
+      "metrics": {
+        "deidentify_spans_per_second": 624.1955,
+        "segmentation_chars_per_second": 320459.236
+      },
+      "reproducibility_hash": "sha256:5c7947070ebaa51b083c518a0c8a5667593f97636c28b11697710fa358be7688",
+      "tier": "zh",
+      "updated_at": "2026-08-12T00:00:00+00:00"
+    },
     "pii::small::mlx-fp": {
       "family": "PII",
       "format": "mlx-fp",
@@ -16,6 +106,35 @@
       "tier": "Small",
       "updated_at": "2026-04-14T00:00:00+00:00"
     }
+  },
+  "relation_golden": {
+    "entries": {
+      "relation::asserted-absent": {
+        "family": "Relation",
+        "fixture_hash": "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187",
+        "key": "relation::asserted-absent",
+        "relation_type": "ASSERTED_ABSENT",
+        "strict_f1": 1.0,
+        "tolerance": 0.01
+      },
+      "relation::temporally-before": {
+        "family": "Relation",
+        "fixture_hash": "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187",
+        "key": "relation::temporally-before",
+        "relation_type": "TEMPORALLY_BEFORE",
+        "strict_f1": 1.0,
+        "tolerance": 0.01
+      },
+      "relation::treats": {
+        "family": "Relation",
+        "fixture_hash": "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187",
+        "key": "relation::treats",
+        "relation_type": "TREATS",
+        "strict_f1": 1.0,
+        "tolerance": 0.01
+      }
+    },
+    "schema_version": 1
   },
   "schema_version": 1
 }

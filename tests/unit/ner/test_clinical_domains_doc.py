@@ -33,6 +33,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
             assert f"| {label} |" in markdown
 
     for fixture_path in (
+        "tests/fixtures/clinical/allergy_intolerance.jsonl",
         "tests/fixtures/clinical/anesthesia.jsonl",
         "tests/fixtures/clinical/endocrinology.jsonl",
         "tests/fixtures/clinical/gastroenterology.jsonl",
@@ -41,10 +42,14 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/nutrition_diet.jsonl",
         "tests/fixtures/clinical/pulmonology.jsonl",
         "tests/fixtures/clinical/pediatrics_growth.jsonl",
+        "tests/fixtures/clinical/nursing_observation.jsonl",
+        "tests/fixtures/clinical/radiology_finding.jsonl",
     ):
         assert Path(fixture_path).exists()
         assert fixture_path in markdown
 
     assert "Not shipped" in markdown
+    assert "OM-138 FHIR AllergyIntolerance exporter" in markdown
+    assert "not a contraindication check" in markdown
     assert "OM-138 FHIR Immunization exporter" in markdown
     assert "VaccineLot to lotNumber" in markdown

@@ -12,6 +12,10 @@ Pick the track that matches how you'll use OpenMed:
 | **App developer** | Call de-identification from a service or agent | [App developer](#app-developer) |
 | **Data engineer** | Redact files, directories, and datasets at scale | [Data engineer](#data-engineer) |
 
+To generate the matching config, offline defaults, README, and starter script
+instead of assembling them by hand, use the
+[`openmed init` project scaffold](cli/openmed-init.md).
+
 !!! warning "Not a medical device"
     OpenMed is a research and engineering toolkit for text de-identification and
     named-entity recognition. It is **not** a medical device and does not provide
@@ -22,12 +26,23 @@ Pick the track that matches how you'll use OpenMed:
 
 All tracks assume a working install. The minimal setup is:
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv (skip if present)
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install "openmed[hf]"                      # core + Hugging Face models
-```
+=== "macOS/Linux"
+
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv (skip if present)
+    uv venv --python 3.11
+    source .venv/bin/activate
+    uv pip install "openmed[hf]"                      # core + Hugging Face models
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    uv venv --python 3.11
+    .venv\Scripts\Activate.ps1
+    uv pip install "openmed[hf]"                      # core + Hugging Face models
+    ```
 
 The first model-backed call may download model artifacts. Clinical text is still
 processed locally; after warming the cache, use

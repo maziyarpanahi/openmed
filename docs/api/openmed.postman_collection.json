@@ -205,6 +205,48 @@
       ]
     },
     {
+      "name": "Grounding",
+      "description": "Offline-first grounding against caller-provisioned terminology snapshots.",
+      "item": [
+        {
+          "name": "Ground Clinical Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Aspirin 81 mg daily\",\n  \"systems\": [\"rxnorm\"],\n  \"source_language\": \"en\",\n  \"top_k\": 5,\n  \"offline\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/ground",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ground"
+              ]
+            },
+            "description": "Ground synthetic clinical text using local terminology snapshots."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "PII",
       "description": "PII extraction and de-identification endpoints.",
       "item": [
@@ -317,6 +359,44 @@
               ]
             },
             "description": "De-identify PII in the supplied text using the selected method (mask, remove, replace, hash, shift_dates)."
+          },
+          "response": []
+        },
+        {
+          "name": "PII Deidentify (Stream)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/x-ndjson"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Contact Jordan Sample at 555-0100 or jordan.sample@example.org regarding appointment on 2021-04-15.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.7,\n  \"lang\": \"en\",\n  \"method\": \"mask\",\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true,\n  \"keep_mapping\": false,\n  \"chunk_size\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pii/deidentify/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pii",
+                "deidentify",
+                "stream"
+              ]
+            },
+            "description": "Stream safely finalized de-identified text and aggregate audit metadata as newline-delimited JSON (application/x-ndjson)."
           },
           "response": []
         }
@@ -523,6 +603,90 @@
               ]
             },
             "description": "Fetch the de-identification summary for a completed SMART backend ingestion job."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OMOP",
+      "item": [
+        {
+          "name": "Load OMOP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records_jsonl\": \"{\\\"document_id\\\": \\\"synthetic-note-001\\\", \\\"entities\\\": [{\\\"code\\\": \\\"73211009\\\", \\\"concept_id\\\": 201820, \\\"domain_id\\\": \\\"Condition\\\", \\\"end\\\": 24, \\\"start\\\": 16, \\\"text\\\": \\\"diabetes\\\", \\\"vocabulary_id\\\": \\\"SNOMED\\\"}], \\\"note_date\\\": \\\"2026-01-02\\\", \\\"note_text\\\": \\\"Patient reports diabetes.\\\", \\\"person_id\\\": \\\"synthetic-patient-001\\\"}\\n\",\n  \"vocabulary_version\": \"SNOMED-2026\",\n  \"validate_constraints\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/omop/load",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "omop",
+                "load"
+              ]
+            },
+            "description": "Load newline-delimited synthetic grounded note records into an in-memory OMOP CDM build and return a PHI-free per-table row-count and rejection summary."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cohort",
+      "item": [
+        {
+          "name": "Resolve Cohort",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phenotype\": {\n    \"schema_version\": \"openmed.cohort.phenotype.v1\",\n    \"id\": \"example-diabetes\",\n    \"name\": \"Example diabetes phenotype\",\n    \"concept_sets\": [\n      {\n        \"id\": \"diabetes\",\n        \"vocabulary\": \"OMOP\",\n        \"concept_ids\": [201826],\n        \"include_descendants\": false\n      }\n    ],\n    \"expression\": {\n      \"operator\": \"criterion\",\n      \"criterion\": {\n        \"id\": \"has-diabetes\",\n        \"concept_set\": \"diabetes\",\n        \"occurrence\": {\"minimum\": 1},\n        \"assertion\": {\"negation\": [\"affirmed\"]}\n      }\n    }\n  },\n  \"records_jsonl\": \"{\\\"document_id\\\": \\\"synthetic-cohort-note-001\\\", \\\"entities\\\": [{\\\"concept_id\\\": 201826, \\\"domain_id\\\": \\\"Condition\\\", \\\"end\\\": 18, \\\"start\\\": 10, \\\"text\\\": \\\"diabetes\\\", \\\"vocabulary_id\\\": \\\"OMOP\\\"}], \\\"note_date\\\": \\\"2026-01-02\\\", \\\"note_text\\\": \\\"Synthetic diabetes marker.\\\", \\\"person_id\\\": \\\"synthetic-cohort-person-001\\\"}\\n\",\n  \"concept_ancestors\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/cohort/resolve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cohort",
+                "resolve"
+              ]
+            },
+            "description": "Resolve a stable phenotype over newline-delimited synthetic grounded records in memory and return internal patient IDs plus PHI-free evidence pointers and provenance."
           },
           "response": []
         }

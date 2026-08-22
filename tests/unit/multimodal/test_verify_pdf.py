@@ -137,10 +137,12 @@ def test_missing_original_fails_closed_when_rasterizing(monkeypatch):
     def raise_ioerror(path, page, bbox):
         raise FileNotFoundError(str(path))
 
-    with pytest.raises(FileNotFoundError):
-        verify_redacted_pdf(
-            "original.pdf", "redacted.pdf", [REGION], rasterizer=raise_ioerror
-        )
+    source = "Synthetic_Patient_John_Doe.pdf"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        verify_redacted_pdf(source, "redacted.pdf", [REGION], rasterizer=raise_ioerror)
+
+    assert source not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
 
 
 def test_page_bbox_tuple_region_is_accepted(monkeypatch):
@@ -300,6 +302,7 @@ def test_cli_exit_codes_and_output(monkeypatch, tmp_path, capsys):
 
 
 def test_cli_bad_spans_file_exits_2(tmp_path):
+    from openmed.cli._output import CliError
     from openmed.cli.verify_pdf import run_from_args
 
     bad = tmp_path / "bad.json"
@@ -307,7 +310,11 @@ def test_cli_bad_spans_file_exits_2(tmp_path):
     args = SimpleNamespace(
         original=Path("o.pdf"), redacted=Path("r.pdf"), spans=bad, output=None
     )
-    assert run_from_args(args) == 2
+    # Malformed spans is a usage error: run_from_args raises CliError (exit 2),
+    # which main()/standalone entrypoints render as the error envelope.
+    with pytest.raises(CliError) as excinfo:
+        run_from_args(args)
+    assert excinfo.value.exit_code == 2
 
 
 def test_cli_spans_object_wrapper(monkeypatch, tmp_path):

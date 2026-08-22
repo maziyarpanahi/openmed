@@ -6,6 +6,14 @@ from collections.abc import Sequence
 from typing import Any, Literal, Optional, Union
 
 from openmed.core.policy import canonical_policy_name
+from openmed.interop.tools import (
+    AnalyzeTextArgs,
+    DeidentifyArgs,
+    ExtractPIIArgs,
+    PIILanguage,
+    UnloadModelArgs,
+)
+from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
@@ -32,50 +40,21 @@ _DEFAULT_STREAM_CHUNK_SIZE = 1024
 _DEFAULT_STREAM_WINDOW_CHARS = 4096
 _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
+_DEFAULT_GROUNDING_SYSTEMS = ["rxnorm", "icd10cm", "loinc", "hpo"]
 KeepAliveValue = Union[int, float, str]
-
-# Languages accepted by the PII endpoints. This MUST mirror
-# ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` so the REST/MCP layer does not
-# reject a language the core library actually supports (e.g. ar/ja/tr, which
-# shipped with published models but were missing from these schemas). The
-# parity is guarded by
-# ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
-PIILanguage = Literal[
-    "en",
-    "fr",
-    "de",
-    "it",
-    "es",
-    "nl",
-    "hi",
-    "te",
-    "pt",
-    "ar",
-    "he",
-    "ja",
-    "tr",
-    "id",
-    "th",
-    "ko",
-    "ro",
-]
 
 
 def _normalize_text(value: Any) -> str:
-    if value is None:
-        raise ValueError("Text is required")
-    if not isinstance(value, str):
-        value = str(value)
+    # Route through the shared gateway so REST requests validate text identically
+    # to the library and MCP surfaces: same character cap (still driven by
+    # ``OPENMED_SERVICE_MAX_TEXT_LENGTH``), plus byte-size and UTF-8 encoding
+    # guardrails. Errors never echo the (possibly PHI) text.
+    return normalize_text(value)
 
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError("Text must not be blank")
-    max_text_length = get_max_text_length()
-    if len(normalized) > max_text_length:
-        raise ValueError(
-            f"Text exceeds the maximum length of {max_text_length} characters"
-        )
-    return normalized
+
+def _normalize_pii_language(value: Any) -> str:
+    """Normalize API PII languages through the shared gateway."""
+    return validate_language(value, include_national_id=False)
 
 
 def _normalize_model_name(value: str) -> str:
@@ -175,6 +154,65 @@ def _normalize_optional_nonblank_string(value: Any, field_name: str) -> Optional
     return _normalize_nonblank_string(value, field_name)
 
 
+def _normalize_records_jsonl(value: Any) -> str:
+    if value is None:
+        raise ValueError("records_jsonl is required")
+    if not isinstance(value, str):
+        raise ValueError("records_jsonl must be a string")
+    if not value.strip():
+        raise ValueError("records_jsonl must not be blank")
+    max_text_length = get_max_text_length()
+    if len(value) > max_text_length:
+        raise ValueError(
+            f"records_jsonl exceeds the maximum length of {max_text_length} characters"
+        )
+    return value
+
+
+def _normalize_optional_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return _normalize_text(value)
+
+
+def _normalize_grounding_systems(value: Any) -> list[str]:
+    if value is None:
+        return list(_DEFAULT_GROUNDING_SYSTEMS)
+    if isinstance(value, str):
+        values = value.split(",")
+    elif isinstance(value, Sequence):
+        values = list(value)
+    else:
+        raise ValueError("systems must be a list of vocabulary names")
+    systems = [str(item).strip() for item in values if str(item).strip()]
+    if not systems:
+        raise ValueError("systems must contain at least one vocabulary")
+    return list(dict.fromkeys(systems))
+
+
+def _normalize_grounding_entities(value: Any) -> Optional[list[dict[str, Any]]]:
+    if value is None:
+        return None
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError("entities must be a list of objects")
+    entities: list[dict[str, Any]] = []
+    for index, entity in enumerate(value):
+        if not isinstance(entity, dict):
+            raise ValueError(f"entity at index {index} must be an object")
+        entities.append(dict(entity))
+    if not entities:
+        raise ValueError("entities must contain at least one object")
+    return entities
+
+
+def _normalize_phenotype(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("phenotype must be an object")
+    if not value:
+        raise ValueError("phenotype must not be empty")
+    return value
+
+
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
     method = values.get("method", "mask")
     shift_dates = values.get("shift_dates")
@@ -202,75 +240,41 @@ class _StrictModel(BaseModel):
         class Config:
             extra = "forbid"
 
+    if PYDANTIC_V2:
+
+        @field_validator("lang", mode="before", check_fields=False)
+        @classmethod
+        def _validate_pii_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
+
+    else:  # pragma: no cover
+
+        @validator("lang", pre=True, check_fields=False)
+        def _validate_pii_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
+
 
 if PYDANTIC_V2:
 
-    class AnalyzeRequest(_StrictModel):
+    class AnalyzeRequest(AnalyzeTextArgs):
         """Request schema for /analyze."""
 
-        text: str
-        model_name: str = "disease_detection_superclinical"
-        confidence_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0)
-        group_entities: bool = False
-        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = (
-            "simple"
-        )
-        sentence_detection: bool = True
-        sentence_language: str = "en"
-        sentence_clean: bool = False
-        use_fast_tokenizer: bool = True
         keep_alive: Optional[KeepAliveValue] = None
-
-        @field_validator("text", mode="before")
-        @classmethod
-        def _validate_text(cls, value: Any) -> str:
-            return _normalize_text(value)
-
-        @field_validator("model_name")
-        @classmethod
-        def _validate_model_name(cls, value: str) -> str:
-            return _normalize_model_name(value)
-
-        @field_validator("confidence_threshold")
-        @classmethod
-        def _validate_confidence_threshold(
-            cls, value: Optional[float]
-        ) -> Optional[float]:
-            return _normalize_confidence_threshold(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
-    class PIIExtractRequest(_StrictModel):
+    class PIIExtractRequest(ExtractPIIArgs):
         """Request schema for /pii/extract."""
 
-        text: str
-        model_name: str = _DEFAULT_PII_MODEL
-        confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-        use_smart_merging: bool = True
-        lang: PIILanguage = "en"
-        normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
-        @field_validator("text", mode="before")
+        @field_validator("lang", mode="before")
         @classmethod
-        def _validate_text(cls, value: Any) -> str:
-            return _normalize_text(value)
-
-        @field_validator("model_name")
-        @classmethod
-        def _validate_model_name(cls, value: str) -> str:
-            return _normalize_model_name(value)
-
-        @field_validator("confidence_threshold")
-        @classmethod
-        def _validate_confidence_threshold(cls, value: float) -> float:
-            normalized = _normalize_confidence_threshold(value)
-            if normalized is None:
-                raise ValueError("confidence_threshold must be a valid number")
-            return normalized
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
@@ -292,58 +296,20 @@ if PYDANTIC_V2:
         )
         include_text: bool = True
 
-    class PIIDeidentifyRequest(_StrictModel):
+    class PIIDeidentifyRequest(DeidentifyArgs):
         """Request schema for /pii/deidentify."""
 
-        text: str
-        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
-        model_name: str = _DEFAULT_PII_MODEL
-        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
-        keep_year: bool = False
-        shift_dates: Optional[bool] = None
-        date_shift_days: Optional[int] = None
-        keep_mapping: bool = False
-        policy: Optional[str] = None
-        use_smart_merging: bool = True
-        use_safety_sweep: bool = True
-        lang: PIILanguage = "en"
-        normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
-        @field_validator("text", mode="before")
+        @field_validator("lang", mode="before")
         @classmethod
-        def _validate_text(cls, value: Any) -> str:
-            return _normalize_text(value)
-
-        @field_validator("model_name")
-        @classmethod
-        def _validate_model_name(cls, value: str) -> str:
-            return _normalize_model_name(value)
-
-        @field_validator("confidence_threshold")
-        @classmethod
-        def _validate_confidence_threshold(cls, value: float) -> float:
-            normalized = _normalize_confidence_threshold(value)
-            if normalized is None:
-                raise ValueError("confidence_threshold must be a valid number")
-            return normalized
-
-        @field_validator("policy", mode="before")
-        @classmethod
-        def _validate_policy(cls, value: Any) -> Optional[str]:
-            return _normalize_policy_name(value)
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
-        @model_validator(mode="after")
-        def _validate_shift_dates(self) -> "PIIDeidentifyRequest":
-            values = _normalize_shift_dates_payload(self.model_dump())
-            for field_name, value in values.items():
-                setattr(self, field_name, value)
-            return self
 
     class PrivacyGatewayRequest(_StrictModel):
         """Request schema for /privacy-gateway/complete."""
@@ -392,24 +358,8 @@ if PYDANTIC_V2:
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
-    class ModelUnloadRequest(_StrictModel):
+    class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
-
-        model_name: Optional[str] = None
-        all: bool = False
-
-        @field_validator("model_name")
-        @classmethod
-        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
-            if value is None:
-                return None
-            return _normalize_model_name(value)
-
-        @model_validator(mode="after")
-        def _validate_target(self) -> "ModelUnloadRequest":
-            if not self.all and self.model_name is None:
-                raise ValueError("model_name is required unless all=true")
-            return self
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -590,67 +540,80 @@ if PYDANTIC_V2:
                 setattr(self, field_name, value)
             return self
 
+    class OmopLoadRequest(_StrictModel):
+        """Request schema for /omop/load."""
+
+        records_jsonl: str
+        vocabulary_version: Optional[str] = None
+        validate_constraints: bool = False
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+        @field_validator("vocabulary_version", mode="before")
+        @classmethod
+        def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @field_validator("text", mode="before")
+        @classmethod
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @field_validator("entities", mode="before")
+        @classmethod
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @field_validator("systems", mode="before")
+        @classmethod
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @field_validator("source_language", mode="before")
+        @classmethod
+        def _validate_source_language(cls, value: Any) -> str:
+            return str(value or "en").strip().casefold()
+
+        @model_validator(mode="after")
+        def _validate_inputs(self) -> "GroundRequest":
+            if self.text is None and not self.entities:
+                raise ValueError("provide text or at least one entity")
+            return self
+
 else:
 
-    class AnalyzeRequest(_StrictModel):
+    class AnalyzeRequest(AnalyzeTextArgs):
         """Request schema for /analyze."""
 
-        text: str
-        model_name: str = "disease_detection_superclinical"
-        confidence_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0)
-        group_entities: bool = False
-        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = (
-            "simple"
-        )
-        sentence_detection: bool = True
-        sentence_language: str = "en"
-        sentence_clean: bool = False
-        use_fast_tokenizer: bool = True
         keep_alive: Optional[KeepAliveValue] = None
-
-        @validator("text", pre=True)
-        def _validate_text(cls, value: Any) -> str:
-            return _normalize_text(value)
-
-        @validator("model_name")
-        def _validate_model_name(cls, value: str) -> str:
-            return _normalize_model_name(value)
-
-        @validator("confidence_threshold")
-        def _validate_confidence_threshold(
-            cls, value: Optional[float]
-        ) -> Optional[float]:
-            return _normalize_confidence_threshold(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
-    class PIIExtractRequest(_StrictModel):
+    class PIIExtractRequest(ExtractPIIArgs):
         """Request schema for /pii/extract."""
 
-        text: str
-        model_name: str = _DEFAULT_PII_MODEL
-        confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-        use_smart_merging: bool = True
-        lang: PIILanguage = "en"
-        normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
-        @validator("text", pre=True)
-        def _validate_text(cls, value: Any) -> str:
-            return _normalize_text(value)
-
-        @validator("model_name")
-        def _validate_model_name(cls, value: str) -> str:
-            return _normalize_model_name(value)
-
-        @validator("confidence_threshold")
-        def _validate_confidence_threshold(cls, value: float) -> float:
-            normalized = _normalize_confidence_threshold(value)
-            if normalized is None:
-                raise ValueError("confidence_threshold must be a valid number")
-            return normalized
+        @validator("lang", pre=True)
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -671,50 +634,18 @@ else:
         )
         include_text: bool = True
 
-    class PIIDeidentifyRequest(_StrictModel):
+    class PIIDeidentifyRequest(DeidentifyArgs):
         """Request schema for /pii/deidentify."""
 
-        text: str
-        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
-        model_name: str = _DEFAULT_PII_MODEL
-        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
-        keep_year: bool = False
-        shift_dates: Optional[bool] = None
-        date_shift_days: Optional[int] = None
-        keep_mapping: bool = False
-        policy: Optional[str] = None
-        use_smart_merging: bool = True
-        use_safety_sweep: bool = True
-        lang: PIILanguage = "en"
-        normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
-        @validator("text", pre=True)
-        def _validate_text(cls, value: Any) -> str:
-            return _normalize_text(value)
-
-        @validator("model_name")
-        def _validate_model_name(cls, value: str) -> str:
-            return _normalize_model_name(value)
-
-        @validator("confidence_threshold")
-        def _validate_confidence_threshold(cls, value: float) -> float:
-            normalized = _normalize_confidence_threshold(value)
-            if normalized is None:
-                raise ValueError("confidence_threshold must be a valid number")
-            return normalized
-
-        @validator("policy", pre=True)
-        def _validate_policy(cls, value: Any) -> Optional[str]:
-            return _normalize_policy_name(value)
+        @validator("lang", pre=True)
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
-        @root_validator
-        def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
-            return _normalize_shift_dates_payload(values)
 
     class PrivacyGatewayRequest(_StrictModel):
         """Request schema for /privacy-gateway/complete."""
@@ -757,23 +688,8 @@ else:
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
-    class ModelUnloadRequest(_StrictModel):
+    class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
-
-        model_name: Optional[str] = None
-        all: bool = False
-
-        @validator("model_name")
-        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
-            if value is None:
-                return None
-            return _normalize_model_name(value)
-
-        @root_validator
-        def _validate_target(cls, values: dict[str, Any]) -> dict[str, Any]:
-            if not values.get("all") and values.get("model_name") is None:
-                raise ValueError("model_name is required unless all=true")
-            return values
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -928,3 +844,128 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
+
+    class OmopLoadRequest(_StrictModel):
+        """Request schema for /omop/load."""
+
+        records_jsonl: str
+        vocabulary_version: Optional[str] = None
+        validate_constraints: bool = False
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+        @validator("vocabulary_version", pre=True)
+        def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @validator("text", pre=True)
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @validator("entities", pre=True)
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @validator("systems", pre=True)
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @validator("source_language", pre=True)
+        def _validate_source_language(cls, value: Any) -> str:
+            return str(value or "en").strip().casefold()
+
+        @root_validator
+        def _validate_inputs(cls, values: dict[str, Any]) -> dict[str, Any]:
+            if values.get("text") is None and not values.get("entities"):
+                raise ValueError("provide text or at least one entity")
+            return values
+
+
+class FHIRBulkExportRequest(_StrictModel):
+    """Request schema for local or SMART-backed Bulk Data jobs.
+
+    ``input_dir``/``source_dir`` select the offline local gateway. When they
+    are omitted, the SMART backend-service fields are required by the service
+    layer. Credential fields are accepted only for the duration of a job and
+    are never returned in status payloads.
+    """
+
+    input_dir: Optional[str] = None
+    source_dir: Optional[str] = None
+    output_dir: str
+    checkpoint_path: Optional[str] = None
+    policy: str = "hipaa_safe_harbor"
+    method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+    max_buffered_resources: int = Field(default=1, ge=1)
+    max_inflight_downloads: int = Field(default=2, ge=1)
+    poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+    request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    fhir_base_url: Optional[str] = None
+    token_url: Optional[str] = None
+    client_id: Optional[str] = None
+    private_key_pem: Optional[str] = None
+    key_id: Optional[str] = None
+    scope: str = "system/*.read"
+    export_path: str = "$export"
+    model_name: str = _DEFAULT_PII_MODEL
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    use_smart_merging: bool = True
+    use_safety_sweep: bool = True
+    lang: PIILanguage = "en"
+    normalize_accents: Optional[bool] = None
+    keep_alive: Optional[KeepAliveValue] = None
+
+
+class FHIRBulkImportRequest(FHIRBulkExportRequest):
+    """Request schema for the local Bulk Data import-compatible route."""
+
+
+class ConceptAncestorRequest(_StrictModel):
+    """One caller-supplied concept hierarchy edge."""
+
+    ancestor_concept_id: int = Field(gt=0)
+    descendant_concept_id: int = Field(gt=0)
+
+
+class CohortResolveRequest(_StrictModel):
+    """Request schema for in-memory ``POST /cohort/resolve``."""
+
+    phenotype: dict[str, Any]
+    records_jsonl: str
+    concept_ancestors: list[ConceptAncestorRequest] = Field(default_factory=list)
+
+    if PYDANTIC_V2:
+
+        @field_validator("phenotype", mode="before")
+        @classmethod
+        def _validate_phenotype(cls, value: Any) -> dict[str, Any]:
+            return _normalize_phenotype(value)
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+    else:  # pragma: no cover
+
+        @validator("phenotype", pre=True)
+        def _validate_phenotype(cls, value: Any) -> dict[str, Any]:
+            return _normalize_phenotype(value)
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)

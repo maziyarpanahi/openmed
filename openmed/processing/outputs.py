@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from openmed.core.errors import InputError, InternalError
+
 logger = logging.getLogger(__name__)
 
 
@@ -193,7 +195,7 @@ class OutputFormatter:
                 else:
                     try:
                         span_metadata = dict(raw_metadata)
-                    except Exception:
+                    except (TypeError, ValueError):
                         span_metadata = {"value": raw_metadata}
 
             entity = EntityPrediction(
@@ -337,6 +339,16 @@ class OutputFormatter:
 
             last_sentence = (last_entity.metadata or {}).get("sentence_index")
             current_sentence = (entity.metadata or {}).get("sentence_index")
+            gap_text = ""
+            if (
+                self._current_text is not None
+                and entity.start is not None
+                and last_entity.end is not None
+            ):
+                gap_text = self._current_text[last_entity.end : entity.start]
+            crosses_hard_line = any(
+                char in "\r\n\v\f\x85\u2028\u2029" for char in gap_text
+            )
 
             # Check if entities are adjacent and same label
             if (
@@ -345,6 +357,7 @@ class OutputFormatter:
                 and last_entity.end is not None
                 and entity.start <= last_entity.end + 2  # Allow small gaps
                 and last_sentence == current_sentence
+                and not crosses_hard_line
             ):
                 current_group.append(entity)
             else:
@@ -376,7 +389,11 @@ class OutputFormatter:
             Merged entity.
         """
         if not entities:
-            raise ValueError("Cannot merge empty entity list")
+            raise InternalError(
+                "Cannot merge an empty entity list because the grouping stage "
+                "violated an internal invariant. Retry without grouping; if it "
+                "persists, report the model identifier."
+            )
 
         start = entities[0].start
         end = entities[-1].end
@@ -600,4 +617,8 @@ def format_predictions(
     elif output_format == "csv":
         return formatter.to_csv_rows(result)
     else:
-        raise ValueError(f"Unsupported output format: {output_format}")
+        supported = ["dict", "json", "html", "csv"]
+        raise InputError(
+            f"Unsupported output format. Pass one of: {supported}.",
+            details={"argument": "output_format", "supported": supported},
+        )

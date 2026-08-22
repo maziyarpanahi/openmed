@@ -273,7 +273,7 @@ GERMAN_CONTEXT_LEXICON = ClinicalCueLexicon(
         "abgeklungen",
     ),
     hypothetical=("wenn", "falls", "im fall von", "sofern", "sollte"),
-    recent=("aktiv", "akut", "aktuell", "derzeit", "neu", "laufend"),
+    recent=("aktiv", "akut", "akute", "aktuell", "derzeit", "neu", "laufend"),
     uncertainty=(
         "möglich",
         "wahrscheinlich",
@@ -392,6 +392,185 @@ HINDI_CONTEXT_LEXICON = ClinicalCueLexicon(
     token_boundaries=False,
 )
 
+# Japanese cue-and-scope behavior is informed by the general negation-focus
+# method in Matsuyoshi et al. (LREC 2014) and the modality analysis in
+# Higashiyama et al. (Natural Language Processing 22(2), 2015). The compact
+# surface forms below are independently authored; no source corpus or trigger
+# list is redistributed.
+JAPANESE_CONTEXT_LEXICON = ClinicalCueLexicon(
+    language="ja",
+    historical=("既往歴", "既往", "以前", "過去に", "かつて", "治癒済み"),
+    hypothetical=("仮に", "場合", "なら", "ときは", "際は"),
+    recent=("急性", "現在", "新規", "新たな", "活動性", "持続中"),
+    uncertainty=(
+        "可能性がある",
+        "可能性",
+        "疑い",
+        "疑われる",
+        "否定できない",
+        "除外できない",
+        "考えられる",
+        "かもしれない",
+        "仮に",
+        "場合",
+        "なら",
+        "ときは",
+        "際は",
+    ),
+    negation=(
+        "認められない",
+        "認めない",
+        "認めず",
+        "所見なし",
+        "なし",
+        "否定された",
+        "否定",
+        "ない",
+    ),
+    pseudo_negation=(
+        "可能性を否定できない",
+        "否定できない",
+        "除外できない",
+        "かもしれない",
+    ),
+    backward=(
+        "場合",
+        "なら",
+        "ときは",
+        "際は",
+        "可能性がある",
+        "可能性",
+        "疑い",
+        "疑われる",
+        "否定できない",
+        "除外できない",
+        "考えられる",
+        "かもしれない",
+        "認められない",
+        "認めない",
+        "認めず",
+        "所見なし",
+        "なし",
+        "否定された",
+        "否定",
+        "ない",
+    ),
+    scope_terminators=("しかし", "ただし", "一方", "または"),
+    conjunction_terminators=("しかし", "ただし", "一方"),
+    token_boundaries=False,
+)
+
+# Portuguese matches on token boundaries and ships an unaccented twin for every
+# accented surface form, because clinical notes are written both ways. Two
+# exclusions are deliberate. Bare "se" is absent from the hypothetical cues: it
+# is also the reflexive clitic ("nao se pode excluir"), so treating it as "if"
+# would make ordinary hedging look conditional; "se houver" carries the
+# conditional instead. Bare "previo"/"previa" are absent because "placenta
+# previa" names a diagnosis rather than a past finding.
+#
+# The hedge meaning "cannot be ruled out" spans three verb families in
+# Portuguese -- descartar, excluir, and afastar -- and each is listed in both
+# pseudo_negation and uncertainty. Without the excluir and afastar entries the
+# embedded "nao" wins and a hedge is reported as a hard negation.
+PORTUGUESE_CONTEXT_LEXICON = ClinicalCueLexicon(
+    language="pt",
+    historical=(
+        "antecedente de",
+        "antecedentes de",
+        "história de",
+        "historia de",
+        "anteriormente",
+        "resolvido",
+        "resolvida",
+    ),
+    hypothetical=("em caso de", "se houver", "a menos que"),
+    # Explicit recency cues reach only the section-prior suppression path, and
+    # that path does not take a language argument yet, so these entries are
+    # inert for every non-English pack. The tuple is kept minimal for that
+    # reason and carries no behavioral regression case.
+    recent=("ativo", "ativa", "agudo", "aguda", "atual"),
+    uncertainty=(
+        "não pode ser descartada",
+        "nao pode ser descartada",
+        "não pode ser descartado",
+        "nao pode ser descartado",
+        "não se pode descartar",
+        "nao se pode descartar",
+        "não pode ser excluída",
+        "nao pode ser excluida",
+        "não pode ser excluído",
+        "nao pode ser excluido",
+        "não se pode excluir",
+        "nao se pode excluir",
+        "não se exclui",
+        "nao se exclui",
+        "não se afasta a hipótese de",
+        "nao se afasta a hipotese de",
+        "suspeita de",
+        "suspeito de",
+        "possível",
+        "possivel",
+        "provável",
+        "provavel",
+        "improvável",
+        "improvavel",
+        "para descartar",
+        "pode",
+        "em caso de",
+        "se houver",
+        "a menos que",
+    ),
+    negation=(
+        "sem evidência de",
+        "sem evidencia de",
+        "sem sinais de",
+        "nenhum sinal de",
+        "negativo para",
+        "ausência de",
+        "ausencia de",
+        "livre de",
+        "descartado",
+        "descartada",
+        "afastado",
+        "afastada",
+        "nega",
+        "negou",
+        "não apresenta",
+        "nao apresenta",
+        "sem",
+        "não",
+        "nao",
+    ),
+    pseudo_negation=(
+        "não pode ser descartada",
+        "nao pode ser descartada",
+        "não pode ser descartado",
+        "nao pode ser descartado",
+        "não se pode descartar",
+        "nao se pode descartar",
+        "não pode ser excluída",
+        "nao pode ser excluida",
+        "não pode ser excluído",
+        "nao pode ser excluido",
+        "não se pode excluir",
+        "nao se pode excluir",
+        "não se exclui",
+        "nao se exclui",
+        "não se afasta a hipótese de",
+        "nao se afasta a hipotese de",
+    ),
+    backward=(
+        "descartado",
+        "descartada",
+        "afastado",
+        "afastada",
+        "resolvido",
+        "resolvida",
+    ),
+    scope_terminators=("e", "mas", "porém", "porem", "contudo", "ou", "embora"),
+    conjunction_terminators=("mas", "porém", "porem", "contudo", "embora"),
+)
+
 _LEXICONS: dict[str, ClinicalCueLexicon] = {}
 
 
@@ -470,6 +649,8 @@ for _lexicon in (
     GERMAN_CONTEXT_LEXICON,
     CHINESE_CONTEXT_LEXICON,
     HINDI_CONTEXT_LEXICON,
+    JAPANESE_CONTEXT_LEXICON,
+    PORTUGUESE_CONTEXT_LEXICON,
 ):
     register_clinical_cue_lexicon(_lexicon)
 

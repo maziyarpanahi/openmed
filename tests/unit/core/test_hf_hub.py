@@ -6,8 +6,18 @@ runs here, so the suite stays offline-friendly (see ``AGENTS.md``).
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
 import sys
+import textwrap
+import threading
 import types
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, List
 
@@ -16,16 +26,28 @@ import pytest
 from openmed.core import hf_hub
 from openmed.core.hf_hub import (
     CachedModel,
+    DownloadIntegrityError,
+    DownloadProgress,
     clear_cached_model,
+    get_remote_model_size_mb,
     list_cached_models,
     prefetch_model,
     resolve_repo_id,
 )
-from openmed.core.offline import OfflineModeError
+from openmed.core.offline import (
+    HF_OFFLINE_ENV_VARS,
+    OfflineModeError,
+    network_blocked_if_offline,
+)
 
 # A stable legacy registry alias -> Hub repo id pair.
 _ALIAS = "disease_detection_superclinical"
 _REPO_ID = "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M"
+_MIRROR_REPO_ID = "mirror-org/mirror-fixture"
+_MIRROR_COMMIT = "0123456789abcdef0123456789abcdef01234567"
+_MIRROR_FILENAME = "config.json"
+_MIRROR_CONTENT = b'{"downloaded_from": "local-mirror"}\n'
+_LOW_BANDWIDTH_DOC = Path(__file__).parents[3] / "docs" / "low-bandwidth-install.md"
 
 
 class _FakeRepo:
@@ -67,6 +89,14 @@ def _install_fake_hub(
 
     module = types.ModuleType("huggingface_hub")
     module.CacheNotFound = _FakeCacheNotFound
+    model_info = attrs.pop("model_info", None)
+    if model_info is not None:
+
+        class _FakeHfApi:
+            def model_info(self, *args: Any, **kwargs: Any) -> Any:
+                return model_info(*args, **kwargs)
+
+        module.HfApi = _FakeHfApi
     for name, value in attrs.items():
         setattr(module, name, value)
     constants_module = types.ModuleType("huggingface_hub.constants")
@@ -77,6 +107,110 @@ def _install_fake_hub(
     monkeypatch.setitem(sys.modules, "huggingface_hub.constants", constants_module)
     monkeypatch.setitem(sys.modules, "huggingface_hub.errors", errors_module)
     return module
+
+
+def _model_info(filename: str, content: bytes, *, sha: str = "a" * 40) -> Any:
+    return types.SimpleNamespace(
+        sha=sha,
+        siblings=[
+            types.SimpleNamespace(
+                rfilename=filename,
+                size=len(content),
+                blob_id=None,
+                lfs=types.SimpleNamespace(sha256=hashlib.sha256(content).hexdigest()),
+            )
+        ],
+    )
+
+
+def _write_snapshot_file(root: Path, filename: str, content: bytes) -> Path:
+    path = root / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def _make_mirror_handler(
+    requests: List[tuple[str, str]],
+) -> type[BaseHTTPRequestHandler]:
+    class MirrorHandler(BaseHTTPRequestHandler):
+        def _record_request(self) -> str:
+            path = self.path.partition("?")[0]
+            requests.append((self.command, path))
+            return path
+
+        def _send_bytes(
+            self,
+            payload: bytes,
+            *,
+            content_type: str,
+            include_hub_headers: bool = False,
+        ) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            if include_hub_headers:
+                self.send_header("ETag", '"mirror-config-etag"')
+                self.send_header("X-Repo-Commit", _MIRROR_COMMIT)
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(payload)
+
+        def do_HEAD(self) -> None:  # noqa: N802 - stdlib handler API
+            path = self._record_request()
+            if path == (
+                f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
+            ):
+                self._send_bytes(
+                    _MIRROR_CONTENT,
+                    content_type="application/json",
+                    include_hub_headers=True,
+                )
+                return
+            self.send_error(404)
+
+        def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+            path = self._record_request()
+            if path in {
+                f"/api/models/{_MIRROR_REPO_ID}",
+                f"/api/models/{_MIRROR_REPO_ID}/revision/main",
+            }:
+                payload = json.dumps(
+                    {
+                        "id": _MIRROR_REPO_ID,
+                        "sha": _MIRROR_COMMIT,
+                        "siblings": [
+                            {
+                                "rfilename": _MIRROR_FILENAME,
+                                "size": len(_MIRROR_CONTENT),
+                                "lfs": {
+                                    "size": len(_MIRROR_CONTENT),
+                                    "sha256": hashlib.sha256(
+                                        _MIRROR_CONTENT
+                                    ).hexdigest(),
+                                    "pointerSize": 128,
+                                },
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+                self._send_bytes(payload, content_type="application/json")
+                return
+            if path == (
+                f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
+            ):
+                self._send_bytes(
+                    _MIRROR_CONTENT,
+                    content_type="application/json",
+                    include_hub_headers=True,
+                )
+                return
+            self.send_error(404)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            return
+
+    return MirrorHandler
 
 
 # --- resolve_repo_id -------------------------------------------------------
@@ -100,66 +234,269 @@ def test_resolve_repo_id_rejects_empty() -> None:
         resolve_repo_id("   ")
 
 
+# --- get_remote_model_size_mb ---------------------------------------------
+
+
+def test_get_remote_model_size_mb_sums_hub_file_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, bool]] = []
+
+    class FakeHfApi:
+        def model_info(self, repo_id: str, *, files_metadata: bool) -> Any:
+            calls.append((repo_id, files_metadata))
+            return types.SimpleNamespace(
+                siblings=[
+                    types.SimpleNamespace(size=1_500_000),
+                    types.SimpleNamespace(size=500_000),
+                ]
+            )
+
+    _install_fake_hub(monkeypatch, HfApi=FakeHfApi)
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    assert get_remote_model_size_mb(_REPO_ID) == 2.0
+    assert calls == [(_REPO_ID, True)]
+
+
+def test_get_remote_model_size_mb_stops_before_hub_import_when_offline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    with pytest.raises(OfflineModeError, match="--remote"):
+        get_remote_model_size_mb(_REPO_ID)
+
+
 # --- prefetch_model --------------------------------------------------------
 
 
 def test_prefetch_model_resolves_alias_before_download(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: List[dict[str, Any]] = []
+    content = b"synthetic weights"
+    snapshot = tmp_path / "snapshot"
 
-    def fake_snapshot_download(**kwargs: Any) -> str:
+    def fake_hf_hub_download(**kwargs: Any) -> str:
         calls.append(kwargs)
-        return "/cache/models--OpenMed--DiseaseDetect"
+        return str(_write_snapshot_file(snapshot, kwargs["filename"], content))
 
-    _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("model.safetensors", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
     monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
 
     path = prefetch_model(_ALIAS, allow_patterns=["*.safetensors"])
 
-    assert path == "/cache/models--OpenMed--DiseaseDetect"
+    assert path == str(snapshot)
     assert len(calls) == 1
     kwargs = calls[0]
-    # The friendly alias is resolved to the Hub repo id before download.
     assert kwargs["repo_id"] == _REPO_ID
     assert kwargs["repo_type"] == "model"
     assert kwargs["local_files_only"] is False
-    assert kwargs["allow_patterns"] == ["*.safetensors"]
+    assert kwargs["filename"] == "model.safetensors"
+    assert "endpoint" not in kwargs
 
 
 def test_prefetch_model_forwards_revision_and_cache_dir(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: List[dict[str, Any]] = []
+    api_calls: List[dict[str, Any]] = []
+    download_calls: List[dict[str, Any]] = []
+    content = b"{}"
+    snapshot = tmp_path / "snapshot"
 
-    def fake_snapshot_download(**kwargs: Any) -> str:
-        calls.append(kwargs)
-        return "/cache/snapshot"
+    def fake_model_info(*args: Any, **kwargs: Any) -> Any:
+        api_calls.append(kwargs)
+        return _model_info("config.json", content, sha="b" * 40)
 
-    _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        download_calls.append(kwargs)
+        return str(_write_snapshot_file(snapshot, kwargs["filename"], content))
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=fake_model_info,
+        hf_hub_download=fake_hf_hub_download,
+    )
     monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
 
     prefetch_model(_ALIAS, revision="v2", cache_dir="/tmp/hf")
 
-    assert calls[0]["revision"] == "v2"
-    assert calls[0]["cache_dir"] == "/tmp/hf"
+    assert api_calls[0]["revision"] == "v2"
+    assert download_calls[0]["revision"] == "b" * 40
+    assert download_calls[0]["cache_dir"] == "/tmp/hf"
 
 
 def test_prefetch_model_preserves_single_allow_pattern(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: List[dict[str, Any]] = []
+    weights = b"weights"
+    config = b"{}"
+    snapshot = tmp_path / "snapshot"
 
-    def fake_snapshot_download(**kwargs: Any) -> str:
+    def fake_hf_hub_download(**kwargs: Any) -> str:
         calls.append(kwargs)
-        return "/cache/snapshot"
+        return str(_write_snapshot_file(snapshot, kwargs["filename"], weights))
 
-    _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
+    info = _model_info("model.safetensors", weights)
+    info.siblings.extend(_model_info("config.json", config).siblings)
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: info,
+        hf_hub_download=fake_hf_hub_download,
+    )
     monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
 
     prefetch_model(_ALIAS, allow_patterns="*.safetensors")
 
-    assert calls[0]["allow_patterns"] == "*.safetensors"
+    assert [call["filename"] for call in calls] == ["model.safetensors"]
+
+
+def test_prefetch_model_downloads_through_hf_endpoint_mirror(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("huggingface_hub")
+    requests: List[tuple[str, str]] = []
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_mirror_handler(requests))
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    endpoint = f"http://127.0.0.1:{server.server_address[1]}"
+    cache_dir = tmp_path / "mirror-cache"
+    env = os.environ.copy()
+    env.update(
+        {
+            "HF_ENDPOINT": endpoint,
+            "HF_HOME": str(tmp_path / "hf-home"),
+            "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+            "HF_HUB_DISABLE_IMPLICIT_TOKEN": "1",
+            "HF_HUB_DISABLE_XET": "1",
+            "NO_PROXY": "127.0.0.1,localhost",
+            "no_proxy": "127.0.0.1,localhost",
+        }
+    )
+    for name in (
+        "OPENMED_OFFLINE",
+        "HF_HUB_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
+        "HF_DATASETS_OFFLINE",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "HF_TOKEN",
+        "HUGGINGFACE_HUB_TOKEN",
+        "HUGGING_FACE_HUB_TOKEN",
+        "HF_TOKEN_PATH",
+    ):
+        env.pop(name, None)
+
+    script = "\n".join(
+        [
+            "import json",
+            "import os",
+            "import socket",
+            "import sys",
+            "from pathlib import Path",
+            "from openmed import prefetch_model",
+            (
+                f"snapshot = Path(prefetch_model('{_MIRROR_REPO_ID}', "
+                "cache_dir=sys.argv[1]))"
+            ),
+            f"downloaded = snapshot / '{_MIRROR_FILENAME}'",
+            "os.environ['OPENMED_OFFLINE'] = '1'",
+            "def block_network(*args, **kwargs):",
+            "    raise AssertionError('post-prefetch command attempted network access')",
+            "socket.socket.connect = block_network",
+            "socket.socket.connect_ex = block_network",
+            "socket.create_connection = block_network",
+            (
+                f"cached = Path(prefetch_model('{_MIRROR_REPO_ID}', "
+                "cache_dir=sys.argv[1]))"
+            ),
+            "from openmed.core.doctor import run_diagnostics",
+            "checks = {item['name']: item for item in run_diagnostics()}",
+            (
+                "print(json.dumps({'path': str(snapshot), 'cached': str(cached), "
+                "'content': downloaded.read_text(), "
+                "'offline': checks['openmed_offline']['enabled']}))"
+            ),
+        ]
+    )
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script, str(cache_dir)],
+            check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            timeout=30,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=5)
+
+    assert completed.returncode == 0, (
+        f"mirror subprocess exited with status {completed.returncode}"
+    )
+    payload = json.loads(completed.stdout)
+    assert json.loads(payload["content"]) == {"downloaded_from": "local-mirror"}
+    assert payload["cached"] == payload["path"]
+    assert payload["offline"] is True
+    assert ("GET", f"/api/models/{_MIRROR_REPO_ID}") in requests
+    download_path = f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
+    assert ("HEAD", download_path) in requests
+    assert ("GET", download_path) in requests
+
+
+def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is not available on this platform")
+
+    markdown = _LOW_BANDWIDTH_DOC.read_text(encoding="utf-8")
+    blocks = re.findall(r"```bash\n(.*?)```", markdown, flags=re.DOTALL)
+
+    assert len(blocks) >= 8
+    for index, block in enumerate(blocks, start=1):
+        completed = subprocess.run(
+            [bash, "-n"],
+            capture_output=True,
+            input=textwrap.dedent(block),
+            text=True,
+        )
+        assert completed.returncode == 0, (
+            f"bash block {index} is not copy-paste valid:\n{completed.stderr}"
+        )
+
+
+def test_metered_checklist_uses_offline_safe_commands() -> None:
+    markdown = _LOW_BANDWIDTH_DOC.read_text(encoding="utf-8")
+    checklist = markdown.split("## Metered-connection checklist", 1)[1].split(
+        "## Diagnose the active environment", 1
+    )[0]
+    shell_commands = "\n".join(
+        textwrap.dedent(block)
+        for block in re.findall(r"```bash\n(.*?)```", checklist, flags=re.DOTALL)
+    )
+
+    assert "openmed models size disease_detection_tiny" in checklist
+    assert "--remote" not in shell_commands
+    assert "prefetch_model" in checklist
+    assert "openmed doctor" in checklist
+    assert "export OPENMED_OFFLINE=1" in checklist
 
 
 def test_prefetch_model_offline_passes_local_files_only_and_raises_when_uncached(
@@ -200,14 +537,395 @@ def test_prefetch_model_offline_returns_path_when_cached(
 def test_prefetch_model_online_error_is_not_swallowed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_snapshot_download(**kwargs: Any) -> str:
+    def fake_hf_hub_download(**kwargs: Any) -> str:
         raise RuntimeError("network exploded")
 
-    _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", b"{}"),
+        hf_hub_download=fake_hf_hub_download,
+    )
     monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
 
     with pytest.raises(RuntimeError, match="network exploded"):
         prefetch_model(_ALIAS)
+
+
+def test_prefetch_model_resumes_partial_file_after_connection_drop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    content = b"x" * 100
+    snapshot = tmp_path / "snapshot"
+    path = snapshot / "model.bin"
+    fetched_per_attempt: List[int] = []
+    progress: List[DownloadProgress] = []
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        existing = path.read_bytes() if path.exists() else b""
+        progress_bar = kwargs["tqdm_class"](
+            total=len(content),
+            initial=len(existing),
+        )
+        if not existing:
+            chunk = content[: len(content) // 2]
+            _write_snapshot_file(snapshot, "model.bin", chunk)
+            progress_bar.update(len(chunk))
+            fetched_per_attempt.append(len(chunk))
+            raise TimeoutError("connection dropped at 50%")
+
+        remainder = content[len(existing) :]
+        path.write_bytes(existing + remainder)
+        progress_bar.update(len(remainder))
+        fetched_per_attempt.append(len(remainder))
+        return str(path)
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("model.bin", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+    monkeypatch.setattr(hf_hub.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(hf_hub.random, "uniform", lambda start, end: 0.0)
+
+    result = prefetch_model(_ALIAS, retries=1, progress_callback=progress.append)
+
+    assert result == str(snapshot)
+    assert fetched_per_attempt == [50, 50]
+    assert fetched_per_attempt[1] <= len(content) // 2 + 1
+    assert path.read_bytes() == content
+    assert progress[-1] == DownloadProgress(
+        filename="model.bin",
+        bytes_done=100,
+        bytes_total=100,
+        files_done=1,
+        files_total=1,
+    )
+
+
+def test_prefetch_model_refetches_corrupt_cached_file_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    content = b"good"
+    snapshot = tmp_path / "snapshot"
+    path = _write_snapshot_file(snapshot, "model.bin", b"bad!")
+    calls: List[bool] = []
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        calls.append(kwargs["force_download"])
+        if kwargs["force_download"]:
+            _write_snapshot_file(snapshot, "model.bin", content)
+        return str(path)
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("model.bin", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    assert prefetch_model(_ALIAS) == str(snapshot)
+    assert calls == [False, True]
+    assert path.read_bytes() == content
+
+
+def test_models_pull_exits_nonzero_when_refetched_file_remains_corrupt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from openmed.cli import main_module
+
+    content = b"good"
+    snapshot = tmp_path / "snapshot"
+    path = _write_snapshot_file(snapshot, "model.bin", b"bad!")
+    calls: List[bool] = []
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        calls.append(kwargs["force_download"])
+        _write_snapshot_file(snapshot, "model.bin", b"bad!")
+        return str(path)
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("model.bin", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    result = main_module.main(["models", "pull", _ALIAS])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert calls == [False, True]
+    assert captured.err == (
+        "Model integrity verification failed after a forced re-fetch.\n"
+    )
+    assert "model.bin" not in captured.err
+
+
+def test_prefetch_model_retries_transient_failures_with_backoff(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    content = b"{}"
+    snapshot = tmp_path / "snapshot"
+    attempts = 0
+    delays: List[float] = []
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise TimeoutError("temporary outage")
+        return str(_write_snapshot_file(snapshot, "config.json", content))
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+    monkeypatch.setattr(hf_hub.time, "sleep", delays.append)
+    monkeypatch.setattr(hf_hub.random, "uniform", lambda start, end: 0.0)
+
+    prefetch_model(_ALIAS, retries=2)
+
+    assert attempts == 3
+    assert delays == [1.0, 2.0]
+
+
+def test_prefetch_model_retries_wrapped_transient_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    content = b"{}"
+    snapshot = tmp_path / "snapshot"
+    attempts = 0
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            try:
+                raise TimeoutError("temporary outage")
+            except TimeoutError as cause:
+                raise _FakeLocalEntryNotFoundError("cache miss") from cause
+        return str(_write_snapshot_file(snapshot, "config.json", content))
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+    monkeypatch.setattr(hf_hub.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(hf_hub.random, "uniform", lambda start, end: 0.0)
+
+    assert prefetch_model(_ALIAS, retries=1) == str(snapshot)
+    assert attempts == 2
+
+
+def test_prefetch_model_default_retries_five_times(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        raise TimeoutError("still offline")
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", b"{}"),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+    monkeypatch.setattr(hf_hub.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(hf_hub.random, "uniform", lambda start, end: 0.0)
+
+    with pytest.raises(TimeoutError, match="still offline"):
+        prefetch_model(_ALIAS)
+
+    assert attempts == 6
+
+
+@pytest.mark.parametrize("status_code", [401, 404])
+def test_prefetch_model_does_not_retry_permanent_http_errors(
+    monkeypatch: pytest.MonkeyPatch, status_code: int
+) -> None:
+    attempts = 0
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        error = RuntimeError(f"HTTP {status_code}")
+        error.response = types.SimpleNamespace(status_code=status_code)  # type: ignore[attr-defined]
+        raise error
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", b"{}"),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
+        prefetch_model(_ALIAS)
+
+    assert attempts == 1
+
+
+def test_prefetch_model_does_not_retry_permanent_error_with_transient_cause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        try:
+            raise TimeoutError("earlier timeout")
+        except TimeoutError as cause:
+            error = RuntimeError("HTTP 404")
+            error.response = types.SimpleNamespace(status_code=404)  # type: ignore[attr-defined]
+            raise error from cause
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", b"{}"),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        prefetch_model(_ALIAS, retries=2)
+
+    assert attempts == 1
+
+
+def test_models_pull_caps_bandwidth_and_prints_file_progress(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from openmed.cli import main_module
+
+    content = b"x" * 1_048_576
+    snapshot = tmp_path / "snapshot"
+    clock = [0.0]
+
+    def fake_monotonic() -> float:
+        return clock[0]
+
+    def fake_sleep(seconds: float) -> None:
+        clock[0] += seconds
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        progress_bar = kwargs["tqdm_class"](total=len(content), initial=0)
+        for _ in range(4):
+            progress_bar.update(len(content) // 4)
+        return str(_write_snapshot_file(snapshot, "model.bin", content))
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("model.bin", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+    monkeypatch.setattr(hf_hub.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(hf_hub.time, "sleep", fake_sleep)
+
+    result = main_module.main(["models", "pull", _ALIAS, "--max-bandwidth", "524288"])
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert len(content) / clock[0] <= 524_288
+    assert "model.bin: 1048576/1048576 bytes; 1/1 files" in output
+    assert f"Model ready: {snapshot}" in output
+
+
+def test_prefetch_model_fails_when_integrity_metadata_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    info = types.SimpleNamespace(
+        sha="a" * 40,
+        siblings=[
+            types.SimpleNamespace(
+                rfilename="model.bin",
+                size=4,
+                lfs=None,
+                blob_id=None,
+            )
+        ],
+    )
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: info,
+        hf_hub_download=lambda **kwargs: "/unused",
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    with pytest.raises(DownloadIntegrityError, match="model.bin"):
+        prefetch_model(_ALIAS)
+
+
+@pytest.mark.parametrize(
+    "invalid_filename",
+    ["../secret", "/absolute", "..\\secret", "bad\nname", "\x1b[31mred"],
+)
+def test_prefetch_model_rejects_unsafe_remote_filenames(
+    monkeypatch: pytest.MonkeyPatch, invalid_filename: str
+) -> None:
+    info = _model_info(invalid_filename, b"content")
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: info,
+        hf_hub_download=lambda **kwargs: "/unused",
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    with pytest.raises(DownloadIntegrityError, match="invalid filename") as exc_info:
+        prefetch_model(_ALIAS)
+
+    assert invalid_filename not in str(exc_info.value)
+
+
+def test_prefetch_model_offline_attempts_no_socket_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: List[dict[str, Any]] = []
+
+    def fake_snapshot_download(**kwargs: Any) -> str:
+        calls.append(kwargs)
+        if not kwargs["local_files_only"]:
+            socket.create_connection(("127.0.0.1", 9))
+        return "/cache/already-here"
+
+    _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    try:
+        with network_blocked_if_offline(local_only=True):
+            result = prefetch_model(_ALIAS)
+    finally:
+        for env_var in HF_OFFLINE_ENV_VARS:
+            monkeypatch.delenv(env_var, raising=False)
+
+    assert result == "/cache/already-here"
+    assert len(calls) == 1
+    assert calls[0]["local_files_only"] is True
 
 
 @pytest.mark.parametrize(

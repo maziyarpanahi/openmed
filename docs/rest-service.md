@@ -11,15 +11,19 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /models/loaded`
 - `POST /models/unload`
 - `POST /analyze`
+- `POST /ground`
 - `POST /pii/extract`
 - `POST /pii/extract/stream`
 - `POST /pii/deidentify`
+- `POST /pii/deidentify/stream`
 - `POST /fhir/smart-backend/ingestions`
 - `GET /fhir/smart-backend/ingestions/{job_id}`
 - `GET /fhir/smart-backend/ingestions/{job_id}/summary`
 - `POST /jobs`
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
+- `POST /omop/load`
+- `POST /cohort/resolve`
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
 schema and returns `404` unless metrics are enabled.
@@ -210,10 +214,11 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 12
 ```
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
-`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`, `/jobs`, and
-`/privacy-gateway/complete`. The default is `1,000,000` characters. Oversized
-requests return the standard `422` validation envelope; split larger documents
-client-side or route them through batch processing.
+`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
+`/pii/deidentify/stream`, `/jobs`, and `/privacy-gateway/complete`. The default
+is `1,000,000` characters. Oversized requests return the standard `422`
+validation envelope; split larger documents client-side or route them through
+batch processing.
 
 Optional privacy-gateway egress endpoint:
 
@@ -236,6 +241,9 @@ Optional dynamic request batching:
 OPENMED_SERVICE_BATCHING_ENABLED=true \
 OPENMED_SERVICE_BATCH_MAX_SIZE=8 \
 OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
+OPENMED_SERVICE_BATCH_HIGH_WATERMARK=256 \
+OPENMED_SERVICE_BATCH_LOW_WATERMARK=128 \
+OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS=1000 \
 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
@@ -248,7 +256,9 @@ batch helper falls back to per-text analysis still preserve per-request results.
 non-batch-compatible settings are still coalesced but executed independently.
 `OPENMED_SERVICE_BATCH_MAX_SIZE` must be a positive integer.
 `OPENMED_SERVICE_BATCH_MAX_WAIT_MS` is a non-negative wait window in
-milliseconds.
+milliseconds. Bounded admission, high/low-watermark hysteresis, maximum queue
+waits, `503` responses with `Retry-After`, and aggregate metrics are described
+in [`Serving Backpressure`](serving/backpressure.md).
 
 Optional request coalescing:
 
@@ -288,8 +298,8 @@ OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host
 `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
 During shutdown, readiness is flipped off, new model-backed work is rejected,
 and the service waits up to this timeout for in-flight `/analyze`,
-`/pii/extract`, `/pii/deidentify`, and `/privacy-gateway/complete` requests to
-finish. The default is `30`.
+`/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
+`/privacy-gateway/complete` requests to finish. The default is `30`.
 
 Optional pull-only Prometheus metrics endpoint:
 
@@ -352,6 +362,8 @@ names, counts, labels, lengths, and durations. See
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
+- Streaming de-identification advances the blocking core iterator in the
+  threadpool and applies the same active-profile timeout to the complete stream.
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
 - `/privacy-gateway/complete` redacts PHI before the configured external LLM
@@ -475,6 +487,25 @@ Request body:
 
 Returns the same shape as OpenMed `analyze_text(..., output_format="dict")`.
 
+### `POST /ground`
+
+Ground synthetic text or pre-extracted entity objects against caller-provisioned
+local terminology snapshots:
+
+```json
+{
+  "text": "Aspirin 81 mg daily",
+  "systems": ["rxnorm"],
+  "source_language": "en",
+  "top_k": 5,
+  "offline": true
+}
+```
+
+The route is offline by default. Restricted terminologies such as UMLS and
+SNOMED CT require an explicitly configured, user-licensed terminology source;
+OpenMed never bundles those vocabularies.
+
 ### `POST /pii/extract`
 
 Request body:
@@ -519,6 +550,70 @@ The deprecated `shift_dates: true` boolean is still accepted as an alias for `me
 
 Returns `deidentify(...).to_dict()`. When `keep_mapping=true` and mapping data exists, a `mapping` field is included.
 
+### `POST /pii/deidentify/stream`
+
+Use the streaming endpoint when a client should receive safe redacted output
+before a long de-identification request finishes. It accepts every
+`/pii/deidentify` request field plus an optional `chunk_size` from `1` to
+`32768` characters (default `1024`):
+
+```json
+{
+  "text": "Patient Maria Garcia called 555-0100 before discharge.",
+  "method": "mask",
+  "lang": "en",
+  "chunk_size": 16
+}
+```
+
+The response media type is `application/x-ndjson`. Each line is one complete
+JSON object. Redacted output records arrive in order:
+
+```json
+{"type":"chunk","index":0,"redacted_text":"Patient [NAME] called "}
+{"type":"chunk","index":1,"redacted_text":"[PHONE] before discharge."}
+{"type":"final","audit":{"span_count":2,"spans":[{"start":8,"end":20,"canonical_label":"PERSON","text_hash":"hmac-sha256:..."}],"stream":{"chunks":4,"max_buffer":4096,"max_observed_buffer":55}},"spans":[{"start":8,"end":20,"canonical_label":"PERSON","text_hash":"hmac-sha256:..."}]}
+```
+
+Concatenate `redacted_text` from records whose `type` is `chunk` to reconstruct
+the complete redacted document. The core carry-over buffer holds unsafe tails,
+so an identifier split across input chunks is not emitted partially. The final
+record contains global-offset spans and the aggregate audit record; these carry
+offsets, labels, and HMAC hashes rather than source surfaces.
+When `keep_mapping=true` (or the selected policy requires reversible mapping),
+the final record also contains the same opt-in `mapping` shape as the
+single-shot endpoint. Treat that mapping as PHI and do not log or persist it
+without the same controls used for the source document. Mapping-enabled streams
+use one full-document core window so placeholder numbering remains identical to
+the single-shot result; omit `keep_mapping` when early incremental output is the
+priority.
+
+Python clients can consume the response without buffering the NDJSON body:
+
+```python
+import json
+
+import requests
+
+with requests.post(
+    "http://127.0.0.1:8080/pii/deidentify/stream",
+    json={"text": "Patient Maria Garcia called 555-0100.", "chunk_size": 16},
+    stream=True,
+    timeout=310,
+) as response:
+    response.raise_for_status()
+    for line in response.iter_lines():
+        if line:
+            event = json.loads(line)
+            if event["type"] == "chunk":
+                consume_redacted_text(event["redacted_text"])
+```
+
+If the configured service timeout is reached after the response has started,
+the last line has `type: "error"` and the standard `timeout` error fields. A
+client disconnect stops iteration and releases the model request. Streamed
+source text is never written to service logs.
+
 ### `POST /privacy-gateway/complete`
 
 Request body:
@@ -560,6 +655,44 @@ Successful response shape:
 }
 ```
 
+### `POST /omop/load`
+
+Loads newline-delimited grounded note records into an in-memory OMOP CDM v5.4
+build over the existing `openmed.interop.omop` loader and returns a PHI-free
+summary. `records_jsonl` carries the grounded results as a JSONL string;
+`validate_constraints` optionally reports CDM constraint violations. The request
+body carries clinical text and must be treated as PHI, but the response contains
+only counts, hashed note identifiers, and span offsets.
+
+Request body:
+
+```json
+{
+  "records_jsonl": "{\"document_id\": \"note-1\", \"person_id\": \"patient-1\", \"note_text\": \"Patient reports diabetes.\", \"entities\": [{\"text\": \"diabetes\", \"domain_id\": \"Condition\", \"start\": 16, \"end\": 24, \"concept_id\": 201820, \"vocabulary_id\": \"SNOMED\"}]}\n",
+  "vocabulary_version": "SNOMED-2026",
+  "validate_constraints": true
+}
+```
+
+Successful response shape:
+
+```json
+{
+  "row_counts": {
+    "note": 1,
+    "note_nlp": 1,
+    "condition_occurrence": 1
+  },
+  "rejection_counts": {},
+  "rejected_spans": [],
+  "source_note_hashes": ["..."],
+  "constraint_violations": {
+    "count": 0,
+    "by_reason": {}
+  }
+}
+```
+
 ## Error Envelope
 
 Application endpoint errors and invalid Host headers use this shape:
@@ -596,6 +729,14 @@ Validation example:
   }
 }
 ```
+
+Failures raised by the public Python taxonomy keep their stable class code in
+this envelope. Input, configuration, and policy errors use HTTP 400;
+capability and budget errors use HTTP 503; and internal or inference errors use
+HTTP 500 with `details` set to `null`. See
+[Structured public errors](api/errors.md) for the complete mapping and
+compatibility guarantees. Request-schema failures continue to use HTTP 422 and
+`validation_error` as shown above.
 
 Timeout example:
 

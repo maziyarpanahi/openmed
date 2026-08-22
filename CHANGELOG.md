@@ -9,6 +9,697 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, dependency-free browser network-egress proof harness with
+  exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
+  source-safe digest reports, and fail-closed local trace validation (#2374).
+- Added a deterministic offline installation smoke check with a clean
+  temporary home, selected-environment entry-point and package-version proof,
+  bundled-manifest validation, repeatable synthetic redaction hashes, and
+  value-free failure reports (#2378).
+- Added a bounded zero-upload browser privacy playground with deterministic
+  local rules, trusted same-origin adapter support, aggregate-only status,
+  source-safe labels, and explicit network-boundary controls (#2373).
+- Added a canonical, lockfile-backed uv contributor workflow with an explicitly
+  pinned CI frontend, frozen optional-extra installs, uv-native package builds,
+  and documented pip and Nix fallback paths (#2339).
+- Added deterministic counts-only comparator reports with fixed metric
+  definitions, bounded aggregate failure accounting, hashed custom identifiers,
+  immutable sanitized state, environment fingerprints, and value-free JSON,
+  Markdown, and write errors (#2380).
+- Added a standard-library Agent Skills exporter for deterministic ZIP and
+  tar.gz bundles with per-file SHA-256 manifests, source revision provenance,
+  data-driven host and topical-pack selection, portable source-path checks,
+  and rollback-safe overwrite handling (#2307).
+- Added a deterministic offline Agent Skills validation gate for frontmatter,
+  identifiers, local references, pack membership, and executable-helper help
+  and test contracts, with symlink and local-path containment, path-only
+  diagnostics, scratch-isolated helper probes, and a dedicated CI workflow
+  that runs every focused skill test (#2306).
+- Added the local-first `setup-openmed` skill and versioned de-identification
+  policy template for collecting five bounded privacy decisions, producing a
+  deterministic atomically written review draft with path-free status output,
+  and stopping at an explicit human approval gate before the policy can control
+  a run (#2305).
+- Added an offline-first self-hosted Compose bundle with loopback-only default
+  publishing, a hardened non-root runtime, persistent cache and read-only model
+  mounts, an internal network, bounded logs and processes, a readiness probe,
+  and opt-in-only remote integrations (#2372).
+- Added a local-only self-hosted redaction service with explicit text and UTF-8
+  file workflows, deterministic offline defaults, counts-only review state,
+  loopback Host and request-size guards, content-free errors, and an accessible
+  aggregate-status page (#2371).
+- Added a deterministic synthetic-only de-identification comparator harness
+  with explicit fail-closed fixture provenance, enforced offline execution,
+  bounded inputs, aggregate privacy metrics, resource budgets, and source-safe
+  reports (#2379).
+- Added an opt-in bundled-model manifest and offline bootstrap for the small
+  English PII model, with registry checksum and license pins, mandatory cached
+  artifact-integrity proof, concurrency-safe socket guarding, and no silent
+  network fallback (#2375).
+- Added deterministic offline bootstrap diagnostics for cache readiness,
+  integrity manifests, optional dependencies, and local-only configuration,
+  with stable exit codes and value-free human and JSON reports (#2376).
+- Added a deterministic standalone local-redactor manifest with a synchronized
+  package/dependency boundary, permissive-license enforcement, explicit opt-in
+  integrations, and excluded restricted dependencies and assets (#2377).
+- Added metadata-only local agent trace-store discovery with platform-aware
+  defaults, explicit opt-out, no content reads or symlink following, PHI-free
+  store labels, and aggregate counts and byte sizes (#2279).
+- Added deterministic spawn-backed parallel trace-file sharding with fresh
+  per-file stores, stable input-order merging, safe sequential fallback, and
+  PHI-minimized aggregate failure metadata (#2285).
+- Added a local registry for training-conversation schemas with collision-safe
+  aliases, recursive format detection, fail-closed validation, and hashed
+  value-free diagnostics (#2286).
+- Added a role-message training schema adapter with recursive content-path
+  redaction, deterministic structure preservation, hashed path diagnostics, and
+  fail-closed handling for cycles and unknown parts (#2287).
+- Added a preference-pair training schema adapter with structure-preserving
+  redaction, bounded span reconciliation, validated schema-version reports, and
+  privacy-safe labels and diagnostics (#2288).
+- Added a local-first, schema-preserving columnar trace-batch adapter with
+  bounded iteration, nested text-path redaction, deterministic defaults,
+  unchanged labels and metadata, and hashed value-free diagnostics (#2289).
+- Added a streaming, schema-preserving JSONL agent-trace content walker and
+  rewriter with explicit string paths, value-free errors, duplicate-key
+  rejection, same-file overwrite protection, and caller-supplied local
+  transforms (#2280).
+- Added structure-aware tool-call trace redaction for JSON objects and encoded
+  payloads, with caller-controlled content paths, deterministic serialization,
+  hashed path-only reports, and a local-only default de-identifier (#2281).
+- Added local credential and secret-token detection for authorization headers,
+  environment values, provider tokens, and private keys, with bounded scanning
+  and value-free, hashed diagnostics (#2283).
+- Added bounded-memory streaming redaction for structured trace records and
+  NDJSON, with independent record and byte limits, deterministic pseudonyms,
+  aggregate-only progress, and local cancellation (#2284).
+- Added a deterministic, read-only local trace privacy inventory with
+  counts-only store, category, and file aggregates; byte ranges; file-status
+  totals; hashed caller-supplied labels; and value-free renderers (#2290).
+- Added local-only transactional in-place trace redaction with sibling
+  temporary files, source-consistency checks, exclusive backups, metadata
+  preservation, atomic replacement, cleanup, and value-free errors (#2291).
+- Added a deterministic offline trace-fidelity verifier that limits changes to
+  declared content fields; preserves order, linkage, identifiers, timestamps,
+  labels, scalar types, and structure; and emits hashed value-free diagnostics
+  (#2292).
+- Added versioned topical agent-skill packs for privacy, interoperability,
+  coding, evaluation, and research, with an offline deterministic builder,
+  membership and size-budget validation, canonical relative links,
+  selection-only output, and fail-closed output preflight (#2303).
+- Added the deterministic `ask-openmed` workflow router skill, with a
+  fail-closed privacy override for ambiguous or negated safety statements,
+  fixed intake-to-verification handoff ordering, canonical links to existing
+  skills, and PHI-free route diagnostics (#2304).
+- Added standard-library HTML/HTM visible-text extraction with source character
+  offsets and markup-preserving redaction write-back (#278).
+- Added an offline, versioned key-lifecycle helper and operator guide for
+  audit-key rotation, retired-key verification, surrogate-vault re-keying,
+  environment isolation, and file-permission hygiene without serializing keys.
+- Added conservative two- and three-column PDF reading-order reconstruction,
+  preserving source word bboxes and character-span projection while leaving
+  single-column extraction byte-for-byte compatible with the source-order path.
+- Added deterministic, local redacted-PDF rendering with burned-in opaque
+  rectangles, clean non-PHI text-layer reconstruction, global source-text
+  removal verification, masked page-layout fidelity reports, synthetic fixtures,
+  enforceable regression gates, bounded raster budgets, Type 3 font rejection,
+  and plaintext-free serialized evidence with sanitized render errors.
+- Added a rooted, backward-compatible public error taxonomy with stable
+  machine-readable codes, actionable PHI-safe diagnostics, REST/MCP mappings,
+  synthetic contract fixtures, and API documentation.
+- Added a production browser token-classification runtime with typed batched
+  WebGPU inference, deterministic local WASM fallback, an audited WGSL
+  classification head, Python-reference parity and recall gates, per-device
+  warm/cold benchmark records, and real headless-browser coverage.
+- Added local EML header, plain-text, HTML, and attachment PHI redaction with
+  decoded source-offset maps, deterministic safety sweeps, image-only PDF
+  attachment output, and an explicit isolated `extract-msg` bridge extra for
+  optional Outlook MSG input.
+- Added committed Android OpenMedKit release-AAR and offline cold-start budgets,
+  with blocking Gradle/CI gates and measured values in the Android job summary.
+- Added a Triton ONNX model-repository generator and configuration-selected
+  KServe V2 HTTP/gRPC inference backend with local tokenization and decoding,
+  mocked local/remote span-parity coverage, and no bundled serving runtime.
+- Added a Kopf-based Kubernetes model operator with the namespaced
+  `OpenMedModel` CRD, manifest-pointer warm-pool rollouts, lifecycle conditions
+  and Events, retained-version rollback, least-privilege RBAC, hardened
+  deployment assets, operator documentation, and a synthetic fake-API reconcile
+  suite.
+- Added a BigQuery-compatible warehouse remote-function handler that validates
+  batched row envelopes, groups policy-specific calls through `process_batch`,
+  emits PHI-safe error replies, and ships synthetic tests, container deployment
+  guidance, and registration DDL (#839).
+- Added a deterministic, fully offline `openmed init` project scaffold with
+  researcher, app-developer, and data-engineer presets, bundled OpenMedConfig
+  schema validation, synthetic starter pipelines, and collision-safe reruns.
+- Added opt-in, no-PHI OpenTelemetry spans and aggregate histograms for all ten
+  core privacy-pipeline stages, with lazy optional imports, no exporter by
+  default, shared `Timer` measurements, synthetic leakage regression tests, and
+  an `otel` installation extra.
+- Added a minimal local-artifact `edge-sbc` ONNX Runtime profile, native ARM64
+  Raspberry Pi and Jetson synthetic benchmark workflow, aggregate cold-start,
+  token-throughput, install-size, and peak-RSS records, plus fail-closed
+  footprint budgets and archived ARM64 proxy evidence.
+
+## [2.2.0] - 2026-08-21
+
+OpenMed 2.2 completes the trustworthy clinical-data-exchange milestone across
+terminology grounding, document intake, FHIR, OMOP, structured privacy, MCP,
+service security, local model runtimes, and offline release evidence. The final
+audited `v2.1.0..v2.2.0` range contains 111 commits and 571 changed files.
+GitHub generated notes associate 38 PRs with that range, including the
+contributor commits preserved by maintainer integration batches.
+
+The static public Python surface grows from 31,619 to 37,735 symbols with
+6,116 additions, zero removals or narrowed signatures, and zero new
+deprecations. The REST surface grows additively from 17 to 19 paths and from
+15 to 17 component schemas through `POST /ground` and
+`POST /pii/deidentify/stream`. Swift adds public Maple and Compass local-model
+runtimes without removing an existing package API. Android keeps its public
+method signatures while making diagnostic descriptions and internal logging
+PHI-safe by default.
+
+### Added
+
+- Added pinned DeepGrove Maple Preview support through Python MLX-LM and a
+  native OpenMedKit MLX architecture, with privacy-bounded PII removal,
+  clinical entities, directed relations, and note-grounded reasoning/chat.
+  Added polished iOS scanning, Android Compose, and browser WebGPU demos plus
+  reproducible 4-bit/8-bit MLX planning and checksum-verified ONNX/ORT bundle
+  tooling. Model weights remain external and every clinical or disclosure
+  result requires human review.
+- Added first-class Cohere Compass vision-language inference for the five
+  OpenMed North Micro Vision MLX precision variants: a native Python runtime,
+  a shared OpenMedKit Swift/iOS runtime, local and Hub artifact loading,
+  native-resolution image processing, and deterministic text/image parity
+  tests across Python and Swift.
+- Added a four-part, synthetic-only Jupyter notebook gallery for redaction,
+  batch processing, FHIR export, and multilingual evaluation, with offline
+  execution and committed-output freshness checks in CI.
+- Added a local-first terminology workbench with checksum-pinned vocabulary
+  snapshots, exact and ranked grounding, calibration, section context,
+  caller-supplied Athena and crosswalk support, value-free provenance, and
+  explicit terminology-conflict decisions.
+- Added FHIR R4 patient-summary and clinical-document assembly, explicit R4/R5
+  conversion boundaries, local profile validation, Bundle reference-integrity
+  reports, privacy-safe SDC form handling, OperationOutcome helpers, Bulk Data
+  pagination and resumable digest-only checkpoints, and a FHIR-to-OMOP CDM 5.4
+  bridge with caller-supplied vocabulary mappings.
+- Added deterministic clinical form and key/value extraction, cross-format
+  offset projection, PDF table reconstruction, XLSX/PPTX/ODT intake, HL7 v2
+  narrative handling, X12 837 redaction, and fail-closed MIME quarantine for
+  document intake.
+- Added structured privacy profiling and release controls for k-anonymity,
+  l-diversity, t-closeness, membership-inference self-tests, aggregate-only
+  differential privacy, qualified-review evidence, and local ARX/sdcMicro
+  bridge boundaries.
+- Added PHI-safe integrations for Arrow Flight, SQLAlchemy, PostgreSQL
+  PL/Python, executable UDFs, distributed SQL, Dataflow, Dagster, Ray,
+  pandas-on-Spark, search ingest, and stream processors.
+- Added service grounding and streaming de-identification routes, GraphQL,
+  backpressure and batching controls, load-test assets, model-cache quotas,
+  a CPU INT8 token-classification path, and additive Go/TypeScript client
+  coverage.
+- Added mTLS, HMAC replay protection, prompt-injection guards, MCP protected
+  resource and OAuth-style authorization boundaries, consent receipts,
+  upstream endpoint policy, and Part 11-oriented aggregate audit evidence.
+- Added local-first Android inference guards with no INTERNET permission,
+  socket-denial tests, opt-in typed aggregate logging, hashed entity
+  descriptions, and explicit assistive-use documentation.
+- Added hard-negative mining, per-language identifier/date traps, clinical
+  domain coverage, FHIR round-trip fixtures, timeline provenance, and the
+  versioned v2.2 synthetic conformance matrix with pinned FHIR, OMOP, and
+  evidence hashes.
+- Added optional `fhir`, `dagster`, and `sqlalchemy` extras, expanded the
+  multimodal and service extras, and added the `openmed-executable-udf` entry
+  point.
+
+### Changed
+
+- Grounding, interoperability, structured privacy, service, and MCP features
+  remain offline-first and require caller-supplied licensed terminology,
+  credentials, models, or external runtimes where applicable; no restricted
+  vocabulary or real-patient fixture is bundled.
+- Android `EntityPrediction.description` now emits label, offsets,
+  confidence, and a SHA-256 digest instead of raw detected text. Applications
+  that need a local UI preview must read the explicit `text` field and must not
+  send it to diagnostics or telemetry.
+- Active Python, npm, Swift, Android/JitPack, Helm, container, website, and
+  documentation coordinates now target `2.2.0` / `v2.2.0`.
+- The final candidate wheel is reproducibly 4,134,629 bytes and remains within
+  the committed 4,483,996-byte maximum. The gate retains its 4,076,360-byte
+  baseline and 10% headroom; the payload contains source, synthetic metadata,
+  and the committed model manifest rather than an unexpected binary or
+  restricted vocabulary asset.
+
+### Fixed
+
+- Fixed production builds to emit Core Metadata 2.4 for compatibility with the
+  PyPI publisher, pinned the recovery workflow for older immutable tags, and
+  made npm recovery skip an existing version only after its source commit and
+  packaged contents match a fresh tag build.
+- Stopped redundant tag-triggered Pages deployments that GitHub's master-only
+  environment protection rules reject; documentation continues to deploy from
+  `master`.
+- Restored the v2.1 public `openmed.clinical.grounding.SnapshotManifest`
+  binding while exposing the new vocabulary manifest as
+  `VocabularySnapshotManifest`, and retained `ConceptResolver` as a public
+  type alias after the OMOP exporter became a package. The v2.1-to-v2.2 static
+  API gate now reports zero breaking symbols.
+- Reconciled the combined v2.2 batches so FHIR profiles, OMOP mappings,
+  grounding provenance, privacy reports, service schemas, generated clients,
+  documentation publication, and shared fixtures agree on one integrated
+  contract.
+
+### Release integration ledger
+
+- GitHub-generated release-note PRs (38): #2228, #2230, #2237, #2239, #2241,
+  #2243, #2244, #2245, #2541, #2543, #2548, #2549, #2550, #2551, #2678,
+  #2679, #2680, #2681, #2682, #2685, #2686, #2687, #2688, #2689, #2690,
+  #2691, #2692, #2693, #2694, #2695, #2696, #2698, #2699, #2700, #2885,
+  #2886, #2887, and #2891.
+- The GitHub generated-note set is intentionally smaller than the complete
+  111-commit ancestry range because the maintainer batches preserve source
+  contributor commits while presenting one reviewed integration PR per
+  coherent subsystem.
+
+## [2.1.0] - 2026-08-12
+
+OpenMed 2.1 is the first feature release on the stable v2 line. The audited
+source scope covers every current-master change after the `v2.0.0` integration
+boundary at `b9ab7a3d`. The current published `v2.0.0` tag resolves to the
+rewritten-history commit `94ace7d` and is an ancestor of `master` through that
+boundary. Public API compatibility compares the tagged trees directly, while
+the integration ledger below follows changes after the integration boundary.
+
+The range adds clinical section, note-type, relation, temporal, coreference,
+radiology, discharge, medication, dosing, and fact-faithfulness workflows;
+offline terminology grounding, OMOP, FHIR, OpenEHR, cohort, and clinical MCP
+surfaces; structured generalization, relational privacy, differential-privacy,
+streaming, and attacker-model risk tools; multilingual, RTF, DICOM-SR, OCR,
+Android, Flutter, Beam, Ray, Spark, plugin, and model-cache adapters; and
+expanded deterministic, signed, rollback-safe evaluation and release gates.
+
+The static Python API grows from 20,538 to 31,619 public symbols with 11,081
+additions, zero breaking changes, and zero new deprecations. REST grows
+additively from 15 paths and 12 component schemas to 17 paths and 15 schemas.
+Android's offset implementation now matches the documented Unicode scalar
+contract; callers that treated offsets as Kotlin UTF-16 indices for non-BMP
+text should follow `docs/migration/2.0-to-2.1.md`.
+
+### Added
+
+- Added dependency-free OpenDocument Text (`.odt`) extraction with paragraph
+  and list reading order, deterministic table linearization, character-offset
+  source maps, multimodal registry discovery, and usage documentation (#857).
+- Added a read-only Strawberry GraphQL endpoint for selective analysis and
+  de-identification fields, canonical entity discovery, policy details, safe
+  aggregate risk facets, introspection, and deterministic SDL export (#828).
+- Added versioned HMAC-SHA256 request signing over method, path, timestamp,
+  nonce, and body digest, with client-side header helpers, bounded fail-closed
+  replay protection, and verifier-compatible signatures on async job webhooks
+  (#849).
+- Added `openmed redact-files` for local-only text and line-delimited file
+  redaction with atomic output, PHI-free JSON summaries, consistent surrogate
+  replacement, and no source overwrite (#2278).
+- Added a weekday-themed model release orchestrator that chains conversion,
+  synthetic evaluation, signed release gates, model-card generation,
+  publication, fresh-environment smoke checks, last-green rollback, quarantine
+  reporting, and an append-only offline audit ledger (#1243).
+- Completed longitudinal document linking with exact caller-supplied patient
+  boundaries, conservative cross-document entity de-duplication with complete
+  hashed occurrence provenance, and summary-card/timeline adapters (#1284).
+- Added offline family-transfer adapter routing that prefers installed target
+  adapters, falls back to compatible donor adapters with scored provenance,
+  and returns explicit unsupported or unavailable routing failures (#1331).
+- Added stdlib-only RTF text extraction (`openmed.multimodal.extract_rtf`,
+  dispatched by `redact_document` for `.rtf`) with a character-offset map back
+  to the source. Destination groups such as `\fonttbl`, `\colortbl`, `\info`,
+  `\pict`, and `\*`-marked extensions are skipped; control words, control
+  symbols, `\'hh` codepage escapes (`\ansicpg`-aware), `\uN` Unicode escapes
+  with the group-scoped `\ucN` fallback count, and `\bin` payloads are handled
+  without leaking markup into the extracted text (#856).
+- Completed clinical temporal timeline composition with DCT/TIMEX anchors on
+  every ordered event, transitively reduced public TLINK graphs, metric-ready
+  edge keys, and retained/pruned privacy-safe decision provenance (#1253).
+- Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
+  consistency scoring, a zero-violation blocking gate, and synthetic
+  discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and
+  contradiction-trap coverage (#1309).
+- Added deterministic OncoTree tumor-type mapping
+  (`openmed.clinical.load_oncotree`, `map_tumor_type`) against a
+  caller-supplied local release snapshot (path / `OPENMED_ONCOTREE_PATH` and
+  version / `OPENMED_ONCOTREE_VERSION`; nothing is bundled or downloaded). The
+  snapshot must be a flat JSON list of tumor-type nodes; nested OncoTree tree
+  dumps are unsupported. Exact and normalized name/code lookup supports an
+  optional caller-supplied `synonyms` list and indexes history and revocation
+  aliases with current codes winning collisions; unmatched or ambiguous
+  mentions stay unmapped with a reason (no fuzzy/lexical fallback).
+  Results are version-stamped `OncoTreeMapping` values. Includes synthetic
+  golden fixtures and `oncotree_top1_accuracy` evaluation support.
+- Added an experimental `yasbd` sentence-segmentation backend selectable via
+  `segment_text(..., backend="yasbd")` and
+  `analyze_text(..., sentence_backend="yasbd")`, backed by the optional
+  `yasbd-lib` extra. The default routing and core dependency set remain
+  unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
+  contract, with explicit errors for missing dependencies, unknown backends,
+  and conflicting preconstructed segmenters (#1848).
+- Added deterministic Urdu-versus-Arabic disambiguation for shared Arabic
+  script runs. `urdu_language_evidence()` scores the six Urdu-exclusive letters
+  (tteh, ddal, rreh, noon ghunna, heh doachashmee, yeh barree) and their sixteen
+  Arabic presentation forms, derived from single-character NFKC decompositions
+  so the Koranic stop-sign ligatures `U+FDF0`/`U+FDF1` are excluded. Extended
+  Arabic-Indic digits reinforce an existing letter signal but never trigger one,
+  keeping Persian on the Arabic route. Evidence moves `ur` ahead of `ar` in the
+  run's candidate order, and runs report `stdlib:urdu-cues` when an Urdu pack is
+  registered or `stdlib:arabic-fallback` at a lower confidence when none is.
+  Script-run offsets and grapheme boundaries are unchanged (#1571).
+
+- Registered the Indic and Urdu routing candidates (`mr`, `ne`, `bn`, `as`,
+  `ta`, `kn`, `ml`, `gu`, `pa`, `or`, `ur`) across the public language
+  surfaces. Nepali and Urdu now have display names, model prefixes, and REST,
+  MCP, TypeScript, and Go language enums; Nepali resolves to Faker's native
+  `ne_NP` locale. Languages in `USER_SUPPLIED_MODEL_LANGUAGES` claim no bundled
+  default model and raise an actionable `ValueError` naming every user-supplied
+  code when `model_name` is omitted, while `SUPPORTED_LANGUAGES` stays
+  model-backed-only so documented model-backed counts are unchanged (#1569).
+- Promoted Vietnamese (`vi`) to a model-backed PII language pack routed to
+  `OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1`, taking
+  `SUPPORTED_LANGUAGES` to 35 codes. Adds Vietnamese month names, deterministic
+  locale PHI generation, `vi_VN` surrogate and CCCD provider coverage across the
+  REST, MCP, TypeScript, and Go surfaces, and a second synthetic golden i18n
+  fixture exercising a native `ngày D tháng M năm YYYY` date, an `0xx` mobile,
+  a 12-digit CCCD, and a diacritic-bearing address (#263).
+
+- Added grapheme-aligned mixed-script run routing. `segment_by_script` now
+  yields `ScriptRun`, a tuple-compatible `NamedTuple`, and every run boundary
+  falls on an extended grapheme-cluster boundary, so a run can no longer split a
+  combining sequence, an Indic virama conjunct, a zero-width joiner sequence, or
+  a regional-indicator pair. Each cluster takes the script of its first
+  script-bearing code point, keeping a cross-script combining mark attached to
+  the base character it decorates. `LanguageRun` gained `candidates`,
+  `normalizer`, `tokenizer`, and `numeral_set`, and `SCRIPT_NORMALIZERS`,
+  `SCRIPT_NUMERAL_SETS`, `normalizer_for_script`, and `numeral_set_for_script`
+  expose the per-script routing tables (#1570).
+
+- Added `decide_rollback()` in `openmed/eval/rollout.py`, the pure decision
+  function mapping a gate diff to a rollback target. It diffs monitored
+  per-label recall and residual leakage against the committed last-green
+  baseline via `eval/history.diff_against_baseline`, applies the shared
+  `G7_RECALL_DROP_LIMIT` tolerance, and returns `HOLD` / `ADVANCE` /
+  `ROLLBACK`. A regression past tolerance rolls back to the committed
+  `last_green` pointer and never advances, even when the candidate's own gate
+  is `RELEASABLE`. The decision is side-effect-free and reproducible from the
+  report plus committed baseline and rollout state with no live API call, and
+  emits a PHI-free audit record carrying metric names, numeric deltas, store
+  keys and hashes only (#1803).
+
+### Changed
+
+- Script runs that previously began inside a grapheme cluster now begin at the
+  cluster boundary. A token opening with a combining mark, such as the Gurmukhi
+  addak U+0A71, starts one code point earlier because UAX #29 binds that mark to
+  the preceding separator. Offsets remain half-open code-point indices and every
+  run still tiles the source exactly (#1570).
+### Fixed
+
+- Separated fail-closed model promotion from tag-driven Library/SDK
+  publication so an SDK tag cannot accidentally attempt a pointer promotion
+  without a staged challenger, while retaining API compatibility and migration
+  enforcement in the tag-driven provenance job. Recalibrated the synthetic
+  Chinese and Indic throughput gate from six GitHub-hosted Ubuntu runs instead
+  of comparing hosted Linux against an Apple Silicon workstation baseline.
+  Also fixed Transformers 5 local-snapshot loading so `local_files_only` is not
+  forwarded twice to `AutoConfig`.
+
+- Refreshed the canonical public model snapshot from 1,520 to 2,266 entries and
+  restored the Android AAR's generated on-device catalog with 753 permissively
+  licensed ONNX/TFLite entries. Manifest refreshes now disable implicit Hub
+  authentication, preserve audited metadata for retained and converted models,
+  distinguish generative PII models from token-classification evidence, and
+  retain MIT license metadata. Android packaging now fails closed instead of
+  writing an empty catalog.
+
+- Replaced the Tamil default's authenticated-only checkpoint with the existing
+  public multilingual placeholder and classified Tamil alongside Russian as a
+  non-model-backed compatibility route. The stable
+  `pii_ta_msuperclinical_large` registry key now resolves to that placeholder;
+  production Tamil extraction still requires explicitly qualified weights.
+
+- Fixed quadratic script segmentation on text containing long combining-mark
+  runs whose marks carry a different script from their base. Such input passes
+  `validate_pii_input` because the combining and format-sequence guards reset on
+  each other's characters, and previously cost seconds per document in
+  `segment_by_script`, `route_runs`, and `is_indic_text`. Cluster starts are now
+  memoized so segmentation stays linear (#1570).
+
+- Fixed `Pipeline.stage2_language_script` rejecting national-ID-only and
+  user-supplied language codes that `openmed.core.pii` already accepted, so an
+  explicit `lang` is no longer refused one stage earlier (#1569).
+- Fixed the shared input gateway rejecting `USER_SUPPLIED_MODEL_LANGUAGES`
+  codes. `openmed.utils.gateway.validate_language` now includes them in its
+  default acceptance set, so the REST and MCP edges accept every code they
+  advertise on their language enums instead of returning `unsupported_language`
+  for `ne` and `ur`. `include_national_id` still toggles exactly
+  `NATIONAL_ID_ONLY_LANGUAGES` (#1569).
+- Fixed day-first date handling for Vietnamese so shifted, replacement, and
+  format-preserving date surrogates all render `DD/MM/YYYY` instead of
+  `MM/DD/YYYY`, matching the `dmy` locale contract already declared for `vi`
+  (#263).
+- Corrected the `languages` metadata on the 18 `OpenMed-PII-Vietnamese-*`
+  manifest rows from `["en"]` to `["vi"]`, so Vietnamese PII checkpoints resolve
+  through `get_pii_models_by_language("vi")`. Those 34 registry keys move from
+  `pii_vietnamese_*` to `pii_vi_*` and, as with the Bengali, Chinese, and Tamil
+  reclassification, they no longer appear in
+  `get_pii_models_by_language("en")`, which drops from 219 to 185 entries
+  (#263).
+- Fixed the PySpark batch de-identification adapter so
+  `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
+  UDF construction instead of failing with an unsupported `Any` signature
+  (#1942).
+- Fixed `openmed risk discover`, `risk assess`, and `risk anonymize` handling
+  of UTF-8 BOM-prefixed CSV and TSV schemas so the first column is classified
+  consistently, and added bounded validation causes to structured-release CLI
+  errors instead of replacing actionable `TypeError` and `ValueError` details
+  with a generic schema mismatch.
+
+### Release integration ledger
+
+- PR-associated integrations (213): #335, #340, #1286, #1315, #1344,
+  #1358, #1360, #1369, #1370, #1903, #1904, #1905, #1906, #1907,
+  #1909, #1910, #1911, #1912, #1913, #1914, #1915, #1916, #1917, #1918,
+  #1919, #1920, #1921, #1922, #1923, #1924, #1925, #1926, #1928, #1929,
+  #1930, #1931, #1932, #1933, #1934, #1935, #1936, #1937, #1938, #1940,
+  #1941, #1943, #1945, #1946, #1949, #1951, #1953, #1954, #1955, #1956,
+  #1957, #1958, #1959, #1960, #1972, #1982, #1984, #1987, #1988, #1993,
+  #1994, #1996, #1997, #1999, #2000, #2001, #2002, #2003, #2004, #2005,
+  #2006, #2007, #2008, #2009, #2010, #2011, #2012, #2013, #2014, #2017,
+  #2018, #2019, #2021, #2022, #2023, #2024, #2025, #2026, #2041, #2043,
+  #2045, #2047, #2050, #2052, #2054, #2055, #2056, #2057, #2058, #2059,
+  #2060, #2061, #2062, #2063, #2064, #2065, #2066, #2067, #2068, #2070,
+  #2071, #2072, #2073, #2074, #2075, #2076, #2077, #2078, #2079, #2080,
+  #2081, #2084, #2086, #2087, #2088, #2089, #2090, #2091, #2103, #2104,
+  #2105, #2106, #2108, #2110, #2111, #2112, #2114, #2115, #2116, #2117,
+  #2118, #2119, #2120, #2121, #2122, #2124, #2125, #2126, #2128, #2129,
+  #2131, #2132, #2134, #2136, #2137, #2138, #2139, #2141, #2143, #2144,
+  #2145, #2146, #2147, #2148, #2150, #2151, #2153, #2180, #2182, #2183,
+  #2184, #2188, #2189, #2190, #2194, #2198, #2199, #2201, #2203, #2205,
+  #2207, #2209, #2211, #2212, #2213, #2216, #2217, #2218, #2219, #2221,
+  #2222, #2223, #2224, #2231, #2232, #2235, #2236, #2238, #2240, #2242,
+  #2253, #2256, #2266, #2269, #2270, #2271, #2272, #2273, and #2275.
+- Direct integrations: `9b867bcc` (nursing-care observation domain),
+  `9b3fa7b4` (TNM extraction), `3c5dad71` (HGVS parsing), `e41628df` (NER
+  family label maps), `37d5817f` (release run ledger), `544e75bf` (private
+  marketplace owner email), and `a6e10b6b` (README maintenance).
+- Final release hardening in this change set covers public-manifest refresh,
+  fail-closed Android catalog generation, lazy-export API comparison, release
+  workflow defaults, dependency policy, deterministic test reliability, and
+  fail-closed Pages artifact boundaries. It is described here without a
+  preassigned commit hash so the permanent changelog remains correct after
+  maintainer review and merge.
+- GitHub's generated-note set contains 153 entries. The ancestry ledger above
+  is authoritative for range accounting because it also includes integrations
+  excluded from generated notes and direct commits without associated PRs.
+
+## [2.0.0] - 2026-07-28
+
+OpenMed 2.0 expands the local-first privacy, clinical extraction, evaluation,
+and deployment stack across Python, Swift, Kotlin/Android, JavaScript, MCP, and
+container environments. The release preserves the documented v1 Python entry
+points and REST paths while establishing explicit multilingual, structured,
+agent-tool, and release-evidence contracts for the v2 line.
+
+### Added
+- Added an offline nursing-care observation zero-shot domain with display
+  label mappings (IntakeOutput, LineDrainTube, RiskScore, MobilityStatus,
+  CareIntervention, PainScore, SkinAssessment), canonical policy label
+  metadata, synthetic per-label fixture coverage for risk-score and
+  line/drain/tube spans, and domain-coverage evaluation integration (#910).
+
+- Expanded built-in PII routing to 34 language codes and added deterministic
+  identifier, date, phone, address, and surrogate support across Chinese,
+  Indic, African, Nordic, Central and Eastern European, Russian, Urdu,
+  Vietnamese, and regional Arabic workflows.
+- Added offset-preserving normalization and segmentation for full-width and
+  half-width text, native digits, Simplified and Traditional Chinese,
+  Chinese numerals and word boundaries, Indic graphemes and legacy encodings,
+  cross-script transliteration, code-mixed Hinglish, and confusable text.
+- Added China PIPL, India DPDP and ABDM, South Africa POPIA, Nigeria NDPA,
+  Kenya DPA, Egypt PDPL, Morocco Law 09-08, pan-African Malabo, GDPR, EU AI
+  Act, ISO 27701/27001, consent-tag, and data-residency evidence workflows.
+- Added script-correct multilingual surrogates, Chinese address and Pinyin name
+  handling, India identifier and transliterated-name consistency, African
+  locale providers, and checksum-valid national-identifier replacements.
+- Added deterministic SMS, low-resource CPU, air-gapped installation, model
+  integrity verification, crash-safe batch resume, tamper-evident audit,
+  Safe Harbor attestation, k-anonymity, adversarial-PHI, and leakage-dashboard
+  paths.
+- Added an offline structured-data release-risk workflow with advisory
+  quasi-identifier discovery, explicit reviewer overrides, patient-level
+  k-anonymity, distinct or entropy l-diversity, variational t-closeness,
+  bounded hierarchy and suppression search, whole-privacy-unit suppression,
+  materialized-output revalidation, and rollback-safe publication.
+- Added exact offline reference-population assessment over row-level or keyed
+  longitudinal profiles, with k-map, exact-linkage risk, delta-presence,
+  conservative unmatched-profile handling, explicit model assumptions, and
+  separate data, schema, policy, and integrity digests. Aggregate results do
+  not serialize raw profiles or privacy-unit values.
+- Added aggregate-only structured-risk dashboards, a strict `openmed risk gate`
+  CI command, deterministic expert-review evidence, and expert-authored
+  Ed25519 attestations that independently verify signature, evidence binding,
+  conclusion, and freshness without claiming automated Expert Determination.
+- Added radiology section and finding extraction, serial measurement trends,
+  longitudinal document linking, clinical coreference, temporal normalization,
+  abbreviation disambiguation, multilingual relations, flowsheets, lab panels,
+  discharge summaries, procedures, pulmonology, and pediatrics coverage.
+- Added local adapters and packaging for OpenMRS, DHIS2, OpenHIM, community
+  health forms, WHO SMART profiles, PySpark, Prefect, scrubadub, LlamaIndex,
+  scispaCy, QuickUMLS, and offline ICD-11 grounding.
+- Added a typed MCP tool registry with annotations and structured output,
+  an `openmed-mcp` entry point, an MCP-enabled container and Compose service,
+  and portable repository skills plus agent-oriented documentation feeds.
+- Added Chinese and Indic throughput gates, multilingual golden fixtures,
+  annotation-agreement and corpus-quality evidence, parser fuzzing, regression
+  tracking, model-size and ARM latency budgets, and a fail-closed signed
+  release-readiness decision.
+- Added watchOS and visionOS OpenMedKit targets, grapheme-safe Swift span
+  parity, compact on-device segmenters, Android `EntityPrediction` metadata and
+  `OpenMedSpan`, GGUF and WebGPU export guidance, and reproducible Nix
+  development environments.
+- Added deterministic, fully local longitudinal document linking with
+  MinHash-based near-duplicate clustering, directional amendment edges,
+  retained superseded documents, and non-text source/target provenance on
+  every relationship (#1835).
+- Added a PySpark `pandas_udf` adapter (`openmed.interop.spark_udf`) for
+  redacting free-text Spark DataFrame columns at warehouse scale via
+  `make_deidentify_udf()` and the `deidentify_columns()` convenience helper,
+  with the OpenMed model loaded lazily and cached per executor worker
+  process. `pyspark` is imported lazily and stays behind the existing `spark`
+  extra; the adapter is registered as `spark` in `openmed.interop` (#1816).
+- Added a procedures zero-shot domain for surgical and diagnostic procedures,
+  devices, and surgical approach, with a new `DEVICE` canonical label,
+  keyword routing metadata, and canonical label normalization (#313).
+- Added deterministic serial measurement trends that group repeated entities,
+  normalize compatible units, order points through the clinical timeline,
+  preserve source spans and incomparable readings, and emit a clinician-review
+  advisory with synthetic offline direction and grouping gates (#1831).
+- Added word-aware Chinese Pinyin romanization with tone-mark, numeric-tone,
+  and heteronym output, plus deterministic Han name surrogates and
+  tone-insensitive Pinyin vault keys for consistent Chinese name matching.
+- Added a fail-closed, signed release-readiness gate that verifies signed model
+  gate evidence, release documentation, a machine-readable API compatibility
+  report, the public clinical disclaimer, and workflow-produced golden-suite
+  evidence before a release can proceed (#1814).
+- Added a scrubadub adapter with `to_canonical()`/`from_canonical()` span
+  conversion and canonical label mapping for scrubadub's core `Filth` types
+  (including the `en_US`/`en_GB` locale detectors), splitting `credential`
+  matches into separate `USERNAME`/`PASSWORD` entities using scrubadub's
+  named regex groups, flattening scrubadub overlap wrappers without label loss,
+  and losslessly recombining credential matches on the return trip. Scoreless
+  scrubadub spans default to fallback priority during OpenMed arbitration.
+  scrubadub stays an optional `scrubadub` extra, and the adapter is
+  registered lazily as `scrubadub` in `openmed.interop` (#281).
+- Added a full Russian (`ru`) PII language pack, including Cyrillic date,
+  phone, postal-index, and street-address patterns, SNILS (insurance account
+  number) and OMS (health-insurance policy number) validators with
+  checksum-backed surrogates, and service/SDK wiring. Russian uses the
+  documented multilingual default-model placeholder until dedicated weights
+  ship; the release-wide supported PII language-code allow-list now covers
+  34 codes (#1860).
+- Added opt-in token-level language identification for Hinglish clinical text,
+  with exact offset-only decisions, deterministic local fallback routing,
+  optional caller-supplied model hooks, and synthetic token-accuracy and
+  de-identification recall gates (#1490).
+- Added an offline, native ARM64 SMS-scale INT8 latency benchmark with a
+  committed synthetic corpus, exact model artifact provenance, aggregate
+  p50/p95/throughput/peak-RSS reporting, a Raspberry Pi 5 target envelope, and
+  a CI gate that fails regressions beyond the permitted 20% tolerance (#1456).
+- Added opt-in Simplified/Traditional Chinese normalization through OpenCC,
+  including Taiwan and Hong Kong conversion configs, mixed-variant detection,
+  and offset-preserving span projection back to original text (#1467).
+- Added source-aligned Chinese numeral parsing for everyday and financial
+  forms, valid year/month/day normalization, and contextual Chinese date,
+  medical-record identifier, and clinical-quantity PII patterns (#1469).
+- Added a Swahili README and an African developer onboarding guide covering
+  bandwidth-aware model sizing and offline setup, POPIA/NDPA policy pointers,
+  OpenMRS FHIR and DHIS2 Tracker recipes, community links, and shared
+  translation-drift enforcement (#1455).
+- Added an offline-first `openmed models size` command with committed download,
+  disk, and peak-RAM estimates, cache-aware remaining bytes, per-task bandwidth
+  recommendations, JSON output, and explicitly opt-in remote refinement (#1453).
+- Added an opt-in, offline FHIR R4 profile checker for locally supplied WHO
+  SMART Guidelines implementation-guide packages, including cardinality,
+  fixed-value, locally enumerable binding, identifier/category slice, and
+  post-de-identification conformance checks (#1451).
+- Added local, structure-preserving de-identification for ODK Central,
+  CommCare HQ, and KoBoToolbox JSON/CSV form exports, including XForm path
+  semantics, repeat fidelity, safe unknown-text handling, geopoint
+  generalization, and value-free policy manifests (#1450).
+- Added an opt-in OpenHIM de-identification mediator with authenticated
+  registration and heartbeats, FHIR and text transformation envelopes,
+  byte-preserving opaque pass-through, and an offline container smoke fixture
+  for deployment inside an HIE trust boundary (#1448).
+- Added data-driven African healthcare-context safety-sweep terms for named
+  facilities, mobile-money references, and context-gated ethnic affiliations,
+  with non-keep defaults across the initial African policy profiles and
+  synthetic no-leak fixtures (#1447).
+- Added PHI-free, hash-verifiable Africa data-residency attestations for audited
+  local de-identification runs, with data-driven jurisdiction wording, exact
+  policy and model provenance, conservative captured offline evidence, a public
+  JSON Schema, and an offline deployment and review guide (#1446).
+- Added an Igbo (`ig`) PII pack for Nigerian clinical text with NFC, NFD, and
+  unmarked context support, native `ig_NG` surrogates, shared Nigerian NIN and
+  phone patterns, and grapheme-safe replacement of dot-below names (#1441).
+- Added a Yoruba (`yo`) PII pack with NFC, NFD, and unmarked context support,
+  native `yo_NG` surrogates, and grapheme-safe normalized span remapping and
+  replacement boundaries for stacked dot-below and tone marks (#1440).
+- Added a deterministic Hausa (`ha`) PII pack for Boko and numeric Ajami text,
+  including Nigerian NINs, Nigerian and Nigerien phone numbers, exact-offset
+  native-digit matching, `ha_NG` surrogates, and Arabic-script arbitration
+  without claiming Ajami lexical coverage (#1439).
+- Added build-generated `llms.txt` and `llms-full.txt` documentation feeds with
+  curated quickstart, API, de-identification, agent, MCP, and REST coverage,
+  plus strict local and Pages build checks (#1787).
+- Added character-offset Chinese and Hindi clinical relation extraction over
+  existing multilingual NER spans, including the versioned 44-predicate CMeIE
+  mapping, constrained graph decoding, assertion propagation, synthetic gold,
+  and distinct per-language relation F1 reporting (#1205).
+- Added a Prefect integration with a `deidentify_file_task` task and a
+  `deidentify_dataset_flow` flow that fan the local dataset redaction runner
+  over lists of files and return PHI-free count summaries. Prefect stays an
+  optional `prefect` extra, and the adapter is registered lazily as
+  `prefect` in `openmed.interop` (#471).
+- Added a deterministic radiology report parser that separates findings,
+  impression, and recommendation text with provenance spans, captures only
+  explicitly stated BI-RADS or Lung-RADS categories, and includes synthetic
+  offline accuracy gates (#1838).
+- Added a deterministic radiology-finding extractor that binds laterality,
+  measured size, and anatomic location with per-field provenance, supports
+  caller-supplied offline RadLex JSON mappings, and includes a synthetic
+  finding-tuple-F1 gate (#1837).
+- Added a deterministic, offline ISO 15919 transliteration pivot for nine Indic
+  scripts, ITRANS and Harvard-Kyoto parsing, offset-preserving romanization,
+  and cross-script person-name linkage in surrogate vaults (#1483).
 - Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
   and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
   five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
@@ -18,6 +709,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
   installed Faker fall back to `ar_EG` with a one-time warning, and
   `list_regional_locales('ar')` enumerates the supported tags (#483).
+- Added curated conceptual surrogate locales for Senegal, Côte d’Ivoire,
+  Cameroon, Mozambique, and Angola (`fr_SN`, `fr_CI`, `fr_CM`, `pt_MZ`, and
+  `pt_AO`), including in-country names, addresses, cities, phone formats, and
+  context-only Senegal CNI and Angola BI detection. Arabic regional overrides
+  now also document `ar-DZ` and `ar-MA`; unavailable Faker backends retain the
+  existing one-time-warning fallback to `ar_EG` (#1443).
+- Added conservative Egypt PDPL and Morocco Law 09-08 policy profiles with
+  complete mask action maps, no reversible mappings, mandatory safety sweeps,
+  declarative `ar_EG`/`ar_MA` clinical identifier formats, and a decision-support
+  compliance checklist covering sensitive-data and transfer controls (#1444).
 - Added a release evidence job that keylessly signs each wheel and source
   distribution with Sigstore and attaches the SLSA provenance bundle, the
   release artifact digest manifest, and the Sigstore bundles to the tagged
@@ -33,6 +734,834 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
   locale-aware synthetic surrogates, and an offline synthetic golden fixture
   ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
+- Added a release run-ledger builder that records, per family, which candidate
+  artifact was published under which gate decision, binding the artifact digest
+  to a recomputed `GateReport` hash so a published artifact provably passed the
+  gate it claims. Non-`RELEASABLE` families are quarantined with no publish
+  target, the run outcome is reconstructable offline from
+  `gates/release_runs.jsonl`, and the ledger carries only identifiers and
+  hashes. Adds `compute_canonical_payload_hash()` to `openmed.core.repro_hash`
+  as the generic counterpart to the training-shaped
+  `compute_reproducibility_hash()` (#1805).
+
+### Changed
+
+- Made the language-pack catalog the shared source of truth for runtime,
+  service, registry, fixture, documentation, and CLI capability reporting.
+- Added uniform CLI JSON output and error envelopes and strengthened
+  model-download, manifest-signature, provenance, SBOM, secret-scan, and
+  dependency-policy enforcement.
+- Added the `DEVICE` canonical clinical label. Consumers that treat canonical
+  labels as a closed enum must add the new value before adopting v2.
+- Added optional extras for Chinese, Indic, language identification, integrity
+  verification, OpenMRS, scrubadub, Prefect, scispaCy, and QuickUMLS; raised
+  the optional MCP runtime floor to the v1.27 API line.
+
+### Compatibility
+
+- Preserved all public Python symbols from `v1.9.1`; the static API comparison
+  records 6,050 additions, no removals or narrowed signatures, and no newly
+  deprecated symbols.
+- Preserved the existing REST/OpenAPI path and schema set. Swift, Android, npm,
+  service, configuration, and serialized evidence changes are additive except
+  for closed-enum consumers that must recognize `DEVICE`.
+- Preserved the documented root imports, including `OpenMedConfig`,
+  `analyze_text`, `deidentify`, and `extract_pii`.
+
+### Fixed
+
+- Corrected compact Indic segmenter licensing to the valid SPDX `ICU`
+  identifier, pinned the immutable ICU 57.1 source revision, retained the full
+  source copyright and permission notice in Python distributions and standalone
+  model bundles, and added fail-closed Python, Swift, and release-policy
+  validation.
+- Corrected PharmaDetect medication boundaries and optional precision
+  filtering, contrastive-clause experiencer scope, radiology span and
+  laterality binding, cross-platform path handling, and model-loader behavior
+  across stale caches and low-memory environments.
+- Allowed explicitly selected models to run with deterministic pattern-only
+  language packs while keeping the no-default-model path fail closed.
+- Restored direct Hub-ID loading for pre-manifest MLX artifacts that carry
+  trusted converter markers, kept local PyTorch privacy-filter snapshots on
+  Torch, and continued to reject unmarked bundles.
+- Root-anchored Hatch build patterns so wheel and source distributions cannot
+  absorb nested local worktrees or workspace-control files.
+- Raised the optional spaCy integration to 3.8.9+, isolated its NumPy 1.x ABI
+  route from incompatible ONNX combinations, and resolved factory type
+  annotations before spaCy's Pydantic-backed config validation.
+- Stabilized the long-input and arbitrary-text de-identification fuzz
+  properties across slower CI platforms by keeping their deterministic example
+  budgets and safety assertions while leaving performance enforcement to the
+  dedicated latency and throughput gates.
+
+### Security
+
+- Added telemetry-off-by-default enforcement, mixed-script and confusable PII
+  defenses, no-raw-PHI evidence formats, integrity-checked model downloads,
+  tamper-evident audit chains, consent and data-use enforcement, and
+  reproducible release evidence.
+- Updated vulnerable locked dependencies and kept release images, Python and
+  npm artifacts, Android coordinates, and signed evidence on independent,
+  fail-closed validation paths.
+- Required ONNX 1.21+ for ONNX-producing optional routes, refreshed the
+  universal dependency lock to the fixed ONNX line, and excluded generated
+  SBOM, audit, vulnerability, and JavaScript dependency artifacts from Docker
+  build contexts so local evidence and development dependencies cannot
+  contaminate service images or image scans.
+
+### Complete commit and pull-request inventory
+
+The audited `1ab2eca4cc89..6525adb5722c` range contains 539 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
+
+The final changelog-only commit that records this ledger is represented by this inventory section itself; a commit cannot contain its own content-derived SHA.
+
+<details>
+<summary>Merged pull requests and their included commits</summary>
+
+- [#1547](https://github.com/maziyarpanahi/openmed/pull/1547) feat: add full-width/half-width normalization with offset preservation (5 audited commits)
+  - `4d2eb1d77321` feat: add full-width/half-width normalization with offset preservation
+  - `81237954a3c7` fix: register cjk_width_convention in OpenMedConfig.from_dict
+  - `8710f526dbfc` Merge current master into PR #1547
+  - `a6663eff65db` fix: integrate CJK width normalization into PII detection
+  - `413db39b2468` Merge pull request #1547 from pardeep-singh/pardeep/issue1468-zh-width-normalize
+- [#1548](https://github.com/maziyarpanahi/openmed/pull/1548) feat: add Indic native-digit folding with offset preservation (6 audited commits)
+  - `d9dde39fa33d` feat: add Indic native-digit folding with offset preservation
+  - `f398af89c4d0` Merge current master into PR #1548
+  - `081e817a84b1` Merge PR #1547 normalization integration into PR #1548
+  - `211f93fa0642` fix: integrate Indic digit folding into PII detection
+  - `240557c8cb74` Merge current master into PR #1548 after #1547
+  - `56e05d7c0fb1` Merge pull request #1548 from pardeep-singh/pardeep/issue1485-indic-numerals
+- [#1596](https://github.com/maziyarpanahi/openmed/pull/1596) feat: add Unified Social Credit Code recognizer and MOD-31-3 validator (5 audited commits)
+  - `614bda8ec16c` feat: add Unified Social Credit Code recognizer and MOD-31-3 validator
+  - `f27a75c169a3` Merge current master into PR #1596
+  - `ba9ccb5769ea` fix: harden Unified Social Credit Code handling
+  - `5ec3721d0e8f` Merge current master into PR #1596 after prior merges
+  - `b7b0e0d4ff49` Merge pull request #1596 from pardeep-singh/pardeep/issue1476-uscc-recognizer
+- [#1595](https://github.com/maziyarpanahi/openmed/pull/1595) feat(ner): add pulmonology domain with spirometry and respiratory labels (3 audited commits)
+  - `cb2445b92b4b` feat(ner): add pulmonology domain with spirometry and respiratory labels
+  - `3b3e90b61a63` Merge current master into PR #1595
+  - `23c1e3c7dfe8` Merge pull request #1595 from PouyanJay/feat/pulmonology-domain-labels
+- [#1592](https://github.com/maziyarpanahi/openmed/pull/1592) feat: add Estonian (et) PII language pack with isikukood validator (6 audited commits)
+  - `a3506aa1e08a` feat: add Estonian (et) PII language pack with isikukood validator
+  - `9606fa9518ad` Merge current master into PR #1592
+  - `b0f2253a06c1` fix: align Estonian personal-code validation
+  - `60615e797776` Merge remote-tracking branch 'origin/master' into review/pr-1592
+  - `c7c9ccdebca7` fix: reject non-string Estonian codes
+  - `5e66ceb95ec3` Merge pull request #1592 from PouyanJay/feat/estonian-isikukood-pii
+- [#1593](https://github.com/maziyarpanahi/openmed/pull/1593) feat: add Hungarian TAJ language pack (9 audited commits)
+  - `42d86399d753` feat: add Hungarian TAJ language pack
+  - `705414f0449c` test: expose Hungarian TAJ generator
+  - `4cfab5d63bb9` Merge current master into PR #1593
+  - `022ef0574907` fix: harden Hungarian TAJ handling
+  - `a4adcb8ce46f` Merge remote-tracking branch 'origin/master' into review/pr-1593
+  - `8efee76aef71` Merge PR #1592 integration into PR #1593
+  - `b36854fb939f` Merge branch 'review/pr-1592' into review/pr-1593
+  - `97c8cf13ace1` Merge remote-tracking branch 'origin/master' into review/pr-1593
+  - `abb671812926` Merge pull request #1593 from thangldw/feat/hungarian-taj-language-pack
+- [#1597](https://github.com/maziyarpanahi/openmed/pull/1597) feat: add Serbian (sr) PII language pack with JMBG validator (8 audited commits)
+  - `baf84a547829` feat: add Serbian (sr) PII language pack with JMBG validator
+  - `729147ba9173` Merge current master into PR #1597
+  - `e391fd08a907` fix: enforce strict Serbian JMBG shape
+  - `519740766194` Merge PR #1593 integration into PR #1597
+  - `e716e0b992e2` Merge branch 'review/pr-1593' into review/pr-1597
+  - `dc068af35f67` Merge remote-tracking branch 'origin/master' into review/pr-1597
+  - `875236ad3f74` Merge remote-tracking branch 'origin/master' into review/pr-1597
+  - `ae188fe01921` Merge pull request #1597 from PouyanJay/feat/serbian-jmbg-pii
+- [#1598](https://github.com/maziyarpanahi/openmed/pull/1598) feat: add Croatian (hr) PII language pack with OIB validator (8 audited commits)
+  - `2c23eca49408` feat: add Croatian (hr) PII language pack with OIB validator
+  - `217cd4779a6a` Merge current master into PR #1598
+  - `0655fbf88e1a` fix: harden Croatian OIB handling
+  - `eb38fc903554` Merge PR #1597 integration into PR #1598
+  - `048249f82327` Merge remote-tracking branch 'origin/master' into review/pr-1598
+  - `d7a8abb7a885` Merge remote-tracking branch 'origin/master' into review/pr-1598
+  - `e4ec9ee962cf` Merge remote-tracking branch 'origin/master' into review/pr-1598
+  - `4ce92e3e9e82` Merge pull request #1598 from PouyanJay/feat/croatian-oib-pii
+- [#1599](https://github.com/maziyarpanahi/openmed/pull/1599) feat: add Bulgarian (bg) PII language pack with EGN validator (9 audited commits)
+  - `a1b37c2c4088` feat: add Bulgarian (bg) PII language pack with EGN validator
+  - `a7ef18421da3` Merge branch 'master' into review/pr-1599
+  - `fb569c99a1f9` fix: enforce strict Bulgarian EGN shape
+  - `137af1344e83` Merge PR #1598 integration into PR #1599
+  - `854339246f93` Merge remote-tracking branch 'origin/master' into review/pr-1599
+  - `82bbd143bee6` Merge remote-tracking branch 'origin/master' into review/pr-1599
+  - `700b77f11b02` Merge remote-tracking branch 'origin/master' into review/pr-1599
+  - `292bd9342382` Merge remote-tracking branch 'origin/master' into review/pr-1599
+  - `e6919c6d1fd4` Merge pull request #1599 from PouyanJay/feat/bulgarian-egn-pii
+- [#1600](https://github.com/maziyarpanahi/openmed/pull/1600) feat: add Finnish (fi) PII language pack with HETU validator (10 audited commits)
+  - `2a758d6092e1` feat: add Finnish (fi) PII language pack with HETU validator
+  - `3401354a6816` Merge branch 'master' into review/pr-1600
+  - `979b924fe551` fix: harden Finnish HETU validation
+  - `ae12d3b6441d` Merge PR #1599 integration into PR #1600
+  - `76db11b978ae` Merge remote-tracking branch 'origin/master' into review/pr-1600
+  - `9011c9cd8f93` Merge remote-tracking branch 'origin/master' into review/pr-1600
+  - `16331a268132` Merge remote-tracking branch 'origin/master' into review/pr-1600
+  - `defd1bd228eb` Merge remote-tracking branch 'origin/master' into review/pr-1600
+  - `cda1e865f7db` Merge remote-tracking branch 'origin/master' into review/pr-1600
+  - `ee9d5189f375` Merge pull request #1600 from PouyanJay/feat/finnish-hetu-pii
+- [#1602](https://github.com/maziyarpanahi/openmed/pull/1602) feat: add Czech (cs) PII language pack with rodne cislo validator (5 audited commits)
+  - `d2d9d8aad070` feat: add Czech (cs) PII language pack with rodne cislo validator
+  - `d03663555e09` Merge master into Czech PII language pack
+  - `a8539f11bb3a` feat(pii): expand Czech locale coverage and regression tests
+  - `012021d20852` fix(pii): finalize Czech language pack validation
+  - `291f40ec2562` Merge pull request #1602 from PouyanJay/feat/czech-rodne-cislo-pii
+- [#1612](https://github.com/maziyarpanahi/openmed/pull/1612) Fix/social cards fix (16 audited commits)
+  - `48cfe1c69677` Delete apple-touch-180.html
+  - `d5e62412fd60` Delete avatar-circle-400.html
+  - `11e53def2d66` Delete avatar-linkedin-300.html
+  - `7790f60106fb` Delete avatar-square-512.html
+  - `14c1cf13fbbe` Delete favicon-64.html
+  - `ce6bf7369b72` Delete github-social.html
+  - `ac891cf1a5f6` Delete hf-card.html
+  - `e15591ccd4fc` Delete og.html
+  - `a949b8a8d5dd` Delete readme-banner.html
+  - `cd444f67a0b8` Delete x-header.html
+  - `1cff6d19b7d1` Update hf-card.png
+  - `0615a4e9cc38` Update og.png
+  - `262dc2abe637` Update readme-banner.png
+  - `5a02809a5eec` Update x-header.png
+  - `f667dad4f3dc` fix: remove deleted social card test target
+  - `c2b582f893ce` Merge pull request #1612 from maziyarpanahi/fix/social-cards-fix
+- [#1617](https://github.com/maziyarpanahi/openmed/pull/1617) test(security): add telemetry-off-by-default enforcement guard (OM-099) (2 audited commits)
+  - `4fe919994d4e` test(security): add telemetry-off-by-default enforcement guard
+  - `981134bd9c76` Merge pull request #1617 from PouyanJay/feat/no-telemetry-guard
+- [#1613](https://github.com/maziyarpanahi/openmed/pull/1613) feat(android): add EntityPrediction description and OpenMedSpan data model (3 audited commits)
+  - `1a7d40213f98` feat(android): add EntityPrediction description and OpenMedSpan data model
+  - `f9e0429bc4db` fix(android): match Swift half-even rounding in EntityPrediction.toString
+  - `aac3019394ce` Merge pull request #1613 from PouyanJay/feat/android-entityprediction-openmedspan
+- [#1618](https://github.com/maziyarpanahi/openmed/pull/1618) test: cover help for every CLI command (2 audited commits)
+  - `8535b504b2d0` test: cover help for every CLI command
+  - `12aae0364648` Merge pull request #1618 from ShiHuiwen-creat/test/485-cli-help-coverage
+- [#1614](https://github.com/maziyarpanahi/openmed/pull/1614) fix(clinical): scope experiencer cues across contrastive clauses (#277) (4 audited commits)
+  - `a7fc761dd641` fix(clinical): scope experiencer cues across contrastive clauses
+  - `a556bf303aac` docs(clinical): note the contrastive-clause terminator set is intentional
+  - `00eb7e0a92b9` fix: cover FHx experiencer cue
+  - `25765c0019b5` Merge pull request #1614 from PouyanJay/feat/experiencer-context-axis
+- [#1615](https://github.com/maziyarpanahi/openmed/pull/1615) docs: add per-language PII de-identification guide (3 audited commits)
+  - `bd91e1fe1afe` docs: add per-language PII de-identification guide
+  - `05a22712351a` style: format language docs coherence test
+  - `384282bc6f2d` Merge pull request #1615 from cycsmail/docs-per-language-pii-guide-287
+- [#1608](https://github.com/maziyarpanahi/openmed/pull/1608) docs: decide and document the on-device Android tokenization strategy (2 audited commits)
+  - `719e0cfdaee7` docs: decide and document the on-device Android tokenization strategy
+  - `e3644bdbead3` Merge pull request #1608 from PouyanJay/docs/android-tokenization
+- [#1606](https://github.com/maziyarpanahi/openmed/pull/1606) docs: add Android quickstart covering setup, model load, and redaction (2 audited commits)
+  - `132826d2d6c5` docs: add Android quickstart covering setup, model load, and redaction
+  - `d45635306acb` Merge pull request #1606 from PouyanJay/docs/android-quickstart
+- [#1603](https://github.com/maziyarpanahi/openmed/pull/1603) feat: add Greek (el) PII language pack with AMKA validator (2 audited commits)
+  - `4c115aad70c4` feat: add Greek (el) PII language pack with AMKA validator
+  - `079a8f8c2ea2` Merge pull request #1603 from PouyanJay/feat/greek-amka-pii
+- [#1605](https://github.com/maziyarpanahi/openmed/pull/1605) feat: add Portuguese NIF validator distinct from Brazilian CPF (2 audited commits)
+  - `1f7903005271` feat: add Portuguese NIF validator distinct from Brazilian CPF
+  - `b71f382c0261` Merge pull request #1605 from PouyanJay/feat/portuguese-nif-validator
+- [#1616](https://github.com/maziyarpanahi/openmed/pull/1616) test(eval): add per-language i18n golden fixtures for all wired languages (4 audited commits)
+  - `bd65981f23b7` test(eval): add per-language i18n golden fixtures for wired languages
+  - `107607449f4f` test: complete multilingual golden fixtures
+  - `2256fa941576` Merge master into multilingual fixture update
+  - `bea669d76c99` Merge pull request #1616 from PouyanJay/feat/i18n-golden-fixtures-supported
+- [#1604](https://github.com/maziyarpanahi/openmed/pull/1604) feat: sign release distributions and attach verifiable evidence (4 audited commits)
+  - `c31ba257ccbd` feat: sign release distributions and attach verifiable evidence
+  - `7653158682b4` Merge remote-tracking branch 'origin/master' into maintainer/pr-1604-followup
+  - `7ba52f9af461` fix: require complete release evidence
+  - `abe12f6a2a7d` Merge pull request #1604 from DrVelvetFog/security/attach-release-provenance-and-verify-docs
+- [#1549](https://github.com/maziyarpanahi/openmed/pull/1549) feat(locales): add regional Arabic Faker-locale overrides (OM-285) (6 audited commits)
+  - `44c4c44adc51` feat(locales): add regional Arabic Faker-locale overrides (OM-285)
+  - `eb2ceac94358` Merge branch 'master' into feat/ar-regional-locales-om285
+  - `218bcb3467b6` Merge master into regional locale update
+  - `8740c7687406` Merge remote-tracking branch 'origin/master' into maintainer/pr-1549-followup
+  - `7de01dbe49fa` Merge remote-tracking branch 'origin/master' into maintainer/pr-1549-followup
+  - `aba65fe93c2e` Merge pull request #1549 from chawki-nasrallah/feat/ar-regional-locales-om285
+- [#1601](https://github.com/maziyarpanahi/openmed/pull/1601) feat: add Vietnamese PII language pack (5 audited commits)
+  - `1f5edb88c5b8` feat: add Vietnamese PII language pack
+  - `93d2b67ae140` fix: align Vietnamese CCCD validation with current law
+  - `425b79d736c9` Merge master into Vietnamese PII update
+  - `fe26421f80c0` Merge commit 'refs/pr-review/1549' into maintainer/pr-1601-followup
+  - `0050e1410cdd` Merge pull request #1601 from thangldw/feat/vietnamese-pii-language-pack
+- [#687](https://github.com/maziyarpanahi/openmed/pull/687) fix: raise TypeError for malformed policy argument types (5 audited commits)
+  - `ced09f8839d8` fix: raise TypeError for malformed policy argument types
+  - `550af1ae1492` Merge remote-tracking branch 'origin/master' into fix/policy-type-validation
+  - `8344228d758d` test: cover policy profile error guidance
+  - `9662c4acb2dd` Merge current master into policy type validation
+  - `43c7e8e0a461` Merge pull request #687 from abdouloued/fix/policy-type-validation
+- [#1611](https://github.com/maziyarpanahi/openmed/pull/1611) feat: add pediatrics growth-parameter domain to NER model and labels map (4 audited commits)
+  - `1bf2b95ddd41` feat: pediatrics growth-parameter domain to NER model and labels map
+  - `b5cca3a9de52` Merge remote-tracking branch 'origin/master' into review-1611-20260718
+  - `1c96952ba827` fix: polish pediatrics growth metadata
+  - `ba9407e8fb57` Merge pull request #1611 from mrfeathers/feature/om-896-pediatrics-labels
+- [#1702](https://github.com/maziyarpanahi/openmed/pull/1702) docs/examples: add synthetic datasets walkthrough (2 audited commits)
+  - `d7c49a4afb21` Add synthetic datasets walkthrough example
+  - `30a375473013` Merge pull request #1702 from otmanm/codex/om-281-datasets-walkthrough
+- [#1697](https://github.com/maziyarpanahi/openmed/pull/1697) feat: add inter-annotator agreement metrics for extraction gold sets (3 audited commits)
+  - `0942b32b28a6` feat: add inter-annotator agreement metrics for extraction gold sets
+  - `3ab7912b08b3` fix: complete span-overlap agreement coverage
+  - `e3eb2801bd5c` Merge pull request #1697 from pardeep-singh/pardeep/issue1317-inter-annotator-agreement
+- [#1698](https://github.com/maziyarpanahi/openmed/pull/1698) feat: add synthetic multi-annotator gold corpus and consensus loader (3 audited commits)
+  - `0102bf1f3cac` feat: add synthetic multi-annotator gold corpus and consensus loader
+  - `b9953896be6a` fix: preserve annotator relation evidence
+  - `1e48420df8f1` Merge pull request #1698 from pardeep-singh/pardeep/issue1318-consensus-corpus
+- [#1700](https://github.com/maziyarpanahi/openmed/pull/1700) feat: add gold-corpus quality report and evidence-bundle output (5 audited commits)
+  - `a61e5bdb2625` Merge branch 'pardeep/issue1318-consensus-corpus' into pardeep/issue1321-quality-report
+  - `25a60961b668` feat: add gold-corpus quality report and evidence-bundle output
+  - `9ffa461aa779` Merge master into pardeep/issue1321-quality-report
+  - `fb1c2d75b8cc` fix: report annotator relation agreement
+  - `d3625ef85e90` Merge pull request #1700 from pardeep-singh/pardeep/issue1321-quality-report
+- [#1716](https://github.com/maziyarpanahi/openmed/pull/1716) feat: add Prefect task and flow for batch de-identification (3 audited commits)
+  - `195c09c9b267` feat: add Prefect task and flow for batch de-identification
+  - `27a5ac11c19c` fix: harden Prefect batch integration
+  - `6a6f3acca788` Merge pull request #1716 from RonitGandhi/fix/issue-471
+- [#1746](https://github.com/maziyarpanahi/openmed/pull/1746) feat: add flowsheet and vitals time-series structurer (3 audited commits)
+  - `29f991e742a9` feat: add flowsheet and vitals time-series structurer
+  - `505fe34b5efe` fix: complete flowsheet continuation handling
+  - `76268507702f` Merge pull request #1746 from pardeep-singh/pardeep/issue941-flowsheet
+- [#1744](https://github.com/maziyarpanahi/openmed/pull/1744) feat: add lab-panel structurer mapping results into analyte rows (4 audited commits)
+  - `ddf40bb96daf` feat: add lab-panel structurer mapping results into analyte rows
+  - `dc24b8593de0` Merge master into pardeep/issue940-lab-panels
+  - `34ce90783509` fix: complete lab panel report parsing
+  - `9d9dc19912a1` Merge pull request #1744 from pardeep-singh/pardeep/issue940-lab-panels
+- [#1743](https://github.com/maziyarpanahi/openmed/pull/1743) feat: add portable Agent Skills catalog for building with OpenMed (1 audited commit)
+  - `1623bf04c1dd` feat: add portable Agent Skills catalog for building with OpenMed (#1743)
+- [#1778](https://github.com/maziyarpanahi/openmed/pull/1778) test: locate py.typed through importlib.resources (2 audited commits)
+  - `cdc195321c2e` test: locate py.typed as package resource
+  - `d60a6f82ee44` Merge pull request #1778 from lntutor/feat/py-typed-254
+- [#1840](https://github.com/maziyarpanahi/openmed/pull/1840) fix: format skills catalog test (2 audited commits)
+  - `a38f7c8c78ce` fix: format skills catalog test
+  - `2f0cbbaf22f8` Merge pull request #1840 from maziyarpanahi/fix/skills-catalog-format
+- [#1755](https://github.com/maziyarpanahi/openmed/pull/1755) docs: add v1 to v2 migration guide (5 audited commits)
+  - `ebb19df3676e` docs: add v1 to v2 migration guide
+  - `e87bae08272f` Merge remote-tracking branch 'origin/master' into review/pr-1755
+  - `ddb01ef4226f` docs: correct v2 migration history
+  - `08f866c7965e` Merge remote-tracking branch 'origin/master' into review/pr-1755
+  - `dedd914832a8` Merge pull request #1755 from lntutor/docs/v1-v2-migration-301
+- [#1762](https://github.com/maziyarpanahi/openmed/pull/1762) docs: define detector plugin SDK stability (4 audited commits)
+  - `19fbdfb6fb87` docs: define detector plugin SDK stability
+  - `712385d3a948` Merge remote-tracking branch 'origin/master' into review/pr-1762
+  - `85477c699ca6` docs: fix detector example span
+  - `cde710f8e9e9` Merge pull request #1762 from lntutor/docs/plugin-sdk-stability-1327
+- [#1586](https://github.com/maziyarpanahi/openmed/pull/1586) Add language pack registry foundation (6 audited commits)
+  - `8b5a9ad6fdb6` Add language pack registry foundation
+  - `c5fadb9512ca` fix: defer optional model imports
+  - `027bd0ad4b0d` Merge remote-tracking branch 'origin/master' into review/pr-1586
+  - `45f2b27c4285` fix: scope language pack foundation
+  - `a89626b03300` Merge remote-tracking branch 'origin/master' into review/pr-1586
+  - `6736c213b175` Merge pull request #1586 from maziyarpanahi/feature/om-678-language-pack-plugin-framework
+- [#1761](https://github.com/maziyarpanahi/openmed/pull/1761) feat: add MCP console entry point (3 audited commits)
+  - `950f977c4b9f` feat: add MCP console entry point
+  - `afa170d9d3b5` Merge remote-tracking branch 'origin/master' into review/pr-1761
+  - `4488346765e2` Merge pull request #1761 from lntutor/feat/mcp-console-clients-1739
+- [#1844](https://github.com/maziyarpanahi/openmed/pull/1844) feat: make language packs source of truth (3 audited commits)
+  - `94de85e2f278` feat: adapt language maps to registry
+  - `ae813ab0c1c5` Merge remote-tracking branch 'origin/master' into feature/language-pack-adapters-1583
+  - `e4922c631630` Merge pull request #1844 from maziyarpanahi/feature/language-pack-adapters-1583
+- [#1780](https://github.com/maziyarpanahi/openmed/pull/1780) feat(cli): uniform --json output, error envelopes, and a tool-schema drift guard (6 audited commits)
+  - `25f1722ab551` feat(cli): add uniform --json output, error envelopes, and a tool-schema drift guard
+  - `6b9ebe6732af` Merge remote-tracking branch 'origin/master' into review/pr-1780
+  - `aec3f342009f` fix: complete CLI JSON error handling
+  - `754715ba9db0` Merge remote-tracking branch 'origin/master' into review/pr-1780
+  - `b1c9ebf59836` Merge remote-tracking branch 'origin/master' into review/pr-1780
+  - `f3c9745053b6` Merge pull request #1780 from PouyanJay/feat/cli-json-uniform
+- [#1779](https://github.com/maziyarpanahi/openmed/pull/1779) feat(core): add language-pack coherence validation and capability coverage (6 audited commits)
+  - `2239d923e62b` feat(core): add language-pack coherence validation and capability coverage
+  - `52f21a10655b` Merge branch 'feature/language-pack-adapters-1583' into review/pr-1779
+  - `8bee055e5a4d` fix: harden language pack coherence
+  - `2da34471ec5c` Merge remote-tracking branch 'origin/master' into review/pr-1779
+  - `83754a07dc18` Merge remote-tracking branch 'origin/master' into review/pr-1779
+  - `142e99aac33d` Merge pull request #1779 from PouyanJay/feat/language-pack-coherence
+- [#1845](https://github.com/maziyarpanahi/openmed/pull/1845) docs: add Windows uv installation steps (2 audited commits)
+  - `fa9319010dff` docs: add Windows uv installation steps
+  - `973dc3484c48` Merge pull request #1845 from maziyarpanahi/agent/windows-uv-install-docs
+- [#1850](https://github.com/maziyarpanahi/openmed/pull/1850) build: consolidate dependency updates (2 audited commits)
+  - `7631f08b23b6` build: consolidate dependency updates
+  - `91a2fe0ae6a9` Merge pull request #1850 from maziyarpanahi/chore/dependency-refresh-july-2026
+- [#1839](https://github.com/maziyarpanahi/openmed/pull/1839) feat: generate llms.txt and llms-full.txt (5 audited commits)
+  - `0cef3e621c80` feat: generate llms.txt and llms-full.txt as requested in #1787
+  - `62d60213b203` Merge origin/master into fix-llms-txt
+  - `a07077d2d9cc` docs: generate LLM documentation feeds
+  - `dad3f6f2837e` build: update Pillow security lock
+  - `e380dcf7f355` Merge pull request #1839 from vamshiss/fix-llms-txt
+- [#1566](https://github.com/maziyarpanahi/openmed/pull/1566) feat: add offset-safe Indic Unicode normalization (1 audited commit)
+  - `8604ed52c49f` feat: add offset-safe Indic Unicode normalization (#1566)
+- [#1573](https://github.com/maziyarpanahi/openmed/pull/1573) Add Indic Unicode script routing metadata (1 audited commit)
+  - `84fc7fa537fa` feat: add Indic script routing metadata (#1573)
+- [#1587](https://github.com/maziyarpanahi/openmed/pull/1587) Script-aware span decoder for no-whitespace CJK and grapheme-cluster Indic (1 audited commit)
+  - `2f087f039e0c` feat: add script-aware grapheme span refinement (#1587)
+- [#1588](https://github.com/maziyarpanahi/openmed/pull/1588) Non-Latin-script leakage evaluation harness with per-script recall floors (1 audited commit)
+  - `4e3906199439` feat: add script-stratified leakage gates (#1588)
+- [#1558](https://github.com/maziyarpanahi/openmed/pull/1558) Add pluggable Chinese word segmentation (1 audited commit)
+  - `7277a1fe18b6` feat: add pluggable Chinese word segmentation (#1558)
+- [#1669](https://github.com/maziyarpanahi/openmed/pull/1669) Defend de-identification against confusable and mixed-script evasion (1 audited commit)
+  - `d472a38a8f35` fix: block confusable mixed-script PII evasion (#1669)
+- [#1665](https://github.com/maziyarpanahi/openmed/pull/1665) Add token- and document-level language routing (1 audited commit)
+  - `1a2ae86dad70` feat: add token- and document-level language routing (#1665)
+- [#1563](https://github.com/maziyarpanahi/openmed/pull/1563) Resident ID (居民身份证) recognizer, MOD-11-2 validator, and locale-correct surrogate generator (1 audited commit)
+  - `c0435ebf7f24` feat: add Chinese Resident ID protection (#1563)
+- [#1564](https://github.com/maziyarpanahi/openmed/pull/1564) Add Chinese personal-name detection and locale-correct surrogates (1 audited commit)
+  - `5858d32952b4` feat: add Chinese name detection and surrogates (#1564)
+- [#1565](https://github.com/maziyarpanahi/openmed/pull/1565) China PIPL de-identification policy profile (1 audited commit)
+  - `85fdacdd6740` feat: add China PIPL policy profile (#1565)
+- [#1575](https://github.com/maziyarpanahi/openmed/pull/1575) Add India DPDP Act de-identification policy profile (1 audited commit)
+  - `5ae1fa3a363e` feat: add India DPDP policy profile (#1575)
+- [#1576](https://github.com/maziyarpanahi/openmed/pull/1576) India ABDM/ABHA-aware health-record de-identification mode (1 audited commit)
+  - `93959a225c0b` feat: add India ABDM de-identification mode (#1576)
+- [#1620](https://github.com/maziyarpanahi/openmed/pull/1620) Add Nigeria NIN and BVN recognizers with +234 mobile prefix validation and deterministic surrogates (1 audited commit)
+  - `6905448c456a` feat: add Nigerian NIN and BVN recognition (#1620)
+- [#1621](https://github.com/maziyarpanahi/openmed/pull/1621) Add Ghana Card and Kenya identity recognizers (1 audited commit)
+  - `2e3029f93007` feat: add Ghana and Kenya identity recognizers (#1621)
+- [#1623](https://github.com/maziyarpanahi/openmed/pull/1623) Add Swahili language pack with Sheng clinical note handling (1 audited commit)
+  - `d53bd2f14dca` feat: add Swahili PII language pack (#1623)
+- [#1625](https://github.com/maziyarpanahi/openmed/pull/1625) Add isiZulu and isiXhosa PII packs with South African ID validation (1 audited commit)
+  - `c0b097b37020` feat: add isiZulu and isiXhosa PII packs (#1625)
+- [#1626](https://github.com/maziyarpanahi/openmed/pull/1626) Add MasakhaNER African-language NER evaluation suite (1 audited commit)
+  - `12a7d05c8aaf` feat: add MasakhaNER evaluation suite (#1626)
+- [#1627](https://github.com/maziyarpanahi/openmed/pull/1627) Add South Africa POPIA policy profile (1 audited commit)
+  - `e9118835e31f` feat: add South Africa POPIA policy profile (#1627)
+- [#1628](https://github.com/maziyarpanahi/openmed/pull/1628) Add Nigeria NDPA 2023 policy profile (1 audited commit)
+  - `cb7078075c05` feat: add Nigeria NDPA policy profile (#1628)
+- [#1629](https://github.com/maziyarpanahi/openmed/pull/1629) Add Kenya Data Protection Act 2019 policy profile (ke_dpa) with health-data handling posture (1 audited commit)
+  - `d4aac730334d` feat: add Kenya DPA policy profile (#1629)
+- [#1631](https://github.com/maziyarpanahi/openmed/pull/1631) feat: add de-identified DHIS2 district exporter (1 audited commit)
+  - `1b05eb865b21` feat: add privacy-safe DHIS2 exporter (#1631)
+- [#1849](https://github.com/maziyarpanahi/openmed/pull/1849) feat(clinical): radiology report section parser with stated RADS capture (4 audited commits)
+  - `f325d28b7d54` feat(clinical): add radiology report section parser with stated RADS capture
+  - `f6810cd6e6ff` fix(clinical): harden radiology report parsing
+  - `3fafae7ba562` fix: keep radiology changelog mergeable
+  - `e4d57be15d82` Merge pull request #1849 from PouyanJay/feat/radiology-report-parser
+- [#1632](https://github.com/maziyarpanahi/openmed/pull/1632) Add resilient integrity-checked model downloads (1 audited commit)
+  - `eaadb395a24f` feat: add resilient integrity-checked model downloads (#1632)
+- [#1852](https://github.com/maziyarpanahi/openmed/pull/1852) feat: add Urdu RTL PII language pack with Pakistani CNIC validation (6 audited commits)
+  - `b4b30fe68ab9` feat: Add an Urdu (ur) RTL PII language pack with Pakistani CNIC validator
+  - `cb0f276f6eaf` Merge branch 'master' into urdu_lang_pack
+  - `c09ede04e1fc` Merge remote-tracking branch 'origin/master' into urdu_lang_pack
+  - `1013c62da2f5` fix: complete Urdu CNIC language pack
+  - `a6ae3df40b17` Merge remote-tracking branch 'origin/master' into urdu_lang_pack
+  - `f9cead16b1f7` Merge pull request #1852 from AlyanPremani05/urdu_lang_pack
+- [#1634](https://github.com/maziyarpanahi/openmed/pull/1634) Add CPU-only low-resource de-identification profile (1 audited commit)
+  - `3d4273e604fb` feat: add CPU-only low-resource de-identification profile (#1634)
+- [#1635](https://github.com/maziyarpanahi/openmed/pull/1635) Add crash-safe batch checkpoints and resume (1 audited commit)
+  - `449ce08f97bf` feat: add crash-safe batch checkpoints and resume (#1635)
+- [#1562](https://github.com/maziyarpanahi/openmed/pull/1562) Add Chinese clinical NER evaluation foundation (1 audited commit)
+  - `e2658f963362` feat: add Chinese clinical NER evaluation foundation (#1562)
+- [#1567](https://github.com/maziyarpanahi/openmed/pull/1567) Add Indic grapheme-safe span offsets (1 audited commit)
+  - `05adab7cce8c` feat: add Indic grapheme-safe span offsets (#1567)
+- [#1574](https://github.com/maziyarpanahi/openmed/pull/1574) Aadhaar recognizer hardening: Verhoeff validation, UIDAI masking rules, and checksum-valid surrogates (1 audited commit)
+  - `f19754a1d37b` feat: harden Aadhaar de-identification (#1574)
+- [#1581](https://github.com/maziyarpanahi/openmed/pull/1581) Add synthetic India code-mixed clinical de-identification corpus (1 audited commit)
+  - `8bc252ad8e79` feat: add synthetic India clinical de-identification corpus (#1581)
+- [#1589](https://github.com/maziyarpanahi/openmed/pull/1589) feat: add Chinese and Indic optional extras (1 audited commit)
+  - `d6ecd85bf22e` feat: add Chinese and Indic optional extras (#1589)
+- [#1590](https://github.com/maziyarpanahi/openmed/pull/1590) Audit PII tokenizer script coverage (1 audited commit)
+  - `7268d6ac9939` feat: audit PII tokenizer script coverage (#1590)
+- [#1591](https://github.com/maziyarpanahi/openmed/pull/1591) Verify cached model artifacts and signed manifests (1 audited commit)
+  - `e0896dfe83c1` feat: verify cached model integrity (#1591)
+- [#1619](https://github.com/maziyarpanahi/openmed/pull/1619) Add South African ID and mobile phone recognizers (1 audited commit)
+  - `29c4398aa34b` feat: add South African ID and mobile phone recognizers (#1619)
+- [#1622](https://github.com/maziyarpanahi/openmed/pull/1622) Add Egypt and Morocco identity recognizers (1 audited commit)
+  - `d23616b474ad` feat: add Egypt and Morocco identity recognizers (#1622)
+- [#1624](https://github.com/maziyarpanahi/openmed/pull/1624) Amharic language pack with Ethiopic script detection and grapheme-safe offsets (1 audited commit)
+  - `bedef9103ff4` feat: add Amharic PII language pack (#1624)
+- [#1630](https://github.com/maziyarpanahi/openmed/pull/1630) OpenMRS adapter: de-identify REST and FHIR2 handoffs locally (1 audited commit)
+  - `675c2114fb67` feat: add local-first OpenMRS handoff adapter (#1630)
+- [#1633](https://github.com/maziyarpanahi/openmed/pull/1633) Add offline installation kit builder (1 audited commit)
+  - `37c9cd07f94c` feat: add air-gapped install kit builder (#1633)
+- [#1841](https://github.com/maziyarpanahi/openmed/pull/1841) feat: add SMS short-text de-identification (1 audited commit)
+  - `02eca8dde552` feat: add SMS short-text de-identification (#1841)
+- [#1636](https://github.com/maziyarpanahi/openmed/pull/1636) Add clinical abbreviation and acronym sense disambiguation (1 audited commit)
+  - `7796a8a405e9` feat: add clinical abbreviation and acronym sense disambiguation (#1636)
+- [#1637](https://github.com/maziyarpanahi/openmed/pull/1637) Build a shared free-vocabulary lexical matcher engine and loader registry (1 audited commit)
+  - `ffccf9559daa` feat: add shared free-vocabulary lexical matcher (#1637)
+- [#1638](https://github.com/maziyarpanahi/openmed/pull/1638) Add tamper-evident audit chains for de-identification runs (1 audited commit)
+  - `70e800c3a8a2` feat: add tamper-evident audit chains (#1638)
+- [#1639](https://github.com/maziyarpanahi/openmed/pull/1639) Add a HIPAA Safe Harbor attestation report generator (1 audited commit)
+  - `95376dc58e22` Add a HIPAA Safe Harbor attestation report generator (#1639)
+- [#1640](https://github.com/maziyarpanahi/openmed/pull/1640) Add clinical coreference resolution linking entity mentions and pronouns (1 audited commit)
+  - `49d3f56b657c` Add clinical coreference resolution linking entity mentions and pronouns (#1640)
+- [#1641](https://github.com/maziyarpanahi/openmed/pull/1641) Normalize TIMEX3 temporal expressions to ISO values (1 audited commit)
+  - `aecb78218c99` Normalize TIMEX3 temporal expressions to ISO values (#1641)
+- [#1642](https://github.com/maziyarpanahi/openmed/pull/1642) Render a public auto-published benchmark leaderboard from archived eval reports (1 audited commit)
+  - `16330e94924f` Render a public benchmark leaderboard from archived eval reports (#1642)
+- [#1643](https://github.com/maziyarpanahi/openmed/pull/1643) Add a k-anonymity engine for tabular outputs (1 audited commit)
+  - `65471ff0ffe8` Add a k-anonymity engine for tabular outputs (#1643)
+- [#1644](https://github.com/maziyarpanahi/openmed/pull/1644) Add an eval-result provenance and reproducibility-hash ledger (1 audited commit)
+  - `e5904a0969c3` Add an eval-result provenance and reproducibility-hash ledger (#1644)
+- [#1647](https://github.com/maziyarpanahi/openmed/pull/1647) Add Chinese sentence segmentation honoring CJK punctuation (1 audited commit)
+  - `6436a26e70cd` Add Chinese sentence segmentation honoring CJK punctuation (#1647)
+- [#1648](https://github.com/maziyarpanahi/openmed/pull/1648) Add Chinese terminology grounding for user-supplied dictionaries (1 audited commit)
+  - `de26a4cfc4b1` feat: add Chinese terminology grounding (#1648)
+- [#1649](https://github.com/maziyarpanahi/openmed/pull/1649) Chinese address de-identification across province/city/district hierarchy with consistent surrogates (1 audited commit)
+  - `cd8d5160e030` feat: add Chinese hierarchical address de-identification (#1649)
+- [#1650](https://github.com/maziyarpanahi/openmed/pull/1650) Add Chinese mobile, bank-card, and travel-document recognizers (1 audited commit)
+  - `5c854800f003` feat: add Chinese identifier recognizers (#1650)
+- [#1651](https://github.com/maziyarpanahi/openmed/pull/1651) Add cross-script Indic transliteration with ISO 15919 (1 audited commit)
+  - `8a7a68853a77` feat: add cross-script Indic transliteration (#1651)
+- [#1652](https://github.com/maziyarpanahi/openmed/pull/1652) Add Indic danda-aware sentence and word tokenization (1 audited commit)
+  - `675766269ee1` feat: add Indic sentence and word tokenization (#1652)
+- [#1656](https://github.com/maziyarpanahi/openmed/pull/1656) Add optional Indic NER and 11-language evaluation (1 audited commit)
+  - `779fdf684d0d` feat: add optional Indic NER evaluation (#1656)
+- [#1658](https://github.com/maziyarpanahi/openmed/pull/1658) Add code-mixed Hinglish de-identification pipeline (1 audited commit)
+  - `2cced3bab6a2` feat: add code-mixed Hinglish de-identification (#1658)
+- [#1660](https://github.com/maziyarpanahi/openmed/pull/1660) feat: add India health-ID de-identification mode (1 audited commit)
+  - `e1c8404aaf0f` feat: add India health-ID de-identification mode (#1660)
+- [#1661](https://github.com/maziyarpanahi/openmed/pull/1661) Add India code-mixed clinical NER (1 audited commit)
+  - `4e15672fffb1` feat: add India code-mixed clinical NER (#1661)
+- [#1662](https://github.com/maziyarpanahi/openmed/pull/1662) India AYUSH and Indian drug terminology grounding (user-supplied, license-aware) (1 audited commit)
+  - `0f6c2313b604` feat: add license-aware India terminology grounding (#1662)
+- [#1663](https://github.com/maziyarpanahi/openmed/pull/1663) India locale-correct surrogate providers (1 audited commit)
+  - `7e5132501661` feat: add India locale surrogate providers (#1663)
+- [#1664](https://github.com/maziyarpanahi/openmed/pull/1664) Add consistent India transliterated-name surrogates (1 audited commit)
+  - `60ab34c39cad` feat: add consistent India transliterated-name surrogates (#1664)
+- [#1666](https://github.com/maziyarpanahi/openmed/pull/1666) Add license-aware CMeEE and Naamapadam eval suites (1 audited commit)
+  - `adf50eefe325` feat: add license-aware CMeEE and Naamapadam eval suites (#1666)
+- [#1667](https://github.com/maziyarpanahi/openmed/pull/1667) Multilingual surrogate framework with script-correct providers and cross-document consistency (1 audited commit)
+  - `c2781792b683` feat: add script-correct multilingual surrogates (#1667)
+- [#1668](https://github.com/maziyarpanahi/openmed/pull/1668) Package compact on-device segmenters for MLX, CoreML, and ONNX (1 audited commit)
+  - `be19eada6064` feat: package compact on-device segmenters (#1668)
+- [#1670](https://github.com/maziyarpanahi/openmed/pull/1670) Bring Simplified Chinese README to full parity and add translation drift check in CI (1 audited commit)
+  - `d73cec9979b1` docs: enforce Chinese README parity (#1670)
+- [#1671](https://github.com/maziyarpanahi/openmed/pull/1671) Bring Hindi README to parity with a synthetic Hinglish example (1 audited commit)
+  - `5f117a09cfe5` docs: bring Hindi README to parity (#1671)
+- [#1673](https://github.com/maziyarpanahi/openmed/pull/1673) docs: add China mirror and offline-cache onboarding (1 audited commit)
+  - `f2135575ff80` docs: add China mirror and offline-cache onboarding (#1673)
+- [#1674](https://github.com/maziyarpanahi/openmed/pull/1674) docs: add India DPDP onboarding guide (1 audited commit)
+  - `7eb132d82053` docs: add India DPDP onboarding guide (#1674)
+- [#1675](https://github.com/maziyarpanahi/openmed/pull/1675) Add Chinese and Hindi de-identification examples (1 audited commit)
+  - `b9dcce966a3c` feat: add Chinese and Hindi de-identification examples (#1675)
+- [#1676](https://github.com/maziyarpanahi/openmed/pull/1676) Add multilingual de-identification Space demo (1 audited commit)
+  - `9351049ab9ec` feat: add multilingual de-identification Space demo (#1676)
+- [#1678](https://github.com/maziyarpanahi/openmed/pull/1678) Add API-surface migration completeness gate (1 audited commit)
+  - `dd9d40a5dd40` Add API-surface migration completeness gate (#1678)
+- [#1679](https://github.com/maziyarpanahi/openmed/pull/1679) Add East African national ID recognizers (1 audited commit)
+  - `4410103f5320` Add East African national ID recognizers (#1679)
+- [#1680](https://github.com/maziyarpanahi/openmed/pull/1680) Add pan-African mobile phone patterns and prefix-preserving surrogates (1 audited commit)
+  - `ce304e269592` Add pan-African mobile phone patterns and prefix-preserving surrogates (#1680)
+- [#1681](https://github.com/maziyarpanahi/openmed/pull/1681) Add M-Pesa transaction code protection for Kenya and Tanzania (1 audited commit)
+  - `9a31ba3399f2` Add M-Pesa transaction code protection for Kenya and Tanzania (#1681)
+- [#1683](https://github.com/maziyarpanahi/openmed/pull/1683) Add mobile-money billing reference recognizers (1 audited commit)
+  - `cf1fc8371f3d` feat: recognize mobile-money billing identifiers (#1683)
+- [#1684](https://github.com/maziyarpanahi/openmed/pull/1684) Add Kenya KMHFL and Nigeria HFR health-facility code support (1 audited commit)
+  - `a5350ff8a2da` feat: add African health facility code support (#1684)
+- [#1685](https://github.com/maziyarpanahi/openmed/pull/1685) Add Hausa Boko and Ajami PII pack (1 audited commit)
+  - `64758633f9fc` feat: add Hausa Boko and Ajami PII pack (#1685)
+- [#1855](https://github.com/maziyarpanahi/openmed/pull/1855) Add deterministic radiology finding extractor (4 audited commits)
+  - `3c67a01573c1` Add deterministic radiology finding extractor
+  - `ea240d9e5dd0` Merge remote-tracking branch 'origin/master' into pr-1855
+  - `0ffb352c081d` fix: complete radiology finding extraction
+  - `241ed36bff90` Merge pull request #1855 from Udaytaneja/feature/radiology-finding-extractor
+- [#1686](https://github.com/maziyarpanahi/openmed/pull/1686) Yoruba language pack with combining-diacritic-safe span offsets (1 audited commit)
+  - `b1541bd11e30` feat: add Yoruba PII pack with grapheme-safe offsets (#1686)
+- [#1687](https://github.com/maziyarpanahi/openmed/pull/1687) Add Igbo language pack for Nigerian clinical text (1 audited commit)
+  - `78e45e6cc674` feat: add Igbo PII language pack (#1687)
+- [#1688](https://github.com/maziyarpanahi/openmed/pull/1688) African French and Portuguese locale surrogate providers (1 audited commit)
+  - `bde6c377fcf9` feat: add African French and Portuguese locale surrogates (#1688)
+- [#1689](https://github.com/maziyarpanahi/openmed/pull/1689) Add Egypt PDPL and Morocco Law 09-08 profiles (1 audited commit)
+  - `5cff74175c39` feat: add Egypt and Morocco privacy profiles (#1689)
+- [#1690](https://github.com/maziyarpanahi/openmed/pull/1690) Add Africa data-residency deployment guide and attestation reports (1 audited commit)
+  - `49bf7a4f2d63` feat: add Africa data-residency attestations (#1690)
+- [#1691](https://github.com/maziyarpanahi/openmed/pull/1691) Add African healthcare-context safety-sweep terms (1 audited commit)
+  - `2e8ecd28486e` feat: add African context safety-sweep terms (#1691)
+- [#1692](https://github.com/maziyarpanahi/openmed/pull/1692) OpenHIE mediator packaging: run the de-identification service as an OpenHIM mediator (1 audited commit)
+  - `bcc9d19c62fb` feat: add OpenHIM mediator packaging (#1692)
+- [#1694](https://github.com/maziyarpanahi/openmed/pull/1694) feat: de-identify community health worker form exports (1 audited commit)
+  - `b06833981cdf` feat: de-identify CHW form exports (#1694)
+- [#1695](https://github.com/maziyarpanahi/openmed/pull/1695) feat: add WHO SMART Guidelines FHIR profile checks (1 audited commit)
+  - `6e41f435b015` feat: check SMART FHIR profile conformance (#1695)
+- [#1696](https://github.com/maziyarpanahi/openmed/pull/1696) Add model size budget command (1 audited commit)
+  - `d0a8e7d5a524` feat: add model size budget command (#1696)
+- [#1701](https://github.com/maziyarpanahi/openmed/pull/1701) Add Swahili README and African developer onboarding (1 audited commit)
+  - `73fa605ba9c8` Add Swahili README and African developer onboarding (#1701)
+- [#1703](https://github.com/maziyarpanahi/openmed/pull/1703) Add ARM SMS latency benchmark and budget gate (1 audited commit)
+  - `f0c6f1f925f0` Add ARM SMS latency benchmark and budget gate (#1703)
+- [#1645](https://github.com/maziyarpanahi/openmed/pull/1645) Add Simplified/Traditional Chinese conversion with offset-preserving alignment (1 audited commit)
+  - `348014388991` Add Simplified/Traditional Chinese conversion with offset-preserving alignment (#1645)
+- [#1646](https://github.com/maziyarpanahi/openmed/pull/1646) Add Chinese numeral normalization for dates, IDs, and quantities (1 audited commit)
+  - `b2de38e0a720` Add Chinese numeral normalization for dates, IDs, and quantities (#1646)
+- [#1657](https://github.com/maziyarpanahi/openmed/pull/1657) Add token-level Hinglish language routing for de-identification (1 audited commit)
+  - `891d01c61c8d` Add token-level Hinglish language routing for de-identification (#1657)
+- [#1659](https://github.com/maziyarpanahi/openmed/pull/1659) Add Indian multi-identifier recognizer pack (1 audited commit)
+  - `1e4258d61211` Add Indian multi-identifier recognizer pack (#1659)
+- [#1672](https://github.com/maziyarpanahi/openmed/pull/1672) docs: add Chinese and Hindi site locales (1 audited commit)
+  - `81bbc7e7c1f5` docs: add Chinese and Hindi site locales (#1672)
+- [#1677](https://github.com/maziyarpanahi/openmed/pull/1677) Harden multilingual ingestion boundaries (1 audited commit)
+  - `898073dc2372` Harden multilingual ingestion boundaries (#1677)
+- [#1693](https://github.com/maziyarpanahi/openmed/pull/1693) Add offline ICD-11 MMS snapshot grounding (1 audited commit)
+  - `a8a5d5057bdf` Add offline ICD-11 MMS snapshot grounding (#1693)
+- [#1699](https://github.com/maziyarpanahi/openmed/pull/1699) Add mirror and proxy installation guidance (1 audited commit)
+  - `886184d5c6ca` Add mirror and proxy installation guidance (#1699)
+- [#1842](https://github.com/maziyarpanahi/openmed/pull/1842) Build an adversarial-PHI red-team corpus and harness for the redactor (1 audited commit)
+  - `6927964116e9` Build an adversarial-PHI red-team corpus and harness for the redactor (#1842)
+- [#1858](https://github.com/maziyarpanahi/openmed/pull/1858) Fix PharmaDetect entity boundaries and medication filtering (1 audited commit)
+  - `aab326d9c2c8` fix: improve PharmaDetect entity precision (#1858)
+- [#1704](https://github.com/maziyarpanahi/openmed/pull/1704) Add Nordic PII language packs (Swedish, Danish, Norwegian) (1 audited commit)
+  - `8d4af5c5315c` feat: add Nordic PII language packs (#1704)
+- [#1705](https://github.com/maziyarpanahi/openmed/pull/1705) Add GDPR and EU AI Act compliance templates (1 audited commit)
+  - `e32661ec8a8f` docs: add GDPR and EU AI Act templates (#1705)
+- [#1707](https://github.com/maziyarpanahi/openmed/pull/1707) Add LlamaIndex node redaction postprocessor (1 audited commit)
+  - `fb5bed7d6c92` feat: add node redaction postprocessor (#1707)
+- [#1708](https://github.com/maziyarpanahi/openmed/pull/1708) Add a WASM/WebGPU browser inference demo and load-time benchmark page (1 audited commit)
+  - `f69a51a49895` feat: add browser PII benchmark demo (#1708)
+- [#1752](https://github.com/maziyarpanahi/openmed/pull/1752) Add a synthetic gold-corpus annotation toolkit with BRAT and CoNLL IO (1 audited commit)
+  - `28e8f3f790a7` feat: add gold-corpus annotation toolkit (#1752)
+- [#1753](https://github.com/maziyarpanahi/openmed/pull/1753) Add ISO 27701/27001 control-evidence pack generator (1 audited commit)
+  - `64b9fa8d6119` feat: add ISO control evidence pack generator (#1753)
+- [#1754](https://github.com/maziyarpanahi/openmed/pull/1754) Add consent and data-use tag enforcement (1 audited commit)
+  - `bf9404852e41` feat: enforce consent data-use tags (#1754)
+- [#1756](https://github.com/maziyarpanahi/openmed/pull/1756) Add an AWQ grounding embedder recall gate (1 audited commit)
+  - `b789714781b4` feat: add AWQ grounding recall gate (#1756)
+- [#1757](https://github.com/maziyarpanahi/openmed/pull/1757) Add a per-language leakage dashboard renderer over benchmark runs (1 audited commit)
+  - `c1129ee870b1` Add a per-language leakage dashboard renderer over benchmark runs (#1757)
+- [#1759](https://github.com/maziyarpanahi/openmed/pull/1759) Add a discharge-summary section structurer with typed slots (1 audited commit)
+  - `1e88f6d0b970` feat: add discharge-summary section structurer (#1759)
+- [#1760](https://github.com/maziyarpanahi/openmed/pull/1760) Add a synthetic tabular-data generator preserving column distributions (1 audited commit)
+  - `80f98267fa4e` Add a synthetic tabular-data generator preserving column distributions (#1760)
+- [#1763](https://github.com/maziyarpanahi/openmed/pull/1763) Add ISCII and legacy-font Devanagari conversion (1 audited commit)
+  - `0904af6004f4` Add ISCII and legacy-font Devanagari conversion (#1763)
+- [#1764](https://github.com/maziyarpanahi/openmed/pull/1764) Add conservative Indic morphology boundary refinement (1 audited commit)
+  - `b943ee163335` Add conservative Indic morphology boundary refinement (#1764)
+- [#1765](https://github.com/maziyarpanahi/openmed/pull/1765) Add transliteration-robust Indian name matching (1 audited commit)
+  - `3898026e8fec` Add transliteration-robust Indian name matching (#1765)
+- [#1860](https://github.com/maziyarpanahi/openmed/pull/1860) feat: Added Russian (ru) PII language package (5 audited commits)
+  - `b82d51db0c9d` Added ru PII package
+  - `763a673591b2` Updated CHANGELOG
+  - `24e5f9b33ae1` Merge remote-tracking branch 'origin/master' into review/pr-1860
+  - `0ba6ddac192f` fix: complete Russian PII language pack
+  - `37937a07dbb6` Merge pull request #1860 from mrfeathers/featire/om-293-ru-pii-language
+- [#1766](https://github.com/maziyarpanahi/openmed/pull/1766) Add optional MuRIL and IndicBERT encoder backbones (1 audited commit)
+  - `f00b739a0efb` Add optional MuRIL and IndicBERT encoder backbones (#1766)
+- [#1857](https://github.com/maziyarpanahi/openmed/pull/1857) feat: add scrubadub adapter to openmed.interop (5 audited commits)
+  - `f43157e68795` feat: add scrubadub adapter to openmed.interop
+  - `d148ce9d036d` Merge remote-tracking branch 'origin/master' into review/pr-1857
+  - `27a083bc854e` fix: complete scrubadub adapter integration
+  - `8ef1ebf7aa07` Merge remote-tracking branch 'origin/master' into review/pr-1857
+  - `bc61cc6bbf4b` Merge pull request #1857 from affanhamid/feat/scrubadub-interop-adapter
+- [#1859](https://github.com/maziyarpanahi/openmed/pull/1859) feat(eval): add release-readiness gate aggregating shippability checks (#1814) (6 audited commits)
+  - `f08924a8d354` feat(eval): add release-readiness gate aggregating shippability checks (#1814)
+  - `4811144c251f` Merge remote-tracking branch 'origin/master' into review/pr-1859
+  - `077edcc33e11` fix: complete release readiness gate
+  - `e7d7fab39f14` Merge remote-tracking branch 'origin/master' into review/pr-1859
+  - `dfac7315bdb8` fix: use POSIX path separators in _display_path for cross-platform CI
+  - `6a6f33808723` Merge pull request #1859 from JonthanaHanh/feat/release-readiness-gate-1814-v2
+- [#1706](https://github.com/maziyarpanahi/openmed/pull/1706) Add scispaCy/QuickUMLS approximate-linker adapters (1 audited commit)
+  - `8c0adbaaade3` feat: add UMLS linker adapters (#1706)
+- [#1751](https://github.com/maziyarpanahi/openmed/pull/1751) Add a model-sharding and streaming weight loader for low-RAM devices (1 audited commit)
+  - `98c032dad909` Add a model-sharding and streaming weight loader for low-RAM devices (#1751)
+- [#1846](https://github.com/maziyarpanahi/openmed/pull/1846) Add coverage-guided fuzzing for document format parsers (1 audited commit)
+  - `cfbcdc7a7e96` Add coverage-guided fuzzing for document format parsers (#1846)
+- [#1758](https://github.com/maziyarpanahi/openmed/pull/1758) Add regression escape tracker dashboard (1 audited commit)
+  - `9fb493e99483` Add regression escape tracker dashboard (#1758)
+- [#1847](https://github.com/maziyarpanahi/openmed/pull/1847) Add multilingual clinical relation extraction (1 audited commit)
+  - `6aa5df6b3cc3` feat: add multilingual relation extraction (#1847)
+- [#1767](https://github.com/maziyarpanahi/openmed/pull/1767) Add Central and Eastern European PII language packs (1 audited commit)
+  - `0189805b8145` feat: add Central and Eastern European PII packs (#1767)
+- [#1768](https://github.com/maziyarpanahi/openmed/pull/1768) Add GGUF embedding-backbone export for grounding retrieval (1 audited commit)
+  - `a1b21b3d7631` feat: add GGUF embedding backbone export (#1768)
+- [#1769](https://github.com/maziyarpanahi/openmed/pull/1769) Add a Nix flake for reproducible builds and dev shells (1 audited commit)
+  - `1adc8abdda22` Add a Nix flake for reproducible builds and dev shells (#1769)
+- [#1777](https://github.com/maziyarpanahi/openmed/pull/1777) feat: add watchOS and visionOS OpenMedKit targets (1 audited commit)
+  - `0d4b5f6081ff` feat: add watchOS and visionOS OpenMedKit targets (#1777)
+- [#1865](https://github.com/maziyarpanahi/openmed/pull/1865) Build exact Chinese character-to-word offset mapping (1 audited commit)
+  - `ad9c1b987026` feat: add Chinese character-word offset mapping (#1865)
+- [#1854](https://github.com/maziyarpanahi/openmed/pull/1854) feat(clinical): add serial measurement and trend extractor (4 audited commits)
+  - `ff25ee23685e` feat(clinical): add serial measurement and trend extractor
+  - `cb133e1d07ca` Merge remote-tracking branch 'origin/master' into HEAD
+  - `51698d4ff879` fix: complete measurement trend API and provenance
+  - `a51e666086db` Merge pull request #1854 from PouyanJay/feat/serial-measurement-trend
+- [#1885](https://github.com/maziyarpanahi/openmed/pull/1885) feat: add procedures zero-shot domain and DEVICE canonical label (4 audited commits)
+  - `172e4b237e36` feat: add procedures zero-shot domain and DEVICE canonical label
+  - `bfd493cc5235` fix: align clinical equipment with device taxonomy
+  - `c6a26b8fd7f7` Merge remote-tracking branch 'origin/master' into HEAD
+  - `f0266be4b69b` Merge pull request #1885 from RonitGandhi/fix/issue-313
+- [#1892](https://github.com/maziyarpanahi/openmed/pull/1892) feat: add PySpark pandas_udf for batch de-identification (6 audited commits)
+  - `e626cb6e39cf` feat: add PySpark pandas_udf for batch de-identification
+  - `767fb47fd33e` fix: complete Spark UDF runtime extra
+  - `9cbda1aee40a` fix: update GitPython past vulnerable releases
+  - `3f3a245f596c` Merge remote-tracking branch 'origin/master' into HEAD
+  - `d54d6758890e` Merge remote-tracking branch 'origin/master' into HEAD
+  - `3e4f67b74615` Merge pull request #1892 from affanhamid/feat/spark-deidentify-udf
+- [#1893](https://github.com/maziyarpanahi/openmed/pull/1893) Document ONNX and WebGPU export (2 audited commits)
+  - `eb6ed0341a9c` Document ONNX and WebGPU export
+  - `47d626010764` Merge pull request #1893 from alberthammerich/docs-onnx-webgpu-export
+- [#1869](https://github.com/maziyarpanahi/openmed/pull/1869) Add grapheme-safe scalar span parity for Swift de-identification (1 audited commit)
+  - `e21db5e29484` feat: add grapheme-safe scalar span parity (#1869)
+- [#1873](https://github.com/maziyarpanahi/openmed/pull/1873) Add Marathi PII language pack (1 audited commit)
+  - `2f6dcee26a93` feat: add Marathi PII language pack (#1873)
+- [#1888](https://github.com/maziyarpanahi/openmed/pull/1888) Add a consumer agent-usage guide and ready-to-use repository skills (1 audited commit)
+  - `b266684cf72d` feat: add agent usage guide and repository skills (#1888)
+- [#1889](https://github.com/maziyarpanahi/openmed/pull/1889) Add Afrikaans PII language pack via Dutch pattern transfer (1 audited commit)
+  - `86f3427a9f26` feat: add Afrikaans PII language pack (#1889)
+- [#1867](https://github.com/maziyarpanahi/openmed/pull/1867) Add CJK-aware span decoding for Chinese text (1 audited commit)
+  - `3cd0f0fb3a62` Add CJK-aware span decoding for Chinese text (#1867)
+- [#1872](https://github.com/maziyarpanahi/openmed/pull/1872) Add Tamil PII language pack with native surrogates (1 audited commit)
+  - `a5d42d46f5a0` Add Tamil PII language pack with native surrogates (#1872)
+- [#1879](https://github.com/maziyarpanahi/openmed/pull/1879) Add path-filtered CJK and Indic fixture CI job (1 audited commit)
+  - `92a85f1d3a3a` Add path-filtered CJK and Indic fixture CI job (#1879)
+- [#1880](https://github.com/maziyarpanahi/openmed/pull/1880) Add Chinese and Indic throughput release gates (1 audited commit)
+  - `79219f203ba8` Add Chinese and Indic throughput release gates (#1880)
+- [#1882](https://github.com/maziyarpanahi/openmed/pull/1882) Publish Chinese and Indic PII registry metadata and model cards (1 audited commit)
+  - `1220bf3dee02` Publish Chinese and Indic PII registry metadata and model cards (#1882)
+- [#1887](https://github.com/maziyarpanahi/openmed/pull/1887) Ship an MCP-enabled container image and compose service (1 audited commit)
+  - `c9aa1f5c784e` feat: add MCP container service (#1887)
+- [#1890](https://github.com/maziyarpanahi/openmed/pull/1890) Add pan-African Malabo baseline and policy coverage eval (1 audited commit)
+  - `90035ff6215a` Add pan-African Malabo baseline and policy coverage eval (#1890)
+- [#1891](https://github.com/maziyarpanahi/openmed/pull/1891) African deployment reference: facility EMR to national HMIS synthetic demo (1 audited commit)
+  - `8c5cf78ff975` feat: add African OpenMRS to DHIS2 reference (#1891)
+- [#1883](https://github.com/maziyarpanahi/openmed/pull/1883) Add Pinyin romanization and deterministic Chinese name surrogates (1 audited commit)
+  - `3e16ae7f2f24` Add Pinyin romanization and deterministic Chinese name surrogates (#1883)
+- [#1884](https://github.com/maziyarpanahi/openmed/pull/1884) Add an Odia (or) PII language pack with native or_IN surrogates and Bengali-script confusion guards (1 audited commit)
+  - `936fdd8dc3cf` feat: add Odia PII language pack (#1884)
+- [#1886](https://github.com/maziyarpanahi/openmed/pull/1886) Add Assamese PII language pack with Bengali-script disambiguation (1 audited commit)
+  - `04e0fd4c6e5d` feat: add Assamese PII language pack (#1886)
+- [#1894](https://github.com/maziyarpanahi/openmed/pull/1894) feat(clinical): add longitudinal document near-duplicate hash and cop… (5 audited commits)
+  - `c110ef63f4f0` feat(clinical): add longitudinal document near-duplicate hash and copy-forward linker
+  - `abc2c93d52e1` fix: complete document linking provenance and safety
+  - `75b8ef2f6ad3` Merge remote-tracking branch 'origin/master' into HEAD
+  - `7f64df515df6` Merge remote-tracking branch 'origin/master' into HEAD
+  - `f66f4f155c3a` Merge pull request #1894 from eslam-ahmed43/feat/document-linking-om-834
+- [#1866](https://github.com/maziyarpanahi/openmed/pull/1866) docs: one-command multi-agent install and quickstart for the skills catalog (5 audited commits)
+  - `023b206f8ad0` docs: one-command multi-agent install and quickstart for the skills catalog
+  - `e44cd9aef37f` Merge remote-tracking branch 'origin/master' into feature/skills-multi-agent-readme
+  - `f2010191d2ff` fix: harden multi-agent skills onboarding
+  - `dfa492bfe183` test: make skills installer checks portable
+  - `7d592dd86b3f` Merge pull request #1866 from maziyarpanahi/feature/skills-multi-agent-readme
+- [#1900](https://github.com/maziyarpanahi/openmed/pull/1900) Render the MCP server from the tool registry with annotations and structured output (2 audited commits)
+  - `ea654a7a24d0` feat: add structured registry tool metadata
+  - `5c005e3c5aff` Merge pull request #1900 from maziyarpanahi/feature/om-394-mcp-server-registry-annotations-structured-outpu
+
+</details>
+
+<details>
+<summary>Direct, integration, and release-preparation commits</summary>
+
+- `364c4f3b116d` fix: preserve multi-arch release images
+- `410da369ac43` Update README.md
+- `70140723c86c` chore: set package version to 2.0.0
+- `ada930a1642e` fix: harden v2 package build inputs
+- `cb961e2644eb` chore: refresh the v2 dependency lock
+- `17b42800aa2c` test: guard root-anchored package inputs
+- `972573949933` fix: allow explicit models for pattern-only languages
+- `58a4200b365e` test: cover explicit Afrikaans model routing
+- `f5de56f4958f` fix: resolve spaCy factory annotations eagerly
+- `9af355db3686` ci: align v2 release gates with v1.9.1
+- `433868420bf4` docs: record the OpenMed 2.0.0 release
+- `d0c057c54a92` docs: add the 1.9 to 2.0 migration guide
+- `0fc824d4d175` docs: add OpenMed 2.0.0 release notes
+- `765cf1cd820f` docs: add v2 release pages to navigation
+- `e607c7618469` docs: make 2.0.0 the current documentation release
+- `c65be2e2ff46` docs: update the Hindi landing page for v2
+- `f4e7653be094` docs: update the Chinese landing page for v2
+- `98e717b44e1b` docs: link v2 compatibility guidance from the feature map
+- `92f81d23059f` docs: finalize the v2 migration contract
+- `c57e34475a5f` docs: update example installation for v2
+- `a23d7e91bf1e` docs: update REST health output for v2
+- `848b309afcd2` docs: update Android quickstart for v2
+- `c37a4ae2924d` docs: update Android export coordinates for v2
+- `7593d831c158` docs: update OpenMedKit installation for v2
+- `0eb3214bd05b` docs: update Helm deployment examples for v2
+- `0177ba797889` docs: update provenance verification for v2
+- `ef1037838ed8` docs: update the website release metadata to v2
+- `5d6b8201d8ff` docs: regenerate the v2 OpenAPI artifact
+- `9b4e46829092` docs: refresh the v2 benchmark leaderboard page
+- `5c9a2fbead1a` docs: refresh the v2 benchmark leaderboard data
+- `21f60ac9c52a` docs: update the main README for v2
+- `f2ae630c6b26` docs: update the Arabic Swift release coordinate
+- `af4db2d9c5e4` docs: update the German Swift release coordinate
+- `3fd66cd8882d` docs: update the Spanish Swift release coordinate
+- `b7c88fa21a58` docs: update the Persian Swift release coordinate
+- `5cab138f6e75` docs: update the French Swift release coordinate
+- `b8fa555db4e0` docs: update the Hindi release coordinates
+- `06cf6ced22a6` docs: update the Italian Swift release coordinate
+- `d888e107b7f5` docs: update the Japanese Swift release coordinate
+- `55e9c5f510ca` docs: update the Dutch Swift release coordinate
+- `3109d62e3ec8` docs: update the Portuguese Swift release coordinate
+- `3493b3a93918` docs: update the Swahili release coordinates
+- `f17acb2cdbb5` docs: update the Telugu Swift release coordinate
+- `2b471993c8a5` docs: update the Turkish Swift release coordinate
+- `41b09ae8eb26` docs: update the Chinese release coordinates
+- `08a5ca4ad2fb` docs: refresh README translation hashes for v2
+- `e40cfc5cf156` docs: update Android installation to v2
+- `20cc658eb2fd` docs: update the Android library guide for v2
+- `7577d55e362c` chore: set the Android library version to 2.0.0
+- `eb80e34cbb7f` test: expect the Android 2.0.0 version
+- `ac25b508a33b` chore: set the Helm app version to 2.0.0
+- `eeb74a94ec4d` chore: set the default Helm image to 2.0.0
+- `1dbd4a601883` test: use the v2 image in Helm CI values
+- `03a039903df1` test: expect the v2 Helm image
+- `c787310511ec` chore: set the web package version to 2.0.0
+- `433a03a4ff77` chore: lock the web package at 2.0.0
+- `17cae3705305` chore: set the OpenMed demo version to 2.0.0
+- `60e04927df1f` chore: set the scan demo version to 2.0.0
+- `1967dd381c4b` docs: update the OpenHIM mediator example to v2
+- `2375f4c671b5` docs: update the de-identification demo dependency to v2
+- `478fec399c06` fix: load converter-marked legacy MLX bundles
+- `5c8cbc38f04a` test: cover legacy MLX Hub artifacts
+- `ca5b7d3195a1` docs: record legacy MLX compatibility fix
+- `252eae93c125` fix: route local privacy-filter artifacts by format
+- `be1d3063d841` test: cover local privacy-filter backend routing
+- `5dc58c3ae66e` docs: record privacy-filter routing fix
+- `a0c1bdf15afc` Add structured quasi-identifier detection
+- `e20f01631983` feat: automate structured release risk analysis
+- `b3be34286aab` Update CHANGELOG.md
+- `d75cfe82b6b9` Update examples.md
+- `c5a78fe488cf` Update reidentification-risk.md
+- `d3f4bae79571` Create structured_population_risk.py
+- `322cc392db19` Update main.py
+- `e1219a398b41` Update __init__.py
+- `77fdab8eadf4` Create expert_attestation.py
+- `6e74ff35eb40` Update expert_review.py
+- `0857fea13d74` Update release_evidence.py
+- `f32ac2c51608` Update release_gates.py
+- `a2ba9755ffdf` Update __init__.py
+- `216b6b207eb1` Update dashboard.py
+- `1f20972a82fd` Update kanon.py
+- `1c81b6460c8b` Create population.py
+- `2e32512d8b7c` Update reid.py
+- `2d6c4347e1a6` Update release.py
+- `404da87e0287` Update qi_detect.py
+- `0b08cd9e735a` Update test_risk_release_cli.py
+- `e6aa77bca87d` Create test_expert_attestation.py
+- `af37d2083b70` Update test_expert_review.py
+- `c12b98e804e4` Update test_release_evidence.py
+- `64fbaecb5046` Create test_unicode_attribute_names.py
+- `da0277fabe57` Update test_audit_report.py
+- `5a533ef31a7d` Update test_release_gates.py
+- `953bfc97a12b` Create test_direct_identifier_names.py
+- `92e124bab1f3` Update test_kanon_enforcement.py
+- `c5d1a7af6475` Create test_population_risk.py
+- `0e90cf6d2c1e` Update test_release.py
+- `e6ed73d4d803` Update test_risk_dashboard.py
+- `98b0695758c5` Create test_unicode_column_names.py
+- `8756388a7246` Update test_qi_detect.py
+- `b6c07862e5a7` Merge branch 'feature/automated-qi-risk-analysis' into release/openmed-200
+- `bbfcad9f8467` fix: expose only implemented clinical benchmark tasks
+- `cf4f5e914fed` test: cover clinical benchmark task choices
+- `288dda9784e8` docs: finalize v2 release notes
+- `767612e3cb0b` docs: refresh v2 migration inventory
+- `458b7d9fd3c2` docs: synchronize Hindi language coverage
+- `679ecb847f75` docs: synchronize website language coverage
+- `98c54a5420b5` fix: require secure ONNX dependency routes
+- `48eb9bc32b30` chore: refresh the secure dependency lock
+- `4359141365d3` docs: record secure optional dependency routes
+- `59b18a4b63b3` fix: exclude generated evidence from images
+- `063dee8df7fa` test: protect image build contexts
+- `f091ef635687` docs: complete the v2 release inventory
+- `cd38b4647215` fix: exclude JavaScript dependencies from images
+- `7c4e407a9548` test: keep JavaScript dependencies out of images
+- `0402798c8713` docs: finalize the v2 release inventory
+- `fa4c4ad2a190` test: remove flaky fuzz timing assertions
+- `e83dd4766090` docs: record the Windows fuzz fix
+- `28d5036c39de` legal: add the ICU license notice
+- `271b9c1af457` legal: pin the ICU segmenter provenance
+- `8807dace9552` fix: require ICU notices in segmenter bundles
+- `cc7637a81a7a` fix: discover the ICU bundle notice
+- `5a735b023b2b` fix(swift): validate ICU bundle attribution
+- `00a192eb3e25` test(swift): cover the ICU bundle notice
+- `f2bd824ec4a8` test: enforce ICU segmenter attribution
+- `b8c1970aa88c` test(mlx): require the ICU bundle notice
+- `4ef4a2c347de` test(coreml): require the ICU bundle notice
+- `591d2cc56990` test(onnx): require the ICU bundle notice
+- `c157e00a686b` test(web): require the ICU bundle notice
+- `bf092e2605d3` fix: audit bundled license notices
+- `333d8e929569` test: guard bundled ICU licensing
+- `82d7882d45d7` docs: attribute the bundled ICU rules
+- `1162b5009b28` docs: document ICU bundle attribution
+- `677eaff81fbc` docs: note the ICU manifest correction
+- `6525adb5722c` docs: record ICU attribution hardening
+
+</details>
 
 ## [1.9.1] - 2026-07-14
 
@@ -1215,7 +2744,10 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/maziyarpanahi/openmed/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/maziyarpanahi/openmed/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/maziyarpanahi/openmed/releases/tag/v2.0.0
 [1.9.1]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1

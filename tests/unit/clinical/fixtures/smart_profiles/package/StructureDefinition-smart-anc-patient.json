@@ -1,0 +1,70 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "smart-anc-patient",
+  "url": "https://openmed.example/fhir/StructureDefinition/smart-anc-patient",
+  "version": "0.0.1",
+  "name": "SyntheticSmartAncPatient",
+  "status": "draft",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "derivation": "constraint",
+  "snapshot": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Patient.identifier",
+        "path": "Patient.identifier",
+        "min": 0,
+        "max": "*",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Patient.identifier:anc-id",
+        "path": "Patient.identifier",
+        "sliceName": "anc-id",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Patient.identifier:anc-id.system",
+        "path": "Patient.identifier.system",
+        "min": 1,
+        "max": "1",
+        "fixedUri": "https://openmed.example/smart-anc/identifier"
+      },
+      {
+        "id": "Patient.identifier:anc-id.value",
+        "path": "Patient.identifier.value",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Patient.name",
+        "path": "Patient.name",
+        "min": 1,
+        "max": "*"
+      },
+      {
+        "id": "Patient.name.family",
+        "path": "Patient.name.family",
+        "min": 1,
+        "max": "1"
+      }
+    ]
+  }
+}

@@ -11,8 +11,10 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .africa_context import profile_defaults_for
 from .arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION
 from .detector_plugins import DetectorCapability, default_detector_capabilities
+from .errors import PolicyError, redact_detail
 from .labels import CANONICAL_LABELS, POLICY_LABELS, normalize_label, policy_label_for
 from .schemas.span import ACTION_VALUES
 
@@ -32,6 +34,15 @@ class PolicyName(str, Enum):
     CANADA_PIPEDA = "canada_pipeda"
     UK_ICO_ANONYMISATION = "uk_ico_anonymisation"
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
+    CHINA_PIPL = "china_pipl"
+    INDIA_DPDP_ACT = "india_dpdp_act"
+    AFRICA_MALABO_BASELINE = "africa_malabo_baseline"
+    ZA_POPIA = "za_popia"
+    NG_NDPA = "ng_ndpa"
+    KENYA_DPA = "ke_dpa"
+    INDIA_HEALTH_ID = "india_health_id"
+    EG_PDPL = "eg_pdpl"
+    MA_LAW_09_08 = "ma_law_09_08"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
@@ -39,8 +50,11 @@ POLICY_ALIASES: Mapping[str, str] = {
     "au_privacy": PolicyName.AUSTRALIA_PRIVACY_ACT.value,
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
     "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
+    "kenya_dpa": PolicyName.KENYA_DPA.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
     "uk_ico": PolicyName.UK_ICO_ANONYMISATION.value,
+    "india_health_ids": PolicyName.INDIA_HEALTH_ID.value,
+    "abha": PolicyName.INDIA_HEALTH_ID.value,
 }
 
 _ARBITRATION_MODES = frozenset({MODE_BALANCED, MODE_HIGH_RECALL_UNION})
@@ -432,17 +446,28 @@ def canonical_policy_name(name: str | PolicyName) -> str:
     if isinstance(name, PolicyName):
         return name.value
     if not isinstance(name, str):
-        raise TypeError(
+        raise PolicyError(
             "policy must be a profile name string or a PolicyProfile object, "
-            f"got {type(name).__name__}"
+            f"got {type(name).__name__}. Pass a name from list_policies() or a "
+            "validated PolicyProfile."
         )
     normalized = name.strip().lower().replace("-", "_")
     if not normalized:
-        raise ValueError("policy must not be blank")
+        raise PolicyError(
+            "policy must not be blank. Pass a name from list_policies() or omit "
+            "the policy argument."
+        )
     normalized = POLICY_ALIASES.get(normalized, normalized)
     if normalized not in CANONICAL_POLICY_NAMES:
         allowed = ", ".join((*CANONICAL_POLICY_NAMES, *sorted(POLICY_ALIASES)))
-        raise ValueError(f"unknown policy {name!r}; expected one of: {allowed}")
+        raise PolicyError(
+            f"unknown policy profile; expected one of: {allowed}. Pass a "
+            "documented policy name from list_policies().",
+            details={
+                "argument": "policy",
+                "policy": redact_detail(name),
+            },
+        )
     return normalized
 
 
@@ -722,10 +747,19 @@ def _profile_from_mapping(payload: Mapping[str, Any], *, source: str) -> PolicyP
             f"arbitration_mode must be one of {sorted(_ARBITRATION_MODES)!r}"
         )
 
+    context_defaults = profile_defaults_for(name)
     policy_label_actions = _policy_label_actions(
-        payload.get("policy_label_actions") or {},
+        _merge_action_defaults(
+            payload.get("policy_label_actions") or {},
+            context_defaults["policy_label_actions"],
+        ),
     )
-    actions = _canonical_actions(payload.get("actions") or {})
+    actions = _canonical_actions(
+        _merge_action_defaults(
+            payload.get("actions") or {},
+            context_defaults["actions"],
+        )
+    )
     forced_cascade_tiers = _string_tuple(
         payload.get("forced_cascade_tiers") or (),
         "forced_cascade_tiers",
@@ -881,6 +915,17 @@ def _policy_label_actions(value: Mapping[str, Any]) -> dict[str, str]:
             raise ValueError(f"unknown policy label {policy_label!r}")
         actions[policy_label] = _action(action, f"policy_label_actions.{policy_label}")
     return actions
+
+
+def _merge_action_defaults(
+    value: Any,
+    defaults: Mapping[str, str],
+) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    merged = dict(defaults)
+    merged.update(value)
+    return merged
 
 
 def _canonical_actions(value: Mapping[str, Any]) -> dict[str, str]:

@@ -1,30 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed：オンデバイスの臨床 AI · 2,000 以上のモデル" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="猫のマスコット、小文字のワードマーク、Open Cross、オープンソースのヘルスケア AI・3億4,000万回以上のダウンロード・1,000万回以上のインストールという文字を配した OpenMed README バナー" width="1280" />
 
 <h3>あなたのデータ。あなたのモデル。あなたのハードウェア。</h3>
 
-<p><b>臨床テキストを、構造化され匿名化されたインサイトへ変換します。アップロードは一切ありません。</b><br/>
-OpenMed は生物医学エンティティを抽出し、55+ 種類の PHI を、お客様が管理するハードウェア上で完全に除去するため、データがデバイスから外に出ることはありません。同じ 2,000+ のオープンモデルが、スマートフォンから GPU サーバーまで、完全オフラインで動作します。iOS と iPadOS では OpenMedKit 経由、Android では ONNX 経由、通常の CPU、Apple Silicon、NVIDIA GPU、そしてブラウザに対応します。クラウドなし。ベンダーロックインなし。患者データがネットワークの外に出ることもありません。</p>
+<p><b>管理下のハードウェアで、臨床テキストを構造化・非識別化されたインサイトに変換します。</b><br/>
+OpenMed の中核ローカルランタイムは、必要なモデル成果物が利用可能になった後に抽出と非識別化を実行します。モデルのダウンロード、リモートプロバイダー用アダプター、テレメトリ有効経路、ユーザー設定の統合はネットワークを利用する場合があります。各モデルとデータセットの条件を確認してください。</p>
 
 <p>
-  <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
-  <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
-  <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
-  <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
+  <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
+  <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
+  <a href="LICENSE">Apache-2.0 SDK source</a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
+  <a href="swift/OpenMedKit">OpenMedKit</a> ·
+  <a href="docs/mlx-backend.md">Apple Silicon / MLX</a> ·
+  <a href="docs/export-onnx-android.md">Android / ONNX Runtime Mobile</a> ·
+  <a href="docs/export-transformersjs.md">Browser / Transformers.js</a> ·
+  <a href="https://openmed.life/docs">Documentation</a>
 </p>
 
 <p>
-  <b>2,000+ モデル</b> &nbsp;·&nbsp; <b>15 の PII 対応言語</b> &nbsp;·&nbsp; <b>600+ 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>ローカルファーストのランタイム</b> &nbsp;·&nbsp; <b>モデル対応 PII 言語 33 種</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -74,42 +74,35 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-最先端の臨床 NER モデルがローカルで動作：API キー不要、ネットワーク呼び出しなし。
+臨床 NER モデルは、必要な成果物が利用可能になった後にローカルランタイムを使用します。
 
 ---
 
 ## OpenMed を選ぶ理由
 
-|                                       |       **OpenMed**        |     クラウド医療 API      |
-| ------------------------------------- | :----------------------: | :-----------------------: |
-| 自分のデバイス/サーバーで動作          |            ✅            |            ❌             |
-| 患者データがネットワーク外に出る       |      **決して出ない**     |     ベンダーに送信         |
-| コスト                                |  無料・オープンソース     |   呼び出しごとの課金       |
-| 専門医療モデル                        |          2,000+          |          限定的           |
-| 言語                                  |           12+            |          まちまち         |
-| オフライン / 隔離環境 (air-gapped)    |            ✅            |            ❌             |
-| Apple Silicon (MLX) アクセラレーション |            ✅            |          非対応           |
-| ネイティブ iOS / macOS アプリ          |   ✅ OpenMedKit 経由     |            ❌             |
-| ベンダーロックイン                    |    なし：Apache-2.0     |            あり           |
+| デプロイ時の考慮事項 | OpenMed SDK の境界 |
+| --- | --- |
+| 中核ランタイム | 必要な成果物が利用可能になった後、ローカルで処理 |
+| 任意のネットワーク経路 | ダウンロード、リモートアダプター、テレメトリ経路、統合はネットワークを使う場合あり |
+| 検証 | デプロイ責任者がモデル・データ条件、プライバシー動作、臨床適合性を検証 |
+| インターフェース | 対応範囲で Python、Swift、Android、ブラウザ、サービス |
 
-- **専門モデル**：厳選された 2,000 以上の生物医学・臨床モデル。その多くは商用の専有スタックを上回ります。
-- **HIPAA 対応の非識別化**：18 項目すべての Safe Harbor 識別子、スマートなエンティティ統合、フォーマットを保持する偽データ置換。
-- **どこでも動作**：CPU、CUDA、Apple Silicon (MLX)、そして OpenMedKit 経由で iOS/macOS アプリにネイティブ対応。
-- **1 行でデプロイ**：Python API、Docker 化された REST サービス、またはバッチパイプライン。
-- **ロックインなし**：Apache-2.0、あなたのインフラ、あなたのデータ。
+- **精選モデルカタログ**：用途ごとに各モデル、ライセンス、データセットを検証してください。
+- **Safe Harbor に沿った設定**：18 の識別子カテゴリを対象にできますが、専門家による導入レビューが必要です。SDK の利用だけで HIPAA 準拠を示すものではありません。
+- **対応する実行経路**：CPU、CUDA、MLX、モバイル、サービス、ブラウザのアダプターは環境と成果物によって異なります。
+- **導入インターフェース**：Python、コンテナ、サービス、バッチ処理には設定と検証が必要です。
+- **SDK ソース**：Apache-2.0 License で公開。モデルとデータセットの条件は異なります。
 
 ---
 
 ## オンデバイス、Apple 上で：Swift、MLX、iOS
 
-OpenMed は、データがすでに存在する場所で動作するよう作られています。Apple ハードウェアでは **MLX** で高速化し、
-**[OpenMedKit](swift/OpenMedKit)** を通じて iPhone・iPad・Mac アプリに直接組み込めます。PII 検出と臨床抽出は
-完全にオフラインで、デバイス上で行われます。
+対応する Apple ハードウェアでは、必要な成果物が利用可能になった後、OpenMed は **MLX** と **[OpenMedKit](swift/OpenMedKit)** を使ってローカル処理できます。モデル取得とユーザー設定のリモート統合は別のネットワーク境界です。
 
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 
@@ -125,7 +118,7 @@ dependencies: [
 
 ```mermaid
 flowchart LR
-    A["臨床テキスト"] --> B["OpenMed<br/>(100% オンデバイス)"]
+    A["臨床テキスト"] --> B["OpenMed<br/>(ローカルファースト)"]
     B --> C["医療エンティティ"]
     B --> D["PII を検出"]
     B --> E["非識別化テキスト"]
@@ -249,7 +242,7 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 
 - **スマートなエンティティ統合**は `01/15/1970` を分割せずにそのまま保持します。
 - **Faker ベースの難読化**：臨床 ID 用のカスタムプロバイダー（CPF、CNPJ、BSN、NIR、Codice Fiscale、NIE、Aadhaar、Steuer-ID、NPI）を内蔵。
-- **HIPAA**：18 項目すべての Safe Harbor 識別子、信頼度しきい値を設定可能。
+- **HIPAA の境界**：Safe Harbor に沿ったカテゴリと設定可能なしきい値は実装支援です。専門家による導入レビューが必要であり、SDK の利用だけで準拠を示すものではありません。
 
 [完全な PII ノートブック](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [スマート統合](docs/pii-smart-merging.md) · [匿名化](docs/anonymization.md)
 
@@ -282,9 +275,9 @@ Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTo
 
 ---
 
-## 多言語 PII（12 言語）
+## 多言語 PII（対応ルート 35、モデル対応 33）
 
-`en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化：合計 **600+ 個の PII チェックポイント**。
+`en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化：合計 **登録済み PII モデルカタログ**。
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -376,7 +369,7 @@ OpenMed は優れたオープンソースの成果の上に成り立っていま
 
 ## ライセンス
 
-[Apache-2.0 ライセンス](LICENSE)の下で公開されています。
+OpenMed SDK のソースは [Apache-2.0 License](LICENSE) の下で公開されています。
 
 ## 引用
 
@@ -400,9 +393,7 @@ OpenMed は優れたオープンソースの成果の上に成り立っていま
 
 OpenMed が役立つと感じたら、スターを付けると他の人が見つけやすくなります。
 
-<a href="https://star-history.com/#maziyarpanahi/openmed&Date">
-  <img src="https://api.star-history.com/svg?repos=maziyarpanahi/openmed&type=Date" alt="スター履歴グラフ" width="640" />
-</a>
+[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

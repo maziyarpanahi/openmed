@@ -4,13 +4,27 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+## Curated Notebook Gallery
+
+For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
+
+For an install-free demonstration, open the
+**[browser privacy playground](/docs/demo/privacy-playground/)**. Its bundled rules
+redact bounded synthetic text in the current tab and expose aggregate counts
+plus the active browser network boundary.
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |
 | --- | --- |
+| [`01_quickstart_redaction.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/01_quickstart_redaction.ipynb) | Quickstart redaction: masking, reversible replacement, and cryptographic hashing. |
+| [`02_batch_dataset.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/02_batch_dataset.ipynb) | Batch dataset de-identification with `BatchProcessor` and directory processing. |
+| [`03_fhir_export.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/03_fhir_export.ipynb) | Redacting clinical text, extracting medical entities, and assembling a deterministic FHIR R4 Bundle. |
+| [`04_eval_walkthrough.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/04_eval_walkthrough.ipynb) | Offline evaluation across bundled synthetic multilingual golden fixtures. |
 | `getting_started.ipynb` | Mirrors the Quick Start guide with step-by-step installation, registry exploration, and a first call to `analyze_text`. |
 | `Sentence_Detection_Batching.ipynb` | Demonstrates pySBD-based segmentation, batching, and how to align predictions back to the original paragraphs. |
 | `ZeroShot_NER_Tour.ipynb` | Walks through GLiNER indexing, domain defaults, inference API usage, and the adapter that converts spans into BIO/BILOU schemes. |
+| [`Chinese_Hindi_Deid_Tour.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/Chinese_Hindi_Deid_Tour.ipynb) | Runs fabricated Simplified Chinese, Hindi, and Hinglish notes through deterministic de-identification, structured entity review, UTF-8 output files, and zero-leak assertions. |
 
 Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pip install ".[hf]"` baseline.
 
@@ -68,14 +82,21 @@ content-security policy blocks the optional inline styling.
 
 | Path | What it does |
 | --- | --- |
+| [`examples/deid_chinese_clinical_note.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_chinese_clinical_note.py) | De-identifies a fabricated Simplified Chinese clinical note, prints structured entities, asserts that every embedded synthetic identifier was removed, and saves the redacted note. |
+| [`examples/deid_hindi_hinglish_note.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_hindi_hinglish_note.py) | Runs the same fail-closed flow on fabricated Hindi and code-mixed Hinglish notes with the shipped compact Hindi checkpoint. |
 | `examples/pii_model_comparison.py` | Compares multiple PII models across shared sample text and summarizes extraction quality. |
 | `examples/pii_batch_processing.py` | Runs batch PII extraction and de-identification with `BatchProcessor(operation=...)`. |
+| `examples/sms_deid_helpdesk_logs.py` | Redacts RapidPro-style JSON or generic CSV helpdesk exports with the `short_text` preset, contact pseudonymization, timestamp coarsening, and bounded batches. |
 | `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
 | `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
 | `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
+| `examples/structured_release_risk.py` | Runs a synthetic structured release through advisory quasi-identifier discovery, explicit patient-level k/l/t policy review, anonymization, materialized-output validation, and aggregate expert-review evidence. |
+| `examples/structured_population_risk.py` | Measures exact offline k-map, exact-linkage risk, and delta-presence for a fabricated sample against a fabricated reference population using patient-level joint QI profiles. |
 | `examples/v17_multimodal_browser_interop.py` | Demonstrates v1.7 multimodal and interop surfaces: AsciiDoc offset projection, OCR contracts, chat JSONL, CSV manifests, FHIR, HL7 v2, and Transformers.js browser bundle checks. |
+| `examples/chw_form_deid.py` | De-identifies local ODK, CommCare, or KoBoToolbox JSON/CSV form exports and emits a value-free field-policy manifest. |
 | `examples/privacy_gateway_quickstart.py` | Shows redaction before an external model call and safe re-identification after the protected boundary. |
 | `examples/dbt-deidentify/` | Demonstrates the v1.8 warehouse transformation package for table redaction macros and redacted staging models. |
+| `examples/warehouse-remote-function/` | Deploys a BigQuery remote-function batch handler with no-raw-PHI logging, a container entrypoint, and registration DDL. |
 | `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
@@ -88,6 +109,31 @@ Run the v1.6 and v1.7 release examples:
 uv run python examples/v16_policy_audit_release_gates.py
 uv run python examples/v17_multimodal_browser_interop.py
 ```
+
+Run the structured release-risk and reference-population examples with
+synthetic data:
+
+```bash
+uv run python examples/structured_release_risk.py
+uv run python examples/structured_population_risk.py
+```
+
+See [Structured Release Risk and Expert-Review Evidence](./reidentification-risk.md)
+for the corresponding CLI and Python workflows, exact longitudinal-profile
+semantics, signed expert handoff, artifact handling, and limitations.
+
+Run the Chinese and Hindi/Hinglish de-identification walkthroughs:
+
+```bash
+uv run python examples/deid_chinese_clinical_note.py
+uv run python examples/deid_hindi_hinglish_note.py
+```
+
+Both examples use fabricated notes, print JSON-serializable entity details,
+write UTF-8 redacted text, and stop with an assertion failure if any known
+synthetic identifier remains. The companion
+[`Chinese_Hindi_Deid_Tour.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/Chinese_Hindi_Deid_Tour.ipynb)
+provides a rendered no-download tour of both flows.
 
 For the full coverage map, see
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
@@ -110,7 +156,7 @@ The v1.8 examples and guides focus on cross-platform runtime and production
 deployment paths:
 
 - Android/Kotlin and Swift-Kotlin parity: [Android Span Parity](./android-parity.md), [Android ONNX Export](./export-onnx-android.md), and [Swift-Kotlin API Parity](./swift-kotlin-parity.md).
-- Browser and mobile JavaScript: [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
+- Browser and mobile JavaScript: [Browser Network-Egress Proof](./demo/browser-egress.md), [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
 - Service operations: [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [Serving Resilience](./serving/resilience.md), and [REST Tracing](./serving/tracing.md).
 - Structured-data jobs: [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md), [DuckDB De-identification UDFs](./duckdb-deidentification.md), and `examples/dbt-deidentify/`.
 
@@ -122,7 +168,7 @@ python examples/datasets_walkthrough.py
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.9.1` includes release-critical Apple, Android, browser, and service entry points:
+OpenMed `2.2.0` includes release-critical Apple, Android, browser, and service entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

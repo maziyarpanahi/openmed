@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,6 +11,8 @@ from openmed.core.backends import (
     _BACKENDS,
     HuggingFaceBackend,
     MLXBackend,
+    OnnxBackend,
+    RemoteInferenceBackend,
     get_backend,
 )
 
@@ -24,6 +27,15 @@ class TestHuggingFaceBackend:
     def test_not_available_when_missing(self, _):
         backend = HuggingFaceBackend()
         assert backend.is_available() is False
+
+    @patch("openmed.core.backends.find_spec", return_value=None)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    def test_not_available_without_torch(self, find_spec):
+        with patch.dict(sys.modules, {"torch": None}):
+            backend = HuggingFaceBackend()
+
+            assert backend.is_available() is False
+        find_spec.assert_not_called()
 
 
 class TestMLXBackend:
@@ -60,6 +72,13 @@ class TestGetBackend:
         backend = get_backend(None)
         assert isinstance(backend, HuggingFaceBackend)
 
+    @patch.object(OnnxBackend, "is_available", return_value=True)
+    @patch.object(HuggingFaceBackend, "is_available", return_value=False)
+    @patch.object(MLXBackend, "is_available", return_value=False)
+    def test_auto_detect_falls_back_to_onnx(self, _, __, ___):
+        backend = get_backend(None)
+        assert isinstance(backend, OnnxBackend)
+
     @patch.object(MLXBackend, "is_available", return_value=True)
     def test_auto_detect_prefers_mlx(self, _):
         backend = get_backend(None)
@@ -73,7 +92,8 @@ class TestGetBackend:
 
     @patch.object(HuggingFaceBackend, "is_available", return_value=False)
     @patch.object(MLXBackend, "is_available", return_value=False)
-    def test_no_backends_available_raises(self, _, __):
+    @patch.object(OnnxBackend, "is_available", return_value=False)
+    def test_no_backends_available_raises(self, _, __, ___):
         with pytest.raises(RuntimeError, match="No inference backend"):
             get_backend(None)
 
@@ -84,6 +104,24 @@ class TestBackendRegistry:
 
     def test_mlx_in_registry(self):
         assert "mlx" in _BACKENDS
+
+    def test_onnx_in_registry(self):
+        assert "onnx" in _BACKENDS
+
+    def test_remote_in_registry(self):
+        assert "remote" in _BACKENDS
+
+
+class TestRemoteInferenceBackend:
+    @patch.object(RemoteInferenceBackend, "is_available", return_value=True)
+    def test_explicit_remote(self, _):
+        backend = get_backend("remote")
+        assert isinstance(backend, RemoteInferenceBackend)
+
+    @patch.object(RemoteInferenceBackend, "is_available", return_value=False)
+    def test_missing_client_extra_has_actionable_error(self, _):
+        with pytest.raises(RuntimeError, match=r"openmed\[triton\]"):
+            get_backend("remote")
 
 
 class TestOpenMedConfigBackendField:

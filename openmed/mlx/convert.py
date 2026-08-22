@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Mapping, Tuple
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
@@ -16,6 +17,10 @@ from openmed.mlx.models import (
     normalize_model_config,
     normalize_model_type,
     resolve_model_type,
+)
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
 )
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
@@ -103,6 +108,31 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("electra.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
     ("electra.embeddings.LayerNorm.", "embeddings.norm."),
     ("classifier.", "classifier."),
+]
+
+_MODERNBERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
+    ("model.layers.", "model.encoder.layers."),
+    ("model.embeddings.tok_embeddings.", "model.embeddings.word_embeddings."),
+    (".attn.Wqkv.", ".attention.qkv_proj."),
+    (".attn.Wo.", ".attention.out_proj."),
+    (".mlp.Wi.", ".mlp.wi_proj."),
+    (".mlp.Wo.", ".mlp.wo_proj."),
+]
+
+_LONGFORMER_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
+    ("longformer.encoder.layer.", "longformer.encoder.layers."),
+    ("longformer.embeddings.LayerNorm.", "longformer.embeddings.norm."),
+    (".attention.self.query_global.", ".attention.query_global_proj."),
+    (".attention.self.key_global.", ".attention.key_global_proj."),
+    (".attention.self.value_global.", ".attention.value_global_proj."),
+    (".attention.self.query.", ".attention.query_proj."),
+    (".attention.self.key.", ".attention.key_proj."),
+    (".attention.self.value.", ".attention.value_proj."),
+    (".attention.output.dense.", ".attention.out_proj."),
+    (".attention.output.LayerNorm.", ".ln1."),
+    (".intermediate.dense.", ".linear1."),
+    (".output.dense.", ".linear2."),
+    (".output.LayerNorm.", ".ln2."),
 ]
 
 _OPF_MODEL_TYPES = {
@@ -312,6 +342,15 @@ def _infer_source_model_type(key: str, model_type: str | None) -> str:
         return "roberta"
     if key.startswith("electra."):
         return "electra"
+    if key.startswith("model."):
+        if (
+            ".layers." in key
+            or key.startswith("model.embeddings.")
+            or key.startswith("model.final_norm.")
+        ):
+            return "modernbert"
+    if key.startswith("longformer."):
+        return "longformer"
     return "bert"
 
 
@@ -320,7 +359,11 @@ def remap_key(key: str, model_type: str | None = None) -> str:
     source_model_type = _infer_source_model_type(key, model_type)
     resolved_model_type = resolve_model_type(source_model_type)
 
-    if resolved_model_type == "deberta-v2":
+    if source_model_type in {"modernbert", "modern-bert"}:
+        replacements = _MODERNBERT_KEY_REPLACEMENTS
+    elif source_model_type == "longformer":
+        replacements = _LONGFORMER_KEY_REPLACEMENTS
+    elif resolved_model_type == "deberta-v2":
         replacements = _DEBERTA_V2_KEY_REPLACEMENTS
     elif source_model_type == "distilbert":
         replacements = _DISTILBERT_KEY_REPLACEMENTS
@@ -354,11 +397,8 @@ def convert_weights(
     """Load HF token-classification weights and config, then remap for MLX."""
     try:
         from transformers import AutoConfig, AutoModelForTokenClassification
-    except ImportError:
-        raise ImportError(
-            "transformers is required for model conversion. "
-            "Install with: pip install transformers"
-        )
+    except ImportError as exc:
+        raise_missing_backend("hf", feature="MLX model conversion", cause=exc)
 
     logger.info("Loading Hugging Face token-classification model %s ...", model_id)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
@@ -405,14 +445,15 @@ def save_mlx_model(
     source_model_id: str | None = None,
     cache_dir: str | None = None,
     quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
+    segmenter_id: str | None = None,
 ) -> Path:
     """Save converted weights and config to *output_dir*."""
     try:
         import mlx.core as mx
         import mlx.nn as nn
         from mlx.utils import tree_flatten
-    except ImportError:
-        raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
+    except ImportError as exc:
+        raise_missing_backend("mlx", feature="Saving an MLX model artifact", cause=exc)
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -424,10 +465,14 @@ def save_mlx_model(
         logger.info("Quantizing to %d bits ...", quantize_bits)
         model = build_model(config)
         model.load_weights(list(mlx_weights.items()))
-        quantize_kwargs = {"bits": quantize_bits}
-        if quantize_group_size is not None:
-            quantize_kwargs["group_size"] = quantize_group_size
-        nn.quantize(model, **quantize_kwargs)
+        if quantize_group_size is None:
+            nn.quantize(model, bits=quantize_bits)
+        else:
+            nn.quantize(
+                model,
+                group_size=quantize_group_size,
+                bits=quantize_bits,
+            )
         mlx_weights = dict(tree_flatten(model.parameters()))
         config_to_save["_mlx_quantization"] = {
             "bits": quantize_bits,
@@ -479,6 +524,7 @@ def save_mlx_model(
         source_model_id=source_model_id,
         config=config_to_save,
         cache_dir=cache_dir,
+        segmenter_id=segmenter_id,
     )
 
     logger.info("Saved MLX model to %s", output_dir)
@@ -491,6 +537,7 @@ def save_numpy_model(
     output_dir: str | Path,
     source_model_id: str | None = None,
     cache_dir: str | None = None,
+    segmenter_id: str | None = None,
 ) -> Path:
     """Save converted weights without MLX, preferring ``.safetensors``."""
     import numpy as np
@@ -544,6 +591,7 @@ def save_numpy_model(
         source_model_id=source_model_id,
         config=config_to_save,
         cache_dir=cache_dir,
+        segmenter_id=segmenter_id,
     )
 
     logger.info(
@@ -688,10 +736,11 @@ def _hf_token_classification_runner(
                     pipeline,
                 )
             except ImportError as exc:
-                raise ImportError(
-                    "transformers is required to certify MLX quantization. "
-                    "Install with: pip install transformers"
-                ) from exc
+                raise_missing_backend(
+                    "hf",
+                    feature="Certifying MLX quantization recall",
+                    cause=exc,
+                )
 
             tokenizer = get_tokenizer_with_loader(
                 model_id,
@@ -879,6 +928,7 @@ def _finalize_artifact(
     source_model_id: str | None,
     config: dict[str, Any],
     cache_dir: str | None,
+    segmenter_id: str | None,
 ) -> None:
     if source_model_id is None:
         return
@@ -904,11 +954,17 @@ def _finalize_artifact(
             exc,
         )
 
+    segmenter = (
+        package_segmenter_resources(output_dir, segmenter_id)
+        if segmenter_id is not None
+        else None
+    )
     write_manifest(
         output_dir,
         source_model_id=source_model_id,
         config=config,
         tokenizer_files=tokenizer_files,
+        segmenter=segmenter,
     )
 
 
@@ -928,6 +984,7 @@ def convert(
     quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
     eval_suite_path: str | Path | None = None,
     recall_delta_report_path: str | Path | None = None,
+    segmenter_id: str | None = None,
 ) -> Path:
     """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
@@ -944,6 +1001,7 @@ def convert(
             source_model_id=model_id,
             cache_dir=cache_dir,
             quantize_group_size=quantize_group_size,
+            segmenter_id=segmenter_id,
         )
         quantized = quantize_bits is not None
     except ImportError:
@@ -958,6 +1016,7 @@ def convert(
             output_dir,
             source_model_id=model_id,
             cache_dir=cache_dir,
+            segmenter_id=segmenter_id,
         )
 
     if eval_suite_path is not None:
@@ -1051,6 +1110,12 @@ def main() -> None:
         help="Hugging Face cache directory",
     )
     parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -1102,6 +1167,7 @@ def main() -> None:
         eval_suite_path=args.eval_suite,
         recall_delta_report_path=args.recall_delta_report,
         quantize_group_size=args.quantize_group_size,
+        segmenter_id=args.segmenter,
         publish_to_hub=args.publish_to_hub,
         publish_repo_id=args.publish_repo_id,
         publish_org=args.publish_org,

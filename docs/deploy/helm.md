@@ -14,7 +14,7 @@ helm upgrade --install openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --create-namespace \
   --set image.repository=ghcr.io/maziyarpanahi/openmed \
-  --set image.tag=v1.9.1
+  --set image.tag=v2.2.0
 ```
 
 The default chart creates:
@@ -36,7 +36,7 @@ Upgrade by changing values and running the same release name:
 helm upgrade openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --set image.repository=ghcr.io/maziyarpanahi/openmed \
-  --set image.tag=v1.9.1
+  --set image.tag=v2.2.0
 ```
 
 The chart does not create an Ingress or autoscaling object. Add those in
@@ -77,7 +77,7 @@ extraEnv:
 | --- | --- | --- |
 | `replicaCount` | `1` | Number of service pods. |
 | `image.repository` | `openmed` | Container image repository. |
-| `image.tag` | `1.9.1` | Container image tag. Empty uses `Chart.appVersion`. |
+| `image.tag` | `2.2.0` | Container image tag. Empty uses `Chart.appVersion`. |
 | `image.pullPolicy` | `IfNotPresent` | Kubernetes image pull policy. |
 | `imagePullSecrets` | `[]` | Pull secrets for private image registries. |
 | `nameOverride` | `""` | Short name override. |
@@ -98,6 +98,10 @@ extraEnv:
 | `config.batching.enabled` | `false` | `OPENMED_SERVICE_BATCHING_ENABLED`. |
 | `config.batching.maxSize` | `8` | `OPENMED_SERVICE_BATCH_MAX_SIZE`. |
 | `config.batching.maxWaitMs` | `5` | `OPENMED_SERVICE_BATCH_MAX_WAIT_MS`. |
+| `config.batching.maxQueueSize` | `256` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE`. |
+| `config.batching.highWatermark` | `256` | `OPENMED_SERVICE_BATCH_HIGH_WATERMARK`. |
+| `config.batching.lowWatermark` | `128` | `OPENMED_SERVICE_BATCH_LOW_WATERMARK`. |
+| `config.batching.maxQueueWaitMs` | `1000` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS`. |
 | `config.coalescing.enabled` | `false` | `OPENMED_SERVICE_COALESCING_ENABLED`. |
 | `config.shutdownDrainSeconds` | `30` | `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`. |
 | `config.metrics.enabled` | `false` | `OPENMED_SERVICE_METRICS_ENABLED`. |

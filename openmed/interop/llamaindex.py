@@ -1,16 +1,641 @@
-"""LlamaIndex tool adapters rendered from the OpenMed tool registry."""
+"""LlamaIndex redaction and tool adapters backed by OpenMed."""
 
 from __future__ import annotations
 
+import asyncio
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import dataclass, field
+from hashlib import sha256
 from importlib import import_module as _import_module
+from pathlib import Path
+from types import MappingProxyType
 from typing import Any
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
+from openmed.core.capabilities import raise_missing_backend
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.interop.function_tools import (
     RuntimeProvider,
     create_tool_callable,
     registry_tool_specs,
 )
 from openmed.mcp.tool_registry import render_adapter_tool_definitions
+
+Deidentifier = Callable[..., Any]
+_NODE_ID_NAMESPACE = uuid5(NAMESPACE_URL, "https://openmed.ai/llamaindex-redaction")
+_MAX_AUDIT_ENTITIES_PER_VALUE = 10_000
+_MAX_AUDIT_ENTITY_CATEGORIES = len(CANONICAL_LABELS) + 1
+
+
+def _safe_audit_label(value: Any) -> str:
+    """Return a bounded category name safe for counts-only metadata."""
+
+    try:
+        label = normalize_label(str(value or ""))
+    except Exception:  # noqa: BLE001 - untrusted detector label object
+        return "OTHER"
+    return label if label in CANONICAL_LABELS else "OTHER"
+
+
+def _safe_nonnegative_count(value: Any) -> int:
+    """Return a validated count without invoking caller-controlled coercion."""
+
+    return value if type(value) is int and value > 0 else 0
+
+
+def _normalize_audit_counts(value: Any) -> dict[str, int]:
+    """Return bounded canonical counts without retaining caller-owned state."""
+
+    if not isinstance(value, Mapping):
+        return {}
+    try:
+        iterator = iter(value.items())
+    except Exception:  # noqa: BLE001 - untrusted mapping implementation
+        return {}
+
+    counts: dict[str, int] = {}
+    for _ in range(_MAX_AUDIT_ENTITY_CATEGORIES):
+        try:
+            entry = next(iterator)
+        except StopIteration:
+            break
+        except Exception:  # noqa: BLE001 - optional audit metadata must not fail
+            break
+        try:
+            label, count = entry
+        except Exception:  # noqa: BLE001 - malformed mapping entry
+            continue
+        safe_count = _safe_nonnegative_count(count)
+        if safe_count:
+            safe_label = _safe_audit_label(label)
+            counts[safe_label] = counts.get(safe_label, 0) + safe_count
+    return dict(sorted(counts.items()))
+
+
+@dataclass(frozen=True)
+class LlamaIndexRedactionAudit:
+    """Counts-only summary for one ingestion-transform invocation.
+
+    The summary intentionally contains no node identifiers, source metadata,
+    offsets, text, replacement values, or exception details. It is safe to
+    expose to pipeline telemetry or persist alongside an ingestion run.
+    """
+
+    nodes_processed: int = 0
+    nodes_changed: int = 0
+    text_values_redacted: int = 0
+    metadata_values_redacted: int = 0
+    entity_counts: Mapping[str, int] = field(default_factory=dict)
+    source_ids_pseudonymized: int = 0
+    numeric_metadata_pseudonymized: int = 0
+
+    def __post_init__(self) -> None:
+        """Freeze validated counts so public audit state stays content-free."""
+
+        for name in (
+            "nodes_processed",
+            "nodes_changed",
+            "text_values_redacted",
+            "metadata_values_redacted",
+            "source_ids_pseudonymized",
+            "numeric_metadata_pseudonymized",
+        ):
+            object.__setattr__(self, name, _safe_nonnegative_count(getattr(self, name)))
+        object.__setattr__(
+            self,
+            "entity_counts",
+            MappingProxyType(_normalize_audit_counts(self.entity_counts)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, counts-only mapping."""
+
+        return {
+            "nodes_processed": self.nodes_processed,
+            "nodes_changed": self.nodes_changed,
+            "text_values_redacted": self.text_values_redacted,
+            "metadata_values_redacted": self.metadata_values_redacted,
+            "entity_counts": dict(self.entity_counts),
+            "source_ids_pseudonymized": self.source_ids_pseudonymized,
+            "numeric_metadata_pseudonymized": self.numeric_metadata_pseudonymized,
+        }
+
+
+@dataclass
+class _RedactionAuditAccumulator:
+    """Mutable internal counter used while a transform processes nodes."""
+
+    nodes_processed: int = 0
+    nodes_changed: int = 0
+    text_values_redacted: int = 0
+    metadata_values_redacted: int = 0
+    entity_counts: Counter[str] = field(default_factory=Counter)
+    source_ids_pseudonymized: int = 0
+    numeric_metadata_pseudonymized: int = 0
+    changed: bool = False
+
+    def observe_value(
+        self,
+        original: str,
+        redacted: str,
+        result: Any,
+        *,
+        metadata: bool,
+    ) -> None:
+        if original != redacted:
+            if metadata:
+                self.metadata_values_redacted += 1
+            else:
+                self.text_values_redacted += 1
+            self.changed = True
+        try:
+            entities = getattr(result, "pii_entities", ())
+        except Exception:  # noqa: BLE001 - optional detector metadata
+            return
+        if isinstance(entities, (str, bytes, bytearray, Mapping)):
+            return
+        try:
+            iterator = iter(entities)
+        except Exception:  # noqa: BLE001 - optional detector metadata
+            return
+        for _ in range(_MAX_AUDIT_ENTITIES_PER_VALUE):
+            try:
+                entity = next(iterator)
+            except StopIteration:
+                break
+            except Exception:  # noqa: BLE001 - optional detector metadata
+                break
+            try:
+                if isinstance(entity, Mapping):
+                    label = (
+                        entity.get("canonical_label")
+                        or entity.get("entity_type")
+                        or entity.get("label")
+                    )
+                else:
+                    label = (
+                        getattr(entity, "canonical_label", None)
+                        or getattr(entity, "entity_type", None)
+                        or getattr(entity, "label", None)
+                    )
+            except Exception:  # noqa: BLE001 - untrusted entity object
+                continue
+            self.entity_counts[_safe_audit_label(label)] += 1
+
+    def merge_node(self, node_audit: "_RedactionAuditAccumulator") -> None:
+        self.nodes_processed += 1
+        self.nodes_changed += int(node_audit.changed)
+        self.text_values_redacted += node_audit.text_values_redacted
+        self.metadata_values_redacted += node_audit.metadata_values_redacted
+        self.entity_counts.update(node_audit.entity_counts)
+        self.source_ids_pseudonymized += node_audit.source_ids_pseudonymized
+        self.numeric_metadata_pseudonymized += node_audit.numeric_metadata_pseudonymized
+
+    def to_public(self) -> LlamaIndexRedactionAudit:
+        return LlamaIndexRedactionAudit(
+            nodes_processed=self.nodes_processed,
+            nodes_changed=self.nodes_changed,
+            text_values_redacted=self.text_values_redacted,
+            metadata_values_redacted=self.metadata_values_redacted,
+            entity_counts=dict(self.entity_counts),
+            source_ids_pseudonymized=self.source_ids_pseudonymized,
+            numeric_metadata_pseudonymized=self.numeric_metadata_pseudonymized,
+        )
+
+
+@dataclass(frozen=True)
+class LlamaIndexRedactionConfig:
+    """Runtime options forwarded to OpenMed's de-identification engine."""
+
+    method: str = "mask"
+    model_name: str | None = None
+    confidence_threshold: float = 0.7
+    keep_year: bool = False
+    keep_mapping: bool = False
+    use_smart_merging: bool = True
+    lang: str = "en"
+    redact_metadata: bool = True
+    numeric_metadata_allowlist: tuple[str, ...] = ()
+    normalize_accents: bool | None = None
+    use_safety_sweep: bool = True
+    consistent: bool = False
+    seed: int | None = None
+    locale: str | None = None
+    policy: str | None = None
+    calibration_thresholds_path: str | Path | None = None
+    extra_kwargs: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_deidentify_kwargs(self) -> dict[str, Any]:
+        """Return keyword arguments for ``openmed.core.pii.deidentify``."""
+
+        kwargs: dict[str, Any] = {
+            "method": self.method,
+            "model_name": self.model_name,
+            "confidence_threshold": self.confidence_threshold,
+            "keep_year": self.keep_year,
+            "keep_mapping": self.keep_mapping,
+            "use_smart_merging": self.use_smart_merging,
+            "lang": self.lang,
+            "normalize_accents": self.normalize_accents,
+            "use_safety_sweep": self.use_safety_sweep,
+            "consistent": self.consistent,
+            "seed": self.seed,
+            "locale": self.locale,
+            "policy": self.policy,
+            "calibration_thresholds_path": self.calibration_thresholds_path,
+        }
+
+        extras = dict(self.extra_kwargs)
+        collisions = sorted(kwargs.keys() & extras.keys())
+        if collisions:
+            fields = ", ".join(collisions)
+            raise ValueError(
+                f"extra_kwargs cannot override named configuration fields: {fields}"
+            )
+        kwargs.update(extras)
+        return {key: value for key, value in kwargs.items() if value is not None}
+
+
+class _NodeRedactor:
+    def __init__(
+        self,
+        *,
+        config: LlamaIndexRedactionConfig,
+        deidentifier: Deidentifier | None,
+        storage_safe: bool,
+    ) -> None:
+        self.config = config
+        self._deidentifier = deidentifier
+        self._storage_safe = storage_safe
+
+    def redact_scored_nodes(
+        self,
+        nodes: Sequence[Any],
+        *,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> list[Any]:
+        return [self._redact_scored_node(node, audit=audit) for node in nodes]
+
+    def redact_nodes(
+        self,
+        nodes: Sequence[Any],
+        *,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> list[Any]:
+        return [self._redact_node(node, audit=audit) for node in nodes]
+
+    def _redact_scored_node(
+        self,
+        scored_node: Any,
+        *,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> Any:
+        try:
+            redacted = _clone(scored_node)
+            self._redact_node(redacted.node, clone=False, audit=audit)
+        except AttributeError as exc:
+            raise TypeError(
+                "LlamaIndex postprocessor inputs must expose a node attribute"
+            ) from exc
+        return redacted
+
+    def _redact_node(
+        self,
+        node: Any,
+        *,
+        clone: bool = True,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> Any:
+        node_audit = _RedactionAuditAccumulator() if audit is not None else None
+        redacted = _clone(node) if clone else node
+        text = _node_text(redacted)
+        if text:
+            _set_node_text(
+                redacted,
+                self._redact_text(text, audit=node_audit, metadata=False),
+            )
+
+        metadata = getattr(redacted, "metadata", None)
+        if self.config.redact_metadata and isinstance(metadata, Mapping):
+            sanitized_metadata = self._redact_metadata_value(
+                metadata,
+                audit=node_audit,
+            )
+            _set_node_metadata(redacted, sanitized_metadata)
+            _exclude_metadata_from_content(redacted, sanitized_metadata)
+        if self._storage_safe:
+            self._pseudonymize_node_identifiers(redacted, audit=node_audit)
+        if audit is not None and node_audit is not None:
+            audit.merge_node(node_audit)
+        return redacted
+
+    def _redact_text(
+        self,
+        text: str,
+        *,
+        audit: _RedactionAuditAccumulator | None = None,
+        metadata: bool = False,
+    ) -> str:
+        result = self._deidentifier_or_default()(
+            text,
+            **self.config.to_deidentify_kwargs(),
+        )
+        redacted = _deidentified_text(result)
+        if audit is not None:
+            audit.observe_value(text, redacted, result, metadata=metadata)
+        return redacted
+
+    def _redact_metadata_value(
+        self,
+        value: Any,
+        *,
+        ancestors: frozenset[int] = frozenset(),
+        field_name: str | None = None,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> Any:
+        if isinstance(value, str):
+            return (
+                self._redact_text(value, audit=audit, metadata=True) if value else value
+            )
+        if isinstance(value, Mapping):
+            next_ancestors = _metadata_ancestors(value, ancestors)
+            redacted: dict[str, Any] = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise TypeError(
+                        "LlamaIndex metadata keys must be strings when "
+                        "redact_metadata=True"
+                    )
+                redacted_key = (
+                    self._redact_text(key, audit=audit, metadata=True) if key else key
+                )
+                if redacted_key in redacted:
+                    raise ValueError("LlamaIndex metadata keys collide after redaction")
+                redacted[redacted_key] = self._redact_metadata_value(
+                    item,
+                    ancestors=next_ancestors,
+                    field_name=key,
+                    audit=audit,
+                )
+            return redacted
+        if isinstance(value, list):
+            next_ancestors = _metadata_ancestors(value, ancestors)
+            return [
+                self._redact_metadata_value(
+                    item,
+                    ancestors=next_ancestors,
+                    field_name=field_name,
+                    audit=audit,
+                )
+                for item in value
+            ]
+        if isinstance(value, tuple):
+            next_ancestors = _metadata_ancestors(value, ancestors)
+            return tuple(
+                self._redact_metadata_value(
+                    item,
+                    ancestors=next_ancestors,
+                    field_name=field_name,
+                    audit=audit,
+                )
+                for item in value
+            )
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            if (
+                self._storage_safe
+                and field_name not in self.config.numeric_metadata_allowlist
+            ):
+                if audit is not None:
+                    audit.numeric_metadata_pseudonymized += 1
+                    audit.changed = True
+                return _pseudonymized_identifier(value)
+            return value
+        raise TypeError(
+            "LlamaIndex metadata values must be strings, numbers, booleans, "
+            "null, mappings, lists, or tuples when redact_metadata=True"
+        )
+
+    def _pseudonymize_node_identifiers(
+        self,
+        node: Any,
+        *,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> None:
+        node_id = getattr(node, "id_", None)
+        if isinstance(node_id, str) and node_id:
+            try:
+                pseudonym = _pseudonymized_node_id(node_id)
+                node.id_ = pseudonym
+                if audit is not None and pseudonym != node_id:
+                    audit.source_ids_pseudonymized += 1
+                    audit.changed = True
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise TypeError("LlamaIndex node id is not mutable") from exc
+
+        relationships = getattr(node, "relationships", None)
+        if isinstance(relationships, Mapping):
+            for related in relationships.values():
+                self._pseudonymize_related_node_ids(related, audit=audit)
+
+    def _pseudonymize_related_node_ids(
+        self,
+        related: Any,
+        *,
+        audit: _RedactionAuditAccumulator | None = None,
+    ) -> None:
+        if isinstance(related, (list, tuple)):
+            for item in related:
+                self._pseudonymize_related_node_ids(item, audit=audit)
+            return
+
+        metadata = getattr(related, "metadata", None)
+        if self.config.redact_metadata and isinstance(metadata, Mapping):
+            sanitized_metadata = self._redact_metadata_value(metadata, audit=audit)
+            try:
+                related.metadata = sanitized_metadata
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise TypeError(
+                    "LlamaIndex related-node metadata is not mutable"
+                ) from exc
+
+        node_id = getattr(related, "node_id", None)
+        if not isinstance(node_id, str) or not node_id:
+            return
+        try:
+            pseudonym = _pseudonymized_node_id(node_id)
+            related.node_id = pseudonym
+            if audit is not None and pseudonym != node_id:
+                audit.source_ids_pseudonymized += 1
+                audit.changed = True
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise TypeError("LlamaIndex related-node id is not mutable") from exc
+
+    def _deidentifier_or_default(self) -> Deidentifier:
+        if self._deidentifier is not None:
+            return self._deidentifier
+
+        from openmed.core.pii import deidentify
+
+        return deidentify
+
+
+def create_redaction_postprocessor(
+    *,
+    config: LlamaIndexRedactionConfig | None = None,
+    deidentifier: Deidentifier | None = None,
+) -> Any:
+    """Create a LlamaIndex node postprocessor that redacts retrieved text."""
+
+    base = _load_optional_class(
+        "llama_index.core.postprocessor.types",
+        "BaseNodePostprocessor",
+        feature="node postprocessors",
+    )
+    redactor = _NodeRedactor(
+        config=config or LlamaIndexRedactionConfig(),
+        deidentifier=deidentifier,
+        storage_safe=False,
+    )
+
+    class OpenMedRedactionPostprocessor(base):  # type: ignore[misc,valid-type]
+        @classmethod
+        def class_name(cls) -> str:
+            return "OpenMedRedactionPostprocessor"
+
+        def __init__(self) -> None:
+            super().__init__()
+            object.__setattr__(self, "_openmed_redactor", redactor)
+
+        def _postprocess_nodes(
+            self,
+            nodes: list[Any],
+            query_bundle: Any | None = None,
+        ) -> list[Any]:
+            del query_bundle
+            return self._openmed_redactor.redact_scored_nodes(nodes)
+
+        async def apostprocess_nodes(
+            self,
+            nodes: list[Any],
+            query_bundle: Any | None = None,
+            query_str: str | None = None,
+        ) -> list[Any]:
+            return await asyncio.to_thread(
+                self.postprocess_nodes,
+                nodes,
+                query_bundle=query_bundle,
+                query_str=query_str,
+            )
+
+    OpenMedRedactionPostprocessor.__module__ = __name__
+    return OpenMedRedactionPostprocessor()
+
+
+def create_redaction_transform(
+    *,
+    config: LlamaIndexRedactionConfig | None = None,
+    deidentifier: Deidentifier | None = None,
+    _cache_identity: str | None = None,
+) -> Any:
+    """Create an optional ingestion transform that redacts nodes before storage."""
+
+    base = _load_optional_class(
+        "llama_index.core.schema",
+        "TransformComponent",
+        feature="ingestion transforms",
+    )
+    resolved_config = config or LlamaIndexRedactionConfig()
+    redactor = _NodeRedactor(
+        config=resolved_config,
+        deidentifier=deidentifier,
+        storage_safe=True,
+    )
+    cache_identity = _cache_identity or _redaction_cache_identity(
+        resolved_config,
+        deidentifier,
+    )
+
+    class OpenMedRedactionTransform(base):  # type: ignore[misc,valid-type]
+        @classmethod
+        def class_name(cls) -> str:
+            return "OpenMedRedactionTransform"
+
+        def __init__(self) -> None:
+            super().__init__()
+            object.__setattr__(self, "_openmed_redactor", redactor)
+            object.__setattr__(self, "_openmed_cache_identity", cache_identity)
+            object.__setattr__(self, "_openmed_last_audit", LlamaIndexRedactionAudit())
+
+        @property
+        def audit_metadata(self) -> dict[str, Any]:
+            """Return counts-only metadata from the most recent invocation."""
+
+            return self._openmed_last_audit.to_dict()
+
+        @property
+        def last_audit(self) -> LlamaIndexRedactionAudit:
+            """Return the structured counts-only summary from the last call."""
+
+            return self._openmed_last_audit
+
+        def get_audit_metadata(self) -> dict[str, Any]:
+            """Return a copy of the most recent counts-only audit metadata."""
+
+            return self.audit_metadata
+
+        def __call__(self, nodes: Sequence[Any], **kwargs: Any) -> list[Any]:
+            del kwargs
+            object.__setattr__(self, "_openmed_last_audit", LlamaIndexRedactionAudit())
+            audit = _RedactionAuditAccumulator()
+            redacted = self._openmed_redactor.redact_nodes(nodes, audit=audit)
+            object.__setattr__(self, "_openmed_last_audit", audit.to_public())
+            return redacted
+
+        def to_dict(self, **kwargs: Any) -> dict[str, Any]:
+            del kwargs
+            return {
+                "class_name": self.class_name(),
+                "openmed_cache_identity": self._openmed_cache_identity,
+            }
+
+        def __reduce__(self) -> tuple[Any, tuple[Any, ...]]:
+            return (
+                _rebuild_redaction_transform,
+                (
+                    self._openmed_redactor.config,
+                    self._openmed_redactor._deidentifier,
+                    self._openmed_cache_identity,
+                ),
+            )
+
+    OpenMedRedactionTransform.__module__ = __name__
+    return OpenMedRedactionTransform()
+
+
+def _rebuild_redaction_transform(
+    config: LlamaIndexRedactionConfig,
+    deidentifier: Deidentifier | None,
+    cache_identity: str,
+) -> Any:
+    return create_redaction_transform(
+        config=config,
+        deidentifier=deidentifier,
+        _cache_identity=cache_identity,
+    )
+
+
+def _redaction_cache_identity(
+    config: LlamaIndexRedactionConfig,
+    deidentifier: Deidentifier | None,
+) -> str:
+    if deidentifier is not None:
+        return f"custom:{uuid4().hex}"
+    digest = sha256(repr(config).encode("utf-8")).hexdigest()
+    return f"default:{digest}"
 
 
 def create_tool_definitions() -> tuple[dict[str, Any], ...]:
@@ -54,23 +679,116 @@ def _function_tool_from_spec(
 
 
 def _load_function_tool() -> Any:
+    return _load_optional_class(
+        "llama_index.core.tools",
+        "FunctionTool",
+        feature="tools",
+    )
+
+
+def _load_optional_class(module_name: str, class_name: str, *, feature: str) -> Any:
     try:
-        module = _import_module("llama_index.core.tools")
+        module = _import_module(module_name)
     except ImportError as exc:
-        raise ImportError(
-            "LlamaIndex tools require the 'llamaindex' extra. "
-            "Install with `pip install openmed[llamaindex]`."
-        ) from exc
+        raise_missing_backend("llamaindex", feature=f"LlamaIndex {feature}", cause=exc)
 
     try:
-        return module.FunctionTool
+        return getattr(module, class_name)
     except AttributeError as exc:
         raise ImportError(
-            "LlamaIndex tools require llama-index-core with FunctionTool."
+            f"LlamaIndex {feature} require llama-index-core with {class_name}."
+        ) from exc
+
+
+def _clone(value: Any) -> Any:
+    model_copy = getattr(value, "model_copy", None)
+    if callable(model_copy):
+        return model_copy(deep=True)
+    return deepcopy(value)
+
+
+def _node_text(node: Any) -> str | None:
+    text = getattr(node, "text", None)
+    if isinstance(text, str):
+        return text
+
+    get_content = getattr(node, "get_content", None)
+    if callable(get_content):
+        content = get_content()
+        if isinstance(content, str):
+            return content
+    return None
+
+
+def _set_node_text(node: Any, text: str) -> None:
+    set_content = getattr(node, "set_content", None)
+    if callable(set_content):
+        set_content(text)
+        return
+    if hasattr(node, "text"):
+        node.text = text
+        return
+    raise TypeError("LlamaIndex node does not expose mutable text content")
+
+
+def _set_node_metadata(node: Any, metadata: dict[Any, Any]) -> None:
+    try:
+        node.metadata = metadata
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise TypeError(
+            "LlamaIndex node does not expose mutable metadata content"
+        ) from exc
+
+
+def _exclude_metadata_from_content(node: Any, metadata: Mapping[Any, Any]) -> None:
+    keys = [key for key in metadata if isinstance(key, str)]
+    for attribute in (
+        "excluded_llm_metadata_keys",
+        "excluded_embed_metadata_keys",
+    ):
+        current = getattr(node, attribute, None)
+        if not isinstance(current, list):
+            continue
+        setattr(node, attribute, list(dict.fromkeys([*current, *keys])))
+
+
+def _metadata_ancestors(
+    value: Any,
+    ancestors: frozenset[int],
+) -> frozenset[int]:
+    identity = id(value)
+    if identity in ancestors:
+        raise ValueError("LlamaIndex metadata must not contain cycles")
+    return ancestors | {identity}
+
+
+def _pseudonymized_identifier(value: str | int | float) -> str:
+    typed_value = f"{type(value).__name__}:{value}"
+    digest = sha256(typed_value.encode("utf-8")).hexdigest()
+    return f"openmed-{digest}"
+
+
+def _pseudonymized_node_id(value: str) -> str:
+    return str(uuid5(_NODE_ID_NAMESPACE, value))
+
+
+def _deidentified_text(result: Any) -> str:
+    if isinstance(result, str):
+        return result
+    try:
+        return str(result.deidentified_text)
+    except AttributeError as exc:
+        raise TypeError(
+            "deidentifier must return a string or an object with deidentified_text"
         ) from exc
 
 
 __all__ = [
+    "Deidentifier",
+    "LlamaIndexRedactionAudit",
+    "LlamaIndexRedactionConfig",
+    "create_redaction_postprocessor",
+    "create_redaction_transform",
     "create_tool_definitions",
     "get_llamaindex_tools",
 ]

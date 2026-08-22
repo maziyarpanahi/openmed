@@ -3,31 +3,75 @@ from __future__ import annotations
 import inspect
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+import openmed
+from openmed.core.audit import (
+    AuditReport,
+    AuditSignature,
+    AuditSpan,
+    DetectorInfo,
+    hash_text,
+    recompute_repro_hash,
+    stable_hash,
+    verify_repro_hash,
+)
 from openmed.interop import adapter_tool_definitions, langchain, presidio
 from openmed.mcp import server as mcp_server
 from openmed.mcp.tool_registry import (
+    CLINICAL_STAGE_ORDER,
     TOOL_REGISTRY,
+    PluginTool,
     ToolCompatibilityError,
     ToolRegistry,
     ToolSchemaValidationError,
     ToolSpec,
     check_tool_registry_compatibility,
     invoke_tool,
+    register_plugin_tools,
+    validate_registered_tool_output,
 )
+
+CLINICAL_TOOL_NAMES = {
+    "openmed_clinical_pipeline",
+    "openmed_export_fhir",
+    "openmed_ground",
+    "openmed_risk_score",
+}
+SYNTHETIC_CLINICAL_SPAN = {
+    "schema_version": 1,
+    "doc_id": "synthetic-note-001",
+    "start": 0,
+    "end": 7,
+    "text_hash": f"hmac-sha256:{'0' * 64}",
+    "entity_type": "SYNTHETIC_CONCEPT",
+    "canonical_label": "CONDITION",
+    "policy_label": "CLINICAL_CONCEPT",
+    "regulatory_tags": [],
+    "score": 0.9,
+    "detector": "synthetic-test-detector",
+    "evidence": {"synthetic": True},
+    "action": "keep",
+    "replacement": None,
+    "reversible_id": None,
+    "section": "assessment",
+    "metadata": {"synthetic": True},
+}
 
 
 class FakeFastMCP:
     def __init__(self) -> None:
         self.tools: dict[str, Any] = {}
+        self.tool_metadata: dict[str, dict[str, Any]] = {}
         self.resources: dict[str, Any] = {}
 
-    def tool(self, *, name: str):
+    def tool(self, *, name: str, **metadata: Any):
         def _decorator(func):
             self.tools[name] = func
+            self.tool_metadata[name] = metadata
             return func
 
         return _decorator
@@ -70,13 +114,25 @@ def test_registered_tool_invocation_validates_structured_output() -> None:
         invoke_tool(spec, bad_handler, category=None, pii_language=None, limit=50)
 
 
+def test_mcp_language_listing_discovers_v2_registry_entries() -> None:
+    payload = mcp_server.openmed_list_pii_languages()
+    languages = {item["code"]: item for item in payload["languages"]}
+
+    for code in ("bn", "zh"):
+        assert languages[code]["default_pii_model"].startswith("OpenMed/OpenMed-PII-")
+        assert languages[code]["model_count"] >= 1
+
+    assert languages["ta"]["default_pii_model"] == "OpenMed/privacy-filter-multilingual"
+    assert languages["ta"]["model_count"] == 0
+
+
 def test_tool_registry_resource_is_generated_from_specs() -> None:
     fake = FakeFastMCP()
 
     mcp_server._register_resources(fake)
     payload = json.loads(fake.resources["openmed://tool-registry"]())
 
-    assert payload["schema_version"] == "1.0.0"
+    assert payload["schema_version"] == "1.1.0"
     assert [tool["name"] for tool in payload["tools"]] == [
         spec.name for spec in TOOL_REGISTRY.all_specs()
     ]
@@ -139,6 +195,337 @@ def test_registry_supports_multiple_versions_side_by_side() -> None:
         "1.0.0",
         "2.0.0",
     ]
+
+
+def test_valid_plugin_tool_is_lazily_registered_with_stable_metadata() -> None:
+    tool = PluginTool(
+        spec=ToolSpec(
+            name="synthetic_plugin_status",
+            title="Synthetic Plugin Status",
+            description="Return deterministic synthetic plugin status.",
+            version="1.2.0",
+            stability="stable",
+            input_schema={
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {},
+                "required": [],
+            },
+            output_schema={
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"status": {"type": "string"}},
+                "required": ["status"],
+            },
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+        handler=lambda: {"status": "synthetic-ok"},
+    )
+
+    class ToolBearingComponent:
+        openmed_tools = (tool,)
+
+    metadata = SimpleNamespace(
+        plugin_id="synthetic-tool-plugin",
+        component_id="status-component",
+        qualified_id="synthetic-tool-plugin:status-component",
+    )
+    registration = SimpleNamespace(
+        metadata=metadata,
+        component=ToolBearingComponent(),
+        loaded_by_policy_opt_in=False,
+    )
+    registry = ToolRegistry(
+        plugin_loader=lambda target: register_plugin_tools(
+            (registration,),
+            registry=target,
+        )
+    )
+
+    assert [spec.name for spec in registry.latest_specs()] == [
+        "synthetic_plugin_status"
+    ]
+    spec = registry.get("synthetic_plugin_status")
+    assert spec.version == "1.2.0"
+    assert spec.stability == "stable"
+    assert spec.document()["plugin"] == {
+        "plugin_id": "synthetic-tool-plugin",
+        "component_id": "status-component",
+        "qualified_id": "synthetic-tool-plugin:status-component",
+    }
+    assert invoke_tool(spec, registry.handler(spec.name)) == {"status": "synthetic-ok"}
+
+
+@pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
+def test_clinical_tool_contracts_are_versioned(tool_name: str) -> None:
+    spec = TOOL_REGISTRY.get(tool_name)
+
+    assert spec.version == "1.0.0"
+    assert spec.document()["input_schema"] == spec.input_schema
+    assert spec.document()["output_schema"] == spec.output_schema
+    assert spec.input_schema["required"]
+    assert spec.output_schema["required"]
+
+
+@pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
+def test_clinical_tool_contracts_use_compatibility_gate(tool_name: str) -> None:
+    spec = TOOL_REGISTRY.get(tool_name)
+    input_schema = deepcopy(dict(spec.input_schema))
+    required_parameter = input_schema["required"][0]
+    input_schema["properties"][required_parameter]["type"] = "string"
+    broken = _replace_spec(spec, input_schema=input_schema)
+
+    with pytest.raises(ToolCompatibilityError, match="without version bump"):
+        check_tool_registry_compatibility([spec], [broken])
+
+
+def test_clinical_contract_handlers_return_registered_output_shapes() -> None:
+    span = deepcopy(SYNTHETIC_CLINICAL_SPAN)
+    handlers = mcp_server.build_mcp_tool_handlers(None)
+    invocations = {
+        "openmed_ground": {"spans": [span]},
+        "openmed_export_fhir": {"spans": [span]},
+        "openmed_risk_score": {"spans": [span]},
+        "openmed_clinical_pipeline": {
+            "stages": ["detect", "context", "ground", "risk"]
+        },
+    }
+
+    for tool_name, arguments in invocations.items():
+        payload = handlers[tool_name](**arguments)
+        assert validate_registered_tool_output(tool_name, payload) == payload
+
+    pipeline = handlers["openmed_clinical_pipeline"](stages=list(CLINICAL_STAGE_ORDER))
+    assert pipeline["status"] == "planned"
+    assert pipeline["stages"] == list(CLINICAL_STAGE_ORDER)
+
+
+# Issue #1741
+NEW_TOOLS = {
+    "openmed_fhir_bundle",
+    "openmed_risk_report",
+    "openmed_signed_audit_report",
+    "openmed_search_models",
+}
+
+
+def test_new_tools_have_correct_annotations() -> None:
+    for tool in NEW_TOOLS:
+        annotations = TOOL_REGISTRY.get(tool).annotations()
+        assert annotations["readOnlyHint"] is True
+        assert annotations["destructiveHint"] is False
+        assert annotations["openWorldHint"] is False
+
+
+# openmed_fhir_bundle specific tests.
+def test_fhir_bundle_assembles_a_valid_bundle() -> None:
+    bundle = mcp_server.openmed_fhir_bundle(
+        resources=[
+            {"resourceType": "Patient", "id": "patient-1"},
+            {
+                "resourceType": "Observation",
+                "id": "obs-1",
+                "status": "final",
+                "subject": {"reference": "Patient/patient-1"},
+            },
+        ],
+        doc_id="doc-1",
+    )
+    assert bundle["resourceType"] == "Bundle"
+    assert bundle["type"] == "transaction"
+    assert len(bundle["entry"]) == 2
+    patient_full_url = bundle["entry"][0]["fullUrl"]
+    subject = bundle["entry"][1]["resource"]["subject"]["reference"]
+    assert subject == patient_full_url
+
+
+def test_fhir_bundle_raises_value_error_without_resource_type() -> None:
+    with pytest.raises(ValueError):
+        mcp_server.openmed_fhir_bundle(resources=[{"id": "patient-1"}])
+
+
+# openmed_risk_report specific tests
+def _span(text, label, value, *, section="assessment"):
+    start = text.index(value)
+    return {
+        "label": label,
+        "start": start,
+        "end": start + len(value),
+        "metadata": {"section": section},
+    }
+
+
+def test_risk_report_is_schema_valid() -> None:
+    text = (
+        "Assessment: 94-year-old seen at North Clinic on 2024-02-03 "
+        "with [RARE_CONDITION]."
+    )
+    report = mcp_server.openmed_risk_report(
+        deidentified={
+            "doc_id": "note-1",
+            "text": text,
+            "entities": [
+                _span(text, "AGE", "94-year-old"),
+                _span(text, "ORGANIZATION", "North Clinic"),
+                _span(text, "DATE", "2024-02-03"),
+                _span(text, "RARE_CONDITION", "[RARE_CONDITION]"),
+            ],
+        }
+    )
+
+    assert set(report) == {
+        "leakage_rate",
+        "reid_rate",
+        "k_min",
+        "singleton_records",
+        "quasi_identifiers",
+    }
+    assert report["k_min"] == 1
+    assert report["singleton_records"][0]["record_id"] == "note-1"
+    categories = {qi["category"] for qi in report["quasi_identifiers"]}
+    assert categories == {"age", "provider_institution", "date", "rare_condition"}
+    age_qi = next(qi for qi in report["quasi_identifiers"] if qi["category"] == "age")
+    assert age_qi["value"] == "94-year-old"
+    assert age_qi["start"] == text.index("94-year-old")
+    assert age_qi["section"] == "assessment"
+
+
+def test_risk_report_output_is_phi_safe() -> None:
+    text = (
+        "Assessment: 94-year-old seen at North Clinic on 2024-02-03 "
+        "with [RARE_CONDITION]."
+    )
+    report = mcp_server.openmed_risk_report(
+        deidentified={
+            "doc_id": "note-1",
+            "text": text,
+            "entities": [
+                _span(text, "AGE", "94-year-old"),
+                _span(text, "ORGANIZATION", "North Clinic"),
+                _span(text, "DATE", "2024-02-03"),
+                _span(text, "RARE_CONDITION", "[RARE_CONDITION]"),
+            ],
+        }
+    )
+    serialized = json.dumps(report)
+    assert text not in serialized
+    for quasi_identifier in report["quasi_identifiers"]:
+        assert quasi_identifier["value"] != text
+        assert len(quasi_identifier["value"]) < len(text)
+
+
+# openmed_signed_audit_report specific tests
+class _StubRuntime:
+    config = None
+
+    def get_loader(self):
+        return None
+
+    def run_model_request(self, model_name, keep_alive, operation):
+        del model_name, keep_alive
+        return operation()
+
+
+def _sample_audit_report(text: str) -> AuditReport:
+    text = "Patient John Doe called 555-1234."
+    return AuditReport(
+        policy="hipaa_safe_harbor",
+        resolved_profile={
+            "method": "mask",
+            "confidence_threshold": 0.7,
+            "language": "en",
+        },
+        detectors=[
+            DetectorInfo(
+                source="ml",
+                model_id="unit-test-model",
+                model_format="transformers",
+            )
+        ],
+        safety_sweep={
+            "source": "safety_sweep",
+            "patterns_version": "safety-sweep-v1",
+            "spans_added": 0,
+        },
+        spans=[
+            AuditSpan(
+                start=8,
+                end=16,
+                label="NAME",
+                canonical_label="PERSON",
+                sources=["ml"],
+                confidence=0.95,
+                threshold=0.7,
+                action="mask",
+                surrogate="[NAME]",
+                text_hash=hash_text("John Doe"),
+                evidence={"raw_label": "NAME", "model_id": "unit-test-model"},
+                context={"before": "Patient ", "after": " called 555-1234."},
+            )
+        ],
+        thresholds={"PERSON": 0.7},
+        residual_risk={
+            "projected_leakage": 0.05,
+            "risk_report_record_score": 0.0,
+            "risk_report": {
+                "leakage_rate": 0.0,
+                "reid_rate": 0.0,
+                "k_min": 0,
+                "singleton_records": [],
+                "quasi_identifiers": [],
+            },
+        },
+        openmed_version="2.0.0",
+        manifest_hash="sha256:manifest",
+        document_length=len(text),
+        input_hash=hash_text(text),
+        deidentified_text_hash=hash_text("Patient [NAME] called [PHONE]."),
+    )
+
+
+def test_signed_audit_report_is_schema_valid_and_signed(monkeypatch) -> None:
+    text = "John Doe visited the clinic."
+
+    def fake_deidentify(*args, **kwargs):
+        assert kwargs.get("audit") is True
+        return _sample_audit_report(text)
+
+    monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
+
+    report = mcp_server.openmed_signed_audit_report(
+        text=text,
+        signing_key="unit-test-key",
+        runtime_provider=_StubRuntime,
+    )
+
+    assert report["signature"]["key_id"] == "release"
+    assert report["signature"]["algorithm"]
+    assert report["signature"]["value"]
+    assert len(report["spans"]) == 1
+
+
+def test_signed_audit_report_output_is_phi_safe(monkeypatch) -> None:
+    text = "John Doe visited the clinic."
+    monkeypatch.setattr(
+        openmed, "deidentify", lambda *a, **k: _sample_audit_report(text)
+    )
+
+    report = mcp_server.openmed_signed_audit_report(
+        text=text,
+        signing_key="unit-test-key",
+        runtime_provider=_StubRuntime,
+    )
+
+    serialized = json.dumps(report)
+    assert "John Doe" not in serialized
+    for span in report["spans"]:
+        assert set(span) >= {"start", "end", "label", "text_hash"}
+        assert isinstance(span["start"], int)
+        assert isinstance(span["end"], int)
+        assert isinstance(span["text_hash"], str) and span["text_hash"]
 
 
 def _replace_spec(
