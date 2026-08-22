@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from email import encoders
 from email import policy as email_policy
+from email.errors import HeaderParseError
 from email.header import decode_header
 from email.message import Message
 from email.parser import BytesParser
@@ -76,6 +77,7 @@ _HASHED_ID_HEADERS = frozenset({"message-id", "in-reply-to", "references"})
 _PRESERVED_MESSAGE_HEADERS = frozenset(
     name.lower() for name in _EXTRACTED_HEADERS if name.lower() != "date"
 )
+_ADDRESS_HEADERS = frozenset({"bcc", "cc", "from", "reply-to", "sender", "to"})
 _MESSAGE_ID_RE = re.compile(r"<[^<>]+>")
 
 _HTML_BLOCK_TAGS = frozenset(
@@ -499,6 +501,15 @@ def _parse_eml(payload: bytes) -> Message:
     return BytesParser(policy=email_policy.default).parsebytes(payload)
 
 
+def _raw_header_values(message: Message, header_name: str) -> tuple[Any, ...]:
+    """Return header values without invoking strict structured-header parsing."""
+
+    normalized = header_name.lower()
+    return tuple(
+        value for name, value in message.raw_items() if name.lower() == normalized
+    )
+
+
 def _ensure_msg_available() -> None:
     if importlib.util.find_spec("extract_msg") is None:
         raise MissingDependencyError(
@@ -600,7 +611,7 @@ def _document_from_message(
             )
 
     for header_name in _EXTRACTED_HEADERS:
-        for header_index, value in enumerate(message.get_all(header_name, ())):
+        for header_index, value in enumerate(_raw_header_values(message, header_name)):
             decoded = _decoded_header_value(value)
             if decoded:
                 append_segment(
@@ -644,7 +655,7 @@ def _document_from_message(
         metadata={
             "format": source_format,
             "header_count": sum(
-                len(message.get_all(name, ())) for name in _EXTRACTED_HEADERS
+                len(_raw_header_values(message, name)) for name in _EXTRACTED_HEADERS
             ),
             "body_part_count": body_count,
             "attachment_count": attachment_count,
@@ -654,7 +665,10 @@ def _document_from_message(
 
 
 def _decoded_header_value(value: Any) -> str:
-    text = str(value)
+    # ``raw_items`` preserves legal folding whitespace. Unfold before decoding
+    # so the redacted value can be stored without permitting header injection.
+    text = re.sub(r"(?:\r\n|\r|\n)[ \t]+", " ", str(value))
+    text = text.replace("\r", " ").replace("\n", " ")
     decoded_parts: list[str] = []
     try:
         fragments = decode_header(text)
@@ -689,12 +703,28 @@ def _decoded_text_part(part: Message) -> str:
         return payload.decode("utf-8", errors="replace")
 
 
+def _address_header_is_valid(header_name: str, value: str) -> bool:
+    """Return whether the stdlib accepts an address without parser defects."""
+
+    candidate = Message(policy=email_policy.default)
+    try:
+        candidate[header_name] = value
+        parsed = candidate[header_name]
+    except (HeaderParseError, IndexError, KeyError, TypeError, ValueError):
+        return False
+    return not getattr(parsed, "defects", ())
+
+
 def _redact_headers(message: Message, processor: "_TextProcessor") -> int:
     changed = 0
-    ordered_names = tuple(dict.fromkeys(message.keys()))
-    for header_name in ordered_names:
-        normalized = header_name.lower()
-        values = tuple(message.get_all(header_name, ()))
+    raw_headers = tuple(message.raw_items())
+    ordered_names: dict[str, str] = {}
+    for header_name, _ in raw_headers:
+        ordered_names.setdefault(header_name.lower(), header_name)
+    for normalized, header_name in ordered_names.items():
+        values = tuple(
+            value for name, value in raw_headers if name.lower() == normalized
+        )
         if normalized in _STRUCTURAL_HEADERS:
             continue
         del message[header_name]
@@ -715,9 +745,29 @@ def _redact_headers(message: Message, processor: "_TextProcessor") -> int:
                 redacted = _redact_message_ids(decoded, processor)
             else:
                 redacted = processor.redact(decoded).text
-            if redacted != decoded:
+            value_changed = redacted != decoded
+            if normalized in _ADDRESS_HEADERS and not _address_header_is_valid(
+                header_name, redacted
+            ):
+                redacted = "redacted-address@openmed.invalid"
+                value_changed = True
+            if value_changed:
                 changed += 1
-            message[header_name] = redacted
+            try:
+                message[header_name] = redacted
+            except (HeaderParseError, IndexError, KeyError, TypeError, ValueError):
+                # Some malformed address values trigger exceptions inside the
+                # standard-library header registry. Emit a safe valid address
+                # instead of preserving an unparsable or potentially private
+                # raw value in the clean message.
+                fallback = (
+                    "redacted-address@openmed.invalid"
+                    if normalized in _ADDRESS_HEADERS
+                    else "[REDACTED]"
+                )
+                message[header_name] = fallback
+                if not value_changed:
+                    changed += 1
     return changed
 
 
