@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline file-sharding planner that balances declared
+  local file metadata under byte and file-count limits, fingerprints normalized
+  paths, rejects duplicates, and emits counts-only plans without reading files
+  (#2639).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
