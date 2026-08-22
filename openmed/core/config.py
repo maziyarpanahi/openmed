@@ -588,8 +588,10 @@ class OpenMedConfig:
                     f"Available profiles: {', '.join(sorted(available))}"
                 )
 
-        profile_data["profile"] = profile_name
+        _validate_config_mapping(profile_data, profile=True)
+        _validate_config_mapping(overrides, profile=True)
         profile_data.update(overrides)
+        profile_data["profile"] = profile_name
         return cls.from_dict(profile_data)
 
     def to_dict(self) -> Dict[str, Any]:

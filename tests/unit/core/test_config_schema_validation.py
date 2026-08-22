@@ -8,6 +8,7 @@ from dataclasses import fields
 import pytest
 from jsonschema import Draft202012Validator
 
+import openmed.core.config as config_module
 from openmed.core.config import (
     ConfigValidationError,
     OpenMedConfig,
@@ -143,3 +144,21 @@ def test_list_items_and_numeric_bounds_are_validated() -> None:
     assert "medical_tokenizer_exceptions[1]" in message
     assert "indic_name_similarity_threshold" in message
     assert "remote_inference_timeout_seconds" in message
+
+
+def test_from_profile_enforces_profile_keys_and_selected_name(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config_module, "PROFILES_DIR", tmp_path)
+    (tmp_path / "reserved.toml").write_text(
+        'profile = "different"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigValidationError, match="profile"):
+        OpenMedConfig.from_profile("reserved")
+    with pytest.raises(ConfigValidationError, match="profile"):
+        OpenMedConfig.from_profile("dev", profile="different")
+
+    assert OpenMedConfig.from_profile("dev", timeout=17).profile == "dev"
