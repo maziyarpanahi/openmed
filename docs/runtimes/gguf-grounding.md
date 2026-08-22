@@ -65,11 +65,11 @@ artifacts/grounding-gguf/
 
 `openmed-gguf.json` records `Q4_K_M`, the G4 verdict, the recall delta, the
 report path, and the certified artifact's size and SHA-256 digest. The
-benchmark report records the same artifact identity alongside synthetic top-k
-overlap, determinism, F16 and Q4_K_M latency, and footprint. Loading recomputes
-the digest and rejects inconsistent evidence or an artifact that no longer
-matches its recorded digest. Reports contain no clinical terminology, patient
-text, or raw input prompts.
+benchmark report binds the same artifact identity to synthetic top-k overlap,
+determinism, F16 and Q4_K_M latency, and footprint. Loading recomputes the
+digest and fails closed if the artifact or either evidence file has been
+replaced. Reports contain no clinical terminology, patient text, or raw input
+prompts.
 
 Publication rechecks output conflicts after certification. With
 `overwrite=True`, existing bundle files are held for rollback until every
@@ -79,7 +79,10 @@ outputs.
 ## Run the local runtime
 
 The runtime is a small subprocess bridge. It never imports a llama.cpp Python
-binding and passes prompts as argument values rather than through a shell:
+binding. On POSIX systems it streams each prompt through the subprocess's
+anonymous standard-input pipe and gives llama.cpp `/dev/stdin` as its prompt
+file. Raw text is therefore absent from process arguments, temporary files,
+stderr, and OpenMed logs:
 
 ```python
 from openmed.onnx import load_gguf_grounding_embedder
@@ -97,6 +100,10 @@ runtime. Runtime requests are bounded to 256 texts, 32,768 characters per
 text, and 65,536 vector dimensions; malformed or oversized executable output
 is rejected. llama.cpp remains a user-built, out-of-process dependency; no
 llama.cpp source or binary is included in OpenMed.
+
+The direct `llama-embedding` bridge requires a POSIX-compatible `/dev/stdin`.
+It fails closed on platforms without that private pipe transport instead of
+placing patient text in command-line arguments or temporary files.
 
 All examples use synthetic offline data. Grounding suggestions are assistive
 and require human verification; this runtime does not make clinical decisions.

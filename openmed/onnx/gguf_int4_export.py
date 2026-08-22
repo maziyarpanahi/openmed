@@ -371,6 +371,8 @@ def export_gguf_int4(
             output_path=q4_path,
             timeout_seconds=validated_timeout,
         )
+        q4_size_bytes = q4_path.stat().st_size
+        q4_sha256 = _sha256_file(q4_path)
 
         resolved_fp16 = fp16_embedder
         resolved_int4 = int4_embedder
@@ -511,8 +513,14 @@ def validate_gguf_int4_artifact(artifact_dir: str | Path) -> None:
         raise GgufInt4Rejected(
             f"GGUF grounding artifact is missing {GGUF_INT4_BENCHMARK_FILENAME}"
         )
+    if any(path.is_symlink() for path in (artifact_path, manifest_path, report_path)):
+        raise GgufInt4Rejected(
+            "GGUF grounding certification files must not be symbolic links"
+        )
 
     try:
+        artifact_size = artifact_path.stat().st_size
+        artifact_sha256 = _sha256_file(artifact_path)
         manifest = _read_json(manifest_path)
         report = _read_json(report_path)
         metrics = _require_mapping(report.get("metrics"), name="report metrics")
@@ -648,6 +656,7 @@ def validate_gguf_int4_artifact(artifact_dir: str | Path) -> None:
             "GGUF grounding certification metadata is invalid"
         ) from exc
 
+    fixture_sha256 = metadata.get("grounding_fixture_sha256")
     valid = (
         manifest.get("format") == "openmed-gguf"
         and _is_exact_int(manifest.get("format_version"), 1)
@@ -1063,6 +1072,7 @@ def _grounding_benchmark_report(
             "source_revision": source_revision,
             "certified": certification.gate.passed,
             "deterministic": certification.gate.deterministic,
+            "artifact_sha256": artifact_sha256,
             "quantization": {
                 "scheme": "Q4_K_M",
                 "source": "model-f16.gguf",
@@ -1429,6 +1439,14 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -1451,6 +1469,7 @@ __all__ = [
     "GgufInt4ExportResult",
     "GgufInt4Rejected",
     "GroundingEmbedder",
+    "MAX_CERTIFICATION_JSON_BYTES",
     "Q4_K_M_FILENAME",
     "SYNTHETIC_GROUNDING_PASSAGES",
     "SYNTHETIC_GROUNDING_QUERIES",

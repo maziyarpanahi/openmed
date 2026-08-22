@@ -94,6 +94,7 @@ def test_subprocess_runtime_returns_vectors_without_in_process_binding(
         )
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "_stdin_prompt_path", lambda: "/dev/stdin")
     runtime = module.LlamaCppEmbeddingRuntime(model, executable)
 
     vectors = runtime.encode(["synthetic query", "synthetic passage"])
@@ -103,10 +104,14 @@ def test_subprocess_runtime_returns_vectors_without_in_process_binding(
     command, kwargs = calls[0]
     assert command[0] == str(executable)
     assert command[command.index("--model") + 1] == str(model)
-    assert "--embeddings" in command
-    assert command[command.index("--prompt") + 1] == "synthetic query"
-    assert kwargs["check"] is True
-    assert kwargs["capture_output"] is True
+    assert "--embeddings" not in command
+    assert command[command.index("--embd-output-format") + 1] == "raw"
+    assert command[command.index("--file") + 1] == "/dev/stdin"
+    assert "synthetic query" not in command
+    assert kwargs["input"] == "synthetic query"
+    assert kwargs["check"] is False
+    assert kwargs["stdout"] is subprocess.PIPE
+    assert kwargs["stderr"] is subprocess.DEVNULL
     assert "shell" not in kwargs
 
 
@@ -130,6 +135,7 @@ def test_subprocess_runtime_parses_llama_style_bracket_output(
             stderr="",
         ),
     )
+    monkeypatch.setattr(module, "_stdin_prompt_path", lambda: "/dev/stdin")
 
     assert module.LlamaCppEmbeddingRuntime(model, executable).embed("synthetic") == [
         -0.25,
@@ -349,6 +355,8 @@ def test_export_quantizes_staged_om195_bundle_and_writes_evidence(
     assert report["metadata"]["certified"] is True
     assert report["metrics"]["resources"]["model_size_bytes"] > 0
     assert report["metrics"]["resources"]["artifact_sha256"] == expected_sha256
+    assert q4_record["sha256"] == report["metadata"]["artifact_sha256"]
+    assert q4_record["size_bytes"] == report["metrics"]["resources"]["model_size_bytes"]
     module.validate_gguf_int4_artifact(output)
 
     result.q4_k_m_path.write_bytes(b"GGUF-tampered")
@@ -532,3 +540,116 @@ def test_certification_json_rejects_duplicate_keys(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="duplicate JSON key"):
         module._read_json(payload)
+
+
+def test_runtime_rejects_args_that_can_bypass_model_or_prompt(
+    tmp_path: Path,
+) -> None:
+    module = _runtime_module()
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF")
+    executable = tmp_path / "llama-embedding"
+    executable.write_bytes(b"stub")
+
+    for extra_args in (
+        ["--model", "other.gguf"],
+        ["--model=other.gguf"],
+        ["--prompt", "other text"],
+        ["--log-file", "prompt.log"],
+        ["--"],
+    ):
+        with pytest.raises(ValueError, match="protected option"):
+            module.LlamaCppEmbeddingRuntime(
+                model,
+                executable,
+                extra_args=extra_args,
+            )
+
+
+def test_runtime_rejects_inconsistent_vector_dimensions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _runtime_module()
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF")
+    executable = tmp_path / "llama-embedding"
+    executable.write_bytes(b"stub")
+    outputs = iter(("1 2", "1 2 3"))
+
+    monkeypatch.setattr(module, "_stdin_prompt_path", lambda: "/dev/stdin")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=next(outputs),
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(module.GgufEmbeddingRuntimeError, match="dimensions"):
+        module.LlamaCppEmbeddingRuntime(model, executable).encode(["one", "two"])
+
+
+def test_certification_rejects_overflowing_vectors(retrieval_fixture) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, _ = retrieval_fixture
+    overflowing = dict(fp16_vectors)
+    overflowing[queries[0]] = [10**400, 1]
+
+    with pytest.raises(ValueError, match="numeric values"):
+        module.certify_gguf_grounding(
+            _MappingEmbedder(overflowing),
+            _MappingEmbedder(fp16_vectors),
+            queries=queries,
+            passages=passages,
+            top_k=2,
+        )
+
+
+def test_loader_rejects_replaced_q4_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retrieval_fixture,
+) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, _ = retrieval_fixture
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_text(
+        json.dumps({"architectures": ["BertModel"], "model_type": "bert"}),
+        encoding="utf-8",
+    )
+    converter = tmp_path / "converter.py"
+    converter.write_text("# synthetic\n", encoding="utf-8")
+    quantizer = tmp_path / "quantizer"
+    quantizer.write_bytes(b"synthetic")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        del kwargs
+        if "--outtype" in command:
+            Path(command[command.index("--outfile") + 1]).write_bytes(b"GGUF")
+        else:
+            Path(command[2]).write_bytes(b"GGUF-Q4")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    output = tmp_path / "export"
+    result = module.export_gguf_int4(
+        model,
+        output,
+        converter_path=converter,
+        quantizer_path=quantizer,
+        fp16_embedder=_MappingEmbedder(fp16_vectors),
+        int4_embedder=_MappingEmbedder(fp16_vectors),
+        queries=queries,
+        passages=passages,
+        top_k=2,
+        recall_delta_tolerance=0.0,
+    )
+    result.q4_k_m_path.write_bytes(b"replacement")
+
+    with pytest.raises(module.GgufInt4Rejected, match="certification"):
+        module.validate_gguf_int4_artifact(output)

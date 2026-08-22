@@ -20,6 +20,8 @@ MAX_EMBEDDING_TEXT_CHARS = 32 * 1024
 MAX_EMBEDDING_TOTAL_CHARS = 1024 * 1024
 MAX_EMBEDDING_OUTPUT_CHARS = 4 * 1024 * 1024
 MAX_EMBEDDING_DIMENSION = 65_536
+MAX_EMBEDDING_DIMENSIONS = MAX_EMBEDDING_DIMENSION
+MAX_PROMPT_BYTES = 1024 * 1024
 MAX_OUTPUT_PARSE_CANDIDATES = 256
 MAX_COMMAND_PARTS = 256
 MAX_COMMAND_PART_CHARS = 32 * 1024
@@ -30,6 +32,36 @@ LLAMA_CPP_EMBEDDING_BINARY_NAMES = (
     "llama-embedding",
     "embedding",
     "llama_embedding",
+)
+
+_PROTECTED_EXTRA_OPTIONS = frozenset(
+    {
+        "--binary-file",
+        "--display-prompt",
+        "--embd-output-format",
+        "--embd-separator",
+        "--file",
+        "--hf-file",
+        "--hf-repo",
+        "--log-file",
+        "--model",
+        "--model-url",
+        "--no-display-prompt",
+        "--prompt",
+        "--prompt-cache",
+        "--prompt-cache-all",
+        "--prompt-cache-ro",
+        "--random-prompt",
+        "--verbose-prompt",
+        "-bf",
+        "-f",
+        "-hf",
+        "-hff",
+        "-hfr",
+        "-m",
+        "-mu",
+        "-p",
+    }
 )
 
 
@@ -84,6 +116,7 @@ class LlamaCppEmbeddingRuntime:
 
         if command is not None:
             base_command = _normalize_command_parts(command, name="command")
+            _reject_protected_options(base_command[1:], field_name="command")
         else:
             resolved_executable = resolve_llama_cpp_embedding_binary(
                 executable,
@@ -96,17 +129,19 @@ class LlamaCppEmbeddingRuntime:
         self.timeout_seconds = validated_timeout
         self.context_size = validated_context_size
         self.batch_size = validated_batch_size
-        self.extra_args = _normalize_command_parts(
-            extra_args,
-            name="extra_args",
-            allow_empty=True,
-        )
+        self.extra_args = _normalize_extra_args(extra_args)
 
     def encode(self, texts: Sequence[str]) -> list[list[float]]:
         """Return one embedding vector for each non-empty input string."""
 
         normalized = _normalize_texts(texts)
-        return [self._encode_one(text) for text in normalized]
+        vectors = [self._encode_one(text) for text in normalized]
+        dimensions = {len(vector) for vector in vectors}
+        if len(dimensions) != 1:
+            raise GgufEmbeddingRuntimeError(
+                "llama.cpp returned inconsistent embedding dimensions"
+            )
+        return vectors
 
     def embed(self, text: str) -> list[float]:
         """Return one embedding vector for a single non-empty string."""
@@ -115,20 +150,22 @@ class LlamaCppEmbeddingRuntime:
         return vectors[0]
 
     def _encode_one(self, text: str) -> list[float]:
-        command = [*self.command, "--model", str(self.model_path)]
-        command.extend(("--embeddings", "--pooling", "mean"))
+        prompt_path = _stdin_prompt_path()
+        command = [*self.command, *self.extra_args, "--model", str(self.model_path)]
+        command.extend(("--pooling", "mean", "--embd-output-format", "raw"))
         if self.context_size is not None:
             command.extend(("--ctx-size", str(self.context_size)))
         if self.batch_size is not None:
             command.extend(("--batch-size", str(self.batch_size)))
-        command.extend(("--log-disable", "--prompt", text))
-        command.extend(self.extra_args)
+        command.extend(("--no-escape", "--log-disable", "--file", prompt_path))
 
         try:
             completed = subprocess.run(
                 command,
-                check=True,
-                capture_output=True,
+                check=False,
+                input=text,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 text=True,
                 encoding="utf-8",
                 timeout=self.timeout_seconds,
@@ -137,14 +174,13 @@ class LlamaCppEmbeddingRuntime:
             raise GgufEmbeddingRuntimeError(
                 f"llama.cpp embedding exceeded {self.timeout_seconds} seconds"
             ) from exc
-        except subprocess.CalledProcessError as exc:
-            raise GgufEmbeddingRuntimeError(
-                "llama.cpp embedding subprocess failed"
-            ) from exc
         except (OSError, UnicodeError, ValueError) as exc:
             raise GgufEmbeddingRuntimeError(
                 "could not start llama.cpp embedding subprocess"
             ) from exc
+
+        if completed.returncode != 0:
+            raise GgufEmbeddingRuntimeError("llama.cpp embedding subprocess failed")
 
         try:
             if not isinstance(completed.stdout, str):
@@ -224,7 +260,38 @@ def _normalize_texts(texts: Sequence[str]) -> list[str]:
         raise ValueError(
             f"texts must contain at most {MAX_EMBEDDING_TOTAL_CHARS} characters total"
         )
+    if any(len(text.encode("utf-8")) > MAX_PROMPT_BYTES for text in normalized):
+        raise ValueError("texts must not exceed the per-prompt byte limit")
     return normalized
+
+
+def _normalize_extra_args(extra_args: Sequence[str]) -> tuple[str, ...]:
+    values = _normalize_command_parts(
+        extra_args,
+        name="extra_args",
+        allow_empty=True,
+    )
+    _reject_protected_options(values, field_name="extra_args")
+    return values
+
+
+def _reject_protected_options(values: Sequence[str], *, field_name: str) -> None:
+    for value in values:
+        option = value.split("=", 1)[0]
+        if option == "--" or option in _PROTECTED_EXTRA_OPTIONS:
+            raise ValueError(
+                f"{field_name} cannot override protected option {option!r}"
+            )
+
+
+def _stdin_prompt_path() -> str:
+    """Return llama.cpp's prompt-file path for the inherited stdin pipe."""
+
+    if os.name == "posix" and Path("/dev/stdin").exists():
+        return "/dev/stdin"
+    raise GgufEmbeddingRuntimeError(
+        "privacy-safe llama.cpp prompt transport is unavailable on this platform"
+    )
 
 
 def _parse_embedding_output(output: str) -> list[float]:
@@ -314,7 +381,7 @@ def _parse_number_sequence(value: str) -> list[float] | None:
         raise ValueError("embedding vector exceeds the dimension limit")
     try:
         values = [float(token) for token in tokens]
-    except ValueError:
+    except (OverflowError, ValueError):
         return None
     return _validate_vector(values)
 
@@ -326,7 +393,7 @@ def _validate_vector(values: Sequence[Any]) -> list[float]:
         raise ValueError("embedding vector exceeds the dimension limit")
     try:
         vector = [float(value) for value in values]
-    except (TypeError, ValueError) as exc:
+    except (OverflowError, TypeError, ValueError) as exc:
         raise ValueError("embedding vector must contain numbers") from exc
     if not all(math.isfinite(value) for value in vector):
         raise ValueError("embedding vector must contain finite numbers")
@@ -406,6 +473,8 @@ __all__ = [
     "GgufEmbeddingRuntime",
     "GgufGroundingRuntime",
     "LLAMA_CPP_EMBEDDING_BINARY_NAMES",
+    "MAX_EMBEDDING_DIMENSIONS",
+    "MAX_PROMPT_BYTES",
     "LlamaCppEmbeddingRunner",
     "LlamaCppEmbeddingRuntime",
     "MAX_EMBEDDING_DIMENSION",
