@@ -103,10 +103,9 @@
                 do {
                     let configuration = try NanoModelConfiguration.bundled()
                     let worker = Task.detached(priority: .userInitiated) {
-                        defer { OpenMed.clearRuntimeMemoryCache() }
-                        let handler = try ExtensionRedactionHandler(configuration: configuration)
-                        return try texts.map {
-                            try handler.redact($0, policyName: policyName).redactedText
+                        try ExtensionRedactionHandler.withRuntime(configuration: configuration) {
+                            handler in
+                            try handler.redact(texts, policyName: policyName).map(\.redactedText)
                         }
                     }
                     let redactedTexts = try await withTaskCancellationHandler {

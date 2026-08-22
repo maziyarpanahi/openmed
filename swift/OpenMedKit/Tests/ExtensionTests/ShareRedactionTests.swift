@@ -1,12 +1,16 @@
-import ActionExtension
 import Foundation
+import OpenMedActionExtension
 import OpenMedExtensionSupport
-import ShareExtension
+import OpenMedShareExtension
 import XCTest
 
 @testable import OpenMedKit
 
 final class ShareRedactionTests: XCTestCase {
+    private enum FixtureError: Error {
+        case failed
+    }
+
     #if os(iOS) || os(macOS)
         func testSyntheticTextMatchesOpenMedKitReferenceSpans() throws {
             let text = "Name Ada DOB 04/01/2026"
@@ -187,6 +191,57 @@ final class ShareRedactionTests: XCTestCase {
                 return XCTFail("Unexpected error: \(error)")
             }
         }
+    }
+
+    func testBatchRedactionRunsEachInputWithinItsOwnInferenceBudget() throws {
+        var receivedByteCounts: [Int] = []
+        let handler = ExtensionRedactionHandler { text, policy in
+            receivedByteCounts.append(text.utf8.count)
+            return PolicyDeidentificationResult(
+                redactedText: text,
+                policyName: policy.name,
+                actions: []
+            )
+        }
+        let item = String(repeating: "🩺", count: 10_000)
+        let texts = [item, item]
+
+        XCTAssertGreaterThan(
+            texts.reduce(0) { $0 + $1.utf8.count },
+            ExtensionRedactionHandler.maximumInputUTF8Bytes
+        )
+        let outputs = try handler.redact(texts)
+
+        XCTAssertEqual(outputs.count, texts.count)
+        XCTAssertEqual(receivedByteCounts, texts.map { $0.utf8.count })
+    }
+
+    func testRuntimeCleanupRunsAfterSuccessAndFailure() throws {
+        let text = "synthetic"
+        let policy = try Policy(named: Policy.defaultName)
+        let result = PolicyDeidentificationResult(
+            redactedText: text,
+            policyName: policy.name,
+            actions: []
+        )
+        var cleanupCount = 0
+
+        let output = try ExtensionRedactionHandler.withCleanup(
+            makeHandler: { ExtensionRedactionHandler { _, _ in result } },
+            cleanup: { cleanupCount += 1 },
+            operation: { try $0.redact(text) }
+        )
+        XCTAssertEqual(output.redactedText, text)
+        XCTAssertEqual(cleanupCount, 1)
+
+        XCTAssertThrowsError(
+            try ExtensionRedactionHandler.withCleanup(
+                makeHandler: { ExtensionRedactionHandler { _, _ in result } },
+                cleanup: { cleanupCount += 1 },
+                operation: { _ -> ExtensionRedactionOutput in throw FixtureError.failed }
+            )
+        )
+        XCTAssertEqual(cleanupCount, 2)
     }
 
     func testInvalidRuntimeOutputFailsClosed() throws {

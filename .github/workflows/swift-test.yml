@@ -60,7 +60,7 @@ jobs:
       working-directory: swift/OpenMedKit
       run: |
         xcodebuild build \
-          -scheme OpenMedKit \
+          -scheme OpenMedKit-Package \
           -destination 'generic/platform=iOS Simulator' \
           -skipPackagePluginValidation
 

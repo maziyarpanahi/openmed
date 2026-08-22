@@ -54,7 +54,7 @@ back to a download.
    keep `$(PRODUCT_MODULE_NAME).ShareViewController` as the principal class:
 
    ```swift
-   import ShareExtension
+   import OpenMedShareExtension
 
    final class ShareViewController: RedactionShareViewController {}
    ```
@@ -76,7 +76,7 @@ user confirms, and completes the request with a new plain-text attachment.
    keep `$(PRODUCT_MODULE_NAME).ActionRequestHandler` as the principal class:
 
    ```swift
-   import ActionExtension
+   import OpenMedActionExtension
 
    final class ActionRequestHandler: RedactionActionRequestHandler {}
    ```

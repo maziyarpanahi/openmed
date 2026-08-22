@@ -58,6 +58,40 @@ public enum ExtensionSecurityPolicy {
     public static let modelAssetURLScheme = "file"
 }
 
+/// Aggregate limits applied while decoding host-provided extension items.
+public enum ExtensionInputBudget {
+    public static let maximumItems = 8
+    public static let maximumAggregateUTF8Bytes = 128 * 1_024
+
+    /// Validate a bounded collection before retaining or redacting it.
+    public static func validate(_ texts: [String]) throws {
+        guard !texts.isEmpty else {
+            throw ExtensionRedactionError.missingPlainTextInput
+        }
+        guard texts.count <= maximumItems else {
+            throw ExtensionRedactionError.tooManyInputItems(
+                actual: texts.count,
+                limit: maximumItems
+            )
+        }
+
+        var aggregateBytes = 0
+        for text in texts {
+            try ExtensionRedactionHandler.validateInput(text)
+            let (nextBytes, overflow) = aggregateBytes.addingReportingOverflow(
+                text.utf8.count
+            )
+            guard !overflow, nextBytes <= maximumAggregateUTF8Bytes else {
+                throw ExtensionRedactionError.aggregateInputTooLarge(
+                    actual: overflow ? Int.max : nextBytes,
+                    limit: maximumAggregateUTF8Bytes
+                )
+            }
+            aggregateBytes = nextBytes
+        }
+    }
+}
+
 /// Conservative memory limits for an iOS Share or Action extension model.
 public struct NanoModelMemoryBudget: Equatable, Sendable {
     public static let extensionWorkingSetEnvelopeBytes: Int64 = 120 * 1_024 * 1_024
@@ -347,9 +381,11 @@ public struct ExtensionRedactionOutput: Equatable, Sendable {
 public final class ExtensionRedactionHandler {
     public static let maximumInputCharacters = 16_384
     public static let maximumInputUTF8Bytes = 64 * 1_024
-    public static let maximumInputItems = 8
-    public static let maximumAggregateInputUTF8Bytes = 128 * 1_024
+    public static let maximumInputItems = ExtensionInputBudget.maximumItems
+    public static let maximumAggregateInputUTF8Bytes =
+        ExtensionInputBudget.maximumAggregateUTF8Bytes
     public static let maximumOutputUTF8Bytes = 256 * 1_024
+    public static let defaultPolicyName = Policy.defaultName
 
     public typealias Redact = (String, Policy) throws -> PolicyDeidentificationResult
 
@@ -368,7 +404,38 @@ public final class ExtensionRedactionHandler {
                 try runtime.deidentify(text, policy: policy)
             }
         }
+
+        /// Use one runtime and release its cache after either success or failure.
+        package static func withRuntime<T>(
+            configuration: NanoModelConfiguration,
+            operation: (ExtensionRedactionHandler) throws -> T
+        ) throws -> T {
+            try withCleanup(
+                makeHandler: { try ExtensionRedactionHandler(configuration: configuration) },
+                cleanup: OpenMed.clearRuntimeMemoryCache,
+                operation: operation
+            )
+        }
     #endif
+
+    package static func withCleanup<T>(
+        makeHandler: () throws -> ExtensionRedactionHandler,
+        cleanup: () -> Void,
+        operation: (ExtensionRedactionHandler) throws -> T
+    ) rethrows -> T {
+        do {
+            let output: T
+            do {
+                let handler = try makeHandler()
+                output = try operation(handler)
+            }
+            cleanup()
+            return output
+        } catch {
+            cleanup()
+            throw error
+        }
+    }
 
     /// Redact a selected text item with a bundled policy profile.
     public func redact(
@@ -398,6 +465,15 @@ public final class ExtensionRedactionHandler {
         )
     }
 
+    /// Redact a bounded extension request one item at a time.
+    public func redact(
+        _ texts: [String],
+        policyName: String = Policy.defaultName
+    ) throws -> [ExtensionRedactionOutput] {
+        try Self.validateInputs(texts)
+        return try texts.map { try redact($0, policyName: policyName) }
+    }
+
     /// Validate one host-provided text before model loading or inference.
     public static func validateInput(_ text: String) throws {
         guard !text.isEmpty else {
@@ -421,30 +497,7 @@ public final class ExtensionRedactionHandler {
 
     /// Validate a bounded batch of host-provided text attachments.
     public static func validateInputs(_ texts: [String]) throws {
-        guard !texts.isEmpty else {
-            throw ExtensionRedactionError.missingPlainTextInput
-        }
-        guard texts.count <= maximumInputItems else {
-            throw ExtensionRedactionError.tooManyInputItems(
-                actual: texts.count,
-                limit: maximumInputItems
-            )
-        }
-
-        var aggregateBytes = 0
-        for text in texts {
-            try validateInput(text)
-            let (nextBytes, overflow) = aggregateBytes.addingReportingOverflow(
-                text.utf8.count
-            )
-            guard !overflow, nextBytes <= maximumAggregateInputUTF8Bytes else {
-                throw ExtensionRedactionError.aggregateInputTooLarge(
-                    actual: overflow ? Int.max : nextBytes,
-                    limit: maximumAggregateInputUTF8Bytes
-                )
-            }
-            aggregateBytes = nextBytes
-        }
+        try ExtensionInputBudget.validate(texts)
     }
 
     private static func validateResult(

@@ -1,4 +1,4 @@
-#if canImport(UIKit) && canImport(UniformTypeIdentifiers)
+#if os(iOS) && canImport(UIKit) && canImport(UniformTypeIdentifiers)
     import Foundation
     import UIKit
     import UniformTypeIdentifiers
@@ -12,10 +12,10 @@
                 for provider in item.attachments ?? []
                 where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
                     providers.append(provider)
-                    guard providers.count <= ExtensionRedactionHandler.maximumInputItems else {
+                    guard providers.count <= ExtensionInputBudget.maximumItems else {
                         throw ExtensionRedactionError.tooManyInputItems(
                             actual: providers.count,
-                            limit: ExtensionRedactionHandler.maximumInputItems
+                            limit: ExtensionInputBudget.maximumItems
                         )
                     }
                 }
@@ -25,10 +25,10 @@
             for provider in providers {
                 let text = try await plainText(from: provider)
                 texts.append(text)
-                try ExtensionRedactionHandler.validateInputs(texts)
+                try ExtensionInputBudget.validate(texts)
             }
 
-            try ExtensionRedactionHandler.validateInputs(texts)
+            try ExtensionInputBudget.validate(texts)
             return texts
         }
 

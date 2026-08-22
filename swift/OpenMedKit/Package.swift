@@ -22,11 +22,11 @@ let package = Package(
         ),
         .library(
             name: "OpenMedShareExtension",
-            targets: ["ShareExtension"]
+            targets: ["OpenMedShareExtension"]
         ),
         .library(
             name: "OpenMedActionExtension",
-            targets: ["ActionExtension"]
+            targets: ["OpenMedActionExtension"]
         ),
     ],
     dependencies: [
@@ -85,12 +85,14 @@ let package = Package(
             dependencies: ["OpenMedKit"]
         ),
         .target(
-            name: "ShareExtension",
-            dependencies: ["OpenMedExtensionSupport"]
+            name: "OpenMedShareExtension",
+            dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
+            path: "Sources/ShareExtension"
         ),
         .target(
-            name: "ActionExtension",
-            dependencies: ["OpenMedExtensionSupport"]
+            name: "OpenMedActionExtension",
+            dependencies: ["OpenMedExtensionSupport"],
+            path: "Sources/ActionExtension"
         ),
         .testTarget(
             name: "OpenMedKitTests",
@@ -101,8 +103,8 @@ let package = Package(
             dependencies: [
                 "OpenMedKit",
                 "OpenMedExtensionSupport",
-                "ShareExtension",
-                "ActionExtension",
+                "OpenMedShareExtension",
+                "OpenMedActionExtension",
             ]
         ),
     ]
