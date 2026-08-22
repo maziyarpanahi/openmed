@@ -43,7 +43,8 @@ def test_spec_is_explicit_bounded_and_value_free():
     assert spec.input_schema == "string_or_mapping"
     assert spec.output_schema == "same_as_input"
     assert spec.to_dict()["max_records"] == 2
-    assert spec.to_dict()["extra_keys"] == ("secret", "seed")
+    assert spec.to_dict()["extra_key_count"] == 2
+    assert spec.to_dict()["extra_keys_fingerprint"].startswith("sha256:")
     assert _SENSITIVE not in metadata
     assert _SENSITIVE not in repr(spec)
     assert spec.fingerprint().startswith("sha256:")
@@ -157,6 +158,34 @@ def test_spec_rejects_unbounded_limits_and_non_finite_backoff():
         BeamRedactionSpec(retry_backoff_seconds=float("nan"))
     with pytest.raises(ValueError, match="bounded text"):
         BeamRedactionSpec(text_field="x" * 257)
+    with pytest.raises(ValueError, match="safe field identifier"):
+        BeamRedactionSpec(text_field="patient-123456")
+    with pytest.raises(ValueError, match="not supported"):
+        BeamRedactionSpec(method="synthetic")
+
+
+def test_mutated_spec_and_result_are_revalidated_before_publication():
+    spec = BeamRedactionSpec(extra_kwargs={_SENSITIVE: "synthetic"})
+    metadata = json.dumps(spec.to_dict(), sort_keys=True)
+
+    assert _SENSITIVE not in metadata
+    assert _SENSITIVE not in repr(spec)
+
+    object.__setattr__(spec, "method", _SENSITIVE)
+    with pytest.raises(ValueError, match="not supported"):
+        spec.to_dict()
+    with pytest.raises(ValueError, match="not supported"):
+        run_synthetic_harness([], spec=spec, deidentifier=_fake_deidentifier)
+    assert repr(spec) == "BeamRedactionSpec(<invalid>)"
+
+    result = run_synthetic_harness(
+        ["synthetic"],
+        deidentifier=lambda text, **kwargs: text,
+    )
+    object.__setattr__(result, "output_fingerprint", "sha256:" + "0" * 64)
+    with pytest.raises(ValueError, match="output_fingerprint"):
+        result.report()
+    assert repr(result) == "BeamRedactionResult(<invalid>)"
 
 
 def test_default_worker_options_cannot_weaken_offline_safety(monkeypatch):

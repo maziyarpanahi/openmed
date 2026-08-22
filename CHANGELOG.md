@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-optional Apache Beam redaction transform with explicit
+  schema metadata, bounded record and byte state, capped retries, deterministic
+  serialization, cache-only defaults, and aggregate value-free reports
+  (#2387).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination

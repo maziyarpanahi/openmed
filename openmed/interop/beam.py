@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
@@ -66,6 +67,23 @@ _MAX_RECORD_KEY_CHARS = 4_096
 _MAX_RECORDS = 1_000_000
 _MAX_RETRY_BACKOFF_SECONDS = 60.0
 _MAX_SPANS_PER_RECORD = 10_000
+_SAFE_METADATA_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
+_METADATA_IDENTIFIER_RE = re.compile(
+    r"(?:^|[_.:-])(?:account|case|encounter|member|mrn|patient|record|subject)"
+    r"[_.:-]?(?:\d{2,}|[a-f0-9]{8,})(?:$|[_.:-])|"
+    r"(?<![A-Za-z0-9])\d{6,}(?![A-Za-z0-9])"
+)
+_DEIDENTIFICATION_METHODS = frozenset(
+    {
+        "aadhaar_mask",
+        "format_preserve",
+        "hash",
+        "mask",
+        "remove",
+        "replace",
+        "shift_dates",
+    }
+)
 _RESERVED_EXTRA_KEYS = frozenset(
     {
         "audit",
@@ -144,13 +162,13 @@ class BeamRedactionSpec:
         object.__setattr__(
             self,
             "text_field",
-            _normalize_config_text(self.text_field, "text_field"),
+            _normalize_text_field(self.text_field),
         )
         object.__setattr__(self, "policy", _normalize_policy(self.policy))
         object.__setattr__(
             self,
             "method",
-            _normalize_config_text(self.method, "method").lower(),
+            _normalize_method(self.method),
         )
         _require_positive_int(
             self.max_records,
@@ -202,17 +220,23 @@ class BeamRedactionSpec:
     def to_deidentify_kwargs(self) -> dict[str, Any]:
         """Return explicit, deterministic options for the deidentifier."""
 
+        safe = _validated_spec(self)
         kwargs: dict[str, Any] = {
-            "method": self.method,
-            "policy": self.policy,
+            "method": safe.method,
+            "policy": safe.policy,
         }
         kwargs.update(
-            {key: _clone_extra_value(value) for key, value in self.extra_kwargs.items()}
+            {key: _clone_extra_value(value) for key, value in safe.extra_kwargs.items()}
         )
         return kwargs
 
     def to_dict(self) -> dict[str, Any]:
         """Return PHI-free schema and bound metadata for this specification."""
+
+        return _validated_spec(self)._to_dict_unchecked()
+
+    def _to_dict_unchecked(self) -> dict[str, Any]:
+        """Return metadata after the specification has been reconstructed."""
 
         return {
             "artifact_type": _ARTIFACT_TYPE,
@@ -227,22 +251,36 @@ class BeamRedactionSpec:
             "max_record_bytes": self.max_record_bytes,
             "max_attempts": self.max_attempts,
             "retry_backoff_seconds": self.retry_backoff_seconds,
-            "extra_keys": tuple(sorted(self.extra_kwargs)),
+            "extra_key_count": len(self.extra_kwargs),
+            "extra_keys_fingerprint": _digest_bytes(
+                _canonical_json(tuple(sorted(self.extra_kwargs)))
+            ),
         }
 
     def fingerprint(self) -> str:
         """Return a deterministic fingerprint without exposing option values."""
 
-        payload = {
-            **self.to_dict(),
-            "extra_values": _fingerprint_value(self.extra_kwargs),
-        }
-        return _digest_bytes(_canonical_json(payload))
+        try:
+            safe = _validated_spec(self)
+            payload = {
+                **safe._to_dict_unchecked(),
+                "extra_values": _fingerprint_value(safe.extra_kwargs),
+            }
+            return _digest_bytes(_canonical_json(payload))
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            raise BeamRedactionError(
+                "redaction specification could not be fingerprinted safely"
+            ) from None
 
     def __repr__(self) -> str:
         """Return configuration metadata without extra-option values."""
 
-        return f"BeamRedactionSpec({self.to_dict()!r})"
+        try:
+            return f"BeamRedactionSpec({self.to_dict()!r})"
+        except BaseException:
+            return "BeamRedactionSpec(<invalid>)"
 
 
 @dataclass(frozen=True)
@@ -261,22 +299,31 @@ class BeamRedactionCounters:
     def __post_init__(self) -> None:
         """Reject invalid counter values instead of serializing them."""
 
-        for name in (
-            "attempts",
-            "input_bytes",
-            "output_bytes",
-            "records_changed",
-            "records_failed",
-            "records_processed",
-            "retries",
-            "spans_redacted",
-        ):
-            _require_non_negative_int(getattr(self, name), name)
+        maxima = {
+            "attempts": _MAX_RECORDS * _MAX_ATTEMPTS,
+            "input_bytes": _MAX_INPUT_BYTES,
+            "output_bytes": _MAX_OUTPUT_BYTES,
+            "records_changed": _MAX_RECORDS,
+            "records_failed": _MAX_RECORDS,
+            "records_processed": _MAX_RECORDS,
+            "retries": _MAX_RECORDS * (_MAX_ATTEMPTS - 1),
+            "spans_redacted": _MAX_RECORDS * _MAX_SPANS_PER_RECORD,
+        }
+        for name, maximum in maxima.items():
+            _require_non_negative_int(getattr(self, name), name, maximum=maximum)
+        if self.records_changed + self.records_failed > self.records_processed:
+            raise ValueError("record outcome counters exceed records_processed")
+        if self.retries > self.attempts:
+            raise ValueError("retries cannot exceed attempts")
 
     def to_dict(self) -> dict[str, int]:
         """Return deterministic counts without identifiers or source values."""
 
-        self.__post_init__()
+        return _validated_counters(self)._to_dict_unchecked()
+
+    def _to_dict_unchecked(self) -> dict[str, int]:
+        """Return counters after the value has been reconstructed."""
+
         return {
             "attempts": self.attempts,
             "input_bytes": self.input_bytes,
@@ -373,22 +420,42 @@ class BeamRedactionResult:
     serialized_output: bytes
 
     def __post_init__(self) -> None:
-        """Validate public report state without inspecting record values."""
+        """Validate and detach bounded public result state."""
 
         if type(self.redacted_records) is not tuple:
             raise TypeError("redacted_records must be a tuple")
-        if not isinstance(self.counters, BeamRedactionCounters):
+        if len(self.redacted_records) > _MAX_RECORDS:
+            raise ValueError("redacted_records exceed the bounded maximum")
+        if type(self.counters) is not BeamRedactionCounters:
             raise TypeError("counters must be BeamRedactionCounters")
+        counters = _validated_counters(self.counters)
+        if len(self.redacted_records) != counters.records_processed:
+            raise ValueError("redacted record count does not match counters")
         _require_digest(self.input_fingerprint, "input_fingerprint")
         _require_digest(self.output_fingerprint, "output_fingerprint")
         _require_digest(self.spec_fingerprint, "spec_fingerprint")
         if type(self.serialized_output) is not bytes:
             raise TypeError("serialized_output must be bytes")
+        expected_bytes = counters.output_bytes + counters.records_processed
+        if len(self.serialized_output) != expected_bytes:
+            raise ValueError("serialized_output size does not match counters")
+        if _digest_bytes(self.serialized_output) != self.output_fingerprint:
+            raise ValueError("output_fingerprint does not match serialized_output")
+        detached_records = tuple(
+            _copy_record(record, maximum_text_chars=_MAX_OUTPUT_RECORD_BYTES)
+            for record in self.redacted_records
+        )
+        object.__setattr__(self, "redacted_records", detached_records)
+        object.__setattr__(self, "counters", counters)
 
     def report(self) -> dict[str, Any]:
         """Return a report containing no record values or exception details."""
 
-        self.__post_init__()
+        return _validated_result(self)._report_unchecked()
+
+    def _report_unchecked(self) -> dict[str, Any]:
+        """Return aggregate metadata after reconstructing this result."""
+
         return {
             "artifact_type": _ARTIFACT_TYPE,
             "schema_version": _SCHEMA_VERSION,
@@ -406,15 +473,18 @@ class BeamRedactionResult:
     def __repr__(self) -> str:
         """Return a safe summary without output records or serialized bytes."""
 
-        self.__post_init__()
-        return (
-            "BeamRedactionResult("
-            f"records={len(self.redacted_records)}, "
-            f"counters={self.counters.to_dict()!r}, "
-            f"input_fingerprint={self.input_fingerprint!r}, "
-            f"output_fingerprint={self.output_fingerprint!r}, "
-            f"spec_fingerprint={self.spec_fingerprint!r})"
-        )
+        try:
+            safe = _validated_result(self)
+            return (
+                "BeamRedactionResult("
+                f"records={len(safe.redacted_records)}, "
+                f"counters={safe.counters.to_dict()!r}, "
+                f"input_fingerprint={safe.input_fingerprint!r}, "
+                f"output_fingerprint={safe.output_fingerprint!r}, "
+                f"spec_fingerprint={safe.spec_fingerprint!r})"
+            )
+        except BaseException:
+            return "BeamRedactionResult(<invalid>)"
 
 
 class _CounterAccumulator:
@@ -455,18 +525,17 @@ class _BeamRedactionDoFn(_DoFnBase):  # type: ignore[misc,valid-type]
         deidentifier: Deidentifier | None = None,
         loader_factory: Callable[[], Any] | None = None,
     ) -> None:
-        if not isinstance(spec, BeamRedactionSpec):
-            raise TypeError("spec must be a BeamRedactionSpec")
+        safe_spec = _validated_spec(spec)
         _require_optional_callable(deidentifier, "deidentifier")
         _require_optional_callable(loader_factory, "loader_factory")
-        self._spec = spec
+        self._spec = safe_spec
         self._deidentifier = deidentifier
         self._loader_factory = loader_factory
         self._loader: Any = None
         self._state = BeamRedactionState(
-            max_records=spec.max_records,
-            max_input_bytes=spec.max_input_bytes,
-            max_record_bytes=spec.max_record_bytes,
+            max_records=safe_spec.max_records,
+            max_input_bytes=safe_spec.max_input_bytes,
+            max_record_bytes=safe_spec.max_record_bytes,
         )
         self._counters = _CounterAccumulator()
         self._metrics: dict[str, Any] = {}
@@ -582,8 +651,6 @@ class BeamRedactionTransform(_PTransformBase):  # type: ignore[misc,valid-type]
         if _beam is not None:
             super().__init__()
         if spec is not None:
-            if not isinstance(spec, BeamRedactionSpec):
-                raise TypeError("spec must be a BeamRedactionSpec")
             if _direct_transform_options_supplied(
                 text_field=text_field,
                 policy=policy,
@@ -596,7 +663,7 @@ class BeamRedactionTransform(_PTransformBase):  # type: ignore[misc,valid-type]
                 extra_kwargs=extra_kwargs,
             ):
                 raise TypeError("spec cannot be combined with direct options")
-            self.spec = spec
+            self.spec = _validated_spec(spec)
         else:
             self.spec = BeamRedactionSpec(
                 text_field=text_field,
@@ -643,11 +710,9 @@ def run_synthetic_harness(
     OpenMed path is configured for cache-only loading.
     """
 
-    if spec is not None and not isinstance(spec, BeamRedactionSpec):
-        raise TypeError("spec must be a BeamRedactionSpec")
     _require_optional_callable(deidentifier, "deidentifier")
     _require_optional_callable(loader_factory, "loader_factory")
-    resolved_spec = BeamRedactionSpec() if spec is None else spec
+    resolved_spec = BeamRedactionSpec() if spec is None else _validated_spec(spec)
     state = BeamRedactionState(
         max_records=resolved_spec.max_records,
         max_input_bytes=resolved_spec.max_input_bytes,
@@ -1257,6 +1322,84 @@ def _clone_extra_value(value: Any) -> Any:
     return value
 
 
+def _validated_spec(value: Any) -> BeamRedactionSpec:
+    """Reconstruct a specification so post-init checks cannot be bypassed."""
+
+    if type(value) is not BeamRedactionSpec:
+        raise TypeError("spec must be a BeamRedactionSpec")
+    try:
+        return BeamRedactionSpec(
+            text_field=value.text_field,
+            policy=value.policy,
+            method=value.method,
+            max_records=value.max_records,
+            max_input_bytes=value.max_input_bytes,
+            max_record_bytes=value.max_record_bytes,
+            max_attempts=value.max_attempts,
+            retry_backoff_seconds=value.retry_backoff_seconds,
+            extra_kwargs={
+                key: _clone_extra_value(item)
+                for key, item in value.extra_kwargs.items()
+            },
+        )
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except (BeamRedactionError, TypeError, ValueError):
+        raise
+    except BaseException:
+        raise BeamRedactionError(
+            "redaction specification could not be read safely"
+        ) from None
+
+
+def _validated_counters(value: Any) -> BeamRedactionCounters:
+    """Reconstruct aggregate counters before they reach a public report."""
+
+    if type(value) is not BeamRedactionCounters:
+        raise TypeError("counters must be BeamRedactionCounters")
+    try:
+        return BeamRedactionCounters(
+            records_processed=value.records_processed,
+            records_changed=value.records_changed,
+            records_failed=value.records_failed,
+            attempts=value.attempts,
+            retries=value.retries,
+            spans_redacted=value.spans_redacted,
+            input_bytes=value.input_bytes,
+            output_bytes=value.output_bytes,
+        )
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except (TypeError, ValueError):
+        raise
+    except BaseException:
+        raise BeamRedactionError(
+            "redaction counters could not be read safely"
+        ) from None
+
+
+def _validated_result(value: Any) -> BeamRedactionResult:
+    """Reconstruct a result before rendering its public metadata."""
+
+    if type(value) is not BeamRedactionResult:
+        raise TypeError("result must be a BeamRedactionResult")
+    try:
+        return BeamRedactionResult(
+            redacted_records=value.redacted_records,
+            counters=value.counters,
+            input_fingerprint=value.input_fingerprint,
+            output_fingerprint=value.output_fingerprint,
+            spec_fingerprint=value.spec_fingerprint,
+            serialized_output=value.serialized_output,
+        )
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except (BeamRedactionError, TypeError, ValueError):
+        raise
+    except BaseException:
+        raise BeamRedactionError("redaction result could not be read safely") from None
+
+
 def _require_beam() -> Any:
     if _beam is None:
         raise ImportError(
@@ -1294,6 +1437,23 @@ def _normalize_config_text(value: Any, name: str) -> str:
         or not normalized.isprintable()
     ):
         raise ValueError(f"{name} must be bounded text")
+    return normalized
+
+
+def _normalize_text_field(value: Any) -> str:
+    normalized = _normalize_config_text(value, "text_field")
+    if (
+        _SAFE_METADATA_RE.fullmatch(normalized) is None
+        or _METADATA_IDENTIFIER_RE.search(normalized) is not None
+    ):
+        raise ValueError("text_field must be a safe field identifier")
+    return normalized
+
+
+def _normalize_method(value: Any) -> str:
+    normalized = _normalize_config_text(value, "method").lower()
+    if normalized not in _DEIDENTIFICATION_METHODS:
+        raise ValueError("method is not supported")
     return normalized
 
 
@@ -1372,11 +1532,18 @@ def _require_positive_int(
         raise ValueError(f"{name} exceeds the bounded maximum")
 
 
-def _require_non_negative_int(value: Any, name: str) -> None:
+def _require_non_negative_int(
+    value: Any,
+    name: str,
+    *,
+    maximum: int | None = None,
+) -> None:
     if type(value) is not int:
         raise TypeError(f"{name} must be an integer")
     if value < 0:
         raise ValueError(f"{name} must be non-negative")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} exceeds the bounded maximum")
 
 
 RedactionTransformSpec = BeamRedactionSpec
