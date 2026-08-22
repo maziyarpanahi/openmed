@@ -1,9 +1,9 @@
 # Synthetic Electron redaction app
 
-This reference keeps the raw synthetic note inside the renderer that owns it,
-runs inference in one shared Electron utility process, and sends only span
-offsets, labels, and confidence scores back across IPC. Use `contextIsolation`
-and keep Node integration disabled in the renderer.
+This reference keeps the raw synthetic note on-device, sends it only over the
+app's private IPC path to one shared Electron utility process, and returns only
+span offsets, labels, and confidence scores. Use `contextIsolation`, keep Node
+integration disabled in the renderer, and authorize every IPC sender.
 
 Install the public de-identification package, build the repository integration,
 and add it as a workspace or local package:
@@ -22,7 +22,13 @@ must already contain a local Transformers.js export.
 ## Main process
 
 ```ts
-import { app, BrowserWindow, ipcMain, utilityProcess } from "electron/main";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  session,
+  utilityProcess,
+} from "electron/main";
 import { join } from "node:path";
 import {
   ElectronDeidentifyService,
@@ -31,8 +37,12 @@ import {
 
 await app.whenReady();
 
+const offlineSession = session.fromPartition("openmed-offline-inference", {
+  cache: false,
+});
 const service = new ElectronDeidentifyService({
   utilityProcess,
+  offlineSession,
   workerPath: join(__dirname, "openmed-utility-process.cjs"),
   modelPath: join(
     app.getPath("userData"),
@@ -41,7 +51,6 @@ const service = new ElectronDeidentifyService({
     "privacy-filter-transformersjs",
   ),
 });
-const unregister = registerElectronDeidentifyIpc(ipcMain, service);
 
 const window = new BrowserWindow({
   webPreferences: {
@@ -49,6 +58,11 @@ const window = new BrowserWindow({
     nodeIntegration: false,
     preload: join(__dirname, "preload.cjs"),
   },
+});
+const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
+  isTrustedSender: (event) =>
+    event.sender === window.webContents &&
+    event.senderFrame === window.webContents.mainFrame,
 });
 await window.loadFile("index.html");
 
@@ -65,7 +79,7 @@ the same utility process and its in-memory pipeline cache.
 
 ```ts
 import { contextBridge, ipcRenderer } from "electron/renderer";
-import { createElectronDeidentifyClient } from "@openmed/openmedkit-electron";
+import { createElectronDeidentifyClient } from "@openmed/openmedkit-electron/renderer";
 
 contextBridge.exposeInMainWorld(
   "openmed",
@@ -76,7 +90,7 @@ contextBridge.exposeInMainWorld(
 ## Renderer
 
 ```ts
-import { redactTextWithSpans } from "@openmed/openmedkit-electron";
+import { redactTextWithSpans } from "@openmed/openmedkit-electron/renderer";
 
 const note =
   "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.";
@@ -95,4 +109,5 @@ Patient [PERSON], DOB [DATE_OF_BIRTH], email [EMAIL].
 
 Do not log the request, the source note, rejected inference values, or model
 errors. The service logger emits only fixed event names, safe error codes, and
-span counts.
+span counts. Keep `offlineSession` dedicated to this one service: its request
+interceptor cancels every Electron-network request made by the utility process.

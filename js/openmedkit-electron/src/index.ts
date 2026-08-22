@@ -1,5 +1,6 @@
 export {
   ElectronDeidentifyService,
+  type ElectronOfflineSessionLike,
   type ElectronDeidentifyServiceEvent,
   type ElectronDeidentifyServiceOptions,
   type UtilityProcessLike,
@@ -11,6 +12,7 @@ export {
   createElectronDeidentifyClient,
   redactTextWithSpans,
   registerElectronDeidentifyIpc,
+  type ElectronDeidentifyIpcOptions,
   type ElectronDeidentifyRequest,
   type ElectronDeidentifyResponse,
   type ElectronDeidentifyServiceLike,

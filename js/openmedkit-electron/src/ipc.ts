@@ -1,10 +1,18 @@
-import type { OpenMedSpan } from "openmed";
+import {
+  CANONICAL_LABELS,
+  POLICY_LABELS,
+  type OpenMedSpan,
+} from "openmed";
 
 export const OPENMED_DEIDENTIFY_CHANNEL = "openmed:deidentify" as const;
 export const OPENMED_ELECTRON_SCHEMA_VERSION = 1 as const;
 
 const MAX_REQUEST_ID_LENGTH = 80;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const MAX_ENTITY_TYPE_LENGTH = 80;
+const ENTITY_TYPE_PATTERN = /^[A-Z][A-Z0-9_:-]*$/;
+const CANONICAL_LABEL_SET = new Set<string>(CANONICAL_LABELS);
+const POLICY_LABEL_SET = new Set<string>(POLICY_LABELS);
 let rendererRequestSequence = 0;
 
 export type RendererOpenMedSpan = Pick<
@@ -53,10 +61,10 @@ export type UtilityDeidentifyResponse =
   | UtilityDeidentifySuccess
   | UtilityDeidentifyFailure;
 
-export interface IpcMainLike {
+export interface IpcMainLike<Event = unknown> {
   handle(
     channel: string,
-    listener: (event: unknown, request: unknown) => Promise<unknown> | unknown,
+    listener: (event: Event, request: unknown) => Promise<unknown> | unknown,
   ): void;
   removeHandler(channel: string): void;
 }
@@ -69,6 +77,10 @@ export interface ElectronDeidentifyServiceLike {
   deidentify(request: ElectronDeidentifyRequest): Promise<ElectronDeidentifyResponse>;
 }
 
+export interface ElectronDeidentifyIpcOptions<Event> {
+  isTrustedSender(event: Event): boolean;
+}
+
 export function createElectronDeidentifyClient(ipcRenderer: IpcRendererLike): {
   deidentify(text: string): Promise<ElectronDeidentifyResponse>;
 } {
@@ -79,8 +91,9 @@ export function createElectronDeidentifyClient(ipcRenderer: IpcRendererLike): {
         requestId: nextRendererRequestId(),
         text,
       };
+      assertElectronDeidentifyRequest(request);
       const response = await ipcRenderer.invoke(OPENMED_DEIDENTIFY_CHANNEL, request);
-      assertElectronDeidentifyResponse(response, request.requestId);
+      assertElectronDeidentifyResponse(response, request.requestId, text.length);
       return {
         schemaVersion: response.schemaVersion,
         requestId: response.requestId,
@@ -90,11 +103,15 @@ export function createElectronDeidentifyClient(ipcRenderer: IpcRendererLike): {
   };
 }
 
-export function registerElectronDeidentifyIpc(
-  ipcMain: IpcMainLike,
+export function registerElectronDeidentifyIpc<Event>(
+  ipcMain: IpcMainLike<Event>,
   service: ElectronDeidentifyServiceLike,
+  options: ElectronDeidentifyIpcOptions<Event>,
 ): () => void {
-  ipcMain.handle(OPENMED_DEIDENTIFY_CHANNEL, async (_event, request) => {
+  ipcMain.handle(OPENMED_DEIDENTIFY_CHANNEL, async (event, request) => {
+    if (!isTrustedSender(options, event)) {
+      throw new Error("Unauthorized OpenMed Electron IPC sender.");
+    }
     assertElectronDeidentifyRequest(request);
     return service.deidentify(request);
   });
@@ -119,11 +136,9 @@ export function redactTextWithSpans(
   text: string,
   spans: readonly RendererOpenMedSpan[],
 ): string {
+  assertRendererSpans(spans, text.length);
   let redacted = text;
   for (const span of [...spans].sort((left, right) => right.start - left.start)) {
-    if (span.start < 0 || span.end < span.start || span.end > text.length) {
-      throw new Error("OpenMed returned an invalid renderer span.");
-    }
     redacted =
       redacted.slice(0, span.start) +
       `[${span.canonical_label}]` +
@@ -165,7 +180,7 @@ export function isUtilityDeidentifyResponse(
   if (
     !isRecord(response) ||
     response.type !== "deidentify-result" ||
-    typeof response.requestId !== "string" ||
+    !isValidRequestId(response.requestId) ||
     typeof response.ok !== "boolean"
   ) {
     return false;
@@ -176,19 +191,44 @@ export function isUtilityDeidentifyResponse(
         response.errorCode === "INFERENCE_FAILED";
 }
 
+export function assertRendererSpans(
+  spans: readonly RendererOpenMedSpan[],
+  textLength: number,
+): void {
+  if (!Number.isSafeInteger(textLength) || textLength < 0) {
+    throw new TypeError("Invalid OpenMed Electron source length.");
+  }
+  if (spans.length > textLength) {
+    throw new TypeError("Invalid OpenMed Electron response spans.");
+  }
+
+  let previousEnd = 0;
+  for (const span of spans) {
+    if (
+      !isRendererOpenMedSpan(span) ||
+      span.start < previousEnd ||
+      span.end > textLength
+    ) {
+      throw new TypeError("Invalid OpenMed Electron response spans.");
+    }
+    previousEnd = span.end;
+  }
+}
+
 function assertElectronDeidentifyResponse(
   response: unknown,
   requestId: string,
+  textLength: number,
 ): asserts response is ElectronDeidentifyResponse {
   if (
     !isRecord(response) ||
     response.schemaVersion !== OPENMED_ELECTRON_SCHEMA_VERSION ||
     response.requestId !== requestId ||
-    !Array.isArray(response.spans) ||
-    !response.spans.every(isRendererOpenMedSpan)
+    !Array.isArray(response.spans)
   ) {
     throw new TypeError("Invalid OpenMed Electron response.");
   }
+  assertRendererSpans(response.spans, textLength);
 }
 
 function isRendererOpenMedSpan(value: unknown): value is RendererOpenMedSpan {
@@ -197,14 +237,42 @@ function isRendererOpenMedSpan(value: unknown): value is RendererOpenMedSpan {
   }
   return (
     value.schema_version === 1 &&
-    Number.isInteger(value.start) &&
-    Number.isInteger(value.end) &&
+    Number.isSafeInteger(value.start) &&
+    Number.isSafeInteger(value.end) &&
+    (value.start as number) >= 0 &&
+    (value.end as number) > (value.start as number) &&
     typeof value.entity_type === "string" &&
-    typeof value.canonical_label === "string" &&
-    typeof value.policy_label === "string" &&
+    value.entity_type.length > 0 &&
+    value.entity_type.length <= MAX_ENTITY_TYPE_LENGTH &&
+    ENTITY_TYPE_PATTERN.test(value.entity_type) &&
+    CANONICAL_LABEL_SET.has(value.canonical_label as string) &&
+    POLICY_LABEL_SET.has(value.policy_label as string) &&
     (value.score === null ||
-      (typeof value.score === "number" && Number.isFinite(value.score)))
+      (typeof value.score === "number" &&
+        Number.isFinite(value.score) &&
+        value.score >= 0 &&
+        value.score <= 1))
   );
+}
+
+function isValidRequestId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= MAX_REQUEST_ID_LENGTH &&
+    REQUEST_ID_PATTERN.test(value)
+  );
+}
+
+function isTrustedSender<Event>(
+  options: ElectronDeidentifyIpcOptions<Event>,
+  event: Event,
+): boolean {
+  try {
+    return options.isTrustedSender(event) === true;
+  } catch {
+    return false;
+  }
 }
 
 function nextRendererRequestId(): string {
