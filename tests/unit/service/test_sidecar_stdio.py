@@ -105,6 +105,15 @@ def _read_host_response(stdout: str) -> dict[str, Any]:
     return json.loads(stdout.splitlines()[0])
 
 
+def _subprocess_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    dependency_path = environment.get("PYTHONPATH")
+    environment["PYTHONPATH"] = os.pathsep.join(
+        part for part in (str(ROOT), dependency_path) if part
+    )
+    return environment
+
+
 def test_stdio_deidentification_matches_committed_golden_within_tolerance() -> None:
     golden = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
     runtime = SidecarRuntime(hmac_secret=HASH_SECRET)
@@ -263,15 +272,12 @@ def test_frozen_binary_entrypoint_emits_only_structured_stderr() -> None:
             "",
         )
     )
-    environment = dict(os.environ)
-    environment["PYTHONPATH"] = str(ROOT)
-
     completed = subprocess.run(
         [sys.executable, str(ROOT / "scripts/openmed_sidecar_entry.py")],
         input=requests,
         capture_output=True,
         text=True,
-        env=environment,
+        env=_subprocess_environment(),
         timeout=10,
         check=False,
     )
@@ -307,8 +313,6 @@ def test_killing_sidecar_mid_request_returns_clean_host_error() -> None:
         raise SystemExit(SidecarServer(BlockingRuntime()).serve())
         """
     )
-    environment = dict(os.environ)
-    environment["PYTHONPATH"] = str(ROOT)
     process = subprocess.Popen(
         [sys.executable, "-c", child_code],
         stdin=subprocess.PIPE,
@@ -316,7 +320,7 @@ def test_killing_sidecar_mid_request_returns_clean_host_error() -> None:
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
-        env=environment,
+        env=_subprocess_environment(),
     )
     assert process.stdin is not None
     assert process.stderr is not None
