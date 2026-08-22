@@ -29,9 +29,10 @@ The in-page panel provides:
 - HIPAA Safe Harbor, clinical minimal-redaction, and strict no-leak profiles
   sourced from OpenMed's bundled policy JSON files.
 
-The content script also blocks form submission when an unmasked active field
-has detected spans. Review the masked result before submitting it because no
-automated detector guarantees complete recall.
+The content script blocks form submission while any populated field is
+unscanned or stale, and when a current scan contains unmasked spans. Submit
+again only after the guard reports a current result. Review the masked result
+before sharing it because no automated detector guarantees complete recall.
 
 ## Offline and privacy guarantees
 
@@ -42,10 +43,11 @@ The background worker uses a compact local detector and the npm
 de-identification API, and its content security policy sets
 `connect-src 'none'`.
 
-Only a site's enabled state and selected policy profile are persisted. Page
-text, raw identifiers, span output, and hashes are not stored. Password fields
-and non-text media are not inspected. See `web/extension/PRIVACY.md` for the
-user-facing privacy notice.
+Only a site's enabled state and selected policy profile are persisted. Scan
+requests are schema-checked and capped at 1,000,000 characters and 4,000,000
+UTF-8 bytes. Page text, raw identifiers, span output, and hashes are not stored.
+Password fields and non-text media are not inspected. See
+`web/extension/PRIVACY.md` for the user-facing privacy notice.
 
 ## Test
 

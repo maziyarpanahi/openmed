@@ -229,6 +229,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md

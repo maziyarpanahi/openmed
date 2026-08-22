@@ -32,6 +32,9 @@ interface ScanResponse {
   spans: OpenMedSpan[];
 }
 
+const MAX_SCAN_TEXT_CHARS = 1_000_000;
+const MAX_SCAN_TEXT_BYTES = 4_000_000;
+
 const extensionApi =
   (globalThis as typeof globalThis & { browser?: typeof chrome }).browser ??
   chrome;
@@ -39,16 +42,16 @@ const workerHashSecret = crypto.randomUUID();
 
 extensionApi.runtime.onMessage.addListener(
   (
-    message: ExtensionRequest,
+    message: unknown,
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: unknown) => void,
   ) => {
     void handleMessage(message, sender)
       .then(sendResponse)
-      .catch((error: unknown) => {
+      .catch(() => {
         sendResponse({
           ok: false,
-          error: error instanceof Error ? error.message : "Detection failed",
+          error: "Detection failed safely.",
         });
       });
     return true;
@@ -56,9 +59,13 @@ extensionApi.runtime.onMessage.addListener(
 );
 
 async function handleMessage(
-  message: ExtensionRequest,
+  rawMessage: unknown,
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
+  if (sender.id !== extensionApi.runtime.id) {
+    throw new Error("Unexpected extension message sender");
+  }
+  const message = parseRequest(rawMessage);
   const origin = senderOrigin(sender);
   const settings = await readSettings(origin);
 
@@ -117,11 +124,15 @@ function emptyScan(text: string, settings: SiteSettings): ScanResponse {
 }
 
 function senderOrigin(sender: chrome.runtime.MessageSender): string {
-  const senderUrl = sender.tab?.url ?? sender.url;
+  const senderUrl = sender.url ?? sender.tab?.url;
   if (senderUrl === undefined) {
     throw new Error("Cannot determine the requesting site");
   }
-  return new URL(senderUrl).origin;
+  const parsed = new URL(senderUrl);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Unsupported requesting site");
+  }
+  return parsed.origin;
 }
 
 function settingsKey(origin: string): string {
@@ -133,7 +144,8 @@ async function readSettings(origin: string): Promise<SiteSettings> {
   const stored = await extensionApi.storage.local.get(key);
   const candidate = stored[key] as Partial<SiteSettings> | undefined;
   return {
-    enabled: candidate?.enabled ?? true,
+    enabled:
+      typeof candidate?.enabled === "boolean" ? candidate.enabled : true,
     policy: isPolicyName(candidate?.policy) ? candidate.policy : DEFAULT_POLICY,
   };
 }
@@ -143,4 +155,55 @@ async function writeSettings(
   settings: SiteSettings,
 ): Promise<void> {
   await extensionApi.storage.local.set({ [settingsKey(origin)]: settings });
+}
+
+function parseRequest(value: unknown): ExtensionRequest {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Invalid extension request");
+  }
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type === "openmed:get-settings") {
+    requireKeys(candidate, ["type"]);
+    return { type: candidate.type };
+  }
+  if (candidate.type === "openmed:set-enabled") {
+    requireKeys(candidate, ["enabled", "type"]);
+    if (typeof candidate.enabled !== "boolean") {
+      throw new Error("Invalid enabled setting");
+    }
+    return { type: candidate.type, enabled: candidate.enabled };
+  }
+  if (candidate.type === "openmed:set-policy") {
+    requireKeys(candidate, ["policy", "type"]);
+    if (typeof candidate.policy !== "string") {
+      throw new Error("Invalid policy setting");
+    }
+    return { type: candidate.type, policy: candidate.policy };
+  }
+  if (candidate.type === "openmed:scan") {
+    requireKeys(candidate, ["text", "type"]);
+    if (
+      typeof candidate.text !== "string" ||
+      candidate.text.length === 0 ||
+      candidate.text.length > MAX_SCAN_TEXT_CHARS ||
+      new TextEncoder().encode(candidate.text).byteLength > MAX_SCAN_TEXT_BYTES
+    ) {
+      throw new Error("Invalid scan text");
+    }
+    return { type: candidate.type, text: candidate.text };
+  }
+  throw new Error("Unsupported extension request");
+}
+
+function requireKeys(
+  candidate: Record<string, unknown>,
+  expected: string[],
+): void {
+  const actual = Object.keys(candidate).sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((key, index) => key !== expected[index])
+  ) {
+    throw new Error("Extension request contains unsupported fields");
+  }
 }

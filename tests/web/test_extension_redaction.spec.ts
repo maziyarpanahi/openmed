@@ -25,6 +25,7 @@ test("extension matches local model spans, masks without network, and honors sit
     browser_specific_settings: {
       gecko: { data_collection_permissions: { required: string[] } };
     };
+    content_security_policy: { extension_pages: string };
     host_permissions: string[];
   };
   expect(manifest.background).toMatchObject({
@@ -35,6 +36,9 @@ test("extension matches local model spans, masks without network, and honors sit
     manifest.browser_specific_settings.gecko.data_collection_permissions,
   ).toEqual({ required: ["none"] });
   expect(manifest.host_permissions).toEqual([]);
+  expect(manifest.content_security_policy.extension_pages).toContain(
+    "connect-src 'none'",
+  );
 
   const server = await startFixtureServer();
   const userDataDir = await mkdtemp(join(tmpdir(), "openmed-extension-"));
@@ -63,7 +67,7 @@ test("extension matches local model spans, masks without network, and honors sit
     await expect(mask).toBeDisabled();
 
     const outboundRequests: string[] = [];
-    page.on("request", (request) => {
+    context.on("request", (request) => {
       if (/^https?:/.test(request.url())) {
         outboundRequests.push(request.url());
       }
@@ -76,7 +80,15 @@ test("extension matches local model spans, masks without network, and honors sit
     const expectedLabels = modelOutput.map((span) =>
       (span.entity ?? "").replace(/^S-/, ""),
     );
-    await note.fill(syntheticNote);
+    await note.evaluate((element, text) => {
+      if (!(element instanceof HTMLTextAreaElement)) {
+        throw new Error("Synthetic fixture is missing its textarea");
+      }
+      element.value = text;
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.form?.requestSubmit();
+    }, syntheticNote);
+    await expect(page.locator("#submit-count")).toHaveText("0");
     await expect(note).toHaveAttribute(
       "data-openmed-phi-count",
       String(modelOutput.length),
@@ -91,6 +103,7 @@ test("extension matches local model spans, masks without network, and honors sit
 
     await page.locator("button[type='submit']").click();
     await expect(status).toContainText("Mask it before submitting");
+    await expect(page.locator("#submit-count")).toHaveText("0");
     expect(outboundRequests).toEqual([]);
 
     await mask.click();
@@ -98,6 +111,9 @@ test("extension matches local model spans, masks without network, and honors sit
       "Patient [PERSON], DOB [DATE_OF_BIRTH], email [EMAIL].",
     );
     await expect(status).toContainText("PHI masked on-device");
+    await expect(note).toHaveAttribute("data-openmed-phi-count", "0");
+    await page.locator("button[type='submit']").click();
+    await expect(page.locator("#submit-count")).toHaveText("1");
 
     await page.locator("#copy").evaluate((element, text) => {
       element.textContent = text;
@@ -116,6 +132,8 @@ test("extension matches local model spans, masks without network, and honors sit
     await page.waitForTimeout(350);
     await expect(note).not.toHaveAttribute("data-openmed-phi-count");
     await expect(mask).toBeDisabled();
+    await page.locator("button[type='submit']").click();
+    await expect(page.locator("#submit-count")).toHaveText("2");
     expect(outboundRequests).toEqual([]);
 
     await page.reload();
@@ -167,7 +185,16 @@ async function startFixtureServer(): Promise<{
             <textarea id="clinical-note"></textarea>
             <button type="submit">Submit</button>
           </form>
+          <output id="submit-count">0</output>
           <p id="copy"></p>
+          <script>
+            const form = document.querySelector("form");
+            const count = document.querySelector("#submit-count");
+            form.addEventListener("submit", (event) => {
+              event.preventDefault();
+              count.value = String(Number(count.value) + 1);
+            });
+          </script>
         </body>
       </html>`);
   });

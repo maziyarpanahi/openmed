@@ -10,10 +10,11 @@ selected policy profile for each site. It does not store page text or detected
 identifiers. Its manifest declares no host permissions for outbound access, and
 its extension-page content security policy disables network connections.
 
-The content script runs on HTTP and HTTPS pages so it can warn before text is
-submitted. It does not inspect password fields, browser-internal pages, or
-non-text content. Users can disable scanning for any site from the in-page
-OpenMed panel.
+The content script runs on HTTP and HTTPS pages so it can fail closed while a
+populated form field is unscanned or contains detected PHI. It does not inspect
+password fields, browser-internal pages, or non-text content. Scan requests are
+bounded to 1,000,000 characters and 4,000,000 UTF-8 bytes. Users can disable
+scanning for any site from the in-page OpenMed panel.
 
 This privacy guard is an assistive safeguard, not a guarantee that every
 identifier will be found. Review masked text before sharing it. OpenMed is not a

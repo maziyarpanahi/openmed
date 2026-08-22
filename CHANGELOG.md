@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a cross-browser Manifest V3 PHI guard that detects and masks text
+  locally, fails closed on unscanned form submissions, persists per-site policy
+  controls without raw text, and verifies zero detection-time network egress
+  with a synthetic unpacked-extension test (#820).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).

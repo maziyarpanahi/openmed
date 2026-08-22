@@ -40,6 +40,7 @@ const ui = createUi();
 let enabled = true;
 let currentPolicy: PolicyName = DEFAULT_POLICY;
 let activeEditable: EditableElement | null = null;
+let settingsGeneration = 0;
 
 void initialize();
 
@@ -100,18 +101,34 @@ function handleSubmit(event: Event): void {
   if (!enabled || !(event.target instanceof HTMLFormElement)) {
     return;
   }
-  const riskyEntry = [...editableResults.entries()].find(
-    ([element, result]) =>
-      event.target instanceof HTMLFormElement &&
-      event.target.contains(element) &&
-      result.text === editableText(element) &&
-      (result.spans?.length ?? 0) > 0,
+  const populatedEntries = editableElements(event.target)
+    .map((element) => [element, editableText(element)] as const)
+    .filter(([, text]) => text.trim().length > 0);
+  const unsettled = populatedEntries.filter(([element, text]) => {
+    const result = editableResults.get(element);
+    return (
+      result === undefined ||
+      result.text !== text ||
+      result.policy !== currentPolicy
+    );
+  });
+  if (unsettled.length > 0) {
+    blockSubmission(event);
+    activeEditable = unsettled[0]?.[0] ?? null;
+    ui.mask.disabled = true;
+    for (const [element] of unsettled) {
+      scanEditableNow(element);
+    }
+    setStatus("Checking for PHI before submission. Submit again after review.", "warning");
+    return;
+  }
+  const riskyEntry = populatedEntries.find(
+    ([element]) => (editableResults.get(element)?.spans?.length ?? 0) > 0,
   );
   if (riskyEntry === undefined) {
     return;
   }
-  event.preventDefault();
-  event.stopImmediatePropagation();
+  blockSubmission(event);
   activeEditable = riskyEntry[0];
   ui.mask.disabled = false;
   setStatus("PHI detected. Mask it before submitting.", "warning");
@@ -135,16 +152,25 @@ function scheduleEditableScan(target: EditableElement): void {
 
 async function scanEditable(target: EditableElement): Promise<void> {
   const text = editableText(target);
-  if (!enabled || text.trim().length === 0) {
+  if (!enabled || !target.isConnected || text.trim().length === 0) {
     clearEditableResult(target);
     return;
   }
+  const generation = settingsGeneration;
   const response = await scanText(text);
-  if (!enabled || editableText(target) !== text) {
+  if (
+    !enabled ||
+    !target.isConnected ||
+    generation !== settingsGeneration ||
+    editableText(target) !== text
+  ) {
     return;
   }
   if (!response.ok) {
     showError(response.error ?? "Detection failed");
+    return;
+  }
+  if (response.policy !== currentPolicy) {
     return;
   }
   editableResults.set(target, response);
@@ -206,6 +232,7 @@ async function toggleSite(): Promise<void> {
     return;
   }
   enabled = nextEnabled;
+  settingsGeneration += 1;
   if (!enabled) {
     clearAllPageState();
   }
@@ -230,6 +257,7 @@ async function changePolicy(): Promise<void> {
     return;
   }
   currentPolicy = selected;
+  settingsGeneration += 1;
   restoreTextRedactions();
   for (const editable of editableResults.keys()) {
     clearEditableResult(editable);
@@ -290,8 +318,16 @@ async function scanTextNode(node: Text): Promise<void> {
   ) {
     return;
   }
+  const generation = settingsGeneration;
   const response = await scanText(text);
-  if (!enabled || !node.isConnected || node.data !== text || !response.ok) {
+  if (
+    !enabled ||
+    generation !== settingsGeneration ||
+    !node.isConnected ||
+    node.data !== text ||
+    !response.ok ||
+    response.policy !== currentPolicy
+  ) {
     return;
   }
   const spans = response.spans ?? [];
@@ -415,12 +451,43 @@ function setEditableText(target: EditableElement, text: string): void {
 async function sendMessage<T>(message: object): Promise<T> {
   try {
     return (await extensionApi.runtime.sendMessage(message)) as T;
-  } catch (error) {
+  } catch {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Extension worker unavailable",
+      error: "Extension worker unavailable.",
     } as T;
   }
+}
+
+function editableElements(form: HTMLFormElement): EditableElement[] {
+  const elements = new Set<EditableElement>();
+  for (const candidate of form.elements) {
+    const editable = editableFromTarget(candidate);
+    if (editable !== null) {
+      elements.add(editable);
+    }
+  }
+  for (const candidate of form.querySelectorAll("[contenteditable='true']")) {
+    const editable = editableFromTarget(candidate);
+    if (editable !== null) {
+      elements.add(editable);
+    }
+  }
+  return [...elements];
+}
+
+function scanEditableNow(target: EditableElement): void {
+  const pending = debounceTimers.get(target);
+  if (pending !== undefined) {
+    window.clearTimeout(pending);
+    debounceTimers.delete(target);
+  }
+  void scanEditable(target);
+}
+
+function blockSubmission(event: Event): void {
+  event.preventDefault();
+  event.stopImmediatePropagation();
 }
 
 function createUi(): UiElements {
