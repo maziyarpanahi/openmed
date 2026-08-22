@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a canonical CLI result envelope with bounded counters, artifact
+  fingerprints, and remediation codes; strict JSON parsing; immutable state;
+  and free-text-free failures (#2636).
 - Added a deterministic structured-schema snapshot compatibility checker with
   versioned field-path, type, and optionality rules plus value-free change
   evidence and canonical JSON output (#2582).
