@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added lazy runtime wiring for validated anonymizer-provider plugins and the
+  `openmed.providers` registrar compatibility group, with canonical-label and
+  locale routing, deterministic Faker access, idempotent discovery, PHI-safe
+  failure warnings, and built-in-generator fallback (#2341).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
