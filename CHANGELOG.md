@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic integration capability matrix covering supported
+  adapters, optional requirements, policy boundaries, documentation, and
+  offline test evidence, with local source and dependency validation (#2390).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
