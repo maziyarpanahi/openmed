@@ -72,6 +72,10 @@ __all__ = [
     "OPENVINO_FORMAT",
     "OPENVINO_INT8_FORMAT",
     "OPENVINO_PROFILE_NAME",
+    "TENSORRT_ENGINE_FORMAT",
+    "TENSORRT_FP16_FORMAT",
+    "TENSORRT_INT8_FORMAT",
+    "TENSORRT_PROFILE_NAME",
     "AndroidProfileValidation",
     "BufferReleaseError",
     "ExportArtifact",
@@ -120,9 +124,22 @@ __all__ = [
     "OpenVinoQuantizationResult",
     "OpenVinoTokenClassificationSession",
     "OpenVinoVerificationError",
+    "TensorRTBenchmarkRecord",
+    "TensorRTBuildError",
+    "TensorRTBuildResult",
+    "TensorRTExportVerification",
+    "TensorRTQuantizationRejected",
+    "TensorRTReproducibilityError",
+    "TensorRTSessionError",
+    "TensorRTShapeProfile",
+    "TensorRTTokenClassificationSession",
+    "TensorRTVerificationError",
     "benchmark_cpu_fastpath",
     "build_openvino_benchmark_report",
+    "build_tensorrt_benchmark_report",
+    "build_tensorrt_engine",
     "certify_openvino_reference",
+    "certify_tensorrt_reference",
     "apply_int8_recall_certification",
     "OnnxOptimizationConfig",
     "PeakRamProbe",
@@ -153,6 +170,7 @@ __all__ = [
     "export_transformersjs_bundle",
     "export_webgpu",
     "measure_openvino_latency",
+    "measure_tensorrt_latency",
     "quantize_openvino_int8",
     "resolve_openvino_device",
     "run_cpu_fastpath",
@@ -186,6 +204,8 @@ __all__ = [
     "validate_transformersjs_contract",
     "verify_cpu_fastpath",
     "write_openvino_benchmark_report",
+    "verify_tensorrt_engine_hash",
+    "write_tensorrt_benchmark_report",
     "write_int8_recall_delta_report",
     "write_maple_qmoe_smoke_model",
     "write_maple_onnx_export_manifest",
@@ -369,6 +389,19 @@ def __getattr__(name: str) -> Any:
             "write_openvino_benchmark_report",
         }:
             module = import_module("openmed.onnx.openvino_export")
+            return getattr(module, name)
+        if name in {"TensorRTSessionError", "TensorRTTokenClassificationSession"}:
+            module = import_module("openmed.onnx.tensorrt_session")
+            return getattr(module, name)
+        if name.startswith(("TENSORRT_", "TensorRT")) or name in {
+            "build_tensorrt_benchmark_report",
+            "build_tensorrt_engine",
+            "certify_tensorrt_reference",
+            "measure_tensorrt_latency",
+            "verify_tensorrt_engine_hash",
+            "write_tensorrt_benchmark_report",
+        }:
+            module = import_module("openmed.onnx.tensorrt_export")
             return getattr(module, name)
         if name.startswith(("export_transformersjs", "validate_transformersjs")):
             module = import_module("openmed.onnx.transformersjs")

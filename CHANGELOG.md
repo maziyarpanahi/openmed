@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added device-specific TensorRT engine export for ONNX token classifiers with
+  bounded dynamic shape profiles, FP16 and fail-closed INT8 calibration,
+  per-family G4 recall evidence, finite synthetic parity checks, rollback-safe
+  engine and metadata publication, trusted-engine logits inference, and
+  device-tier benchmark records (#834).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
