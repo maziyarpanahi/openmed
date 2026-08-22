@@ -80,6 +80,63 @@ def test_status_cues_do_not_cross_adversative_clause():
     assert status_by_category == {"alcohol": "none", "tobacco": "current"}
 
 
+def test_status_cues_do_not_bleed_across_coordinated_categories():
+    findings = extract_sdoh(
+        "Former smoker and current alcohol use.",
+        spans=[],
+    )
+
+    status_by_category = {finding.category: finding.status for finding in findings}
+
+    assert status_by_category == {"alcohol": "current", "tobacco": "past"}
+
+
+def test_negation_does_not_bleed_across_comma_coordinated_categories():
+    findings = extract_sdoh(
+        "Denies alcohol, current smoker.",
+        spans=[],
+    )
+
+    status_by_category = {finding.category: finding.status for finding in findings}
+
+    assert status_by_category == {"alcohol": "none", "tobacco": "current"}
+
+
+def test_positive_extent_does_not_inherit_prior_category_negation():
+    findings = extract_sdoh(
+        "Denies tobacco, drinks 7 drinks/week.",
+        spans=[],
+    )
+
+    findings_by_category = {finding.category: finding for finding in findings}
+
+    assert findings_by_category["tobacco"].status == "none"
+    assert findings_by_category["alcohol"].status == "current"
+    assert findings_by_category["alcohol"].extent == "7 drinks/week"
+
+
+def test_explicit_use_does_not_inherit_prior_category_negation():
+    findings = extract_sdoh(
+        "Denies alcohol and uses tobacco.",
+        spans=[],
+    )
+
+    status_by_category = {finding.category: finding.status for finding in findings}
+
+    assert status_by_category == {"alcohol": "none", "tobacco": "current"}
+
+
+def test_shared_negation_applies_across_coordinated_categories():
+    findings = extract_sdoh(
+        "Denies alcohol and illicit drugs.",
+        spans=[],
+    )
+
+    status_by_category = {finding.category: finding.status for finding in findings}
+
+    assert status_by_category == {"alcohol": "none", "drug": "none"}
+
+
 def test_substance_findings_are_scoped_to_social_history_sections():
     text = (
         "Assessment: Current smoker.\n"
