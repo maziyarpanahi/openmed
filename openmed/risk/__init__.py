@@ -172,6 +172,14 @@ from .release import (
     safe_risk_summary,
     validate_released_output,
 )
+from .schema_drift import (
+    SchemaContract,
+    SchemaDriftError,
+    SchemaDriftReport,
+    SchemaField,
+    compare_schema_drift,
+    enforce_schema_contract,
+)
 from .synthetic_tabular import (
     DEFAULT_CORRELATION_TOLERANCE,
     DEFAULT_MARGINAL_TOLERANCE,
@@ -339,6 +347,12 @@ __all__ = [
     "render_risk_dashboard",
     "safe_risk_summary",
     "validate_released_output",
+    "SchemaContract",
+    "SchemaDriftError",
+    "SchemaDriftReport",
+    "SchemaField",
+    "compare_schema_drift",
+    "enforce_schema_contract",
     "write_release_assessment_dashboard",
     "write_risk_dashboard",
     "utility_report",
