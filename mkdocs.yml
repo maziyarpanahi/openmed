@@ -23,6 +23,7 @@ nav:
       - Persona Quickstarts: quickstarts.md
       - Project Scaffold CLI: cli/openmed-init.md
       - CLI Result Envelope: cli/result-envelope.md
+      - CLI Help-Surface Drift: cli/help-drift.md
       - Machine-readable CLI Contract: cli/machine-contract.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md

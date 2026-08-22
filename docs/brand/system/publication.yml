@@ -99,6 +99,7 @@ classification:
     - quickstarts.md
     - cli/openmed-init.md
     - cli/result-envelope.md
+    - cli/help-drift.md
     - cli/machine-contract.md
     - onboarding-china.md
     - onboarding-india.md
