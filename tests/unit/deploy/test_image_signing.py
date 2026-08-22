@@ -12,6 +12,12 @@ SUPPLY_CHAIN_DOCS = ROOT / "docs" / "security" / "supply-chain.md"
 MULTIARCH_DOCS = ROOT / "docs" / "deploy" / "multi-arch.md"
 MKDOCS = ROOT / "mkdocs.yml"
 
+LOWERCASE_IMAGE_NAME_STEP = (
+    """owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" """
+    """| tr '[:upper:]' '[:lower:]')\n"""
+    """          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV\""""
+)
+
 
 def test_image_signing_workflow_signs_and_verifies_digest():
     content = WORKFLOW.read_text(encoding="utf-8")
@@ -74,3 +80,23 @@ def test_image_signing_docs_are_linked_from_existing_docs_and_nav():
     assert "supply-chain/image-signing.md" in MKDOCS.read_text(encoding="utf-8")
     assert "Container Image Signing" in SUPPLY_CHAIN_DOCS.read_text(encoding="utf-8")
     assert "Container Image Signing" in MULTIARCH_DOCS.read_text(encoding="utf-8")
+
+
+def test_image_signing_workflow_lowercases_the_ghcr_image_reference():
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    # The signing job resolves the same reference the publish job pushed, so
+    # it needs the identical case folding.
+    assert LOWERCASE_IMAGE_NAME_STEP in content
+    assert content.index(LOWERCASE_IMAGE_NAME_STEP) < content.index(
+        'image_ref="${IMAGE_NAME}:sha-'
+    )
+
+
+def test_image_signing_workflow_keeps_the_oidc_identity_unfolded():
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    # The signer identity must match the repository exactly as GitHub reports
+    # it in the OIDC token claim, so it is deliberately not case folded.
+    assert "SIGNER_IDENTITY_RE" in content
+    assert "https://github.com/${{ github.repository }}/" in content

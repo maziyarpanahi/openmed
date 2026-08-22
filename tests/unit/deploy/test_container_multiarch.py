@@ -13,6 +13,12 @@ ARM_LATENCY_DOCS = ROOT / "docs" / "benchmarks" / "arm-latency.md"
 DOCS = ROOT / "docs" / "deploy" / "multi-arch.md"
 MKDOCS = ROOT / "mkdocs.yml"
 
+LOWERCASE_IMAGE_NAME_STEP = (
+    """owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" """
+    """| tr '[:upper:]' '[:lower:]')\n"""
+    """          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV\""""
+)
+
 PINNED_PYTHON_BASE_RE = re.compile(
     r"^FROM(?: --platform=\$TARGETPLATFORM)? "
     r"python:3\.11-slim@sha256:[0-9a-f]{64}$",
@@ -88,3 +94,16 @@ def test_multiarch_docs_are_in_mkdocs_nav():
     content = MKDOCS.read_text(encoding="utf-8")
 
     assert "deploy/multi-arch.md" in content
+
+
+def test_multiarch_workflow_lowercases_the_ghcr_image_reference():
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    # GHCR rejects uppercase repository names, so the workflow folds
+    # ``GITHUB_REPOSITORY`` before it builds any image reference. Without this
+    # every fork of a capitalised owner fails with "repository name must be
+    # lowercase".
+    assert LOWERCASE_IMAGE_NAME_STEP in content
+    assert content.index(LOWERCASE_IMAGE_NAME_STEP) < content.index(
+        "${IMAGE_NAME}:sha-"
+    )
