@@ -260,7 +260,7 @@ async def abatch(
         raise ValueError("max_concurrency must be positive")
 
     try:
-        values = tuple(items)
+        values = await asyncio.to_thread(tuple, items)
     except Exception:
         raise ValueError("items could not be read") from None
 

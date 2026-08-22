@@ -128,6 +128,24 @@ def test_abatch_concurrency_limit_bounds_scheduled_tasks():
     assert peak_tasks <= 4
 
 
+def test_abatch_materializes_items_off_the_event_loop_thread():
+    """Reading a synchronous iterable must not block the event-loop thread."""
+    caller_thread = threading.get_ident()
+    iterator_threads: list[int] = []
+
+    def items():
+        iterator_threads.append(threading.get_ident())
+        yield 1
+        iterator_threads.append(threading.get_ident())
+        yield 2
+
+    result = asyncio.run(openmed.abatch(lambda value: value, items()))
+
+    assert result == [1, 2]
+    assert iterator_threads
+    assert all(thread != caller_thread for thread in iterator_threads)
+
+
 @pytest.mark.parametrize("limit", [False, 0, -1, 1.5, "2"])
 def test_abatch_rejects_invalid_concurrency_limits(limit: object):
     """Only positive, non-boolean integer limits are accepted."""
