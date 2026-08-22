@@ -200,6 +200,7 @@ nav:
       - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
+      - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
@@ -242,6 +243,7 @@ nav:
       - Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
+      - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
@@ -253,6 +255,7 @@ nav:
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Resource Path Portability Audit: security/path-portability.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
       - SLSA Build Provenance: supply-chain/provenance.md
