@@ -1,5 +1,17 @@
 """Integration helpers for OpenMed deployments."""
 
+from .capability_probe import (
+    CAPABILITY_PROBE_SCHEMA_VERSION,
+    MAX_CAPABILITY_ADAPTERS,
+    CapabilityAdapter,
+    CapabilityCheck,
+    CapabilityProbeError,
+    CapabilityProbeReport,
+    CapabilityStatus,
+    probe_capabilities,
+    probe_capability,
+    provider_fingerprint,
+)
 from .columnar_redactor import (
     ColumnarProgress,
     ColumnarRedactionResult,
@@ -68,6 +80,13 @@ from .stream_processor import (
 )
 
 __all__ = [
+    "CAPABILITY_PROBE_SCHEMA_VERSION",
+    "MAX_CAPABILITY_ADAPTERS",
+    "CapabilityAdapter",
+    "CapabilityCheck",
+    "CapabilityProbeError",
+    "CapabilityProbeReport",
+    "CapabilityStatus",
     "ColumnarProgress",
     "ColumnarRedactionResult",
     "DEFAULT_EXECUTABLE_UDF_MODEL",
@@ -106,6 +125,9 @@ __all__ = [
     "process_flow_file",
     "process_json_lines",
     "process_record",
+    "probe_capabilities",
+    "probe_capability",
+    "provider_fingerprint",
     "redact_columnar",
     "redact_columnar_dataset",
     "redact_lakehouse",

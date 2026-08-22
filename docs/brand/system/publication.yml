@@ -245,6 +245,8 @@ classification:
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/capability-probes.md
+    - integrations/matrix.md
     - integrations/dbt.md
     - integrations/postgres.md
     - integrations/pandas-on-spark.md
