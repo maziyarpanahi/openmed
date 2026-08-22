@@ -2,6 +2,7 @@ package com.openmed.openmedkit
 
 import ai.djl.huggingface.tokenizers.Encoding
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
+import com.openmed.openmedkit.onnx.AcceleratorConfig
 import com.openmed.openmedkit.onnx.AcceleratorSelection
 import com.openmed.openmedkit.onnx.AcceleratorSession
 import com.openmed.openmedkit.onnx.TokenOffset
@@ -39,20 +40,34 @@ interface OnnxTokenClassifier : Closeable {
 /**
  * Hugging Face tokenizer and ONNX Runtime classifier for offline artifacts.
  */
-class BackendOnnxTokenClassifier(
-    private val backend: OpenMedBackend,
+class BackendOnnxTokenClassifier private constructor(
+    private val configuration: BackendClassifierConfiguration,
 ) : OnnxTokenClassifier {
+    /** Preserve the original public constructor while enabling provider probing. */
+    constructor(backend: OpenMedBackend) : this(
+        BackendClassifierConfiguration(backend, AcceleratorConfig()),
+    )
+
+    /** Construct a classifier with explicit execution-provider configuration. */
+    constructor(
+        backend: OpenMedBackend,
+        acceleratorConfig: AcceleratorConfig,
+    ) : this(BackendClassifierConfiguration(backend, acceleratorConfig))
+
+    private val backend: OpenMedBackend
+        get() = configuration.backend
+
     private val classifier = if (backend.id2Label.isEmpty()) {
         AcceleratorSession(
             backend.modelFile,
             backend.id2LabelFile,
-            backend.acceleratorConfig,
+            configuration.acceleratorConfig,
         )
     } else {
         AcceleratorSession(
             backend.modelFile,
             backend.id2Label,
-            backend.acceleratorConfig,
+            configuration.acceleratorConfig,
         )
     }
     private val tokenizer = try {
@@ -135,6 +150,11 @@ class BackendOnnxTokenClassifier(
         return HuggingFaceTokenizer.newInstance(backend.modelDirectory.toPath())
     }
 }
+
+private data class BackendClassifierConfiguration(
+    val backend: OpenMedBackend,
+    val acceleratorConfig: AcceleratorConfig,
+)
 
 internal fun aggregateTokenPredictions(
     text: String,

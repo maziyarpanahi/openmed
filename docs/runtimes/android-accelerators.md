@@ -22,16 +22,17 @@ Runtime and device expose it.
 
 ## Configure a Session
 
-`OpenMedBackend` uses `AcceleratorConfig()` by default, so the normal
-`OpenMedKit` path automatically probes the provider order above. Use a CPU-only
-configuration for a baseline run:
+`OpenMedKit(OpenMedBackend(...))` uses `AcceleratorConfig()` by default, so the
+normal facade path automatically probes the provider order above. Pass the
+additive accelerator-config overload for a CPU-only baseline run:
 
 ```kotlin
 import com.openmed.openmedkit.OpenMedBackend
+import com.openmed.openmedkit.OpenMedKit
 import com.openmed.openmedkit.onnx.AcceleratorConfig
 
-val cpuBackend = OpenMedBackend(
-    modelDirectory = modelDirectory,
+val cpuKit = OpenMedKit(
+    backend = OpenMedBackend(modelDirectory = modelDirectory),
     acceleratorConfig = AcceleratorConfig.cpuOnly(),
 )
 ```

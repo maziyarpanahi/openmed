@@ -1,5 +1,6 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.onnx.AcceleratorConfig
 import com.openmed.openmedkit.policy.PolicyProfiles
 import com.openmed.openmedkit.util.SafeLog
 import com.openmed.openmedkit.util.SafeLogOperation
@@ -29,6 +30,20 @@ class OpenMedKit(
         deidentifyEngine: DeidentifyEngine = DeidentifyEngine(),
     ) : this(
         classifier = BackendOnnxTokenClassifier(backend),
+        decoder = decoder,
+        merger = merger,
+        deidentifyEngine = deidentifyEngine,
+    )
+
+    /** Construct the facade with explicit Android execution-provider options. */
+    constructor(
+        backend: OpenMedBackend,
+        acceleratorConfig: AcceleratorConfig,
+        decoder: TokenClassificationDecoder = TokenClassificationDecoder(),
+        merger: PiiEntityMerger = PiiEntityMerger(),
+        deidentifyEngine: DeidentifyEngine = DeidentifyEngine(),
+    ) : this(
+        classifier = BackendOnnxTokenClassifier(backend, acceleratorConfig),
         decoder = decoder,
         merger = merger,
         deidentifyEngine = deidentifyEngine,
