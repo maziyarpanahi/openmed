@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a deterministic export filename policy derived from validated artifact
   metadata, schema versions, and short provenance fingerprints, with path,
   raw-identifier, clock-derived, and value-leaking input rejection (#2584).
+- Added a deterministic offline artifact inventory with bounded safe-path
+  handling, byte counts, media types, SHA-256 fingerprints, and aggregate-only
+  JSON and Markdown reports (#2581).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
