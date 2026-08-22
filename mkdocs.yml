@@ -253,6 +253,7 @@ nav:
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Resource Path Portability Audit: security/path-portability.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
       - SLSA Build Provenance: supply-chain/provenance.md
