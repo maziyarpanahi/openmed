@@ -324,6 +324,7 @@ classification:
     - security/mcp-upstream-policy.md
     - security/hf-token-policy.md
     - security/supply-chain.md
+    - security/path-portability.md
     - supply-chain/vulnerability-scanning.md
     - security/sbom.md
     - supply-chain/provenance.md
