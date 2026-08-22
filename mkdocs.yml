@@ -155,6 +155,7 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
@@ -221,6 +222,7 @@ nav:
       - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Electron In-Process De-identification: runtimes/electron.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
       - Android Integration & Model Catalog: android-integration.md

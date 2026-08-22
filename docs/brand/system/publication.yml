@@ -229,6 +229,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
@@ -294,6 +295,7 @@ classification:
     - export-onnx-webgpu.md
     - export-transformersjs.md
     - runtimes/onnxruntime-web.md
+    - runtimes/electron.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
     - android-integration.md
