@@ -429,6 +429,112 @@ def test_text_and_unicode_validation_fail_closed_without_echoing_phi() -> None:
     assert "rowan@example.test" not in stderr
 
 
+def test_duplicate_keys_non_finite_numbers_and_empty_text_fail_closed() -> None:
+    stdin = io.StringIO(
+        "\n".join(
+            (
+                '{"id":"duplicate","operation":"ping","operation":"shutdown"}',
+                '{"id":"empty","operation":"deidentify","text":""}',
+                (
+                    '{"id":"non-finite","operation":"deidentify",'
+                    '"text":"Synthetic","options":{"confidence_threshold":NaN}}'
+                ),
+                '{"id":"ping-next","operation":"ping"}',
+                "",
+            )
+        )
+    )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    server = SidecarServer(
+        SidecarRuntime(hmac_secret=HASH_SECRET),
+        stdin=stdin,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert server.serve() == 0
+
+    responses = [json.loads(line) for line in stdout.getvalue().splitlines()]
+    assert [response["ok"] for response in responses] == [False, False, False, True]
+    assert [response.get("id") for response in responses] == [
+        None,
+        "empty",
+        None,
+        "ping-next",
+    ]
+    assert all(
+        response.get("error", {}).get("code") == "INVALID_REQUEST"
+        for response in responses[:3]
+    )
+
+
+def test_response_line_limit_fails_with_a_small_structured_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _LargeResponseRuntime:
+        def deidentify(
+            self,
+            _text: str,
+            _options: DeidentifyOptions,
+        ) -> dict[str, Any]:
+            return {"deidentified_text": "x" * 512, "spans": []}
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(sidecar_module, "MAX_RESPONSE_LINE_BYTES", 256)
+    stdin = io.StringIO(
+        json.dumps(
+            {
+                "id": "bounded-response",
+                "operation": "deidentify",
+                "text": "Synthetic note",
+                "options": {"deterministic_only": True},
+            }
+        )
+        + "\n"
+    )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    server = SidecarServer(
+        _LargeResponseRuntime(),  # type: ignore[arg-type]
+        stdin=stdin,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert server.serve() == 0
+
+    response_lines = stdout.getvalue().splitlines()
+    assert len(response_lines) == 1
+    assert len(response_lines[0].encode("utf-8")) + 1 <= 256
+    response = json.loads(response_lines[0])
+    assert response["id"] == "bounded-response"
+    assert response["error"]["code"] == "PROCESSING_FAILED"
+
+
+def test_cleanup_suppresses_dependency_output_and_errors(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class _NoisyUnloadLoader:
+        def unload_all_models(self) -> None:
+            print("rowan@example.test")
+            print("rowan@example.test", file=sys.stderr)
+            raise RuntimeError("rowan@example.test")
+
+    runtime = SidecarRuntime(hmac_secret=HASH_SECRET)
+    runtime.loader = _NoisyUnloadLoader()
+
+    responses, stderr = _serve([{"id": "ping-cleanup", "operation": "ping"}], runtime)
+
+    assert responses[0]["ok"] is True
+    assert json.loads(stderr.splitlines()[-1])["event"] == "sidecar_stopped"
+    captured = capsys.readouterr()
+    assert "rowan@example.test" not in captured.out
+    assert "rowan@example.test" not in captured.err
+
+
 def test_pipeline_cache_is_bounded() -> None:
     runtime = SidecarRuntime(hmac_secret=HASH_SECRET)
     for index in range(sidecar_module.MAX_CACHED_PIPELINES + 3):

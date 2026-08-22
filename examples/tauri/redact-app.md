@@ -96,6 +96,11 @@ fn main() {
 }
 ```
 
+The webview calls only the three bounded application commands above. Do not
+grant it `shell:allow-spawn`, `shell:allow-stdin-write`, or another direct shell
+permission: the trusted Rust wrapper owns sidecar creation and stdio so a
+renderer cannot bypass model pinning, limits, validation, or safe errors.
+
 The command wrapper serializes requests through one long-lived child process.
 This lets the Python runtime reuse the same offline loader and cached model. If
 the process is killed while a request is running, the command rejects with
@@ -174,3 +179,5 @@ Supported operations are `ping`, `deidentify`, and `shutdown`. Closing stdin,
 sending `SIGINT`/`SIGTERM`, or sending `shutdown` releases cached model objects
 and exits cleanly. Direct protocol hosts can pin the pre-provisioned model with
 `OPENMED_SIDECAR_MODEL`; `options` deliberately does not accept a model path.
+Duplicate JSON keys, non-finite numbers, empty text, and response lines above
+64,000,000 bytes fail closed.

@@ -41,6 +41,7 @@ MAX_POLICY_LENGTH = 128
 MAX_RESPONSE_SPANS = 65_536
 MAX_DEIDENTIFIED_TEXT_CHARS = 8_000_000
 MAX_DEIDENTIFIED_TEXT_BYTES = 32_000_000
+MAX_RESPONSE_LINE_BYTES = 64_000_000
 MAX_CACHED_PIPELINES = 8
 MAX_REQUEST_LINE_CHARS = DEFAULT_MAX_TEXT_CHARS * 12 + 65_536
 _DEFAULT_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -253,7 +254,18 @@ class SidecarRuntime:
         self._closed = True
         unload = getattr(self.loader, "unload_all_models", None)
         if callable(unload):
-            unload()
+            from openmed.core.offline import network_blocked_if_offline
+
+            try:
+                with (
+                    redirect_stdout(_DISCARD_STREAM),
+                    redirect_stderr(_DISCARD_STREAM),
+                    network_blocked_if_offline(self.config, local_only=True),
+                ):
+                    unload()
+            except Exception:
+                # Cleanup is best-effort and must not emit dependency details.
+                pass
         self._pipelines.clear()
 
     def _pipeline_for(self, options: DeidentifyOptions) -> Any:
@@ -369,7 +381,7 @@ class SidecarServer:
         request_id: str | None = None
         operation = "unknown"
         try:
-            payload = json.loads(line)
+            payload = _decode_request(line)
             if not isinstance(payload, Mapping):
                 raise SidecarRequestError("request must be a JSON object")
             request_id = _request_id(payload.get("id"))
@@ -405,8 +417,8 @@ class SidecarServer:
                             max_chars=DEFAULT_MAX_TEXT_CHARS,
                             max_bytes=DEFAULT_MAX_TEXT_BYTES,
                         ),
-                        min_length=0,
-                        allow_empty=True,
+                        min_length=1,
+                        allow_empty=False,
                         strip=False,
                     )
                 except InputValidationError as exc:
@@ -424,7 +436,7 @@ class SidecarServer:
                 span_count=span_count,
                 duration_ms=round((perf_counter() - started) * 1000.0, 3),
             )
-        except (json.JSONDecodeError, SidecarRequestError):
+        except SidecarRequestError:
             self._write_error(request_id, "INVALID_REQUEST", "Invalid sidecar request.")
             self._log(
                 event="request_failed",
@@ -465,15 +477,15 @@ class SidecarServer:
         )
 
     def _write_response(self, payload: Mapping[str, Any]) -> None:
-        self.stdout.write(
-            json.dumps(
-                payload,
-                allow_nan=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            )
+        encoded = json.dumps(
+            payload,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
         )
-        self.stdout.write("\n")
+        if len(encoded.encode("utf-8", errors="strict")) + 1 > MAX_RESPONSE_LINE_BYTES:
+            raise RuntimeError("sidecar response exceeds the protocol limit")
+        self.stdout.write(encoded + "\n")
         self.stdout.flush()
 
     def _request_id_hash(self, request_id: str | None) -> str:
@@ -490,10 +502,38 @@ class SidecarServer:
     def _log(self, **payload: Any) -> None:
         if set(payload) - _LOG_FIELDS:
             raise RuntimeError("sidecar log payload contains a non-allow-listed field")
-        self.stderr.write(
-            json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"
+        try:
+            self.stderr.write(
+                json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"
+            )
+            self.stderr.flush()
+        except (OSError, ValueError):
+            # Logging is observational and must never change protocol behavior.
+            pass
+
+
+def _decode_request(line: str) -> Any:
+    try:
+        return json.loads(
+            line,
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
         )
-        self.stderr.flush()
+    except (RecursionError, ValueError) as exc:
+        raise SidecarRequestError("request is not valid JSON") from exc
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise SidecarRequestError("request contains duplicate fields")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> Any:
+    raise SidecarRequestError("request contains a non-finite number")
 
 
 def _sidecar_hash_secret() -> bytes:
@@ -605,10 +645,7 @@ def main() -> int:
         runtime = SidecarRuntime()
         server = SidecarServer(runtime)
     except Exception:
-        sys.stderr.write(
-            '{"error_code":"SIDECAR_START_FAILED","event":"sidecar_failed"}\n'
-        )
-        sys.stderr.flush()
+        _write_terminal_error("SIDECAR_START_FAILED")
         logging.disable(previous_logging_level)
         return 1
 
@@ -622,9 +659,27 @@ def main() -> int:
         return server.serve()
     except (BrokenPipeError, KeyboardInterrupt):
         return 0
+    except Exception:
+        _write_terminal_error("SIDECAR_RUNTIME_FAILED")
+        return 1
     finally:
         server.close()
         logging.disable(previous_logging_level)
+
+
+def _write_terminal_error(error_code: str) -> None:
+    try:
+        sys.stderr.write(
+            json.dumps(
+                {"error_code": error_code, "event": "sidecar_failed"},
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        sys.stderr.flush()
+    except (OSError, ValueError):
+        pass
 
 
 if __name__ == "__main__":
