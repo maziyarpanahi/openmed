@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openmed-operator
+  labels:
+    app.kubernetes.io/name: openmed-operator
+    app.kubernetes.io/part-of: openmed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openmed-operator
+subjects:
+  - kind: ServiceAccount
+    name: openmed-operator
+    namespace: openmed-system

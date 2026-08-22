@@ -254,6 +254,10 @@ docs/api/_build/
 output/playwright/
 .playwright-cli/
 
+# Local browser-demo model and runtime payloads
+/docs/demo/web/models/
+/docs/demo/web/vendor/
+
 .pypirc
 
 PLANS/**
