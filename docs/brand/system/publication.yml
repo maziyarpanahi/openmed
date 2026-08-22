@@ -260,6 +260,7 @@ classification:
     - hl7v2-deidentification.md
     - interop/hl7v2-narrative-extraction.md
     - interop/x12-837-redaction.md
+    - interop/artifact-inventory.md
     - compliance.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/api-deprecation-policy.md
@@ -273,6 +274,7 @@ classification:
     - compliance/consent-data-use-tags.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
+    - interop/archive-safety.md
     - fhir-interop.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
@@ -313,6 +315,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
     - security/threat-model-multilingual-ingestion.md
@@ -324,6 +327,7 @@ classification:
     - security/mcp-upstream-policy.md
     - security/hf-token-policy.md
     - security/supply-chain.md
+    - security/path-portability.md
     - supply-chain/vulnerability-scanning.md
     - security/sbom.md
     - supply-chain/provenance.md
