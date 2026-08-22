@@ -281,6 +281,22 @@ from openmed.eval.suites.shield import (
     run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
 )
+from openmed.eval.suites.temporal_consistency import (
+    SCORED_AXES as TEMPORAL_CONSISTENCY_AXES,
+)
+from openmed.eval.suites.temporal_consistency import (
+    TEMPORAL_CONSISTENCY,
+    TEMPORAL_CONSISTENCY_FIXTURE_PATH,
+    TEMPORAL_CONSISTENCY_SCHEMA_VERSION,
+    AxisAccuracy,
+    TemporalConsistencyFixture,
+    TemporalConsistencyResult,
+    evaluate_temporal_consistency,
+    load_temporal_consistency_fixtures,
+    run_temporal_consistency_suite,
+    score_temporal_consistency,
+    temporal_consistency_metadata,
+)
 from openmed.eval.suites.temporal_tlinks import (
     TEMPORAL_TLINK_FIXTURE_PATH,
     TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION,
@@ -323,6 +339,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIC_NAME_CONSISTENCY,
     INDIA_CLINICAL_PHI_LEAKAGE,
     INDIA_SURROGATE_CONSISTENCY,
+    TEMPORAL_CONSISTENCY,
 )
 SUPPORTED_SUITES: tuple[str, ...] = (
     DEFAULT_SUITES
@@ -420,6 +437,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
             kwargs.get("manifest_path"),
             kwargs.get("fixture_path", kwargs.get("path")),
         )
+    if suite == TEMPORAL_CONSISTENCY:
+        return list(load_temporal_consistency_fixtures(kwargs.get("path")))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -482,6 +501,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return india_clinical_leakage_metadata(**kwargs)
     if suite == INDIA_SURROGATE_CONSISTENCY:
         return india_surrogate_consistency_metadata(**kwargs)
+    if suite == TEMPORAL_CONSISTENCY:
+        return temporal_consistency_metadata()
     return {"suite": suite}
 
 
@@ -607,6 +628,13 @@ __all__ = [
     "INDIAN_MULTI_ID",
     "INDIC_NAME_CONSISTENCY",
     "INDIA_SURROGATE_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY_AXES",
+    "TEMPORAL_CONSISTENCY_FIXTURE_PATH",
+    "TEMPORAL_CONSISTENCY_SCHEMA_VERSION",
+    "AxisAccuracy",
+    "TemporalConsistencyFixture",
+    "TemporalConsistencyResult",
     "INDIA_CLINICAL_SUITE",
     "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
@@ -787,5 +815,10 @@ __all__ = [
     "load_india_surrogate_consistency_fixtures",
     "run_india_clinical_suite_report",
     "run_india_surrogate_consistency_gate",
+    "evaluate_temporal_consistency",
+    "load_temporal_consistency_fixtures",
+    "run_temporal_consistency_suite",
+    "score_temporal_consistency",
+    "temporal_consistency_metadata",
     "validate_name_matching_mode",
 ]
