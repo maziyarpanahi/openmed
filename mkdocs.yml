@@ -171,7 +171,9 @@ nav:
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Apache Beam Redaction Transform: integrations/beam.md
       - dbt Privacy-Safe Text Projection: integrations/dbt.md
+      - Spark Redaction Transform: integrations/spark.md
       - PostgreSQL Redaction Adapter: integrations/postgres.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
