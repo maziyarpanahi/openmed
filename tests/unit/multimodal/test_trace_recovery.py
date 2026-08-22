@@ -38,13 +38,17 @@ def test_trace_redaction_journal_is_value_free_and_deterministic(tmp_path: Path)
     trace_path = tmp_path / "synthetic-trace.jsonl"
     journal_path = tmp_path / "trace-recovery.json"
     trace_path.write_text(source, encoding="utf-8")
+    source_bytes = trace_path.read_bytes()
 
     result = redact_trace_file(trace_path, _redact, journal_path=journal_path)
 
     expected = source.replace(SYNTHETIC_VALUE, SYNTHETIC_REPLACEMENT)
+    expected_bytes = source_bytes.replace(
+        SYNTHETIC_VALUE.encode("utf-8"), SYNTHETIC_REPLACEMENT.encode("utf-8")
+    )
     assert trace_path.read_text(encoding="utf-8") == expected
-    assert result.input_fingerprint == trace_fingerprint(source)
-    assert result.output_fingerprint == trace_fingerprint(expected)
+    assert result.input_fingerprint == trace_fingerprint(source_bytes)
+    assert result.output_fingerprint == trace_fingerprint(expected_bytes)
     assert result.recovery_attempts == 0
 
     journal_text = journal_path.read_text(encoding="utf-8")
