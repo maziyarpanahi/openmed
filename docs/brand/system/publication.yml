@@ -273,6 +273,7 @@ classification:
     - compliance/consent-data-use-tags.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
+    - interop/archive-safety.md
     - fhir-interop.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
@@ -325,6 +326,7 @@ classification:
     - security/mcp-upstream-policy.md
     - security/hf-token-policy.md
     - security/supply-chain.md
+    - security/path-portability.md
     - supply-chain/vulnerability-scanning.md
     - security/sbom.md
     - supply-chain/provenance.md
