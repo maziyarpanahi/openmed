@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-free local capability probe for injected optional
+  integrations, with deterministic availability counts, provider fingerprints,
+  safe missing-extra classification, and exception-text-free JSON reports
+  (#2585).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
