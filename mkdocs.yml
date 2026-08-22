@@ -221,6 +221,7 @@ nav:
       - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Electron In-Process De-identification: runtimes/electron.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
       - Android Integration & Model Catalog: android-integration.md
