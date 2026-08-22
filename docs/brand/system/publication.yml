@@ -247,6 +247,7 @@ classification:
     - integrations/dask.md
     - integrations/beam.md
     - integrations/dbt.md
+    - integrations/spark.md
     - integrations/postgres.md
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
