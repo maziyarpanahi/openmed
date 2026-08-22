@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-free OpenSearch ingest redaction processor with validated
+  local policies, explicitly selected fields, immutable document copies,
+  cache-only defaults, and aggregate value-free diagnostics (#2389).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
