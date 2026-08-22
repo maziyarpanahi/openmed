@@ -42,6 +42,33 @@ offline operation, pre-stage normalized vocabulary artifacts and use
 `local_only=True`. A download is attempted only when local-only mode is off and
 a source has an expected SHA-256; checksum-free downloads are refused.
 
+## Load a local RxNorm release
+
+RxNorm is freely redistributable, but its release files are not bundled with
+OpenMed. Obtain a release from the [NLM RxNorm distribution](https://www.nlm.nih.gov/research/umls/rxnorm/),
+keep the downloaded archive or its unpacked files under the terms of that
+distribution, and pass the local path to the TTY-aware loader:
+
+```python
+from openmed.clinical.grounding import RxNormLoader
+
+rxnorm = RxNormLoader("/srv/vocab/rxnorm")
+matches = rxnorm.resolve("Tylenol 500 MG Oral Tablet", tty="SBD")
+match = matches[0]
+assert match.code == match.metadata["ingredient_rxcui"]
+print(match.metadata["tty"], match.metadata["normalized_ingredient"])
+```
+
+The path may be an unpacked release directory containing `RXNCONSO.RRF` and,
+when available, `RXNREL.RRF` and `RXNSAT.RRF`; a release archive and small
+caller-created JSONL/TSV projections are also accepted. Product and brand
+records roll up through local relationship rows to an ingredient RXCUI, while
+TTY filtering falls back in a documented deterministic order when a requested
+term type is absent (the default preference is `SBD`, `SCD`, `BN`, `IN`, `PIN`,
+then `MIN`). Dose-form relationships are exposed in
+`match.metadata["dose_form"]`. Loading is local-only and performs no network
+request; no RxNorm rows are stored in the repository.
+
 ## Restricted vocabularies
 
 UMLS and SNOMED CT content is never bundled or downloaded. Activating either
@@ -66,7 +93,39 @@ grounded = ground(
 The key is validated and immediately discarded: it is not retained, logged,
 serialized, read from environment variables, or sent over a network. The alias
 table remains local. Callers remain responsible for UMLS and SNOMED CT license
-terms. CPT remains outside the in-process API and no CPT content is shipped.
+terms. CPT remains user-provided only; no CPT content is shipped.
+
+## Resolve OMOP concepts from Athena
+
+OMOP standard concept IDs can be resolved from a caller-supplied Athena release.
+Download and extract the release yourself, then pass the local directory (or a
+path to one of its files) to `AthenaResolver`:
+
+```python
+from openmed.clinical.grounding import AthenaResolver
+
+resolver = AthenaResolver("/local/athena-export")
+concept_id = resolver.resolve("RxNorm", "SYNTHETIC-SOURCE-CODE")
+concept = resolver.lookup("RxNorm", "SYNTHETIC-SOURCE-CODE")
+
+assert concept is not None
+assert concept_id == concept.concept_id
+print(resolver.vocabulary_version, resolver.reproducibility_hash)
+```
+
+The directory must contain `CONCEPT.csv`, `CONCEPT_RELATIONSHIP.csv`, and
+`VOCABULARY.csv`. Resolution follows active `Maps to` relationships and returns
+`0` for an absent or unmapped source. The returned concept metadata includes
+the concept name, OMOP domain, vocabulary, and standard-concept flag. The
+loaded vocabulary version and a stable `sha256:` reproducibility hash are
+available for manifests and exports.
+
+Athena content is never bundled or downloaded by OpenMed. `CPT4` rows are
+excluded by default because the vocabulary is restricted; a user with the
+applicable rights may opt in only for their own local bundle with
+`AthenaResolver("/licensed/athena-export", include_cpt4=True)`. Setting
+`OPENMED_OFFLINE=1` is supported and keeps resolution on the supplied local
+files.
 
 ## Export FHIR R4 and OMOP CDM v5.4
 

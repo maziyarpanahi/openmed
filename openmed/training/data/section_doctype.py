@@ -21,6 +21,9 @@ from openmed.clinical.sections import (
     detect_sections,
     validate_section_spans,
 )
+from openmed.clinical.sections import (
+    document_type_loinc_coverage as _document_type_loinc_coverage,
+)
 from openmed.training.synthetic import LocalePhiGenerator
 
 RULE_LABEL_SOURCE = "rule"
@@ -46,6 +49,7 @@ DOCUMENT_TYPES = (
     "radiology_report",
     "pathology_report",
     "operative_note",
+    "history_and_physical",
     "consult_note",
 )
 SUPPORTED_DOCUMENT_TYPES = DOCUMENT_TYPES
@@ -61,6 +65,7 @@ _DOCUMENT_TYPE_TITLES = {
     "radiology_report": "RADIOLOGY REPORT",
     "pathology_report": "PATHOLOGY REPORT",
     "operative_note": "OPERATIVE NOTE",
+    "history_and_physical": "HISTORY AND PHYSICAL",
     "consult_note": "CONSULTATION NOTE",
 }
 _SECTION_HEADERS = (
@@ -425,6 +430,21 @@ def build_document_type_examples(
     ).build_document_type_examples(notes)
 
 
+def document_type_loinc_mapping_coverage(
+    notes: Iterable[NoteInput],
+) -> dict[str, Any]:
+    """Report classifier-to-LOINC coverage for public or synthetic notes.
+
+    The report contains aggregate counts and unmapped labels only. It is safe
+    for the public harness because note text is consumed locally and never
+    included in the returned evidence.
+    """
+
+    normalized_notes = _normalize_notes(notes)
+    classifications = (classify_document(note.text) for note in normalized_notes)
+    return _document_type_loinc_coverage(classifications)
+
+
 def build_section_doctype_examples(
     notes: Iterable[NoteInput],
     *,
@@ -663,6 +683,7 @@ __all__ = [
     "build_document_type_examples",
     "build_section_doctype_examples",
     "build_section_examples",
+    "document_type_loinc_mapping_coverage",
     "first_token_window",
     "generate_synthetic_notes",
     "generate_synthetic_social_history",
