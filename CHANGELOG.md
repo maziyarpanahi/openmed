@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `openmed.providers` registrar compatibility group, with canonical-label and
   locale routing, deterministic Faker access, idempotent discovery, PHI-safe
   failure warnings, and built-in-generator fallback (#2341).
-
+- Added a bounded offline JSON-lines de-identification sidecar with a typed
+  Tauri host and frontend bridge, model pinning, serialized process reuse,
+  renderer-safe errors, strict response validation, and synthetic termination
+  and egress coverage (#823).
 - Added a bounded, dependency-free browser network-egress proof harness with
   exact or path-scoped model-asset allowlists, immediate raw-URL disposal,
   source-safe digest reports, and fail-closed local trace validation (#2374).
