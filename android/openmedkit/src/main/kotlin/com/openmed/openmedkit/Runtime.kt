@@ -2,7 +2,9 @@ package com.openmed.openmedkit
 
 import ai.djl.huggingface.tokenizers.Encoding
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
-import com.openmed.openmedkit.onnx.OnnxTokenClassifier as RuntimeOnnxTokenClassifier
+import com.openmed.openmedkit.onnx.AcceleratorConfig
+import com.openmed.openmedkit.onnx.AcceleratorSelection
+import com.openmed.openmedkit.onnx.AcceleratorSession
 import com.openmed.openmedkit.onnx.TokenOffset
 import com.openmed.openmedkit.onnx.TokenPrediction
 import com.openmed.openmedkit.segmentation.IcuTextSegmenter
@@ -38,13 +40,35 @@ interface OnnxTokenClassifier : Closeable {
 /**
  * Hugging Face tokenizer and ONNX Runtime classifier for offline artifacts.
  */
-class BackendOnnxTokenClassifier(
-    private val backend: OpenMedBackend,
+class BackendOnnxTokenClassifier private constructor(
+    private val configuration: BackendClassifierConfiguration,
 ) : OnnxTokenClassifier {
+    /** Preserve the original public constructor while enabling provider probing. */
+    constructor(backend: OpenMedBackend) : this(
+        BackendClassifierConfiguration(backend, AcceleratorConfig()),
+    )
+
+    /** Construct a classifier with explicit execution-provider configuration. */
+    constructor(
+        backend: OpenMedBackend,
+        acceleratorConfig: AcceleratorConfig,
+    ) : this(BackendClassifierConfiguration(backend, acceleratorConfig))
+
+    private val backend: OpenMedBackend
+        get() = configuration.backend
+
     private val classifier = if (backend.id2Label.isEmpty()) {
-        RuntimeOnnxTokenClassifier(backend.modelFile, backend.id2LabelFile)
+        AcceleratorSession(
+            backend.modelFile,
+            backend.id2LabelFile,
+            configuration.acceleratorConfig,
+        )
     } else {
-        RuntimeOnnxTokenClassifier(backend.modelFile, backend.id2Label)
+        AcceleratorSession(
+            backend.modelFile,
+            backend.id2Label,
+            configuration.acceleratorConfig,
+        )
     }
     private val tokenizer = try {
         loadTokenizer(backend)
@@ -52,6 +76,10 @@ class BackendOnnxTokenClassifier(
         classifier.close()
         throw error
     }
+
+    /** Provider and operator-partition decision for this model session. */
+    val acceleratorSelection: AcceleratorSelection
+        get() = classifier.selection
 
     override suspend fun predict(text: String): List<TokenClassificationPrediction> {
         require(text.isNotEmpty()) { "text must not be empty" }
@@ -122,6 +150,11 @@ class BackendOnnxTokenClassifier(
         return HuggingFaceTokenizer.newInstance(backend.modelDirectory.toPath())
     }
 }
+
+private data class BackendClassifierConfiguration(
+    val backend: OpenMedBackend,
+    val acceleratorConfig: AcceleratorConfig,
+)
 
 internal fun aggregateTokenPredictions(
     text: String,

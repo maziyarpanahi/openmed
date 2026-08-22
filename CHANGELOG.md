@@ -9,9 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added configurable Android QNN and NNAPI execution-provider selection with
+  deterministic CPU fallback, per-family operator-coverage reporting, and
+  bounded PHI-free latency, span-parity, and recall evidence (#851).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
+- Added reusable iOS Share and Action extension modules for bounded plain-text
+  redaction with bundled policy selection, local-only Nano Core ML assets,
+  fail-closed tokenizer loading, guaranteed runtime-cache cleanup, and
+  host-returnable output that preserves original span offsets (#835).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination

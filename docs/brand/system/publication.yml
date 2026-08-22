@@ -298,12 +298,14 @@ classification:
     - android-quickstart.md
     - android-integration.md
     - export-onnx-android.md
+    - runtimes/android-accelerators.md
     - android-tokenization.md
     - android-parity.md
     - on-device-segmenters.md
     - coreml-export.md
     - swift-openmedkit.md
     - runtimes/apple-platforms.md
+    - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
     - faq.md
     - troubleshooting.md
