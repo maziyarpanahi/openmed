@@ -2746,6 +2746,51 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Device tier to benchmark.",
     )
     mobile_parser.add_argument(
+        "--format",
+        dest="model_format",
+        default="INT8",
+        help="Model format recorded in an archived device benchmark (default: INT8).",
+    )
+    mobile_parser.add_argument(
+        "--sequence-lengths",
+        nargs="+",
+        default=None,
+        metavar="TOKENS",
+        help="Sequence lengths to sweep; space- or comma-separated positive integers.",
+    )
+    mobile_parser.add_argument(
+        "--batch-sizes",
+        nargs="+",
+        default=None,
+        metavar="COUNT",
+        help="Batch sizes to sweep; space- or comma-separated positive integers.",
+    )
+    mobile_parser.add_argument(
+        "--repeats",
+        type=_positive_int,
+        default=1,
+        help="Number of times to repeat each matrix cell (default: 1).",
+    )
+    mobile_parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="Optional local JSON/JSONL corpus; the committed synthetic corpus is default.",
+    )
+    from openmed.eval.device_bench import DEFAULT_DEVICE_ARCHIVE_DIR
+
+    mobile_parser.add_argument(
+        "--archive",
+        nargs="?",
+        const=DEFAULT_DEVICE_ARCHIVE_DIR,
+        type=Path,
+        default=None,
+        help=(
+            "Write per-format/device/tier JSON archives. With no value, use "
+            "eval/results/device/."
+        ),
+    )
+    mobile_parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
@@ -6091,6 +6136,9 @@ def _handle_benchmark_domain_coverage(args: argparse.Namespace) -> int:
 def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
     from openmed.eval import perf as perf_module
 
+    if args.archive is not None:
+        return _handle_benchmark_mobile_archive(args)
+
     try:
         models = _parse_model_args(args.models or [])
     except ValueError as exc:
@@ -6152,6 +6200,57 @@ def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
         payload = {"reports": [report.to_dict() for report in reports]}
         human = json.dumps(payload, indent=2, sort_keys=True)
     return emit(args, payload, human=human)
+
+
+def _handle_benchmark_mobile_archive(args: argparse.Namespace) -> int:
+    from openmed.eval import device_bench as device_bench_module
+
+    try:
+        models = _parse_model_args(args.models or [])
+        if not models:
+            models = [device_bench_module.SYNTHETIC_PERF_MODEL_NAME]
+        reports = []
+        archives = []
+        for model in models:
+            runner = (
+                device_bench_module.synthetic_device_bench_runner
+                if model == device_bench_module.SYNTHETIC_PERF_MODEL_NAME
+                else None
+            )
+            report = device_bench_module.run_device_benchmark(
+                model,
+                device=str(args.device),
+                tier=str(args.tier),
+                model_format=str(args.model_format),
+                corpus=args.corpus,
+                sequence_lengths=args.sequence_lengths,
+                batch_sizes=args.batch_sizes,
+                repeats=args.repeats,
+                runner=runner,
+                metadata={"benchmark_domain": "mobile", "source_suite": "device"},
+            )
+            reports.append(report)
+            archives.append(
+                device_bench_module.write_device_benchmark_archive(
+                    report,
+                    archive_dir=args.archive,
+                )
+            )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"Mobile device benchmark failed: {exc}",
+            code="benchmark_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "archives": [str(path) for path in archives],
+        "reports": [report.to_dict() for report in reports],
+    }
+    human_lines = ["Mobile device benchmark archives written:"]
+    for path in archives:
+        human_lines.append(f"  JSON: {path}")
+    return emit(args, payload, human="\n".join(human_lines))
 
 
 def _handle_benchmark_latency(args: argparse.Namespace) -> int:
