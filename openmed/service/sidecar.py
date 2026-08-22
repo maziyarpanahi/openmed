@@ -16,16 +16,33 @@ import os
 import secrets
 import signal
 import sys
+from collections import OrderedDict
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, replace
 from time import perf_counter
 from types import SimpleNamespace
 from typing import Any, Callable, Mapping, TextIO
+
+from openmed.utils.gateway import (
+    DEFAULT_MAX_TEXT_BYTES,
+    DEFAULT_MAX_TEXT_CHARS,
+    GatewayLimits,
+    InputValidationError,
+    normalize_text,
+)
 
 PROTOCOL_VERSION = 1
 SIDECAR_HASH_SECRET_ENV_VAR = "OPENMED_SIDECAR_HASH_SECRET"
 DEFAULT_MODEL_ENV_VAR = "OPENMED_SIDECAR_MODEL"
 MAX_REQUEST_ID_LENGTH = 128
 MAX_DOC_ID_LENGTH = 256
+MAX_MODEL_NAME_LENGTH = 4_096
+MAX_POLICY_LENGTH = 128
+MAX_RESPONSE_SPANS = 65_536
+MAX_DEIDENTIFIED_TEXT_CHARS = 8_000_000
+MAX_DEIDENTIFIED_TEXT_BYTES = 32_000_000
+MAX_CACHED_PIPELINES = 8
+MAX_REQUEST_LINE_CHARS = DEFAULT_MAX_TEXT_CHARS * 12 + 65_536
 _DEFAULT_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _METHODS = frozenset({"mask", "remove", "replace", "hash", "format_preserve"})
 _OPTION_KEYS = frozenset(
@@ -35,7 +52,6 @@ _OPTION_KEYS = frozenset(
         "doc_id",
         "lang",
         "method",
-        "model_name",
         "policy",
         "use_safety_sweep",
         "use_smart_merging",
@@ -53,10 +69,36 @@ _LOG_FIELDS = frozenset(
         "span_count",
     }
 )
+_REQUEST_KEYS = {
+    "ping": frozenset({"id", "operation"}),
+    "shutdown": frozenset({"id", "operation"}),
+    "deidentify": frozenset({"id", "operation", "options", "text"}),
+}
 
 
 class SidecarRequestError(ValueError):
     """A safe validation error suitable for the sidecar error envelope."""
+
+
+class _DiscardStream:
+    """Drop dependency output so protocol and lifecycle streams stay PHI-free."""
+
+    encoding = "utf-8"
+
+    def write(self, value: str) -> int:
+        return len(value)
+
+    def flush(self) -> None:
+        return None
+
+    def isatty(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
+
+
+_DISCARD_STREAM = _DiscardStream()
 
 
 @dataclass(frozen=True)
@@ -84,28 +126,33 @@ class DeidentifyOptions:
         if set(payload) - _OPTION_KEYS:
             raise SidecarRequestError("options contains unsupported fields")
 
-        default_model = os.getenv(DEFAULT_MODEL_ENV_VAR, _DEFAULT_MODEL)
-        model_name = _optional_string(
-            payload.get("model_name", default_model),
-            field="model_name",
-        )
-        if model_name is None:
-            model_name = default_model
+        model_name = _configured_model_name()
         policy = _optional_string(
             payload.get("policy", "hipaa_safe_harbor"),
             field="policy",
+            max_length=MAX_POLICY_LENGTH,
         )
         if policy is None:
             policy = "hipaa_safe_harbor"
-        method = _optional_string(payload.get("method", "mask"), field="method")
+        method = _optional_string(
+            payload.get("method", "mask"),
+            field="method",
+            max_length=32,
+        )
         if method not in _METHODS:
             raise SidecarRequestError("method is not supported by the sidecar")
-        lang = _optional_string(payload.get("lang", "en"), field="lang")
-        if lang is None or len(lang) > 16:
+        lang = _optional_string(
+            payload.get("lang", "en"),
+            field="lang",
+            max_length=16,
+        )
+        if lang is None:
             raise SidecarRequestError("lang must be a short language identifier")
-        doc_id = _optional_string(payload.get("doc_id"), field="doc_id")
-        if doc_id is not None and len(doc_id) > MAX_DOC_ID_LENGTH:
-            raise SidecarRequestError("doc_id is too long")
+        doc_id = _optional_string(
+            payload.get("doc_id"),
+            field="doc_id",
+            max_length=MAX_DOC_ID_LENGTH,
+        )
 
         threshold = payload.get("confidence_threshold", 0.7)
         if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
@@ -157,7 +204,7 @@ class SidecarRuntime:
         self._loader_factory = loader_factory
         self.loader: Any = None
         self.hmac_secret = hmac_secret or _sidecar_hash_secret()
-        self._pipelines: dict[tuple[Any, ...], Any] = {}
+        self._pipelines: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
         self._closed = False
 
     def deidentify(self, text: str, options: DeidentifyOptions) -> dict[str, Any]:
@@ -165,16 +212,37 @@ class SidecarRuntime:
 
         from openmed.core.offline import network_blocked_if_offline
 
-        pipeline = self._pipeline_for(options)
-        with network_blocked_if_offline(self.config, local_only=True):
+        with (
+            redirect_stdout(_DISCARD_STREAM),
+            redirect_stderr(_DISCARD_STREAM),
+            network_blocked_if_offline(self.config, local_only=True),
+        ):
+            pipeline = self._pipeline_for(options)
             result = pipeline.run(
                 text,
                 method=options.method,
                 doc_id=options.doc_id,
             )
+        redacted_text = result.redacted_text
+        if (
+            not isinstance(redacted_text, str)
+            or len(redacted_text) > MAX_DEIDENTIFIED_TEXT_CHARS
+        ):
+            raise RuntimeError("sidecar pipeline returned invalid redacted text")
+        try:
+            redacted_bytes = redacted_text.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as exc:
+            raise RuntimeError(
+                "sidecar pipeline returned invalid redacted text"
+            ) from exc
+        if len(redacted_bytes) > MAX_DEIDENTIFIED_TEXT_BYTES:
+            raise RuntimeError("sidecar pipeline returned invalid redacted text")
+        spans = _response_spans(result)
+        if not _valid_response_spans(spans, len(text)):
+            raise RuntimeError("sidecar pipeline returned too many spans")
         return {
-            "deidentified_text": result.redacted_text,
-            "spans": [span.to_dict() for span in _response_spans(result)],
+            "deidentified_text": redacted_text,
+            "spans": [span.to_dict() for span in spans],
         }
 
     def close(self) -> None:
@@ -192,6 +260,7 @@ class SidecarRuntime:
         key = options.pipeline_key()
         cached = self._pipelines.get(key)
         if cached is not None:
+            self._pipelines.move_to_end(key)
             return cached
 
         from openmed.core.pipeline import Pipeline
@@ -211,6 +280,9 @@ class SidecarRuntime:
             hmac_secret=self.hmac_secret,
         )
         self._pipelines[key] = pipeline
+        self._pipelines.move_to_end(key)
+        while len(self._pipelines) > MAX_CACHED_PIPELINES:
+            self._pipelines.popitem(last=False)
         return pipeline
 
     def _model_loader(self) -> Any:
@@ -252,9 +324,24 @@ class SidecarServer:
         self._log(event="sidecar_started", protocol_version=PROTOCOL_VERSION)
         try:
             while not self._stopping:
-                line = self.stdin.readline()
+                line = self.stdin.readline(MAX_REQUEST_LINE_CHARS + 1)
                 if line == "":
                     break
+                if len(line) > MAX_REQUEST_LINE_CHARS:
+                    self._drain_oversized_line(line)
+                    self._write_error(
+                        None,
+                        "INVALID_REQUEST",
+                        "Invalid sidecar request.",
+                    )
+                    self._log(
+                        event="request_failed",
+                        operation="unknown",
+                        request_id_hash=self._request_id_hash(None),
+                        error_code="INVALID_REQUEST",
+                        duration_ms=0.0,
+                    )
+                    continue
                 if not line.strip():
                     continue
                 self._handle_line(line)
@@ -292,6 +379,8 @@ class SidecarServer:
             if requested_operation not in {"ping", "shutdown", "deidentify"}:
                 raise SidecarRequestError("operation is not supported")
             operation = requested_operation
+            if set(payload) - _REQUEST_KEYS[operation]:
+                raise SidecarRequestError("request contains unsupported fields")
 
             if operation == "ping":
                 result: dict[str, Any] = {
@@ -309,6 +398,19 @@ class SidecarServer:
                 text = payload.get("text")
                 if not isinstance(text, str):
                     raise SidecarRequestError("text must be a string")
+                try:
+                    text = normalize_text(
+                        text,
+                        limits=GatewayLimits(
+                            max_chars=DEFAULT_MAX_TEXT_CHARS,
+                            max_bytes=DEFAULT_MAX_TEXT_BYTES,
+                        ),
+                        min_length=0,
+                        allow_empty=True,
+                        strip=False,
+                    )
+                except InputValidationError as exc:
+                    raise SidecarRequestError("text is invalid") from exc
                 options = DeidentifyOptions.from_payload(payload.get("options"))
                 result = self.runtime.deidentify(text, options)
                 span_count = len(result["spans"])
@@ -344,6 +446,14 @@ class SidecarServer:
                 error_code="PROCESSING_FAILED",
                 duration_ms=round((perf_counter() - started) * 1000.0, 3),
             )
+
+    def _drain_oversized_line(self, first_chunk: str) -> None:
+        if first_chunk.endswith(("\n", "\r")):
+            return
+        while True:
+            chunk = self.stdin.readline(MAX_REQUEST_LINE_CHARS + 1)
+            if chunk == "" or chunk.endswith(("\n", "\r")):
+                return
 
     def _write_error(self, request_id: str | None, code: str, message: str) -> None:
         self._write_response(
@@ -425,6 +535,25 @@ def _response_spans(result: Any) -> tuple[Any, ...]:
     return tuple(response)
 
 
+def _valid_response_spans(spans: tuple[Any, ...], text_length: int) -> bool:
+    if len(spans) > MAX_RESPONSE_SPANS or len(spans) > text_length:
+        return False
+    previous_end = 0
+    for span in sorted(spans, key=lambda value: (value.start, value.end)):
+        if (
+            isinstance(span.start, bool)
+            or isinstance(span.end, bool)
+            or not isinstance(span.start, int)
+            or not isinstance(span.end, int)
+            or span.start < previous_end
+            or span.end <= span.start
+            or span.end > text_length
+        ):
+            return False
+        previous_end = span.end
+    return True
+
+
 def _request_id(value: Any) -> str:
     if isinstance(value, bool) or not isinstance(value, (str, int)):
         raise SidecarRequestError("id must be a string or integer")
@@ -434,11 +563,29 @@ def _request_id(value: Any) -> str:
     return request_id
 
 
-def _optional_string(value: Any, *, field: str) -> str | None:
+def _configured_model_name() -> str:
+    value = _optional_string(
+        os.getenv(DEFAULT_MODEL_ENV_VAR, _DEFAULT_MODEL),
+        field="configured model",
+        max_length=MAX_MODEL_NAME_LENGTH,
+    )
+    if value is None:
+        raise SidecarRequestError("configured model must be a non-empty string")
+    return value
+
+
+def _optional_string(
+    value: Any,
+    *,
+    field: str,
+    max_length: int,
+) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value:
         raise SidecarRequestError(f"{field} must be a non-empty string")
+    if len(value) > max_length:
+        raise SidecarRequestError(f"{field} is too long")
     return value
 
 

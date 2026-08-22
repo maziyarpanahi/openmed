@@ -6,9 +6,10 @@ only the redacted text and canonical `OpenMedSpan` records, and shuts the
 process down when the application exits.
 
 The sidecar always enables OpenMed's local-only mode. Download the model during
-application installation or development, then pass its local directory as
-`modelName`. A missing local model fails with a structured error; it never
-falls back to a network request.
+application installation or development, then pin its local directory from the
+trusted Rust host. Renderer requests cannot select a model path. A missing
+local model fails with a structured error; it never falls back to a network
+request.
 
 ## Build the self-contained executable
 
@@ -63,7 +64,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = "2"
 tauri-plugin-shell = "2"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "time"] }
 ```
 
 Register the persistent state, shell plugin, and commands in the Tauri builder:
@@ -77,9 +78,14 @@ use sidecar_command::{
 };
 
 fn main() {
+    let sidecar_state = OpenMedSidecarState::with_model(
+        "/absolute/app-resource/models/openmed-pii",
+    )
+    .expect("OpenMed model configuration must be valid");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(OpenMedSidecarState::default())
+        .manage(sidecar_state)
         .invoke_handler(tauri::generate_handler![
             openmed_sidecar_ping,
             openmed_sidecar_deidentify,
@@ -94,7 +100,17 @@ The command wrapper serializes requests through one long-lived child process.
 This lets the Python runtime reuse the same offline loader and cached model. If
 the process is killed while a request is running, the command rejects with
 `SIDECAR_TERMINATED` instead of returning partial JSON or an unstructured
-process error.
+process error. A concurrent renderer call fails with `SIDECAR_BUSY`, and a
+request that exceeds the two-minute host deadline fails with
+`SIDECAR_TIMEOUT`; either transport failure discards the child before a later
+request can start it again.
+
+Resolve the model path from trusted application resources in Rust. Do not take
+it from a renderer message, URL parameter, document field, or other untrusted
+input. `OpenMedSidecarState::default()` instead uses the sidecar's default model
+identifier and requires that model to already exist in the local cache.
+Keep Tauri remote-domain IPC access disabled, use a restrictive content
+security policy, and do not navigate the PHI-handling webview to remote content.
 
 ## Redact a synthetic note
 
@@ -111,7 +127,6 @@ const note =
   "Callback 425-555-0100 or email rowan@example.test.";
 
 const result = await deidentify(note, {
-  modelName: "/absolute/app-resource/models/openmed-pii",
   policy: "hipaa_safe_harbor",
   docId: "synthetic-tauri-example",
 });
@@ -128,6 +143,12 @@ Do not log `note`, the protocol request, or the returned redacted text. The
 sidecar writes structured operational records to stderr containing only event
 names, counts, durations, and a keyed request-ID hash. It never logs request
 text, document IDs, model paths, detected surfaces, or exception details.
+
+Requests are limited to 1,000,000 Unicode code points and 4,000,000 UTF-8
+bytes. Returned span offsets use OpenMed's cross-platform Unicode code-point
+coordinate space, not JavaScript UTF-16 code units. The clients reject invalid,
+overlapping, out-of-range, or excessive span records before returning them to
+application code.
 
 For a rules-only smoke test that does not load a learned model, set
 `deterministicOnly: true`. Production PHI workflows should use a locally
@@ -151,4 +172,5 @@ the actual response includes every canonical `OpenMedSpan` field:
 
 Supported operations are `ping`, `deidentify`, and `shutdown`. Closing stdin,
 sending `SIGINT`/`SIGTERM`, or sending `shutdown` releases cached model objects
-and exits cleanly.
+and exits cleanly. Direct protocol hosts can pin the pre-provisioned model with
+`OPENMED_SIDECAR_MODEL`; `options` deliberately does not accept a model path.

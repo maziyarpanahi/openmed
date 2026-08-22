@@ -15,7 +15,15 @@ from typing import Any
 
 import pytest
 
-from openmed.service.sidecar import SidecarRuntime, SidecarServer
+import openmed.service.sidecar as sidecar_module
+from openmed.service.sidecar import (
+    DEFAULT_MODEL_ENV_VAR,
+    DeidentifyOptions,
+    SidecarRequestError,
+    SidecarRuntime,
+    SidecarServer,
+)
+from openmed.utils.gateway import DEFAULT_MAX_TEXT_CHARS
 
 ROOT = Path(__file__).resolve().parents[3]
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "sidecar_stdio_golden.json"
@@ -25,6 +33,8 @@ PHI_FRAGMENTS = ("425-555-0100", "rowan@example.test")
 
 class _FakeModelPipeline:
     def __call__(self, text: str, **_: Any) -> list[dict[str, Any]]:
+        print(text)
+        print(text, file=sys.stderr)
         entities = []
         for value, label, score in (
             ("425-555-0100", "PHONE", 0.85),
@@ -134,7 +144,11 @@ def test_stdio_deidentification_matches_committed_golden_within_tolerance() -> N
     assert golden["request"]["id"] not in rendered_logs
 
 
-def test_model_loader_is_local_only_lazy_reused_and_unloaded() -> None:
+def test_model_loader_is_local_only_lazy_reused_and_unloaded(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(DEFAULT_MODEL_ENV_VAR, "local-pii")
     loaders: list[_FakeLoader] = []
 
     def loader_factory(config: Any) -> _FakeLoader:
@@ -149,7 +163,6 @@ def test_model_loader_is_local_only_lazy_reused_and_unloaded() -> None:
         "operation": "deidentify",
         "text": "Callback 425-555-0100.",
         "options": {
-            "model_name": "local-pii",
             "use_smart_merging": False,
         },
     }
@@ -166,9 +179,15 @@ def test_model_loader_is_local_only_lazy_reused_and_unloaded() -> None:
     assert loader.create_calls == 2
     assert loader.unload_calls == 1
     assert len(runtime._pipelines) == 0
+    captured = capsys.readouterr()
+    assert "425-555-0100" not in captured.out
+    assert "425-555-0100" not in captured.err
 
 
-def test_network_egress_is_blocked_and_failure_log_contains_no_phi() -> None:
+def test_network_egress_is_blocked_and_failure_log_contains_no_phi(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(DEFAULT_MODEL_ENV_VAR, "local-pii")
     loader: _FakeLoader | None = None
 
     def loader_factory(config: Any) -> _FakeLoader:
@@ -181,7 +200,7 @@ def test_network_egress_is_blocked_and_failure_log_contains_no_phi() -> None:
         "id": "network-guard",
         "operation": "deidentify",
         "text": "Callback 425-555-0100.",
-        "options": {"model_name": "local-pii"},
+        "options": {},
     }
 
     responses, stderr = _serve([request], runtime)
@@ -328,3 +347,97 @@ def test_killing_sidecar_mid_request_returns_clean_host_error() -> None:
         _read_host_response(stdout)
     assert exc_info.value.code == "SIDECAR_TERMINATED"
     assert str(exc_info.value) == ("The OpenMed sidecar terminated before responding.")
+
+
+def test_model_configuration_is_pinned_outside_untrusted_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(DEFAULT_MODEL_ENV_VAR, "/trusted/app/model")
+
+    options = DeidentifyOptions.from_payload({"deterministic_only": True})
+
+    assert options.model_name == "/trusted/app/model"
+    with pytest.raises(SidecarRequestError, match="unsupported fields"):
+        DeidentifyOptions.from_payload(
+            {"model_name": "/private/rowan@example.test/model"}
+        )
+
+
+def test_oversized_json_line_is_drained_before_the_next_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sidecar_module, "MAX_REQUEST_LINE_CHARS", 96)
+    oversized = json.dumps(
+        {
+            "id": "oversized-rowan@example.test",
+            "operation": "ping",
+            "padding": "x" * 160,
+        }
+    )
+    stdin = io.StringIO(
+        oversized + "\n" + json.dumps({"id": "ping-next", "operation": "ping"}) + "\n"
+    )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    server = SidecarServer(
+        SidecarRuntime(hmac_secret=HASH_SECRET),
+        stdin=stdin,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert server.serve() == 0
+
+    responses = [json.loads(line) for line in stdout.getvalue().splitlines()]
+    assert responses[0] == {
+        "id": None,
+        "ok": False,
+        "error": {
+            "code": "INVALID_REQUEST",
+            "message": "Invalid sidecar request.",
+        },
+    }
+    assert responses[1]["id"] == "ping-next"
+    assert responses[1]["ok"] is True
+    assert "rowan@example.test" not in stderr.getvalue()
+
+
+def test_text_and_unicode_validation_fail_closed_without_echoing_phi() -> None:
+    runtime = SidecarRuntime(hmac_secret=HASH_SECRET)
+    too_long = "x" * (DEFAULT_MAX_TEXT_CHARS + 1)
+    requests = [
+        {
+            "id": "too-long",
+            "operation": "deidentify",
+            "text": too_long,
+            "options": {"deterministic_only": True},
+        },
+        {
+            "id": "bad-unicode",
+            "operation": "deidentify",
+            "text": "rowan@example.test\ud800",
+            "options": {"deterministic_only": True},
+        },
+    ]
+
+    responses, stderr = _serve(requests, runtime)
+
+    assert [response["error"]["code"] for response in responses] == [
+        "INVALID_REQUEST",
+        "INVALID_REQUEST",
+    ]
+    assert "rowan@example.test" not in stderr
+
+
+def test_pipeline_cache_is_bounded() -> None:
+    runtime = SidecarRuntime(hmac_secret=HASH_SECRET)
+    for index in range(sidecar_module.MAX_CACHED_PIPELINES + 3):
+        runtime._pipeline_for(
+            DeidentifyOptions(
+                confidence_threshold=index / 20,
+                deterministic_only=True,
+            )
+        )
+
+    assert len(runtime._pipelines) == sidecar_module.MAX_CACHED_PIPELINES
+    runtime.close()
