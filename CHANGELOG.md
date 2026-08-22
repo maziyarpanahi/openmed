@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline artifact inventory with bounded safe-path
+  handling, byte counts, media types, SHA-256 fingerprints, and aggregate-only
+  JSON and Markdown reports (#2581).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
