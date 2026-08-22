@@ -37,6 +37,23 @@ def test_scaling_gauges_are_present_under_synthetic_load() -> None:
     assert f"{INFLIGHT_REQUESTS_METRIC} 1" in rendered
 
 
+def test_scaling_queue_labels_collapse_unknown_values_without_phi() -> None:
+    metrics = PrometheusMetricsRegistry()
+    sensitive_queue = "Patient Jane Doe 12345"
+    metrics.record_admission_queue_state(
+        queue=sensitive_queue,
+        depth=3,
+        shedding=False,
+    )
+    metrics.record_admission_queue_wait(queue=sensitive_queue, wait_seconds=0.25)
+    metrics.record_admission_shed(queue=sensitive_queue)
+
+    rendered = metrics.render()
+
+    assert sensitive_queue not in rendered
+    assert f'{QUEUE_DEPTH_METRIC}{{queue="other"}} 3' in rendered
+
+
 def test_reference_hpa_targets_queue_inflight_and_cpu_metrics() -> None:
     manifest = yaml.safe_load(HPA_PATH.read_text(encoding="utf-8"))
 
@@ -51,6 +68,7 @@ def test_reference_hpa_targets_queue_inflight_and_cpu_metrics() -> None:
     assert manifest["spec"]["maxReplicas"] == 10
 
     metrics = manifest["spec"]["metrics"]
+    assert len(metrics) == 3
     pod_metrics = {
         item["pods"]["metric"]["name"]: item["pods"]["target"]
         for item in metrics
@@ -91,6 +109,15 @@ def test_load_shape_maps_thresholds_to_bounded_replicas(
     assert result.recommended_replicas == expected
 
 
+def test_load_shape_uses_exact_integer_math_for_large_counters() -> None:
+    result = recommend_replicas(
+        queue_depth=10**400,
+        inflight_requests=10**400,
+    )
+
+    assert result.recommended_replicas == 10
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -107,6 +134,13 @@ def test_load_shape_rejects_invalid_observations(kwargs) -> None:
 def test_scaling_targets_reject_invalid_bounds() -> None:
     with pytest.raises(ValueError, match="min_replicas"):
         ScalingTargets(min_replicas=4, max_replicas=3)
+
+    with pytest.raises(TypeError, match="ScalingTargets"):
+        recommend_replicas(
+            queue_depth=0,
+            inflight_requests=0,
+            targets=0,  # type: ignore[arg-type]
+        )
 
 
 def test_autoscaling_guide_documents_reproducible_wiring() -> None:

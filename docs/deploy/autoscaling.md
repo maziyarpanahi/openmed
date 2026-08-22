@@ -5,8 +5,10 @@ HorizontalPodAutoscaler (HPA) can use as backpressure signals. The reference
 manifest combines those custom metrics with CPU utilization, keeps two warm
 replicas, scales up quickly, and waits five minutes before scaling down.
 
-The signals contain counts and fixed queue labels only. They never contain
-request text, entities, model output, client identity, or other PHI.
+The signals contain counts and a bounded queue label only: `analyze`,
+`pii_extract`, `batch`, or `other`. Unknown queue names collapse to `other`.
+They never contain request text, entities, model output, client identity, or
+other PHI.
 
 ## Enable and scrape metrics
 
@@ -27,7 +29,9 @@ series are present before applying the HPA:
 
 The queue gauge tracks admitted work that has not completed. The in-flight
 gauge tracks active HTTP requests. Both are useful earlier saturation signals
-than CPU alone when a model or accelerator becomes the bottleneck.
+than CPU alone when a model or accelerator becomes the bottleneck. A scrape of
+`/metrics` is excluded from the in-flight gauge so monitoring does not create a
+scaling feedback signal.
 
 ## Wire prometheus-adapter
 
@@ -116,4 +120,6 @@ assert decision.recommended_replicas == 3
 Tune targets from synthetic load tests, keep resource requests accurate for
 the CPU metric, and use a disruption budget when maintaining more than one
 replica. Do not expose `/metrics` outside the cluster or add user-controlled
-label values.
+label values. The helper and table show the raw custom-metric recommendation;
+the Kubernetes controller also considers CPU, its tolerance, missing or
+not-yet-ready pods, and the stabilization policies in the manifest.

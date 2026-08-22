@@ -8,7 +8,6 @@ operators can use when choosing HorizontalPodAutoscaler targets.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from .metrics import ADMISSION_QUEUE_DEPTH_NAME, INFLIGHT_NAME
@@ -74,6 +73,7 @@ def recommend_replicas(
         A value-only recommendation containing both signal calculations.
 
     Raises:
+        TypeError: If ``targets`` is not a ``ScalingTargets`` instance.
         ValueError: If either observed count is not a non-negative integer.
     """
 
@@ -82,10 +82,19 @@ def recommend_replicas(
         inflight_requests,
         "inflight_requests",
     )
-    resolved = targets or ScalingTargets()
-    queue_replicas = math.ceil(observed_queue / resolved.queue_depth_per_pod)
-    inflight_replicas = math.ceil(
-        observed_inflight / resolved.inflight_requests_per_pod
+    if targets is None:
+        resolved = ScalingTargets()
+    elif isinstance(targets, ScalingTargets):
+        resolved = targets
+    else:
+        raise TypeError("targets must be a ScalingTargets instance")
+    queue_replicas = _ceil_division(
+        observed_queue,
+        resolved.queue_depth_per_pod,
+    )
+    inflight_replicas = _ceil_division(
+        observed_inflight,
+        resolved.inflight_requests_per_pod,
     )
     recommended = min(
         max(
@@ -108,6 +117,10 @@ def _non_negative_integer(value: int, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{field_name} must be a non-negative integer")
     return value
+
+
+def _ceil_division(numerator: int, denominator: int) -> int:
+    return (numerator + denominator - 1) // denominator
 
 
 __all__ = [

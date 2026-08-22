@@ -27,6 +27,8 @@ ADMISSION_QUEUE_DEPTH_NAME = "openmed_service_admission_queue_depth"
 ADMISSION_QUEUE_SHEDDING_NAME = "openmed_service_admission_queue_shedding"
 ADMISSION_QUEUE_WAIT_NAME = "openmed_service_admission_queue_wait_seconds"
 ADMISSION_SHED_NAME = "openmed_service_admission_shed_total"
+ADMISSION_QUEUE_LABELS = frozenset({"analyze", "batch", "pii_extract"})
+UNKNOWN_ADMISSION_QUEUE_LABEL = "other"
 CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
 CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
 CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
@@ -266,7 +268,7 @@ class PrometheusMetricsRegistry:
         shedding: bool,
     ) -> None:
         """Set aggregate outstanding depth and load-shedding state."""
-        queue_label = str(queue)
+        queue_label = _admission_queue_label(queue)
         with self._lock:
             self._admission_queue_depth[queue_label] = max(int(depth), 0)
             self._admission_queue_shedding[queue_label] = int(bool(shedding))
@@ -279,13 +281,16 @@ class PrometheusMetricsRegistry:
     ) -> None:
         """Set the latest bounded pre-dispatch wait for an admission queue."""
         with self._lock:
-            self._admission_queue_wait[str(queue)] = max(float(wait_seconds), 0.0)
+            self._admission_queue_wait[_admission_queue_label(queue)] = max(
+                float(wait_seconds),
+                0.0,
+            )
 
     def record_admission_shed(self, *, queue: str, count: int = 1) -> None:
         """Record requests rejected or expired by aggregate admission control."""
         if count <= 0:
             return
-        queue_label = str(queue)
+        queue_label = _admission_queue_label(queue)
         with self._lock:
             self._admission_shed_total[queue_label] = self._admission_shed_total.get(
                 queue_label, 0
@@ -764,6 +769,13 @@ def _label_suffix(labels: Mapping[str, str]) -> str:
 
 def _escape_label_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _admission_queue_label(value: object) -> str:
+    normalized = str(value).strip().casefold()
+    if normalized in ADMISSION_QUEUE_LABELS:
+        return normalized
+    return UNKNOWN_ADMISSION_QUEUE_LABEL
 
 
 def _non_negative_int(value: object) -> int:
