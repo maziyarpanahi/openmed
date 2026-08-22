@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integrations, with deterministic availability counts, provider fingerprints,
   safe missing-extra classification, and exception-text-free JSON reports
   (#2585).
+- Added a deterministic integration capability matrix covering supported
+  adapters, optional requirements, policy boundaries, documentation, and
+  offline test evidence, with local source and dependency validation (#2390).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
