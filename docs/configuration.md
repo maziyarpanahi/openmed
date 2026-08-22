@@ -42,6 +42,40 @@ transliteration_aware_name_matching = false
 indic_name_similarity_threshold = 0.80
 ```
 
+### JSON Schema validation
+
+OpenMed publishes its Draft 2020-12 configuration schema inside the installed
+package. Editors and deployment tools can locate it without relying on the
+repository layout:
+
+```python
+from openmed.core.config import config_schema_path
+
+print(config_schema_path())
+```
+
+`OpenMedConfig.from_dict()`, `load_config_from_file()`, and custom profile
+loading validate keys and types against this schema. Unknown keys are rejected
+instead of being silently ignored, and all detected violations are reported in
+one `ConfigValidationError`. Diagnostics name schema fields but never echo
+their values, so credentials and other sensitive settings do not leak through
+validation errors.
+
+```python
+from openmed.core.config import ConfigValidationError, load_config_from_file
+
+try:
+    config = load_config_from_file("openmed.toml")
+except ConfigValidationError as error:
+    for violation in error.errors:
+        print(violation)  # Field names and constraints only; no values.
+```
+
+Instances constructed directly can be checked explicitly with
+`config.validate()`. The schema also declares `x-profile-keys`, the exact set
+accepted in custom profile TOML files. This keeps editor completion, runtime
+validation, and profile authoring on one source of truth.
+
 Runtime environment controls can select the config path, provide Hub
 credentials, or choose a device when the loaded config leaves it automatic:
 

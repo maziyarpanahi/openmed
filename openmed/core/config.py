@@ -1,10 +1,12 @@
 """Configuration management for OpenMed."""
 
+import json
 import math
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from .offline import (
     OFFLINE_ENV_VAR,
@@ -38,6 +40,206 @@ else:
 DEFAULT_CONFIG_DIR = _default_config_root / "openmed"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
 PROFILES_DIR = DEFAULT_CONFIG_DIR / "profiles"
+
+
+class ConfigValidationError(ValueError):
+    """Aggregate one or more schema violations without echoing config values."""
+
+    def __init__(self, errors: List[str]) -> None:
+        self.errors = tuple(errors)
+        super().__init__("Invalid OpenMed configuration: " + "; ".join(errors))
+
+
+def config_schema_path() -> Path:
+    """Return the installed Draft 2020-12 configuration schema path."""
+
+    return Path(__file__).with_name("config.schema.json")
+
+
+@lru_cache(maxsize=1)
+def _config_schema() -> Dict[str, Any]:
+    """Load the bundled configuration schema once per process."""
+
+    with config_schema_path().open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise RuntimeError("OpenMed configuration schema must be a JSON object")
+    return payload
+
+
+def _validate_config_mapping(
+    data: Mapping[str, Any],
+    *,
+    profile: bool = False,
+) -> None:
+    """Validate a mapping against the controlled bundled-schema subset."""
+
+    schema = _config_schema()
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        raise RuntimeError("OpenMed configuration schema has no properties object")
+
+    if profile:
+        declared_profile_keys = schema.get("x-profile-keys")
+        if not isinstance(declared_profile_keys, list) or not all(
+            isinstance(key, str) for key in declared_profile_keys
+        ):
+            raise RuntimeError(
+                "OpenMed configuration schema has no valid x-profile-keys list"
+            )
+        allowed_keys = set(declared_profile_keys)
+    else:
+        allowed_keys = set(properties)
+
+    errors: List[str] = []
+    for key in sorted(data, key=str):
+        if not isinstance(key, str) or key not in allowed_keys:
+            errors.append(f"{key}: unknown configuration key")
+            continue
+        property_schema = properties.get(key)
+        if not isinstance(property_schema, dict):
+            errors.append(f"{key}: schema definition is invalid")
+            continue
+        errors.extend(_property_validation_errors(key, data[key], property_schema))
+
+    if errors:
+        raise ConfigValidationError(errors)
+
+
+def _config_validation_view(data: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return the values as ``OpenMedConfig.__post_init__`` normalizes them.
+
+    Validation must run before dataclass construction so malformed mappings do
+    not reach field-specific operations or value-bearing legacy exceptions.
+    Preserve the established whitespace, case, and numeric-string coercions in
+    the validation-only copy; the constructor remains responsible for applying
+    those normalizations to the actual instance.
+    """
+
+    normalized = dict(data)
+    for key in ("chinese_segmentation_backend", "remote_inference_protocol"):
+        value = normalized.get(key)
+        if isinstance(value, str):
+            normalized[key] = value.strip().lower()
+
+    chinese_domain = normalized.get("chinese_pkuseg_domain")
+    if isinstance(chinese_domain, str):
+        normalized["chinese_pkuseg_domain"] = chinese_domain.strip()
+
+    for key in (
+        "indic_name_similarity_threshold",
+        "remote_inference_timeout_seconds",
+    ):
+        value = normalized.get(key)
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            normalized[key] = float(value)
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return normalized
+
+
+def _property_validation_errors(
+    path: str,
+    value: Any,
+    schema: Mapping[str, Any],
+) -> List[str]:
+    errors: List[str] = []
+    declared_types = schema.get("type")
+    if isinstance(declared_types, str):
+        allowed_types = (declared_types,)
+    elif isinstance(declared_types, list) and all(
+        isinstance(item, str) for item in declared_types
+    ):
+        allowed_types = tuple(declared_types)
+    else:
+        return [f"{path}: schema type declaration is invalid"]
+
+    if not any(_matches_json_type(value, name) for name in allowed_types):
+        expected = " or ".join(allowed_types)
+        return [f"{path}: expected {expected}, got {_json_type_name(value)}"]
+
+    if value is None:
+        return errors
+
+    enum = schema.get("enum")
+    if isinstance(enum, list) and value not in enum:
+        errors.append(f"{path}: value is not in the allowed set")
+
+    if isinstance(value, str):
+        minimum_length = schema.get("minLength")
+        if isinstance(minimum_length, int) and len(value) < minimum_length:
+            errors.append(f"{path}: string is shorter than the minimum length")
+
+    if _matches_json_type(value, "number"):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return [f"{path}: number must be finite"]
+        if not math.isfinite(numeric):
+            return [f"{path}: number must be finite"]
+        minimum = schema.get("minimum")
+        if isinstance(minimum, (int, float)) and numeric < float(minimum):
+            errors.append(f"{path}: number is below the minimum")
+        maximum = schema.get("maximum")
+        if isinstance(maximum, (int, float)) and numeric > float(maximum):
+            errors.append(f"{path}: number exceeds the maximum")
+        exclusive_minimum = schema.get("exclusiveMinimum")
+        if isinstance(exclusive_minimum, (int, float)) and numeric <= float(
+            exclusive_minimum
+        ):
+            errors.append(f"{path}: number must exceed the exclusive minimum")
+
+    if isinstance(value, list):
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                errors.extend(
+                    _property_validation_errors(
+                        f"{path}[{index}]",
+                        item,
+                        item_schema,
+                    )
+                )
+    return errors
+
+
+def _matches_json_type(value: Any, type_name: str) -> bool:
+    if type_name == "null":
+        return value is None
+    if type_name == "boolean":
+        return isinstance(value, bool)
+    if type_name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if type_name == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if type_name == "string":
+        return isinstance(value, str)
+    if type_name == "array":
+        return isinstance(value, list)
+    if type_name == "object":
+        return isinstance(value, Mapping)
+    return False
+
+
+def _json_type_name(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, Mapping):
+        return "object"
+    return type(value).__name__
+
 
 # Built-in profile presets
 PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -346,50 +548,12 @@ class OpenMedConfig:
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "OpenMedConfig":
-        """Create config from dictionary."""
-        # Filter out unknown keys
-        valid_keys = {
-            "default_org",
-            "cache_dir",
-            "device",
-            "hf_token",
-            "log_level",
-            "timeout",
-            "use_medical_tokenizer",
-            "medical_tokenizer_exceptions",
-            "chinese_segmentation_backend",
-            "chinese_user_dict_path",
-            "chinese_pkuseg_domain",
-            "clinical_protect_enabled",
-            "clinical_protect_terms",
-            "clinical_protect_use_builtin",
-            "backend",
-            "remote_inference_endpoint",
-            "remote_inference_protocol",
-            "remote_inference_model_name",
-            "remote_inference_model_version",
-            "remote_inference_tokenizer",
-            "remote_inference_timeout_seconds",
-            "remote_inference_verify_tls",
-            "batch_size",
-            "num_workers",
-            "lazy_model_loading",
-            "pii_model",
-            "pii_model_revision",
-            "onnx_variant",
-            "onnx_intra_op_num_threads",
-            "torch_attention_backend",
-            "load_in_4bit",
-            "bnb_4bit_use_double_quant",
-            "local_only",
-            "cjk_width_convention",
-            "chinese_target_script",
-            "transliteration_aware_name_matching",
-            "indic_name_similarity_threshold",
-            "profile",
-        }
-        filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
-        return cls(**filtered)
+        """Create config from a schema-validated dictionary."""
+
+        _validate_config_mapping(_config_validation_view(config_dict))
+        config = cls(**config_dict)
+        config.validate()
+        return config
 
     @classmethod
     def from_profile(cls, profile_name: str, **overrides: Any) -> "OpenMedConfig":
@@ -424,8 +588,10 @@ class OpenMedConfig:
                     f"Available profiles: {', '.join(sorted(available))}"
                 )
 
-        profile_data["profile"] = profile_name
+        _validate_config_mapping(profile_data, profile=True)
+        _validate_config_mapping(overrides, profile=True)
         profile_data.update(overrides)
+        profile_data["profile"] = profile_name
         return cls.from_dict(profile_data)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -472,6 +638,15 @@ class OpenMedConfig:
             "indic_name_similarity_threshold": self.indic_name_similarity_threshold,
             "profile": self.profile,
         }
+
+    def validate(self) -> None:
+        """Validate this configuration against the bundled JSON Schema.
+
+        Raises:
+            ConfigValidationError: If one or more fields violate the schema.
+        """
+
+        _validate_config_mapping(self.to_dict())
 
     def with_profile(self, profile_name: str) -> "OpenMedConfig":
         """Return a new config with profile settings applied.
@@ -608,11 +783,10 @@ def load_config_from_file(path: Optional[Union[str, Path]] = None) -> OpenMedCon
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     file_data = _load_toml(config_path)
+    _validate_config_mapping(file_data)
     merged = get_config().to_dict()
 
-    for key, value in file_data.items():
-        if key in merged:
-            merged[key] = value
+    merged.update(file_data)
 
     return OpenMedConfig.from_dict(merged)
 
@@ -621,6 +795,7 @@ def save_config_to_file(
     config: OpenMedConfig, path: Optional[Union[str, Path]] = None
 ) -> Path:
     """Persist configuration to a TOML file."""
+    config.validate()
     config_path = resolve_config_path(path)
     ensure_config_directory(config_path)
     toml_content = _dump_toml(config.to_dict())
@@ -668,7 +843,9 @@ def get_profile(profile_name: str) -> Dict[str, Any]:
 
     profile_path = PROFILES_DIR / f"{profile_name}.toml"
     if profile_path.exists():
-        return _load_toml(profile_path)
+        profile_data = _load_toml(profile_path)
+        _validate_config_mapping(profile_data, profile=True)
+        return profile_data
 
     raise ValueError(f"Unknown profile: {profile_name}")
 
@@ -683,6 +860,7 @@ def save_profile(profile_name: str, settings: Dict[str, Any]) -> Path:
     Returns:
         Path to the saved profile file.
     """
+    _validate_config_mapping(settings, profile=True)
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     profile_path = PROFILES_DIR / f"{profile_name}.toml"
 

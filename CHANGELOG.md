@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a deterministic structured-schema snapshot compatibility checker with
   versioned field-path, type, and optionality rules plus value-free change
   evidence and canonical JSON output (#2582).
+- Added fail-fast JSON Schema validation for `OpenMedConfig`, TOML files, and
+  custom profiles, with aggregated value-free diagnostics, an installed schema
+  path helper, and complete remote-backend field coverage (#2264).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).

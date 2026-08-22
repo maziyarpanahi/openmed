@@ -12,7 +12,9 @@ from .audit_chain import (
 from .budget import RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
+    ConfigValidationError,
     OpenMedConfig,
+    config_schema_path,
     delete_profile,
     get_profile,
     list_profiles,
@@ -176,6 +178,8 @@ __all__ = [
     "ModelSearchResult",
     "search_models",
     "OpenMedConfig",
+    "ConfigValidationError",
+    "config_schema_path",
     "CustomRecognizer",
     "AuditReport",
     "AuditSignature",
