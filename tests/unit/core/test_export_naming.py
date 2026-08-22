@@ -175,14 +175,14 @@ def test_unsupported_metadata_fields_are_rejected_without_serializing_values() -
 
 
 def test_hostile_mapping_failure_is_value_free() -> None:
-    secret = "synthetic-sensitive-mapping-482901"
+    test_marker = "synthetic-sensitive-mapping-482901"
 
     class MappingFailure(BaseException):
         pass
 
     class HostileMapping(Mapping[str, Any]):
         def __getitem__(self, key: str) -> Any:
-            raise MappingFailure(f"{secret}:{key}")
+            raise MappingFailure(f"{test_marker}:{key}")
 
         def __iter__(self) -> Iterator[str]:
             return iter(("artifact_type",))
@@ -198,7 +198,7 @@ def test_hostile_mapping_failure_is_value_free() -> None:
             type(error.value), error.value, error.value.__traceback__
         )
     )
-    assert secret not in rendered
+    assert test_marker not in rendered
 
 
 def test_serialization_failure_does_not_retain_exception_context() -> None:
@@ -223,24 +223,24 @@ def test_serialization_failure_does_not_retain_exception_context() -> None:
 
 
 def test_tampered_metadata_is_revalidated_without_echoing_values() -> None:
-    secret = "synthetic-sensitive/path-482901"
+    test_marker = "synthetic-sensitive/path-482901"
     metadata = ExportArtifactMetadata(
         artifact_type="audit-report",
         format="json",
         schema_version="v1",
         fingerprint=_FINGERPRINT,
     )
-    object.__setattr__(metadata, "artifact_type", secret)
+    object.__setattr__(metadata, "artifact_type", test_marker)
 
     with pytest.raises(ExportNamingError) as error:
         build_export_filename(metadata)
 
-    assert secret not in str(error.value)
+    assert test_marker not in str(error.value)
 
     with pytest.raises(ExportNamingError) as report_error:
         metadata.to_dict()
 
-    assert secret not in str(report_error.value)
+    assert test_marker not in str(report_error.value)
 
 
 @pytest.mark.parametrize(
