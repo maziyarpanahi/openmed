@@ -1,0 +1,24 @@
+{
+  "resourceType": "ValueSet",
+  "id": "openmed-example-allergens",
+  "url": "https://openmed.example/fhir/ValueSet/allergens",
+  "version": "1.0.0",
+  "status": "active",
+  "compose": {
+    "include": [
+      {
+        "system": "https://openmed.example/fhir/CodeSystem/allergens",
+        "concept": [
+          {
+            "code": "synthetic-allergen-a",
+            "display": "Synthetic allergen A"
+          },
+          {
+            "code": "synthetic-allergen-b",
+            "display": "Synthetic allergen B"
+          }
+        ]
+      }
+    ]
+  }
+}

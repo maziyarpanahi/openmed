@@ -1,5 +1,6 @@
 """Configuration management for OpenMed."""
 
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -116,7 +117,7 @@ class OpenMedConfig:
     clinical_protect_terms: Optional[List[str]] = None
     clinical_protect_use_builtin: bool = True
 
-    # Inference backend: None (auto-detect), "hf", "mlx", or CPU-only "onnx"
+    # Inference backend: None (auto-detect), "hf", "mlx", "onnx", or "remote"
     backend: Optional[str] = None
 
     # Runtime resource controls. None preserves backend-specific defaults.
@@ -156,6 +157,17 @@ class OpenMedConfig:
     # Active profile name (if any)
     profile: Optional[str] = None
 
+    # Explicit KServe V2 / Triton inference settings. These are appended to
+    # preserve the positional order of the established public constructor.
+    # Tokenization and decoding stay local; the endpoint receives tensors.
+    remote_inference_endpoint: Optional[str] = None
+    remote_inference_protocol: str = "http"
+    remote_inference_model_name: Optional[str] = None
+    remote_inference_model_version: Optional[str] = None
+    remote_inference_tokenizer: Optional[str] = None
+    remote_inference_timeout_seconds: float = 30.0
+    remote_inference_verify_tls: bool = True
+
     def __post_init__(self):
         """Post-initialization to set default values."""
         if self.cache_dir is None:
@@ -185,6 +197,29 @@ class OpenMedConfig:
                 "cjk_width_convention must be 'cjk' or 'nfkc', got "
                 f"{self.cjk_width_convention!r}"
             )
+
+        if not isinstance(self.remote_inference_protocol, str):
+            raise TypeError("remote_inference_protocol must be a string")
+        self.remote_inference_protocol = self.remote_inference_protocol.strip().lower()
+        if self.remote_inference_protocol not in {"http", "grpc"}:
+            raise ValueError(
+                "remote_inference_protocol must be 'http' or 'grpc', got "
+                f"{self.remote_inference_protocol!r}"
+            )
+        if isinstance(self.remote_inference_timeout_seconds, bool):
+            raise TypeError("remote_inference_timeout_seconds must be a real number")
+        self.remote_inference_timeout_seconds = float(
+            self.remote_inference_timeout_seconds
+        )
+        if (
+            not math.isfinite(self.remote_inference_timeout_seconds)
+            or self.remote_inference_timeout_seconds <= 0
+        ):
+            raise ValueError(
+                "remote_inference_timeout_seconds must be positive and finite"
+            )
+        if not isinstance(self.remote_inference_verify_tls, bool):
+            raise TypeError("remote_inference_verify_tls must be a boolean")
 
         if self.batch_size is not None and self.batch_size <= 0:
             raise ValueError("batch_size must be positive")
@@ -329,6 +364,13 @@ class OpenMedConfig:
             "clinical_protect_terms",
             "clinical_protect_use_builtin",
             "backend",
+            "remote_inference_endpoint",
+            "remote_inference_protocol",
+            "remote_inference_model_name",
+            "remote_inference_model_version",
+            "remote_inference_tokenizer",
+            "remote_inference_timeout_seconds",
+            "remote_inference_verify_tls",
             "batch_size",
             "num_workers",
             "lazy_model_loading",
@@ -404,6 +446,13 @@ class OpenMedConfig:
             "clinical_protect_terms": self.clinical_protect_terms,
             "clinical_protect_use_builtin": self.clinical_protect_use_builtin,
             "backend": self.backend,
+            "remote_inference_endpoint": self.remote_inference_endpoint,
+            "remote_inference_protocol": self.remote_inference_protocol,
+            "remote_inference_model_name": self.remote_inference_model_name,
+            "remote_inference_model_version": self.remote_inference_model_version,
+            "remote_inference_tokenizer": self.remote_inference_tokenizer,
+            "remote_inference_timeout_seconds": self.remote_inference_timeout_seconds,
+            "remote_inference_verify_tls": self.remote_inference_verify_tls,
             "batch_size": self.batch_size,
             "num_workers": self.num_workers,
             "lazy_model_loading": self.lazy_model_loading,
@@ -505,6 +554,12 @@ def _parse_value(value: str) -> Any:
     except ValueError:
         pass
 
+    # Float
+    try:
+        return float(value)
+    except ValueError:
+        pass
+
     # Fallback to raw string
     return value
 
@@ -514,7 +569,7 @@ def _format_value(value: Any) -> str:
         return "null"
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, int):
+    if isinstance(value, (int, float)):
         return str(value)
     return f'"{value}"'
 
