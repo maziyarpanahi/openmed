@@ -295,6 +295,7 @@ classification:
     - export-onnx-webgpu.md
     - export-transformersjs.md
     - runtimes/onnxruntime-web.md
+    - runtimes/electron.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
     - android-integration.md

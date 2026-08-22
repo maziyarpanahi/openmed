@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a sender-authorized Electron de-identification bridge with bounded IPC,
+  a shared serialized utility-process model cache, Node- and Electron-stack
+  offline enforcement, renderer-safe span projection, and timeout-safe worker
+  recovery (#824).
 - Added a cross-browser Manifest V3 PHI guard that detects and masks text
   locally, fails closed on unscanned form submissions, persists per-site policy
   controls without raw text, and verifies zero detection-time network egress
