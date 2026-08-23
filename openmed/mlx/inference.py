@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import re
+import struct
 from bisect import bisect_left, bisect_right
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -27,6 +28,7 @@ from openmed.core.decoding import (
     trim_span_whitespace,
     viterbi_decode,
 )
+from openmed.core.decoding.spans import grapheme_break_checker
 from openmed.mlx.artifact import (
     MANIFEST_FILENAME,
     has_local_tokenizer,
@@ -381,6 +383,14 @@ def _decode_tiktoken_offsets(
 # rest of this module reads unchanged.
 _trim_span_whitespace = trim_span_whitespace
 _refine_privacy_filter_span = refine_privacy_filter_span
+_grapheme_break_checker = grapheme_break_checker
+
+_FLOAT32 = struct.Struct("=f")
+
+
+def _score_from_log_probability(log_probability: float) -> float:
+    """Exponentiate one score and preserve the prior binary32 output shape."""
+    return _FLOAT32.unpack(_FLOAT32.pack(math.exp(log_probability)))[0]
 
 
 def _resolve_compile_forward(compile_forward: bool | None) -> bool:
@@ -550,18 +560,27 @@ class PrivacyFilterMLXPipeline:
         text: str,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
+        break_checker = None
         for index, label_id in enumerate(pred_ids):
             label = self.id2label.get(label_id, f"LABEL_{label_id}")
             if label == "O":
                 continue
+            if break_checker is None:
+                break_checker = _grapheme_break_checker(text)
             start, end = char_starts[index], char_ends[index]
-            start, end = _refine_privacy_filter_span(label, start, end, text)
+            start, end = _refine_privacy_filter_span(
+                label,
+                start,
+                end,
+                text,
+                break_checker=break_checker,
+            )
             if end <= start:
                 continue
             results.append(
                 {
                     "entity": label,
-                    "score": math.exp(log_probs[index][label_id]),
+                    "score": _score_from_log_probability(log_probs[index][label_id]),
                     "word": text[start:end],
                     "start": start,
                     "end": end,
@@ -586,10 +605,18 @@ class PrivacyFilterMLXPipeline:
         char_spans = token_spans_to_char_spans(token_spans, token_offsets, text)
 
         entities: list[dict[str, Any]] = []
+        break_checker = None
         for token_span, char_span in zip(token_spans, char_spans):
             _, token_start, token_end = token_span
             span_label, start, end = char_span
-            start, end = _trim_span_whitespace(start, end, text)
+            if break_checker is None:
+                break_checker = _grapheme_break_checker(text)
+            start, end = _trim_span_whitespace(
+                start,
+                end,
+                text,
+                break_checker=break_checker,
+            )
             if end <= start:
                 continue
             label = (
@@ -598,11 +625,17 @@ class PrivacyFilterMLXPipeline:
                 else f"label_{span_label}"
             )
             token_scores = [
-                math.exp(log_probs[index][pred_ids[index]])
+                _score_from_log_probability(log_probs[index][pred_ids[index]])
                 for index in range(token_start, token_end)
                 if 0 <= index < len(log_probs)
             ]
-            start, end = _refine_privacy_filter_span(label, start, end, text)
+            start, end = _refine_privacy_filter_span(
+                label,
+                start,
+                end,
+                text,
+                break_checker=break_checker,
+            )
             if end <= start:
                 continue
             score = sum(token_scores) / len(token_scores) if token_scores else 0.0

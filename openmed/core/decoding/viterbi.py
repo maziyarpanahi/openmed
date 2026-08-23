@@ -1,8 +1,8 @@
 """BIOES-aware Viterbi decoder for token-classification logits.
 
-Used by both the MLX and PyTorch privacy-filter pipelines. Pure-Python,
-no array-framework dependencies — operates on lists of floats produced
-by ``logits.tolist()`` from either backend.
+Used by both the MLX and PyTorch privacy-filter pipelines. It operates on
+lists of floats produced by ``logits.tolist()`` from either backend, with an
+optional NumPy acceleration path and a pure-Python fallback.
 
 The algorithm enforces the standard BIOES (B-egin / I-nside / E-nd /
 S-ingleton, plus background ``O``) state machine and supports six learned
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Final, Sequence
+from typing import Final, Sequence
 
 try:  # Optional fast path; the decoder stays pure-Python without numpy.
     import numpy as _np
@@ -41,6 +41,9 @@ VITERBI_BIAS_KEYS: Final = (
     "transition_bias_end_to_start",
 )
 
+ViterbiTables = tuple[list[float], list[float], list[list[float]]]
+ViterbiTableCacheEntry = tuple[tuple[float, ...], ViterbiTables]
+
 
 class TokenLabelInfo:
     """Resolves a flat ``id2label`` map into BIOES tag / span-label tables.
@@ -66,10 +69,11 @@ class TokenLabelInfo:
         self.token_boundary_tags: dict[int, str | None] = {}
         self.background_token_label = 0
         self.background_span_label = 0
-        # Cache of ``(start, end, transition)`` tables keyed by resolved
-        # bias tuples; building the O(C^2) transition matrix dominates
-        # decode latency for large label spaces (e.g. 221 PII classes).
-        self._viterbi_table_cache: dict[tuple[float, ...], Any] = {}
+        # Keep only the most recent ``(start, end, transition)`` tables.
+        # A single entry accelerates the stable per-model bias configuration
+        # without retaining an unbounded number of O(C^2) matrices when a
+        # public caller varies biases dynamically.
+        self._viterbi_table_cache: ViterbiTableCacheEntry | None = None
 
         for index, label in enumerate(class_names):
             if label == "O":
@@ -109,11 +113,17 @@ def zero_viterbi_biases() -> dict[str, float]:
 
 
 def resolve_viterbi_biases(biases: dict[str, float]) -> dict[str, float]:
-    """Return only supported Viterbi biases with missing keys filled as zero."""
+    """Return only supported Viterbi biases with missing keys filled as zero.
+
+    Raises:
+        ValueError: If a supported bias is NaN or positive infinity.
+    """
     resolved_biases = zero_viterbi_biases()
     resolved_biases.update(
         {key: float(value) for key, value in biases.items() if key in resolved_biases}
     )
+    if any(_is_invalid_score(value) for value in resolved_biases.values()):
+        raise ValueError("Viterbi biases must not contain NaN or positive infinity")
     return resolved_biases
 
 
@@ -122,6 +132,15 @@ def resolve_viterbi_biases(biases: dict[str, float]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 _NEG_INF: Final = -1e9
+
+
+def _is_invalid_score(value: float) -> bool:
+    return math.isnan(value) or value == math.inf
+
+
+def _validate_scores(values: Sequence[float], *, field: str) -> None:
+    if any(_is_invalid_score(value) for value in values):
+        raise ValueError(f"{field} must not contain NaN or positive infinity")
 
 
 def _split_boundary_label(label: str) -> tuple[str, str]:
@@ -205,25 +224,28 @@ def _is_valid_transition(
 def _viterbi_tables(
     label_info: TokenLabelInfo,
     resolved_biases: dict[str, float],
-) -> tuple[list[float], list[float], list[list[float]]]:
+) -> ViterbiTables:
     """Return cached ``(start, end, transition)`` tables for *label_info*.
 
     The transition matrix is O(C^2) to construct and identical across
-    decode calls that share a label space and biases, so it is memoized on
-    the ``TokenLabelInfo`` instance.
+    decode calls that share a label space and biases, so the most recent table
+    is memoized on the ``TokenLabelInfo`` instance. Replacing that one entry
+    keeps memory bounded when callers vary bias configurations.
     """
     cache_key = tuple(resolved_biases[key] for key in VITERBI_BIAS_KEYS)
-    cached = label_info._viterbi_table_cache.get(cache_key)
-    if cached is None:
-        cached = _build_viterbi_scores(label_info, resolved_biases)
-        label_info._viterbi_table_cache[cache_key] = cached
-    return cached
+    cached = label_info._viterbi_table_cache
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
+
+    tables = _build_viterbi_scores(label_info, resolved_biases)
+    label_info._viterbi_table_cache = (cache_key, tables)
+    return tables
 
 
 def _build_viterbi_scores(
     label_info: TokenLabelInfo,
     biases: dict[str, float],
-) -> tuple[list[float], list[float], list[list[float]]]:
+) -> ViterbiTables:
     num_classes = len(label_info.token_to_span_label)
     start_scores = [_NEG_INF] * num_classes
     end_scores = [_NEG_INF] * num_classes
@@ -288,6 +310,10 @@ def viterbi_decode(
         A list of class indices (one per token) representing the most
         likely BIOES-valid path. Falls back to a per-token argmax when
         no finite-score path exists (e.g. degenerate label space).
+
+    Raises:
+        ValueError: If emissions or supported transition biases contain NaN
+            or positive infinity.
     """
     decoded, _ = viterbi_decode_incremental(
         token_logprobs,
@@ -315,6 +341,11 @@ def viterbi_decode_incremental(
     matrix operations; otherwise it falls back to the pure-Python loop.
     Both paths share identical transition semantics and first-max
     tie-breaking.
+
+    Raises:
+        ValueError: If emissions, transition biases, or incremental state
+            scores contain NaN or positive infinity. Negative infinity remains
+            valid and represents an impossible emission.
     """
     resolved_biases = resolve_viterbi_biases(biases)
     start_scores, end_scores, transition_scores = _viterbi_tables(
@@ -324,6 +355,15 @@ def viterbi_decode_incremental(
     num_classes = len(label_info.token_to_span_label)
     if state is not None and len(state.scores) != num_classes:
         raise ValueError("incremental Viterbi state does not match label space")
+    if state is not None:
+        _validate_scores(state.scores, field="incremental Viterbi state scores")
+
+    if any(len(row) < num_classes for row in token_logprobs):
+        raise ValueError(
+            "token_logprobs has fewer classes than the configured label space"
+        )
+    for row in token_logprobs:
+        _validate_scores(row[:num_classes], field="token_logprobs")
 
     if not token_logprobs:
         if state is not None:
@@ -332,11 +372,6 @@ def viterbi_decode_incremental(
             token_count=0,
             scores=tuple(start_scores),
             last_backpointer=(),
-        )
-
-    if any(len(row) < num_classes for row in token_logprobs):
-        raise ValueError(
-            "token_logprobs has fewer classes than the configured label space"
         )
 
     backpointers: list[list[int]] = []
