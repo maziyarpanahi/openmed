@@ -17,6 +17,7 @@ from openmed.mcp.consent_receipts import (
     ConsentReceiptPolicy,
     ConsentReceiptReplayError,
     ConsentReceiptRequiredError,
+    ConsentReceiptVerificationResult,
     ConsentReceiptVerifier,
     MappingConsentKeyProvider,
     canonical_argument_digest,
@@ -122,6 +123,76 @@ def test_verifier_accepts_once_and_rejects_binding_variants_and_replay() -> None
             _SCOPE,
             _ARGUMENTS,
         )
+
+
+def test_verifier_result_is_non_throwing_stable_and_single_use() -> None:
+    clock = [1_000.0]
+    receipt = _issuer(clock).issue(
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        _ARGUMENTS,
+        ttl_seconds=60,
+    )
+    verifier = ConsentReceiptVerifier(
+        MappingConsentKeyProvider({"synthetic": _KEY}),
+        clock=lambda: clock[0],
+    )
+
+    assert verifier.verify_result(
+        None, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS
+    ) == ConsentReceiptVerificationResult(False, "missing_receipt")
+    assert verifier.verify_result(
+        receipt, _CLIENT, "other-tool", _RESOURCE, _SCOPE, _ARGUMENTS
+    ) == ConsentReceiptVerificationResult(False, "binding_mismatch")
+
+    success = verifier.verify_result(
+        receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS
+    )
+    assert success == ConsentReceiptVerificationResult(True, "verified", receipt)
+    assert verifier.verify_result(
+        receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS
+    ) == ConsentReceiptVerificationResult(False, "replay")
+
+
+def test_verifier_result_maps_typed_failures_to_stable_codes() -> None:
+    clock = [1_000.0]
+    receipt = _issuer(clock).issue(
+        _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS, ttl_seconds=10
+    )
+
+    def result_for(candidate, *, now=1_000.0, keys=None):
+        verifier = ConsentReceiptVerifier(
+            keys or MappingConsentKeyProvider({"synthetic": _KEY}),
+            clock=lambda: now,
+        )
+        return verifier.verify_result(
+            candidate, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS
+        )
+
+    tampered = receipt.from_dict(
+        {**receipt.to_dict(), "signature": f"hmac-sha256:{'0' * 64}"}
+    )
+    denied = _issuer(clock).issue(
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        _ARGUMENTS,
+        decision="deny",
+        ttl_seconds=10,
+    )
+
+    assert result_for(tampered).code == "invalid_signature"
+    assert result_for(receipt, now=999.0).code == "not_yet_valid"
+    assert result_for(receipt, now=1_010.0).code == "expired"
+    assert result_for(denied).code == "decision_denied"
+    assert (
+        result_for(receipt, keys=MappingConsentKeyProvider({})).code
+        == "key_unavailable"
+    )
+    assert result_for("not-json").code == "invalid_receipt"
 
 
 def test_verifier_rejects_expiry_and_does_not_log_request_content(

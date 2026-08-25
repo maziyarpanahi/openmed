@@ -86,6 +86,15 @@ class ConsentReceiptRequiredError(ConsentReceiptVerificationError):
     """Raised when a configured policy requires a receipt but none was sent."""
 
 
+@dataclass(frozen=True, slots=True)
+class ConsentReceiptVerificationResult:
+    """Content-free outcome from non-throwing consent receipt verification."""
+
+    verified: bool
+    code: str
+    receipt: ConsentReceipt | None = None
+
+
 # Descriptive aliases for callers that prefer shorter exception names.
 ConsentReceiptExpired = ConsentReceiptExpiredError
 ConsentReceiptReplay = ConsentReceiptReplayError
@@ -540,6 +549,42 @@ class ConsentReceiptVerifier:
                 raise ConsentReceiptReplayError("receipt has already been consumed")
             self._consumed.add(candidate.receipt_id)
         return candidate
+
+    def verify_result(
+        self,
+        receipt: ConsentReceipt | Mapping[str, Any] | str | bytes | None,
+        client: str,
+        tool: str,
+        resource: str,
+        scope: str,
+        arguments: Any = _MISSING,
+        *,
+        argument_digest: str | None = None,
+        canonical_argument_digest: str | None = None,
+    ) -> ConsentReceiptVerificationResult:
+        """Verify without raising and return only a stable categorical outcome.
+
+        Successful calls retain the one-time consumption behavior of
+        :meth:`verify`. The result never includes request arguments, signatures,
+        key material, or exception messages.
+        """
+
+        if receipt is None:
+            return ConsentReceiptVerificationResult(False, "missing_receipt")
+        try:
+            verified = self.verify(
+                receipt,
+                client,
+                tool,
+                resource,
+                scope,
+                arguments,
+                argument_digest=argument_digest,
+                canonical_argument_digest=canonical_argument_digest,
+            )
+        except ConsentReceiptError as exc:
+            return ConsentReceiptVerificationResult(False, _reason_code(exc))
+        return ConsentReceiptVerificationResult(True, "verified", verified)
 
     verify_and_consume = verify
 
@@ -1010,6 +1055,7 @@ __all__ = [
     "ConsentReceiptSignatureError",
     "ConsentReceiptValidationError",
     "ConsentReceiptVerifier",
+    "ConsentReceiptVerificationResult",
     "ConsentReceiptVerificationError",
     "MappingConsentKeyProvider",
     "StaticConsentKeyProvider",

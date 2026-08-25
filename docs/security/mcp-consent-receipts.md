@@ -64,6 +64,13 @@ expired receipt, changed tool, changed resource, changed scope, changed
 client, or changed argument set fails closed. Failed binding checks do not
 consume a receipt that was never authorized for that request.
 
+Call `verifier.verify_result(...)` when an adapter needs a non-throwing result.
+It returns an immutable result with `verified`, a stable `code`, and the verified
+receipt only on success. Codes are `verified`, `missing_receipt`, `expired`,
+`not_yet_valid`, `invalid_signature`, `binding_mismatch`, `key_unavailable`,
+`decision_denied`, `replay`, or `invalid_receipt`. Results contain no exception
+message, signature, key material, request argument, or clinical text.
+
 ## Optional MCP policy hook
 
 Pass a `ConsentReceiptPolicy` to `create_mcp_server` to require receipts for
