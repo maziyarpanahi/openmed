@@ -195,6 +195,7 @@ classification:
     - benchmarks/cost-vs-cloud.md
     - zero-shot-howto.md
     - zero-shot-ner.md
+    - cookbook.md
     - examples.md
     - examples/notebook-gallery.md
     - document-adapter-provenance.md
@@ -292,6 +293,7 @@ classification:
     - compliance/consent-data-use-tags.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
+    - guides/fhir-omop-interoperability.md
     - interop/archive-safety.md
     - fhir-interop.md
     - interop/fhir-bulk-data.md
