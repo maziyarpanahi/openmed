@@ -7,12 +7,11 @@ credentials.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import math
 import re
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
-
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,128}$")
