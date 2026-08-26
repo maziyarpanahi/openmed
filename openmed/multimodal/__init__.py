@@ -1,10 +1,11 @@
 """Multimodal ingestion and redaction package for section 4.2.
 
-Intended contents include PDF/DOCX/HTML->text+offsets extraction, OCR, and
-image/DICOM redaction. The per-format parsers and OCR adapters use the shared
-``ExtractedDocument`` contract and are registered lazily via
-:func:`register_handler`, so this package stays importable without the
-``multimodal`` extra installed.
+Provides the shared ingest/redact contract (``ExtractedDocument`` and the
+``redact_document`` dispatcher) that PDF/DOCX/HTML->text+offsets, PPTX, OCR,
+and image/DICOM ingesters build on. The per-format parsers and OCR adapters live
+in sibling modules and
+are registered lazily via :func:`register_handler`; this package stays
+importable without the ``multimodal`` extra installed.
 """
 
 from __future__ import annotations
@@ -16,10 +17,17 @@ from openmed.interop import cda as _cda
 from . import contacts_calendar as _contacts_calendar
 from . import dicom as _dicom
 
+# Importing the DICOM SR adapter registers content-aware SR flattening for
+# ``.dcm`` files. pydicom is imported lazily, so the public multimodal import
+# path stays free of the optional imaging extra.
+from . import dicom_sr as _dicom_sr
+
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_docx as _documents_docx
+from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
+from . import pptx as _pptx
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -57,6 +65,31 @@ from .dicom import (
     deidentify_dicom_headers,
     redact_dicom_pixels,
 )
+from .dicom_sr import (
+    DICOM_SR_ADVISORY,
+    SrContentItem,
+    extract_dicom_sr,
+    walk_sr_content_tree,
+)
+from .document_graph import (
+    BBox,
+    BoundingBox,
+    DocumentBlock,
+    DocumentColumn,
+    DocumentFormField,
+    DocumentGraph,
+    DocumentGraphBuilder,
+    DocumentNode,
+    DocumentPage,
+    DocumentTable,
+    DocumentTableCell,
+    SourceRegion,
+    build_document_graph,
+    extract_document_graph,
+    extract_pdf_graph,
+    graph_from_ocr,
+    ingest_document_graph,
+)
 from .documents_docx import (
     DocxRedaction,
     DocxRunRange,
@@ -64,10 +97,37 @@ from .documents_docx import (
     map_text_spans_to_docx_runs,
     write_redacted_docx,
 )
+from .documents_html import extract_html, write_redacted_html
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
+from .documents_pdf_layout import (
+    PdfBBox,
+    PdfColumn,
+    PdfPageLayout,
+    PdfReadingOrder,
+    detect_pdf_columns,
+    reconstruct_pdf_reading_order,
+)
+from .documents_pdf_tables import (
+    CaptionRegion,
+    PdfRegions,
+    TableCell,
+    TableRegion,
+    extract_pdf_captions,
+    extract_pdf_regions,
+    extract_pdf_tables,
+    project_region_spans,
+    project_structured_spans,
+)
+from .email import EmailAttachmentReport, RedactedEmail, extract_email, redact_email
 from .epub import extract_epub
-from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .exceptions import (
+    DocumentGraphError,
+    EncryptedDocumentError,
+    MalformedDocumentError,
+    MissingDependencyError,
+    UnsupportedDocumentError,
+)
 from .image import (
     ImageMetadataReport,
     ImageRedactionVerificationError,
@@ -115,6 +175,25 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .odt import extract_odt
+from .pptx import (
+    PptxRedaction,
+    PptxRunRange,
+    extract_pptx,
+    map_text_spans_to_pptx_runs,
+    write_redacted_pptx,
+)
+from .render_pdf import (
+    PdfLayoutFidelityError,
+    PdfLayoutFidelityReport,
+    PdfPageFidelity,
+    PdfRedactionRegion,
+    PdfRedactionResult,
+    PdfRenderVerificationError,
+    measure_pdf_layout_fidelity,
+    render_redacted_pdf,
+    write_redacted_pdf,
+)
 from .rtf import extract_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
@@ -143,10 +222,16 @@ from .tabular_csv import (
 )
 from .verify_pdf import (
     PdfFidelityReport,
+    PdfTextRemovalReport,
+    RedactedTextRemovalError,
     RedactionFidelityError,
     RegionFidelity,
+    TextRemovalRegion,
+    assert_redacted_text_removed,
     verify_redacted_pdf,
+    verify_redacted_text_removed,
 )
+from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
     "ExtractedDocument",
@@ -157,6 +242,9 @@ __all__ = [
     "is_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "DocumentGraphError",
+    "MalformedDocumentError",
+    "EncryptedDocumentError",
     "ChatLogRedactionSummary",
     "RedactedChatLog",
     "TurnRecordAdapter",
@@ -180,15 +268,63 @@ __all__ = [
     "DicomResidualTextReport",
     "deidentify_dicom_headers",
     "redact_dicom_pixels",
+    "DICOM_SR_ADVISORY",
+    "SrContentItem",
+    "extract_dicom_sr",
+    "walk_sr_content_tree",
     "ProjectedRectangle",
+    "PdfBBox",
+    "PdfColumn",
+    "PdfPageLayout",
+    "PdfReadingOrder",
+    "detect_pdf_columns",
+    "reconstruct_pdf_reading_order",
     "extract_pdf",
     "project_text_spans",
+    "BBox",
+    "BoundingBox",
+    "SourceRegion",
+    "DocumentBlock",
+    "DocumentColumn",
+    "DocumentFormField",
+    "DocumentGraph",
+    "DocumentGraphBuilder",
+    "DocumentNode",
+    "DocumentPage",
+    "DocumentTable",
+    "DocumentTableCell",
+    "build_document_graph",
+    "graph_from_ocr",
+    "extract_document_graph",
+    "ingest_document_graph",
+    "extract_pdf_graph",
+    "TableCell",
+    "TableRegion",
+    "CaptionRegion",
+    "PdfRegions",
+    "extract_pdf_tables",
+    "extract_pdf_captions",
+    "extract_pdf_regions",
+    "project_structured_spans",
+    "project_region_spans",
     "DocxRedaction",
     "DocxRunRange",
     "extract_docx",
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
+    "extract_html",
+    "write_redacted_html",
+    "extract_odt",
+    "PptxRedaction",
+    "PptxRunRange",
+    "extract_pptx",
+    "map_text_spans_to_pptx_runs",
+    "write_redacted_pptx",
     "extract_epub",
+    "EmailAttachmentReport",
+    "RedactedEmail",
+    "extract_email",
+    "redact_email",
     "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",
@@ -248,7 +384,24 @@ __all__ = [
     "extract_asciidoc",
     "redact_source_text",
     "PdfFidelityReport",
+    "PdfTextRemovalReport",
     "RegionFidelity",
+    "TextRemovalRegion",
     "RedactionFidelityError",
+    "RedactedTextRemovalError",
+    "assert_redacted_text_removed",
     "verify_redacted_pdf",
+    "verify_redacted_text_removed",
+    "PdfLayoutFidelityError",
+    "PdfLayoutFidelityReport",
+    "PdfPageFidelity",
+    "PdfRedactionRegion",
+    "PdfRedactionResult",
+    "PdfRenderVerificationError",
+    "measure_pdf_layout_fidelity",
+    "render_redacted_pdf",
+    "write_redacted_pdf",
+    "XlsxCellRedaction",
+    "XlsxRedactionResult",
+    "redact_xlsx",
 ]

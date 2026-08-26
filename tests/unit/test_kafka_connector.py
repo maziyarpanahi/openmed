@@ -595,9 +595,10 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
         deidentify_calls["count"] += 1
         payload = text.encode("utf-8")
         digest = b""
-        # Keep the synthetic pipeline cost high enough that CI timer noise does
-        # not dominate the throughput smoke measurement.
-        for _ in range(300):
+        # Keep the synthetic pipeline cost high enough that coverage-instrumented
+        # Windows runners and CI timer noise do not dominate the throughput smoke
+        # measurement.
+        for _ in range(600):
             digest = hashlib.sha256(payload + digest).digest()
         return SimpleNamespace(deidentified_text=text.replace("Jane Roe", "[NAME]"))
 
