@@ -14,7 +14,8 @@ workflows, broad multilingual PII coverage, and fail-closed release evidence:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility
   hashes, review bundles, redaction previews, and release gates.
-- **Multimodal and structured inputs** across OCR, images, PDFs, DOCX, EPUB,
+- **Multimodal and structured inputs** across OCR, images, PDFs, DOCX,
+  email, EPUB,
   vCard/iCalendar, DICOM, CSV/TSV, JSONL chat logs, HL7 v2, CDA/C-CDA, FHIR
   operations, and FHIR Bulk NDJSON.
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and

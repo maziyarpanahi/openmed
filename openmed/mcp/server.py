@@ -25,6 +25,15 @@ from openmed.clinical.grounding import (
     ground,
 )
 from openmed.clinical.grounding.provenance import GroundingProvenance
+from openmed.core.errors import (
+    ERROR_CODES,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    OpenMedError,
+)
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -120,9 +129,12 @@ def _load_fastmcp() -> Any:
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:  # pragma: no cover - exercised by packaging users
-        raise RuntimeError(
+        raise MissingExtraError(
             "The MCP SDK is not installed. Install OpenMed with the MCP extra: "
-            'pip install "openmed[mcp]"'
+            'pip install "openmed[mcp]".',
+            package="mcp",
+            feature="The MCP server",
+            extra="mcp",
         ) from exc
     return FastMCP
 
@@ -145,12 +157,18 @@ def _result_to_dict(result: Any) -> Dict[str, Any]:
         payload = result.to_dict()
         if isinstance(payload, dict):
             return dict(payload)
-        raise TypeError("Result to_dict() must return a dictionary.")
+        raise InternalError(
+            "An OpenMed result returned a non-dictionary payload. Stop "
+            "processing and report this serialization invariant failure."
+        )
 
     if isinstance(result, dict):
         return dict(result)
 
-    raise TypeError("Unsupported OpenMed result type.")
+    raise InternalError(
+        "An OpenMed operation returned an unsupported result type. Stop "
+        "processing and report this serialization invariant failure."
+    )
 
 
 def _run_model_request(
@@ -173,6 +191,23 @@ def _json_resource(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
+MCP_ERROR_CODES: Dict[str, str] = dict(ERROR_CODES)
+
+
+def mcp_error_payload(exc: OpenMedError) -> Dict[str, Any]:
+    """Return the stable, PHI-safe MCP envelope for a public API error."""
+
+    code = MCP_ERROR_CODES.get(type(exc).__name__, exc.code)
+    return {
+        "error": {
+            "code": code,
+            "message": exc.message,
+            "details": dict(exc.details),
+        },
+        "is_error": True,
+    }
+
+
 def _error_envelope(error: BaseException) -> Dict[str, Any]:
     """Return a PHI-safe structured tool error without echoing input or output."""
 
@@ -181,6 +216,8 @@ def _error_envelope(error: BaseException) -> Dict[str, Any]:
 
     if isinstance(error, PromptInjectionDetected):
         return {"error": error.to_dict(), "is_error": True}
+    if isinstance(error, OpenMedError):
+        return mcp_error_payload(error)
     error_module = error.__class__.__module__
     if isinstance(error, ConsentReceiptRequiredError):
         code = "consent_required"
@@ -746,7 +783,11 @@ def openmed_signed_audit_report(
     text = normalize_text(text)
     lang = validate_language(lang, include_national_id=False)
     if not signing_key:
-        raise ValueError("A signing key is required")
+        raise InputError(
+            "A signing key is required. Pass a non-empty signing_key to create "
+            "a signed audit report.",
+            details={"argument": "signing_key"},
+        )
     runtime = _runtime(runtime_provider)
 
     def operation() -> Dict[str, Any]:
@@ -831,7 +872,11 @@ def openmed_unload_model(
         response = runtime.unload_all_models()
         return validate_registered_tool_output("openmed_unload_model", response)
     if model_name is None:
-        raise ValueError("model_name is required unless all_models=true")
+        raise InputError(
+            "model_name is required unless all_models=true. Pass a model name "
+            "or request unloading all inactive models.",
+            details={"argument": "model_name"},
+        )
     response = runtime.unload_model(validate_model_name(model_name))
     return validate_registered_tool_output("openmed_unload_model", response)
 
@@ -871,7 +916,11 @@ def openmed_ground(
     del allow_external_llm
     validated, safe_spans = _prepare_clinical_spans(spans)
     if type(max_candidates) is not int or max_candidates < 1:
-        raise ValueError("max_candidates must be a positive integer")
+        raise InputError(
+            "max_candidates must be a positive integer. Pass an integer greater "
+            "than zero.",
+            details={"argument": "max_candidates"},
+        )
 
     groundable = [
         (index, span)
@@ -1100,7 +1149,11 @@ def _clinical_detect_stage(
             "entity_count": len(spans),
         }
     if artifact.text is None:
-        raise ValueError("the detect stage requires text or canonical spans")
+        raise InputError(
+            "The detect stage requires source text or canonical spans. Provide "
+            "one of those inputs before running the stage.",
+            details={"stage": "detect"},
+        )
 
     from openmed.core.labels import normalize_label, policy_label_for
     from openmed.core.pipeline import DEFAULT_HASH_SECRET
@@ -1164,7 +1217,11 @@ def _clinical_context_stage(
     options = dict(stage_options)
     language = options.pop("language", None)
     if options:
-        raise ValueError("the context stage received unsupported options")
+        raise InputError(
+            "The context stage received unsupported options. Remove unknown "
+            "stage options before retrying.",
+            details={"stage": "context", "option_count": len(options)},
+        )
 
     spans: list[dict[str, Any]] = []
     for span in artifact.public_spans():
@@ -1195,7 +1252,11 @@ def _clinical_sections_stage(
     from openmed.clinical.sections import detect_sections
 
     if artifact.text is None:
-        raise ValueError("the sections stage requires source text")
+        raise InputError(
+            "The sections stage requires source text. Provide text before "
+            "running the stage.",
+            details={"stage": "sections"},
+        )
     options = dict(stage_options)
     sections = detect_sections(artifact.text, **options)
     safe_sections = [
@@ -1230,7 +1291,11 @@ def _clinical_relations_stage(
     )
 
     if artifact.text is None:
-        raise ValueError("the relations stage requires source text")
+        raise InputError(
+            "The relations stage requires source text. Provide text before "
+            "running the stage.",
+            details={"stage": "relations"},
+        )
     options = dict(stage_options)
     language = str(options.pop("language", "en")).lower()
     relations: list[dict[str, Any]] = []
@@ -1256,7 +1321,11 @@ def _clinical_relations_stage(
             _safe_relation_payload(relation.to_dict()) for relation in extracted
         ]
     elif options:
-        raise ValueError("relation options require a supported relation language")
+        raise InputError(
+            "Relation options require a supported relation language. Select a "
+            "registered language or remove the options.",
+            details={"stage": "relations"},
+        )
     return {"spans": artifact.public_spans(), "relations": relations}
 
 
@@ -1325,12 +1394,28 @@ def _clinical_external_stage_gateway(
         result = gateway.complete(json.dumps(dict(request), sort_keys=True))
         response_text = getattr(result, "reidentified_text", None)
         if not isinstance(response_text, str):
-            raise TypeError("privacy gateway returned no structured stage response")
-        response = json.loads(response_text)
+            raise InferenceError(
+                "The privacy gateway returned no structured stage response. "
+                "Retry the request or inspect the configured gateway backend."
+            )
+        try:
+            response = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            raise InferenceError(
+                "The privacy gateway returned invalid structured JSON. Retry "
+                "the request or inspect the configured gateway backend."
+            ) from exc
         if not isinstance(response, Mapping):
-            raise TypeError("privacy gateway stage response must be an object")
+            raise InferenceError(
+                "The privacy gateway stage response was not an object. Retry "
+                "the request or inspect the configured gateway backend."
+            )
         if stage != "ground":
-            raise ValueError("unsupported external clinical stage")
+            raise ConfigurationError(
+                "The requested external clinical stage is unsupported. Route "
+                "only the documented ground stage through the privacy gateway.",
+                details={"supported_stages": ["ground"]},
+            )
         return dict(response)
 
     return route
@@ -1371,13 +1456,32 @@ def _prepare_clinical_spans(
     """Validate canonical spans and remove input-only text from artifacts."""
 
     if isinstance(spans, (str, bytes, bytearray)) or not isinstance(spans, Sequence):
-        raise TypeError("spans must be a sequence of OpenMedSpan mappings")
+        raise InputError(
+            "spans must be a sequence of OpenMedSpan mappings. Pass a list of "
+            "canonical span objects.",
+            details={"argument": "spans"},
+        )
     validated: list[OpenMedSpan] = []
     safe_spans: list[Dict[str, Any]] = []
     for index, payload in enumerate(spans):
         if not isinstance(payload, Mapping):
-            raise TypeError(f"span at index {index} must be a mapping")
-        span = OpenMedSpan.from_dict(payload)
+            raise InputError(
+                "Each span must be an OpenMedSpan mapping. Correct the item at "
+                "the reported index before retrying.",
+                details={"argument": "spans", "index": index},
+            )
+        try:
+            span = OpenMedSpan.from_dict(payload)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise InputError(
+                "A span does not match the OpenMedSpan schema. Correct the item "
+                "at the reported index before retrying.",
+                details={
+                    "argument": "spans",
+                    "index": index,
+                    "error_type": type(exc).__name__,
+                },
+            ) from exc
         safe = span.to_dict()
         safe["evidence"] = _remove_input_text(safe["evidence"])
         safe["metadata"] = _remove_input_text(safe["metadata"])
@@ -1495,7 +1599,11 @@ def _sanitize_fhir_resource(resource: Mapping[str, Any]) -> Dict[str, Any]:
     """Drop direct Patient identifiers before deterministic Bundle assembly."""
 
     if not isinstance(resource, Mapping):
-        raise TypeError("FHIR resources must be mappings")
+        raise InputError(
+            "FHIR resources must be mappings. Pass JSON-compatible FHIR resource "
+            "objects before retrying.",
+            details={"argument": "resources"},
+        )
     sanitized = deepcopy(dict(resource))
     if sanitized.get("resourceType") == "Patient":
         for field in _PATIENT_DIRECT_IDENTIFIER_FIELDS:
@@ -1800,10 +1908,17 @@ def create_mcp_server(
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
     if consent_policy is not None and consent_verifier is not None:
-        raise ValueError("provide consent_policy or consent_verifier, not both")
+        raise ConfigurationError(
+            "Provide consent_policy or consent_verifier, not both. Remove one "
+            "consent configuration before creating the server."
+        )
     if consent_verifier is not None:
         if consent_client is None:
-            raise ValueError("consent_client is required with consent_verifier")
+            raise ConfigurationError(
+                "consent_client is required with consent_verifier. Configure the "
+                "client identifier before creating the server.",
+                details={"argument": "consent_client"},
+            )
         consent_policy = ConsentReceiptPolicy(
             verifier=consent_verifier,
             client=consent_client,
@@ -1813,12 +1928,19 @@ def create_mcp_server(
             require_receipt=consent_require_receipt,
         )
     if authorization_config is not None and auth_config is not None:
-        raise ValueError("Specify one MCP authorization configuration")
+        raise ConfigurationError(
+            "Specify one MCP authorization configuration. Remove either "
+            "authorization_config or the legacy auth_config alias."
+        )
     gateway_config = authorization_config or auth_config
     if gateway_config is None:
         gateway_config = MCPAuthorizationConfig.from_env()
     if not isinstance(gateway_config, MCPAuthorizationConfig):
-        raise TypeError("MCP authorization configuration has an invalid type")
+        raise ConfigurationError(
+            "The MCP authorization configuration has an invalid type. Pass an "
+            "MCPAuthorizationConfig instance.",
+            details={"argument": "authorization_config"},
+        )
 
     install_mcp_log_filter()
     tool_scopes = {

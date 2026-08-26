@@ -730,6 +730,14 @@ Validation example:
 }
 ```
 
+Failures raised by the public Python taxonomy keep their stable class code in
+this envelope. Input, configuration, and policy errors use HTTP 400;
+capability and budget errors use HTTP 503; and internal or inference errors use
+HTTP 500 with `details` set to `null`. See
+[Structured public errors](api/errors.md) for the complete mapping and
+compatibility guarantees. Request-schema failures continue to use HTTP 422 and
+`validation_error` as shown above.
+
 Timeout example:
 
 ```json

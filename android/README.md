@@ -52,6 +52,19 @@ cd android
 ./gradlew test
 ```
 
+The Android CI gate also builds the release AAR and measures offline library
+initialization (packaged catalog load plus downloader/cache setup):
+
+```bash
+cd android
+./gradlew :openmedkit:verifyAndroidBudgets --continue
+```
+
+Reviewable ceilings live in `gradle/budgets.properties`. Measurements are
+written to `openmedkit/build/reports/budgets/` and published in the GitHub
+Actions job summary. Budget increases should include an explicit review of the
+packaged AAR or cold-start regression that requires the additional headroom.
+
 Dependency resolution is limited to Google Maven, Maven Central, and the scoped
 OpenMed group on JitPack. Dependency and plugin versions are declared in
 `gradle/libs.versions.toml`; avoid hardcoding library versions in module build
