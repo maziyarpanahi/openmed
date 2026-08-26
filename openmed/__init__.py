@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
+    from .aio import aanalyze_text, abatch, adeidentify, aextract_pii
     from .core import ModelCachePolicy, ModelLoader, OpenMedConfig
     from .core.capabilities import (
         BackendSpec,
@@ -34,6 +35,10 @@ if TYPE_CHECKING:
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {
+    "aanalyze_text": ".aio",
+    "abatch": ".aio",
+    "adeidentify": ".aio",
+    "aextract_pii": ".aio",
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
     "ModelCachePolicy": ".core",
@@ -60,6 +65,7 @@ _LAZY_IMPORTS = {
     "Anonymizer": ".core.anonymizer",
     "AnonymizerConfig": ".core.anonymizer",
     "IndiaSurrogateProvider": ".core.anonymizer",
+    "discover_anonymizer_provider_plugins": ".core.anonymizer",
     "register_clinical_provider": ".core.anonymizer",
     "register_label_generator": ".core.anonymizer",
     "AttestationReport": ".core.attestation",
@@ -877,6 +883,7 @@ __all__ = [
     "DatasetRedactionResult",
     "DatasetRedactionSummary",
     "process_batch",
+    "abatch",
     "redact_dataset",
     "AdvancedNERProcessor",
     "StreamingReplayResult",
@@ -908,6 +915,7 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "aanalyze_text",
     "explain",
     "ExplainReport",
     "generate_text",
@@ -940,7 +948,9 @@ __all__ = [
     "timed",
     # PII detection and de-identification
     "extract_pii",
+    "aextract_pii",
     "deidentify",
+    "adeidentify",
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
@@ -1006,6 +1016,7 @@ __all__ = [
     "AnonymizerConfig",
     "IndiaSurrogateProvider",
     "LANG_TO_LOCALE",
+    "discover_anonymizer_provider_plugins",
     "register_clinical_provider",
     "register_label_generator",
     "SurrogateVault",
