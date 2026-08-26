@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-optional Apache Beam redaction transform with explicit
+  schema metadata, bounded record and byte state, capped retries, deterministic
+  serialization, cache-only defaults, and aggregate value-free reports
+  (#2387).
+- Added a dependency-optional Spark redaction transform with immutable,
+  pickle-safe configuration, partition-local workers, deterministic retry
+  behavior, bounded serialization, and stable value-free failures (#2386).
 - Added a locked Pixi Python 3.12 workflow for Linux x86_64, Intel macOS, and
   Apple Silicon macOS, with environments mirroring the development,
   documentation, Hugging Face, service, and MLX extras (#2348).
