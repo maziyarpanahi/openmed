@@ -36,6 +36,7 @@ nav:
       - JSONL Trace Content Walker: reference/trace-jsonl.md
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
+      - Async Python API: async-api.md
       - REST Service (MVP): rest-service.md
       - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
@@ -62,6 +63,7 @@ nav:
       - Service Load Testing & Latency SLOs: serving/load-testing.md
       - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
+      - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
