@@ -372,7 +372,7 @@ def test_model_release_workflow_is_separate_from_sdk_tags():
 
     assert "\n  push:" not in model_workflow
     assert "workflow_dispatch:" in model_workflow
-    assert "schedule:" in model_workflow
+    assert "schedule:" not in model_workflow
     assert "fetch-depth: 0" in model_workflow
     assert "Check API migration guide completeness" in model_workflow
     assert "if: github.event_name == 'workflow_dispatch'" in model_workflow

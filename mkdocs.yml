@@ -239,7 +239,7 @@ nav:
       - Onboarding: onboarding.md
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
-      - Model Release Queue: model-release-queue.md
+      - Local Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
@@ -251,7 +251,7 @@ nav:
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
-      - HF Write Token Policy: security/hf-token-policy.md
+      - Manual HF Model Publication: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
