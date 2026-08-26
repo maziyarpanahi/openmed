@@ -143,6 +143,11 @@ corpus and keeps the exported graph callable through the same inputs and
 `model.required_operators_and_types.config` is the required-operators/types
 file to pass into an ONNX Runtime Android minimal build.
 
+The graph family and operator list in `openmed-onnx.json` also feed
+[Android QNN and NNAPI Acceleration](runtimes/android-accelerators.md). The
+Android runtime combines that manifest contract with device-observed provider
+coverage so unsupported subgraphs stay on CPU.
+
 If the optional ONNX Runtime conversion tooling is not available, export still
 finishes with the `.onnx` artifacts and logs a dependency-only skip reason. The
 message does not include source model text or sample input content.
