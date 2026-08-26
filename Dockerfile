@@ -1,4 +1,6 @@
-FROM python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd521731aafc0d76
+FROM python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd521731aafc0d76 AS python-runtime
+
+FROM debian:forky-slim@sha256:91b0aaebf7a1ccacfe7a9cbff6ab2d6be7d9b3b6cf1dfcf44b25f9095c0e0464
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,22 +9,29 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Keep the immutable base's OS security fixes explicit and reproducible.
+# Keep the immutable base's Python runtime while using Debian's fixed SQLite
+# release. Runtime libraries stay exact and come from one Debian suite.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        "bsdutils=1:2.41.5-0+deb13u1" \
-        "libblkid1=2.41.5-0+deb13u1" \
-        "liblastlog2-2=2.41.5-0+deb13u1" \
-        "libmount1=2.41.5-0+deb13u1" \
-        "libsmartcols1=2.41.5-0+deb13u1" \
-        "libssl3t64=3.5.7-1~deb13u2" \
-        "libuuid1=2.41.5-0+deb13u1" \
-        "login=1:4.16.0-2+really2.41.5-0+deb13u1" \
-        "mount=2.41.5-0+deb13u1" \
-        "openssl=3.5.7-1~deb13u2" \
-        "openssl-provider-legacy=3.5.7-1~deb13u2" \
-        "util-linux=2.41.5-0+deb13u1" \
+        "ca-certificates=20260601" \
+        "libbz2-1.0=1.0.8-6+b2" \
+        "libffi8=3.8.0-2" \
+        "libgdbm6t64=1.26-1+b2" \
+        "liblzma5=5.8.3-1" \
+        "libncursesw6=6.6+20260608-2" \
+        "libreadline8t64=8.3-4" \
+        "libsqlite3-0=3.53.4-2" \
+        "libssl3t64=3.6.3-1" \
+        "libuuid1=2.42.2-2" \
+        "netbase=6.5" \
+        "openssl=3.6.3-1" \
+        "openssl-provider-legacy=3.6.3-1" \
+        "readline-common=8.3-4" \
+        "tzdata=2026c-1" \
+        "zlib1g=1:1.3.dfsg+really1.3.2-3" \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=python-runtime /usr/local /usr/local
 
 COPY . /app
 
