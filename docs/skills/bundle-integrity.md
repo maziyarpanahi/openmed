@@ -18,7 +18,7 @@ The bundle directory must contain a `manifest.json` file. The schema is:
 | `manifest_version` | Schema version string. Must be in the verifier's accepted set. |
 | `bundle_id` | Stable, non-empty bundle identifier. |
 | `entry_points` | List of relative paths of executable entry points in the bundle. |
-| `files` | Mapping of relative file path to declared SHA-256 hex digest. |
+| `files` | Complete mapping of bundle-relative file paths to declared SHA-256 hex digests. |
 | `signature_scheme` | Signature scheme; `"none"`, `"hmac-sha256"`, or `"ed25519"`. |
 | `signature` | Hex-encoded signature tag; empty when scheme is `"none"`. |
 
@@ -49,7 +49,8 @@ the result with a stable failure category:
 4. Every declared file's computed SHA-256 matches the declared digest.
 5. Every declared entry point file exists in the bundle directory.
 6. Every entry point is listed in the manifest `files` map.
-7. When `signature_scheme` is `hmac-sha256`, the supplied key produces a
+7. The bundle contains no files absent from the manifest `files` map.
+8. When `signature_scheme` is `hmac-sha256`, the supplied key produces a
    matching HMAC-SHA256 over the canonical manifest. When `signature_scheme`
    is `ed25519`, the supplied public key verifies the Ed25519 signature over
    the canonical manifest.
@@ -57,13 +58,14 @@ the result with a stable failure category:
 ## Failure categories
 
 All failures are represented in the result and never raised, except filesystem
-errors reading `manifest.json` itself. The ten stable `REASON_*` categories:
+errors reading `manifest.json` itself. The eleven stable `REASON_*` categories:
 
 | Category | Description |
 |---|---|
 | `manifest_malformed` | `manifest.json` is not valid JSON or fails schema validation. |
 | `manifest_version_unsupported` | Manifest version is not in the accepted set. |
 | `file_missing` | A declared file does not exist in the bundle directory. |
+| `file_undeclared` | The bundle contains a file absent from the manifest files map. |
 | `hash_mismatch` | A file's computed SHA-256 does not match the declared digest. |
 | `entry_point_missing` | A declared entry point file does not exist. |
 | `entry_point_not_declared` | An entry point is not listed in the manifest files map. |

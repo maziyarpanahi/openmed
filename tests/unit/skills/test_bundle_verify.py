@@ -16,6 +16,7 @@ from openmed.skills.bundle_verify import (
     REASON_ENTRY_POINT_MISSING,
     REASON_ENTRY_POINT_NOT_DECLARED,
     REASON_FILE_MISSING,
+    REASON_FILE_UNDECLARED,
     REASON_HASH_MISMATCH,
     REASON_MANIFEST_MALFORMED,
     REASON_MANIFEST_VERSION_UNSUPPORTED,
@@ -173,6 +174,37 @@ def test_manifest_validation_failure(tmp_path):
     assert result.reason == REASON_MANIFEST_MALFORMED
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("entry_points", None),
+        ("entry_points", 1),
+        ("files", None),
+        ("files", []),
+        ("signature_scheme", []),
+        ("signature", None),
+    ],
+)
+def test_malformed_field_types_return_failure(tmp_path, field, value):
+    _, manifest = _make_bundle(tmp_path, {"main.py": "print('hi')\n"})
+    manifest[field] = value
+    _write_manifest(tmp_path, manifest)
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
+def test_non_mapping_manifest_returns_failure(tmp_path):
+    (tmp_path / "manifest.json").write_text("[]", encoding="utf-8")
+
+    result = verify_bundle(tmp_path)
+
+    assert result.valid is False
+    assert result.reason == REASON_MANIFEST_MALFORMED
+
+
 def test_unsupported_manifest_version(tmp_path):
     bundle_dir, manifest = _make_bundle(tmp_path, {"main.py": "print('hi')\n"})
     manifest["manifest_version"] = "2.0"
@@ -216,6 +248,24 @@ def test_hash_mismatch(tmp_path):
     assert len(result.files) == 1
     assert result.files[0].matched is False
     assert result.files[0].path == "main.py"
+
+
+def test_undeclared_file_rejected(tmp_path):
+    bundle_dir, _ = _make_bundle(
+        tmp_path,
+        {"main.py": "print('hi')\n"},
+        manifest_extra={"entry_points": ["main.py"]},
+    )
+    (bundle_dir / "undeclared.py").write_text(
+        "print('undeclared')\n",
+        encoding="utf-8",
+    )
+
+    result = verify_bundle(bundle_dir)
+
+    assert result.valid is False
+    assert result.reason == REASON_FILE_UNDECLARED
+    assert "undeclared.py" not in result.message
 
 
 def test_entry_point_missing(tmp_path):

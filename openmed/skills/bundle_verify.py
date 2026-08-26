@@ -26,6 +26,7 @@ HASH_PREFIX_LENGTH = 12
 REASON_MANIFEST_MALFORMED = "manifest_malformed"
 REASON_MANIFEST_VERSION_UNSUPPORTED = "manifest_version_unsupported"
 REASON_FILE_MISSING = "file_missing"
+REASON_FILE_UNDECLARED = "file_undeclared"
 REASON_HASH_MISMATCH = "hash_mismatch"
 REASON_ENTRY_POINT_MISSING = "entry_point_missing"
 REASON_ENTRY_POINT_NOT_DECLARED = "entry_point_not_declared"
@@ -122,7 +123,10 @@ class SkillBundleManifest:
                 raise ValueError("files must map to 64-character hex digests")
             files[path] = digest.lower()
 
-        if self.signature_scheme not in _SIGNATURE_SCHEMES:
+        if (
+            not isinstance(self.signature_scheme, str)
+            or self.signature_scheme not in _SIGNATURE_SCHEMES
+        ):
             raise ValueError(
                 "signature_scheme must be 'none', 'hmac-sha256', or 'ed25519'"
             )
@@ -148,11 +152,22 @@ class SkillBundleManifest:
 
         if not isinstance(data, Mapping):
             raise ValueError("manifest must be a mapping")
+
+        entry_points = data.get("entry_points", ())
+        if isinstance(entry_points, (str, bytes)) or not isinstance(
+            entry_points, Sequence
+        ):
+            raise ValueError("entry_points must be a sequence of strings")
+
+        files = data.get("files", {})
+        if not isinstance(files, Mapping):
+            raise ValueError("files must be a mapping")
+
         return cls(
             manifest_version=data.get("manifest_version", ""),
             bundle_id=data.get("bundle_id", ""),
-            entry_points=tuple(data.get("entry_points", ())),
-            files=dict(data.get("files", {})),
+            entry_points=tuple(entry_points),
+            files=dict(files),
             signature_scheme=data.get("signature_scheme", "none"),
             signature=data.get("signature", ""),
         )
@@ -344,7 +359,7 @@ class BundleVerifier:
 
         try:
             manifest = SkillBundleManifest.from_mapping(raw_manifest)
-        except ValueError:
+        except (TypeError, ValueError):
             _LOGGER.info(
                 "bundle verification failed: category=%s",
                 REASON_MANIFEST_MALFORMED,
@@ -485,6 +500,29 @@ class BundleVerifier:
                     files=tuple(file_results),
                     entry_points_checked=tuple(entry_points_checked),
                 )
+
+        declared_paths = {Path(path).as_posix() for path in manifest.files}
+        actual_paths = {
+            path.relative_to(bundle_path).as_posix()
+            for path in bundle_path.rglob("*")
+            if path != manifest_path and (path.is_file() or path.is_symlink())
+        }
+        undeclared_count = len(actual_paths - declared_paths)
+        if undeclared_count:
+            _LOGGER.info(
+                "bundle=%s verification failed: category=%s undeclared_count=%d",
+                manifest.bundle_id,
+                REASON_FILE_UNDECLARED,
+                undeclared_count,
+            )
+            return _build_failure(
+                manifest.bundle_id,
+                manifest.manifest_version,
+                REASON_FILE_UNDECLARED,
+                "one or more bundle files are not declared in the manifest",
+                files=tuple(file_results),
+                entry_points_checked=tuple(entry_points_checked),
+            )
 
         signature_verified = False
         if manifest.signature_scheme == "none":
