@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic cost-versus-cloud benchmark with measured local
+  throughput amortization, cited dated AWS and Azure paid-price tiers,
+  breakeven math, JSON/Markdown CLI output, and fail-closed citation checks
+  (#2342).
+- Added lazy runtime wiring for validated anonymizer-provider plugins and the
+  `openmed.providers` registrar compatibility group, with canonical-label and
+  locale routing, deterministic Faker access, idempotent discovery, PHI-safe
+  failure warnings, and built-in-generator fallback (#2341).
+- Added lazy async wrappers for PII extraction, de-identification, and text
+  analysis, plus ordered batch execution with an optional hard concurrency
+  bound that keeps synchronous work off the event-loop thread (#2338).
+- Added a Kubernetes HPA reference for aggregate queue-depth and in-flight
+  request metrics, with a concurrent CPU signal, exact load-to-replica
+  guidance, Prometheus Adapter wiring, bounded queue labels, and PHI-safe
+  metric tests (#831).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
@@ -429,6 +444,13 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   report plus committed baseline and rollout state with no live API call, and
   emits a PHI-free audit record carrying metric names, numeric deltas, store
   keys and hashes only (#1803).
+- Added a read-only catalog coherence gate that checks every `models.jsonl`
+  `canonical_labels` value against `openmed.core.labels.CANONICAL_LABELS`,
+  resolving aliases (`CHEM`/`SIMPLE_CHEMICAL` -> `CHEMICAL`) while still
+  rejecting labels that only survive `normalize_label`'s `OTHER` fallthrough;
+  exposed as `openmed.core.labels.is_recognized_label`,
+  `openmed.core.catalog_coherence.manifest_label_errors`, and a `Catalog
+  coherence` workflow (#2246).
 
 ### Changed
 
