@@ -174,6 +174,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   token-throughput, install-size, and peak-RSS records, plus fail-closed
   footprint budgets and archived ARM64 proxy evidence.
 
+### Changed
+
+- Removed the scheduled and manual GitHub-hosted model conversion and Hugging
+  Face publication workflows, removed the daily model release-gate cron, and
+  removed the hosted Apple Silicon model-conversion smoke job. Model conversion,
+  evaluation, and publication remain explicit local maintainer operations
+  (#2961).
+- Optimized MLX Privacy Filter decoding with bounded BIOES transition-table
+  reuse, equivalent NumPy and pure-Python paths, span-local grapheme work,
+  binary32-compatible confidence reconstruction, and opt-in kernel compilation
+  controls (#2946).
+
 ## [2.2.0] - 2026-08-21
 
 OpenMed 2.2 completes the trustworthy clinical-data-exchange milestone across
