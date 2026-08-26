@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added lazy runtime wiring for validated anonymizer-provider plugins and the
+  `openmed.providers` registrar compatibility group, with canonical-label and
+  locale routing, deterministic Faker access, idempotent discovery, PHI-safe
+  failure warnings, and built-in-generator fallback (#2341).
 - Added lazy async wrappers for PII extraction, de-identification, and text
   analysis, plus ordered batch execution with an optional hard concurrency
   bound that keeps synchronous work off the event-loop thread (#2338).
