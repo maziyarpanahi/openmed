@@ -110,6 +110,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "llamaindex",
         "omop",
         "openmrs",
+        "opensearch",
         "pandas",
         "philter",
         "polars",
@@ -140,6 +141,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("llamaindex").extra == "llamaindex"
     assert adapter_spec("omop").extra == ""
     assert adapter_spec("openmrs").extra == "openmrs"
+    assert adapter_spec("opensearch").extra == ""
     assert adapter_spec("pandas").extra == "pandas"
     assert adapter_spec("presidio").extra == "presidio"
     assert adapter_spec("philter").extra == "philter"
