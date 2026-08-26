@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Kubernetes HPA reference for aggregate queue-depth and in-flight
+  request metrics, with a concurrent CPU signal, exact load-to-replica
+  guidance, Prometheus Adapter wiring, bounded queue labels, and PHI-safe
+  metric tests (#831).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
