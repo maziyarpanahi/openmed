@@ -1,0 +1,40 @@
+name: Catalog coherence
+
+on:
+  pull_request:
+    paths:
+      - "models.jsonl"
+      - "openmed/core/labels.py"
+      - "openmed/core/catalog_coherence.py"
+      - "tests/unit/core/test_catalog_coherence.py"
+      - ".github/workflows/coherence.yml"
+  push:
+    branches: [master]
+    paths:
+      - "models.jsonl"
+      - "openmed/core/labels.py"
+      - "openmed/core/catalog_coherence.py"
+      - "tests/unit/core/test_catalog_coherence.py"
+      - ".github/workflows/coherence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Check manifest canonical_labels against the taxonomy
+        run: python -m openmed.core.catalog_coherence
