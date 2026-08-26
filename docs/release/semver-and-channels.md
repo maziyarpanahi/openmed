@@ -8,7 +8,7 @@ Model artifacts are data. A bad checkpoint affects one model entry and can be
 rolled back by repointing the manifest to the last green artifact.
 
 - Versioning: repository suffix or artifact revision plus a reproducibility hash.
-- Cadence: daily-capable once the release gates and manifest automation are in place.
+- Cadence: maintainer-triggered after local conversion, evaluation, and review.
 - Gate owner: release engineering plus the evaluation gate.
 - Rollback: manifest pointer flip, regenerated cards, and a tracking issue.
 
@@ -78,46 +78,51 @@ stable. Library releases must also pass the repository policy, dependency
 license policy, and test suite.
 
 Model promotion and Library/SDK publication remain separate release streams.
-`.github/workflows/release-gates.yml` runs on its schedule or by explicit model
-candidate dispatch; an SDK `v*` tag does not promote a model. A Library/SDK
-release that changes a `canary`, `latest`, or `last_green` model pointer must
-first complete the model workflow with real staged golden and SHIELD evidence.
-When those pointers are unchanged, the SDK tag uses the retained last-green
-model evidence and the tag-driven package, platform, and repository gates.
+`.github/workflows/release-gates.yml` runs only by explicit model-candidate
+dispatch or the metadata-only rollback dispatch; it has no schedule and never
+publishes model artifacts. An SDK `v*` tag does not promote a model. A
+Library/SDK release that changes a `canary`, `latest`, or `last_green` model
+pointer must first complete the model gate with real staged golden and SHIELD
+evidence. When those pointers are unchanged, the SDK tag uses the retained
+last-green model evidence and the tag-driven package, platform, and repository
+gates.
 
-## Nightly Model Orchestration
+## Manual Model Orchestration
 
-`.github/workflows/nightly-release.yml` runs at 02:17 UTC each weekday. Its
-reviewed control plane is `gates/nightly_release_queue.json`, which maps Monday
-through Friday to a named theme and at least two explicit model candidates. A
-queue row fixes the source and target repositories, family, tier, format,
-parameter count, synthetic fixture path, and evaluation suite. Queue identifiers
-and repository identifiers are validated before any conversion starts.
+OpenMed does not build, convert, evaluate, or publish models on a GitHub Actions
+schedule. Maintainers may use `gates/nightly_release_queue.json` as a reviewed
+local control file on explicitly provisioned hardware. A queue row fixes the
+source and target repositories, family, tier, format, parameter count,
+synthetic fixture path, and evaluation suite. Queue identifiers and repository
+identifiers are validated before any conversion starts.
 
-For each candidate, `scripts/release/orchestrate.py run` executes conversion,
-the shared evaluation harness, the signed `ReleaseGate`, artifact-backed model
-card generation, publication, registry promotion, and a fresh-environment smoke
-test in that order. A non-`RELEASABLE` report halts that candidate before model
-card generation or publication. The remaining candidates continue, while the
-run becomes `PARTIAL` and a PHI-free quarantine issue records identifiers,
-hashes, the failing stage, the run id, and the git SHA.
+For each explicitly selected candidate, a maintainer can run
+`scripts/release/orchestrate.py run` locally to execute conversion, the shared
+evaluation harness, the signed `ReleaseGate`, artifact-backed model-card
+generation, publication, registry promotion, and a fresh-environment smoke test
+in that order. A non-`RELEASABLE` report halts that candidate before model-card
+generation or publication. The remaining candidates continue, while the run
+becomes `PARTIAL` and its PHI-free evidence records identifiers, hashes, the
+failing stage, the run id, and the git SHA.
 
 The smoke test downloads the just-published repository into a new virtual
 environment and calls both `extract_pii` and `deidentify` on a synthetic probe.
 It emits only a span count and offsets hash. Failure immediately flips the
 family's `latest` registry pointer back to committed `last_green` evidence.
 
-Every final candidate outcome is appended to `gates/release_runs.jsonl`. The
-row binds the gate-report path and hash, artifact digest, decision, final pointer
-target, smoke state, start/completion timestamps, run status, and git SHA under
-a provenance hash. Gate reports live under `gates/release_reports/<run-id>/`.
-The workflow opens a review PR containing the ledger, reports, manifest, and
-registry state. Reconstruct and validate a run without a live API call with:
+Every locally executed candidate outcome is appended to
+`gates/release_runs.jsonl`. The row binds the gate-report path and hash,
+artifact digest, decision, final pointer target, smoke state, start/completion
+timestamps, run status, and git SHA under a provenance hash. Gate reports live
+under `gates/release_reports/<run-id>/`.
+A maintainer reviews and commits the ledger, reports, manifest, and registry
+state through a normal PR. Reconstruct and validate a run without a live API
+call with:
 
 ```bash
 python scripts/release/orchestrate.py audit \
   --run-id <workflow-run-id>-<attempt>
 ```
 
-Publication uses the protected `hf-publish` environment and follows the
-[HF write-token policy](../security/hf-token-policy.md).
+Publication is an explicit local operation and follows the [manual Hugging Face
+publication policy](../security/hf-token-policy.md).
