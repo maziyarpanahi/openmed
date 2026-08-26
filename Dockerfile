@@ -15,9 +15,12 @@ RUN apt-get update \
         "liblastlog2-2=2.41.5-0+deb13u1" \
         "libmount1=2.41.5-0+deb13u1" \
         "libsmartcols1=2.41.5-0+deb13u1" \
+        "libssl3t64=3.5.7-1~deb13u2" \
         "libuuid1=2.41.5-0+deb13u1" \
         "login=1:4.16.0-2+really2.41.5-0+deb13u1" \
         "mount=2.41.5-0+deb13u1" \
+        "openssl=3.5.7-1~deb13u2" \
+        "openssl-provider-legacy=3.5.7-1~deb13u2" \
         "util-linux=2.41.5-0+deb13u1" \
     && rm -rf /var/lib/apt/lists/*
 
