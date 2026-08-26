@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import math
+import random
 import re
 from datetime import datetime
 from unittest.mock import patch
 
 import pytest
 
+import openmed.core.decoding.viterbi as viterbi_module
 from openmed import deidentify_stream
 from openmed.core.decoding import (
+    VITERBI_BIAS_KEYS,
+    IncrementalViterbiState,
     build_label_info,
     viterbi_decode,
     viterbi_decode_incremental,
@@ -344,3 +349,165 @@ def test_incremental_viterbi_matches_full_decode_after_commit_boundary():
     assert state.token_count == 3
     assert state.last_backpointer
     assert resumed_state.token_count == len(logprobs)
+
+
+@pytest.mark.parametrize("bad_score", [float("nan"), math.inf])
+@pytest.mark.parametrize("backend", ["numpy", "python"])
+def test_viterbi_rejects_invalid_emissions_in_both_backends(
+    bad_score,
+    backend,
+    monkeypatch,
+):
+    if backend == "numpy" and viterbi_module._np is None:
+        pytest.skip("numpy is not installed")
+    if backend == "python":
+        monkeypatch.setattr(viterbi_module, "_np", None)
+
+    label_info = build_label_info({0: "O", 1: "S-NAME"})
+    with pytest.raises(ValueError, match="token_logprobs"):
+        viterbi_decode(
+            [[0.0, bad_score]],
+            label_info=label_info,
+            biases={},
+        )
+
+
+@pytest.mark.parametrize("bad_score", [float("nan"), math.inf])
+def test_viterbi_rejects_invalid_biases_and_incremental_state(bad_score):
+    label_info = build_label_info({0: "O", 1: "S-NAME"})
+    with pytest.raises(ValueError, match="biases"):
+        viterbi_decode(
+            [[0.0, -1.0]],
+            label_info=label_info,
+            biases={VITERBI_BIAS_KEYS[0]: bad_score},
+        )
+
+    state = IncrementalViterbiState(
+        token_count=1,
+        scores=(0.0, bad_score),
+    )
+    with pytest.raises(ValueError, match="state scores"):
+        viterbi_decode_incremental(
+            [[0.0, -1.0]],
+            label_info=label_info,
+            biases={},
+            state=state,
+        )
+
+
+@pytest.mark.skipif(
+    viterbi_module._np is None,
+    reason="numpy is required to compare the accelerated decoder",
+)
+def test_numpy_and_python_viterbi_paths_match_randomized(monkeypatch):
+    label_info = build_label_info(
+        {
+            0: "O",
+            1: "B-NAME",
+            2: "I-NAME",
+            3: "E-NAME",
+            4: "S-NAME",
+            5: "B-EMAIL",
+            6: "I-EMAIL",
+            7: "E-EMAIL",
+            8: "S-EMAIL",
+        }
+    )
+    rng = random.Random(2946)
+    score_values = (-math.inf, -8.0, -2.0, -0.5, 0.0, 0.0)
+    cases = []
+    for _ in range(60):
+        token_count = rng.randint(1, 10)
+        emissions = [
+            [rng.choice(score_values) for _ in range(9)] for _ in range(token_count)
+        ]
+        biases = {key: rng.choice((-0.75, 0.0, 0.0, 0.25)) for key in VITERBI_BIAS_KEYS}
+        split_at = rng.randint(1, token_count)
+        cases.append((emissions, biases, split_at))
+
+    numpy_paths = [
+        viterbi_decode(emissions, label_info=label_info, biases=biases)
+        for emissions, biases, _ in cases
+    ]
+    numpy_incremental = []
+    for emissions, biases, split_at in cases:
+        prefix, state = viterbi_decode_incremental(
+            emissions[:split_at],
+            label_info=label_info,
+            biases=biases,
+        )
+        suffix, resumed_state = viterbi_decode_incremental(
+            emissions[split_at:],
+            label_info=label_info,
+            biases=biases,
+            state=state,
+        )
+        numpy_incremental.append((prefix, suffix, state, resumed_state))
+
+    monkeypatch.setattr(viterbi_module, "_np", None)
+    python_paths = [
+        viterbi_decode(emissions, label_info=label_info, biases=biases)
+        for emissions, biases, _ in cases
+    ]
+    python_incremental = []
+    for emissions, biases, split_at in cases:
+        prefix, state = viterbi_decode_incremental(
+            emissions[:split_at],
+            label_info=label_info,
+            biases=biases,
+        )
+        suffix, resumed_state = viterbi_decode_incremental(
+            emissions[split_at:],
+            label_info=label_info,
+            biases=biases,
+            state=state,
+        )
+        python_incremental.append((prefix, suffix, state, resumed_state))
+
+    assert numpy_paths == python_paths
+    assert numpy_incremental == python_incremental
+
+
+def test_viterbi_transition_cache_is_bounded_and_reuses_last_entry():
+    id2label = {0: "O"}
+    label_id = 1
+    for entity_index in range(55):
+        for boundary in "BIES":
+            id2label[label_id] = f"{boundary}-ENTITY_{entity_index}"
+            label_id += 1
+    label_info = build_label_info(id2label)
+    emissions = [[0.0] * len(id2label)]
+
+    with patch.object(
+        viterbi_module,
+        "_build_viterbi_scores",
+        wraps=viterbi_module._build_viterbi_scores,
+    ) as build_tables:
+        for bias_value in range(8):
+            viterbi_decode(
+                emissions,
+                label_info=label_info,
+                biases={VITERBI_BIAS_KEYS[0]: float(bias_value)},
+            )
+        viterbi_decode(
+            emissions,
+            label_info=label_info,
+            biases={VITERBI_BIAS_KEYS[0]: 7.0},
+        )
+
+    assert build_tables.call_count == 8
+    assert label_info._viterbi_table_cache is not None
+    cache_key, tables = label_info._viterbi_table_cache
+    assert cache_key[0] == 7.0
+    assert len(tables[2]) == len(id2label)
+
+    different_label_info = build_label_info({0: "O", 1: "S-OTHER"})
+    viterbi_decode(
+        [[0.0, -1.0]],
+        label_info=different_label_info,
+        biases={VITERBI_BIAS_KEYS[0]: 7.0},
+    )
+    assert different_label_info._viterbi_table_cache is not None
+    assert different_label_info._viterbi_table_cache is not (
+        label_info._viterbi_table_cache
+    )
