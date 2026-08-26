@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, BinaryIO, Callable, Iterable, Mapping
 
 from openmed.core.capabilities import is_backend_available as _is_backend_available
 
@@ -151,7 +151,7 @@ class ExtractedDocument:
 # Document handlers are registered lazily by per-format ingester modules so the
 # dispatcher never needs editing when a new format lands.
 DocumentHandler = Callable[..., ExtractedDocument]
-DocumentDetector = Callable[[str | Path], bool]
+DocumentDetector = Callable[[Any], bool]
 
 
 @dataclass(frozen=True)
@@ -188,9 +188,7 @@ def register_handler(
         _HANDLERS.setdefault(_normalize_extension(extension), []).append(spec)
 
 
-def _select_handler(
-    path: str | Path, specs: Iterable[_HandlerSpec]
-) -> _HandlerSpec | None:
+def _select_handler(path: Any, specs: Iterable[_HandlerSpec]) -> _HandlerSpec | None:
     ordered = sorted(tuple(specs), key=lambda spec: spec.detector is None)
     for spec in ordered:
         if spec.detector is None or spec.detector(path):
@@ -199,7 +197,7 @@ def _select_handler(
 
 
 def redact_document(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     *,
     policy: Any | None = None,
     models: Any | None = None,
@@ -216,8 +214,12 @@ def redact_document(
     language-aware ingestion: image handlers pass it through to OCR so scanned
     documents are read in the right language. Handlers that do not use it accept
     and ignore it. Defaults to English-equivalent behavior when unset.
+
+    ``path`` may also be a seekable binary stream with a ``name`` attribute;
+    the dispatcher uses that safe name solely for extension routing.
     """
-    extension = Path(str(path)).suffix.lower()
+    source_name = getattr(path, "name", path)
+    extension = Path(str(source_name)).suffix.lower()
     specs = _HANDLERS.get(extension)
     if specs is None:
         ensure_multimodal_available()

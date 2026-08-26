@@ -40,6 +40,7 @@ OPTIONAL_ENRICHMENT_FIELDS = frozenset(
         "recommended_tier",
         "script_coverage",
         "script_eval",
+        "training_data_licenses",
         "training_provenance",
     }
 )
@@ -79,6 +80,10 @@ TRAINING_PROVENANCE_OPTIONAL_FIELDS = frozenset(
 TRAINING_PROVENANCE_FIELDS = (
     TRAINING_PROVENANCE_REQUIRED_FIELDS | TRAINING_PROVENANCE_OPTIONAL_FIELDS
 )
+TRAINING_DATA_LICENSE_REQUIRED_FIELDS = frozenset(
+    {"name", "license", "redistributable", "role"}
+)
+TRAINING_DATA_LICENSE_ROLES = ("train", "eval")
 
 ALLOWED_TIERS = ("Tiny", "Small", "Base", "Medium", "Large", "XLarge")
 ALLOWED_FORMATS = (
@@ -86,6 +91,7 @@ ALLOWED_FORMATS = (
     "mlx-fp",
     "mlx-8bit",
     "mlx-4bit",
+    "mlx-2bit",
     "onnx",
     "onnx-android",
     "onnx-int8",
@@ -432,6 +438,13 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
             line_number,
             row["training_provenance"],
             row.get("reproducibility_hash"),
+        )
+
+    if "training_data_licenses" in row:
+        _validate_training_data_licenses(
+            violations,
+            line_number,
+            row["training_data_licenses"],
         )
 
     if "nnapi_compatible" in row and not isinstance(row["nnapi_compatible"], bool):
@@ -1014,6 +1027,64 @@ def _validate_training_provenance(
                 "reproducibility_hash",
             )
         )
+
+
+def _validate_training_data_licenses(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+) -> None:
+    if not isinstance(value, list):
+        violations.append(
+            ManifestViolation(line_number, "training_data_licenses must be a list")
+        )
+        return
+
+    for index, entry in enumerate(value):
+        field = f"training_data_licenses[{index}]"
+        if not isinstance(entry, Mapping):
+            violations.append(
+                ManifestViolation(line_number, f"{field} must be an object")
+            )
+            continue
+
+        fields = set(entry)
+        for key in sorted(TRAINING_DATA_LICENSE_REQUIRED_FIELDS - fields):
+            violations.append(
+                ManifestViolation(line_number, f"{field} missing required key: {key}")
+            )
+        for key in sorted(fields - TRAINING_DATA_LICENSE_REQUIRED_FIELDS):
+            violations.append(
+                ManifestViolation(line_number, f"{field} has unexpected key: {key}")
+            )
+
+        for key in ("name", "license"):
+            if key in entry and (
+                not isinstance(entry[key], str) or not entry[key].strip()
+            ):
+                violations.append(
+                    ManifestViolation(
+                        line_number, f"{field}.{key} must be a non-empty string"
+                    )
+                )
+
+        if "redistributable" in entry and not isinstance(
+            entry["redistributable"], bool
+        ):
+            violations.append(
+                ManifestViolation(
+                    line_number, f"{field}.redistributable must be a boolean"
+                )
+            )
+
+        if "role" in entry and entry["role"] not in TRAINING_DATA_LICENSE_ROLES:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field}.role must be one of: "
+                    f"{_allowed(TRAINING_DATA_LICENSE_ROLES)}",
+                )
+            )
 
 
 def _validate_metric(

@@ -1,8 +1,9 @@
 """Structured PDF tables and caption regions with source-offset projection.
 
-The flat PDF extractor remains the source of truth for normalized text and
-character offsets.  This module uses pdfplumber's table geometry and the flat
-extractor's word spans to add structure without changing that contract.
+The PDF extractor remains the source of truth for normalized text and
+character offsets. This module uses pdfplumber's table geometry and the
+extractor's bbox-preserving word spans to add structure without changing that
+contract, including when multi-column pages have been reordered.
 """
 
 from __future__ import annotations
@@ -254,8 +255,9 @@ def extract_pdf_regions(
     """Extract table cells and caption lines from ``path``.
 
     ``document`` may be supplied when the caller already has the OM-060 flat
-    extraction.  Reusing it guarantees that every structured offset refers to
-    the exact same normalized character stream.
+    extraction or its column-reconstructed successor. Reusing it guarantees
+    that every structured offset refers to the exact same normalized character
+    stream.
     """
     flat_document = document if document is not None else extract_pdf(path)
     pdfplumber = _import_pdfplumber()
@@ -612,12 +614,29 @@ def _group_source_lines(
     lines: list[list[SourceSpan]] = []
     for span in spans:
         for line in lines:
-            if _same_line_bbox(line[0].bbox, span.bbox):  # type: ignore[arg-type]
+            if _same_line_bbox(
+                line[0].bbox,
+                span.bbox,  # type: ignore[arg-type]
+            ) and _same_reading_column(line[0], span):
                 line.append(span)
                 break
         else:
             lines.append([span])
     return tuple(tuple(line) for line in lines)
+
+
+def _same_reading_column(first: SourceSpan, second: SourceSpan) -> bool:
+    first_reconstructed = "source_page_word_index" in first.metadata
+    second_reconstructed = "source_page_word_index" in second.metadata
+    if not first_reconstructed and not second_reconstructed:
+        return True
+    if first_reconstructed != second_reconstructed:
+        return False
+    return first.metadata.get("column_index") == second.metadata.get(
+        "column_index"
+    ) and bool(first.metadata.get("spans_columns")) == bool(
+        second.metadata.get("spans_columns")
+    )
 
 
 def _span_sort_key(span: SourceSpan) -> tuple[int, float, float, int]:
