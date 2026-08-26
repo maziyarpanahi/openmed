@@ -98,6 +98,8 @@ classification:
     - low-bandwidth-install.md
     - quickstarts.md
     - cli/openmed-init.md
+    - cli/result-envelope.md
+    - cli/help-drift.md
     - cli/machine-contract.md
     - onboarding-china.md
     - onboarding-india.md
@@ -111,6 +113,7 @@ classification:
     - reference/trace-jsonl.md
     - reference/trace-tool-calls.md
     - analyze-text.md
+    - async-api.md
     - rest-service.md
     - service/self-hosted-redaction.md
     - mcp-clients.md
@@ -137,6 +140,7 @@ classification:
     - serving/load-testing.md
     - serving/mtls.md
     - deploy/helm.md
+    - deploy/autoscaling.md
     - deploy/operator.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
@@ -153,6 +157,7 @@ classification:
     - model-tokenizer-script-coverage.md
     - output-formatting.md
     - structured/offset-properties.md
+    - structured/schema-snapshots.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - grounding.md
@@ -177,14 +182,17 @@ classification:
     - configuration/precedence-audit.md
     - profiles.md
     - plugin-sdk.md
+    - skills/bundle-integrity.md
     - plugins/quarantine-report.md
     - batch-processing.md
     - batch-howto.md
+    - processing/shard-plans.md
     - legacy-indic-encoding.md
     - profiling.md
     - core-observability.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
+    - benchmarks/cost-vs-cloud.md
     - zero-shot-howto.md
     - zero-shot-ner.md
     - examples.md
@@ -212,8 +220,10 @@ classification:
     - clinical/experiencer-refinement.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
+    - runtimes/tensorrt.md
     - runtimes/webgpu.md
     - runtimes/awq-grounding.md
+    - runtimes/gguf-grounding.md
     - tiers.md
     - export-awq.md
     - export-gptq.md
@@ -229,23 +239,31 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/secret-detection.md
     - guides/in-place-redaction.md
+    - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
     - integrations-haystack.md
+    - integrations/opensearch.md
     - integrations/llamaindex.md
     - integrations/columnar-redactor.md
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
+    - integrations/elasticsearch.md
+    - integrations/beam.md
+    - integrations/capability-probes.md
+    - integrations/matrix.md
     - integrations/dbt.md
+    - integrations/spark.md
     - integrations/postgres.md
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
@@ -296,16 +314,19 @@ classification:
     - export-onnx-webgpu.md
     - export-transformersjs.md
     - runtimes/onnxruntime-web.md
+    - runtimes/electron.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
     - android-integration.md
     - export-onnx-android.md
+    - runtimes/android-accelerators.md
     - android-tokenization.md
     - android-parity.md
     - on-device-segmenters.md
     - coreml-export.md
     - swift-openmedkit.md
     - runtimes/apple-platforms.md
+    - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
     - faq.md
     - troubleshooting.md

@@ -22,6 +22,8 @@ nav:
       - Low-Bandwidth & Proxy Install: low-bandwidth-install.md
       - Persona Quickstarts: quickstarts.md
       - Project Scaffold CLI: cli/openmed-init.md
+      - CLI Result Envelope: cli/result-envelope.md
+      - CLI Help-Surface Drift: cli/help-drift.md
       - Machine-readable CLI Contract: cli/machine-contract.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
@@ -36,6 +38,7 @@ nav:
       - JSONL Trace Content Walker: reference/trace-jsonl.md
       - Structure-aware Tool-call Redaction: reference/trace-tool-calls.md
       - Analyze Text Helper: analyze-text.md
+      - Async Python API: async-api.md
       - REST Service (MVP): rest-service.md
       - Self-hosted Redaction Service: service/self-hosted-redaction.md
       - MCP Client Connections: mcp-clients.md
@@ -62,6 +65,7 @@ nav:
       - Service Load Testing & Latency SLOs: serving/load-testing.md
       - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
+      - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
@@ -78,6 +82,7 @@ nav:
       - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Cross-format Offset Properties: structured/offset-properties.md
+      - Schema Snapshot Compatibility: structured/schema-snapshots.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
@@ -102,14 +107,17 @@ nav:
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
+      - Skill Bundle Integrity: skills/bundle-integrity.md
       - Plugin Quarantine Preflight: plugins/quarantine-report.md
       - Batch Processing: batch-processing.md
       - Batch Processing How-To: batch-howto.md
+      - Offline File Shard Plans: processing/shard-plans.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Core Pipeline Observability: core-observability.md
       - Low-resource Benchmark: benchmarks/low-resource.md
       - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
+      - Cost vs Cloud: benchmarks/cost-vs-cloud.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
@@ -137,8 +145,10 @@ nav:
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
+      - TensorRT Runtime: runtimes/tensorrt.md
       - WebGPU Token-Classification Runtime: runtimes/webgpu.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
+      - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
@@ -155,23 +165,31 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md
+      - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
+      - OpenSearch Ingest Redaction Processor: integrations/opensearch.md
       - LlamaIndex Redaction Transform: integrations/llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Elasticsearch Ingest Redaction: integrations/elasticsearch.md
+      - Apache Beam Redaction Transform: integrations/beam.md
+      - Local Capability Probes: integrations/capability-probes.md
+      - Integration Capability Matrix: integrations/matrix.md
       - dbt Privacy-Safe Text Projection: integrations/dbt.md
+      - Spark Redaction Transform: integrations/spark.md
       - PostgreSQL Redaction Adapter: integrations/postgres.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
@@ -223,16 +241,19 @@ nav:
       - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Electron In-Process De-identification: runtimes/electron.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
       - Android Integration & Model Catalog: android-integration.md
       - Android ONNX Export: export-onnx-android.md
+      - Android QNN and NNAPI: runtimes/android-accelerators.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - On-device Segmenters: on-device-segmenters.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
       - OpenMedKit Apple Platforms: runtimes/apple-platforms.md
+      - iOS Share and Action Extensions: runtimes/ios-share-extension.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
