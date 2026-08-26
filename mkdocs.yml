@@ -175,11 +175,13 @@ nav:
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
       - Haystack Redaction Component: integrations-haystack.md
+      - OpenSearch Ingest Redaction Processor: integrations/opensearch.md
       - LlamaIndex Redaction Transform: integrations/llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Elasticsearch Ingest Redaction: integrations/elasticsearch.md
       - Apache Beam Redaction Transform: integrations/beam.md
       - Local Capability Probes: integrations/capability-probes.md
       - Integration Capability Matrix: integrations/matrix.md

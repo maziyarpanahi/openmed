@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-free OpenSearch ingest redaction processor with validated
+  local policies, explicitly selected fields, immutable document copies,
+  cache-only defaults, and aggregate value-free diagnostics (#2389).
+- Added a dependency-free Elasticsearch ingest redaction processor with
+  explicit static field rules, deterministic pipeline serialization, injected
+  local redaction, and counts-only value-free diagnostics (#2388).
 - Added device-specific TensorRT engine export for ONNX token classifiers with
   bounded dynamic shape profiles, FP16 and fail-closed INT8 calibration,
   per-family G4 recall evidence, finite synthetic parity checks, rollback-safe
