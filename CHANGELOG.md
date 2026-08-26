@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a canonical CLI result envelope with bounded counters, artifact
+  fingerprints, and remediation codes; strict JSON parsing; immutable state;
+  and free-text-free failures (#2636).
+- Added a deterministic CLI help-surface drift checker with canonical command,
+  option, argument, and default snapshots plus machine-readable compatibility
+  reports (#2583).
+- Added a deterministic structured-schema snapshot compatibility checker with
+  versioned field-path, type, and optionality rules plus value-free change
+  evidence and canonical JSON output (#2582).
+- Added fail-fast JSON Schema validation for `OpenMedConfig`, TOML files, and
+  custom profiles, with aggregated value-free diagnostics, an installed schema
+  path helper, and complete remote-backend field coverage (#2264).
 - Added a dependency-free OpenSearch ingest redaction processor with validated
   local policies, explicitly selected fields, immutable document copies,
   cache-only defaults, and aggregate value-free diagnostics (#2389).
