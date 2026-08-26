@@ -69,8 +69,38 @@
     },
     "backend": {
       "description": "Inference backend; null selects automatic detection.",
-      "enum": [null, "hf", "mlx", "onnx"],
+      "enum": [null, "hf", "mlx", "onnx", "remote"],
       "type": ["string", "null"]
+    },
+    "remote_inference_endpoint": {
+      "description": "Optional KServe V2 or Triton inference endpoint.",
+      "type": ["string", "null"]
+    },
+    "remote_inference_protocol": {
+      "description": "Protocol used by the explicit remote inference backend.",
+      "enum": ["http", "grpc"],
+      "type": "string"
+    },
+    "remote_inference_model_name": {
+      "description": "Optional remote model repository name.",
+      "type": ["string", "null"]
+    },
+    "remote_inference_model_version": {
+      "description": "Optional remote model version.",
+      "type": ["string", "null"]
+    },
+    "remote_inference_tokenizer": {
+      "description": "Optional local tokenizer identifier for remote inference.",
+      "type": ["string", "null"]
+    },
+    "remote_inference_timeout_seconds": {
+      "description": "Positive timeout for explicit remote inference calls.",
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "remote_inference_verify_tls": {
+      "description": "Whether explicit remote inference verifies TLS.",
+      "type": "boolean"
     },
     "batch_size": {
       "description": "Optional inference batch size.",
@@ -163,6 +193,13 @@
     "clinical_protect_terms",
     "clinical_protect_use_builtin",
     "backend",
+    "remote_inference_endpoint",
+    "remote_inference_protocol",
+    "remote_inference_model_name",
+    "remote_inference_model_version",
+    "remote_inference_tokenizer",
+    "remote_inference_timeout_seconds",
+    "remote_inference_verify_tls",
     "batch_size",
     "num_workers",
     "lazy_model_loading",
