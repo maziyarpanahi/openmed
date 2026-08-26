@@ -14,9 +14,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-family G4 recall evidence, finite synthetic parity checks, rollback-safe
   engine and metadata publication, trusted-engine logits inference, and
   device-tier benchmark records (#834).
+- Added configurable Android QNN and NNAPI execution-provider selection with
+  deterministic CPU fallback, per-family operator-coverage reporting, and
+  bounded PHI-free latency, span-parity, and recall evidence (#851).
+- Added a dependency-optional Apache Beam redaction transform with explicit
+  schema metadata, bounded record and byte state, capped retries, deterministic
+  serialization, cache-only defaults, and aggregate value-free reports
+  (#2387).
+- Added a dependency-optional Spark redaction transform with immutable,
+  pickle-safe configuration, partition-local workers, deterministic retry
+  behavior, bounded serialization, and stable value-free failures (#2386).
+- Added a locked Pixi Python 3.12 workflow for Linux x86_64, Intel macOS, and
+  Apple Silicon macOS, with environments mirroring the development,
+  documentation, Hugging Face, service, and MLX extras (#2348).
+- Added parser-derived Bash, Zsh, and Fish completion scripts and documented
+  the stable machine-readable CLI output workflow (#2347).
+- Added a sender-authorized Electron de-identification bridge with bounded IPC,
+  a shared serialized utility-process model cache, Node- and Electron-stack
+  offline enforcement, renderer-safe span projection, and timeout-safe worker
+  recovery (#824).
+- Added a cross-browser Manifest V3 PHI guard that detects and masks text
+  locally, fails closed on unscanned form submissions, persists per-site policy
+  controls without raw text, and verifies zero detection-time network egress
+  with a synthetic unpacked-extension test (#820).
+- Added a dependency-free local capability probe for injected optional
+  integrations, with deterministic availability counts, provider fingerprints,
+  safe missing-extra classification, and exception-text-free JSON reports
+  (#2585).
+- Added a deterministic integration capability matrix covering supported
+  adapters, optional requirements, policy boundaries, documentation, and
+  offline test evidence, with local source and dependency validation (#2390).
+- Added a deterministic offline file-sharding planner that balances declared
+  local file metadata under byte and file-count limits, fingerprints normalized
+  paths, rejects duplicates, and emits counts-only plans without reading files
+  (#2639).
+- Added crash-safe transactional trace redaction with a value-free recovery
+  journal, fingerprint-verified bounded resume and rollback, transaction-owned
+  staging cleanup, and idempotent completed recovery (#2559).
+- Added a deterministic cost-versus-cloud benchmark with measured local
+  throughput amortization, cited dated AWS and Azure paid-price tiers,
+  breakeven math, JSON/Markdown CLI output, and fail-closed citation checks
+  (#2342).
+- Added lazy runtime wiring for validated anonymizer-provider plugins and the
+  `openmed.providers` registrar compatibility group, with canonical-label and
+  locale routing, deterministic Faker access, idempotent discovery, PHI-safe
+  failure warnings, and built-in-generator fallback (#2341).
+- Added lazy async wrappers for PII extraction, de-identification, and text
+  analysis, plus ordered batch execution with an optional hard concurrency
+  bound that keeps synchronous work off the event-loop thread (#2338).
+- Added a Kubernetes HPA reference for aggregate queue-depth and in-flight
+  request metrics, with a concurrent CPU signal, exact load-to-replica
+  guidance, Prometheus Adapter wiring, bounded queue labels, and PHI-safe
+  metric tests (#831).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
+- Added reusable iOS Share and Action extension modules for bounded plain-text
+  redaction with bundled policy selection, local-only Nano Core ML assets,
+  fail-closed tokenizer loading, guaranteed runtime-cache cleanup, and
+  host-returnable output that preserves original span offsets (#835).
 - Added a bounded offline JSON-lines de-identification sidecar with a typed
   Tauri host and frontend bridge, model pinning, serialized process reuse,
   renderer-safe errors, strict response validation, and synthetic termination
@@ -438,6 +494,13 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   report plus committed baseline and rollout state with no live API call, and
   emits a PHI-free audit record carrying metric names, numeric deltas, store
   keys and hashes only (#1803).
+- Added a read-only catalog coherence gate that checks every `models.jsonl`
+  `canonical_labels` value against `openmed.core.labels.CANONICAL_LABELS`,
+  resolving aliases (`CHEM`/`SIMPLE_CHEMICAL` -> `CHEMICAL`) while still
+  rejecting labels that only survive `normalize_label`'s `OTHER` fallthrough;
+  exposed as `openmed.core.labels.is_recognized_label`,
+  `openmed.core.catalog_coherence.manifest_label_errors`, and a `Catalog
+  coherence` workflow (#2246).
 
 ### Changed
 
