@@ -2011,6 +2011,27 @@ def normalize_label(label: str, lang: str = "en") -> str:
     return OTHER
 
 
+def is_recognized_label(label: str, lang: str = "en") -> bool:
+    """Return whether ``label`` resolves to a real member of the taxonomy.
+
+    :func:`normalize_label` sends anything it does not recognise to ``OTHER``,
+    which is itself a canonical label — so ``normalize_label(x) in
+    CANONICAL_LABELS`` is ``True`` for *every* string and cannot gate anything.
+    This predicate is ``True`` only when ``label`` resolves through an explicit
+    path (a CMeEE mapping, the alias map, or a direct canonical match) and
+    ``False`` when it would fall through to the ``OTHER`` default. Use it to
+    check a manifest or config column against the taxonomy.
+    """
+
+    if not label or not _key(label):
+        return False
+    if normalize_label(label, lang=lang) != OTHER:
+        return True
+    # Reached OTHER: accept only labels that legitimately ARE OTHER — the literal
+    # canonical label or an explicit alias to it — never the fallthrough default.
+    return _key(label) == _key(OTHER) or _key(label) in _ALIAS_MAP
+
+
 def supports_name_boundary_refinement(label: str, lang: str = "en") -> bool:
     """Return whether ``label`` is eligible for conservative name stemming."""
 
@@ -2083,6 +2104,7 @@ __all__ = [
     "CLINICAL_CONCEPT_LABELS",
     "NAME_BOUNDARY_REFINEMENT_LABELS",
     "normalize_label",
+    "is_recognized_label",
     "canonical_label_for_column_semantic",
     "supports_name_boundary_refinement",
     "CMEEE_LABEL_TO_CANONICAL",
