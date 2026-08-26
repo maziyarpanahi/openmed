@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -233,14 +235,84 @@ def test_viterbi_rejects_invalid_inside_start():
     assert decoded == [4]
 
 
+def test_compile_forward_is_opt_in_and_explicit_argument_wins(monkeypatch):
+    from openmed.mlx.inference import _resolve_compile_forward
+
+    monkeypatch.delenv("OPENMED_MLX_COMPILE", raising=False)
+    assert _resolve_compile_forward(None) is False
+
+    for value in ("1", "true", "TRUE", " yes ", "on"):
+        monkeypatch.setenv("OPENMED_MLX_COMPILE", value)
+        assert _resolve_compile_forward(None) is True
+
+    for value in ("", "0", "false", "off", "unexpected"):
+        monkeypatch.setenv("OPENMED_MLX_COMPILE", value)
+        assert _resolve_compile_forward(None) is False
+
+    monkeypatch.setenv("OPENMED_MLX_COMPILE", "1")
+    assert _resolve_compile_forward(False) is False
+    monkeypatch.setenv("OPENMED_MLX_COMPILE", "0")
+    assert _resolve_compile_forward(True) is True
+
+
+def test_pipeline_compile_forward_wraps_loaded_model(tmp_path):
+    from openmed.mlx import inference
+
+    loaded_model = object()
+    compiled_model = object()
+    compile_model = Mock(return_value=compiled_model)
+    fake_tiktoken = SimpleNamespace(get_encoding=Mock(return_value=object()))
+
+    with (
+        patch.object(inference, "MLX_AVAILABLE", True),
+        patch.object(
+            inference,
+            "mx",
+            SimpleNamespace(compile=compile_model),
+            create=True,
+        ),
+        patch("openmed.mlx.models.load_model", return_value=loaded_model),
+        patch.object(
+            inference,
+            "load_artifact_config",
+            return_value=({}, _privacy_config()),
+        ),
+        patch.dict(sys.modules, {"tiktoken": fake_tiktoken}),
+    ):
+        pipeline = inference.PrivacyFilterMLXPipeline(
+            tmp_path,
+            compile_forward=True,
+        )
+
+    compile_model.assert_called_once_with(loaded_model)
+    assert pipeline.model is compiled_model
+
+
+@pytest.mark.parametrize(
+    ("probability", "expected"),
+    [
+        (0.9, 0.8999999761581421),
+        (0.8, 0.800000011920929),
+        (0.7, 0.699999988079071),
+        (0.95, 0.949999988079071),
+    ],
+)
+def test_score_reconstruction_preserves_binary32_outputs(probability, expected):
+    from openmed.mlx.inference import _score_from_log_probability
+
+    assert _score_from_log_probability(math.log(probability)) == expected
+
+
 @pytest.mark.skipif(
     not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests"
 )
 def test_privacy_filter_grouped_decode_handles_bioes():
     from openmed.core.decoding import build_label_info
-    from openmed.mlx.inference import PrivacyFilterMLXPipeline
+    from openmed.mlx import inference
 
-    pipeline = PrivacyFilterMLXPipeline.__new__(PrivacyFilterMLXPipeline)
+    pipeline = inference.PrivacyFilterMLXPipeline.__new__(
+        inference.PrivacyFilterMLXPipeline
+    )
     pipeline.id2label = {
         0: "O",
         1: "B-private_person",
@@ -250,20 +322,32 @@ def test_privacy_filter_grouped_decode_handles_bioes():
     }
     pipeline.label_info = build_label_info(pipeline.id2label)
 
-    probs = [
-        [0.0, 0.9, 0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.8, 0.0, 0.0],
-        [0.0, 0.0, 0.0, 0.7, 0.0],
-        [0.9, 0.0, 0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0, 0.0, 0.95],
+    # _decode_grouped receives per-token log-probabilities; token scores are
+    # recovered as exp(log_prob) for the predicted label.
+    log_probs = [
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
+        [math.log(0.05)] * 5,
     ]
-    result = pipeline._decode_grouped(
-        [1, 2, 3, 0, 4],
-        probs,
-        [0, 4, 8, 9, 10],
-        [4, 8, 9, 10, 27],
-        "John Doe, alice@example.com",
-    )
+    log_probs[0][1] = math.log(0.9)
+    log_probs[1][2] = math.log(0.8)
+    log_probs[2][3] = math.log(0.7)
+    log_probs[3][0] = math.log(0.9)
+    log_probs[4][4] = math.log(0.95)
+    with patch.object(
+        inference,
+        "_grapheme_break_checker",
+        wraps=inference._grapheme_break_checker,
+    ) as break_checker:
+        result = pipeline._decode_grouped(
+            [1, 2, 3, 0, 4],
+            log_probs,
+            [0, 4, 8, 9, 10],
+            [4, 8, 9, 10, 27],
+            "John Doe, alice@example.com",
+        )
 
     assert result == [
         {
@@ -281,6 +365,7 @@ def test_privacy_filter_grouped_decode_handles_bioes():
             "end": 27,
         },
     ]
+    break_checker.assert_called_once_with("John Doe, alice@example.com")
 
 
 @pytest.mark.skipif(
