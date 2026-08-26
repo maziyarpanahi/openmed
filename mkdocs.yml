@@ -182,6 +182,7 @@ nav:
       - OpenSearch Ingest Redaction Processor: integrations/opensearch.md
       - LlamaIndex Redaction Transform: integrations/llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Notebook Cell Redaction: integrations/notebook-redaction.md
       - Columnar Trace Dataset Adapter: reference/columnar-traces.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md

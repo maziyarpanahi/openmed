@@ -256,6 +256,7 @@ classification:
     - integrations/opensearch.md
     - integrations/llamaindex.md
     - integrations/columnar-redactor.md
+    - integrations/notebook-redaction.md
     - reference/columnar-traces.md
     - integrations/lakehouse-redaction.md
     - integrations/dask.md
