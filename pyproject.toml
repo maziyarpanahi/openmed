@@ -166,8 +166,9 @@ quickumls = [
   "quickumls>=1.4,<2",
 ]
 
-# sdcMicro and R are installed separately under GPL-2.0. This explicit extra
-# opts into the subprocess-only bridge without adding GPL code or dependencies.
+# sdcMicro/R (GPL-2.0) and MedCAT/CogStack (Elastic License 2.0) are installed
+# separately. This explicit extra opts into subprocess-only bridges without
+# adding restricted code or dependencies.
 interop-gpl = []
 
 # extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
