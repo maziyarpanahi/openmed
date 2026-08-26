@@ -203,6 +203,27 @@ def _redact_output(output: Any, action: str) -> bool:
                 # conservatively to avoid leaking embedded PHI.
                 del data[mime_type]
                 changed = True
+    elif output_type == "error":
+        replacement = _apply_action(action)
+
+        for field_name in ("ename", "evalue"):
+            value = output.get(field_name, "")
+            new_value, value_changed = _redact_text(value, replacement)
+            if value_changed:
+                output[field_name] = new_value
+                changed = True
+
+        traceback = output.get("traceback", [])
+        if isinstance(traceback, list):
+            new_traceback = [_redact_text(line, replacement)[0] for line in traceback]
+            if new_traceback != traceback:
+                output["traceback"] = new_traceback
+                changed = True
+        else:
+            new_traceback, traceback_changed = _redact_text(traceback, replacement)
+            if traceback_changed:
+                output["traceback"] = new_traceback
+                changed = True
 
     return changed
 

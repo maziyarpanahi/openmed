@@ -81,7 +81,8 @@ the output `data` dict while preserving `output_type`, `metadata`, and
 | Unknown MIME types | Removed from `data` dict (conservative) |
 
 Stream outputs (`output_type="stream"`) have their `text` field redacted
-in-place.
+in-place. Error outputs (`output_type="error"`) redact `ename`, `evalue`, and
+every `traceback` entry.
 
 ## Notes
 

@@ -184,6 +184,35 @@ def test_stream_output_redacted(
     assert stream_output["text"] == "***"
 
 
+def test_error_output_redacted() -> None:
+    nb = nbformat.v4.new_notebook()
+    cell = nbformat.v4.new_code_cell("raise ValueError('synthetic patient')")
+    cell.outputs.append(
+        nbformat.v4.new_output(
+            "error",
+            ename="ValueError",
+            evalue="Synthetic Patient",
+            traceback=[
+                "Traceback (most recent call last):",
+                "ValueError: Synthetic Patient",
+            ],
+        )
+    )
+    nb.cells.append(cell)
+
+    result = redact_notebook(
+        nb,
+        policy=NotebookRedactionPolicy(dry_run=True),
+    )
+
+    error_output = result.notebook.cells[0].outputs[0]
+    assert error_output["output_type"] == "error"
+    assert error_output["ename"] == "***"
+    assert error_output["evalue"] == "***"
+    assert error_output["traceback"] == ["***", "***"]
+    assert result.summary.redacted_cells == 1
+
+
 def test_svg_removed() -> None:
     nb = nbformat.v4.new_notebook()
     cell = nbformat.v4.new_code_cell("display(SVG(svg_string))")
