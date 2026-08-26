@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added lazy async wrappers for PII extraction, de-identification, and text
+  analysis, plus ordered batch execution with an optional hard concurrency
+  bound that keeps synchronous work off the event-loop thread (#2338).
 - Added a Kubernetes HPA reference for aggregate queue-depth and in-flight
   request metrics, with a concurrent CPU signal, exact load-to-replica
   guidance, Prometheus Adapter wiring, bounded queue labels, and PHI-safe

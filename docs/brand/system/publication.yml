@@ -111,6 +111,7 @@ classification:
     - reference/trace-jsonl.md
     - reference/trace-tool-calls.md
     - analyze-text.md
+    - async-api.md
     - rest-service.md
     - service/self-hosted-redaction.md
     - mcp-clients.md
