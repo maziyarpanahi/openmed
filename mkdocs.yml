@@ -108,6 +108,7 @@ nav:
       - Plugin Quarantine Preflight: plugins/quarantine-report.md
       - Batch Processing: batch-processing.md
       - Batch Processing How-To: batch-howto.md
+      - Offline File Shard Plans: processing/shard-plans.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Core Pipeline Observability: core-observability.md
@@ -164,6 +165,7 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md
+      - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md

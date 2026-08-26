@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic offline file-sharding planner that balances declared
+  local file metadata under byte and file-count limits, fingerprints normalized
+  paths, rejects duplicates, and emits counts-only plans without reading files
+  (#2639).
+- Added crash-safe transactional trace redaction with a value-free recovery
+  journal, fingerprint-verified bounded resume and rollback, transaction-owned
+  staging cleanup, and idempotent completed recovery (#2559).
 - Added a deterministic cost-versus-cloud benchmark with measured local
   throughput amortization, cited dated AWS and Azure paid-price tiers,
   breakeven math, JSON/Markdown CLI output, and fail-closed citation checks
