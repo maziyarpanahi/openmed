@@ -49,9 +49,13 @@ The `NotebookCellSummary` includes:
 Each `NotebookCellRecord` includes:
 
 - `index`: cell position in the notebook's cell list.
-- `cell_type`: the notebook cell type (`"markdown"`, `"code"`, or `"raw"`).
+- `cell_type`: the notebook cell type (`"markdown"`, `"code"`, `"raw"`, or
+  canonical `"unknown"`).
 - `action`: the redaction action applied (from `ACTION_VALUES`).
 - `redacted`: whether this cell was modified.
+
+Malformed or non-standard cell types are reported as `"unknown"`; their raw
+type values are never copied into the summary.
 
 ## Privacy Contract
 
@@ -84,6 +88,9 @@ Stream outputs (`output_type="stream"`) have their `text` field redacted
 in-place. Error outputs (`output_type="error"`) redact `ename`, `evalue`, and
 every `traceback` entry.
 
+An action override of `"keep"` preserves every field of the selected cell
+type, including text, binary, and unknown MIME outputs.
+
 ## Notes
 
 - SVG with embedded text is not redacted; the `image/svg+xml` MIME entry is
@@ -98,3 +105,5 @@ every `traceback` entry.
   sensitive from non-sensitive fields in arbitrary JSON is out of scope for this
   helper. Users should not rely on this for selective field-level redaction of
   JSON output.
+- Notebook read and write failures raise a value-free `NotebookRedactionError`
+  that does not include source content or filesystem paths.

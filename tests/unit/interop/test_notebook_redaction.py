@@ -13,6 +13,7 @@ nbformat = pytest.importorskip("nbformat")
 from openmed.interop.notebook_redaction import (
     NotebookCellRecord,
     NotebookCellSummary,
+    NotebookRedactionError,
     NotebookRedactionPolicy,
     NotebookRedactionResult,
     redact_notebook,
@@ -125,6 +126,29 @@ def test_keep_action(synthetic_notebook: nbformat.NotebookNode) -> None:
     result = redact_notebook(synthetic_notebook, policy=policy)
 
     assert result.notebook.cells[1].source == original_source
+
+
+def test_keep_action_preserves_all_code_outputs(
+    synthetic_notebook: nbformat.NotebookNode,
+) -> None:
+    original_outputs = [
+        copy.deepcopy(cell.outputs)
+        for cell in synthetic_notebook.cells
+        if cell.cell_type == "code"
+    ]
+    policy = NotebookRedactionPolicy(
+        dry_run=True,
+        redact_markdown=False,
+        action_overrides={"code": "keep"},
+    )
+
+    result = redact_notebook(synthetic_notebook, policy=policy)
+
+    kept_outputs = [
+        cell.outputs for cell in result.notebook.cells if cell.cell_type == "code"
+    ]
+    assert kept_outputs == original_outputs
+    assert result.summary.redacted_cells == 0
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +300,50 @@ def test_no_raw_phi_in_summary(
     assert "Bob" not in serialized
     assert "Alice" not in serialized
     assert "john@example.com" not in serialized
+
+
+def test_unknown_cell_type_is_canonicalized_in_summary() -> None:
+    sensitive_cell_type = "synthetic-patient-john-doe"
+    notebook = nbformat.v4.new_notebook()
+    notebook.cells.append(
+        nbformat.NotebookNode(
+            {
+                "cell_type": sensitive_cell_type,
+                "metadata": {},
+                "source": "synthetic content",
+            }
+        )
+    )
+
+    result = redact_notebook(
+        notebook,
+        policy=NotebookRedactionPolicy(dry_run=True),
+    )
+
+    serialized = json.dumps(result.summary.to_dict())
+    assert sensitive_cell_type not in serialized
+    assert result.summary.cell_type_counts == {"unknown": 1}
+    assert result.summary.cell_records[0].cell_type == "unknown"
+
+
+def test_unhashable_cell_type_is_canonicalized_in_summary() -> None:
+    notebook = nbformat.v4.new_notebook()
+    notebook.cells.append(
+        nbformat.NotebookNode(
+            {
+                "cell_type": ["synthetic", "patient"],
+                "metadata": {},
+                "source": "synthetic content",
+            }
+        )
+    )
+
+    result = redact_notebook(
+        notebook,
+        policy=NotebookRedactionPolicy(dry_run=True),
+    )
+
+    assert result.summary.cell_type_counts == {"unknown": 1}
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +540,45 @@ def test_redact_neither(
 # ---------------------------------------------------------------------------
 
 
-def test_invalid_action_raises() -> None:
-    with pytest.raises(ValueError):
-        NotebookRedactionPolicy(action_overrides={"markdown": "invalid_action"})
+def test_invalid_action_raises_without_echoing_value() -> None:
+    sensitive_action = "synthetic-patient-john-doe"
+
+    with pytest.raises(ValueError) as exc_info:
+        NotebookRedactionPolicy(action_overrides={"markdown": sensitive_action})
+
+    assert sensitive_action not in str(exc_info.value)
+
+
+def test_read_failure_does_not_echo_sensitive_path(tmp_path: Path) -> None:
+    sensitive_path = tmp_path / "synthetic-patient-john-doe.ipynb"
+
+    with pytest.raises(NotebookRedactionError) as exc_info:
+        redact_notebook(
+            str(sensitive_path),
+            policy=NotebookRedactionPolicy(dry_run=True),
+        )
+
+    assert str(sensitive_path) not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+
+
+def test_write_failure_does_not_echo_sensitive_path(
+    synthetic_notebook: nbformat.NotebookNode,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sensitive_path = "synthetic-patient-john-doe.ipynb"
+
+    def fail_write(*_args: object, **_kwargs: object) -> None:
+        raise OSError(sensitive_path)
+
+    monkeypatch.setattr(nbformat, "write", fail_write)
+
+    with pytest.raises(NotebookRedactionError) as exc_info:
+        redact_notebook(
+            synthetic_notebook,
+            policy=NotebookRedactionPolicy(),
+            output_path=sensitive_path,
+        )
+
+    assert sensitive_path not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None

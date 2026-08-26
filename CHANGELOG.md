@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic Jupyter notebook cell redaction helper that preserves
+  code sources and execution structure, applies explicit markdown and output
+  policies, removes unredacted binary MIME data, and emits counts-only,
+  value-free summaries and failures (#2561).
 - Added a license-quarantined MedCAT/CogStack subprocess bridge
   (`openmed/interop/bridges/medcat.py`) that shells out to a user-provided
   MedCAT process and maps its `{cui, name, score}` concept output onto

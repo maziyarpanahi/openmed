@@ -4,7 +4,8 @@ The adapter preserves notebook structure by editing only markdown cell sources
 and code cell outputs. Code cell sources (the executable code itself) are never
 modified, so redaction never silently alters notebook semantics. Binary output
 MIME types are dropped entirely while text outputs are masked, replaced, or
-cleared according to the configured action.
+cleared according to the configured action. The ``keep`` action preserves
+every output field unchanged.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from openmed.core.schemas.span import ACTION_VALUES
 from openmed.multimodal.exceptions import MissingDependencyError
 
 __all__ = [
+    "NotebookRedactionError",
     "NotebookRedactionPolicy",
     "NotebookCellRecord",
     "NotebookCellSummary",
@@ -24,6 +26,8 @@ __all__ = [
 ]
 
 _NOTEBOOK_HINT = 'Install with: pip install "openmed[notebook]".'
+
+_SAFE_CELL_TYPES = frozenset({"markdown", "code", "raw"})
 
 _TEXT_MIME_TYPES = frozenset(
     {
@@ -42,6 +46,10 @@ _BINARY_MIME_TYPES = frozenset(
         "application/pdf",
     }
 )
+
+
+class NotebookRedactionError(RuntimeError):
+    """Value-free failure raised while reading or writing a notebook."""
 
 
 @dataclass(frozen=True)
@@ -66,9 +74,7 @@ class NotebookRedactionPolicy:
     def __post_init__(self) -> None:
         for value in self.action_overrides.values():
             if value not in ACTION_VALUES:
-                raise ValueError(
-                    f"Invalid action {value!r}; expected one of {ACTION_VALUES}."
-                )
+                raise ValueError(f"Action must be one of {ACTION_VALUES}.")
 
 
 @dataclass(frozen=True)
@@ -78,7 +84,7 @@ class NotebookCellRecord:
     Attributes:
         index: Zero-based position of the cell in ``notebook.cells``.
         cell_type: The notebook cell type (``"markdown"``, ``"code"``,
-            ``"raw"``).
+            ``"raw"``, or canonical ``"unknown"``).
         action: The redaction action applied to the cell.
         redacted: ``True`` if any field of the cell was modified.
     """
@@ -173,6 +179,9 @@ def _redact_text(value: Any, replacement: str | None) -> tuple[str, bool]:
 def _redact_output(output: Any, action: str) -> bool:
     """Redact one code cell output in place. Return ``True`` if changed."""
 
+    if action == "keep":
+        return False
+
     output_type = output.get("output_type")
     changed = False
 
@@ -255,6 +264,8 @@ def redact_notebook(
 
     Raises:
         MissingDependencyError: If ``nbformat`` is not installed.
+        NotebookRedactionError: If reading or writing the notebook fails. The
+            exception message does not include a path or notebook content.
         ValueError: If ``output_path`` is ``None`` while ``dry_run`` is
             ``False``.
     """
@@ -271,7 +282,10 @@ def redact_notebook(
         ) from exc
 
     if isinstance(source, str):
-        notebook = nbformat.read(source, as_version=4)
+        try:
+            notebook = nbformat.read(source, as_version=4)
+        except Exception:
+            raise NotebookRedactionError("Failed to read notebook.") from None
     else:
         notebook = source
 
@@ -280,7 +294,12 @@ def redact_notebook(
     cell_type_counts: dict[str, int] = {}
 
     for index, cell in enumerate(notebook.cells):
-        cell_type = cell.get("cell_type", "raw")
+        raw_cell_type = cell.get("cell_type", "raw")
+        cell_type = (
+            raw_cell_type
+            if isinstance(raw_cell_type, str) and raw_cell_type in _SAFE_CELL_TYPES
+            else "unknown"
+        )
         cell_type_counts[cell_type] = cell_type_counts.get(cell_type, 0) + 1
         action = _resolve_action(cell_type, policy)
         cell_changed = False
@@ -324,5 +343,8 @@ def redact_notebook(
     if output_path is None:
         raise ValueError("output_path is required when dry_run=False")
 
-    nbformat.write(notebook, output_path)
+    try:
+        nbformat.write(notebook, output_path)
+    except Exception:
+        raise NotebookRedactionError("Failed to write notebook.") from None
     return result
