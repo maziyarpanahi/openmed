@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic cost-versus-cloud benchmark with measured local
+  throughput amortization, cited dated AWS and Azure paid-price tiers,
+  breakeven math, JSON/Markdown CLI output, and fail-closed citation checks
+  (#2342).
 - Added lazy runtime wiring for validated anonymizer-provider plugins and the
   `openmed.providers` registrar compatibility group, with canonical-label and
   locale routing, deterministic Faker access, idempotent discovery, PHI-safe
