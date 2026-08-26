@@ -718,6 +718,8 @@ def create_app() -> FastAPI:
 
         @app.middleware("http")
         async def _metrics_middleware(request: Request, call_next):
+            if request.url.path == "/metrics":
+                return await call_next(request)
             metrics = request.app.state.metrics
             metrics.request_started()
             start_time = time.perf_counter()

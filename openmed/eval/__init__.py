@@ -145,6 +145,14 @@ from openmed.eval.context_coverage import (
     context_coverage_metadata,
     run_context_coverage,
 )
+from openmed.eval.cost import (
+    CLOUD_PRICE_SCHEMA_VERSION,
+    COST_REPORT_SCHEMA_VERSION,
+    CloudCostComparison,
+    CostVsCloudReport,
+    cost_vs_cloud_report,
+    load_cloud_prices,
+)
 from openmed.eval.coverage import (
     GOLDEN_EDGE_CASE_CATEGORIES,
     FixtureCoverageReport,
@@ -943,6 +951,7 @@ __all__ = [
     "GENERALIZATION_SUITE",
     "GeneralizationReport",
     "cross_corpus_report",
+    "cost_vs_cloud_report",
     "DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING",
     "DEFAULT_SYNTHETIC_CORRELATION_MAE_CAP",
     "DEFAULT_SYNTHETIC_MARGINAL_MAE_CAP",
@@ -1088,6 +1097,10 @@ __all__ = [
     "ComparatorUnavailable",
     "COMPARATOR_REPORT_ARTIFACT",
     "COMPARATOR_REPORT_SCHEMA_VERSION",
+    "CLOUD_PRICE_SCHEMA_VERSION",
+    "COST_REPORT_SCHEMA_VERSION",
+    "CloudCostComparison",
+    "CostVsCloudReport",
     "CountsOnlyComparatorReport",
     "load_comparator_fixtures",
     "run_comparator_benchmark",
@@ -1547,6 +1560,7 @@ __all__ = [
     "load_section_messy_fixtures",
     "load_surrogate_quality_records",
     "load_perf_documents",
+    "load_cloud_prices",
     "load_or_compute",
     "lookup_tier_budget",
     "load_run_ledger",
