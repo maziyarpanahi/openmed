@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-free, versioned multimodal asset manifest with strict
+  media and digest validation, bounded metadata-only fields, deterministic
+  JSON serialization, and value-free rejection of paths, URLs, free text, and
+  unknown fields (#2954).
 - Added a deterministic Jupyter notebook cell redaction helper that preserves
   code sources and execution structure, applies explicit markdown and output
   policies, removes unredacted binary MIME data, and emits counts-only,
