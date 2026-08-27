@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added bounded, dependency-free detection for PDF, PNG, JPEG, TIFF, DICOM,
+  and WAV prefixes, with stable match, mismatch, and unknown validation results
+  that do not log source bytes or trust filename extensions (#2955).
 - Added a deterministic Jupyter notebook cell redaction helper that preserves
   code sources and execution structure, applies explicit markdown and output
   policies, removes unredacted binary MIME data, and emits counts-only,

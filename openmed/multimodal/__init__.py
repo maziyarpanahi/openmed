@@ -28,6 +28,12 @@ from . import documents_docx as _documents_docx
 from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from . import pptx as _pptx
+from .media_type import (
+    MAX_MEDIA_TYPE_PREFIX_BYTES,
+    MediaTypeStatus,
+    detect_media_type,
+    validate_media_type,
+)
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -252,6 +258,10 @@ __all__ = [
     "register_handler",
     "ensure_multimodal_available",
     "is_multimodal_available",
+    "MAX_MEDIA_TYPE_PREFIX_BYTES",
+    "MediaTypeStatus",
+    "detect_media_type",
+    "validate_media_type",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "DocumentGraphError",
