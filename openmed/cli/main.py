@@ -75,6 +75,7 @@ from .contract import (
 from .gates import add_gates_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
+from .repro import add_repro_command
 from .scaffold import (
     PERSONA_PRESETS,
     ScaffoldConflictError,
@@ -602,6 +603,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)
+    add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
     _finalize_parser(parser)
     return parser

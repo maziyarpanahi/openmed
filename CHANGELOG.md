@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic clinical evidence tables with source offsets, controlled
   assertion and review metadata, optional protected-value hashes, and
   value-free JSON and Markdown rendering (#2567).
+
+- Added an audited teacher-ensemble registry for weak labeling with
+  manifest-resolved PII and Privacy Filter members, bounded weights and
+  agreement thresholds, checksum-validator policies, and fail-closed runtime
+  source matching (#284).
+- Added an experiencer-aware patient-record span filter
+  (`openmed.clinical.filter_patient_record`) that partitions per-span
+  `ClinicalAssertion` records into patient-record eligible and excluded sets.
+  Non-patient experiencers (`family` and `other`) and hypothetical spans are
+  excluded with auditable reasons; negated patient spans are retained and
+  marked `refuted`. Includes a medical-device-style advisory disclaimer that
+  the filter is a record-construction aid, not a clinical decision (#2251).
 - Added a deterministic Jupyter notebook cell redaction helper that preserves
   code sources and execution structure, applies explicit markdown and output
   policies, removes unredacted binary MIME data, and emits counts-only,
