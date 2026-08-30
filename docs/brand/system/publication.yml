@@ -204,6 +204,7 @@ classification:
     - reference/preference-schema.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
+    - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md

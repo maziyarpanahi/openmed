@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added strict, deterministic multimodal abstention records with typed pipeline
+  stages, stable reason codes, metadata-only JSON, and value-free validation
+  failures (#2977).
 - Added a deterministic Jupyter notebook cell redaction helper that preserves
   code sources and execution structure, applies explicit markdown and output
   policies, removes unredacted binary MIME data, and emits counts-only,
