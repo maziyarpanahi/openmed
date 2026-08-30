@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import zipfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -162,6 +163,21 @@ def test_invalid_odt_archive_raises_clear_error(tmp_path: Path):
     path.write_bytes(b"not an odt archive")
 
     with pytest.raises(UnsupportedDocumentError, match="valid ZIP archive"):
+        extract_odt(path)
+
+
+def test_odt_rejects_corrupt_compressed_content(tmp_path: Path, monkeypatch):
+    path = _write_synthetic_odt(tmp_path / "corrupt-content.odt")
+    read = zipfile.ZipFile.read
+
+    def corrupt_content(archive, name, *args, **kwargs):
+        if name == "content.xml":
+            raise zlib.error("synthetic invalid compressed data")
+        return read(archive, name, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "read", corrupt_content)
+
+    with pytest.raises(UnsupportedDocumentError, match="readable entries"):
         extract_odt(path)
 
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import zipfile
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -333,8 +334,10 @@ def extract_odt(path: str | Path) -> ExtractedDocument:
         with zipfile.ZipFile(source_path) as archive:
             _ensure_supported_archive(archive)
             content = _read_required(archive, _CONTENT_PATH)
-    except zipfile.BadZipFile as exc:
-        raise UnsupportedDocumentError("ODT must be a valid ZIP archive") from exc
+    except (OSError, zipfile.BadZipFile, zlib.error) as exc:
+        raise UnsupportedDocumentError(
+            "ODT must be a valid ZIP archive with readable entries"
+        ) from exc
 
     root = _parse_content_xml(content)
     return _OdtReader().document(root, source_path)

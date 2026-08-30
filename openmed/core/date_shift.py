@@ -6,6 +6,8 @@ import hashlib
 import hmac
 from typing import Final
 
+from .errors import InputError
+
 DEFAULT_DATE_SHIFT_MAX_DAYS: Final = 365
 _SEED_DOMAIN: Final = b"openmed-date-shift-seed-v1\x00"
 
@@ -37,7 +39,10 @@ def stable_offset_from_seed(seed: int, *, max_days: int) -> int:
     caller-supplied seed to reproduce the complete output.
     """
     if isinstance(seed, bool) or not isinstance(seed, int):
-        raise TypeError("seed must be an integer")
+        raise InputError(
+            "seed must be an integer. Pass a stable integer seed before retrying.",
+            details={"argument": "seed"},
+        )
     _validate_max_days(max_days)
 
     digest = hashlib.sha256(_SEED_DOMAIN + str(seed).encode("ascii")).digest()
@@ -54,9 +59,15 @@ def _offset_from_digest(digest: bytes, *, max_days: int) -> int:
 
 def _validate_max_days(max_days: int) -> None:
     if isinstance(max_days, bool) or not isinstance(max_days, int):
-        raise TypeError("max_days must be an integer")
+        raise InputError(
+            "max_days must be an integer. Pass a positive integer day limit.",
+            details={"argument": "max_days"},
+        )
     if max_days <= 0:
-        raise ValueError("max_days must be positive")
+        raise InputError(
+            "max_days must be positive. Pass an integer greater than zero.",
+            details={"argument": "max_days", "constraint": "positive"},
+        )
 
 
 def _nonempty_bytes(value: str | bytes, *, name: str) -> bytes:
@@ -65,10 +76,16 @@ def _nonempty_bytes(value: str | bytes, *, name: str) -> bytes:
     elif isinstance(value, bytes):
         encoded = value
     else:
-        raise TypeError(f"{name} must be str or bytes")
+        raise InputError(
+            f"{name} must be text or bytes. Pass a non-empty stable value.",
+            details={"argument": name, "expected": "str or bytes"},
+        )
 
     if not encoded:
-        raise ValueError(f"{name} must be non-empty")
+        raise InputError(
+            f"{name} must be non-empty. Pass a stable value before retrying.",
+            details={"argument": name, "constraint": "non_empty"},
+        )
     return encoded
 
 

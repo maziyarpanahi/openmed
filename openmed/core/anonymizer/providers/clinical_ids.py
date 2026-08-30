@@ -19,6 +19,7 @@ deterministic:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Bangladesh NID structural formats with 10, 13, or 17 digits
   - ABDM identifiers: 14-digit ABHA numbers, ABHA addresses,
     PAN-shaped tax identifiers, and synthetic HPR/HFR registry identifiers
   - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
@@ -699,6 +700,47 @@ class AadhaarProvider(BaseProvider):
 
     def aadhaar(self) -> str:
         return generate_aadhaar(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Bangladesh National ID (10, 13, or 17 digits; structural validation only)
+# ---------------------------------------------------------------------------
+def generate_bangladesh_nid(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structural Bangladesh NID, preserving a valid source length."""
+
+    from openmed.core.pii_i18n import (
+        normalize_bengali_assamese_digits,
+        validate_bangladesh_nid,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+
+    if original is not None and validate_bangladesh_nid(original):
+        normalized = normalize_bengali_assamese_digits(original).strip()
+
+    length = len(normalized) if normalized else source.choice((10, 13, 17))
+    candidate = ""
+
+    for _ in range(20):
+        candidate = str(source.randint(1, 9)) + "".join(
+            str(source.randint(0, 9)) for _ in range(length - 1)
+        )
+        if candidate != normalized:
+            return candidate
+
+    return candidate
+
+
+class BangladeshNIDProvider(BaseProvider):
+    """Generate structural Bangladesh National ID surrogates."""
+
+    def bangladesh_nid(self, original: str | None = None) -> str:
+        return generate_bangladesh_nid(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -3901,6 +3943,7 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BangladeshNIDProvider",
     "BelgianRRNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
@@ -3958,6 +4001,7 @@ __all__ = [
     "generate_australian_tfn",
     "generate_aadhaar",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bc_phn",
     "generate_bic",
     "generate_belgian_rrn",

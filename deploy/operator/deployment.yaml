@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openmed-operator
+  namespace: openmed-system
+  labels:
+    app.kubernetes.io/name: openmed-operator
+    app.kubernetes.io/part-of: openmed
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openmed-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openmed-operator
+        app.kubernetes.io/part-of: openmed
+    spec:
+      serviceAccountName: openmed-operator
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: operator
+          image: ghcr.io/maziyarpanahi/openmed-operator:v2.3.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - kopf
+          args:
+            - run
+            - --standalone
+            - --all-namespaces
+            - --log-format=json
+            - --liveness=http://0.0.0.0:8080/healthz
+            - /app/openmed_operator.py
+          env:
+            - name: HOME
+              value: /tmp
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30

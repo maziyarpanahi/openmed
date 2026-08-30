@@ -1,6 +1,6 @@
 import Foundation
 
-/// The five pipeline stages the user walks through in order.
+/// The six pipeline stages the user walks through in order.
 /// Name kept distinct from ContentView's private enum so both can coexist
 /// during the migration; the private one is removed once all screens ship.
 public enum ScanStage: Int, CaseIterable, Identifiable, Sendable, Hashable {
@@ -8,6 +8,7 @@ public enum ScanStage: Int, CaseIterable, Identifiable, Sendable, Hashable {
     case review
     case deidentify
     case clinical
+    case insights
     case summary
 
     public var id: Int { rawValue }
@@ -15,11 +16,12 @@ public enum ScanStage: Int, CaseIterable, Identifiable, Sendable, Hashable {
     /// Short name used in the workflow indicator and the action bar hint.
     public var shortTitle: String {
         switch self {
-        case .input:      return "Input"
-        case .review:     return "Review"
+        case .input: return "Input"
+        case .review: return "Review"
         case .deidentify: return "De-ID"
-        case .clinical:   return "Clinical"
-        case .summary:    return "Summary"
+        case .clinical: return "Clinical"
+        case .insights: return "Maple"
+        case .summary: return "Summary"
         }
     }
 

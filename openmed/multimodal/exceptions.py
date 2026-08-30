@@ -25,11 +25,18 @@ class MissingDependencyError(MissingOptionalDependencyError):
             f"Optional dependency '{dependency}' is required for this operation. "
             f"{instruction}"
         )
-        # Bypass the parent's keyword-only constructor to preserve the legacy
-        # message/attributes while remaining part of the shared error family.
-        ImportError.__init__(self, message)
+        super().__init__(
+            package=dependency,
+            feature="This operation",
+        )
+        # Preserve the historical sentence exactly while retaining the shared
+        # taxonomy fields initialized by the parent.
+        self.args = (message,)
+        self.message = message
         self.dependency = dependency
         self.instruction = instruction
+        # Keep the v2.1 constructor-owned attributes visible on this concrete
+        # compatibility class as well as initialized by the shared parent.
         self.package = dependency
         self.feature = "This operation"
         self.extra = None

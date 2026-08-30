@@ -41,11 +41,21 @@ only reviewed reasons a module in `openmed` may open a connection are:
 None of these run on the default de-identification path, and none contact an
 OpenMed-operated or analytics endpoint.
 
-### Distributed tracing (opt-in, off by default)
+### Operator observability (opt-in, off by default)
+
+The core privacy pipeline has an optional OpenTelemetry-compatible layer in
+`core/telemetry.py`. It is off by default, enabled only through
+`Pipeline(telemetry_enabled=True)`, an explicitly supplied `PipelineTelemetry`,
+or `OPENMED_TELEMETRY_ENABLED=true`. The module imports OpenTelemetry lazily,
+creates no provider or exporter, and emits only fixed stage names, canonical
+label sets, counts, aggregate offsets, and durations. See
+[Core Pipeline Observability](../core-observability.md) for the complete
+no-PHI attribute and metric contract.
 
 The REST service integrates OpenTelemetry in `service/tracing.py` for operators
-who want request tracing in **their own** infrastructure. It is off by default
-(`enabled = False`), enabled only via `OPENMED_SERVICE_TRACING_ENABLED`, and
+who want request tracing in **their own** infrastructure. It is also off by
+default (`enabled = False`), enabled only via
+`OPENMED_SERVICE_TRACING_ENABLED`, and
 exports to a user-supplied `OPENMED_SERVICE_OTLP_ENDPOINT`. Because it is opt-in
 and points only at the operator's own collector, it does not constitute
 telemetry-by-default or a phone-home.
@@ -56,8 +66,10 @@ telemetry-by-default or a phone-home.
 enforces the guarantee on every test run:
 
 - A **static scan** of `openmed/**/*.py` fails if a telemetry/analytics SDK is
-  imported, a known phone-home host literal appears, or a telemetry opt-OUT
-  environment variable is read.
+  imported (including through `importlib`), a known phone-home host literal
+  appears, or a telemetry opt-OUT environment variable is read. The two
+  reviewed OpenTelemetry surfaces are pinned to the core pipeline and REST
+  tracing modules, including their off-by-default controls.
 - A **network-surface inventory** pins the exact set of modules allowed to
   import a raw-network library. A new module that opens the network fails the
   test until it is reviewed and added to the allowlist — this is how outbound

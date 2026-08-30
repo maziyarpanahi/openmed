@@ -2,6 +2,16 @@
 
 This directory contains the Gradle build for the `:openmedkit` Android library.
 
+## Demos
+
+- `OpenMedScanDemo` demonstrates CameraX capture, on-device OCR, and highlighted
+  identifier redaction.
+- [`OpenMedMapleDemo`](OpenMedMapleDemo/README.md) is the offline Maple Clinical
+  Studio for PII redaction, entity extraction, relation extraction, and
+  source-grounded reasoning/chat. It runs without model weights in synthetic
+  preview mode and accepts a pinned, checksummed ONNX Runtime Mobile bundle for
+  real on-device generation.
+
 ## Install OpenMedKit 2.2.0
 
 OpenMedKit Android is published from immutable OpenMed release tags through JitPack.
@@ -41,6 +51,19 @@ Install JDK 11 and Android SDK Platform 33, then run:
 cd android
 ./gradlew test
 ```
+
+The Android CI gate also builds the release AAR and measures offline library
+initialization (packaged catalog load plus downloader/cache setup):
+
+```bash
+cd android
+./gradlew :openmedkit:verifyAndroidBudgets --continue
+```
+
+Reviewable ceilings live in `gradle/budgets.properties`. Measurements are
+written to `openmedkit/build/reports/budgets/` and published in the GitHub
+Actions job summary. Budget increases should include an explicit review of the
+packaged AAR or cold-start regression that requires the additional headroom.
 
 Dependency resolution is limited to Google Maven, Maven Central, and the scoped
 OpenMed group on JitPack. Dependency and plugin versions are declared in
