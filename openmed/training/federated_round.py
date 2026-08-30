@@ -119,7 +119,10 @@ class FederatedRoundLifecycle:
 
     def __post_init__(self) -> None:
         _require_state(self.state)
-        if self.schema_version != FEDERATED_ROUND_SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not str
+            or self.schema_version != FEDERATED_ROUND_SCHEMA_VERSION
+        ):
             raise FederatedRoundStateError(
                 "unsupported federated round lifecycle schema"
             )
@@ -163,35 +166,40 @@ class FederatedRoundLifecycle:
     def from_dict(cls, payload: Mapping[str, Any]) -> FederatedRoundLifecycle:
         """Parse a strict lifecycle payload without retaining extra metadata."""
 
-        if not isinstance(payload, Mapping) or set(payload) != {
-            "schema_version",
-            "state",
-        }:
+        if not isinstance(payload, Mapping):
+            raise FederatedRoundStateError("invalid federated round lifecycle payload")
+        try:
+            keys = set(payload)
+        except Exception:
+            raise FederatedRoundStateError(
+                "invalid federated round lifecycle payload"
+            ) from None
+        if keys != {"schema_version", "state"}:
             raise FederatedRoundStateError("invalid federated round lifecycle payload")
         schema_version = payload["schema_version"]
         state_value = payload["state"]
         if (
-            not isinstance(schema_version, str)
+            type(schema_version) is not str
             or schema_version != FEDERATED_ROUND_SCHEMA_VERSION
         ):
             raise FederatedRoundStateError(
                 "unsupported federated round lifecycle schema"
             )
-        if not isinstance(state_value, str):
+        if type(state_value) is not str:
             raise FederatedRoundStateError("unknown federated round state")
         try:
             state = FederatedRoundState(state_value)
         except ValueError:
             raise FederatedRoundStateError("unknown federated round state") from None
-        return cls(state=state, schema_version=schema_version)
+        return cls(state=state, schema_version=FEDERATED_ROUND_SCHEMA_VERSION)
 
     @classmethod
     def from_json(cls, payload: str) -> FederatedRoundLifecycle:
         """Parse lifecycle JSON and replace parser details with a safe error."""
 
         try:
-            decoded = json.loads(payload)
-        except (json.JSONDecodeError, TypeError):
+            decoded = json.loads(payload, object_pairs_hook=_strict_json_object)
+        except (json.JSONDecodeError, FederatedRoundStateError, TypeError):
             raise FederatedRoundStateError(
                 "invalid federated round lifecycle JSON"
             ) from None
@@ -203,6 +211,17 @@ class FederatedRoundLifecycle:
 def _require_state(state: object) -> None:
     if not isinstance(state, FederatedRoundState):
         raise FederatedRoundStateError("unknown federated round state")
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Build one JSON object while rejecting ambiguous duplicate keys."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise FederatedRoundStateError("invalid federated round lifecycle JSON")
+        result[key] = value
+    return result
 
 
 __all__ = [

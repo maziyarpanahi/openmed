@@ -156,6 +156,34 @@ def test_errors_and_serialization_do_not_expose_caller_metadata() -> None:
     assert sentinel not in serialized
 
 
+def test_duplicate_json_fields_are_rejected_instead_of_last_value_winning() -> None:
+    payload = (
+        '{"schema_version":"openmed.training.federated_round.v1",'
+        '"state":"planned","state":"promoted"}'
+    )
+
+    with pytest.raises(
+        FederatedRoundStateError,
+        match="invalid federated round lifecycle JSON",
+    ):
+        FederatedRoundLifecycle.from_json(payload)
+
+
+class SchemaVersionSubclass(str):
+    """A string subtype that must not be retained in immutable state."""
+
+
+def test_schema_version_subclasses_are_rejected_by_all_constructors() -> None:
+    schema = SchemaVersionSubclass(FEDERATED_ROUND_SCHEMA_VERSION)
+
+    with pytest.raises(FederatedRoundStateError):
+        FederatedRoundLifecycle(schema_version=schema)
+    with pytest.raises(FederatedRoundStateError):
+        FederatedRoundLifecycle.from_dict(
+            {"schema_version": schema, "state": "planned"}
+        )
+
+
 def test_plain_strings_cannot_bypass_typed_transition_validation() -> None:
     with pytest.raises(FederatedRoundStateError):
         can_transition_round("planned", S.PREFLIGHT)  # type: ignore[arg-type]
