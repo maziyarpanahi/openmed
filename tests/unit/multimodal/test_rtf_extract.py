@@ -232,7 +232,7 @@ def test_rtf_handler_runs_detector_and_writes_redacted_copy(tmp_path: Path):
     )
 
     assert observed == [(EXPECTED_TEXT, "en")]
-    assert extract_rtf(output).text.startswith("Patient [NAME]")
+    assert extract_rtf(output).text.startswith("Patient [PERSON]")
     assert document.metadata["detected_span_count"] == 1
     assert document.metadata["redacted_rtf_path"] == str(output)
 

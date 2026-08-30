@@ -5,8 +5,11 @@ from __future__ import annotations
 import inspect
 import os
 from collections.abc import Iterable, Mapping, Sequence
+from numbers import Integral
 from pathlib import Path
 from typing import Any
+
+from openmed.core.labels import is_recognized_label, normalize_label
 
 from .base import ExtractedDocument
 
@@ -45,7 +48,7 @@ def validate_replacements(
 ) -> tuple[TextReplacement, ...]:
     """Return sorted, de-duplicated, non-overlapping logical replacements."""
     unique = {
-        (int(start), int(end), str(replacement))
+        (_coerce_offset(start), _coerce_offset(end), str(replacement))
         for start, end, replacement in replacements
     }
     ordered = tuple(sorted(unique, key=lambda item: (item[0], item[1], item[2])))
@@ -179,13 +182,12 @@ def _coerce_entity(
         return (
             _coerce_offset(span[0]),
             _coerce_offset(span[1]),
-            default_replacement or _mask_for_label(label),
+            _replacement_for(default_replacement, label),
         )
     if isinstance(span, Mapping):
         start = span.get("start")
         end = span.get("end")
         label = span.get("label", span.get("entity_type", span.get("entity_group")))
-        replacement = span.get("replacement", span.get("redacted_text"))
     else:
         start = getattr(span, "start", None)
         end = getattr(span, "end", None)
@@ -194,23 +196,19 @@ def _coerce_entity(
             "label",
             getattr(span, "entity_type", getattr(span, "entity_group", None)),
         )
-        replacement = getattr(span, "replacement", getattr(span, "redacted_text", None))
     if start is None or end is None:
         return None
     return (
         _coerce_offset(start),
         _coerce_offset(end),
-        str(replacement)
-        if replacement is not None
-        else default_replacement or _mask_for_label(label),
+        _replacement_for(default_replacement, label),
     )
 
 
 def _coerce_offset(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool) or not isinstance(value, Integral):
         raise ValueError("invalid detector entity offsets") from None
+    return int(value)
 
 
 def _looks_like_sequence_entity(value: Any) -> bool:
@@ -230,11 +228,17 @@ def _looks_like_sequence_entity(value: Any) -> bool:
 
 
 def _mask_for_label(label: Any) -> str:
-    safe = "".join(
-        character if character.isalnum() else "_"
-        for character in str(label or "PHI").upper()
-    ).strip("_")
-    return f"[{safe or 'PHI'}]"
+    if type(label) is not str or not is_recognized_label(label):
+        return "[PHI]"
+    return f"[{normalize_label(label)}]"
+
+
+def _replacement_for(default_replacement: Any, label: Any) -> str:
+    if default_replacement is None:
+        return _mask_for_label(label)
+    if type(default_replacement) is not str:
+        raise ValueError("policy replacement must be text")
+    return default_replacement
 
 
 __all__ = [

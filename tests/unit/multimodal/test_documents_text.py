@@ -108,7 +108,7 @@ def test_text_handler_runs_detector_and_writes_redacted_copy(tmp_path: Path):
     )
 
     assert observed == [("Patient     MRN\nJane Roe    A123\n", "en")]
-    assert output.read_text(encoding="utf-8").splitlines()[1] == "[NAME]      A123"
+    assert output.read_text(encoding="utf-8").splitlines()[1] == "[PERSON]    A123"
     assert document.metadata["detected_span_count"] == 1
     assert document.metadata["redacted_text_path"] == str(output)
     assert base._HANDLERS[".txt"][-1].requires_multimodal is False
@@ -151,6 +151,43 @@ def test_text_handler_accepts_object_entities_and_positional_only_lang(tmp_path:
 
     assert document.metadata["detected_span_count"] == 1
     assert output.read_text(encoding="utf-8") == "[PERSON]\n"
+
+
+def test_detector_cannot_supply_raw_replacement_or_untrusted_label(tmp_path: Path):
+    sentinel = "SYNTHETIC-RAW-PATIENT-VALUE"
+    source = _write_text(tmp_path / "report.txt", f"{sentinel}\n")
+    output = tmp_path / "redacted.txt"
+
+    def detector(text: str):
+        return [
+            {
+                "start": 0,
+                "end": len(sentinel),
+                "label": sentinel,
+                "replacement": sentinel,
+            }
+        ]
+
+    multimodal.redact_document(
+        source,
+        models=detector,
+        policy={"output_path": output},
+    )
+
+    rendered = output.read_text(encoding="utf-8")
+    assert sentinel not in rendered
+    assert rendered.rstrip() == "[PHI]"
+
+
+@pytest.mark.parametrize("offset", [True, 0.5])
+def test_detector_offsets_must_be_integral(tmp_path: Path, offset: object):
+    source = _write_text(tmp_path / "report.txt", "Jane Roe\n")
+
+    with pytest.raises(ValueError, match="invalid detector entity offsets"):
+        multimodal.redact_document(
+            source,
+            models=lambda text: [{"start": offset, "end": 8, "label": "NAME"}],
+        )
 
 
 def test_text_writer_rejects_line_crossings_and_source_aliases(tmp_path: Path):
