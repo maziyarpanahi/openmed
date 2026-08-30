@@ -13,7 +13,6 @@ from typing import Any, Literal, Mapping
 from openmed.core.repro_hash import (
     _MODEL_CARD_REPRO_HASH_RE,
     _SHA256_DIGEST_RE,
-    ReproducibilityVerificationError,
     _normalise_component,
     compute_reproducibility_hash,
 )
@@ -111,7 +110,7 @@ def verify_reproducibility_inputs(
             status="UNVERIFIABLE",
             matched=False,
             recomputed_hash=None,
-            claimed_hash=resolved_claim,
+            claimed_hash=None,
             diverging_inputs=(),
             details={
                 "reason": "Missing or malformed claimed reproducibility hash",
@@ -132,6 +131,21 @@ def verify_reproducibility_inputs(
         "recipe_config_hash": recipe_config_hash,
         "env_lock_digest": env_lock_digest,
     }
+    missing_inputs = tuple(
+        key for key in CORE_PROVENANCE_KEYS if _is_missing(candidate_inputs[key])
+    )
+    if missing_inputs:
+        return ReproVerificationResult(
+            status="UNVERIFIABLE",
+            matched=False,
+            recomputed_hash=None,
+            claimed_hash=resolved_claim,
+            details={
+                "reason": "Missing required reproducibility inputs",
+                "claim_source": claim_source,
+                "missing_inputs": list(missing_inputs),
+            },
+        )
 
     # If reference provenance is available, diff inputs to isolate divergences
     resolved_ref = _resolve_reference_provenance(
@@ -139,14 +153,13 @@ def verify_reproducibility_inputs(
         manifest_row=manifest_row,
     )
 
-    diverging_inputs: tuple[str, ...] = ()
-    if resolved_ref is not None:
-        diverging_inputs = _localize_divergences(
-            candidate=candidate_inputs,
-            reference=resolved_ref,
-        )
-
     try:
+        diverging_inputs: tuple[str, ...] = ()
+        if resolved_ref is not None:
+            diverging_inputs = _localize_divergences(
+                candidate=candidate_inputs,
+                reference=resolved_ref,
+            )
         recomputed = compute_reproducibility_hash(
             recipe=recipe,
             data_manifest=data_manifest,
@@ -156,15 +169,14 @@ def verify_reproducibility_inputs(
             recipe_config_hash=recipe_config_hash,
             env_lock_digest=env_lock_digest,
         )
-    except (TypeError, ValueError, ReproducibilityVerificationError) as exc:
+    except Exception:
         return ReproVerificationResult(
-            status="MISMATCH",
+            status="UNVERIFIABLE",
             matched=False,
             recomputed_hash=None,
             claimed_hash=resolved_claim,
-            diverging_inputs=diverging_inputs or ("inputs_invalid",),
             details={
-                "error_class": exc.__class__.__name__,
+                "reason": "Invalid reproducibility inputs",
                 "claim_source": claim_source,
             },
         )
@@ -212,8 +224,10 @@ def _resolve_claimed_hash(
     reference_provenance: Mapping[str, Any] | None,
 ) -> tuple[str | None, str]:
     """Extract claimed reproducibility hash across precedence tiers."""
-    if explicit_hash is not None:
+    if type(explicit_hash) is str:
         return explicit_hash.strip(), "explicit_argument"
+    if explicit_hash is not None:
+        return None, "explicit_argument"
 
     if manifest_row is not None:
         manifest_hash = manifest_row.get("reproducibility_hash")
@@ -298,9 +312,13 @@ def _localize_divergences(
     return tuple(diverged)
 
 
-def _is_valid_sha256(value: str) -> bool:
+def _is_valid_sha256(value: object) -> bool:
     """Return True if value matches the canonical sha256: digest format."""
-    return bool(_SHA256_DIGEST_RE.fullmatch(value.strip()))
+    return type(value) is str and bool(_SHA256_DIGEST_RE.fullmatch(value.strip()))
+
+
+def _is_missing(value: Any) -> bool:
+    return value is None or (type(value) is str and not value.strip())
 
 
 __all__ = [

@@ -163,7 +163,7 @@ def test_multi_factor_mismatch(
     assert set(result.diverging_inputs) == {"base_model", "git_sha"}
 
 
-def test_unlocalized_mismatch_incomplete_reference_provenance(
+def test_incomplete_candidate_inputs_are_unverifiable(
     reference_provenance: dict[str, Any], claimed_hash: str
 ) -> None:
     # Reference only contains base_model; recipe, data_manifest, git_sha missing
@@ -173,11 +173,11 @@ def test_unlocalized_mismatch_incomplete_reference_provenance(
         base_model=reference_provenance["base_model"],
         reference_provenance=partial_reference,
     )
-    assert result.status == "MISMATCH"
+    assert result.status == "UNVERIFIABLE"
     assert result.matched is False
     assert result.diverging_inputs == ()
-    assert result.details["unlocalized_reason"] == "incomplete_reference_provenance"
-    assert set(result.details["missing_reference_keys"]) == {
+    assert result.details["reason"] == "Missing required reproducibility inputs"
+    assert set(result.details["missing_inputs"]) == {
         "recipe",
         "data_manifest",
         "git_sha",
@@ -464,7 +464,7 @@ def test_malformed_hash_and_invalid_inputs_fail_closed(
     assert res_malformed.status == "UNVERIFIABLE"
     assert res_malformed.matched is False
 
-    # Invalid seed types causing computation failure -> MISMATCH
+    # Invalid seed types make a recomputation impossible, not a mismatch.
     res_invalid = verify_reproducibility_inputs(
         claimed_hash="sha256:" + "a" * 64,
         recipe=reference_provenance["recipe"],
@@ -473,9 +473,58 @@ def test_malformed_hash_and_invalid_inputs_fail_closed(
         git_sha=reference_provenance["git_sha"],
         rng_seeds={"python": True},  # Boolean is rejected as invalid seed
     )
-    assert res_invalid.status == "MISMATCH"
+    assert res_invalid.status == "UNVERIFIABLE"
     assert res_invalid.matched is False
-    assert "inputs_invalid" in res_invalid.diverging_inputs
+    assert res_invalid.details["reason"] == "Invalid reproducibility inputs"
+
+
+def test_malformed_claim_is_not_retained_in_result_payload(
+    reference_provenance: dict[str, Any],
+) -> None:
+    marker = "synthetic-sensitive-invalid-hash"
+
+    result = verify_reproducibility_inputs(
+        claimed_hash=marker,
+        recipe=reference_provenance["recipe"],
+        data_manifest=reference_provenance["data_manifest"],
+        base_model=reference_provenance["base_model"],
+        git_sha=reference_provenance["git_sha"],
+    )
+
+    assert result.status == "UNVERIFIABLE"
+    assert result.claimed_hash is None
+    assert marker not in json.dumps(result.to_dict())
+
+
+def test_manifest_claim_without_required_inputs_is_unverifiable(tmp_path: Path) -> None:
+    manifest_file = tmp_path / "models.jsonl"
+    manifest_file.write_text(
+        json.dumps(
+            {
+                "repo_id": "OpenMed/test-model",
+                "reproducibility_hash": "sha256:" + "a" * 64,
+                "base_model": "OpenMed/base-model",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    stdout = io.StringIO()
+    with patch("sys.stdout", stdout):
+        code = main(
+            [
+                "repro",
+                "verify",
+                "--repo",
+                "OpenMed/test-model",
+                "--manifest",
+                str(manifest_file),
+            ]
+        )
+
+    assert code == 1
+    assert "UNVERIFIABLE: Missing required reproducibility inputs" in stdout.getvalue()
 
 
 def test_cli_corrupted_file_handling(tmp_path: Path) -> None:
