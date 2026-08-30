@@ -727,7 +727,7 @@ papers, posters, and derived documentation.
 
 If OpenMed is useful to you, a star helps others discover it.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
