@@ -31,7 +31,8 @@ def manifest_fixture(tmp_path: Path) -> Path:
     rows = [
         {"model_id": "OpenMed/OpenMed-PII-BigMed-Large-560M-v1"},
         {"model_id": "OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1"},
-        {"model_id": "OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1"},
+        {"model_id": "OpenMed/OpenMed-PII-BigMed-Large-278M-v1"},
+        {"model_id": "OpenMed/privacy-filter-nemotron"},
     ]
     with open(p, "w", encoding="utf-8") as f:
         for r in rows:
@@ -62,8 +63,8 @@ def custom_yaml_fixture(tmp_path: Path) -> Path:
                         "weight": 0.9,
                     },
                     {
-                        "id": "privacy-filter-heuristics-v1",
-                        "type": "filter",
+                        "id": "OpenMed/privacy-filter-nemotron",
+                        "type": "model",
                         "weight": 0.8,
                     },
                 ],
@@ -75,14 +76,14 @@ def custom_yaml_fixture(tmp_path: Path) -> Path:
                 "agreement_threshold": 0.66,
                 "members": [
                     {
-                        "id": "OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1",
+                        "id": "OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
                         "type": "model",
                         "weight": 1.0,
                     },
                     {
-                        "id": "direct-id-regex-v1",
-                        "type": "filter",
-                        "weight": 0.9,
+                        "id": "OpenMed/privacy-filter-nemotron",
+                        "type": "model",
+                        "weight": 0.8,
                     },
                 ],
                 "validators": [
@@ -138,7 +139,7 @@ def test_resolve_members_against_manifest_fixture(
 
 
 def test_unknown_member_id_fails_manifest_validation(tmp_path: Path) -> None:
-    """Test that declaring an unmanifested model ID raises EnsembleManifestError."""
+    """Test that every member type must resolve through the manifest."""
     yaml_path = tmp_path / "bad_member.yaml"
     data = {
         "schema_version": "openmed.training.teacher_ensemble.v1",
@@ -147,7 +148,7 @@ def test_unknown_member_id_fails_manifest_validation(tmp_path: Path) -> None:
                 "family": "ClinicalPrivacy",
                 "agreement_threshold": 0.5,
                 "members": [
-                    {"id": "unmanifested-model-v1", "type": "model", "weight": 1.0}
+                    {"id": "unregistered-filter-v1", "type": "filter", "weight": 1.0}
                 ],
                 "validators": [],
             }
@@ -185,7 +186,10 @@ def test_unknown_validator_fails_validation(tmp_path: Path) -> None:
     assert "is not registered in VALIDATOR_REGISTRY" in str(exc_info.value)
 
 
-@pytest.mark.parametrize("invalid_threshold", [0.0, -0.5, 1.2, float("nan")])
+@pytest.mark.parametrize(
+    "invalid_threshold",
+    [0.0, -0.5, 1.2, float("nan"), float("inf"), True],
+)
 def test_out_of_range_threshold_fails(tmp_path: Path, invalid_threshold: float) -> None:
     """Test that agreement_threshold <= 0, > 1.0, or NaN raises EnsembleConfigError."""
     yaml_path = tmp_path / "bad_threshold.yaml"
@@ -202,16 +206,18 @@ def test_out_of_range_threshold_fails(tmp_path: Path, invalid_threshold: float) 
     }
     yaml_path.write_text(yaml.dump(data), encoding="utf-8")
 
-    with pytest.raises(EnsembleConfigError) as exc_info:
+    with pytest.raises(
+        EnsembleConfigError, match="agreement_threshold|Agreement threshold"
+    ):
         load_teacher_ensemble_config(yaml_path)
-    assert "Agreement threshold" in str(exc_info.value) or str(
-        invalid_threshold
-    ) in str(exc_info.value)
 
 
-@pytest.mark.parametrize("invalid_weight", [0.0, -1.0, float("nan")])
-def test_non_positive_weight_fails(tmp_path: Path, invalid_weight: float) -> None:
-    """Test that member weight <= 0.0 or NaN raises EnsembleConfigError."""
+@pytest.mark.parametrize(
+    "invalid_weight",
+    [0.0, -1.0, 1.1, float("nan"), float("inf"), True],
+)
+def test_invalid_weight_fails(tmp_path: Path, invalid_weight: float) -> None:
+    """Test that non-finite or out-of-range weights fail closed."""
     yaml_path = tmp_path / "bad_weight.yaml"
     data = {
         "schema_version": "openmed.training.teacher_ensemble.v1",
@@ -226,9 +232,8 @@ def test_non_positive_weight_fails(tmp_path: Path, invalid_weight: float) -> Non
     }
     yaml_path.write_text(yaml.dump(data), encoding="utf-8")
 
-    with pytest.raises(EnsembleConfigError) as exc_info:
+    with pytest.raises(EnsembleConfigError, match="weight|Weight"):
         load_teacher_ensemble_config(yaml_path)
-    assert "Member weight" in str(exc_info.value)
 
 
 def test_invalid_member_type_or_missing_id_fails() -> None:
@@ -238,6 +243,47 @@ def test_invalid_member_type_or_missing_id_fails() -> None:
 
     with pytest.raises(EnsembleConfigError, match="Invalid member type"):
         EnsembleMember(id="m1", member_type="invalid_type", weight=1.0)
+
+
+def test_duplicate_members_and_mismatched_family_keys_fail() -> None:
+    """Test that ambiguous family registries cannot be constructed."""
+    member = EnsembleMember(id="OpenMed/example", member_type="model", weight=1.0)
+
+    with pytest.raises(EnsembleConfigError, match="duplicate member IDs"):
+        FamilyEnsembleConfig(
+            family="ClinicalPrivacy",
+            agreement_threshold=0.5,
+            members=(member, member),
+            validators=(),
+        )
+
+    family = FamilyEnsembleConfig(
+        family="ClinicalPrivacy",
+        agreement_threshold=0.5,
+        members=(member,),
+        validators=(),
+    )
+    with pytest.raises(EnsembleConfigError, match="does not match"):
+        TeacherEnsembleConfig(
+            schema_version="openmed.training.teacher_ensemble.v1",
+            families={"DirectID": family},
+        )
+
+
+def test_policy_rejects_incomplete_or_unconfigured_detector_sets(
+    custom_yaml_fixture: Path,
+) -> None:
+    """Test that runtime sources cannot drift from the audited teacher set."""
+    policy = resolve_family_agreement_policy(
+        load_teacher_ensemble_config(custom_yaml_fixture), "ClinicalPrivacy"
+    )
+
+    with pytest.raises(EnsembleConfigError, match="missing="):
+        policy.validate_detector_sources(["OpenMed/OpenMed-PII-BigMed-Large-560M-v1"])
+    with pytest.raises(EnsembleConfigError, match="unexpected="):
+        policy.validate_detector_sources(
+            [*policy.member_weights, "OpenMed/unconfigured-teacher"]
+        )
 
 
 def test_invalid_schema_version_fails(tmp_path: Path) -> None:
@@ -298,10 +344,11 @@ def test_agreement_policy_weak_label_integration(custom_yaml_fixture: Path) -> N
             },
             {"start": 32, "end": 37, "label": "PERSON", "text": "Alice", "score": 0.88},
         ],
-        "privacy-filter-heuristics-v1": [
+        "OpenMed/privacy-filter-nemotron": [
             {"start": 0, "end": 11, "label": "SSN", "text": valid_ssn, "score": 0.80},
         ],
     }
+    policy.validate_detector_sources(detector_outputs)
 
     decision = weak_label_document(
         text=text,
@@ -336,14 +383,14 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
     text = f"{valid_npi} {invalid_npi} {valid_nhs} {invalid_nhs}"
 
     detector_outputs = {
-        "OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1": [
+        "OpenMed/OpenMed-PII-BigMed-Large-278M-v1": [
             WeakLabelSpan(
                 start=0,
                 end=10,
                 label="NPI",
                 text=valid_npi,
                 score=0.95,
-                source="OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1",
+                source="OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
             ),
             WeakLabelSpan(
                 start=11,
@@ -351,7 +398,7 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
                 label="NPI",
                 text=invalid_npi,
                 score=0.95,
-                source="OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1",
+                source="OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
             ),
             WeakLabelSpan(
                 start=22,
@@ -359,7 +406,7 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
                 label="NHS_NUMBER",
                 text=valid_nhs,
                 score=0.90,
-                source="OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1",
+                source="OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
             ),
             WeakLabelSpan(
                 start=35,
@@ -367,17 +414,17 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
                 label="NHS_NUMBER",
                 text=invalid_nhs,
                 score=0.90,
-                source="OpenMed/OpenMed-ClinicalNER-SuperClinical-Large-434M-v1",
+                source="OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
             ),
         ],
-        "direct-id-regex-v1": [
+        "OpenMed/privacy-filter-nemotron": [
             WeakLabelSpan(
                 start=0,
                 end=10,
                 label="NPI",
                 text=valid_npi,
                 score=0.90,
-                source="direct-id-regex-v1",
+                source="OpenMed/privacy-filter-nemotron",
             ),
             WeakLabelSpan(
                 start=11,
@@ -385,7 +432,7 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
                 label="NPI",
                 text=invalid_npi,
                 score=0.90,
-                source="direct-id-regex-v1",
+                source="OpenMed/privacy-filter-nemotron",
             ),
             WeakLabelSpan(
                 start=22,
@@ -393,7 +440,7 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
                 label="NHS_NUMBER",
                 text=valid_nhs,
                 score=0.85,
-                source="direct-id-regex-v1",
+                source="OpenMed/privacy-filter-nemotron",
             ),
             WeakLabelSpan(
                 start=35,
@@ -401,10 +448,11 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
                 label="NHS_NUMBER",
                 text=invalid_nhs,
                 score=0.85,
-                source="direct-id-regex-v1",
+                source="OpenMed/privacy-filter-nemotron",
             ),
         ],
     }
+    policy.validate_detector_sources(detector_outputs)
 
     decision = weak_label_document(
         text=text,

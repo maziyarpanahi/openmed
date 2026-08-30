@@ -8,23 +8,18 @@ families:
       - id: "OpenMed/OpenMed-PII-BigMed-Large-560M-v1"
         type: "model"
         weight: 1.0
-        target_entities: ["NAME", "DATE", "LOCATION", "AGE", "ID"]
+        target_entities: ["PERSON", "DATE", "LOCATION", "AGE", "ID_NUM"]
         description: "Primary transformer token classifier for broad clinical text de-identification."
       - id: "OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1"
         type: "model"
         weight: 0.9
-        target_entities: ["NAME", "DATE", "LOCATION", "AGE", "ID"]
+        target_entities: ["PERSON", "DATE", "LOCATION", "AGE", "ID_NUM"]
         description: "BioClinicalBERT token classifier optimized for clinical privacy entities."
-      - id: "privacy-filter-heuristics-v1"
-        type: "filter"
+      - id: "OpenMed/privacy-filter-nemotron"
+        type: "model"
         weight: 0.8
-        target_entities: ["NAME", "DATE", "LOCATION"]
-        description: "Contextual privacy filter heuristics and pattern engine."
-      - id: "clinical-regex-pii-v1"
-        type: "filter"
-        weight: 0.7
-        target_entities: ["SSN", "PHONE", "MRN"]
-        description: "Deterministic regular expression detector for structured PII."
+        target_entities: ["PERSON", "DATE", "LOCATION", "SSN", "PHONE", "ID_NUM"]
+        description: "Manifest-registered Privacy Filter teacher for narrative and structured PII."
     validators:
       - "validate_ssn"
       - "validate_phone_us"
@@ -38,18 +33,13 @@ families:
       - id: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1"
         type: "model"
         weight: 1.0
-        target_entities: ["SSN", "PHONE", "NPI", "IBAN", "NHS_NUMBER"]
+        target_entities: ["SSN", "PHONE", "ID_NUM", "CREDIT_CARD", "IBAN"]
         description: "Transformer NER model specialized for structured direct identifiers."
-      - id: "direct-id-regex-v1"
-        type: "filter"
-        weight: 0.9
-        target_entities: ["SSN", "PHONE", "NPI", "LUHN", "IBAN", "NHS_NUMBER"]
-        description: "Strict expression matching detector for direct identifiers."
-      - id: "privacy-filter-direct-v1"
-        type: "filter"
+      - id: "OpenMed/privacy-filter-nemotron"
+        type: "model"
         weight: 0.8
-        target_entities: ["SSN", "NPI"]
-        description: "Contextual rule filter for explicit identity numbers."
+        target_entities: ["SSN", "PHONE", "ID_NUM", "CREDIT_CARD", "IBAN"]
+        description: "Manifest-registered Privacy Filter teacher for direct identifiers."
     validators:
       - "validate_ssn"
       - "validate_phone_us"
