@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "matrix_version": "2026-08-02",
+  "supported_resource_types": [
+    "AllergyIntolerance",
+    "AuditEvent",
+    "Bundle",
+    "CarePlan",
+    "Composition",
+    "Condition",
+    "Device",
+    "DiagnosticReport",
+    "DocumentReference",
+    "Encounter",
+    "Goal",
+    "Immunization",
+    "Medication",
+    "MedicationRequest",
+    "MedicationStatement",
+    "Observation",
+    "Organization",
+    "Patient",
+    "Procedure",
+    "Provenance",
+    "Practitioner",
+    "PractitionerRole",
+    "RelatedPerson",
+    "ServiceRequest",
+    "Specimen"
+  ],
+  "profiles": [
+    {
+      "id": "fhir-r4-core",
+      "kind": "fhir-core",
+      "fhir_release": "R4",
+      "fhir_version": "4.0.1",
+      "package": "hl7.fhir.r4.core#4.0.1",
+      "status": "published",
+      "support": "First-class OpenMed export and offline structural validation."
+    },
+    {
+      "id": "fhir-r5-core",
+      "kind": "fhir-core",
+      "fhir_release": "R5",
+      "fhir_version": "5.0.0",
+      "package": "hl7.fhir.r5.core#5.0.0",
+      "status": "published",
+      "support": "Loss-aware conversion subset from the R4 OpenMed exchange surface."
+    },
+    {
+      "id": "ips",
+      "kind": "implementation-guide",
+      "fhir_release": "R4",
+      "fhir_version": "4.0.1",
+      "package": "hl7.fhir.uv.ips#2.0.1",
+      "canonical": "http://hl7.org/fhir/uv/ips/ImplementationGuide/hl7.fhir.uv.ips",
+      "status": "published-stu",
+      "support": "Synthetic patient-summary shape and offline structural checks."
+    },
+    {
+      "id": "ipa",
+      "kind": "implementation-guide",
+      "fhir_release": "R4",
+      "fhir_version": "4.0.1",
+      "package": "hl7.fhir.uv.ipa#1.1.0",
+      "canonical": "http://hl7.org/fhir/uv/ipa/ImplementationGuide/hl7.fhir.uv.ipa",
+      "status": "published-stu",
+      "support": "Synthetic patient-access example and offline structural checks."
+    },
+    {
+      "id": "clinical-document",
+      "kind": "implementation-guide",
+      "fhir_release": "R4",
+      "fhir_version": "4.0.1",
+      "package": "hl7.fhir.uv.fhir-clinical-document#1.1.0",
+      "canonical": "http://hl7.org/fhir/uv/fhir-clinical-document/ImplementationGuide/hl7.fhir.uv.fhir-clinical-document",
+      "status": "published-stu",
+      "support": "Document Bundle shape, narrative, references, and provenance."
+    }
+  ]
+}

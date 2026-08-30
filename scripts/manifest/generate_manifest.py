@@ -352,24 +352,47 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
     )
     if is_mlx:
         formats.add("mlx-fp")
-    if is_mlx and (
-        "8bit" in lowered_tags
-        or "8-bit" in lowered_tags
-        or "-mlx-8bit" in repo_lower
-        or any("8bit" in name for name in lowered_names)
+    is_mlx_2bit = is_mlx and (
+        "2-bit" in lowered_tags
+        or "2bit" in lowered_tags
+        or "mlx-2bit" in lowered_tags
+        or "-2bit-mlx" in repo_lower
+        or "-mlx-2bit" in repo_lower
+        or any("2bit" in name or "2-bit" in name for name in lowered_names)
+    )
+    if is_mlx_2bit:
+        formats.add("mlx-2bit")
+        formats.discard("mlx-fp")
+    is_mlx_4bit = is_mlx and (
+        "4-bit" in lowered_tags
+        or "4bit" in lowered_tags
+        or "mlx-4bit" in lowered_tags
+        or "q4" in lowered_tags
+        or "-q4-" in repo_lower
+        or "-4bit-mlx" in repo_lower
+        or "-mlx-4bit" in repo_lower
+        or any(
+            "4bit" in name or "4-bit" in name or "q4" in name for name in lowered_names
+        )
+    )
+    if is_mlx_4bit:
+        formats.add("mlx-4bit")
+        formats.discard("mlx-fp")
+    if (
+        is_mlx
+        and not is_mlx_2bit
+        and not is_mlx_4bit
+        and (
+            "8bit" in lowered_tags
+            or "8-bit" in lowered_tags
+            or "-mlx-8bit" in repo_lower
+            or "-8bit-mlx" in repo_lower
+            or any("8bit" in name or "8-bit" in name for name in lowered_names)
+            or "quantized" in lowered_tags
+        )
     ):
         formats.add("mlx-8bit")
         formats.discard("mlx-fp")
-    if is_mlx and (
-        "4bit" in lowered_tags
-        or "4-bit" in lowered_tags
-        or "q4" in lowered_tags
-        or "-q4-" in repo_lower
-        or any("4bit" in name or "q4" in name for name in lowered_names)
-    ):
-        formats.add("mlx-4bit")
-        formats.discard("mlx-fp")
-        formats.discard("mlx-8bit")
     if any(name.endswith(".onnx") for name in lowered_names):
         formats.add("onnx")
     if (

@@ -11,13 +11,13 @@
   "claims": {
     "package_version": {
       "status": "verified",
-      "value": "2.1.0",
-      "display": "OpenMed SDK 2.1.0",
+      "value": "2.2.0",
+      "display": "OpenMed SDK 2.2.0",
       "definition": "Version declared by openmed/__about__.py.",
       "source": "openmed/__about__.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "OpenMed SDK 2.1.0",
+      "public_wording": "OpenMed SDK 2.2.0",
       "qualification": "Package version, not proof of PyPI publication.",
       "review_by": "2026-10-29",
       "follow_up_by": null

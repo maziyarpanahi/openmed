@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from openmed.core.errors import ERROR_CODES
+
 SCHEMA_VERSION = 1
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONTRACT_PATH = REPOSITORY_ROOT / "docs" / "api" / "openapi.json"
@@ -30,25 +32,32 @@ _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 # These are the stable categories emitted by the service error envelope.  The
 # list is intentionally value-only metadata: it never contains a request,
 # response, credential, or model payload.
-STABLE_ERROR_CATEGORIES = (
+_LEGACY_STABLE_ERROR_CATEGORIES = (
     "auth_rate_limited",
     "authentication_required",
     "backpressure",
     "bad_request",
     "circuit_breaker_open",
     "forbidden",
+    "grounding_invalid_request",
     "internal_error",
     "invalid_credentials",
     "not_ready",
+    "offline_snapshot_unavailable",
     "privacy_gateway_blocked",
     "privacy_gateway_error",
     "privacy_gateway_not_configured",
     "privacy_gateway_reidentification_error",
     "privacy_gateway_transport_error",
     "rate_limited",
+    "restricted_terminology_unconfigured",
     "service_busy",
+    "snapshot_invalid",
     "timeout",
     "validation_error",
+)
+STABLE_ERROR_CATEGORIES = tuple(
+    sorted(set(_LEGACY_STABLE_ERROR_CATEGORIES) | set(ERROR_CODES.values()))
 )
 DEFAULT_ERROR_CATEGORIES = STABLE_ERROR_CATEGORIES
 
@@ -350,6 +359,9 @@ def discover_service_error_categories(
     # 5xx values to internal_error through a conditional expression, so those
     # two stable categories are not represented by one literal call argument.
     categories.update({"bad_request", "internal_error"})
+    # Taxonomy handlers use ``exc.code`` rather than literals so subclasses can
+    # retain their public code. Include the canonical registry explicitly.
+    categories.update(ERROR_CODES.values())
     return _normalize_error_categories(categories)
 
 

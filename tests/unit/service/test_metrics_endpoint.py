@@ -146,7 +146,8 @@ def test_metrics_endpoint_renders_prometheus_text_when_enabled(monkeypatch) -> N
         'openmed_service_request_duration_seconds_count{route="/health"} 1'
         in response.text
     )
-    assert "openmed_service_inflight_requests" in response.text
+    assert "openmed_service_inflight_requests 0" in response.text
+    assert 'route="/metrics"' not in response.text
     assert f"{MODEL_LOAD_NAME} 0" in response.text
     assert f"{MODEL_EVICTION_NAME} 0" in response.text
     assert f"{PAGED_KV_CACHE_OCCUPANCY_NAME} 0" in response.text
@@ -217,6 +218,7 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
             "status_code",
             "le",
             "priority",
+            "queue",
         }
 
 

@@ -102,7 +102,7 @@ Desteklenen Apple donanımında OpenMed, gerekli yapıtlar hazır olduktan sonra
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.1.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 

@@ -1,0 +1,26 @@
+{
+  "name": "@openmed/browser-extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-browser on-device PHI redaction extension.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:browser": "playwright test --config playwright.config.ts",
+    "test": "npm run build && npm run typecheck && npm run test:browser"
+  },
+  "dependencies": {
+    "openmed": "file:../../js/openmedkit-web"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/chrome": "0.2.2",
+    "@types/node": "24.13.3",
+    "esbuild": "0.28.1",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

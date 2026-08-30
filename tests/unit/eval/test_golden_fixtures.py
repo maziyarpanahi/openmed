@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import unicodedata
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -16,12 +17,17 @@ from openmed.core.decoding.spans import (
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.language_pack import LanguagePack, get_language_pack
 from openmed.core.language_router import LanguageRouter
-from openmed.core.pii_entity_merger import find_semantic_units, validate_luhn
+from openmed.core.pii_entity_merger import (
+    find_semantic_units,
+    validate_luhn,
+    validate_ssn,
+)
 from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
     LANGUAGE_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    get_patterns_for_language,
     normalize_bengali_assamese_digits,
     normalize_odia_digits,
     validate_aadhaar,
@@ -30,8 +36,13 @@ from openmed.core.pii_i18n import (
     validate_assamese_indian_phone,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
+    validate_dutch_bsn,
+    validate_egyptian_national_id,
+    validate_french_nir,
+    validate_german_steuer_id,
     validate_hungarian_taj,
     validate_israeli_teudat_zehut,
+    validate_italian_codice_fiscale,
     validate_latvian_personas_kods,
     validate_maharashtra_pin,
     validate_malaysian_mykad,
@@ -44,8 +55,10 @@ from openmed.core.pii_i18n import (
     validate_philsys_psn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
+    validate_spanish_dni,
     validate_tamil_aadhaar,
     validate_tamil_nadu_puducherry_pin,
+    validate_turkish_tckn,
     validate_vietnamese_cccd,
 )
 from openmed.eval import harness
@@ -1537,6 +1550,162 @@ def test_date_arithmetic_fixture_preserves_intervals_after_shift_dates():
     for original, shifted in zip(original_dates, shifted_dates):
         assert original in fixture.text
         assert shifted in fixture.expected_output["text"]
+
+
+# OM-120 freezes the 12-language baseline named in issue #285. The live
+# language registry now includes later packs, so deriving this historical
+# acceptance set from SUPPORTED_LANGUAGES would silently expand the task.
+OM_120_WIRED_LANGUAGES = frozenset(
+    {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"}
+)
+
+_ID_TRAP_VALIDATORS: dict[str, tuple[Callable[[str], bool], ...]] = {
+    "en": (validate_ssn,),
+    "fr": (validate_french_nir,),
+    "de": (validate_german_steuer_id,),
+    "it": (validate_italian_codice_fiscale,),
+    "es": (validate_spanish_dni,),
+    "nl": (validate_dutch_bsn,),
+    "hi": (validate_aadhaar,),
+    "te": (validate_aadhaar,),
+    "pt": (validate_portuguese_cpf,),
+    "ar": (validate_egyptian_national_id,),
+    "tr": (validate_turkish_tckn,),
+}
+
+
+def _id_trap_fixtures() -> list[GoldenFixture]:
+    return [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.fixture_id.startswith("golden-per-language-id-trap-")
+    ]
+
+
+def _date_trap_fixtures() -> list[GoldenFixture]:
+    return [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.fixture_id.startswith("golden-per-language-date-trap-")
+    ]
+
+
+def _mask_gold_spans(fixture: GoldenFixture) -> str:
+    masked = fixture.text
+    for span in sorted(fixture.gold_spans, key=lambda item: item.start, reverse=True):
+        masked = masked[: span.start] + f"[{span.label}]" + masked[span.end :]
+    return masked
+
+
+def test_per_language_id_traps_cover_all_wired_languages():
+    fixtures = _id_trap_fixtures()
+    languages = {fixture.language for fixture in fixtures}
+
+    assert languages == OM_120_WIRED_LANGUAGES
+    assert len(fixtures) == len(OM_120_WIRED_LANGUAGES)
+
+    for fixture in fixtures:
+        assert fixture.category == "checksum_ids"
+        assert fixture.metadata["synthetic"] is True
+        assert len(fixture.gold_spans) >= 1
+        assert fixture.gold_spans[0].label in CANONICAL_LABELS
+        hard_negatives = fixture.metadata.get("hard_negatives", [])
+        assert len(hard_negatives) == 1
+        hn = hard_negatives[0]
+        assert "start" in hn and "end" in hn
+        assert "text" in hn and "identifier_type" in hn and "reason" in hn
+        assert fixture.text[hn["start"] : hn["end"]] == hn["text"]
+        for span in fixture.gold_spans:
+            assert not (hn["start"] < span.end and span.start < hn["end"]), (
+                f"{fixture.fixture_id}: hard negative [{hn['start']}:{hn['end']}] "
+                f"overlaps gold span [{span.start}:{span.end}]"
+            )
+        assert fixture.expected_output["method"] == "mask"
+        assert fixture.expected_output["text"] == _mask_gold_spans(fixture)
+
+
+def test_per_language_date_traps_cover_all_wired_languages():
+    fixtures = _date_trap_fixtures()
+    languages = {fixture.language for fixture in fixtures}
+
+    assert languages == OM_120_WIRED_LANGUAGES
+    assert len(fixtures) == len(OM_120_WIRED_LANGUAGES)
+
+    for fixture in fixtures:
+        assert fixture.category == "multilingual"
+        assert fixture.metadata["synthetic"] is True
+        date_spans = [span for span in fixture.gold_spans if span.label == "DATE"]
+        assert len(date_spans) == 3
+        assert fixture.expected_output["method"] == "mask"
+        assert fixture.expected_output["text"].count("[DATE]") == 3
+        assert fixture.expected_output["text"] == _mask_gold_spans(fixture)
+
+
+def test_per_language_id_traps_invalid_ids_fail_validators():
+    """Valid IDs pass their language's checksum validator; invalid hard
+    negatives fail it.  For ``ja`` there is no My Number checksum validator
+    in the repository, so the fixture explicitly uses
+    ``checksum_status="not_validated"`` with a ``format_mismatch`` hard
+    negative instead of a checksum failure.
+    """
+    for fixture in _id_trap_fixtures():
+        lang = fixture.language
+        valid_span = fixture.gold_spans[0]
+        valid_id = valid_span.text
+        hn = fixture.metadata["hard_negatives"][0]
+        invalid_id = hn["text"]
+
+        if lang == "ja":
+            assert valid_span.metadata["checksum_status"] == "not_validated"
+            assert hn["reason"] == "format_mismatch"
+            continue
+
+        validators = _ID_TRAP_VALIDATORS[lang]
+        assert any(v(valid_id) for v in validators), (
+            f"{lang}: valid ID {valid_id!r} should pass at least one validator"
+        )
+        assert all(not v(invalid_id) for v in validators), (
+            f"{lang}: invalid ID {invalid_id!r} should fail all validators"
+        )
+
+
+def test_per_language_traps_recover_through_language_patterns():
+    """Every gold span in the per-language trap fixtures is recovered by the
+    language's PII patterns at the exact recorded offset.  This catches
+    regressions where a language pack's regex stops matching native formats.
+    """
+    for fixture in [*_id_trap_fixtures(), *_date_trap_fixtures()]:
+        units = find_semantic_units(
+            fixture.text,
+            get_patterns_for_language(fixture.language),
+        )
+        recovered = {
+            (
+                start,
+                end,
+                normalize_label(entity_type, fixture.language),
+                fixture.text[start:end],
+            )
+            for start, end, entity_type, _score, _pattern, validated in units
+            if validated
+        }
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label, span.text) in recovered, (
+                f"{fixture.fixture_id}: span {span.text!r} ({span.label}) "
+                f"at [{span.start}:{span.end}] not recovered by "
+                f"{fixture.language} patterns"
+            )
+
+        for hard_negative in fixture.metadata.get("hard_negatives", []):
+            assert not any(
+                start < hard_negative["end"]
+                and end > hard_negative["start"]
+                and validated
+                for start, end, _entity_type, _score, _pattern, validated in units
+            ), (
+                f"{fixture.fixture_id}: hard negative {hard_negative['text']!r} "
+                "was accepted by a production pattern"
+            )
 
 
 def _one(category: str) -> GoldenFixture:

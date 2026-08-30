@@ -1,0 +1,79 @@
+name: Load-test SLO
+
+on:
+  schedule:
+    # Keep the service load gate out of pull-request and push workflows.
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: "How long to generate mixed traffic"
+        required: false
+        default: "30"
+        type: string
+      rate:
+        description: "Target request arrival rate per second"
+        required: false
+        default: "2"
+        type: string
+      concurrency:
+        description: "Pre-allocated k6 virtual users"
+        required: false
+        default: "4"
+        type: string
+      slo_p95_ms:
+        description: "Maximum p95 latency in milliseconds"
+        required: false
+        default: "30000"
+        type: string
+      slo_p99_ms:
+        description: "Maximum p99 latency in milliseconds"
+        required: false
+        default: "60000"
+        type: string
+      slo_error_rate:
+        description: "Maximum failed-request ratio"
+        required: false
+        default: "0.05"
+        type: string
+      slo_min_throughput_rps:
+        description: "Minimum achieved requests per second"
+        required: false
+        default: "0.5"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  loadtest:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Build the ephemeral service and enforce SLOs
+        env:
+          LOADTEST_SERVICE_IMAGE: openmed:loadtest-${{ github.sha }}
+          LOADTEST_RESULT_FILE: ${{ github.workspace }}/loadtest-results/summary.json
+          LOADTEST_DURATION_SECONDS: ${{ inputs.duration_seconds || '30' }}
+          LOADTEST_RATE: ${{ inputs.rate || '2' }}
+          LOADTEST_CONCURRENCY: ${{ inputs.concurrency || '4' }}
+          LOADTEST_SLO_P95_MS: ${{ inputs.slo_p95_ms || '30000' }}
+          LOADTEST_SLO_P99_MS: ${{ inputs.slo_p99_ms || '60000' }}
+          LOADTEST_SLO_ERROR_RATE: ${{ inputs.slo_error_rate || '0.05' }}
+          LOADTEST_SLO_MIN_THROUGHPUT_RPS: ${{ inputs.slo_min_throughput_rps || '0.5' }}
+        run: deploy/loadtest/run.sh
+
+      - name: Archive load-test SLO report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: loadtest-slo-${{ github.run_id }}
+          path: loadtest-results/
+          if-no-files-found: warn
+          retention-days: 30

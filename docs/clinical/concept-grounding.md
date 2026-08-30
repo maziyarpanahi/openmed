@@ -93,7 +93,39 @@ grounded = ground(
 The key is validated and immediately discarded: it is not retained, logged,
 serialized, read from environment variables, or sent over a network. The alias
 table remains local. Callers remain responsible for UMLS and SNOMED CT license
-terms. CPT remains outside the in-process API and no CPT content is shipped.
+terms. CPT remains user-provided only; no CPT content is shipped.
+
+## Resolve OMOP concepts from Athena
+
+OMOP standard concept IDs can be resolved from a caller-supplied Athena release.
+Download and extract the release yourself, then pass the local directory (or a
+path to one of its files) to `AthenaResolver`:
+
+```python
+from openmed.clinical.grounding import AthenaResolver
+
+resolver = AthenaResolver("/local/athena-export")
+concept_id = resolver.resolve("RxNorm", "SYNTHETIC-SOURCE-CODE")
+concept = resolver.lookup("RxNorm", "SYNTHETIC-SOURCE-CODE")
+
+assert concept is not None
+assert concept_id == concept.concept_id
+print(resolver.vocabulary_version, resolver.reproducibility_hash)
+```
+
+The directory must contain `CONCEPT.csv`, `CONCEPT_RELATIONSHIP.csv`, and
+`VOCABULARY.csv`. Resolution follows active `Maps to` relationships and returns
+`0` for an absent or unmapped source. The returned concept metadata includes
+the concept name, OMOP domain, vocabulary, and standard-concept flag. The
+loaded vocabulary version and a stable `sha256:` reproducibility hash are
+available for manifests and exports.
+
+Athena content is never bundled or downloaded by OpenMed. `CPT4` rows are
+excluded by default because the vocabulary is restricted; a user with the
+applicable rights may opt in only for their own local bundle with
+`AthenaResolver("/licensed/athena-export", include_cpt4=True)`. Setting
+`OPENMED_OFFLINE=1` is supported and keeps resolution on the supplied local
+files.
 
 ## Export FHIR R4 and OMOP CDM v5.4
 

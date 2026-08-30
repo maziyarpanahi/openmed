@@ -93,10 +93,12 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     from openmed.interop import adapter_spec, available_adapters
 
     assert available_adapters() == (
+        "airflow",
         "beam",
         "cda",
         "cdm_etl",
         "duckdb",
+        "fhir_server",
         "function_tools",
         "gliner_biomed",
         "graph_orchestration",
@@ -108,6 +110,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "llamaindex",
         "omop",
         "openmrs",
+        "opensearch",
         "pandas",
         "philter",
         "polars",
@@ -129,6 +132,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("duckdb").extra == "duckdb"
     assert adapter_spec("hl7v2").extra == ""
     assert adapter_spec("icd11_api").extra == ""
+    assert adapter_spec("fhir_server").extra == "fhir"
     assert adapter_spec("indic").extra == "indic"
     assert adapter_spec("function_tools").extra == ""
     assert adapter_spec("graph_orchestration").extra == "langgraph"
@@ -137,6 +141,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("llamaindex").extra == "llamaindex"
     assert adapter_spec("omop").extra == ""
     assert adapter_spec("openmrs").extra == "openmrs"
+    assert adapter_spec("opensearch").extra == ""
     assert adapter_spec("pandas").extra == "pandas"
     assert adapter_spec("presidio").extra == "presidio"
     assert adapter_spec("philter").extra == "philter"

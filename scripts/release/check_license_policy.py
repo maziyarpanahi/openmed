@@ -68,12 +68,14 @@ DISALLOWED_LICENSE_MARKERS = (
 )
 
 GPL_BRIDGE_EXCEPTIONS = {
+    "extract-msg": "GPL-3.0-only; optional out-of-process Outlook MSG bridge",
     "sdcmicro": "GPL-2.0-only; optional out-of-process disclosure-control bridge",
 }
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
+    "apache-airflow": "Apache-2.0",
     "apache-beam": "Apache-2.0",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
@@ -81,9 +83,11 @@ REVIEWED_LICENSES = {
     "confluent-kafka": "Apache-2.0",
     "coremltools": "BSD-3-Clause",
     "cryptography": "Apache-2.0 OR BSD-3-Clause",
+    "dagster": "Apache-2.0",
     "dask": "BSD-3-Clause",
     "duckdb": "MIT",
     "easyocr": "Apache-2.0",
+    "extract-msg": "GPL-3.0-only",
     "faker": "MIT",
     "fastapi": "MIT",
     "fsspec": "BSD-3-Clause",
@@ -99,6 +103,7 @@ REVIEWED_LICENSES = {
     "httpx": "BSD-3-Clause",
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
+    "kopf": "MIT",
     "langchain-core": "MIT",
     "langgraph": "MIT",
     "llama-index-core": "MIT",
@@ -113,6 +118,7 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "numpy": "BSD-3-Clause",
     "onnx": "Apache-2.0",
@@ -123,6 +129,7 @@ REVIEWED_LICENSES = {
     "opentelemetry-api": "Apache-2.0",
     "opentelemetry-exporter-otlp-proto-http": "Apache-2.0",
     "opentelemetry-sdk": "Apache-2.0",
+    "openpyxl": "MIT",
     "openvino": "Apache-2.0",
     "paddleocr": "Apache-2.0",
     "pandas": "BSD-3-Clause",
@@ -147,6 +154,7 @@ REVIEWED_LICENSES = {
     "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
+    "python-pptx": "MIT",
     "quickumls": "MIT",
     "rapidfuzz": "MIT",
     "ray": "Apache-2.0",
@@ -157,6 +165,7 @@ REVIEWED_LICENSES = {
     "scispacy": "Apache-2.0",
     "spacy": "MIT",
     "sqlalchemy": "MIT",
+    "strawberry-graphql": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
     "torch": "BSD-3-Clause",

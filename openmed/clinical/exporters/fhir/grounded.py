@@ -34,6 +34,7 @@ from .codeable_concept import (
     to_codeable_concept,
 )
 from .condition import to_condition
+from .observation import to_observation
 
 __all__ = [
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
@@ -118,8 +119,8 @@ def to_fhir(
             resource=resource,
             subject_reference=subject_reference,
             document_id=document_id,
-            value=value,
-            unit=unit,
+            value=grounded.metadata.get("value", value),
+            unit=grounded.metadata.get("unit", unit),
             coreference=coreference_by_offset.get((grounded.start, grounded.end)),
         )
 
@@ -181,33 +182,19 @@ def _one_resource(
             return None
         return _attach_coreference_evidence(_strict_fhir(condition), coreference)
 
-    concept = _strict_codeable_concept(grounded)
     if resource_type == "Observation":
-        result: dict[str, Any] = {
-            "resourceType": "Observation",
-            "id": resource_id,
-            "status": _observation_status(asserted),
-            "code": concept,
-            "subject": {"reference": subject_reference},
-        }
-        if value is not None:
-            if isinstance(value, bool):
-                result["valueBoolean"] = value
-            elif isinstance(value, (int, float)):
-                quantity: dict[str, Any] = {"value": value}
-                if unit:
-                    quantity.update(
-                        {
-                            "unit": unit,
-                            "system": "http://unitsofmeasure.org",
-                            "code": unit,
-                        }
-                    )
-                result["valueQuantity"] = quantity
-            else:
-                result["valueString"] = str(value)
-        return _attach_coreference_evidence(result, coreference)
+        observation = to_observation(
+            asserted,
+            subject_reference=subject_reference,
+            observation_id=resource_id,
+            value=value,
+            unit=unit,
+        )
+        if observation is None:
+            return None
+        return _attach_coreference_evidence(_strict_fhir(observation), coreference)
 
+    concept = _strict_codeable_concept(grounded)
     if resource_type == "MedicationStatement":
         result = {
             "resourceType": "MedicationStatement",
@@ -395,7 +382,9 @@ def _strict_fhir(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _remove_internal_fields(node: Any) -> None:
     if isinstance(node, dict):
-        node.pop("_score", None)
+        for key in tuple(node):
+            if str(key).startswith("_"):
+                node.pop(key)
         extensions = node.get("extension")
         if isinstance(extensions, list):
             retained_urls = {
@@ -442,12 +431,6 @@ def _resource_id(
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
     return f"openmed-{digest}"
-
-
-def _observation_status(asserted: AssertedGroundedSpan) -> str:
-    if asserted.status.status in {GROUNDING_REFUTED, GROUNDING_HYPOTHETICAL}:
-        return "cancelled"
-    return "final"
 
 
 def _medication_status(asserted: AssertedGroundedSpan) -> str:

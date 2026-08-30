@@ -145,6 +145,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "bn_BD",
         ("Bengali",),
+        national_id_provider=("bn_BD", "bangladesh_nid"),
     ),
     _pack(
         "te",

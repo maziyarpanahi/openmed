@@ -70,3 +70,7 @@ redacted = redact_hl7v2(message_text, field_map=field_map)
 
 For offline tests, pass a `deidentifier` callable. The callable should return
 either a string or an object with `deidentified_text`.
+
+For downstream clinical NLP or review, use the [HL7 v2 narrative
+extractor](./interop/hl7v2-narrative-extraction.md) to render de-identified
+flat or sectioned text with final-text offsets back to segment fields.

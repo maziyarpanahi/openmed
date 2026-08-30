@@ -124,7 +124,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.1.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 
@@ -166,11 +166,11 @@ dependencyResolutionManagement {
 }
 ```
 
-然后使用不可变的 OpenMed `v2.1.0` 版本：
+然后使用不可变的 OpenMed `v2.2.0` 版本：
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.1.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.2.0")
 }
 ```
 
@@ -643,7 +643,7 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [常见问题](docs/faq.md) | [匿名化](docs/anonymization.md) | [批处理](https://openmed.life/docs/batch-processing) |
 | [配置档案](https://openmed.life/docs/profiles) | [REST 服务](docs/rest-service.md) | [MLX 后端](docs/mlx-backend.md) |
 | [Transformers.js 导出](docs/export-transformersjs.md) | [FHIR 互操作](docs/fhir-interop.md) | [HL7 v2 去标识化](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.1.0 发行说明](docs/release/v2.1.0.md) | [OpenMed 2.0.0 发行说明](docs/release/v2.0.0.md) | [示例](docs/examples.md) |
+| [OpenMed 2.2.0 发行说明](docs/release/v2.2.0.md) | [OpenMed 2.1.0 发行说明](docs/release/v2.1.0.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
 | [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [扩展插件 SDK](docs/plugin-sdk.md) |
 | [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |

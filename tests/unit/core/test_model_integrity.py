@@ -140,6 +140,46 @@ def test_skip_env_logs_prominent_warning(
     assert "MODEL INTEGRITY VERIFICATION DISABLED" in caplog.text
 
 
+def test_required_integrity_rejects_missing_or_skipped_proof(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_info = SimpleNamespace(
+        model_id="OpenMed/required-integrity-fixture",
+        reproducibility_hash="sha256:" + "3" * 64,
+    )
+
+    with pytest.raises(ModelIntegrityError, match="no verified artifact"):
+        prepare_model_reference(
+            registry_info.model_id,
+            registry_info=registry_info,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+    monkeypatch.setenv("OPENMED_SKIP_MODEL_VERIFY", "1")
+    with pytest.raises(ModelIntegrityError, match="cannot be skipped"):
+        prepare_model_reference(
+            registry_info.model_id,
+            registry_info=registry_info,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+
+def test_required_integrity_rejects_unregistered_reference(tmp_path: Path) -> None:
+    with pytest.raises(ModelIntegrityError, match="registry integrity metadata"):
+        prepare_model_reference(
+            "OpenMed/unregistered-integrity-fixture",
+            registry_info=None,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+
 def test_strict_mode_rejects_registry_model_without_hash(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
