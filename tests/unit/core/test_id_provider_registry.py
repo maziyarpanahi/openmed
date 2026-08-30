@@ -5,10 +5,12 @@ from __future__ import annotations
 import pytest
 from faker import Faker
 
+from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import FAKER_BACKEND_LOCALE
 from openmed.core.anonymizer.providers import registry_ids
 from openmed.core.anonymizer.providers.clinical_ids import (
     AfricanPhoneProvider,
+    BangladeshNIDProvider,
     register_clinical_providers,
 )
 from openmed.core.anonymizer.providers.registry_ids import (
@@ -17,6 +19,10 @@ from openmed.core.anonymizer.providers.registry_ids import (
     clinical_faker_provider_classes,
     get_national_id,
     register_national_id,
+)
+from openmed.core.pii_i18n import (
+    validate_bangladesh_nid,
+    validate_bengali_aadhaar,
 )
 
 
@@ -167,6 +173,54 @@ class TestNationalIdRegistry:
             assert spec.validate(surrogate), (
                 f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
             )
+
+    def test_bengali_id_aliases_resolve_and_generate(self):
+        faker = Faker("bn_BD")
+        register_clinical_providers(faker)
+        faker.seed_instance(292)
+
+        for alias in ("bn", "bn_BD"):
+            aadhaar_spec = get_national_id(alias, "aadhaar")
+            assert aadhaar_spec is not None
+            assert aadhaar_spec.validate(faker.aadhaar())
+
+        for alias in ("bd", "bn", "bn_BD"):
+            nid_spec = get_national_id(alias, "bangladesh_nid")
+            assert nid_spec is not None
+            assert nid_spec.validate(faker.bangladesh_nid())
+
+        assert clinical_faker_provider_classes().count(BangladeshNIDProvider) == 1
+
+    def test_bengali_anonymizer_dispatches_aadhaar_and_bangladesh_nid(self):
+        anonymizer = Anonymizer(lang="bn", consistent=True, seed=292)
+
+        aadhaar = anonymizer.surrogate(
+            "২৪৬৭ ৭৮৩২ ৫৪৮৪",
+            "national_id",
+        )
+        nid = anonymizer.surrogate(
+            "১২৩৪৫৬৭৮৯০",
+            "national_id",
+        )
+
+        assert validate_bengali_aadhaar(aadhaar)
+        assert validate_bangladesh_nid(nid)
+        assert len(nid) == 10
+
+    @pytest.mark.parametrize("length", (10, 13, 17))
+    def test_bangladesh_nid_provider_preserves_length(self, length):
+        faker = Faker("bn_BD")
+        register_clinical_providers(faker)
+        faker.seed_instance(length)
+
+        original = "1" + ("0" * (length - 1))
+        surrogate = faker.bangladesh_nid(original)
+        spec = get_national_id("bn_BD", "bangladesh_nid")
+
+        assert spec is not None
+        assert surrogate != original
+        assert len(surrogate) == length
+        assert spec.validate(surrogate)
 
     @pytest.mark.parametrize(("lang", "id_type"), EXPECTED_VALIDATOR_KEYS)
     def test_pre_existing_validators_are_reachable(self, lang, id_type):

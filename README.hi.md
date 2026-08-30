@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>34 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>33 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -124,7 +124,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.2.0"),
 ]
 ```
 
@@ -167,11 +167,11 @@ dependencyResolutionManagement {
 }
 ```
 
-फिर immutable OpenMed `v2.0.0` release उपयोग करें:
+फिर immutable OpenMed `v2.2.0` release उपयोग करें:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.2.0")
 }
 ```
 
@@ -529,7 +529,7 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (35 समर्थित रूट; 34 मॉडल-समर्थित)
+## बहुभाषी PII (35 समर्थित रूट; 33 मॉडल-समर्थित)
 
 निष्कर्षण और डी-आइडेंटिफिकेशन **35 समर्थित PII भाषा codes** में उपलब्ध हैं:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
@@ -662,7 +662,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [बैच processing](https://openmed.life/docs/batch-processing) |
 | [Configuration profiles](https://openmed.life/docs/profiles) | [REST सेवा](docs/rest-service.md) | [MLX बैकएंड](docs/mlx-backend.md) |
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.0.0 release notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [उदाहरण](docs/examples.md) |
+| [OpenMed 2.2.0 release notes](docs/release/v2.2.0.md) | [OpenMed 2.1.0 release notes](docs/release/v2.1.0.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
 | [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [एक्सटेंशन प्लगइन SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |

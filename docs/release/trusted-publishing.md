@@ -28,6 +28,11 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 - The reusable provenance job in `.github/workflows/provenance.yml` builds and
   checks the distributions, generates SLSA provenance, and verifies the
   attestations before upload.
+- The source configuration requires Core Metadata 2.4 for both wheel and sdist
+  until the pinned PyPI publishing action supports Core Metadata 2.5. The
+  reusable workflow additionally installs Hatchling 1.31.0 and builds without
+  isolation so recovery of an older immutable tag that predates that source
+  setting cannot silently select a newer incompatible backend.
 - The publish job downloads those verified distributions, uses
   `pypa/gh-action-pypi-publish`, and grants only `contents: read`.
 - The publish job attaches the `pypi` GitHub environment so it can read the
@@ -74,6 +79,10 @@ under the existing unscoped npm name `openmed`.
   `npm publish --ignore-scripts --access public --provenance` uploads the package
   without running lifecycle hooks in the credential-bearing step. Provenance
   links the package to the tag workflow and source commit.
+- Recovery dispatches query an existing npm version before accessing the token.
+  An existing package is skipped only when its registry `gitHead` matches the
+  immutable tag and its downloaded tarball contents match a fresh tag build;
+  any mismatch fails closed.
 - The release SBOM job starts only after both PyPI and npm publication succeed.
 
 Do not publish `@openmed/openmedkit-web`; the public package name is `openmed`.
@@ -103,6 +112,21 @@ The regression tests in `tests/unit/test_publish_workflow_version.py` and
 `tests/unit/release/test_provenance_workflow.py` are the local guardrails for
 this contract. Update them in the same change as any PyPI release workflow
 change.
+
+## v2.1.0 Incident Lessons
+
+On 2026-08-12, Hatchling 1.32.0 began emitting Core Metadata 2.5 by default.
+The `v2.1.0` provenance job selected that newly released backend because the
+build requirement was unconstrained. Local `twine check` and provenance passed,
+but `pypa/gh-action-pypi-publish@v1.14.1` rejected the wheel before upload. npm
+had already published `openmed@2.1.0`, so a blind recovery dispatch would have
+attempted to publish the immutable npm version twice.
+
+Wheel and sdist targets now explicitly emit Core Metadata 2.4, the recovery
+workflow pins Hatchling 1.31.0 for older immutable tags, and npm recovery is
+content-aware and idempotent. Keep the tag immutable: recover through
+`workflow_dispatch` from current `master`, which uses the repaired workflow
+while checking out and verifying the original tag.
 
 ## PyPI project setup
 
@@ -152,9 +176,12 @@ workflow:
 gh workflow run publish.yml --ref master -f tag=vX.Y.Z
 ```
 
-Do not delete, move, or recreate the tag. Do not use the recovery dispatch when
-either registry already contains the version without first determining whether
-the other publish can be safely resumed.
+Do not delete, move, or recreate the tag. If npm already contains the version,
+the recovery guard must prove that its `gitHead` and tarball contents match the
+immutable tag before skipping npm and resuming the remaining publication jobs.
+If PyPI already contains either distribution, inspect both PyPI artifacts
+before any recovery dispatch because production PyPI uploads remain
+non-idempotent.
 
 ## Token Handling
 

@@ -1,4 +1,4 @@
-"""Tests for scheduled model release batch dispatch."""
+"""Tests for local model release batch dispatch."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ from scripts.release.dispatch_batch import (
 
 ROOT = Path(__file__).resolve().parents[2]
 QUEUE = ROOT / "recipes" / "queue.yaml"
-CONVERT_WORKFLOW = ROOT / ".github" / "workflows" / "convert-models.yml"
 QUEUE_DOC = ROOT / "docs" / "model-release-queue.md"
 
 
@@ -238,27 +237,12 @@ def test_item_runs_convert_gate_then_publish_without_exposing_token(
     assert calls[2][0][2] == "openmed.core.hf_publish"
 
 
-def test_workflow_has_scheduled_batch_matrix_and_manual_dispatch():
-    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
-
-    assert "workflow_dispatch:" in workflow
-    assert "schedule:" in workflow
-    assert "cron:" in workflow
-    assert "scripts/release/dispatch_batch.py plan" in workflow
-    assert "fromJson(needs.plan-batch.outputs.matrix)" in workflow
-    assert "fail-fast: false" in workflow
-    assert "name: Release ${{ matrix.id }}" in workflow
-    assert "OPENMED_BATCH_ITEM: ${{ toJson(matrix) }}" in workflow
-    assert "actions/checkout@v4" not in workflow
-    assert "actions/setup-python@v5" not in workflow
-    assert "actions/upload-artifact@v4" not in workflow
-
-
 def test_queue_documentation_describes_format_and_weekly_ordering():
     text = QUEUE_DOC.read_text(encoding="utf-8")
     compact = " ".join(text.split())
 
     assert "recipes/queue.yaml" in text
     assert "depends_on_green_parent" in text
-    assert "Monday and Tuesday rows publish parent artifacts first" in compact
+    assert "Monday and Tuesday rows list parent artifacts first" in compact
     assert "Wednesday rows are reserved for edge artifacts" in compact
+    assert "does not run this queue automatically" in compact

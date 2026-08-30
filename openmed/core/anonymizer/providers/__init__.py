@@ -19,6 +19,7 @@ from .clinical_ids import (
     AadhaarProvider,
     ABDMProvider,
     AfricanPhoneProvider,
+    BangladeshNIDProvider,
     BelgianRRNProvider,
     BulgarianEgnProvider,
     ChineseIdentifierProvider,
@@ -54,6 +55,7 @@ from .clinical_ids import (
     generate_abha_address,
     generate_abha_number,
     generate_african_phone,
+    generate_bangladesh_nid,
     generate_belgian_rrn,
     generate_bic,
     generate_bulgarian_egn,
@@ -130,24 +132,23 @@ if TYPE_CHECKING:
         register_national_id,
     )
 
-_LAZY_REGISTRY_EXPORTS = frozenset(
-    {
-        "AUXILIARY_FAKER_PROVIDER_CLASSES",
-        "ID_PROVIDER_REGISTRY",
-        "NationalIdSpec",
-        "clinical_faker_provider_classes",
-        "get_national_id",
-        "register_national_id",
-    }
-)
+_LAZY_IMPORTS = {
+    "AUXILIARY_FAKER_PROVIDER_CLASSES": ".registry_ids",
+    "ID_PROVIDER_REGISTRY": ".registry_ids",
+    "NationalIdSpec": ".registry_ids",
+    "clinical_faker_provider_classes": ".registry_ids",
+    "get_national_id": ".registry_ids",
+    "register_national_id": ".registry_ids",
+}
 
 
 def __getattr__(name: str) -> Any:
     """Resolve registry-backed provider exports without creating an import cycle."""
 
-    if name not in _LAZY_REGISTRY_EXPORTS:
+    module_name = _LAZY_IMPORTS.get(name)
+    if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    value = getattr(import_module(".registry_ids", __name__), name)
+    value = getattr(import_module(module_name, __name__), name)
     globals()[name] = value
     return value
 
@@ -155,7 +156,7 @@ def __getattr__(name: str) -> Any:
 def __dir__() -> list[str]:
     """Return eager and lazy provider exports for interactive discovery."""
 
-    return sorted(set(globals()) | set(_LAZY_REGISTRY_EXPORTS))
+    return sorted(set(globals()) | set(_LAZY_IMPORTS))
 
 
 __all__ = [
@@ -164,6 +165,7 @@ __all__ = [
     "BelgianRRNProvider",
     "AfricanPhoneProvider",
     "AUXILIARY_FAKER_PROVIDER_CLASSES",
+    "BangladeshNIDProvider",
     "BulgarianEgnProvider",
     "ChineseIdentifierProvider",
     "ChineseNameProvider",
@@ -211,6 +213,7 @@ __all__ = [
     "generate_abha_address",
     "generate_abha_number",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bulgarian_egn",
     "generate_chinese_bank_card",
     "generate_chinese_given_name",

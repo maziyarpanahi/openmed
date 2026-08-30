@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "processors": [
+    {
+      "id": "openmed-inline-redaction",
+      "type": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8090/process",
+        "timeout_seconds": 30,
+        "body": {
+          "document": "${document}",
+          "fields": [
+            "clinical.note",
+            "patient.summary"
+          ],
+          "policy": "hipaa_safe_harbor"
+        }
+      },
+      "response_document": "$"
+    }
+  ],
+  "pipeline": {
+    "id": "openmed-inline-redaction-v1",
+    "processors": [
+      "openmed-inline-redaction"
+    ]
+  },
+  "routes": [
+    {
+      "index_pattern": "clinical-documents-*",
+      "pipeline": "openmed-inline-redaction-v1"
+    }
+  ]
+}

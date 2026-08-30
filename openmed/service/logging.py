@@ -19,6 +19,8 @@ REQUEST_ID_HEADER = "X-Request-ID"
 SERVICE_LOG_LEVEL_ENV_VAR = "OPENMED_SERVICE_LOG_LEVEL"
 SERVICE_LOG_FORMAT_ENV_VAR = "OPENMED_SERVICE_LOG_FORMAT"
 _MODEL_NAME_SCOPE_KEY = "openmed.access_log_model_name"
+_IDENTITY_SCOPE_KEY = "openmed.access_log_identity"
+_CREDENTIAL_TYPE_SCOPE_KEY = "openmed.access_log_credential_type"
 
 _REQUEST_ID: ContextVar[Optional[str]] = ContextVar(
     "openmed_service_request_id",
@@ -73,6 +75,17 @@ def set_access_log_model_name(request: Any, model_name: Optional[str]) -> None:
         request.scope[_MODEL_NAME_SCOPE_KEY] = str(model_name)
 
 
+def set_access_log_identity(
+    request: Any,
+    *,
+    principal: str,
+    credential_type: str,
+) -> None:
+    """Attach a non-PHI caller identity to the current request access log."""
+    request.scope[_IDENTITY_SCOPE_KEY] = str(principal)
+    request.scope[_CREDENTIAL_TYPE_SCOPE_KEY] = str(credential_type)
+
+
 class CorrelationIdMiddleware:
     """Add request IDs and emit PHI-free structured access logs."""
 
@@ -118,6 +131,8 @@ class CorrelationIdMiddleware:
                         "status_code": status_code,
                         "duration_ms": round(duration_ms, 3),
                         "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
+                        "identity": scope.get(_IDENTITY_SCOPE_KEY),
+                        "credential_type": scope.get(_CREDENTIAL_TYPE_SCOPE_KEY),
                         "request_id": request_id,
                     },
                 )
@@ -165,7 +180,9 @@ def _format_access_log(payload: Mapping[str, Any], config: ServiceLogConfig) -> 
             f"{payload.get('status_code', 0)} "
             f"{payload.get('duration_ms', 0)}ms "
             f"request_id={payload.get('request_id', '')} "
-            f"model_name={payload.get('model_name') or '-'}"
+            f"model_name={payload.get('model_name') or '-'} "
+            f"identity={payload.get('identity') or '-'} "
+            f"credential_type={payload.get('credential_type') or '-'}"
         )
     return _json_dumps(payload)
 
@@ -213,5 +230,6 @@ __all__ = [
     "StructuredJsonLogFormatter",
     "current_request_id",
     "service_log_config_from_env",
+    "set_access_log_identity",
     "set_access_log_model_name",
 ]

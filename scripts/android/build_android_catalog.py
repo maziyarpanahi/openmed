@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence, TextIO
 
@@ -145,11 +146,19 @@ def run(
     output: Path,
     *,
     stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
 ) -> int:
     """Build the Android catalog and return a process exit code."""
     stdout = stdout or None
     rows = load_manifest_rows(manifest)
     catalog_rows = build_catalog_rows(rows)
+    if not catalog_rows:
+        if stderr is not None:
+            stderr.write(
+                "Refusing to write an empty Android model catalog: "
+                f"{manifest} contains no permissively licensed ONNX/TFLite rows.\n"
+            )
+        return 1
     write_catalog(catalog_rows, output)
     if stdout is not None:
         stdout.write(f"Wrote {len(catalog_rows)} catalog rows to {output}\n")
@@ -159,7 +168,7 @@ def run(
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the Android catalog builder."""
     args = build_parser().parse_args(argv)
-    return run(args.manifest, args.output)
+    return run(args.manifest, args.output, stdout=sys.stdout, stderr=sys.stderr)
 
 
 if __name__ == "__main__":

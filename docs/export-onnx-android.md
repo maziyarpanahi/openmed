@@ -74,11 +74,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Add the OpenMed `v2.0.0` release to the app module:
+Add the OpenMed `v2.2.0` release to the app module:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.2.0")
 }
 ```
 
@@ -142,6 +142,11 @@ corpus and keeps the exported graph callable through the same inputs and
 `model.ort` is the ORT mobile-format model generated from `model.onnx`.
 `model.required_operators_and_types.config` is the required-operators/types
 file to pass into an ONNX Runtime Android minimal build.
+
+The graph family and operator list in `openmed-onnx.json` also feed
+[Android QNN and NNAPI Acceleration](runtimes/android-accelerators.md). The
+Android runtime combines that manifest contract with device-observed provider
+coverage so unsupported subgraphs stay on CPU.
 
 If the optional ONNX Runtime conversion tooling is not available, export still
 finishes with the `.onnx` artifacts and logs a dependency-only skip reason. The

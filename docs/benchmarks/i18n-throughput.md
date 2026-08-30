@@ -43,14 +43,24 @@ Each entry records the two steady-state metrics and a regression threshold of
 `0.2`. A candidate fails when either metric is more than 20% below its
 language baseline.
 
-Baselines never update automatically. Refresh them only through a reviewed
-pull request:
+Baselines never update automatically. The release workflow runs on GitHub's
+hosted Ubuntu x86_64 runner, so its committed baseline must come from that same
+runner class rather than a developer workstation. The current values are the
+median of six consecutive hosted runs; the run identifiers and aggregate
+calibration hash are recorded with every entry. The calibration-set digest is
+the SHA-256 of a compact, key-sorted JSON list of `{run_id, report}` objects,
+ordered by run identifier, so reviewers can reproduce it from the named
+workflow artifacts.
 
-1. Run the benchmark on the designated reference Apple Silicon host with an
-   otherwise idle machine.
-2. Repeat the run and investigate unstable results before choosing values.
-3. Manually update only the six steady-state metrics plus their measurement
-   metadata and reproducibility hashes in `gates/baseline.json`.
+Refresh them only through a reviewed pull request:
+
+1. Collect at least six completed benchmark artifacts from the designated
+   GitHub-hosted Ubuntu x86_64 workflow.
+2. Investigate bimodal or unstable results, then use the median of each
+   steady-state metric rather than a single fast runner.
+3. Update only the six steady-state metrics plus their measurement metadata,
+   source run identifiers, sample count, and aggregate reproducibility hash in
+   `gates/baseline.json`.
 4. Review the JSON diff together with the benchmark report. Do not accept an
    unexplained lower baseline merely to make the gate pass.
 5. Run the throughput gate and the full test suite before merging the baseline

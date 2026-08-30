@@ -289,16 +289,19 @@ def test_analyze_extra_field_returns_validation_error(client):
     assert payload["error"]["details"][0]["field"] == "body.unexpected"
 
 
-def test_analyze_value_error_returns_bad_request(client, monkeypatch):
+def test_analyze_value_error_returns_phi_safe_bad_request(client, monkeypatch):
+    raw_text = "SYNTHETIC_RAW_PHI_SENTINEL_1354"
+
     def fake_analyze(*args, **kwargs):
-        raise ValueError("Invalid model")
+        raise ValueError(raw_text)
 
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
 
     response = client.post("/analyze", json={"text": "sample"})
 
     payload = _assert_error_payload(response, 400, "bad_request")
-    assert payload["error"]["details"] == {"reason": "Invalid model"}
+    assert payload["error"]["details"] == {"reason": "invalid_arguments"}
+    assert raw_text not in response.text
 
 
 def test_model_memory_backpressure_returns_service_busy(

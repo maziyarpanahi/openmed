@@ -15,12 +15,15 @@ from openmed.clinical.exporters.codeable_concept import (
 from openmed.clinical.grounding import Candidate, grounding_provenance
 from openmed.clinical.grounding.calibration import (
     GroundingCalibrationRecord,
+    GroundingCalibrator,
+    apply_concept_match_calibration,
     apply_grounding_abstention,
     calibrate_grounding,
     evaluate_grounding_coverage_gate,
     fit_grounding_calibrator,
     grounding_calibration_report,
 )
+from openmed.clinical.grounding.matcher import ConceptMatch, LexicalMatcher
 from openmed.eval.metrics import expected_calibration_error, reliability_bins
 from openmed.eval.suites import (
     GROUNDING_CALIBRATION,
@@ -188,3 +191,117 @@ def test_grounding_calibration_suite_reads_local_gold_and_writes_report(
         "offline": True,
         "gold_path": str(gold_path),
     }
+
+
+def test_synthetic_calibration_is_monotonic_comparable_and_improves_raw_ece() -> None:
+    scores: list[dict[str, object]] = []
+    gold: list[bool] = []
+    for system, positives in (("rxnorm", 9), ("hpo", 2)):
+        for index in range(10):
+            scores.append(
+                {
+                    "system": system,
+                    "label": "concept",
+                    "score": 0.80,
+                    "correct": index < positives,
+                }
+            )
+            gold.append(index < positives)
+
+    calibrator = fit_grounding_calibrator(scores)
+    raw_probabilities = [float(row["score"]) for row in scores]
+    calibrated = calibrator.predict_many(scores)
+    raw_ece = expected_calibration_error(
+        reliability_bins(zip(raw_probabilities, gold), n_bins=10)
+    )
+    calibrated_ece = expected_calibration_error(
+        reliability_bins(zip(calibrated, gold), n_bins=10)
+    )
+
+    assert calibrated_ece < raw_ece
+    assert calibrator.predict(system="RXNORM", label="concept", score=0.80) > (
+        calibrator.predict(system="HPO", label="concept", score=0.80)
+    )
+    for system in ("RXNORM", "HPO"):
+        probabilities = [
+            calibrator.predict(system=system, label="concept", score=score)
+            for score in (0.10, 0.80, 1.00)
+        ]
+        assert probabilities == sorted(probabilities)
+
+
+def test_calibrator_config_is_versioned_and_round_trips() -> None:
+    records = [
+        GroundingCalibrationRecord("RXNORM", "DRUG", 0.20, False),
+        GroundingCalibrationRecord("RXNORM", "DRUG", 0.90, True),
+    ]
+    calibrator = fit_grounding_calibrator(records)
+
+    config = calibrator.to_config()
+    restored = GroundingCalibrator.from_config(config)
+
+    assert config["schema_version"] == 1
+    assert config["artifact_type"] == "openmed.grounding.calibrator"
+    assert restored.to_config() == config
+    with pytest.raises(ValueError, match="schema_version"):
+        GroundingCalibrator.from_config({**config, "schema_version": 2})
+
+
+def test_concept_matches_receive_confidence_and_review_state_offline() -> None:
+    system_uri = "https://example.org/fhir/CodeSystem/synthetic-free"
+    training = (
+        ConceptMatch(
+            system_uri=system_uri,
+            code="LOW",
+            display="Low synthetic concept",
+            score=0.20,
+            match_type="normalized",
+            matched_term="low",
+        ),
+        ConceptMatch(
+            system_uri=system_uri,
+            code="HIGH",
+            display="High synthetic concept",
+            score=0.90,
+            match_type="exact",
+            matched_term="high",
+        ),
+    )
+    calibrator = fit_grounding_calibrator(
+        training,
+        [False, True],
+        labels=["concept", "concept"],
+    )
+    matches = (
+        training[0],
+        training[1],
+    )
+
+    calibrated = apply_concept_match_calibration(
+        matches,
+        calibrator,
+        review_threshold=0.75,
+        label="concept",
+    )
+
+    assert calibrated[0].score == pytest.approx(0.20)
+    assert calibrated[0].calibrated_confidence == pytest.approx(0.0)
+    assert calibrated[0].review_required is True
+    assert calibrated[0].needs_review is True
+    assert calibrated[0].abstained is True
+    assert calibrated[1].calibrated_confidence == pytest.approx(1.0)
+    assert calibrated[1].review_required is False
+    assert calibrated[1].calibration["schema_version"] == 1
+
+    matcher = LexicalMatcher(
+        {"High": {"code": "HIGH", "display": "High synthetic concept"}},
+        system_uri=system_uri,
+    )
+    emitted = matcher.lookup(
+        "High",
+        calibrator=calibrator,
+        review_threshold=0.75,
+        label="concept",
+    )
+    assert emitted[0].calibrated_confidence == pytest.approx(1.0)
+    assert emitted[0].review_required is False

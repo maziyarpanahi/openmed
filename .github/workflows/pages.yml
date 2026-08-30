@@ -3,7 +3,6 @@ name: Deploy Docs to GitHub Pages
 on:
   push:
     branches: ["master"]
-    tags: ["v*"]
   pull_request:
     branches: ["master"]
     paths:
@@ -18,7 +17,10 @@ on:
       - "scripts/brand/**"
       - "scripts/docs/**"
       - "scripts/i18n/**"
+      - "js/openmedkit-web/**"
       - "tests/browser/brand/**"
+      - "tests/browser/privacy-playground.spec.ts"
+      - "tests/web/**"
       - "tests/unit/test_brand_system.py"
       - "tests/unit/test_docs_publication.py"
       - "tests/unit/test_pages_manifest.py"
@@ -27,6 +29,7 @@ on:
       - "tests/unit/test_web_demo_layout.py"
       - "tests/unit/eval/test_leaderboard.py"
       - "uv.lock"
+      - "web/runtime/**"
   workflow_dispatch:
 
 permissions:
@@ -54,16 +57,22 @@ jobs:
           enable-cache: true
       - name: Install locked documentation tooling
         run: uv sync --frozen --extra dev --extra docs --python 3.11
-      - name: Validate brand sources, claims, consumers, and generated art
+      - name: Validate brand sources, claims, and generated art
         run: |
           uv run --frozen python scripts/brand/validate_system.py
           uv run --frozen python scripts/brand/update_claims.py --check
           uv run --frozen python scripts/brand/sync_consumers.py --check
           uv run --frozen python scripts/brand/render_social_assets.py --check
+          uv run --frozen python -m pytest tests/unit/test_brand_system.py -q
+      - name: Validate documentation publication contract
+        run: |
           uv run --frozen python -m pytest \
-            tests/unit/test_brand_system.py \
             tests/unit/test_docs_publication.py \
             tests/unit/test_pages_manifest.py \
+            -q
+      - name: Validate documentation consumers
+        run: |
+          uv run --frozen python -m pytest \
             tests/unit/test_readme_i18n_drift.py \
             tests/unit/test_readme_sw_drift.py \
             tests/unit/test_web_demo_layout.py \
@@ -83,10 +92,16 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: tests/browser/brand/package-lock.json
+          cache-dependency-path: |
+            js/openmedkit-web/package-lock.json
+            tests/browser/brand/package-lock.json
+      - name: Build and validate the browser runtime
+        run: |
+          npm ci --prefix js/openmedkit-web
+          npm --prefix js/openmedkit-web test
       - name: Install pinned browser test dependencies
         run: npm ci --prefix tests/browser/brand
-      - name: Validate light, dark, mobile, and documentation surfaces
+      - name: Validate browser behavior, accessibility, and representative visuals
         run: |
           docker run --rm --ipc=host \
             --user "$(id -u):$(id -g)" \

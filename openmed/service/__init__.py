@@ -11,6 +11,7 @@ Install with: ``pip install openmed[service]``.
 
 from __future__ import annotations
 
+from importlib import import_module
 from typing import Any
 
 from openmed.core.capabilities import (
@@ -19,6 +20,11 @@ from openmed.core.capabilities import (
 )
 
 __all__ = ["app", "create_app", "ensure_service_available", "is_service_available"]
+
+_LAZY_IMPORTS = {
+    "app": ".app",
+    "create_app": ".app",
+}
 
 
 def is_service_available() -> bool:
@@ -34,9 +40,10 @@ def ensure_service_available() -> None:
 
 
 def __getattr__(name: str) -> Any:
-    if name in {"app", "create_app"}:
-        ensure_service_available()
-        from .app import app, create_app
-
-        return {"app": app, "create_app": create_app}[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name = _LAZY_IMPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    ensure_service_available()
+    value = getattr(import_module(module_name, __name__), name)
+    globals()[name] = value
+    return value

@@ -22,7 +22,7 @@ from openmed.core.pii_i18n import (
 )
 
 MULTILINGUAL_DEFAULT_LANGUAGES = {"as", "he", "id", "mr", "or", "ro", "th"}
-V2_REGISTRY_LANGUAGES = {"bn", "ta", "zh"}
+V2_REGISTRY_LANGUAGES = {"bn", "zh"}
 OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - SUPPORTED_LANGUAGES
 
 
@@ -143,12 +143,17 @@ class TestModelNaming:
         ("lang", "expected_key"),
         (
             ("bn", "pii_bn_msuperclinical_large"),
-            ("ta", "pii_ta_msuperclinical_large"),
             ("zh", "pii_zh_bigmed_large"),
         ),
     )
     def test_v2_language_compatibility_aliases_are_stable(self, lang, expected_key):
         assert expected_key in get_pii_models_by_language(lang)
+
+    def test_tamil_compatibility_alias_resolves_only_as_a_placeholder(self):
+        alias = OPENMED_MODELS["pii_ta_msuperclinical_large"]
+
+        assert alias.model_id == "OpenMed/privacy-filter-multilingual"
+        assert get_pii_models_by_language("ta") == {}
 
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_bucket_keys_use_language_prefix_when_specific(self, lang):

@@ -1,7 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
-from .api import DEFAULT_GROUNDING_SYSTEMS, ground
+from .api import DEFAULT_GROUNDING_SYSTEMS, ground, ground_payload
 from .assertion_grounding import (
     ASSERTION_GROUNDING_ADVISORY,
     GROUNDING_ASSERTION_STATUSES,
@@ -14,13 +14,30 @@ from .assertion_grounding import (
     assertion_grounding_status,
     ground_with_context,
 )
+from .athena import (
+    ATHENA_REQUIRED_FILES,
+    CPT4_VOCABULARY_ID,
+    AthenaBundleError,
+    AthenaConcept,
+    AthenaResolver,
+)
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
 from .crosswalk import (
     DEFAULT_CROSSWALK_RESOURCES,
+    Crosswalk,
+    CrosswalkCandidate,
+    CrosswalkConfigurationError,
+    CrosswalkDataError,
     CrosswalkEntry,
     CrosswalkFormatError,
     CrosswalkLicenseError,
+    CrosswalkProvenance,
     CrosswalkResource,
+    ICDSNOMEDCrosswalk,
+    UMLSCodeCrosswalk,
+    UMLSCrosswalk,
+    UMLSMappingSource,
+    crosswalk,
     load_crosswalk,
     load_default_crosswalks,
 )
@@ -135,6 +152,14 @@ from .registry import (
 )
 from .restricted import RESTRICTED_SYSTEM_URIS, UserKeyVocabularyLoader
 from .retrieval import TwoStageRetriever, retrieve_candidates
+from .section_context import (
+    DEFAULT_SECTION_CONTEXT_CONFIG,
+    DEFAULT_SECTION_CONTEXT_RULES,
+    SECTION_CONTEXT_RULES,
+    SectionContextConfig,
+    SectionContextRule,
+    apply_section_context,
+)
 from .snapshot_cache import (
     DEFAULT_CACHE_ENV,
     DEFAULT_GROUNDING_CACHE_ENV,
@@ -158,6 +183,7 @@ from .snapshot_cache import (
     snapshot_path,
     store_snapshot,
 )
+from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
 from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -173,13 +199,20 @@ from .vocab import (
     get_index,
     normalize_language,
 )
+from .vocab import (
+    SnapshotManifest as VocabularySnapshotManifest,
+)
 
 __all__ = [
     "ASSERTION_GROUNDING_ADVISORY",
+    "ATHENA_REQUIRED_FILES",
     "AliasEmbeddingIndex",
     "AliasEncoder",
     "AssertedGroundedSpan",
     "AssertionGroundingStatus",
+    "AthenaBundleError",
+    "AthenaConcept",
+    "AthenaResolver",
     "Candidate",
     "CandidateRankingStage",
     "COMPOSITE_GROUNDING_DECISIONS",
@@ -188,14 +221,22 @@ __all__ = [
     "CompositeGroundingResult",
     "ConceptMatch",
     "ConceptReference",
+    "Crosswalk",
+    "CrosswalkCandidate",
+    "CrosswalkConfigurationError",
+    "CrosswalkDataError",
+    "CPT4_VOCABULARY_ID",
     "CrosswalkEntry",
     "CrosswalkFormatError",
     "CrosswalkLicenseError",
+    "CrosswalkProvenance",
     "CrosswalkResource",
     "DEFAULT_CROSSWALK_RESOURCES",
     "DenseCandidateGenerator",
     "DEFAULT_TTY_PRIORITY",
     "DEFAULT_GROUNDING_SYSTEMS",
+    "DEFAULT_SECTION_CONTEXT_CONFIG",
+    "DEFAULT_SECTION_CONTEXT_RULES",
     "ECLConstraint",
     "ECLResolver",
     "ECLValidationError",
@@ -215,6 +256,7 @@ __all__ = [
     "IndexBackendUnavailableError",
     "IndexUpdateSummary",
     "InvalidVocabularyLoaderError",
+    "ICDSNOMEDCrosswalk",
     "ICD10CM_CODE_PATTERN",
     "ICD10CM_LICENSE_NOTE",
     "ICD10CM_SYSTEM_URI",
@@ -254,6 +296,7 @@ __all__ = [
     "PostCoordinationStage",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RESTRICTED_SYSTEM_URIS",
+    "RESTRICTED_SYSTEMS",
     "RXNORM_SYSTEM_URI",
     "RankingConfig",
     "Refinement",
@@ -261,17 +304,26 @@ __all__ = [
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "SYSTEM_URIS",
+    "SnapshotManifest",
     "RulesPostCoordinationDecomposer",
     "RxNormLoader",
     "RxNormLoaderError",
     "RxNormVocabularyLoader",
     "SnomedExpression",
+    "SECTION_CONTEXT_RULES",
+    "SectionContextConfig",
+    "SectionContextRule",
     "TwoStageRetriever",
+    "UMLSCodeCrosswalk",
+    "UMLSMappingSource",
+    "UMLSCrosswalk",
     "UserKeyVocabularyLoader",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
     "VocabSource",
+    "VocabularySnapshotManifest",
     "VocabularyChecksumError",
     "VocabularyIndex",
     "VocabularyLoader",
@@ -279,16 +331,19 @@ __all__ = [
     "VocabularyNotFoundError",
     "VocabularyRegistryError",
     "assertion_grounding_status",
+    "apply_section_context",
     "available_linkers",
     "available_loaders",
     "build_index",
     "build_or_load_index",
     "build_expression",
+    "crosswalk",
     "decompose_laterality_site_mention",
     "decompose_mention",
     "decompose_and_relink",
     "generate_candidates",
     "ground",
+    "ground_payload",
     "ground_multilingual",
     "ground_with_context",
     "get_index",
@@ -309,6 +364,8 @@ __all__ = [
     "register_loader",
     "retrieve_candidates",
     "scan_provenance_for_raw_text",
+    "canonical_system",
+    "system_uri",
     "DEFAULT_CACHE_ENV",
     "DEFAULT_GROUNDING_CACHE_ENV",
     "INDEX_ARTIFACT_FILENAME",
@@ -319,7 +376,6 @@ __all__ = [
     "SnapshotCache",
     "SnapshotCacheStats",
     "SnapshotIntegrityError",
-    "SnapshotManifest",
     "SnapshotPolicyError",
     "TerminologySnapshot",
     "TerminologySnapshotCache",

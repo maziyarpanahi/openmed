@@ -21,6 +21,8 @@ class FixtureNode:
     id_: str = "fixture-node"
     excluded_llm_metadata_keys: list[str] = field(default_factory=list)
     excluded_embed_metadata_keys: list[str] = field(default_factory=list)
+    start_char_idx: int | None = None
+    end_char_idx: int | None = None
 
     def set_content(self, text: str) -> None:
         self.text = text
@@ -73,6 +75,35 @@ def fake_mask_deidentify(text: str, **kwargs):
 def fake_remove_deidentify(text: str, **kwargs):
     del kwargs
     return SimpleNamespace(deidentified_text=f"REMOVED:{text}")
+
+
+def fake_deidentify_with_entities(text: str, **kwargs):
+    redacted = fake_deidentify(text, **kwargs)
+    entities = []
+    if "Jane Roe" in text:
+        entities.append(SimpleNamespace(canonical_label="PERSON"))
+    if "jane.roe@example.com" in text:
+        entities.append(SimpleNamespace(entity_type="EMAIL"))
+    if "555-0100" in text:
+        entities.append(SimpleNamespace(label="PHONE"))
+    return SimpleNamespace(
+        deidentified_text=redacted.deidentified_text,
+        pii_entities=entities,
+    )
+
+
+class ExplodingEntityMetadata:
+    def __iter__(self):
+        yield SimpleNamespace(canonical_label="PERSON")
+        raise RuntimeError("SYNTHETIC_SENSITIVE_VALUE")
+
+
+def fake_deidentify_with_exploding_entities(text: str, **kwargs):
+    del kwargs
+    return SimpleNamespace(
+        deidentified_text=text.replace("Jane Roe", "[PERSON]"),
+        pii_entities=ExplodingEntityMetadata(),
+    )
 
 
 def test_registry_loads_llamaindex_redaction_adapter_lazily() -> None:
@@ -352,6 +383,8 @@ def test_ingestion_transform_redacts_copies_before_storage(monkeypatch) -> None:
             "page_number": 2,
         },
         id_="patient-1234567",
+        start_char_idx=12,
+        end_char_idx=54,
     )
 
     transform = llamaindex_adapter.create_redaction_transform(
@@ -370,9 +403,102 @@ def test_ingestion_transform_redacts_copies_before_storage(monkeypatch) -> None:
     assert processed[0].metadata["page_number"] == 2
     assert processed[0].id_ != "patient-1234567"
     UUID(processed[0].id_)
+    assert processed[0].start_char_idx == 12
+    assert processed[0].end_char_idx == 54
     assert original.text == "Jane Roe can be reached at 555-0100."
     assert original.metadata["record_number"] == 1234567
     assert original.id_ == "patient-1234567"
+
+
+def test_ingestion_transform_exposes_counts_only_audit_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(llamaindex_adapter, "_import_module", fake_import)
+    original = FixtureNode(
+        text="Jane Roe can be reached at 555-0100.",
+        metadata={
+            "patient_name": "Jane Roe",
+            "contact": "jane.roe@example.com",
+            "page_number": 2,
+        },
+        id_="patient-1234567",
+    )
+
+    transform = llamaindex_adapter.create_redaction_transform(
+        config=llamaindex_adapter.LlamaIndexRedactionConfig(
+            numeric_metadata_allowlist=("page_number",),
+        ),
+        deidentifier=fake_deidentify_with_entities,
+    )
+    transform([original])
+
+    audit = transform.audit_metadata
+    assert audit == {
+        "nodes_processed": 1,
+        "nodes_changed": 1,
+        "text_values_redacted": 1,
+        "metadata_values_redacted": 2,
+        "entity_counts": {"EMAIL": 1, "PERSON": 2, "PHONE": 1},
+        "source_ids_pseudonymized": 1,
+        "numeric_metadata_pseudonymized": 0,
+    }
+    assert transform.get_audit_metadata() == audit
+    assert transform.last_audit.to_dict() == audit
+    assert "Jane Roe" not in repr(audit)
+    assert "jane.roe@example.com" not in repr(audit)
+    assert "555-0100" not in repr(audit)
+
+
+def test_audit_collapses_untrusted_entity_labels_without_exposing_them() -> None:
+    sensitive_label = "SYNTHETIC_SENSITIVE_VALUE"
+    audit = llamaindex_adapter.LlamaIndexRedactionAudit(
+        entity_counts={sensitive_label: 2}
+    ).to_dict()
+
+    assert audit["entity_counts"] == {"OTHER": 2}
+    assert sensitive_label not in repr(audit)
+
+
+def test_audit_freezes_and_sanitizes_caller_owned_counts() -> None:
+    sensitive_label = "SYNTHETIC_SENSITIVE_VALUE"
+    source_counts = {sensitive_label: 2, "PERSON": -1, "EMAIL": True}
+    audit = llamaindex_adapter.LlamaIndexRedactionAudit(
+        nodes_processed=sensitive_label,  # type: ignore[arg-type]
+        entity_counts=source_counts,
+    )
+    source_counts[sensitive_label] = 99
+
+    rendered = audit.to_dict()
+
+    assert rendered["nodes_processed"] == 0
+    assert rendered["entity_counts"] == {"OTHER": 2}
+    assert sensitive_label not in repr(audit)
+    assert sensitive_label not in repr(rendered)
+
+
+def test_audit_contains_optional_detector_metadata_failures(monkeypatch) -> None:
+    monkeypatch.setattr(llamaindex_adapter, "_import_module", fake_import)
+    transform = llamaindex_adapter.create_redaction_transform(
+        deidentifier=fake_deidentify_with_exploding_entities,
+    )
+
+    transformed = transform([FixtureNode("Jane Roe", {}, id_="stable-source")])
+
+    assert transformed[0].text == "[PERSON]"
+    assert transform.audit_metadata["entity_counts"] == {"PERSON": 1}
+    assert "SYNTHETIC_SENSITIVE_VALUE" not in repr(transform.last_audit)
+
+
+def test_ingestion_transform_keeps_source_ids_stable_across_calls(monkeypatch) -> None:
+    monkeypatch.setattr(llamaindex_adapter, "_import_module", fake_import)
+    transform = llamaindex_adapter.create_redaction_transform(
+        deidentifier=fake_mask_deidentify,
+    )
+
+    first = transform([FixtureNode("Jane Roe", {}, id_="stable-source")])[0]
+    second = transform([FixtureNode("Jane Roe", {}, id_="stable-source")])[0]
+
+    assert first.id_ == second.id_
+    assert first.id_ != "stable-source"
+    assert first.text == second.text == "MASKED:Jane Roe"
 
 
 def test_redaction_factories_raise_clear_error_without_extra(monkeypatch) -> None:

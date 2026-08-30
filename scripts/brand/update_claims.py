@@ -20,6 +20,8 @@ GITHUB_API_URL = "https://api.github.com/repos/maziyarpanahi/openmed"
 AS_OF = "2026-07-29"
 REVIEW_BY = "2026-10-29"
 UNVERIFIED_FOLLOW_UP_BY = "2026-10-29"
+MODEL_MANIFEST_AS_OF = "2026-08-11"
+MODEL_MANIFEST_REVIEW_BY = "2026-11-11"
 OWNER = "repository-owner"
 
 
@@ -149,6 +151,11 @@ def _read_model_manifest() -> dict[str, Any]:
     repo_ids = [row["repo_id"] for row in rows]
     if len(repo_ids) != len(set(repo_ids)):
         raise RuntimeError("models.jsonl contains duplicate repo_id values")
+    license_counts: dict[str, int] = {}
+    for row in rows:
+        license_name = str(row.get("license") or "unknown")
+        license_counts[license_name] = license_counts.get(license_name, 0) + 1
+
     return {
         "rows": len(rows),
         "openmed_owned": sum(repo_id.startswith("OpenMed/") for repo_id in repo_ids),
@@ -157,11 +164,7 @@ def _read_model_manifest() -> dict[str, Any]:
             any(str(fmt).startswith("mlx") for fmt in row.get("formats", []))
             for row in rows
         ),
-        "licenses": {
-            "apache-2.0": sum(row.get("license") == "apache-2.0" for row in rows),
-            "other": sum(row.get("license") == "other" for row in rows),
-            "unknown": sum(not row.get("license") for row in rows),
-        },
+        "licenses": dict(sorted(license_counts.items())),
     }
 
 
@@ -245,6 +248,8 @@ def build_registry() -> dict[str, Any]:
                 f"{manifest['rows']:,} unique entries."
             ),
             qualification="Dated offline snapshot; availability can change.",
+            as_of=MODEL_MANIFEST_AS_OF,
+            review_by=MODEL_MANIFEST_REVIEW_BY,
         ),
         "hugging_face_openmed_owned_snapshot": _claim(
             status="verified",
@@ -260,6 +265,8 @@ def build_registry() -> dict[str, Any]:
                 f"{manifest['openmed_owned']:,} OpenMed-namespace entries."
             ),
             qualification="Not a live organization inventory.",
+            as_of=MODEL_MANIFEST_AS_OF,
+            review_by=MODEL_MANIFEST_REVIEW_BY,
         ),
         "broader_compatible_model_count": _claim(
             status="unverified",
@@ -369,6 +376,8 @@ def build_registry() -> dict[str, Any]:
                 "PII-family entries."
             ),
             qualification="Snapshot entries, not live checkpoints or downloads.",
+            as_of=MODEL_MANIFEST_AS_OF,
+            review_by=MODEL_MANIFEST_REVIEW_BY,
         ),
         "pii_checkpoint_count": _claim(
             status="unverified",
@@ -416,6 +425,8 @@ def build_registry() -> dict[str, Any]:
                 f"The committed snapshot has {manifest['mlx']} MLX-format entries."
             ),
             qualification="Manifest format availability can change upstream.",
+            as_of=MODEL_MANIFEST_AS_OF,
+            review_by=MODEL_MANIFEST_REVIEW_BY,
         ),
         "pii_entity_types": _claim(
             status="verified",
@@ -449,6 +460,8 @@ def build_registry() -> dict[str, Any]:
             source="models.jsonl",
             public_wording="Model licenses vary; review each model repository.",
             qualification=("Never inherit the SDK's Apache-2.0 license onto models."),
+            as_of=MODEL_MANIFEST_AS_OF,
+            review_by=MODEL_MANIFEST_REVIEW_BY,
         ),
         "sdk_license": _claim(
             status="verified",
@@ -610,7 +623,7 @@ def build_registry() -> dict[str, Any]:
 
     return {
         "schema_version": 2,
-        "generated_at": AS_OF,
+        "generated_at": MODEL_MANIFEST_AS_OF,
         "generation": {
             "command": "python scripts/brand/update_claims.py --write",
             "network": "forbidden",
@@ -817,11 +830,11 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     package_version_header = f"""<a
     class="release-chip"
     href="https://github.com/maziyarpanahi/openmed/releases"
-    aria-label="OpenMed SDK version {version}, shipped this week"
+    aria-label="OpenMed SDK version {version}, current release"
     data-release-label
 >
     <span class="status-dot" aria-hidden="true"></span>
-    v{version} shipped this week
+    v{version} current release
 </a>"""
     github_stars = f"""<a
     class="release-chip repository-stars"

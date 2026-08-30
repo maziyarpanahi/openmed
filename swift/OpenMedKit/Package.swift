@@ -15,12 +15,30 @@ let package = Package(
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        )
+        ),
+        .library(
+            name: "OpenMedExtensionSupport",
+            targets: ["OpenMedExtensionSupport"]
+        ),
+        .library(
+            name: "OpenMedShareExtension",
+            targets: ["OpenMedShareExtension"]
+        ),
+        .library(
+            name: "OpenMedActionExtension",
+            targets: ["OpenMedActionExtension"]
+        ),
     ],
     dependencies: [
         // swift-transformers for HuggingFace-compatible tokenization
         .package(url: "https://github.com/huggingface/swift-transformers.git", from: "0.1.12"),
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
+        // Includes upstream #419, which preserves multimodal RoPE state from
+        // prefill into autoregressive decode. Pin until the next tagged release.
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm.git",
+            revision: "42f08a872075fd07f9f1f40ec1a5e191e6aad86e"
+        ),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
     ],
     targets: [
@@ -43,6 +61,16 @@ let package = Package(
                     condition: .when(platforms: [.iOS, .macOS])
                 ),
                 .product(
+                    name: "MLXLMCommon",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLXLLM",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
                     name: "ZIPFoundation",
                     package: "ZIPFoundation",
                     condition: .when(platforms: [.iOS, .macOS])
@@ -52,9 +80,32 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .target(
+            name: "OpenMedExtensionSupport",
+            dependencies: ["OpenMedKit"]
+        ),
+        .target(
+            name: "OpenMedShareExtension",
+            dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
+            path: "Sources/ShareExtension"
+        ),
+        .target(
+            name: "OpenMedActionExtension",
+            dependencies: ["OpenMedExtensionSupport"],
+            path: "Sources/ActionExtension"
+        ),
         .testTarget(
             name: "OpenMedKitTests",
             dependencies: ["OpenMedKit"]
+        ),
+        .testTarget(
+            name: "ExtensionTests",
+            dependencies: [
+                "OpenMedKit",
+                "OpenMedExtensionSupport",
+                "OpenMedShareExtension",
+                "OpenMedActionExtension",
+            ]
         ),
     ]
 )

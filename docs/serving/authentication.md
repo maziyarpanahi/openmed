@@ -50,6 +50,7 @@ When authentication is enabled, the current built-in route scopes are:
 | `POST /analyze` | `analyze:write` |
 | `POST /pii/extract` | `pii:read` |
 | `POST /pii/deidentify` | `pii:write` |
+| `POST /pii/deidentify/stream` | `pii:write` |
 
 `GET /health`, `GET /livez`, `GET /readyz`, `GET /metrics`, `/docs`,
 `/redoc`, and `/openapi.json` are exempt so health checks, local API docs, and
@@ -87,3 +88,9 @@ OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=peer
 
 The failure limiter only counts failed authentication attempts. Successful
 authenticated requests are not charged against it.
+
+## Mutual TLS
+
+For certificate-bearing workload identity, including deployments that require
+mTLS before JWT or API-key authorization, see
+[Mutual TLS Client Authentication](mtls.md).

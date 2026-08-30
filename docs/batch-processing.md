@@ -2,6 +2,9 @@
 
 OpenMed provides batch processing capabilities for efficiently analyzing multiple texts or files with progress reporting and result aggregation.
 
+For task-oriented CSV, directory, and progress-callback examples, see the
+[Batch Processing How-To](batch-howto.md). This page remains the API reference.
+
 ## Quick Start
 
 ```python

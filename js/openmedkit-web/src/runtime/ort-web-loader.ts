@@ -18,9 +18,16 @@ export type OrtExecutionProvider = "webgpu" | "wasm";
 export type OrtTensorLike = {
   data?: unknown;
   dims?: readonly number[];
+  dispose?: () => void;
   type?: string;
   [key: string]: unknown;
 };
+
+export type OrtTensorConstructor = new (
+  type: string,
+  data: unknown,
+  dims: readonly number[],
+) => OrtTensorLike;
 
 export type OrtFeeds = Record<string, OrtTensorLike | unknown>;
 export type OrtResults = Record<string, OrtTensorLike | unknown>;
@@ -30,6 +37,7 @@ export interface OrtInferenceSession {
     feeds: OrtFeeds,
     options?: Record<string, unknown>,
   ): Promise<OrtResults> | OrtResults;
+  release?(): Promise<void> | void;
 }
 
 export interface OrtSessionCreateOptions {
@@ -55,6 +63,7 @@ export interface OrtWebRuntime {
       options?: OrtSessionCreateOptions,
     ): Promise<OrtInferenceSession> | OrtInferenceSession;
   };
+  Tensor?: OrtTensorConstructor;
 }
 
 export type OrtWebRuntimeProvider =
@@ -73,6 +82,7 @@ export interface OrtWebLoaderOptions {
 
 export interface OrtWebLoadedSession {
   session: OrtInferenceSession;
+  runtime?: OrtWebRuntime;
   backend: OrtWebBackendChoice;
   modelPath: string;
   assetPath: string;
@@ -106,7 +116,7 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   if (trimmed.length === 0) {
     throw new Error(`ONNX Runtime Web ${label} must not be empty.`);
   }
-  if (trimmed.startsWith("//")) {
+  if (trimmed.startsWith("//") || trimmed.startsWith("\\\\")) {
     throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
   }
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
@@ -114,6 +124,22 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   }
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)) {
     if (!trimmed.startsWith("file://")) {
+      throw new Error(
+        `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+      );
+    }
+    let fileUrl: URL;
+    try {
+      fileUrl = new URL(trimmed);
+    } catch {
+      throw new Error(
+        `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+      );
+    }
+    if (
+      (fileUrl.hostname !== "" && fileUrl.hostname !== "localhost") ||
+      fileUrl.pathname.startsWith("//")
+    ) {
       throw new Error(
         `ONNX Runtime Web ${label} must be local/offline, not remote.`,
       );
@@ -231,6 +257,7 @@ async function createOrtWebSession(
   );
   return {
     session,
+    runtime,
     backend: options.backend,
     modelPath: options.modelPath,
     assetPath: options.assetPath,

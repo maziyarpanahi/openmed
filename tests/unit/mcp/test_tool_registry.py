@@ -118,9 +118,12 @@ def test_mcp_language_listing_discovers_v2_registry_entries() -> None:
     payload = mcp_server.openmed_list_pii_languages()
     languages = {item["code"]: item for item in payload["languages"]}
 
-    for code in ("bn", "ta", "zh"):
+    for code in ("bn", "zh"):
         assert languages[code]["default_pii_model"].startswith("OpenMed/OpenMed-PII-")
         assert languages[code]["model_count"] >= 1
+
+    assert languages["ta"]["default_pii_model"] == "OpenMed/privacy-filter-multilingual"
+    assert languages["ta"]["model_count"] == 0
 
 
 def test_tool_registry_resource_is_generated_from_specs() -> None:
