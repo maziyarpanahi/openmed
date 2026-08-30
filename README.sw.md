@@ -537,6 +537,7 @@ Michango inakaribishwa: ripoti za hitilafu, maombi ya vipengele na PR. Soma
 - [Fungua issue](https://github.com/maziyarpanahi/openmed/issues)
 - [Mwongozo wa kuchangia](CONTRIBUTING.md) ·
   [Kanuni za Maadili](CODE_OF_CONDUCT.md) ·
+  [Wadumishaji](MAINTAINERS.md) ·
   [Sera ya usalama](SECURITY.md)
 - **Tafsiri zinakaribishwa**: saidia kukamilisha README za lugha nyingine.
 

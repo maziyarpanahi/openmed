@@ -126,6 +126,7 @@ nav:
       - Document Adapter Provenance: document-adapter-provenance.md
       - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
+      - Federated Round Lifecycle: training/federated-round-lifecycle.md
       - Preference Pair Schema: reference/preference-schema.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Bounded Asset Digests: multimodal/asset-digests.md
