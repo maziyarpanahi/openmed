@@ -31,6 +31,62 @@ result = analyze_text(
 print(result.entities)
 ```
 
+### Privacy Filter decoding and compilation
+
+The Python MLX Privacy Filter keeps eager execution as the default. Kernel
+compilation is an explicit performance experiment because fused kernels can
+produce unit-in-the-last-place floating-point differences:
+
+```python
+from openmed.mlx.inference import PrivacyFilterMLXPipeline
+
+pipeline = PrivacyFilterMLXPipeline(
+    "/path/to/openai-privacy-filter-mlx",
+    compile_forward=True,
+)
+```
+
+Alternatively, set `OPENMED_MLX_COMPILE=1`. The values `1`, `true`, `yes`, and
+`on` are accepted case-insensitively. An explicit `compile_forward=True` or
+`compile_forward=False` always overrides the environment variable. Leaving the
+argument unset and the variable absent selects eager mode.
+
+BIOES transition tables retain only the most recent bias configuration, so
+varying biases cannot grow an unbounded matrix cache. The NumPy decoder and its
+pure-Python fallback reject NaN and positive-infinite emissions, state scores,
+or biases; negative infinity remains the supported representation for an
+impossible emission. Confidence reconstruction is rounded to binary32, matching
+the previous MLX probability tensor. Labels, text, and offsets must match
+exactly; allow an absolute score tolerance of `1e-6` across MLX devices or
+compiled/eager kernels.
+
+#### Reference latency measurement
+
+The following steady-state measurement was collected on August 23, 2026, on an
+Apple M2 Max MacBook Pro with 96 GB RAM and macOS 26.5.2. Both revisions used
+Python 3.11.10, MLX 0.32.1, NumPy 1.26.4, tiktoken 0.14.0, eager mode, and the
+same locally cached `OpenMed/privacy-filter-mlx` artifact at revision
+`833fa7ea3fd36148900deea2d55bdadd4b90efa9`. Model loading was excluded. Each
+cell is the median of 12 synchronized pipeline calls after three warmups over
+synthetic text encoded to the exact sequence length.
+
+| Batch | Tokens | Before, ms | Optimized, ms | Change |
+|---:|---:|---:|---:|---:|
+| 1 | 32 | 21.947 | 21.704 | -1.1% |
+| 1 | 64 | 38.357 | 37.131 | -3.2% |
+| 2 | 32 | 38.141 | 37.408 | -1.9% |
+| 2 | 64 | 70.745 | 67.745 | -4.2% |
+| 4 | 32 | 69.887 | 67.300 | -3.7% |
+| 4 | 64 | 132.328 | 127.491 | -3.7% |
+
+“Before” is upstream revision `55232ecf`; “Optimized” is the repaired #2946
+working tree based on `61e318b2`. To reproduce the method, load one pipeline per
+revision, generate text by decoding the first `N` tokens of a repeated synthetic
+sentence and assert that re-encoding returns exactly `N` tokens, run each batch
+and sequence-length pair three times, then time 12 further calls with
+`time.perf_counter()`. A synthetic person/email/phone fixture produced identical
+entity JSON and confidence values before and after the optimization.
+
 ### Python MLX-LM Quick Start
 
 OpenMed also exposes MLX-LM causal language models through the same

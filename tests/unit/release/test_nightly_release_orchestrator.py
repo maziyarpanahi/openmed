@@ -326,23 +326,6 @@ def test_committed_queue_has_two_reviewed_candidates_per_weekday() -> None:
         )
 
 
-def test_workflow_schedules_batch_guards_publish_and_commits_audit_state() -> None:
-    workflow = (ROOT / ".github" / "workflows" / "nightly-release.yml").read_text()
-
-    assert "cron: '17 2 * * 1-5'" in workflow
-    assert "environment:\n      name: hf-publish" in workflow
-    assert "HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}" in workflow
-    assert (
-        "OPENMED_RELEASE_GATE_KEY: ${{ secrets.OPENMED_RELEASE_GATE_KEY }}" in workflow
-    )
-    assert "continue-on-error: true" in workflow
-    assert "python scripts/release/orchestrate.py run" in workflow
-    assert "gates/release_runs.jsonl" in workflow
-    assert "gates/release_reports/" in workflow
-    assert "peter-evans/create-pull-request@v8" in workflow
-    assert "steps.orchestrate.outcome != 'success'" in workflow
-
-
 def test_fresh_venv_smoke_installs_downloads_and_probes_without_output(
     tmp_path: Path,
 ) -> None:

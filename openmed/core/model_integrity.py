@@ -124,6 +124,7 @@ def prepare_model_reference(
     cache_dir: str | Path,
     local_only: bool,
     token: str | None = None,
+    require_integrity: bool = False,
 ) -> str:
     """Return a verified local snapshot path or the unchanged model reference.
 
@@ -133,6 +134,13 @@ def prepare_model_reference(
     local-only mode is disabled.
     """
     if model_verification_skipped():
+        if require_integrity:
+            raise ModelIntegrityError(
+                model_reference,
+                expected_sha256="sha256:<required>",
+                actual_sha256="sha256:<skipped>",
+                reason="integrity verification cannot be skipped for this load",
+            )
         _warn_verification_skipped(model_reference)
         return model_reference
 
@@ -141,6 +149,13 @@ def prepare_model_reference(
         sidecar = local_path / ARTIFACT_MANIFEST_FILENAME
         if sidecar.exists():
             verify_artifact_manifest(sidecar)
+        elif require_integrity:
+            raise ModelIntegrityError(
+                model_reference,
+                expected_sha256="sha256:<required>",
+                actual_sha256="sha256:<missing>",
+                reason="the local model integrity manifest is missing",
+            )
         else:
             logger.warning(
                 "MODEL INTEGRITY NOT VERIFIED for local path %s: %s is absent",
@@ -150,6 +165,13 @@ def prepare_model_reference(
         return str(local_path)
 
     if registry_info is None:
+        if require_integrity:
+            raise ModelIntegrityError(
+                model_reference,
+                expected_sha256="sha256:<required>",
+                actual_sha256="sha256:<unregistered>",
+                reason="the model is not backed by registry integrity metadata",
+            )
         return model_reference
 
     model_id = str(registry_info.model_id)
@@ -157,7 +179,11 @@ def prepare_model_reference(
     if not isinstance(reproducibility_hash, str) or not _SHA256_RE.fullmatch(
         reproducibility_hash
     ):
-        return _handle_missing_registry_hash(model_id, model_reference)
+        return _handle_missing_registry_hash(
+            model_id,
+            model_reference,
+            require_integrity=require_integrity,
+        )
 
     sidecar = _registry_sidecar_path(cache_dir, model_id, reproducibility_hash)
     if sidecar.exists():
@@ -169,13 +195,19 @@ def prepare_model_reference(
         return str(result.artifact_root)
 
     if local_only:
-        return _handle_missing_integrity_sidecar(model_id, model_reference, sidecar)
+        return _handle_missing_integrity_sidecar(
+            model_id,
+            model_reference,
+            sidecar,
+            require_integrity=require_integrity,
+        )
 
     return _download_verified_snapshot(
         registry_info,
         cache_dir=Path(cache_dir),
         sidecar=sidecar,
         token=token,
+        require_integrity=require_integrity,
     )
 
 
@@ -438,6 +470,7 @@ def _download_verified_snapshot(
     cache_dir: Path,
     sidecar: Path,
     token: str | None,
+    require_integrity: bool = False,
 ) -> str:
     try:
         from huggingface_hub import HfApi, snapshot_download
@@ -467,7 +500,12 @@ def _download_verified_snapshot(
 
         siblings = _select_runtime_siblings(remote_info.siblings or ())
         if not any(_runtime_weight_file(str(item.rfilename)) for item in siblings):
-            return _handle_missing_integrity_sidecar(model_id, model_id, sidecar)
+            return _handle_missing_integrity_sidecar(
+                model_id,
+                model_id,
+                sidecar,
+                require_integrity=require_integrity,
+            )
         snapshot = Path(
             snapshot_download(
                 repo_id=model_id,
@@ -744,8 +782,13 @@ def _existing_directory(value: str) -> Path | None:
         return None
 
 
-def _handle_missing_registry_hash(model_id: str, fallback: str) -> str:
-    if strict_model_verification():
+def _handle_missing_registry_hash(
+    model_id: str,
+    fallback: str,
+    *,
+    require_integrity: bool = False,
+) -> str:
+    if require_integrity or strict_model_verification():
         raise ModelIntegrityError(
             model_id,
             expected_sha256="sha256:<required>",
@@ -764,8 +807,10 @@ def _handle_missing_integrity_sidecar(
     model_id: str,
     fallback: str,
     sidecar: Path,
+    *,
+    require_integrity: bool = False,
 ) -> str:
-    if strict_model_verification():
+    if require_integrity or strict_model_verification():
         raise ModelIntegrityError(
             model_id,
             expected_sha256="sha256:<required artifact set>",

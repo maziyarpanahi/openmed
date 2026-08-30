@@ -62,8 +62,16 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
-from .benchmark import add_generalization_command
+from .benchmark import add_cost_command, add_generalization_command
 from .calibrate import add_calibrate_command
+from .contract import (
+    OFFLINE_ERROR_CODE,
+    OFFLINE_ERROR_MESSAGE,
+    PRIVACY_POLICY_ERROR_CODE,
+    PRIVACY_POLICY_ERROR_MESSAGE,
+    VALIDATION_ERROR_CODE,
+    VALIDATION_ERROR_MESSAGE,
+)
 from .gates import add_gates_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
@@ -334,6 +342,211 @@ def _policy_name_arg(value: str) -> str:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
+def _completion_specs(
+    parser: argparse.ArgumentParser,
+) -> dict[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Return shell-completion commands and options from an argparse tree."""
+
+    specs: dict[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]] = {}
+    seen: set[tuple[int, tuple[str, ...]]] = set()
+
+    def visit(current: argparse.ArgumentParser, path: tuple[str, ...]) -> None:
+        marker = (id(current), path)
+        if marker in seen:
+            return
+        seen.add(marker)
+
+        child_action = _find_subparsers(current)
+        commands = tuple(child_action.choices) if child_action is not None else ()
+        options = tuple(
+            dict.fromkeys(
+                option
+                for action in current._actions
+                if not isinstance(action, argparse._SubParsersAction)
+                for option in action.option_strings
+            )
+        )
+        specs[path] = (commands, options)
+
+        if child_action is not None:
+            for name, child in child_action.choices.items():
+                visit(child, (*path, name))
+
+    visit(parser, ())
+    return specs
+
+
+def _shell_literal(value: str) -> str:
+    """Quote a completion term for POSIX-like shell source."""
+
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+        .replace("`", "\\`")
+    )
+    return f'"{escaped}"'
+
+
+def _completion_transition_cases(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> list[str]:
+    lines = ['    case "$path:$word" in']
+    for path, (commands, _) in specs.items():
+        parent = " ".join(path)
+        for command in commands:
+            child_path = " ".join((*path, command))
+            lines.append(
+                f"        {_shell_literal(f'{parent}:{command}')}) "
+                f"path={_shell_literal(child_path)} ;;"
+            )
+    lines.append("    esac")
+    return lines
+
+
+def _completion_candidate_cases(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> list[str]:
+    lines = ['    case "$path" in']
+    for path, (commands, options) in specs.items():
+        candidates = (*commands, *options)
+        if not candidates:
+            continue
+        lines.append(
+            f"        {_shell_literal(' '.join(path))}) "
+            f"candidates={_shell_literal(' '.join(candidates))} ;;"
+        )
+    lines.extend(['        *) candidates="" ;;', "    esac"])
+    return lines
+
+
+def _bash_completion_script(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> str:
+    lines = [
+        "# OpenMed completion for Bash.",
+        "_openmed_completion() {",
+        '    local cur="${COMP_WORDS[COMP_CWORD]}"',
+        '    local path="" word candidates',
+        "    local i",
+        "    for ((i=1; i<COMP_CWORD; i++)); do",
+        '        word="${COMP_WORDS[i]}"',
+        '        case "$word" in',
+        "            --) break ;;",
+        "            -*) continue ;;",
+        "        esac",
+    ]
+    lines.extend(_completion_transition_cases(specs))
+    lines.extend(
+        [
+            "    done",
+            *_completion_candidate_cases(specs),
+            '    COMPREPLY=( $(compgen -W "$candidates" -- "$cur") )',
+            "}",
+            "complete -F _openmed_completion openmed",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _zsh_completion_script(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> str:
+    lines = [
+        "#compdef openmed",
+        "",
+        "_openmed() {",
+        '    local path="" word candidates',
+        "    integer index",
+        "    for (( index = 2; index < CURRENT; index++ )); do",
+        '        word="${words[index]}"',
+        '        case "$word" in',
+        "            --) break ;;",
+        "            -*) continue ;;",
+        "        esac",
+    ]
+    lines.extend(_completion_transition_cases(specs))
+    lines.extend(
+        [
+            "    done",
+            *_completion_candidate_cases(specs),
+            "    compadd -- ${(s: :)candidates}",
+            "}",
+            "",
+            "compdef _openmed openmed",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _fish_condition(path: tuple[str, ...]) -> str:
+    if not path:
+        return "__fish_use_subcommand"
+    return "; and ".join(f"__fish_seen_subcommand_from {command}" for command in path)
+
+
+def _fish_completion_script(
+    specs: Mapping[tuple[str, ...], tuple[tuple[str, ...], tuple[str, ...]]],
+) -> str:
+    lines = ["# OpenMed completion for Fish."]
+    for path, (commands, options) in specs.items():
+        condition = _fish_condition(path)
+        for command in commands:
+            lines.append(
+                "complete -c openmed -f "
+                f"-n {_shell_literal(condition)} -a {_shell_literal(command)}"
+            )
+        for option in options:
+            if option.startswith("--"):
+                lines.append(
+                    "complete -c openmed -f "
+                    f"-n {_shell_literal(condition)} "
+                    f"-l {_shell_literal(option[2:])}"
+                )
+            elif option.startswith("-") and len(option) == 2:
+                lines.append(
+                    "complete -c openmed -f "
+                    f"-n {_shell_literal(condition)} "
+                    f"-s {_shell_literal(option[1:])}"
+                )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _completion_script(
+    shell: str,
+    parser: argparse.ArgumentParser,
+) -> str:
+    """Render a completion script for one of the supported shells."""
+
+    specs = _completion_specs(parser)
+    renderers = {
+        "bash": _bash_completion_script,
+        "zsh": _zsh_completion_script,
+        "fish": _fish_completion_script,
+    }
+    return renderers[shell](specs)
+
+
+def _add_completion_command(subparsers: argparse._SubParsersAction) -> None:
+    completion_parser = subparsers.add_parser(
+        "completion",
+        help="Generate a shell completion script.",
+    )
+    completion_sub = completion_parser.add_subparsers(
+        dest="completion_shell",
+        required=True,
+    )
+    for shell in ("bash", "zsh", "fish"):
+        shell_parser = completion_sub.add_parser(
+            shell,
+            help=f"Generate a {shell} completion script.",
+        )
+        shell_parser.set_defaults(handler=_handle_completion)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create the top-level CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -382,6 +595,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
+    _add_completion_command(subparsers)
     _add_init_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
@@ -2738,6 +2952,51 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Device tier to benchmark.",
     )
     mobile_parser.add_argument(
+        "--format",
+        dest="model_format",
+        default="INT8",
+        help="Model format recorded in an archived device benchmark (default: INT8).",
+    )
+    mobile_parser.add_argument(
+        "--sequence-lengths",
+        nargs="+",
+        default=None,
+        metavar="TOKENS",
+        help="Sequence lengths to sweep; space- or comma-separated positive integers.",
+    )
+    mobile_parser.add_argument(
+        "--batch-sizes",
+        nargs="+",
+        default=None,
+        metavar="COUNT",
+        help="Batch sizes to sweep; space- or comma-separated positive integers.",
+    )
+    mobile_parser.add_argument(
+        "--repeats",
+        type=_positive_int,
+        default=1,
+        help="Number of times to repeat each matrix cell (default: 1).",
+    )
+    mobile_parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="Optional local JSON/JSONL corpus; the committed synthetic corpus is default.",
+    )
+    from openmed.eval.device_bench import DEFAULT_DEVICE_ARCHIVE_DIR
+
+    mobile_parser.add_argument(
+        "--archive",
+        nargs="?",
+        const=DEFAULT_DEVICE_ARCHIVE_DIR,
+        type=Path,
+        default=None,
+        help=(
+            "Write per-format/device/tier JSON archives. With no value, use "
+            "eval/results/device/."
+        ),
+    )
+    mobile_parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
@@ -2838,6 +3097,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Trim rendered context windows to this many characters around a span.",
     )
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
+    add_cost_command(benchmark_sub)
     add_generalization_command(benchmark_sub)
 
 
@@ -2940,6 +3200,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
+
+
+def _handle_completion(args: argparse.Namespace) -> int:
+    """Write the requested shell completion script to stdout."""
+
+    shell = args.completion_shell
+    script = _completion_script(shell, build_parser())
+    return emit(
+        args,
+        {"shell": shell, "script": script},
+        human=script,
+    )
 
 
 def _load_and_apply_config(args: argparse.Namespace) -> OpenMedConfig:
@@ -3965,7 +4237,7 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
     if len(role_overrides) != len(args.role):
         raise CliError(
             "Each structured discovery column may have only one role override.",
-            code="invalid_discovery_config",
+            code=VALIDATION_ERROR_CODE,
             exit_code=EXIT_USAGE,
         )
     _preflight_structured_paths(
@@ -4000,8 +4272,8 @@ def _handle_risk_discover(args: argparse.Namespace) -> int:
         )
     except DiscoveryConfigurationError as exc:
         raise CliError(
-            "The structured discovery configuration does not match the input schema.",
-            code="invalid_discovery_config",
+            VALIDATION_ERROR_MESSAGE,
+            code=VALIDATION_ERROR_CODE,
             exit_code=EXIT_USAGE,
         ) from exc
     except (ImportError, OSError, TypeError, ValueError) as exc:
@@ -4295,9 +4567,8 @@ def _handle_risk_assess(args: argparse.Namespace) -> int:
             _unlink_path(staged_path, missing_ok=True)
     if not assessment.meets_policy:
         raise CliError(
-            "Structured release does not meet the configured privacy policy; "
-            f"the aggregate assessment was written to {args.output}.",
-            code="release_policy_failed",
+            PRIVACY_POLICY_ERROR_MESSAGE,
+            code=PRIVACY_POLICY_ERROR_CODE,
             exit_code=EXIT_ERROR,
         )
 
@@ -6083,6 +6354,9 @@ def _handle_benchmark_domain_coverage(args: argparse.Namespace) -> int:
 def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
     from openmed.eval import perf as perf_module
 
+    if args.archive is not None:
+        return _handle_benchmark_mobile_archive(args)
+
     try:
         models = _parse_model_args(args.models or [])
     except ValueError as exc:
@@ -6144,6 +6418,57 @@ def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
         payload = {"reports": [report.to_dict() for report in reports]}
         human = json.dumps(payload, indent=2, sort_keys=True)
     return emit(args, payload, human=human)
+
+
+def _handle_benchmark_mobile_archive(args: argparse.Namespace) -> int:
+    from openmed.eval import device_bench as device_bench_module
+
+    try:
+        models = _parse_model_args(args.models or [])
+        if not models:
+            models = [device_bench_module.SYNTHETIC_PERF_MODEL_NAME]
+        reports = []
+        archives = []
+        for model in models:
+            runner = (
+                device_bench_module.synthetic_device_bench_runner
+                if model == device_bench_module.SYNTHETIC_PERF_MODEL_NAME
+                else None
+            )
+            report = device_bench_module.run_device_benchmark(
+                model,
+                device=str(args.device),
+                tier=str(args.tier),
+                model_format=str(args.model_format),
+                corpus=args.corpus,
+                sequence_lengths=args.sequence_lengths,
+                batch_sizes=args.batch_sizes,
+                repeats=args.repeats,
+                runner=runner,
+                metadata={"benchmark_domain": "mobile", "source_suite": "device"},
+            )
+            reports.append(report)
+            archives.append(
+                device_bench_module.write_device_benchmark_archive(
+                    report,
+                    archive_dir=args.archive,
+                )
+            )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"Mobile device benchmark failed: {exc}",
+            code="benchmark_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "archives": [str(path) for path in archives],
+        "reports": [report.to_dict() for report in reports],
+    }
+    human_lines = ["Mobile device benchmark archives written:"]
+    for path in archives:
+        human_lines.append(f"  JSON: {path}")
+    return emit(args, payload, human="\n".join(human_lines))
 
 
 def _handle_benchmark_latency(args: argparse.Namespace) -> int:
@@ -7065,13 +7390,19 @@ def _handle_models_list(args: argparse.Namespace) -> int:
 
 
 def _handle_models_pull(args: argparse.Namespace) -> int:
-    from ..core.hf_hub import DownloadProgress, prefetch_model
+    from ..core.hf_hub import (
+        DownloadIntegrityError,
+        DownloadProgress,
+        prefetch_model,
+    )
 
     config = _load_and_apply_config(args)
     completed_files = 0
 
     def report_progress(progress: DownloadProgress) -> None:
         nonlocal completed_files
+        if wants_json(args):
+            return
         finished = progress.files_done > completed_files
         completed_files = max(completed_files, progress.files_done)
         line_end = "\n" if finished else "\r"
@@ -7092,12 +7423,30 @@ def _handle_models_pull(args: argparse.Namespace) -> int:
             max_bandwidth=args.max_bandwidth,
             progress_callback=report_progress,
         )
+    except OfflineModeError as exc:
+        raise CliError(
+            OFFLINE_ERROR_MESSAGE,
+            code=OFFLINE_ERROR_CODE,
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except DownloadIntegrityError as exc:
+        raise CliError(
+            "Model integrity verification failed after a forced re-fetch.",
+            code="model_pull_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
     except Exception as exc:  # pragma: no cover - exact failures tested in helper
-        sys.stderr.write(f"Failed to pull model: {exc}\n")
-        return 1
+        raise CliError(
+            "Failed to pull the requested model.",
+            code="model_pull_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
 
-    sys.stdout.write(f"Model ready: {path}\n")
-    return 0
+    return emit(
+        args,
+        {"status": "ready"},
+        human=f"Model ready: {path}",
+    )
 
 
 def _handle_models_info(args: argparse.Namespace) -> int:

@@ -73,6 +73,7 @@ def _extract_cell_output_text(cell: nbformat.NotebookNode) -> str:
     """Extract every output and MIME payload into a canonical representation."""
     outputs = cell.get("outputs", [])
     text_parts: list[str] = []
+    last_stream_name: str | None = None
     for out in outputs:
         out_type = out.get("output_type")
         if out_type == "stream":
@@ -81,8 +82,12 @@ def _extract_cell_output_text(cell: nbformat.NotebookNode) -> str:
                 text = "".join(text)
             if not _normalize_output_text(text):
                 continue
-            text_parts.append(f"stream:{out.get('name', '')}:{text}")
+            stream_name = str(out.get("name", ""))
+            prefix = "" if stream_name == last_stream_name else f"stream:{stream_name}:"
+            text_parts.append(f"{prefix}{text}")
+            last_stream_name = stream_name
         elif out_type in {"execute_result", "display_data"}:
+            last_stream_name = None
             data = out.get("data", {})
             for mime_type, value in sorted(data.items()):
                 if isinstance(value, list):
@@ -93,6 +98,7 @@ def _extract_cell_output_text(cell: nbformat.NotebookNode) -> str:
                     text = json.dumps(value, sort_keys=True, separators=(",", ":"))
                 text_parts.append(f"{out_type}:{mime_type}:{text}")
         elif out_type == "error":
+            last_stream_name = None
             traceback = "\n".join(out.get("traceback", []))
             text_parts.append(
                 f"error:{out.get('ename', '')}:{out.get('evalue', '')}:{traceback}"
@@ -130,6 +136,21 @@ def test_extract_cell_output_text_ignores_empty_stream_records() -> None:
         ]
     )
     assert _extract_cell_output_text(cell) == "stream:stdout:ready"
+
+
+def test_extract_cell_output_text_coalesces_adjacent_stream_records() -> None:
+    """Kernel-specific stream chunking must not make outputs appear stale."""
+    cell = nbformat.v4.new_code_cell(
+        outputs=[
+            nbformat.v4.new_output("stream", name="stdout", text="first"),
+            nbformat.v4.new_output("stream", name="stdout", text="\nsecond\n"),
+            nbformat.v4.new_output("stream", name="stderr", text="warning\n"),
+            nbformat.v4.new_output("stream", name="stderr", text="details\n"),
+        ]
+    )
+    assert _extract_cell_output_text(cell) == (
+        "stream:stdout:first\nsecond\nstream:stderr:warning\ndetails"
+    )
 
 
 def _scan_for_leaks(text: str, filename: str) -> None:

@@ -166,8 +166,9 @@ quickumls = [
   "quickumls>=1.4,<2",
 ]
 
-# sdcMicro and R are installed separately under GPL-2.0. This explicit extra
-# opts into the subprocess-only bridge without adding GPL code or dependencies.
+# sdcMicro/R (GPL-2.0) and MedCAT/CogStack (Elastic License 2.0) are installed
+# separately. This explicit extra opts into subprocess-only bridges without
+# adding restricted code or dependencies.
 interop-gpl = []
 
 # extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
@@ -192,6 +193,10 @@ multimodal = [
   "pytesseract>=0.3.10",
   "markdown-it-py>=3.0,<5",
   "easyocr>=1.7",
+]
+
+notebook = [
+  "nbformat>=5.9.0",
 ]
 
 # PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
@@ -247,6 +252,10 @@ agents = [
 
 beam = [
   "apache-beam>=2.73,<3",
+]
+
+airflow = [
+  "apache-airflow>=3.2.2,<4",
 ]
 
 duckdb = [
@@ -392,6 +401,7 @@ yasbd = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-sidecar = "openmed.service.sidecar:main"
 openmed-executable-udf = "openmed.integrations.executable_udf:main"
 openmed-mcp = "openmed.mcp.server:main"
 
@@ -406,6 +416,10 @@ override-dependencies = [
   "httplib2>=0.32",
 ]
 conflicts = [
+  [
+    { extra = "airflow" },
+    { extra = "ocr-paddle" },
+  ],
   [
     { extra = "awq" },
     { extra = "gliner" },

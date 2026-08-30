@@ -159,6 +159,9 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
     class FakeStringType:
         pass
 
+    class RuntimeSeries:
+        pass
+
     def fake_pandas_udf(return_type):
         assert isinstance(return_type, FakeStringType)
 
@@ -168,10 +171,19 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
 
         return decorate
 
+    def fake_import_module(name: str):
+        assert name == "pandas"
+        return SimpleNamespace(Series=RuntimeSeries)
+
     monkeypatch.setattr(
         spark_udf,
         "_load_pandas_udf",
         lambda: (fake_pandas_udf, FakeStringType),
+    )
+    monkeypatch.setattr(
+        spark_udf,
+        "_import_module",
+        fake_import_module,
     )
 
     udf = spark_udf.make_deidentify_udf()
@@ -179,16 +191,7 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
     assert callable(udf)
     series_annotation = captured_annotations["texts"]
     assert series_annotation is captured_annotations["return"]
-    # PySpark needs a concrete class rather than Any or a postponed string.
-    # Assert that by name, not identity: tests/unit/interop pops pandas out of
-    # sys.modules to prove openmed does not import it eagerly, so a later
-    # importorskip rebinds Series to a fresh class object and any identity
-    # check against a module-level import compares stale against fresh.
-    # The module path is matched loosely because pandas 3 moved Series from
-    # pandas.core.series to pandas.
-    assert isinstance(series_annotation, type)
-    assert series_annotation.__qualname__ == "Series"
-    assert series_annotation.__module__.split(".")[0] == "pandas"
+    assert series_annotation is RuntimeSeries
 
 
 def test_make_deidentify_udf_constructs_real_pandas_udf_when_installed():

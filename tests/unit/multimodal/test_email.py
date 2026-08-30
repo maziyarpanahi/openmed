@@ -142,6 +142,28 @@ def test_extract_email_decodes_headers_bodies_and_html_offset_map():
     assert document.location_at(document.text.index("Alice Patient")) is not None
 
 
+def test_malformed_address_header_is_extracted_and_redacted_without_crashing(
+    monkeypatch,
+):
+    payload = b"From: Synthetic Clinic <clinic@"
+
+    document = extract_email(payload)
+    assert document.text == "From: Synthetic Clinic <clinic@"
+    assert document.metadata["header_count"] == 1
+
+    monkeypatch.setattr(
+        email_module._TextProcessor,
+        "redact",
+        lambda _self, text: SimpleNamespace(text=text),
+    )
+    result = redact_email(payload, models=lambda text, **_: text)
+    message = _parsed(result.email_bytes)
+
+    assert str(message["From"]) == "redacted-address@openmed.invalid"
+    assert result.header_redaction_count == 1
+    assert b"Synthetic Clinic <clinic@" not in result.email_bytes
+
+
 def test_redact_email_redacts_headers_plain_html_and_attachment_metadata(
     tmp_path: Path,
     monkeypatch,
