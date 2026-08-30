@@ -28,6 +28,7 @@ from . import documents_docx as _documents_docx
 from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from . import pptx as _pptx
+from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -270,6 +271,9 @@ __all__ = [
     "register_handler",
     "ensure_multimodal_available",
     "is_multimodal_available",
+    "AssetManifest",
+    "AssetManifestError",
+    "MANIFEST_VERSION",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "DocumentGraphError",
