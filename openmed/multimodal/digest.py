@@ -16,12 +16,22 @@ __all__ = [
 _CHUNK_BYTES = 1024 * 1024
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AssetDigest:
     """SHA-256 hex digest and the number of bytes hashed."""
 
     sha256: str
     byte_count: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.sha256) is not str
+            or len(self.sha256) != 64
+            or any(character not in "0123456789abcdef" for character in self.sha256)
+        ):
+            raise ValueError("sha256 must be a lowercase hexadecimal digest")
+        if type(self.byte_count) is not int or self.byte_count < 0:
+            raise ValueError("byte_count must be a non-negative integer")
 
 
 class DigestLimitExceededError(ValueError):
@@ -87,10 +97,19 @@ def digest_asset(
 
 
 def _stream_position(stream: BinaryIO) -> int | None:
-    try:
-        return stream.tell() if stream.seekable() else None
-    except Exception:
+    seekable = getattr(stream, "seekable", None)
+    if not callable(seekable):
         return None
+    try:
+        if not seekable():
+            return None
+        position = stream.tell()
+    except Exception:
+        pass
+    else:
+        if type(position) is int and position >= 0:
+            return position
+    raise DigestStreamError("digest_stream_position_error")
 
 
 def _read_chunk(read: Callable[[int], bytes], request_bytes: int) -> bytes:

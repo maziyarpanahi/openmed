@@ -6,6 +6,7 @@ import io
 import pytest
 
 from openmed.multimodal.digest import (
+    AssetDigest,
     DigestLimitExceededError,
     DigestStreamError,
     digest_asset,
@@ -88,6 +89,45 @@ def test_digest_stream_error_does_not_expose_underlying_details() -> None:
     assert str(raised.value) == "digest_stream_read_error"
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
+
+
+def test_seekable_stream_position_failure_is_categorical_and_prevents_read() -> None:
+    class BrokenPositionStream(NonSeekableStream):
+        def seekable(self) -> bool:
+            return True
+
+        def tell(self) -> int:
+            raise OSError("/private/patient-name.dcm")
+
+    stream = BrokenPositionStream(b"secret bytes")
+
+    with pytest.raises(
+        DigestStreamError,
+        match="digest_stream_position_error",
+    ) as raised:
+        digest_asset(stream)
+
+    assert stream.read_sizes == []
+    assert "patient-name" not in str(raised.value)
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    ("sha256", "byte_count"),
+    [
+        ("A" * 64, 0),
+        ("a" * 63, 0),
+        ("a" * 64, -1),
+        ("a" * 64, True),
+    ],
+)
+def test_asset_digest_rejects_inconsistent_public_values(
+    sha256: str,
+    byte_count: object,
+) -> None:
+    with pytest.raises(ValueError):
+        AssetDigest(sha256=sha256, byte_count=byte_count)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("max_bytes", [-1, True, 1.5])
