@@ -17,7 +17,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final, Iterable
 
-__all__ = ["AssertionStatus", "EvidenceRecord", "EvidenceTable"]
+__all__ = [
+    "EVIDENCE_TABLE_DISCLAIMER",
+    "EVIDENCE_TABLE_SCHEMA_VERSION",
+    "AssertionStatus",
+    "EvidenceRecord",
+    "EvidenceTable",
+]
 
 
 EVIDENCE_TABLE_SCHEMA_VERSION: Final = 1
@@ -189,6 +195,7 @@ class EvidenceTable:
             allow_nan=False,
             ensure_ascii=True,
             separators=(",", ":"),
+            sort_keys=True,
         )
 
     def to_markdown(self) -> str:

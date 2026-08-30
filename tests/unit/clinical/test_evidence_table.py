@@ -10,6 +10,8 @@ import traceback
 import pytest
 
 from openmed.clinical.evidence_table import (
+    EVIDENCE_TABLE_DISCLAIMER,
+    EVIDENCE_TABLE_SCHEMA_VERSION,
     AssertionStatus,
     EvidenceRecord,
     EvidenceTable,
@@ -117,6 +119,16 @@ def test_json_is_compact_and_deterministic() -> None:
     assert table.to_json() == table.to_json()
     assert '": ' not in table.to_json()
     assert ', "' not in table.to_json()
+
+
+def test_json_uses_canonical_key_order_and_public_schema_constants() -> None:
+    table = EvidenceTable(records=(record(3, 7),))
+
+    assert EVIDENCE_TABLE_SCHEMA_VERSION == 1
+    assert "value-free review aids" in EVIDENCE_TABLE_DISCLAIMER
+    assert table.to_json().startswith(
+        '{"assertion_counts":{"affirmed":1},"disclaimer":'
+    )
 
 
 def test_markdown_contains_offsets_and_review_flags_without_values() -> None:
