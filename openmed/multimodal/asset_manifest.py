@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 MANIFEST_VERSION = 1
+MAX_MANIFEST_BYTE_SIZE = (1 << 63) - 1
+MAX_MANIFEST_COUNT = (1 << 31) - 1
+MAX_MANIFEST_DURATION_SECONDS = float(MAX_MANIFEST_COUNT)
 
 _ASSET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
@@ -59,7 +62,7 @@ class AssetManifestError(ValueError):
     """Raised when a privacy-safe asset manifest fails validation."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AssetManifest:
     """Versioned, privacy-safe description of a multimodal input asset."""
 
@@ -79,49 +82,62 @@ class AssetManifest:
         _validate_opaque_string("asset_id", self.asset_id, _ASSET_ID_RE)
         _validate_media_type(self.media_type)
         _validate_opaque_string("sha256", self.sha256, _SHA256_RE)
-        _validate_positive_int("byte_size", self.byte_size)
+        _validate_positive_int(
+            "byte_size", self.byte_size, maximum=MAX_MANIFEST_BYTE_SIZE
+        )
         for field_name in ("pages", "width", "height", "frames"):
             value = getattr(self, field_name)
             if value is not None:
-                _validate_positive_int(field_name, value)
+                _validate_positive_int(field_name, value, maximum=MAX_MANIFEST_COUNT)
         if self.duration_seconds is not None:
-            _validate_positive_number("duration_seconds", self.duration_seconds)
+            _validate_positive_number(
+                "duration_seconds",
+                self.duration_seconds,
+                maximum=MAX_MANIFEST_DURATION_SECONDS,
+            )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "AssetManifest":
         """Build and validate a manifest from a strict mapping."""
         if not isinstance(data, Mapping):
             raise AssetManifestError("manifest must be a mapping")
+        try:
+            fields = dict(data)
+            provided = set(fields)
+        except Exception:
+            raise AssetManifestError("manifest fields could not be read") from None
 
-        unknown = set(data) - _ALLOWED_FIELDS
+        unknown = provided - _ALLOWED_FIELDS
         if unknown:
             raise AssetManifestError("manifest contains unknown fields")
 
-        missing = {"asset_id", "media_type", "sha256", "byte_size"} - set(data)
+        missing = {"asset_id", "media_type", "sha256", "byte_size"} - provided
         if missing:
             raise AssetManifestError("manifest is missing required fields")
 
-        version = data.get("version", MANIFEST_VERSION)
+        version = fields.get("version", MANIFEST_VERSION)
         return cls(
             version=version,
-            asset_id=data["asset_id"],
-            media_type=data["media_type"],
-            sha256=data["sha256"],
-            byte_size=data["byte_size"],
-            pages=data.get("pages"),
-            width=data.get("width"),
-            height=data.get("height"),
-            frames=data.get("frames"),
-            duration_seconds=data.get("duration_seconds"),
+            asset_id=fields["asset_id"],
+            media_type=fields["media_type"],
+            sha256=fields["sha256"],
+            byte_size=fields["byte_size"],
+            pages=fields.get("pages"),
+            width=fields.get("width"),
+            height=fields.get("height"),
+            frames=fields.get("frames"),
+            duration_seconds=fields.get("duration_seconds"),
         )
 
     @classmethod
     def from_json(cls, payload: str | bytes | bytearray) -> "AssetManifest":
         """Build and validate a manifest from a JSON object."""
         try:
-            data = json.loads(payload)
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as exc:
-            raise AssetManifestError("manifest JSON is malformed") from exc
+            data = json.loads(payload, object_pairs_hook=_strict_json_object)
+        except AssetManifestError:
+            raise
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError, ValueError):
+            raise AssetManifestError("manifest JSON is malformed") from None
         return cls.from_dict(data)
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,7 +155,7 @@ class AssetManifest:
 
 
 def _validate_version(value: Any) -> None:
-    if value != MANIFEST_VERSION or isinstance(value, bool):
+    if type(value) is not int or value != MANIFEST_VERSION:
         raise AssetManifestError("version must match the supported manifest version")
 
 
@@ -169,15 +185,24 @@ def _validate_media_type(value: Any) -> None:
     raise AssetManifestError("media_type is unsupported")
 
 
-def _validate_positive_int(field_name: str, value: Any) -> None:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise AssetManifestError(f"{field_name} must be a positive integer")
-    if value <= 0:
-        raise AssetManifestError(f"{field_name} must be a positive integer")
+def _validate_positive_int(field_name: str, value: Any, *, maximum: int) -> None:
+    if type(value) is not int or not 0 < value <= maximum:
+        raise AssetManifestError(f"{field_name} must be a bounded positive integer")
 
 
-def _validate_positive_number(field_name: str, value: Any) -> None:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise AssetManifestError(f"{field_name} must be a positive finite number")
-    if not math.isfinite(value) or value <= 0:
-        raise AssetManifestError(f"{field_name} must be a positive finite number")
+def _validate_positive_number(field_name: str, value: Any, *, maximum: float) -> None:
+    if type(value) not in (int, float):
+        raise AssetManifestError(
+            f"{field_name} must be a bounded positive finite number"
+        )
+    if not math.isfinite(value) or not 0 < value <= maximum:
+        raise AssetManifestError(
+            f"{field_name} must be a bounded positive finite number"
+        )
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    fields = dict(pairs)
+    if len(fields) != len(pairs):
+        raise AssetManifestError("manifest contains duplicate fields")
+    return fields

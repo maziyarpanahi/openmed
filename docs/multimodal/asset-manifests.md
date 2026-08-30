@@ -18,6 +18,11 @@ The validator rejects unknown fields, paths, URLs, and free-text fields such as
 descriptions or source metadata. Validation errors name the failed field or rule
 without echoing the supplied value.
 
+Integer sizes and counts use explicit 64-bit and 32-bit upper bounds,
+respectively. Duration is finite, positive, and capped at the same upper bound
+as other counts. Boolean values, scalar subclasses, duplicate JSON fields, and
+numeric values outside those bounds fail closed.
+
 ```python
 from openmed.multimodal.asset_manifest import AssetManifest
 
