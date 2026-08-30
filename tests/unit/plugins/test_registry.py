@@ -279,6 +279,25 @@ def test_recognizer_without_declared_labels_is_quarantined(monkeypatch):
     assert result.quarantined[0].reason == REASON_MISSING_LABELS
 
 
+def test_anonymizer_provider_without_declared_labels_is_quarantined(monkeypatch):
+    class MissingLabelsPlugin:
+        metadata = PluginComponentMetadata(
+            plugin_id="missing-labels",
+            component_id="anonymizer-provider",
+            kind=COMPONENT_ANONYMIZER_PROVIDER,
+        )
+
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("missing-anonymizer-labels", MissingLabelsPlugin()),
+    )
+
+    result = discover_plugins()
+
+    assert result.quarantined[0].reason == REASON_MISSING_LABELS
+    assert "anonymizer provider" in result.quarantined[0].message
+
+
 def test_malformed_plugin_fixture_is_quarantined_with_specific_reason(monkeypatch):
     class MissingMetadata:
         pass

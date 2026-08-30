@@ -15,9 +15,14 @@ MKDOCS = ROOT / "mkdocs.yml"
 
 PINNED_PYTHON_BASE_RE = re.compile(
     r"^FROM(?: --platform=\$TARGETPLATFORM)? "
-    r"python:3\.11-slim@sha256:[0-9a-f]{64}$",
+    r"python:3\.11-slim@sha256:[0-9a-f]{64}(?: AS [A-Za-z0-9._-]+)?$",
     re.MULTILINE,
 )
+FROM_IMAGE_RE = re.compile(
+    r"^FROM(?: --platform=\S+)? (?P<image>\S+)(?: AS \S+)?$",
+    re.IGNORECASE | re.MULTILINE,
+)
+PINNED_IMAGE_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
 
 
 def test_deployment_dockerfile_uses_digest_pinned_python_base():
@@ -28,8 +33,11 @@ def test_deployment_dockerfile_uses_digest_pinned_python_base():
 
 def test_root_dockerfile_keeps_compose_base_digest_pinned():
     content = ROOT_DOCKERFILE.read_text(encoding="utf-8")
+    stage_images = [match.group("image") for match in FROM_IMAGE_RE.finditer(content)]
 
     assert PINNED_PYTHON_BASE_RE.search(content)
+    assert stage_images
+    assert all(PINNED_IMAGE_RE.fullmatch(image) for image in stage_images)
 
 
 def test_multiarch_workflow_builds_manifest_and_smokes_each_platform():

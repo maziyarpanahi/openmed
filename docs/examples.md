@@ -4,6 +4,10 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+If you already know the outcome you want, use the
+**[Task-oriented Cookbook](./cookbook.md)** to jump directly from that goal to
+the matching script, notebook, or REST recipe.
+
 ## Curated Notebook Gallery
 
 For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
@@ -99,6 +103,7 @@ content-security policy blocks the optional inline styling.
 | `examples/warehouse-remote-function/` | Deploys a BigQuery remote-function batch handler with no-raw-PHI logging, a container entrypoint, and registration DDL. |
 | `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
+| `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |

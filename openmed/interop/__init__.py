@@ -228,6 +228,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="openmrs",
         description="Local-first OpenMRS REST and FHIR2 de-identification adapter",
     ),
+    "opensearch": AdapterSpec(
+        name="opensearch",
+        module="openmed.interop.opensearch",
+        extra="",
+        description="Local-first OpenSearch ingest redaction processor",
+    ),
     "fhir_server": AdapterSpec(
         name="fhir_server",
         module="openmed.interop.fhir_server",
