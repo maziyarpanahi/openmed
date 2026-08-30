@@ -40,6 +40,28 @@ INVALID_RECORDS = tuple(
 )
 
 
+def test_abstention_contract_is_available_from_public_multimodal_api() -> None:
+    from openmed.multimodal import (
+        ABSTENTION_SCHEMA_VERSION,
+        AbstentionValidationError,
+    )
+    from openmed.multimodal import (
+        AbstentionReason as PublicReason,
+    )
+    from openmed.multimodal import (
+        AbstentionRecord as PublicRecord,
+    )
+    from openmed.multimodal import (
+        AbstentionStage as PublicStage,
+    )
+
+    assert ABSTENTION_SCHEMA_VERSION == 1
+    assert PublicReason is AbstentionReason
+    assert PublicRecord is AbstentionRecord
+    assert PublicStage is AbstentionStage
+    assert issubclass(AbstentionValidationError, ValueError)
+
+
 @pytest.mark.parametrize(("stage", "reason"), VALID_RECORDS)
 def test_every_stage_and_reason_round_trips(
     stage: AbstentionStage,
