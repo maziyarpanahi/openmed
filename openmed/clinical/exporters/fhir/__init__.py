@@ -17,6 +17,12 @@ from .condition import (
     CONDITION_VER_STATUS_SYSTEM,
     to_condition,
 )
+from .diagnostic_report import (
+    DIAGNOSTIC_REPORT_FIELDS_R4R5,
+    DIAGNOSTIC_REPORT_STATUS_UNKNOWN,
+    DIAGNOSTIC_REPORT_STATUSES,
+    to_diagnostic_report,
+)
 from .exchange import (
     FHIRClinicalExchangeWorkbench,
     FHIRExchange,
@@ -61,12 +67,16 @@ __all__ = [
     "CONDITION_CLINICAL_SYSTEM",
     "CONDITION_VER_STATUS_SYSTEM",
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
+    "DIAGNOSTIC_REPORT_FIELDS_R4R5",
+    "DIAGNOSTIC_REPORT_STATUS_UNKNOWN",
+    "DIAGNOSTIC_REPORT_STATUSES",
     "FHIR_RESOURCE_TYPES",
     "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_ONLY_DISCLAIMER",
     "POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL",
     "to_condition",
+    "to_diagnostic_report",
     "to_observation",
     "to_codeable_concept",
     "to_fhir",
