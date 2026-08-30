@@ -18,6 +18,7 @@ __all__ = [
     "CLINICAL_PRIVACY_TRAINING_SOURCE_IDS",
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
+    "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
     "MAX_LORA_TRAINABLE_RATIO",
     "PRESET_BY_MODE",
     "QLORA_CONFIG_SCHEMA_VERSION",
@@ -64,6 +65,7 @@ __all__ = [
     "DIRECTID_TRAINING_REPORT_SCHEMA_VERSION",
     "DIRECTID_TINY_HEAD_CONTRACT",
     "FEDERATED_ROUND_SCHEMA_VERSION",
+    "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
     "FEDERATED_ROUND_STATES",
     "FEDERATED_ROUND_TERMINAL_STATES",
     "FEDERATED_ROUND_TRANSITIONS",
@@ -97,8 +99,13 @@ __all__ = [
     "DistillationTargets",
     "EntityTypeWeights",
     "FederatedRoundLifecycle",
+    "FederatedCompletionBand",
+    "FederatedQuorumStatus",
+    "FederatedRoundReasonCode",
     "FederatedRoundState",
     "FederatedRoundStateError",
+    "FederatedRoundStatus",
+    "FederatedRoundStatusError",
     "FederatedRoundTransitionError",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
@@ -138,6 +145,7 @@ __all__ = [
     "build_clinical_privacy_checkpoint_manifest",
     "build_clinical_family_release",
     "build_directid_dataset_evidence",
+    "build_federated_round_status",
     "config_hash",
     "clinical_family_recipe_hash",
     "clinical_model_family_spec",
@@ -195,6 +203,18 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
+        "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
+        "FederatedCompletionBand",
+        "FederatedQuorumStatus",
+        "FederatedRoundReasonCode",
+        "FederatedRoundStatus",
+        "FederatedRoundStatusError",
+        "build_federated_round_status",
+    }:
+        federated_status = import_module(".federated_status", __name__)
+        return getattr(federated_status, name)
     if name in {
         "FEDERATED_ROUND_SCHEMA_VERSION",
         "FEDERATED_ROUND_STATES",
