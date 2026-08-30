@@ -228,6 +228,7 @@ nav:
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
+      - FHIR DiagnosticReport Export: fhir/diagnostic-report-export.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
       - FHIR SDC Privacy Projection: fhir/sdc-privacy.md
       - Document Intake Quarantine: fhir/document-intake-quarantine.md

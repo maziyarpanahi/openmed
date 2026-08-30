@@ -302,6 +302,7 @@ classification:
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
     - fhir/bulk-checkpoints.md
+    - fhir/diagnostic-report-export.md
     - fhir/operation-outcome.md
     - fhir/sdc-privacy.md
     - fhir/document-intake-quarantine.md
