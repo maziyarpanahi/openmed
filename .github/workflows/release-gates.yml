@@ -50,8 +50,6 @@ on:
   repository_dispatch:
     types:
       - release-status-regression
-  schedule:
-    - cron: "17 3 * * *"
 
 concurrency:
   group: release-gates-${{ github.ref }}

@@ -75,6 +75,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
+    "apache-airflow": "Apache-2.0",
     "apache-beam": "Apache-2.0",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
@@ -117,6 +118,7 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "numpy": "BSD-3-Clause",
     "onnx": "Apache-2.0",

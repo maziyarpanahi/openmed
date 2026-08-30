@@ -295,6 +295,41 @@ def test_full_package_extraction_is_ast_only_and_under_thirty_seconds(monkeypatc
     assert set(sys.modules) - imported_before == set()
 
 
+def test_v21_exception_compatibility_symbols_remain_public():
+    surface = api_surface_diff.extract_surface(ROOT, "WORKTREE")
+    expected = {
+        "openmed.multimodal.MissingDependencyError.extra",
+        "openmed.multimodal.MissingDependencyError.feature",
+        "openmed.multimodal.MissingDependencyError.package",
+        "openmed.multimodal.base.MissingDependencyError.extra",
+        "openmed.multimodal.base.MissingDependencyError.feature",
+        "openmed.multimodal.base.MissingDependencyError.package",
+        "openmed.multimodal.exceptions.MissingDependencyError.extra",
+        "openmed.multimodal.exceptions.MissingDependencyError.feature",
+        "openmed.multimodal.exceptions.MissingDependencyError.package",
+        "openmed.multimodal.metadata_scrub.MissingDependencyError.extra",
+        "openmed.multimodal.metadata_scrub.MissingDependencyError.feature",
+        "openmed.multimodal.metadata_scrub.MissingDependencyError.package",
+        "openmed.multimodal.ocr.MissingDependencyError.extra",
+        "openmed.multimodal.ocr.MissingDependencyError.feature",
+        "openmed.multimodal.ocr.MissingDependencyError.package",
+        "openmed.ner.MissingDependencyError.extra",
+        "openmed.ner.MissingDependencyError.feature",
+        "openmed.ner.MissingDependencyError.package",
+        "openmed.ner.exceptions.MissingDependencyError.extra",
+        "openmed.ner.exceptions.MissingDependencyError.feature",
+        "openmed.ner.exceptions.MissingDependencyError.package",
+        "openmed.ner.exceptions.MissingOptionalDependencyError",
+        "openmed.ner.exceptions.MissingOptionalDependencyError.extra",
+        "openmed.ner.exceptions.MissingOptionalDependencyError.feature",
+        "openmed.ner.exceptions.MissingOptionalDependencyError.package",
+        "openmed.utils.InputValidationError.code",
+        "openmed.utils.gateway.InputValidationError.code",
+    }
+
+    assert expected <= surface.keys()
+
+
 def test_real_migration_guide_covers_every_detected_break(tmp_path):
     baseline = subprocess.run(
         [
@@ -337,7 +372,7 @@ def test_model_release_workflow_is_separate_from_sdk_tags():
 
     assert "\n  push:" not in model_workflow
     assert "workflow_dispatch:" in model_workflow
-    assert "schedule:" in model_workflow
+    assert "schedule:" not in model_workflow
     assert "fetch-depth: 0" in model_workflow
     assert "Check API migration guide completeness" in model_workflow
     assert "if: github.event_name == 'workflow_dispatch'" in model_workflow
