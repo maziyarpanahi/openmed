@@ -37,7 +37,7 @@ PATIENT_RECORD_FILTER_ADVISORY = (
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PatientRecordSpan:
     """One span and its assertion after patient-record filtering.
 
@@ -50,6 +50,22 @@ class PatientRecordSpan:
     assertion: ClinicalAssertion
     record_status: str | None = None
     exclusion_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.assertion) is not ClinicalAssertion:
+            raise TypeError("assertion must be a ClinicalAssertion")
+        if self.record_status not in {None, "recorded", "refuted"}:
+            raise ValueError("record_status is unsupported")
+        if self.exclusion_reason not in {
+            None,
+            "hypothetical",
+            "non-patient experiencer",
+        }:
+            raise ValueError("exclusion_reason is unsupported")
+        if (self.record_status is None) == (self.exclusion_reason is None):
+            raise ValueError(
+                "exactly one of record_status or exclusion_reason must be set"
+            )
 
 
 def filter_patient_record(
@@ -80,6 +96,8 @@ def filter_patient_record(
             f"spans and assertions must have the same length, got "
             f"{len(span_list)} spans and {len(assertion_list)} assertions"
         )
+    if any(type(assertion) is not ClinicalAssertion for assertion in assertion_list):
+        raise TypeError("assertions must contain ClinicalAssertion values")
 
     included: list[PatientRecordSpan] = []
     excluded: list[PatientRecordSpan] = []

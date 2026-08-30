@@ -185,6 +185,33 @@ def test_mismatched_span_assertion_lengths_raise():
         filter_patient_record([_span(), _span()], [_assertion()])
 
 
+def test_non_assertion_values_fail_with_a_categorical_error():
+    with pytest.raises(TypeError, match="ClinicalAssertion"):
+        filter_patient_record([_span()], [{"experiencer": "patient"}])
+
+
+@pytest.mark.parametrize(
+    ("record_status", "exclusion_reason"),
+    [
+        (None, None),
+        ("recorded", "hypothetical"),
+        ("unsupported", None),
+        (None, "unsupported"),
+    ],
+)
+def test_public_result_rejects_inconsistent_decision_states(
+    record_status: str | None,
+    exclusion_reason: str | None,
+):
+    with pytest.raises(ValueError):
+        PatientRecordSpan(
+            span=_span(),
+            assertion=_assertion(),
+            record_status=record_status,
+            exclusion_reason=exclusion_reason,
+        )
+
+
 def test_advisory_is_non_empty_string():
     assert isinstance(PATIENT_RECORD_FILTER_ADVISORY, str)
     assert PATIENT_RECORD_FILTER_ADVISORY
