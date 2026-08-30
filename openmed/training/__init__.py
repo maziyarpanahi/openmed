@@ -126,6 +126,7 @@ __all__ = [
     "RecordPassageSource",
     "RecipeConfigError",
     "RepairedSpan",
+    "ReproVerificationResult",
     "SpanAgreementBreakdown",
     "TrainingRecipeConfig",
     "WeakLabelDecision",
@@ -188,6 +189,7 @@ __all__ = [
     "validate_directid_preset",
     "validate_directid_split_records",
     "validate_round_transition",
+    "verify_reproducibility_inputs",
     "weak_label_document",
     "write_clinical_privacy_checkpoint_manifest",
     "write_jsonl_records",
@@ -434,4 +436,10 @@ def __getattr__(name: str) -> Any:
     }:
         weak_labeling = import_module(".weak_labeling", __name__)
         return getattr(weak_labeling, name)
+    if name in {
+        "ReproVerificationResult",
+        "verify_reproducibility_inputs",
+    }:
+        repro_verify = import_module(".repro_verify", __name__)
+        return getattr(repro_verify, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
