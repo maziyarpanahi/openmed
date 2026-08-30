@@ -1,16 +1,19 @@
-# Multimodal Manifest Profiles
+# Multimodal manifest profiles
 
-This document defines the versioned metadata profiles used for safe multimodal preflight validation. 
+These profiles apply modality-specific rules to the canonical fields from the
+privacy-safe asset manifest contract. They do not open or decode an asset.
 
 ## Overview
 
-A manifest profile allows the preflight system to determine if a generic asset manifest is structurally valid for its declared modality *without opening or decoding the underlying asset*.
+A manifest profile determines whether structurally validated metadata includes
+the fields required for its declared modality.
 
-**Strict Privacy and Safety Boundary:**
-- Validation uses **manifest metadata only**.
-- Files are **never opened or decoded** by the validator.
-- Manifest metadata is **not proof that the underlying file is trustworthy**—it merely checks that the preflight metadata contract is fulfilled.
-- This represents a preflight check, not a clinical semantic validator. Model tensor layouts and clinical semantics are out of scope.
+The privacy and safety boundary is strict:
+
+- Validation uses manifest metadata only.
+- Files are never opened or decoded by the validator.
+- Metadata is not proof that the underlying file is trustworthy.
+- This is a preflight check, not a clinical semantic validator.
 
 ## Profiles
 
@@ -19,32 +22,32 @@ A manifest profile allows the preflight system to determine if a generic asset m
 - **Version:** `1.0`
 - **Required Fields:** `width`, `height`
 - **Optional Fields:** (none)
-- **Inapplicable Fields:** `page_count`, `frame_count`, `duration`
+- **Inapplicable Fields:** `pages`, `frames`, `duration_seconds`
 
 ### PDF Profile (v1.0)
 - **Modality:** `pdf`
 - **Version:** `1.0`
-- **Required Fields:** `page_count`
+- **Required Fields:** `pages`
 - **Optional Fields:** (none)
-- **Inapplicable Fields:** `width`, `height`, `frame_count`, `duration`
+- **Inapplicable Fields:** `width`, `height`, `frames`, `duration_seconds`
 
 ### DICOM Profile (v1.0)
 - **Modality:** `dicom`
 - **Version:** `1.0`
-- **Required Fields:** `frame_count`, `width`, `height`
+- **Required Fields:** `frames`, `width`, `height`
 - **Optional Fields:** (none)
-- **Inapplicable Fields:** `page_count`, `duration`
+- **Inapplicable Fields:** `pages`, `duration_seconds`
 
 ### Audio Profile (v1.0)
 - **Modality:** `audio`
 - **Version:** `1.0`
-- **Required Fields:** `duration`
+- **Required Fields:** `duration_seconds`
 - **Optional Fields:** (none)
-- **Inapplicable Fields:** `width`, `height`, `page_count`, `frame_count`
+- **Inapplicable Fields:** `width`, `height`, `pages`, `frames`
 
 ## Validation Findings
 
-The validator evaluates the metadata against these profiles and produces deterministic, categorical findings. Findings only contain the field name and a stable reason code. 
+The validator evaluates the metadata against these profiles and produces deterministic, categorical findings. Findings only contain the field name and a stable reason code.
 
 **Categorical Reason Codes:**
 - `missing_required`: A required metadata field is missing.
@@ -53,5 +56,8 @@ The validator evaluates the metadata against these profiles and produces determi
 - `invalid_boolean`: A python boolean (`True`/`False`) was provided for a numeric field.
 - `non_finite_numeric`: A numeric field contained NaN, +Infinity, or -Infinity.
 - `invalid_type`: The field value was of an unsupported type.
+- `out_of_range`: A numeric value was negative or exceeded its fixed bound.
 
-Findings do NOT expose source paths, filenames, URLs, raw input values, embedded media content, or arbitrary exception messages.
+Findings cannot be constructed with arbitrary field names or reason codes. They
+do not expose source paths, filenames, URLs, raw input values, embedded media
+content, or arbitrary exception messages.

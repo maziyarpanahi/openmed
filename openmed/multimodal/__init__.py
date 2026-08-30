@@ -150,6 +150,16 @@ from .layout import (
     LayoutWordSpan,
     parse_layout,
 )
+from .manifest_profiles import (
+    AUDIO_V1,
+    DICOM_V1,
+    IMAGE_V1,
+    PDF_V1,
+    ManifestProfile,
+    ManifestProfileError,
+    ValidationFinding,
+    validate_manifest_metadata,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -246,6 +256,14 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "AUDIO_V1",
+    "DICOM_V1",
+    "IMAGE_V1",
+    "PDF_V1",
+    "ManifestProfile",
+    "ManifestProfileError",
+    "ValidationFinding",
+    "validate_manifest_metadata",
     "ExtractedDocument",
     "SourceSpan",
     "redact_document",
