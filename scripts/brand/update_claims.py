@@ -623,7 +623,7 @@ def build_registry() -> dict[str, Any]:
 
     return {
         "schema_version": 2,
-        "generated_at": MODEL_MANIFEST_AS_OF,
+        "generated_at": max(MODEL_MANIFEST_AS_OF, github["captured_at"][:10]),
         "generation": {
             "command": "python scripts/brand/update_claims.py --write",
             "network": "forbidden",

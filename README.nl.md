@@ -393,7 +393,7 @@ Als OpenMed nuttig is in je onderzoek, citeer het dan:
 
 Als OpenMed nuttig voor je is, helpt een ster anderen om het te ontdekken.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
