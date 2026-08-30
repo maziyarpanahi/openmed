@@ -3,17 +3,17 @@
   "repository": "maziyarpanahi/openmed",
   "api_url": "https://api.github.com/repos/maziyarpanahi/openmed",
   "html_url": "https://github.com/maziyarpanahi/openmed",
-  "captured_at": "2026-07-29T09:12:38Z",
-  "repository_updated_at": "2026-07-29T08:26:53Z",
-  "stargazers_count": 4744,
+  "captured_at": "2026-08-30T09:11:06Z",
+  "repository_updated_at": "2026-08-30T05:51:53Z",
+  "stargazers_count": 5181,
   "display": {
     "method": "floor",
     "quantum": 100,
-    "value": 4700,
-    "label": "4,700+ GitHub stars"
+    "value": 5100,
+    "label": "5,100+ GitHub stars"
   },
   "owner": "repository-owner",
-  "review_by": "2026-08-29",
+  "review_by": "2026-09-30",
   "refresh": {
     "command": "python scripts/brand/update_claims.py --refresh-github-stars",
     "network": "explicit opt-in only",
