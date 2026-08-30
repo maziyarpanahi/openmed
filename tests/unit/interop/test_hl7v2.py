@@ -251,6 +251,7 @@ BLANK_LINE_BASE = "\n".join(
         ),
         ("no trailing separator", BLANK_LINE_BASE.rstrip("\n")),
         ("carriage-return separators", BLANK_LINE_BASE.replace("\n", "\r")),
+        ("CRLF separators", BLANK_LINE_BASE.replace("\n", "\r\n")),
     ],
 )
 def test_serialize_round_trips_messages_containing_blank_lines(
