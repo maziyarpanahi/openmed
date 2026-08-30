@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 
 import pytest
 
@@ -152,6 +153,48 @@ def test_malformed_json_fails_closed(payload):
     with pytest.raises(OutcomeError) as exc_info:
         WorkflowOutcome.from_json(payload)  # type: ignore[arg-type]
     assert exc_info.value.code == "malformed_json"
+
+
+def test_duplicate_json_fields_fail_closed_instead_of_last_value_winning():
+    payload = (
+        '{"outcome_class":"success","outcome_class":"failed","reason_code":"completed"}'
+    )
+
+    with pytest.raises(OutcomeError) as exc_info:
+        WorkflowOutcome.from_json(payload)
+
+    assert exc_info.value.code == "malformed_json"
+
+
+def test_rejected_values_are_absent_from_full_exception_chain():
+    sentinel = "Patient Jane Roe /private/chart bearer-token"
+
+    with pytest.raises(OutcomeError) as exc_info:
+        WorkflowOutcome.from_json(sentinel)
+
+    rendered = "".join(
+        traceback.format_exception(exc_info.type, exc_info.value, exc_info.tb)
+    )
+    assert sentinel not in rendered
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+class StringSubclass(str):
+    """A string subtype that must not be retained in immutable outcomes."""
+
+
+@pytest.mark.parametrize("field", ["schema_version", "reason_code"])
+def test_string_subclasses_are_rejected_by_direct_constructor(field: str):
+    values = {
+        "outcome_class": OutcomeClass.SUCCESS,
+        "reason_code": "completed",
+        "schema_version": OUTCOME_SCHEMA_VERSION,
+    }
+    values[field] = StringSubclass(values[field])
+
+    with pytest.raises(OutcomeError):
+        WorkflowOutcome(**values)  # type: ignore[arg-type]
 
 
 def test_allowed_reason_codes_are_closed_per_class():

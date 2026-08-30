@@ -20,15 +20,11 @@ _ORDERED_FIELDS = ("schema_version", "outcome_class", "reason_code")
 
 _REASON_CODES: dict[str, frozenset[str]] = {
     "success": frozenset({"completed"}),
-    "abstained": frozenset(
-        {"insufficient_evidence", "out_of_scope", "low_confidence"}
-    ),
+    "abstained": frozenset({"insufficient_evidence", "out_of_scope", "low_confidence"}),
     "review_required": frozenset(
         {"conflicting_evidence", "safety_review", "human_gate"}
     ),
-    "policy_denied": frozenset(
-        {"consent_required", "purpose_mismatch", "phi_policy"}
-    ),
+    "policy_denied": frozenset({"consent_required", "purpose_mismatch", "phi_policy"}),
     "failed": frozenset({"tool_error", "timeout", "invalid_input"}),
 }
 
@@ -66,15 +62,17 @@ class OutcomeError(ValueError):
 
 def allowed_reason_codes(outcome_class: OutcomeClass | str) -> frozenset[str]:
     """Return the closed reason-code set for an outcome class."""
-    key = (
-        outcome_class.value
-        if isinstance(outcome_class, OutcomeClass)
-        else outcome_class
-    )
+    if isinstance(outcome_class, OutcomeClass):
+        key = outcome_class.value
+    elif type(outcome_class) is str:
+        key = outcome_class
+    else:
+        raise OutcomeError("unknown_class", "outcome_class")
     try:
         return _REASON_CODES[key]
-    except KeyError as exc:
-        raise OutcomeError("unknown_class", "outcome_class") from exc
+    except KeyError:
+        pass
+    raise OutcomeError("unknown_class", "outcome_class")
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +95,13 @@ class WorkflowOutcome:
         if not isinstance(data, Mapping) or isinstance(data, (str, bytes, bytearray)):
             raise OutcomeError("not_a_mapping")
 
-        unknown = set(data) - _ALLOWED_FIELDS
+        unknown: set[Any] | None = None
+        try:
+            unknown = set(data) - _ALLOWED_FIELDS
+        except Exception:
+            pass
+        if unknown is None:
+            raise OutcomeError("not_a_mapping")
         if unknown:
             raise OutcomeError("unknown_field")
 
@@ -116,10 +120,12 @@ class WorkflowOutcome:
     def from_json(cls, payload: str | bytes | bytearray) -> "WorkflowOutcome":
         """Build and validate an outcome from a JSON object."""
         try:
-            data = json.loads(payload)
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as exc:
-            raise OutcomeError("malformed_json") from exc
-        return cls.from_dict(data)
+            data = json.loads(payload, object_pairs_hook=_strict_json_object)
+        except (json.JSONDecodeError, OutcomeError, TypeError, UnicodeDecodeError):
+            pass
+        else:
+            return cls.from_dict(data)
+        raise OutcomeError("malformed_json")
 
     def to_dict(self) -> dict[str, str]:
         """Return a deterministic dictionary in field order."""
@@ -138,25 +144,35 @@ class WorkflowOutcome:
 def _parse_outcome_class(value: Any) -> OutcomeClass:
     if isinstance(value, OutcomeClass):
         return value
-    if not isinstance(value, str) or isinstance(value, bool):
+    if type(value) is not str:
         raise OutcomeError("unknown_class", "outcome_class")
     try:
         return OutcomeClass(value)
-    except ValueError as exc:
-        raise OutcomeError("unknown_class", "outcome_class") from exc
+    except ValueError:
+        pass
+    raise OutcomeError("unknown_class", "outcome_class")
 
 
 def _validate_schema_version(value: Any) -> None:
-    if value != OUTCOME_SCHEMA_VERSION or isinstance(value, bool):
+    if type(value) is not str or value != OUTCOME_SCHEMA_VERSION:
         raise OutcomeError("invalid_schema_version", "schema_version")
 
 
 def _validate_reason_code(outcome_class: OutcomeClass, value: Any) -> None:
-    if not isinstance(value, str) or isinstance(value, bool):
+    if type(value) is not str:
         raise OutcomeError("unknown_reason", "reason_code")
     allowed = _REASON_CODES[outcome_class.value]
     if value not in allowed:
         raise OutcomeError("unknown_reason", "reason_code")
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise OutcomeError("duplicate_field")
+        result[key] = value
+    return result
 
 
 __all__ = [
