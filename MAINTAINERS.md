@@ -1,20 +1,24 @@
 # Maintainers
 
-OpenMed is currently maintained project-wide by
-[Maziyar Panahi](https://github.com/maziyarpanahi) (`@maziyarpanahi`).
+OpenMed is currently maintained by:
 
-## Areas of ownership
-
-| Area                                                                          | Maintainer                                         |
-| ----------------------------------------------------------------------------- | -------------------------------------------------- |
-| Python package, privacy/security, clinical/eval, and data-processing surfaces | [@maziyarpanahi](https://github.com/maziyarpanahi) |
-| Backends, service, interop, documentation, release, and CI                    | [@maziyarpanahi](https://github.com/maziyarpanahi) |
-| Swift/OpenMedKit                                                              | [@maziyarpanahi](https://github.com/maziyarpanahi) |
+| Maintainer | GitHub | Areas of ownership |
+|---|---|---|
+| Maziyar Panahi | [@maziyarpanahi](https://github.com/maziyarpanahi) | Project lead; privacy and de-identification; model registry and release engineering; documentation, brand, and website; community and Code of Conduct enforcement |
 
 ## Review and merge process
 
-1. Contributors open a focused pull request linked to the relevant issue.
-2. The maintainer reviews the pull request against the issue acceptance criteria
-   and the project's privacy, security, and license rules.
-3. Applicable checks must pass, and all review feedback must be resolved.
-4. The final merge decision and merge are maintainer-owned.
+- Pull requests follow the [contributing guide](CONTRIBUTING.md) and the
+  [pull request template](.github/PULL_REQUEST_TEMPLATE.md), and should link an
+  accepted issue unless a maintainer has confirmed the scope directly.
+- CI must pass before merge: lint, format, tests, and any scoped gates
+  (`make lint`, `make format-check`, and `.venv/bin/python -m pytest tests/ -q`).
+- Maintainers may add focused follow-up commits to a contributor branch when a
+  change needs tests, hardening, or conflict resolution. Contributor credit is
+  retained when the completed pull request is squash-merged.
+- Pull requests stay focused on one feature or fix; unrelated formatting churn
+  is kept out of the merge.
+- Privacy-sensitive paths (PII extraction, de-identification, logging, service
+  request handling) get extra scrutiny for direct-identifier recall, critical
+  leakage, and span integrity, per the no-raw-PHI rule.
+- Releases are tag-driven; see the [release process](docs/contributing.md#release-outline).

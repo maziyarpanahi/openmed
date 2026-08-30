@@ -667,7 +667,7 @@ OpenMed 的守护者是一只蓬松的波斯猫，化身为小小的**阿维森�
 欢迎贡献：bug 报告、功能请求和 PR 都欢迎。请先阅读[贡献指南](CONTRIBUTING.md)和[行为准则](CODE_OF_CONDUCT.md)。
 
 - [提交 issue](https://github.com/maziyarpanahi/openmed/issues)
-- [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [安全策略](SECURITY.md)
+- [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [维护者](MAINTAINERS.md) · [安全策略](SECURITY.md)
 - **欢迎翻译**：帮助完善顶部语言切换栏中链接的其他语言 README。
 
 ---
