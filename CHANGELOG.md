@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic clinical evidence tables with source offsets, controlled
+  assertion and review metadata, optional protected-value hashes, and
+  value-free JSON and Markdown rendering (#2567).
 - Added a deterministic Jupyter notebook cell redaction helper that preserves
   code sources and execution structure, applies explicit markdown and output
   policies, removes unredacted binary MIME data, and emits counts-only,
