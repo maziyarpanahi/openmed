@@ -65,11 +65,11 @@ client, or changed argument set fails closed. Failed binding checks do not
 consume a receipt that was never authorized for that request.
 
 Call `verifier.verify_result(...)` when an adapter needs a non-throwing result.
-It returns an immutable result with `verified`, a stable `code`, and the verified
-receipt only on success. Codes are `verified`, `missing_receipt`, `expired`,
+It returns an immutable, content-free result with `verified` and a stable `code`.
+Codes are `verified`, `missing_receipt`, `expired`,
 `not_yet_valid`, `invalid_signature`, `binding_mismatch`, `key_unavailable`,
 `decision_denied`, `replay`, or `invalid_receipt`. Results contain no exception
-message, signature, key material, request argument, or clinical text.
+message, receipt, signature, key material, request argument, or clinical text.
 
 ## Optional MCP policy hook
 

@@ -31,6 +31,20 @@ DEFAULT_CONSENT_SCOPE = "mcp:state-changing"
 _DIGEST_PREFIX = "sha256:"
 _SIGNATURE_PREFIX = "hmac-sha256:"
 _MISSING = object()
+_CONSENT_VERIFICATION_CODES = frozenset(
+    {
+        "binding_mismatch",
+        "decision_denied",
+        "expired",
+        "invalid_receipt",
+        "invalid_signature",
+        "key_unavailable",
+        "missing_receipt",
+        "not_yet_valid",
+        "replay",
+        "verified",
+    }
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +106,14 @@ class ConsentReceiptVerificationResult:
 
     verified: bool
     code: str
-    receipt: ConsentReceipt | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.verified) is not bool:
+            raise TypeError("verified must be a boolean")
+        if type(self.code) is not str or self.code not in _CONSENT_VERIFICATION_CODES:
+            raise ValueError("code must be a supported verification outcome")
+        if self.verified != (self.code == "verified"):
+            raise ValueError("verified and code must describe the same outcome")
 
 
 # Descriptive aliases for callers that prefer shorter exception names.
@@ -572,7 +593,7 @@ class ConsentReceiptVerifier:
         if receipt is None:
             return ConsentReceiptVerificationResult(False, "missing_receipt")
         try:
-            verified = self.verify(
+            self.verify(
                 receipt,
                 client,
                 tool,
@@ -584,7 +605,11 @@ class ConsentReceiptVerifier:
             )
         except ConsentReceiptError as exc:
             return ConsentReceiptVerificationResult(False, _reason_code(exc))
-        return ConsentReceiptVerificationResult(True, "verified", verified)
+        except Exception:
+            # Provider and clock implementations are application-owned. Preserve
+            # the non-throwing contract without retaining their exception data.
+            return ConsentReceiptVerificationResult(False, "invalid_receipt")
+        return ConsentReceiptVerificationResult(True, "verified")
 
     verify_and_consume = verify
 

@@ -150,7 +150,8 @@ def test_verifier_result_is_non_throwing_stable_and_single_use() -> None:
     success = verifier.verify_result(
         receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS
     )
-    assert success == ConsentReceiptVerificationResult(True, "verified", receipt)
+    assert success == ConsentReceiptVerificationResult(True, "verified")
+    assert not hasattr(success, "receipt")
     assert verifier.verify_result(
         receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS
     ) == ConsentReceiptVerificationResult(False, "replay")
@@ -193,6 +194,30 @@ def test_verifier_result_maps_typed_failures_to_stable_codes() -> None:
         == "key_unavailable"
     )
     assert result_for("not-json").code == "invalid_receipt"
+
+
+def test_verifier_result_is_total_and_enforces_result_invariants() -> None:
+    clock = [1_000.0]
+    receipt = _issuer(clock).issue(
+        _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS, ttl_seconds=10
+    )
+
+    def broken_clock() -> float:
+        raise RuntimeError("synthetic private clock failure")
+
+    result = ConsentReceiptVerifier(
+        MappingConsentKeyProvider({"synthetic": _KEY}),
+        clock=broken_clock,
+    ).verify_result(receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS)
+    assert result == ConsentReceiptVerificationResult(False, "invalid_receipt")
+    assert "private" not in repr(result)
+
+    with pytest.raises(TypeError):
+        ConsentReceiptVerificationResult(1, "verified")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="supported verification outcome"):
+        ConsentReceiptVerificationResult(False, "synthetic private failure")
+    with pytest.raises(ValueError, match="same outcome"):
+        ConsentReceiptVerificationResult(True, "invalid_receipt")
 
 
 def test_verifier_rejects_expiry_and_does_not_log_request_content(
