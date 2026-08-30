@@ -202,6 +202,7 @@ classification:
     - reference/chat-schema.md
     - reference/training-schemas.md
     - reference/preference-schema.md
+    - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/email-ingestion.md
