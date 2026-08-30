@@ -1561,8 +1561,17 @@ def transform(filename: str, text: str) -> str:
     )
     snapshot = _star_snapshot()
     if snapshot not in text:
+        governed_count = 0
         html_count = 0
         markdown_count = 0
+        text, governed_count = re.subn(
+            r"(?m)^\[[0-9,]+\+ GitHub stars · "
+            r"[0-9]{1,2} [A-Z][a-z]{2} [0-9]{4} snapshot\]"
+            r"\(https://github\.com/maziyarpanahi/openmed/stargazers\)$",
+            snapshot,
+            text,
+            count=1,
+        )
         text, html_count = re.subn(
             r'(?s)<a href="https://star-history\.com/[^"]*">\s*'
             r'<img src="https://api\.star-history\.com/[^"]*"[^>]*\s*/>\s*</a>',
@@ -1576,7 +1585,7 @@ def transform(filename: str, text: str) -> str:
             text,
             count=1,
         )
-        if html_count + markdown_count != 1:
+        if governed_count + html_count + markdown_count != 1:
             raise RuntimeError(f"{filename}: expected one remote star-history image")
     return text
 
