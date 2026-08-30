@@ -203,6 +203,7 @@ classification:
     - document-adapter-provenance.md
     - reference/chat-schema.md
     - reference/training-schemas.md
+    - training/federated-round-lifecycle.md
     - reference/preference-schema.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
