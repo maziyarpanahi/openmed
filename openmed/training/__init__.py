@@ -63,6 +63,10 @@ __all__ = [
     "DIRECTID_RUN_MANIFEST_SCHEMA_VERSION",
     "DIRECTID_TRAINING_REPORT_SCHEMA_VERSION",
     "DIRECTID_TINY_HEAD_CONTRACT",
+    "FEDERATED_ROUND_SCHEMA_VERSION",
+    "FEDERATED_ROUND_STATES",
+    "FEDERATED_ROUND_TERMINAL_STATES",
+    "FEDERATED_ROUND_TRANSITIONS",
     "DirectIDArtifactEvaluator",
     "DirectIDArtifactExporter",
     "DirectIDArtifactMeasurement",
@@ -92,6 +96,10 @@ __all__ = [
     "DistillationReport",
     "DistillationTargets",
     "EntityTypeWeights",
+    "FederatedRoundLifecycle",
+    "FederatedRoundState",
+    "FederatedRoundStateError",
+    "FederatedRoundTransitionError",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
@@ -124,6 +132,7 @@ __all__ = [
     "WeakLabelDecision",
     "WeakLabelSpan",
     "arxiv_qbio_source",
+    "allowed_round_transitions",
     "assemble_dapt_corpus",
     "assert_manifest_has_no_raw_text",
     "build_distillation_report",
@@ -137,6 +146,7 @@ __all__ = [
     "count_hard_negatives",
     "compute_kd_loss",
     "compute_span_agreement_loss",
+    "can_transition_round",
     "decode_repaired_spans",
     "directid_dataset_manifest_hash",
     "directid_records_hash",
@@ -178,6 +188,7 @@ __all__ = [
     "validate_directid_dataset_manifest",
     "validate_directid_preset",
     "validate_directid_split_records",
+    "validate_round_transition",
     "verify_reproducibility_inputs",
     "weak_label_document",
     "write_clinical_privacy_checkpoint_manifest",
@@ -186,6 +197,21 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "FEDERATED_ROUND_SCHEMA_VERSION",
+        "FEDERATED_ROUND_STATES",
+        "FEDERATED_ROUND_TERMINAL_STATES",
+        "FEDERATED_ROUND_TRANSITIONS",
+        "FederatedRoundLifecycle",
+        "FederatedRoundState",
+        "FederatedRoundStateError",
+        "FederatedRoundTransitionError",
+        "allowed_round_transitions",
+        "can_transition_round",
+        "validate_round_transition",
+    }:
+        federated_round = import_module(".federated_round", __name__)
+        return getattr(federated_round, name)
     if name in {
         "CLINICAL_PRIVACY_CHECKPOINT_NAME",
         "CLINICAL_PRIVACY_CHECKPOINT_SCHEMA_VERSION",
