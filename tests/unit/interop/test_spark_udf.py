@@ -194,6 +194,38 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
     assert series_annotation is RuntimeSeries
 
 
+def test_make_deidentify_udf_accepts_installed_pandas_series_annotation(monkeypatch):
+    captured_annotations: dict[str, object] = {}
+
+    class FakeStringType:
+        pass
+
+    def fake_pandas_udf(return_type):
+        assert isinstance(return_type, FakeStringType)
+
+        def decorate(function):
+            captured_annotations.update(function.__annotations__)
+            return function
+
+        return decorate
+
+    monkeypatch.setattr(
+        spark_udf,
+        "_load_pandas_udf",
+        lambda: (fake_pandas_udf, FakeStringType),
+    )
+    monkeypatch.setattr(
+        spark_udf,
+        "_import_module",
+        lambda name: pd if name == "pandas" else None,
+    )
+
+    udf = spark_udf.make_deidentify_udf()
+
+    assert callable(udf)
+    assert captured_annotations == {"texts": pd.Series, "return": pd.Series}
+
+
 def test_make_deidentify_udf_constructs_real_pandas_udf_when_installed():
     pytest.importorskip("pyspark")
 
