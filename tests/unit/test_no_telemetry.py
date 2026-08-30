@@ -72,6 +72,9 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
+    "service/backends/remote_inference.py": (
+        "opt-in user-configured KServe V2 remote inference"
+    ),
     "service/openhim_mediator.py": (
         "opt-in OpenHIM mediator registration/heartbeat (user-configured)"
     ),
@@ -145,12 +148,13 @@ TELEMETRY_ENV_FRAGMENTS = (
     "USAGE_STATS",
 )
 
-# Reviewed exceptions where a telemetry-tooling import is permitted because it is
-# opt-in, off by default, and exports only to a user-configured endpoint (not a
-# vendor phone-home). Maps ``relative/path.py`` -> allowed import root. The
-# permitted properties are additionally pinned by
-# ``test_service_tracing_is_opt_in_and_off_by_default``.
+# Reviewed exceptions where telemetry tooling is permitted because it is
+# opt-in, off by default, and never targets a vendor phone-home. Maps
+# ``relative/path.py`` -> allowed import root. The permitted properties are
+# additionally pinned by
+# ``test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default``.
 TELEMETRY_SDK_ALLOWLIST: dict[str, str] = {
+    "core/telemetry.py": "opentelemetry",
     "service/tracing.py": "opentelemetry",
 }
 
@@ -174,6 +178,21 @@ def _iter_import_roots(tree: ast.AST):
                 continue
             if node.module:
                 yield node.module.split(".")[0], node.module
+        elif (
+            isinstance(node, ast.Call)
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and (
+                (isinstance(node.func, ast.Name) and node.func.id == "import_module")
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "import_module"
+                )
+            )
+        ):
+            dotted = node.args[0].value
+            yield dotted.split(".")[0], dotted
 
 
 def _network_modules(source: str) -> set[str]:
@@ -298,12 +317,14 @@ def test_openmed_package_has_no_telemetry_indicators():
     assert offenders == {}, f"telemetry/analytics indicators found: {offenders!r}"
 
 
-def test_service_tracing_is_opt_in_and_off_by_default():
-    """The one reviewed telemetry-tooling exception must stay opt-in and safe."""
+def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
+    """Both reviewed OpenTelemetry surfaces must stay opt-in and no-PHI."""
+    core_telemetry = PACKAGE_ROOT / "core" / "telemetry.py"
+    core_source = core_telemetry.read_text(encoding="utf-8")
     tracing = PACKAGE_ROOT / "service" / "tracing.py"
     source = tracing.read_text(encoding="utf-8")
 
-    # OpenTelemetry usage is confined to this single reviewed module.
+    # OpenTelemetry usage is confined to the two reviewed modules.
     users = [
         _rel(path)
         for path in _package_files()
@@ -314,11 +335,23 @@ def test_service_tracing_is_opt_in_and_off_by_default():
             )
         )
     ]
-    assert users == ["service/tracing.py"], (
+    assert users == ["core/telemetry.py", "service/tracing.py"], (
         f"opentelemetry imported outside the reviewed carve-out: {users!r}"
     )
 
-    # Off by default and opt-in via an explicit enable flag (never an opt-out).
+    # Core telemetry is lazy, off by default, and has no exporter configuration.
+    assert "enabled: bool = False" in core_source
+    assert 'TELEMETRY_ENABLED_ENV_VAR = "OPENMED_TELEMETRY_ENABLED"' in core_source
+    assert 'import_module("opentelemetry.trace")' in core_source
+    assert 'import_module("opentelemetry.metrics")' in core_source
+    assert "record_exception=False" in core_source
+    assert "set_status_on_exception=False" in core_source
+    assert "OTLPSpanExporter" not in core_source
+    assert _telemetry_host_hits(core_source) == []
+    assert _telemetry_optout_envs(core_source) == []
+
+    # Service tracing remains off by default and opt-in via an explicit enable
+    # flag (never an opt-out).
     assert "enabled: bool = False" in source
     assert 'TRACING_ENABLED_ENV_VAR = "OPENMED_SERVICE_TRACING_ENABLED"' in source
 
@@ -354,6 +387,14 @@ def test_network_surface_matches_reviewed_allowlist():
 
 def test_guard_detects_planted_telemetry_sdk():
     source = "import sentry_sdk\nsentry_sdk.init('https://example.test')\n"
+    assert any("telemetry SDK import" in v for v in _telemetry_violations(source))
+
+
+def test_guard_detects_planted_lazy_telemetry_sdk_import():
+    source = (
+        "from importlib import import_module\n"
+        'trace = import_module("opentelemetry.trace")\n'
+    )
     assert any("telemetry SDK import" in v for v in _telemetry_violations(source))
 
 

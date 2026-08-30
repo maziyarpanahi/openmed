@@ -71,6 +71,33 @@ Threaded WebAssembly requires cross-origin isolation. Serve the application with
 `Cross-Origin-Embedder-Policy: require-corp`; otherwise OpenMed falls back to a
 single WebAssembly thread.
 
+For a typed `run(tokens) -> logits` contract with a real adapter probe and
+separate WebGPU/WASM artifacts:
+
+```ts
+import { loadWebGpuTokenClassificationSession } from "openmed";
+
+const session = await loadWebGpuTokenClassificationSession({
+  modelPath: {
+    webgpu: "/models/openmed/model.webgpu.onnx",
+    wasm: "/models/openmed/model.onnx",
+  },
+  assetPath: "/models/openmed/onnxruntime/",
+});
+
+const logits = await session.run({
+  inputIds,
+  attentionMask,
+  batchSize: 1,
+  sequenceLength: inputIds.length,
+});
+
+await session.dispose();
+```
+
+The session also emits local-only warm/cold per-device benchmark records and
+provides fail-closed Python-reference parity and critical-label recall gates.
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.

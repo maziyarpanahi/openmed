@@ -15,7 +15,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
@@ -643,25 +643,27 @@ def _policy_value(policy: Any, *names: str) -> Any:
 
 
 def _pptx_handler(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     *,
     policy: Any = None,
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
+    _rewind(path)
     document = extract_pptx(path)
     entities = _iter_entity_inputs(_detect_entities(document, models, lang))
     replacement = _coerce_optional_str(_policy_value(policy, "replacement"))
     redactions = map_text_spans_to_pptx_runs(
         document, entities, replacement=replacement
     )
-    if not redactions:
-        return document
-
     output_path = _policy_value(
         policy, "output_path", "redacted_path", "destination_path"
     )
+    if not redactions and output_path is None:
+        return document
+
     if output_path is not None:
+        _rewind(path)
         _write_pptx_redactions(path, output_path, redactions)
 
     metadata = dict(document.metadata)
@@ -672,7 +674,10 @@ def _pptx_handler(
         }
     )
     if output_path is not None:
-        metadata["redacted_pptx_path"] = str(output_path)
+        if hasattr(output_path, "write"):
+            metadata["redacted_pptx_in_memory"] = True
+        else:
+            metadata["redacted_pptx_path"] = str(output_path)
     if policy is not None:
         metadata["policy"] = policy
 
@@ -681,6 +686,13 @@ def _pptx_handler(
         spans=document.spans,
         metadata=metadata,
     )
+
+
+def _rewind(source: Any) -> None:
+    try:
+        source.seek(0)
+    except (AttributeError, OSError):
+        pass
 
 
 register_handler(".pptx", _pptx_handler)

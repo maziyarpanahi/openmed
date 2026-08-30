@@ -141,6 +141,33 @@ Progress contains only repository filenames and byte/file totals. After the
 pull completes, set `OPENMED_OFFLINE=1`; the same command then performs a
 cache-only lookup and never attempts a network connection.
 
+### Scriptable CLI output and shell completion
+
+Add `--json` to a leaf command when a pipeline needs one stable JSON document
+on stdout instead of human-readable formatting:
+
+```bash
+openmed analyze --text "synthetic clinical note" --json
+```
+
+The result uses the command's typed `to_dict()` payload inside a stable
+`ok`/`command`/`data` envelope. Errors use the matching `ok`/`command`/`error`
+envelope and a non-zero exit code; diagnostics and progress stay off the JSON
+stdout stream.
+
+Generate completion definitions for the shell in use:
+
+```bash
+# Bash
+eval "$(openmed completion bash)"
+
+# Zsh
+source <(openmed completion zsh)
+
+# Fish
+openmed completion fish | source
+```
+
 ## 5. Copy code snippets from the docs
 
 All code blocks ship with Material for MkDocs copy buttons. Invoking the command palette (`/` or `cmd/ctrl + K`) lets you

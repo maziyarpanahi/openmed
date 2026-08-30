@@ -13,6 +13,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from openmed.core.errors import InputError
+
 __all__ = [
     "DEFAULT_MAX_TEXT_BYTES",
     "DEFAULT_MAX_TEXT_CHARS",
@@ -31,7 +33,7 @@ MAX_TEXT_CHARS_ENV_VAR = "OPENMED_SERVICE_MAX_TEXT_LENGTH"
 MAX_TEXT_BYTES_ENV_VAR = "OPENMED_MAX_TEXT_BYTES"
 
 
-class InputValidationError(ValueError):
+class InputValidationError(InputError):
     """Raised when shared input validation fails.
 
     Args:
@@ -57,13 +59,15 @@ class InputValidationError(ValueError):
         limit: Optional[int] = None,
         actual: Optional[int] = None,
     ) -> None:
-        super().__init__(message)
         details = dict(metadata or {})
         if limit is not None:
             details.setdefault("limit", limit)
         if actual is not None:
             details.setdefault("actual", actual)
-        self.code = code
+        super().__init__(message, code=code, details=details)
+        # Preserve the v2.1 constructor-owned public attribute for the static
+        # compatibility inventory as well as the runtime value from InputError.
+        self.code = code  # type: ignore[misc]
         self.metadata = details
         self.limit = limit
         self.actual = actual
@@ -120,7 +124,7 @@ def _coerce_to_text(value: Any) -> str:
     """Return strict UTF-8 text without exposing rejected input in errors."""
     if value is None:
         raise InputValidationError(
-            "Input text cannot be None.",
+            "Input text cannot be None. Pass a str or strict UTF-8 bytes-like value.",
             code="text_required",
         )
 
@@ -132,24 +136,25 @@ def _coerce_to_text(value: Any) -> str:
             return bytes(value).decode("utf-8", errors="strict")
         except UnicodeDecodeError:
             raise InputValidationError(
-                "Input text is not valid UTF-8.",
+                "Input text is not valid UTF-8. Re-encode the payload as strict "
+                "UTF-8 before retrying.",
                 code="invalid_encoding",
             ) from None
 
     if not isinstance(value, str):
-        try:
-            value = str(value)
-        except Exception:
-            raise InputValidationError(
-                "Input text cannot be converted to a string.",
-                code="text_type",
-            ) from None
+        raise InputValidationError(
+            "Input text has an unsupported type. Pass a str or strict UTF-8 "
+            "bytes-like value.",
+            code="text_type",
+            metadata={"type": type(value).__name__},
+        )
 
     try:
         value.encode("utf-8", errors="strict")
     except UnicodeEncodeError:
         raise InputValidationError(
-            "Input text is not valid UTF-8.",
+            "Input text is not valid UTF-8. Normalize or re-encode it as valid "
+            "Unicode before retrying.",
             code="invalid_encoding",
         ) from None
     return value
@@ -166,7 +171,7 @@ def normalize_text(
     """Normalize text and enforce shared size and encoding guardrails.
 
     Args:
-        text: Text, UTF-8 bytes-like input, or a string-convertible value.
+        text: Text or a strict UTF-8 bytes-like input.
         limits: Optional character and byte limits. Current configured defaults
             are used when omitted.
         min_length: Minimum normalized character count.
@@ -191,13 +196,15 @@ def normalize_text(
         if allow_empty:
             return ""
         raise InputValidationError(
-            "Input text cannot be empty.",
+            "Input text cannot be empty. Pass the text to process or explicitly "
+            "enable empty input where supported.",
             code="empty_text",
         )
 
     if len(normalized) < min_length:
         raise InputValidationError(
-            f"Input text too short. Minimum length: {min_length}.",
+            f"Input text too short; the minimum is {min_length} characters. "
+            "Pass a longer input before retrying.",
             code="min_chars",
             metadata={"unit": "characters"},
             limit=min_length,
@@ -209,7 +216,8 @@ def normalize_text(
         and len(normalized) > effective_limits.max_chars
     ):
         raise InputValidationError(
-            f"Input text too long. Maximum length: {effective_limits.max_chars}.",
+            f"Input text too long; the limit is {effective_limits.max_chars} "
+            "characters. Reduce the input or increase the configured limit.",
             code="max_chars",
             metadata={"unit": "characters"},
             limit=effective_limits.max_chars,
@@ -222,8 +230,8 @@ def normalize_text(
         and byte_length > effective_limits.max_bytes
     ):
         raise InputValidationError(
-            f"Input text exceeds the maximum size of "
-            f"{effective_limits.max_bytes} bytes.",
+            f"Input text exceeds the {effective_limits.max_bytes}-byte limit. "
+            "Reduce the input or increase the configured byte limit.",
             code="max_bytes",
             metadata={"unit": "bytes"},
             limit=effective_limits.max_bytes,
@@ -283,19 +291,19 @@ def validate_language(
     """
     if lang is None:
         raise InputValidationError(
-            "Language code is required.",
+            "Language code is required. Pass a supported ISO language code.",
             code="language_required",
         )
     if not isinstance(lang, str):
         raise InputValidationError(
-            "Language code must be a string.",
+            "Language code must be a string. Pass a supported ISO language code.",
             code="language_type",
         )
 
     normalized = lang.strip().lower()
     if not normalized:
         raise InputValidationError(
-            "Language code is required.",
+            "Language code is required. Pass a supported ISO language code.",
             code="language_required",
         )
 
@@ -307,7 +315,8 @@ def validate_language(
     if normalized not in allowed:
         supported_languages = tuple(sorted(allowed))
         raise InputValidationError(
-            f"Unsupported language code. Supported: {list(supported_languages)}.",
+            "Unsupported language code. Pass one of the documented supported "
+            f"codes: {list(supported_languages)}.",
             code="unsupported_language",
             metadata={
                 "supported_languages": supported_languages,

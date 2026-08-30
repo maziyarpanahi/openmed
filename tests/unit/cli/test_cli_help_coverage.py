@@ -20,9 +20,15 @@ def _command_paths(
             continue
 
         help_by_name = {choice.dest: choice.help for choice in action._choices_actions}
+        help_by_parser = {
+            id(action.choices[choice.dest]): choice.help
+            for choice in action._choices_actions
+            if choice.dest in action.choices
+        }
         for name, child_parser in action.choices.items():
             path = (*prefix, name)
-            paths.append((path, help_by_name.get(name, "")))
+            help_text = help_by_name.get(name, help_by_parser.get(id(child_parser), ""))
+            paths.append((path, help_text))
             paths.extend(_command_paths(child_parser, path))
 
     return paths

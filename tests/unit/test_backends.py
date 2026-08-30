@@ -12,6 +12,7 @@ from openmed.core.backends import (
     HuggingFaceBackend,
     MLXBackend,
     OnnxBackend,
+    RemoteInferenceBackend,
     get_backend,
 )
 
@@ -106,6 +107,21 @@ class TestBackendRegistry:
 
     def test_onnx_in_registry(self):
         assert "onnx" in _BACKENDS
+
+    def test_remote_in_registry(self):
+        assert "remote" in _BACKENDS
+
+
+class TestRemoteInferenceBackend:
+    @patch.object(RemoteInferenceBackend, "is_available", return_value=True)
+    def test_explicit_remote(self, _):
+        backend = get_backend("remote")
+        assert isinstance(backend, RemoteInferenceBackend)
+
+    @patch.object(RemoteInferenceBackend, "is_available", return_value=False)
+    def test_missing_client_extra_has_actionable_error(self, _):
+        with pytest.raises(RuntimeError, match=r"openmed\[triton\]"):
+            get_backend("remote")
 
 
 class TestOpenMedConfigBackendField:

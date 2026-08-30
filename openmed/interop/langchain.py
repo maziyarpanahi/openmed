@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib import import_module as _import_module
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,62 @@ from openmed.interop.function_tools import (
 from openmed.mcp.tool_registry import render_langchain_tool_definitions
 
 Deidentifier = Callable[..., Any]
+_DEFAULT_POLICY = "hipaa_safe_harbor"
+_REPLACEMENT_METHODS = frozenset({"replace", "format_preserve"})
+_MESSAGE_METADATA_KEYS = frozenset(
+    {"metadata", "additional_kwargs", "response_metadata"}
+)
+
+
+class LangChainRedactionError(RuntimeError):
+    """Raised when a LangChain payload cannot be redacted safely.
+
+    The adapter deliberately omits payload values from this exception. A
+    deidentifier can be supplied by an application, so its exception text is
+    not assumed to be safe for a chain log or callback trace.
+    """
+
+
+@dataclass
+class LangChainRedactionState:
+    """Request-local replacement state for deterministic chain redaction.
+
+    ``replace`` and ``format_preserve`` can otherwise produce a different
+    surrogate each time a message is processed. This state carries only the
+    deterministic controls and aggregate counters; it never stores source
+    text, mappings, or payloads. Reuse one state instance for a chain request
+    when separate messages should share replacement behavior.
+    """
+
+    seed: int | None = None
+    consistent: bool = True
+    redacted_items: int = field(default=0, init=False)
+    replacement_items: int = field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.consistent, bool):
+            raise TypeError("replacement_state.consistent must be a boolean")
+        if self.seed is not None and (
+            not isinstance(self.seed, int) or isinstance(self.seed, bool)
+        ):
+            raise TypeError("replacement_state.seed must be an integer or None")
+
+    def deidentify_kwargs(self, *, method: str) -> dict[str, Any]:
+        """Return safe replacement controls for one deidentifier call."""
+
+        if method not in _REPLACEMENT_METHODS:
+            return {}
+        kwargs: dict[str, Any] = {"consistent": self.consistent}
+        if self.seed is not None:
+            kwargs["seed"] = self.seed
+        return kwargs
+
+    def record(self, *, method: str) -> None:
+        """Record aggregate work without retaining any input value."""
+
+        self.redacted_items += 1
+        if method in _REPLACEMENT_METHODS:
+            self.replacement_items += 1
 
 
 @dataclass(frozen=True)
@@ -33,18 +89,31 @@ class LangChainRedactionConfig:
     lang: str = "en"
     normalize_accents: bool | None = None
     use_safety_sweep: bool = True
-    consistent: bool = False
+    consistent: bool = True
     seed: int | None = None
     locale: str | None = None
-    policy: str | None = None
+    policy: str | None = _DEFAULT_POLICY
     calibration_thresholds_path: str | Path | None = None
     extra_kwargs: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.policy is None:
+            object.__setattr__(self, "policy", _DEFAULT_POLICY)
+        elif not isinstance(self.policy, str) or not self.policy.strip():
+            raise ValueError("policy must be a non-empty string")
+        if not isinstance(self.consistent, bool):
+            raise TypeError("consistent must be a boolean")
+        if self.seed is not None and (
+            not isinstance(self.seed, int) or isinstance(self.seed, bool)
+        ):
+            raise TypeError("seed must be an integer or None")
 
     def to_deidentify_kwargs(self) -> dict[str, Any]:
         """Return keyword arguments for ``openmed.core.pii.deidentify``."""
 
         kwargs: dict[str, Any] = {
             "method": self.method,
+            "model_name": self.model_name,
             "confidence_threshold": self.confidence_threshold,
             "keep_year": self.keep_year,
             "keep_mapping": self.keep_mapping,
@@ -58,15 +127,24 @@ class LangChainRedactionConfig:
             "policy": self.policy,
             "calibration_thresholds_path": self.calibration_thresholds_path,
         }
-        if self.model_name is not None:
-            kwargs["model_name"] = self.model_name
-
-        kwargs.update(dict(self.extra_kwargs))
+        extras = dict(self.extra_kwargs)
+        collisions = sorted(kwargs.keys() & extras.keys())
+        if collisions:
+            fields = ", ".join(collisions)
+            raise ValueError(
+                f"extra_kwargs cannot override named configuration fields: {fields}"
+            )
+        kwargs.update(extras)
         return {key: value for key, value in kwargs.items() if value is not None}
 
 
 class OpenMedRedactionTransform:
-    """Redact strings, documents, lists, and mapping payloads before a chain call."""
+    """Redact chain payloads while preserving their container structure.
+
+    Strings are redacted directly. LangChain ``Document`` and message-like
+    objects are copied with only their textual content changed, so metadata,
+    message attributes, and list ordering remain untouched.
+    """
 
     def __init__(
         self,
@@ -75,11 +153,24 @@ class OpenMedRedactionTransform:
         input_key: str | None = None,
         output_key: str | None = None,
         deidentifier: Deidentifier | None = None,
+        policy: str | None = None,
+        replacement_state: LangChainRedactionState | Mapping[str, Any] | None = None,
     ) -> None:
-        self.config = config or LangChainRedactionConfig()
+        self.config = _config_with_policy(config, policy) or LangChainRedactionConfig()
         self.input_key = input_key
         self.output_key = output_key
         self._deidentifier = deidentifier
+        self.replacement_state = _coerce_replacement_state(replacement_state)
+
+    def __call__(self, input: Any) -> Any:
+        """Redact one payload when the transform is used as a plain callable."""
+
+        return self.invoke(input)
+
+    def redact(self, input: Any) -> Any:
+        """Redact one payload using a descriptive node-style method name."""
+
+        return self.invoke(input)
 
     def invoke(
         self,
@@ -154,6 +245,10 @@ class OpenMedRedactionTransform:
             return self._redact_text(value)
         if _is_document_like(value):
             return self._redact_document(value)
+        if _is_message_like(value):
+            return self._redact_message(value)
+        if _is_prompt_like(value):
+            return self._redact_prompt(value)
         if isinstance(value, Mapping):
             return self._redact_mapping(value)
         if isinstance(value, list):
@@ -165,45 +260,84 @@ class OpenMedRedactionTransform:
     def _redact_mapping(self, value: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(value)
         if self.input_key is None:
-            return {key: self._redact_value(item) for key, item in payload.items()}
+            if _is_message_mapping(payload):
+                payload["content"] = self._redact_message_content(payload["content"])
+                return payload
+            return {
+                key: item if key in _MESSAGE_METADATA_KEYS else self._redact_value(item)
+                for key, item in payload.items()
+            }
 
         if self.input_key not in payload:
-            raise KeyError(
-                f"input key {self.input_key!r} not found in LangChain payload"
-            )
+            raise KeyError("configured input key not found in LangChain payload")
 
         target_key = self.output_key or self.input_key
         payload[target_key] = self._redact_value(payload[self.input_key])
         return payload
 
     def _redact_document(self, value: Any) -> Any:
-        redacted_content = self._redact_text(str(value.page_content))
-        if hasattr(value, "model_copy"):
-            return value.model_copy(update={"page_content": redacted_content})
-        if hasattr(value, "copy"):
-            return value.copy(update={"page_content": redacted_content})
+        redacted_content = self._redact_text(value.page_content)
+        return _copy_with_field(
+            value,
+            field_name="page_content",
+            field_value=redacted_content,
+            error_message="LangChain document cannot be copied with redacted content",
+        )
 
-        cloned = copy(value)
-        cloned.page_content = redacted_content
-        return cloned
+    def _redact_message(self, value: Any) -> Any:
+        redacted_content = _redact_message_content(
+            value.content,
+            redact_text=self._redact_text,
+        )
+        return _copy_with_field(
+            value,
+            field_name="content",
+            field_value=redacted_content,
+            error_message="LangChain message cannot be copied with redacted content",
+        )
+
+    def _redact_prompt(self, value: Any) -> Any:
+        messages = [self._redact_value(message) for message in value.messages]
+        if isinstance(value.messages, tuple):
+            messages = tuple(messages)
+        return _copy_with_field(
+            value,
+            field_name="messages",
+            field_value=messages,
+            error_message="LangChain prompt cannot be copied with redacted messages",
+        )
 
     def _redact_text(self, text: str) -> str:
         if text == "":
             return text
 
-        result = self._deidentifier_or_default()(
-            text,
-            **self.config.to_deidentify_kwargs(),
-        )
-        if isinstance(result, str):
-            return result
+        kwargs = self.config.to_deidentify_kwargs()
+        if self.replacement_state is not None:
+            kwargs.update(
+                self.replacement_state.deidentify_kwargs(method=self.config.method)
+            )
 
         try:
-            return str(result.deidentified_text)
-        except AttributeError as exc:
-            raise TypeError(
-                "deidentifier must return a string or an object with deidentified_text"
-            ) from exc
+            result = self._deidentifier_or_default()(text, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - do not expose payload-bearing errors
+            raise LangChainRedactionError(
+                "LangChain redaction failed in the local deidentifier "
+                f"({exc.__class__.__name__})"
+            ) from None
+
+        if isinstance(result, str):
+            redacted_text = result
+        else:
+            redacted_text = getattr(result, "deidentified_text", None)
+            if not isinstance(redacted_text, str):
+                raise LangChainRedactionError(
+                    "deidentifier must return a string or an object with "
+                    "deidentified_text"
+                )
+
+        if self.replacement_state is not None:
+            self.replacement_state.record(method=self.config.method)
+        return redacted_text
 
     def _deidentifier_or_default(self) -> Deidentifier:
         if self._deidentifier is not None:
@@ -312,14 +446,18 @@ def create_redaction_transform(
     input_key: str | None = None,
     output_key: str | None = None,
     deidentifier: Deidentifier | None = None,
+    policy: str | None = None,
+    replacement_state: LangChainRedactionState | Mapping[str, Any] | None = None,
 ) -> OpenMedRedactionTransform:
     """Create a dependency-light transform that can be wrapped as a runnable."""
 
+    resolved_config = _config_with_policy(config, policy)
     return OpenMedRedactionTransform(
-        config=config,
+        config=resolved_config,
         input_key=input_key,
         output_key=output_key,
         deidentifier=deidentifier,
+        replacement_state=replacement_state,
     )
 
 
@@ -329,6 +467,8 @@ def create_redaction_runnable(
     input_key: str | None = None,
     output_key: str | None = None,
     deidentifier: Deidentifier | None = None,
+    policy: str | None = None,
+    replacement_state: LangChainRedactionState | Mapping[str, Any] | None = None,
     name: str = "openmed_redaction",
 ) -> Any:
     """Create a LangChain runnable that redacts payloads before downstream steps."""
@@ -338,8 +478,38 @@ def create_redaction_runnable(
         input_key=input_key,
         output_key=output_key,
         deidentifier=deidentifier,
+        policy=policy,
+        replacement_state=replacement_state,
     )
     return transform.as_runnable(name=name)
+
+
+def create_redaction_node(
+    *,
+    config: LangChainRedactionConfig | None = None,
+    input_key: str | None = None,
+    output_key: str | None = None,
+    deidentifier: Deidentifier | None = None,
+    policy: str | None = None,
+    replacement_state: LangChainRedactionState | Mapping[str, Any] | None = None,
+    name: str = "openmed_redaction",
+) -> Any:
+    """Create an optional LangChain node that redacts payloads locally.
+
+    The `langchain-core` extra is loaded only by this factory. Use
+    :func:`create_redaction_transform` when the dependency-light transform is
+    sufficient for a test or another local orchestration layer.
+    """
+
+    return create_redaction_runnable(
+        config=config,
+        input_key=input_key,
+        output_key=output_key,
+        deidentifier=deidentifier,
+        policy=policy,
+        replacement_state=replacement_state,
+        name=name,
+    )
 
 
 def create_retrieval_chain(
@@ -440,13 +610,162 @@ def _is_document_like(value: Any) -> bool:
     return hasattr(value, "page_content") and isinstance(value.page_content, str)
 
 
+def _is_message_like(value: Any) -> bool:
+    """Return whether *value* resembles a LangChain message without importing it."""
+
+    return not _is_document_like(value) and hasattr(value, "content")
+
+
+def _is_prompt_like(value: Any) -> bool:
+    """Return whether *value* resembles a LangChain prompt value."""
+
+    if _is_message_like(value) or not hasattr(value, "messages"):
+        return False
+    messages = value.messages
+    return isinstance(messages, Sequence) and not isinstance(messages, (str, bytes))
+
+
+def _is_message_mapping(value: Mapping[str, Any]) -> bool:
+    """Return whether a mapping has the standard message-content shape."""
+
+    return "content" in value
+
+
+def _redact_message_content(
+    content: Any,
+    *,
+    redact_text: Callable[[str], str] | None = None,
+) -> Any:
+    """Redact text blocks while retaining non-text message content verbatim."""
+
+    redact = redact_text or (lambda text: text)
+    if isinstance(content, str):
+        return redact(content)
+    if isinstance(content, list):
+        return [
+            _redact_message_content_item(item, redact_text=redact) for item in content
+        ]
+    if isinstance(content, tuple):
+        return tuple(
+            _redact_message_content_item(item, redact_text=redact) for item in content
+        )
+    if isinstance(content, Mapping):
+        return _redact_message_block(content, redact_text=redact)
+    return content
+
+
+def _redact_message_content_item(
+    item: Any, *, redact_text: Callable[[str], str]
+) -> Any:
+    if isinstance(item, str):
+        return redact_text(item)
+    if isinstance(item, Mapping):
+        return _redact_message_block(item, redact_text=redact_text)
+    if hasattr(item, "text") and isinstance(item.text, str):
+        return _copy_with_field(
+            item,
+            field_name="text",
+            field_value=redact_text(item.text),
+            error_message="LangChain content block cannot be copied safely",
+        )
+    return item
+
+
+def _redact_message_block(
+    block: Mapping[str, Any], *, redact_text: Callable[[str], str]
+) -> dict[str, Any]:
+    """Redact only text-bearing keys in a multimodal message block."""
+
+    redacted = dict(block)
+    if isinstance(redacted.get("text"), str):
+        redacted["text"] = redact_text(redacted["text"])
+    elif isinstance(redacted.get("content"), str):
+        redacted["content"] = redact_text(redacted["content"])
+    return redacted
+
+
+def _copy_with_field(
+    value: Any,
+    *,
+    field_name: str,
+    field_value: Any,
+    error_message: str,
+) -> Any:
+    """Copy a framework object and replace one field without mutating it."""
+
+    for copier_name in ("model_copy", "copy"):
+        copier = getattr(value, copier_name, None)
+        if not callable(copier):
+            continue
+        try:
+            return copier(update={field_name: field_value})
+        except TypeError:
+            try:
+                cloned = copier()
+                setattr(cloned, field_name, field_value)
+                return cloned
+            except Exception:  # noqa: BLE001 - sanitize framework copy failures
+                continue
+
+    try:
+        cloned = copy(value)
+        setattr(cloned, field_name, field_value)
+        return cloned
+    except Exception:  # noqa: BLE001 - sanitize framework copy failures
+        raise TypeError(error_message) from None
+
+
+def _coerce_replacement_state(
+    value: LangChainRedactionState | Mapping[str, Any] | None,
+) -> LangChainRedactionState | None:
+    if value is None or isinstance(value, LangChainRedactionState):
+        return value
+    if not isinstance(value, Mapping):
+        raise TypeError(
+            "replacement_state must be LangChainRedactionState, a mapping, or None"
+        )
+    unknown = sorted(set(value) - {"seed", "consistent"})
+    if unknown:
+        raise ValueError(
+            "replacement_state supports only the 'seed' and 'consistent' fields"
+        )
+    return LangChainRedactionState(
+        seed=value.get("seed"),
+        consistent=value.get("consistent", True),
+    )
+
+
+def _config_with_policy(
+    config: LangChainRedactionConfig | None,
+    policy: str | None,
+) -> LangChainRedactionConfig | None:
+    if policy is None:
+        return config
+    if config is None:
+        return LangChainRedactionConfig(policy=policy)
+    return replace(config, policy=policy)
+
+
+LangChainRedactionNode = OpenMedRedactionTransform
+OpenMedRedactionNode = OpenMedRedactionTransform
+RedactionNode = OpenMedRedactionTransform
+ReplacementState = LangChainRedactionState
+
+
 __all__ = [
     "Deidentifier",
+    "LangChainRedactionError",
     "LangChainRedactionConfig",
+    "LangChainRedactionNode",
+    "LangChainRedactionState",
     "OpenMedRedactionTransform",
     "OpenMedRetrievalChain",
+    "OpenMedRedactionNode",
+    "RedactionNode",
+    "ReplacementState",
     "create_retrieval_chain",
     "create_tool_definitions",
+    "create_redaction_node",
     "create_redaction_runnable",
     "create_redaction_transform",
     "get_langchain_tools",

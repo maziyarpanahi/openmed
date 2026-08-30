@@ -68,12 +68,14 @@ DISALLOWED_LICENSE_MARKERS = (
 )
 
 GPL_BRIDGE_EXCEPTIONS = {
+    "extract-msg": "GPL-3.0-only; optional out-of-process Outlook MSG bridge",
     "sdcmicro": "GPL-2.0-only; optional out-of-process disclosure-control bridge",
 }
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
+    "apache-airflow": "Apache-2.0",
     "apache-beam": "Apache-2.0",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
@@ -85,6 +87,7 @@ REVIEWED_LICENSES = {
     "dask": "BSD-3-Clause",
     "duckdb": "MIT",
     "easyocr": "Apache-2.0",
+    "extract-msg": "GPL-3.0-only",
     "faker": "MIT",
     "fastapi": "MIT",
     "fsspec": "BSD-3-Clause",
@@ -100,6 +103,7 @@ REVIEWED_LICENSES = {
     "httpx": "BSD-3-Clause",
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
+    "kopf": "MIT",
     "langchain-core": "MIT",
     "langgraph": "MIT",
     "llama-index-core": "MIT",
@@ -114,6 +118,7 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "numpy": "BSD-3-Clause",
     "onnx": "Apache-2.0",
