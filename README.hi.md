@@ -687,7 +687,7 @@ OpenMed का संरक्षक एक रोएँदार फ़ार�
 Bug reports, feature requests और PR—सभी योगदानों का स्वागत है। पहले [योगदान गाइड](CONTRIBUTING.md) और हमारा [Code of Conduct](CODE_OF_CONDUCT.md) पढ़ें।
 
 - [Issue खोलें](https://github.com/maziyarpanahi/openmed/issues)
-- [योगदान गाइड](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [सुरक्षा नीति](SECURITY.md)
+- [योगदान गाइड](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [मेंटेनर्स](MAINTAINERS.md) · [सुरक्षा नीति](SECURITY.md)
 - **अनुवादों का स्वागत है**: ऊपर language switcher में linked अन्य भाषाओं की README पूरी करने में मदद करें।
 
 ---
