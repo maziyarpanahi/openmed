@@ -202,7 +202,9 @@ def test_container_workflow_attests_pushed_manifest_digest():
     assert workflow["permissions"]["attestations"] == "write"
     assert workflow["permissions"]["packages"] == "write"
     assert "id: push" in content
-    assert "subject-name: ${{ env.IMAGE_NAME }}" in content
+    assert "id: image-name" in content
+    assert "image_name=ghcr.io/${owner_repo}" in content
+    assert "subject-name: ${{ steps.image-name.outputs.image_name }}" in content
     assert "subject-digest: ${{ steps.push.outputs.digest }}" in content
     assert "push-to-registry: true" in content
     assert "create-storage-record: false" in content
