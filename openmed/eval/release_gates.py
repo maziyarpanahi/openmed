@@ -1253,7 +1253,18 @@ def _manifest_coherence_check(
                     "error": "candidate repo_id is absent from manifest",
                 }
 
-    if manifest_rows:
+    if manifest_path is not None and manifest_rows:
+        # Import lazily because data_license_gate returns this module's GateCheck.
+        # The release path must enforce the same read-only license decision as
+        # registry_ctl without creating an import cycle at module load time.
+        from openmed.eval.data_license_gate import evaluate_data_license_gate
+
+        data_license_check = evaluate_data_license_gate(manifest_path)
+        if not data_license_check.passed:
+            mismatches["training_data_licenses"] = {
+                "reason": data_license_check.reason,
+                "details": dict(data_license_check.details),
+            }
         mismatches.update(
             _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
         )

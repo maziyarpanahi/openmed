@@ -66,7 +66,11 @@ from openmed.core.pii_i18n import (
     build_african_mobile_pattern,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
+    validate_bangladesh_nid,
     validate_belgian_rrn,
+    validate_bengali_aadhaar,
+    validate_bengali_mobile,
+    validate_bengali_postcode,
     validate_bic,
     validate_bulgarian_egn,
     validate_croatian_oib,
@@ -284,6 +288,164 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+class TestBengaliValidators:
+    """Validator coverage for Bengali PII values."""
+
+    @pytest.mark.parametrize(
+        ("entity_type", "value"),
+        (
+            ("date", "১৫/০৮/১৯৮৫"),
+            ("date", "১৫ আগস্ট ১৯৮৫"),
+            ("phone_number", "+৯১ ৯৮৭৬৫ ৪৩২১০"),
+            ("phone_number", "+৮৮০ ১৭১২৩৪৫৬৭৮"),
+            ("national_id", "২৪৬৭ ৭৮৩২ ৫৪৮৪"),
+            ("national_id", "১২৩৪৫৬৭৮৯০"),
+            ("postcode", "১২০৫"),
+            ("postcode", "৭০০০০১"),
+            ("street_address", "১২ কাজী নজরুল ইসলাম রোড"),
+            ("street_address", "শান্তি নগর"),
+        ),
+    )
+    def test_bengali_patterns_detect_required_entities(self, entity_type, value):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == entity_type
+        ]
+
+        assert patterns
+
+        for pattern in patterns:
+            match = re.fullmatch(pattern.pattern, value, pattern.flags)
+            if match is None:
+                continue
+            if pattern.validator is None or pattern.validator(match.group(0)):
+                break
+        else:
+            pytest.fail(f"No validated Bengali {entity_type} pattern matched {value!r}")
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1234567890",
+            "1234567890123",
+            "12345678901234567",
+            "১২৩৪৫৬৭৮৯০",
+            "১২৩৪৫৬৭৮৯০১২৩",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭",
+        ),
+    )
+    def test_bangladesh_nid_accepts_supported_lengths(self, value):
+        assert validate_bangladesh_nid(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "123456789",
+            "12345678901",
+            "123456789012",
+            "12345678901234",
+            "1234567890123456",
+            "123456789012345678",
+            "12345-67890",
+            "১২৩৪৫ ৬৭৮৯০",
+            "１２３４５６７８９０",
+            "",
+            None,
+        ),
+    )
+    def test_bangladesh_nid_rejects_unsupported_structures(self, value):
+        assert not validate_bangladesh_nid(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "১২৩৪৫৬৭৮৯",
+            "১২৩৪৫৬৭৮৯০১",
+            "১২৩৪৫৬৭৮৯০১২৩৪",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭৮",
+        ),
+    )
+    def test_unsupported_nid_lengths_do_not_match_any_bengali_id_pattern(self, value):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == "national_id"
+        ]
+
+        assert not any(
+            match is not None
+            and (pattern.validator is None or pattern.validator(match.group(0)))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, value, pattern.flags)) is not None
+        )
+
+    def test_bengali_aadhaar_accepts_ascii_and_native_digits(self):
+        assert validate_bengali_aadhaar("2467 7832 5484")
+        assert validate_bengali_aadhaar("২৪৬৭ ৭৮৩২ ৫৪৮৪")
+
+    def test_bengali_aadhaar_rejects_invalid_checksum_and_types(self):
+        assert not validate_bengali_aadhaar("2467 7832 5485")
+        assert not validate_bengali_aadhaar("২৪৬৭ ৭৮৩২ ৫৪৮৫")
+        assert not validate_bengali_aadhaar(None)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "+91 98765 43210",
+            "+৯১ ৯৮৭৬৫ ৪৩২১০",
+            "+880 1712345678",
+            "+৮৮০ ১৭১২৩৪৫৬৭৮",
+        ),
+    )
+    def test_bengali_mobile_accepts_supported_international_numbers(self, value):
+        assert validate_bengali_mobile(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "+91 58765 43210",
+            "+880 1212345678",
+            "+880 171234567",
+            "01712345678",
+            "9876543210",
+            "+৮৮০ ১২১২৩৪৫৬৭৮",
+            "",
+            None,
+        ),
+    )
+    def test_bengali_mobile_rejects_unsupported_numbers(self, value):
+        assert not validate_bengali_mobile(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1205",
+            "১২০৫",
+            "700001",
+            "৭০০০০১",
+        ),
+    )
+    def test_bengali_postcode_accepts_bangladesh_and_indian_formats(self, value):
+        assert validate_bengali_postcode(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "0123",
+            "12345",
+            "000000",
+            "1234567",
+            "１２３４",
+            "",
+            None,
+        ),
+    )
+    def test_bengali_postcode_rejects_invalid_formats(self, value):
+        assert not validate_bengali_postcode(value)
 
 
 class TestEastAfricanNationalIds:

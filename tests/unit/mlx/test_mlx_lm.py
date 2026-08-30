@@ -102,6 +102,57 @@ def test_resolve_default_downloads_openmed_mlx_repo(monkeypatch):
     assert calls[0]["repo_id"] == "OpenMed/laneformer-2b-it-q4-mlx"
 
 
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "maple",
+        "maple-preview",
+        "deepgrove/maple-preview",
+        "deepgrove/maple-preview-2bit-mlx",
+    ],
+)
+def test_resolve_maple_alias_downloads_pinned_2bit_artifact(monkeypatch, model_name):
+    from openmed.mlx.lm import (
+        MAPLE_MLX_MODEL,
+        MAPLE_MLX_REVISION,
+        resolve_mlx_language_model,
+    )
+
+    calls = []
+
+    def fake_snapshot_download(**kwargs):
+        calls.append(kwargs)
+        return "/tmp/maple-mlx"
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(snapshot_download=fake_snapshot_download),
+    )
+
+    assert resolve_mlx_language_model(model_name) == "/tmp/maple-mlx"
+    assert calls == [
+        {
+            "repo_id": MAPLE_MLX_MODEL,
+            "repo_type": "model",
+            "cache_dir": None,
+            "allow_patterns": [
+                "README.md",
+                "config.json",
+                "generation_config.json",
+                "model.safetensors.index.json",
+                "model*.safetensors",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "special_tokens_map.json",
+                "chat_template.jinja",
+                "*.py",
+            ],
+            "revision": MAPLE_MLX_REVISION,
+        }
+    ]
+
+
 def test_resolve_local_mlx_lm_artifact_does_not_download(tmp_path, monkeypatch):
     from openmed.mlx.lm import resolve_mlx_language_model
 
@@ -181,6 +232,35 @@ def test_language_model_generate_uses_mlx_lm(monkeypatch, tmp_path):
     assert calls[1][3]["max_tokens"] == 8
     assert "temp" not in calls[1][3]
     assert "top_p" not in calls[1][3]
+
+
+def test_maple_artifact_enables_reviewed_custom_tokenizer_config(
+    monkeypatch,
+    tmp_path,
+):
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    artifact = tmp_path / "maple"
+    artifact.mkdir()
+    (artifact / "config.json").write_text(
+        '{"model_type":"maple","model_file":"maple.py"}'
+    )
+    calls = []
+
+    def fake_load(path, **kwargs):
+        calls.append((path, kwargs))
+        return object(), object()
+
+    monkeypatch.setitem(sys.modules, "mlx_lm", SimpleNamespace(load=fake_load))
+
+    OpenMedMLXLanguageModel(str(artifact))
+
+    assert calls == [
+        (
+            str(artifact),
+            {"tokenizer_config": {"trust_remote_code": True}},
+        )
+    ]
 
 
 def test_language_model_generate_uses_sampler_for_sampling(monkeypatch, tmp_path):

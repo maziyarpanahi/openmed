@@ -21,6 +21,7 @@ from openmed.core.registry_service import (
     RegistryError,
     RegistryService,
 )
+from openmed.eval.data_license_gate import data_license_gate_errors
 from openmed.eval.release_gates import GateReport
 
 
@@ -83,6 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 readme_path=args.readme,
                 card_dir=args.card_dir,
             )
+            errors.extend(data_license_gate_errors(manifest_path=args.manifest))
             if errors:
                 for error in errors:
                     print(error, file=sys.stderr)

@@ -1,0 +1,376 @@
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
+
+import pytest
+
+from openmed.interop.archive_safety import (
+    DEFAULT_MAX_ENTRIES,
+    ArchiveDecision,
+    ArchiveMember,
+    ArchiveSafetyPolicy,
+    ArchiveSafetyReason,
+    ArchiveSafetyReport,
+    assess_archive_members,
+    inspect_archive_members,
+)
+
+
+def member(
+    path: str,
+    *,
+    compressed: int = 100,
+    uncompressed: int = 200,
+    kind: str = "file",
+    link_target: str | None = None,
+) -> ArchiveMember:
+    return ArchiveMember(
+        path=path,
+        compressed_size=compressed,
+        uncompressed_size=uncompressed,
+        kind=kind,
+        link_target=link_target,
+    )
+
+
+def test_clean_metadata_is_allowed_and_deterministic():
+    members = [
+        member("records/summary.txt"),
+        member("records/attachments/item.bin", compressed=50, uncompressed=100),
+    ]
+
+    first = inspect_archive_members(members)
+    second = assess_archive_members(members)
+
+    assert first == second
+    assert first.decision is ArchiveDecision.ALLOW
+    assert first.allowed
+    assert first.entry_count == 2
+    assert first.total_uncompressed_bytes == 300
+    assert first.reason_counts == {}
+
+
+def test_traversal_and_links_are_rejected_without_echoing_member_names():
+    sensitive_name = "synthetic-record-001.txt"
+    traversal = member(f"reports\\..\\{sensitive_name}")
+    linked = member("reports/linked.txt", kind="symlink", link_target=sensitive_name)
+
+    report = inspect_archive_members([traversal, linked])
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts["path_traversal"] == 1
+    assert report.reason_counts["link"] == 1
+    rendered = repr(report) + repr(report.to_dict())
+    assert sensitive_name not in rendered
+    assert sensitive_name not in repr(traversal)
+
+
+def test_duplicates_are_rejected_even_with_resource_limit_findings():
+    policy = ArchiveSafetyPolicy(
+        max_entries=5,
+        max_member_uncompressed_bytes=500,
+        max_total_uncompressed_bytes=700,
+        max_expansion_ratio=4,
+    )
+    members = [
+        member("records/one.txt", compressed=100, uncompressed=200),
+        member("records/./one.txt", compressed=100, uncompressed=200),
+        member("records/two.txt", compressed=1, uncompressed=10),
+        member("records/three.txt", compressed=100, uncompressed=400),
+    ]
+
+    report = inspect_archive_members(members, policy)
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts["duplicate_path"] == 1
+    assert report.reason_counts["expansion_ratio"] == 1
+    assert report.reason_counts["total_size_limit"] == 1
+
+
+def test_mapping_metadata_and_entry_limit_are_bounded():
+    policy = ArchiveSafetyPolicy(max_entries=2)
+    metadata = [
+        {
+            "name": "records/one.txt",
+            "compressed_size": 10,
+            "uncompressed_size": 20,
+        },
+        {
+            "path": "records/two.txt",
+            "compressed_size": 10,
+            "uncompressed_size": 20,
+        },
+        {
+            "path": "records/three.txt",
+            "compressed_size": 10,
+            "uncompressed_size": 20,
+        },
+    ]
+
+    report = inspect_archive_members(metadata, policy)
+
+    assert report.decision is ArchiveDecision.QUARANTINE
+    assert report.entry_count == 3
+    assert report.reason_counts == {"entry_limit": 1}
+    assert report.total_uncompressed_bytes == 40
+
+
+def test_malformed_sizes_are_rejected_without_raw_values_in_errors():
+    report = inspect_archive_members(
+        [
+            {
+                "path": "records/invalid.bin",
+                "compressed_size": -1,
+                "uncompressed_size": 20,
+            },
+            {
+                "path": "records/unknown.bin",
+                "compressed_size": 10,
+                "uncompressed_size": 20,
+                "kind": "unsupported-kind",
+            },
+        ]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts["invalid_metadata"] == 2
+    assert "records/invalid.bin" not in repr(report)
+    assert "unsupported-kind" not in repr(report)
+
+
+def test_conflicting_metadata_aliases_fail_closed_without_echoing_values():
+    sensitive_name = "../synthetic-sensitive-placeholder"
+
+    report = inspect_archive_members(
+        [
+            {
+                "path": "records/safe.txt",
+                "name": sensitive_name,
+                "compressed_size": 10,
+                "uncompressed_size": 20,
+            }
+        ]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+    assert "synthetic-sensitive-placeholder" not in repr(report.to_dict())
+
+
+@pytest.mark.parametrize("link_flag", [1, "false", None])
+def test_non_boolean_link_flags_are_invalid(link_flag: object):
+    report = inspect_archive_members(
+        [
+            {
+                "path": "records/item.txt",
+                "compressed_size": 10,
+                "uncompressed_size": 20,
+                "is_link": link_flag,
+            }
+        ]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
+def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
+    marker = "synthetic-archive-hook-value-733"
+
+    class HostileMapping(dict):
+        def __contains__(self, key):
+            del key
+            raise RuntimeError(marker)
+
+    def failing_members():
+        yield HostileMapping()
+        raise RuntimeError(marker)
+
+    report = inspect_archive_members(failing_members())
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 2}
+    assert marker not in repr(report)
+    assert marker not in repr(report.to_dict())
+
+
+def test_maximum_invalid_metadata_count_stays_bounded_and_constructible():
+    invalid_member = member("records/unsafe\x00name", kind="unsupported")
+
+    def failing_members():
+        for _ in range(DEFAULT_MAX_ENTRIES):
+            yield invalid_member
+        raise RuntimeError("synthetic iterator failure")
+
+    report = inspect_archive_members(failing_members())
+
+    assert report.entry_count == DEFAULT_MAX_ENTRIES
+    assert report.reason_counts == {"invalid_metadata": 20_001}
+    assert report.decision is ArchiveDecision.REJECT
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "records/CON.txt",
+        "records/CONIN$.txt",
+        "records/CONOUT$.txt",
+        "records/item.txt:stream",
+        'records/unsafe"name.txt',
+        "records/unsafe<name>.txt",
+        "records/unsafe|name.txt",
+        "records/unsafe?name.txt",
+        "records/unsafe*name.txt",
+        "records/trailing.",
+        "records/line\u2028separator.txt",
+        "records/paragraph\u2029separator.txt",
+        "records/hidden\u202efile.txt",
+    ],
+)
+def test_cross_platform_ambiguous_paths_are_rejected(path: str):
+    report = inspect_archive_members([member(path)])
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
+def test_path_limit_is_rechecked_after_unicode_normalization():
+    policy = ArchiveSafetyPolicy(max_path_length=1)
+
+    report = inspect_archive_members([member("Ⅳ")], policy)
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"path_too_long": 1}
+
+
+def test_policy_limits_can_only_be_tightened():
+    defaults = ArchiveSafetyPolicy()
+
+    with pytest.raises(ValueError, match="safe bounds"):
+        ArchiveSafetyPolicy(max_entries=defaults.max_entries + 1)
+    with pytest.raises(ValueError, match="safe bounds"):
+        ArchiveSafetyPolicy(
+            max_expansion_ratio=defaults.max_expansion_ratio + 1,
+        )
+    with pytest.raises(ValueError, match="safe bounds"):
+        ArchiveSafetyPolicy(max_expansion_ratio=10**400)
+
+
+def test_public_report_rejects_arbitrary_reason_metadata():
+    marker = "synthetic-report-reason-value-448"
+
+    with pytest.raises(ValueError, match="reasons are invalid") as raised:
+        ArchiveSafetyReport(
+            decision=ArchiveDecision.ALLOW,
+            entry_count=0,
+            total_compressed_bytes=0,
+            total_uncompressed_bytes=0,
+            reason_counts={marker: 1},
+        )
+
+    assert marker not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"entry_count": 10_002},
+        {"total_compressed_bytes": 10**400},
+        {"total_uncompressed_bytes": 10**400},
+        {"reason_counts": {"invalid_metadata": 20_002}},
+    ],
+)
+def test_public_report_rejects_unbounded_aggregates(
+    overrides: dict[str, object],
+):
+    values: dict[str, object] = {
+        "decision": ArchiveDecision.ALLOW,
+        "entry_count": 0,
+        "total_compressed_bytes": 0,
+        "total_uncompressed_bytes": 0,
+        "reason_counts": {},
+    }
+    values.update(overrides)
+
+    with pytest.raises(ValueError, match="safe bounds|reasons are invalid"):
+        ArchiveSafetyReport(**values)  # type: ignore[arg-type]
+
+
+def test_public_report_bounds_hostile_reason_iteration():
+    class RepeatingReasons(Mapping[str, int]):
+        emitted = 0
+
+        def __getitem__(self, key: str) -> int:
+            del key
+            return 1
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(())
+
+        def __len__(self) -> int:
+            return 1
+
+        def items(self):
+            for _ in range(100):
+                self.emitted += 1
+                yield (ArchiveSafetyReason.INVALID_METADATA.value, 1)
+
+    reasons = RepeatingReasons()
+
+    with pytest.raises(ValueError, match="reasons are invalid"):
+        ArchiveSafetyReport(
+            decision=ArchiveDecision.REJECT,
+            entry_count=1,
+            total_compressed_bytes=0,
+            total_uncompressed_bytes=0,
+            reason_counts=reasons,
+        )
+
+    assert reasons.emitted == len(ArchiveSafetyReason) + 1
+
+
+def test_oversized_kind_metadata_is_rejected_before_normalization():
+    report = inspect_archive_members(
+        [member("records/item.txt", kind=(" " * 4_096) + "file")]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
+def test_extreme_sizes_fail_closed_without_float_overflow():
+    report = inspect_archive_members(
+        [member("records/large.bin", compressed=1, uncompressed=10**400)]
+    )
+
+    assert report.decision is ArchiveDecision.REJECT
+    assert report.reason_counts == {"invalid_metadata": 1}
+
+
+def test_expansion_ratio_comparison_is_exact_for_large_archive_sizes():
+    compressed_size = 10_000_000_000_000_000
+    policy = ArchiveSafetyPolicy(max_expansion_ratio=1.1)
+
+    at_limit = inspect_archive_members(
+        [
+            member(
+                "records/at-limit.bin",
+                compressed=compressed_size,
+                uncompressed=11_000_000_000_000_000,
+            )
+        ],
+        policy,
+    )
+    above_limit = inspect_archive_members(
+        [
+            member(
+                "records/above-limit.bin",
+                compressed=compressed_size,
+                uncompressed=11_000_000_000_000_002,
+            )
+        ],
+        policy,
+    )
+
+    assert "expansion_ratio" not in at_limit.reason_counts
+    assert above_limit.reason_counts["expansion_ratio"] == 1

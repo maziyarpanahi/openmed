@@ -31,6 +31,7 @@ HEAVY_MODULES = (
     "paddleocr",
     "markdown_it",
     "openpyxl",
+    "extract_msg",
 )
 
 

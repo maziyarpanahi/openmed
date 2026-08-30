@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+from threading import Event, Thread
 from unittest.mock import Mock, patch
 
 import pytest
@@ -172,6 +173,69 @@ def test_explicit_local_only_work_blocks_socket_connection(monkeypatch):
     with network_blocked_if_offline(local_only=True):
         with pytest.raises(OfflineModeError, match="OPENMED_OFFLINE/local_only=True"):
             socket.create_connection(("127.0.0.1", 9), timeout=0.01)
+
+
+def test_overlapping_offline_guards_remain_blocked(monkeypatch):
+    _clear_offline_env(monkeypatch)
+    unguarded_calls = []
+
+    def unguarded_connection(*args, **kwargs):
+        unguarded_calls.append((args, kwargs))
+        return object()
+
+    monkeypatch.setattr(socket, "create_connection", unguarded_connection)
+    first_entered = Event()
+    second_entered = Event()
+    release_first = Event()
+    first_exited = Event()
+    guarded_results = []
+    thread_errors = []
+
+    def first_guard() -> None:
+        try:
+            with network_blocked_if_offline(local_only=True):
+                first_entered.set()
+                if not second_entered.wait(timeout=5):
+                    raise AssertionError("second guard did not enter")
+                if not release_first.wait(timeout=5):
+                    raise AssertionError("first guard was not released")
+        except BaseException as exc:
+            thread_errors.append(exc)
+        finally:
+            first_exited.set()
+
+    def second_guard() -> None:
+        try:
+            if not first_entered.wait(timeout=5):
+                raise AssertionError("first guard did not enter")
+            with network_blocked_if_offline(local_only=True):
+                second_entered.set()
+                if not first_exited.wait(timeout=5):
+                    raise AssertionError("first guard did not exit")
+                try:
+                    socket.create_connection(("synthetic.invalid", 9))
+                except OfflineModeError:
+                    guarded_results.append(True)
+                else:
+                    guarded_results.append(False)
+        except BaseException as exc:
+            thread_errors.append(exc)
+
+    first = Thread(target=first_guard)
+    second = Thread(target=second_guard)
+    first.start()
+    second.start()
+    assert second_entered.wait(timeout=5)
+    release_first.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert thread_errors == []
+    assert guarded_results == [True]
+    assert unguarded_calls == []
+    assert socket.create_connection is unguarded_connection
 
 
 class _FakeLocalPiiPipeline:

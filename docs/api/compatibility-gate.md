@@ -24,11 +24,17 @@ field values, credentials, or model payloads.
 The service error envelope currently exposes these stable categories:
 
 `auth_rate_limited`, `authentication_required`, `backpressure`, `bad_request`,
-`circuit_breaker_open`, `forbidden`, `internal_error`, `invalid_credentials`,
-`not_ready`, `privacy_gateway_blocked`, `privacy_gateway_error`,
+`budget_exceeded`, `capability_error`, `circuit_breaker_open`,
+`configuration_error`, `forbidden`, `grounding_invalid_request`,
+`inference_error`, `input_error`, `internal_error`, `invalid_credentials`,
+`missing_extra`, `model_load_error`, `not_ready`,
+`offline_snapshot_unavailable`, `openmed_error`, `policy_error`,
+`privacy_gateway_blocked`, `privacy_gateway_error`,
 `privacy_gateway_not_configured`, `privacy_gateway_reidentification_error`,
-`privacy_gateway_transport_error`, `rate_limited`, `service_busy`, `timeout`,
-and `validation_error`.
+`privacy_gateway_transport_error`, `rate_limited`,
+`restricted_terminology_unconfigured`, `service_busy`, `snapshot_invalid`,
+`timeout`, and `validation_error`. The taxonomy subset and HTTP/MCP mapping are
+documented in [Structured public errors](errors.md).
 
 For an in-process check, callers can use
 `openmed.service.api_compatibility.check_api_compatibility()` and inspect the

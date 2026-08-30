@@ -15,7 +15,7 @@ import math
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, BinaryIO, Iterable, Mapping, Sequence
 
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .documents_pdf import ProjectedRectangle, project_text_spans
@@ -200,9 +200,9 @@ class RedactedImage:
 
 
 def redact_image(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     *,
-    output_path: str | Path | None = None,
+    output_path: str | Path | BinaryIO | None = None,
     policy: Any | None = None,
     models: Any | None = None,
     lang: str | None = None,
@@ -214,9 +214,9 @@ def redact_image(
     """Redact burned-in PHI from a PNG, JPEG, or TIFF image.
 
     Args:
-        path: Source raster image.
-        output_path: Optional destination for the redacted image. When omitted,
-            the redacted bytes are returned without writing a file.
+        path: Source raster image path or named seekable binary stream.
+        output_path: Optional destination path or writable binary stream. When
+            omitted, the redacted bytes are returned without writing a file.
         policy: Optional policy marker copied into result metadata.
         models: Supplied OpenMed PII model object or mapping. Detector callables
             are resolved from keys/attributes such as ``detector``,
@@ -234,8 +234,12 @@ def redact_image(
         and residual verification metadata.
     """
 
-    source = Path(path)
-    target = Path(output_path) if output_path is not None else None
+    source_name = getattr(path, "name", path)
+    source = Path(str(source_name))
+    output_stream = output_path if hasattr(output_path, "write") else None
+    target = (
+        Path(output_path) if output_path is not None and output_stream is None else None
+    )
     image_module, image_chops, image_draw, image_sequence = _import_pillow()
     detector = _resolve_detector(models)
     first_pass_engine = (
@@ -252,7 +256,7 @@ def redact_image(
         verify = bool(_model_option(models, "verify", default=detector is not None))
 
     languages = [lang] if lang else None
-    with image_module.open(source) as image:
+    with _open_image(path, image_module) as image:
         source_format = _image_format(image, source)
         output_format = _output_format(target or source, source_format)
         frames = [frame.copy() for frame in image_sequence.Iterator(image)]
@@ -289,6 +293,17 @@ def redact_image(
     if target is not None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(redacted_bytes)
+    elif output_stream is not None:
+        try:
+            output_stream.seek(0)
+            output_stream.truncate()
+        except (AttributeError, OSError):
+            pass
+        output_stream.write(redacted_bytes)
+        try:
+            output_stream.seek(0)
+        except (AttributeError, OSError):
+            pass
 
     metadata_report = verify_image_metadata(redacted_bytes)
     residual_report = None
@@ -542,6 +557,19 @@ def _model_option(models: Any, name: str, default: Any = None) -> Any:
     return getattr(models, name, default)
 
 
+def _policy_value(policy: Any, *names: str) -> Any:
+    if isinstance(policy, Mapping):
+        for name in names:
+            if name in policy:
+                return policy[name]
+        return None
+    for name in names:
+        value = getattr(policy, name, None)
+        if value is not None:
+            return value
+    return None
+
+
 def _prepare_frame_for_output(frame: Any, image_format: str) -> Any:
     if image_format == "JPEG":
         if frame.mode not in {"L", "RGB", "CMYK"}:
@@ -696,14 +724,20 @@ def _coerce_confidence(value: Any) -> float | None:
 
 
 def _image_handler(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     *,
     policy: Any = None,
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
     detector = _resolve_detector(models)
-    if detector is None:
+    output_path = _policy_value(
+        policy,
+        "output_path",
+        "redacted_path",
+        "destination_path",
+    )
+    if detector is None and output_path is None:
         languages = [lang] if lang else None
         return ocr(
             path,
@@ -711,7 +745,13 @@ def _image_handler(
             languages=languages,
         ).to_document()
 
-    result = redact_image(path, policy=policy, models=models, lang=lang)
+    result = redact_image(
+        path,
+        output_path=output_path,
+        policy=policy,
+        models=models,
+        lang=lang,
+    )
     return result.to_document()
 
 
