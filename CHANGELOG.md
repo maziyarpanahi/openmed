@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an audited teacher-ensemble registry for weak labeling with
+  manifest-resolved PII and Privacy Filter members, bounded weights and
+  agreement thresholds, checksum-validator policies, and fail-closed runtime
+  source matching (#284).
 - Added an experiencer-aware patient-record span filter
   (`openmed.clinical.filter_patient_record`) that partitions per-span
   `ClinicalAssertion` records into patient-record eligible and excluded sets.
