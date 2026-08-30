@@ -128,6 +128,7 @@ nav:
       - Training Schema Registry: reference/training-schemas.md
       - Preference Pair Schema: reference/preference-schema.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
+      - Bounded Asset Digests: multimodal/asset-digests.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
