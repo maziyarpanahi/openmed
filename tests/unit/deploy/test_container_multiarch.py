@@ -18,6 +18,9 @@ LOWERCASE_IMAGE_NAME_STEP = (
     """| tr '[:upper:]' '[:lower:]')\n"""
     """          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV\""""
 )
+LOWERCASE_IMAGE_NAME_OUTPUT = (
+    'echo "image_name=ghcr.io/${owner_repo}" >> "$GITHUB_OUTPUT"'
+)
 
 PINNED_PYTHON_BASE_RE = re.compile(
     r"^FROM(?: --platform=\$TARGETPLATFORM)? "
@@ -115,3 +118,12 @@ def test_multiarch_workflow_lowercases_the_ghcr_image_reference():
     assert content.index(LOWERCASE_IMAGE_NAME_STEP) < content.index(
         "${IMAGE_NAME}:sha-"
     )
+    assert LOWERCASE_IMAGE_NAME_OUTPUT in content
+
+
+def test_multiarch_attestation_uses_the_lowercase_step_output() -> None:
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "id: image-name" in content
+    assert "subject-name: ${{ steps.image-name.outputs.image_name }}" in content
+    assert "subject-name: ${{ env.IMAGE_NAME }}" not in content
