@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added typed, 128-bit opaque correlation identifiers for agent runs and
+  actions, with strict kind-aware parsing, deterministic metadata-only JSON,
+  parent-action validation, and value-free failures (#2973).
 - Added an audited teacher-ensemble registry for weak labeling with
   manifest-resolved PII and Privacy Filter members, bounded weights and
   agreement thresholds, checksum-validator policies, and fail-closed runtime
