@@ -27,6 +27,7 @@ from . import dicom_sr as _dicom_sr
 from . import documents_docx as _documents_docx
 from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
+from . import documents_text as _documents_text
 from . import pptx as _pptx
 from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
@@ -120,6 +121,7 @@ from .documents_pdf_tables import (
     project_region_spans,
     project_structured_spans,
 )
+from .documents_text import extract_text, write_redacted_text
 from .email import EmailAttachmentReport, RedactedEmail, extract_email, redact_email
 from .epub import extract_epub
 from .exceptions import (
@@ -195,7 +197,7 @@ from .render_pdf import (
     render_redacted_pdf,
     write_redacted_pdf,
 )
-from .rtf import extract_rtf
+from .rtf import extract_rtf, write_redacted_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -342,6 +344,9 @@ __all__ = [
     "extract_email",
     "redact_email",
     "extract_rtf",
+    "write_redacted_rtf",
+    "extract_text",
+    "write_redacted_text",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
