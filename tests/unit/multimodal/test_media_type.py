@@ -51,6 +51,12 @@ def test_detection_accepts_bytes_like_inputs_and_uses_a_bounded_prefix():
     assert MAX_MEDIA_TYPE_PREFIX_BYTES == 132
 
 
+def test_detection_never_recognizes_a_signature_beyond_the_prefix_bound() -> None:
+    payload = b"x" * MAX_MEDIA_TYPE_PREFIX_BYTES + b"%PDF-1.7"
+
+    assert detect_media_type(payload) is None
+
+
 @pytest.mark.parametrize(
     ("prefix", "declared", "expected"),
     [
