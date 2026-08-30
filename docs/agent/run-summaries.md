@@ -1,30 +1,42 @@
-# Agent Run Summaries
+# Privacy-safe agent run summaries
 
-`openmed.agent.run_summary` provides privacy-safe summaries of agent runs.
+`openmed.agent.RunSummary` produces deterministic metadata for dashboards and
+evidence bundles without copying prompts, tool arguments, tool outputs,
+evidence text, filesystem paths, credentials, or exception text.
 
-The summary layer accepts structured run metadata and intentionally does not
-publish prompts, tool arguments, tool outputs, evidence text, filesystem
-paths, or credentials.
+## Event contract
 
-## Run events
+Each `RunEvent` contains only:
 
-A `RunEvent` represents one agent workflow execution:
+- a bounded workflow identifier without path or URL syntax;
+- a typed [`WorkflowOutcome`](outcome-reasons.md) from the closed outcome and
+  reason-code vocabulary;
+- a bounded non-negative tool-call count and finite duration; and
+- optional lowercase SHA-256 artifact digests.
 
-- `workflow_id` — safe identifier for the workflow.
-- `outcome` — one of `success`, `failure`, or `abstained`.
-- `tool_call_count` — number of tool calls made during the run.
-- `duration_seconds` — non-negative execution duration.
-- `artifact_digests` — optional SHA-256 digests identifying generated artifacts.
+Inputs and aggregate totals are bounded. Duplicate event digests, malformed
+identifiers, incomplete outcome-count mappings, non-finite values, and direct
+construction that bypasses canonical ordering fail with stable value-free
+errors.
 
-Example:
+## Example
 
 ```python
-from openmed.agent.run_summary import RunEvent
+from openmed.agent import OutcomeClass, RunEvent, RunSummary, WorkflowOutcome
 
 event = RunEvent(
     workflow_id="clinical-review",
-    outcome="success",
+    outcome=WorkflowOutcome(OutcomeClass.SUCCESS, "completed"),
     tool_call_count=3,
     duration_seconds=2.5,
     artifact_digests=("sha256:" + "a" * 64,),
 )
+
+summary = RunSummary.from_events([event])
+json_payload = summary.to_json()
+markdown_report = summary.to_markdown()
+```
+
+JSON keys, outcome rows, workflow identifiers, and artifact digests have stable
+ordering. Artifact contents and workflow content are never read by the summary
+layer.
