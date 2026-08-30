@@ -283,32 +283,48 @@ def to_diagnostic_report(
     }
 
     # report_id takes precedence over report["id"]; otherwise honor report["id"].
+    # C9: id fields are untrusted — trim, length-bound (≤200), fail closed.
+    # report["id"] whitespace is silently ignored (preserves existing test),
+    # while explicit report_id/subject_reference whitespace is rejected below.
     effective_report_id = report_id
     if effective_report_id is None and "id" in report and report["id"] is not None:
         effective_report_id = report["id"]
     if effective_report_id is not None:
-        if not isinstance(effective_report_id, str):
+        if isinstance(effective_report_id, bool) or not isinstance(
+            effective_report_id, str
+        ):
             raise ValueError("invalid value for field 'report_id'")
-        if effective_report_id.strip():
-            resource["id"] = effective_report_id.strip()
+        stripped_id = effective_report_id.strip()
+        if stripped_id:
+            if len(stripped_id) > 200:
+                raise ValueError("invalid value for field 'report_id'")
+            resource["id"] = stripped_id
+        elif report_id is not None and effective_report_id.strip() == "":
+            # Explicit report_id param that is whitespace-only → fail closed
+            # (mirrors subject_reference parity). report["id"] whitespace
+            # remains silent per existing contract.
+            raise ValueError("invalid value for field 'report_id'")
 
     if subject_reference is not None:
-        if not isinstance(subject_reference, str):
+        if isinstance(subject_reference, bool) or not isinstance(
+            subject_reference, str
+        ):
             raise ValueError("invalid value for field 'subject_reference'")
         stripped_ref = subject_reference.strip()
-        if not stripped_ref:
+        if not stripped_ref or len(stripped_ref) > 512:
             raise ValueError("invalid value for field 'subject_reference'")
         resource["subject"] = {"reference": stripped_ref}
     elif "subject" in report and report["subject"] is not None:
         subject_val = report["subject"]
+        if isinstance(subject_val, bool):
+            raise ValueError("invalid value for field 'subject'")
         if isinstance(subject_val, Mapping):
             resource["subject"] = _deep_copy_value(dict(subject_val))
         elif isinstance(subject_val, str):
             stripped = subject_val.strip()
-            if stripped:
-                resource["subject"] = {"reference": stripped}
-            else:
+            if not stripped or len(stripped) > 512:
                 raise ValueError("invalid value for field 'subject'")
+            resource["subject"] = {"reference": stripped}
         else:
             raise ValueError("invalid value for field 'subject'")
 
@@ -332,11 +348,13 @@ def to_diagnostic_report(
                     copied.append(_deep_copy_value(item))
             resource[key] = copied
         elif key in _REFERENCE_FIELDS:
+            if isinstance(value, bool):
+                raise ValueError(f"invalid value for field '{key}'")
             if isinstance(value, Mapping):
                 resource[key] = _deep_copy_value(dict(value))
             elif isinstance(value, str):
                 stripped = value.strip()
-                if not stripped:
+                if not stripped or len(stripped) > 512:
                     raise ValueError(f"invalid value for field '{key}'")
                 resource[key] = {"reference": stripped}
             else:

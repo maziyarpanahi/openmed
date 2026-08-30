@@ -448,3 +448,91 @@ def test_report_id_via_mapping_and_encounter_privacy() -> None:
     with pytest.raises(ValueError, match="report_id") as exc:
         to_diagnostic_report(_synthetic_report(id=sensitive), report_id=123)  # type: ignore[arg-type]
     assert sensitive not in str(exc.value)
+
+
+def test_report_id_and_reference_length_bounds_fail_closed() -> None:
+    # C9 — id/reference strings are untrusted: trim, length-bound, bool-rejected.
+    long_id = "x" * 201  # >200
+    sensitive_long = "PHI-" + long_id
+    with pytest.raises(ValueError, match="report_id") as exc:
+        to_diagnostic_report(_synthetic_report(), report_id=long_id)
+    assert long_id not in str(exc.value)
+    assert sensitive_long not in str(exc.value)
+
+    long_ref = "Patient/" + "x" * 510  # >512
+    with pytest.raises(ValueError, match="subject_reference") as exc2:
+        to_diagnostic_report(_synthetic_report(), subject_reference=long_ref)
+    assert long_ref not in str(exc2.value)
+
+    with pytest.raises(ValueError, match="subject") as exc3:
+        to_diagnostic_report(_synthetic_report(subject=long_ref))
+    assert long_ref not in str(exc3.value)
+
+    # Reference fields via report mapping
+    with pytest.raises(ValueError, match="encounter") as exc4:
+        to_diagnostic_report(_synthetic_report(encounter=long_ref))
+    assert long_ref not in str(exc4.value)
+
+    with pytest.raises(ValueError, match="composition") as exc5:
+        to_diagnostic_report(_synthetic_report(composition=long_ref))
+    assert long_ref not in str(exc5.value)
+
+    # Bool must be rejected explicitly (not as string)
+    with pytest.raises(ValueError, match="report_id") as exc6:
+        to_diagnostic_report(_synthetic_report(), report_id=True)  # type: ignore[arg-type]
+    assert "True" not in str(exc6.value)
+
+    with pytest.raises(ValueError, match="subject") as exc7:
+        to_diagnostic_report(_synthetic_report(subject=True))  # type: ignore[arg-type]
+    assert "True" not in str(exc7.value)
+
+
+def test_result_partition_and_fail_closed_invariants() -> None:
+    # C5/C3 — every input is either copied, defaulted, or rejected with
+    # field-name-only error; no silent drop or passthrough.
+    report = _synthetic_report(
+        status="final",
+        conclusion="synthetic",
+        encounter="Encounter/syn-1",
+        result=[{"reference": "Observation/syn-1"}],
+    )
+    out = to_diagnostic_report(report)
+    # Included: allowlisted keys appear
+    assert out["status"] == "final"
+    assert out["conclusion"] == "synthetic"
+    assert out["encounter"] == {"reference": "Encounter/syn-1"}
+    # Excluded: unsupported key is rejected, not silently dropped
+    with pytest.raises(ValueError, match="inferredField"):
+        to_diagnostic_report(_synthetic_report(inferredField="secret"))
+    # Partition: included ∩ excluded = ∅ — allowlisted set never overlaps
+    # rejected set; verify via oracle (len check)
+    assert len(out) <= len(_EXPECTED_ALLOWED)
+    assert set(out) <= _EXPECTED_ALLOWED
+
+
+def test_corrupt_input_fails_closed_value_free(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # C3/C4 analog to corrupt models.jsonl — non-mapping report and bad types
+    # must raise with field-name-only, not leak raw value. Verifies #2566:
+    # "Logs, exceptions, reports, and fixtures contain no raw sensitive values"
+    sensitive = "PHI-corrupt-999-XYZ"
+    with pytest.raises(TypeError, match="report") as exc:
+        to_diagnostic_report(sensitive)  # type: ignore[arg-type]
+    # Exception message and args must not contain the sensitive value
+    assert sensitive not in str(exc.value)
+    for arg in exc.value.args:
+        assert sensitive not in str(arg)
+
+    # Non-mapping code with sensitive string must not leak in exception
+    sensitive_code = "PHI-code-XYZ-123-secret"
+    with pytest.raises(ValueError, match="code") as exc:
+        to_diagnostic_report(_synthetic_report(code=sensitive_code))  # type: ignore[arg-type]
+    assert sensitive_code not in str(exc.value)
+    for arg in exc.value.args:
+        assert sensitive_code not in str(arg)
+
+    # No log records should contain sensitive values (module is log-free by design)
+    for record in caplog.records:
+        assert sensitive not in record.getMessage()
+        assert sensitive_code not in record.getMessage()

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a conservative, deterministic FHIR DiagnosticReport exporter with
+  R4/R5 union allowlisting (32-field), explicit `unknown` status, type-gated
+  scalars and Reference normalization, `effective[x]` mutual exclusivity,
+  deep-copy evidence preservation, field-name-only value-free errors, and
+  no network or clock dependency (#2566).
 - Added an audited teacher-ensemble registry for weak labeling with
   manifest-resolved PII and Privacy Filter members, bounded weights and
   agreement thresholds, checksum-validator policies, and fail-closed runtime
