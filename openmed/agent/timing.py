@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+_PATH_OR_URL_RE = re.compile(r"://|(^|[A-Za-z]):[\\/]|[\\/]|~")
 
 
 class TimingValidationError(ValueError):
@@ -12,22 +17,28 @@ class TimingValidationError(ValueError):
 
 
 def _validate_ns(value: Any, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
+    if type(value) is not int:
         raise TimingValidationError(f"{field_name} must be an integer")
     if value < 0:
         raise TimingValidationError(f"{field_name} must be non-negative")
     return value
 
 
-def _validate_correlation_id(value: Any, field_name: str) -> str | None:
+def _validate_identifier(value: Any, field_name: str, *, optional: bool) -> str | None:
     if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TimingValidationError(f"{field_name} must be a string")
+        if optional:
+            return None
+        raise TimingValidationError(f"{field_name} must be a safe opaque identifier")
+    if (
+        type(value) is not str
+        or _IDENTIFIER_RE.fullmatch(value) is None
+        or _PATH_OR_URL_RE.search(value) is not None
+    ):
+        raise TimingValidationError(f"{field_name} must be a safe opaque identifier")
     return value
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RunTiming:
     """Immutable monotonic nanosecond boundaries for one agent run."""
 
@@ -43,7 +54,7 @@ class RunTiming:
             "run",
             max_duration_ns=self.max_duration_ns,
         )
-        _validate_correlation_id(self.correlation_id, "run.correlation_id")
+        _validate_identifier(self.correlation_id, "run.correlation_id", optional=True)
 
     @property
     def duration_ns(self) -> int:
@@ -64,7 +75,7 @@ class RunTiming:
         return payload
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ActionTiming:
     """Immutable monotonic nanosecond boundaries for one agent action."""
 
@@ -76,10 +87,11 @@ class ActionTiming:
     correlation_id: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.action_id, str) or not self.action_id:
-            raise TimingValidationError("action_id must be a non-empty string")
-        _validate_correlation_id(self.parent_action_id, "parent_action_id")
-        _validate_correlation_id(self.correlation_id, "action.correlation_id")
+        _validate_identifier(self.action_id, "action_id", optional=False)
+        _validate_identifier(self.parent_action_id, "parent_action_id", optional=True)
+        _validate_identifier(
+            self.correlation_id, "action.correlation_id", optional=True
+        )
         _validate_interval(
             self.start_ns,
             self.end_ns,
@@ -109,7 +121,7 @@ class ActionTiming:
         return payload
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AgentRunTiming:
     """Validated monotonic timing metadata for an agent run and its actions."""
 
@@ -120,9 +132,12 @@ class AgentRunTiming:
     def __post_init__(self) -> None:
         if not isinstance(self.run, RunTiming):
             raise TimingValidationError("run must be a RunTiming record")
-        if not isinstance(self.allow_action_overlaps, bool):
+        if type(self.allow_action_overlaps) is not bool:
             raise TimingValidationError("allow_action_overlaps must be a boolean")
-        actions = tuple(self.actions)
+        try:
+            actions = tuple(self.actions)
+        except Exception:
+            raise TimingValidationError("actions could not be read") from None
         for action in actions:
             if not isinstance(action, ActionTiming):
                 raise TimingValidationError("actions must contain ActionTiming records")
@@ -136,6 +151,11 @@ class AgentRunTiming:
             "run": self.run.to_dict(),
             "actions": [action.to_dict() for action in self.actions],
         }
+
+    def to_json(self) -> str:
+        """Return deterministic compact JSON containing only timing metadata."""
+
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
 
 
 def _validate_interval(
@@ -186,6 +206,21 @@ def _validate_actions(
             raise TimingValidationError(
                 "action interval must be within parent_action_id"
             )
+
+        ancestors = {action.action_id}
+        current = parent
+        while current.parent_action_id is not None:
+            if current.action_id in ancestors:
+                raise TimingValidationError("parent_action_id graph must be acyclic")
+            ancestors.add(current.action_id)
+            next_parent = by_id.get(current.parent_action_id)
+            if next_parent is None:
+                raise TimingValidationError(
+                    "parent_action_id must reference an existing action_id"
+                )
+            current = next_parent
+        if current.action_id in ancestors:
+            raise TimingValidationError("parent_action_id graph must be acyclic")
 
     if not allow_action_overlaps:
         ordered = sorted(actions, key=lambda item: (item.start_ns, item.end_ns))

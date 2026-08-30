@@ -142,24 +142,75 @@ def test_parent_and_run_bounds_fail_without_echoing_identifiers() -> None:
 
 
 def test_serialization_stays_relative_and_payload_free() -> None:
-    serialized = json.dumps(
-        AgentRunTiming(
-            run=RunTiming(start_ns=0, end_ns=1, correlation_id="opaque-run"),
-            actions=(
-                ActionTiming(
-                    action_id="scan",
-                    start_ns=0,
-                    end_ns=1,
-                    correlation_id="opaque-action",
-                ),
+    timing = AgentRunTiming(
+        run=RunTiming(start_ns=0, end_ns=1, correlation_id="opaque-run"),
+        actions=(
+            ActionTiming(
+                action_id="scan",
+                start_ns=0,
+                end_ns=1,
+                correlation_id="opaque-action",
             ),
-        ).to_dict(),
-        sort_keys=True,
+        ),
     )
+    serialized = timing.to_json()
 
+    assert serialized == json.dumps(
+        timing.to_dict(), sort_keys=True, separators=(",", ":")
+    )
     assert "opaque-run" in serialized
     assert "opaque-action" in serialized
     assert "wall" not in serialized
     assert "timestamp" not in serialized
     assert "payload" not in serialized
     assert "event" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("constructor", "kwargs"),
+    (
+        (RunTiming, {"start_ns": 0, "end_ns": 1, "correlation_id": "/phi/run"}),
+        (
+            ActionTiming,
+            {"action_id": "https://phi.example/action", "start_ns": 0, "end_ns": 1},
+        ),
+        (
+            ActionTiming,
+            {
+                "action_id": "safe",
+                "start_ns": 0,
+                "end_ns": 1,
+                "correlation_id": "x" * 129,
+            },
+        ),
+    ),
+)
+def test_identifiers_reject_paths_urls_and_unbounded_text_without_echo(
+    constructor, kwargs
+) -> None:
+    with pytest.raises(TimingValidationError) as caught:
+        constructor(**kwargs)
+
+    message = str(caught.value)
+    assert "/phi/run" not in message
+    assert "phi.example" not in message
+    assert "x" * 129 not in message
+
+
+def test_parent_action_graph_rejects_cycles() -> None:
+    with pytest.raises(TimingValidationError, match="acyclic"):
+        AgentRunTiming(
+            run=RunTiming(start_ns=0, end_ns=10),
+            actions=(
+                ActionTiming("first", 0, 10, parent_action_id="second"),
+                ActionTiming("second", 0, 10, parent_action_id="first"),
+            ),
+        )
+
+
+def test_timing_contract_is_available_from_public_agent_api() -> None:
+    import openmed.agent as agent
+
+    assert agent.RunTiming is RunTiming
+    assert agent.ActionTiming is ActionTiming
+    assert agent.AgentRunTiming is AgentRunTiming

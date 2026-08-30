@@ -21,10 +21,15 @@ timing = AgentRunTiming(
 payload = timing.to_dict()
 ```
 
-The serialized payload contains only relative nanosecond boundaries, exact
+`to_json()` emits deterministic compact JSON. The serialized payload contains
+only relative nanosecond boundaries, exact
 durations, action identifiers, parent action identifiers when present, and
 optional opaque correlation identifiers. It does not include wall-clock
 timestamps, event payloads, local paths, or PHI.
+
+Identifiers are bounded to 128 characters and a conservative opaque alphabet.
+Paths, URLs, slashes, backslashes, and free text are rejected without echoing
+the submitted value. Parent links must form an acyclic graph.
 
 Validation fails closed for negative, reversed, boolean, non-integer, and
 over-maximum boundaries. When `allow_action_overlaps=False`, adjacent sequential
