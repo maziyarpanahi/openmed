@@ -393,7 +393,7 @@ OpenMed SDK のソースは [Apache-2.0 License](LICENSE) の下で公開され�
 
 OpenMed が役立つと感じたら、スターを付けると他の人が見つけやすくなります。
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

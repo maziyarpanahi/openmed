@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import time
 from typing import Any
 
 import httpx
@@ -163,7 +162,9 @@ def test_high_priority_waiter_promotes_coalesced_bulk_batch(monkeypatch) -> None
     _enable_coalescing_env(monkeypatch)
     monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "8")
-    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "500")
+    # Keep the timer fallback beyond the liveness timeout so completion proves
+    # that the interactive waiter promoted and flushed the queued bulk job.
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "60000")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", "8")
     monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
     lock = threading.Lock()
@@ -178,8 +179,10 @@ def test_high_priority_waiter_promotes_coalesced_bulk_batch(monkeypatch) -> None
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     app = create_app()
 
-    async def scenario() -> tuple[list[httpx.Response], float]:
+    async def scenario() -> list[httpx.Response]:
         async with app.router.lifespan_context(app):
+            batcher = app.state.analyze_batcher
+            assert batcher is not None
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
@@ -192,8 +195,13 @@ def test_high_priority_waiter_promotes_coalesced_bulk_batch(monkeypatch) -> None
                         headers={"x-openmed-priority": "bulk"},
                     )
                 )
-                await asyncio.sleep(0.05)
-                start = time.perf_counter()
+                for _ in range(100):
+                    if (await batcher.queue_depths())["bulk"] == 1:
+                        break
+                    await asyncio.sleep(0)
+                else:
+                    raise AssertionError("bulk request never entered the batch queue")
+
                 second = asyncio.create_task(
                     client.post(
                         "/analyze",
@@ -201,15 +209,18 @@ def test_high_priority_waiter_promotes_coalesced_bulk_batch(monkeypatch) -> None
                         headers={"x-openmed-priority": "interactive"},
                     )
                 )
-                responses = list(await asyncio.gather(first, second))
-                return responses, time.perf_counter() - start
+                return list(
+                    await asyncio.wait_for(
+                        asyncio.gather(first, second),
+                        timeout=5.0,
+                    )
+                )
 
-    responses, joined_latency = asyncio.run(scenario())
+    responses = asyncio.run(scenario())
 
     assert [response.status_code for response in responses] == [200, 200]
     assert [response.json()["text"] for response in responses] == ["alpha", "alpha"]
     assert calls == 1
-    assert joined_latency < 0.3
 
 
 @pytest.mark.parametrize(

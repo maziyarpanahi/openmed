@@ -194,10 +194,14 @@ def test_blocking_core_iterator_does_not_block_event_loop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker_threads: list[int] = []
+    worker_started = threading.Event()
+    worker_release = threading.Event()
+    worker_released: list[bool] = []
 
     def slow_stream(*args: Any, **kwargs: Any):
         worker_threads.append(threading.get_ident())
-        time.sleep(0.3)
+        worker_started.set()
+        worker_released.append(worker_release.wait(timeout=10.0))
         yield StreamingDeidentificationEvent(redacted_text="safe output")
         yield StreamingDeidentificationEvent(
             redacted_text="",
@@ -208,7 +212,7 @@ def test_blocking_core_iterator_does_not_block_event_loop(
     monkeypatch.setattr("openmed.service.streaming.deidentify_stream", slow_stream)
     app = create_app()
 
-    async def scenario() -> tuple[httpx.Response, httpx.Response, float, int]:
+    async def scenario() -> tuple[httpx.Response, httpx.Response, int]:
         async with app.router.lifespan_context(app):
             loop_thread = threading.get_ident()
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
@@ -216,24 +220,35 @@ def test_blocking_core_iterator_does_not_block_event_loop(
                 transport=transport,
                 base_url=LOOPBACK_BASE_URL,
             ) as async_client:
-                started = time.perf_counter()
                 stream_task = asyncio.create_task(
                     async_client.post(
                         "/pii/deidentify/stream",
                         json={"text": "synthetic input", "chunk_size": 4},
                     )
                 )
-                await asyncio.sleep(0.02)
-                live = await async_client.get("/livez")
-                live_elapsed = time.perf_counter() - started
-                streamed = await stream_task
-                return streamed, live, live_elapsed, loop_thread
 
-    streamed, live, live_elapsed, loop_thread = asyncio.run(scenario())
+                async def wait_until_worker_starts() -> None:
+                    while not worker_started.is_set():
+                        await asyncio.sleep(0)
+
+                await asyncio.wait_for(wait_until_worker_starts(), timeout=10.0)
+                try:
+                    live = await asyncio.wait_for(
+                        async_client.get("/livez"), timeout=10.0
+                    )
+                finally:
+                    worker_release.set()
+                streamed = await asyncio.wait_for(
+                    stream_task,
+                    timeout=10.0,
+                )
+                return streamed, live, loop_thread
+
+    streamed, live, loop_thread = asyncio.run(scenario())
 
     assert streamed.status_code == 200
     assert live.status_code == 200
-    assert live_elapsed < 0.2
+    assert worker_released == [True]
     assert worker_threads and worker_threads[0] != loop_thread
 
 

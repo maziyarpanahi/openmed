@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'none'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'"
+    />
+    <meta
+      name="description"
+      content="Redact synthetic text in the browser with a visible local-only network boundary."
+    />
+    <link
+      rel="canonical"
+      href="https://openmed.life/docs/demo/privacy-playground/"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OpenMed" />
+    <meta property="og:title" content="OpenMed privacy playground" />
+    <meta
+      property="og:description"
+      content="Redact synthetic text in the browser with a visible local-only network boundary."
+    />
+    <meta
+      property="og:url"
+      content="https://openmed.life/docs/demo/privacy-playground/"
+    />
+    <meta property="og:image" content="https://openmed.life/og.png" />
+    <meta property="og:image:alt" content="OpenMed local-first healthcare NLP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OpenMed privacy playground" />
+    <meta
+      name="twitter:description"
+      content="Redact synthetic text in the browser with a visible local-only network boundary."
+    />
+    <meta name="twitter:image" content="https://openmed.life/og.png" />
+    <meta name="twitter:image:alt" content="OpenMed local-first healthcare NLP" />
+    <link rel="icon" href="../../assets/openmed-favicon.svg" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-system.css" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-standalone.css" />
+    <title>OpenMed privacy playground</title>
+  </head>
+  <body>
+    <a class="om-skip-link" href="#main">Skip to content</a>
+    <header class="om-site-header">
+      <div class="om-site-header__inner">
+        <a class="om-brand" href="/docs/" aria-label="OpenMed documentation">
+          <img
+            src="../../assets/openmed-mark.svg"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span>openmed</span>
+          <span class="om-brand__product">privacy playground</span>
+        </a>
+        <nav class="om-site-nav" aria-label="Page links">
+          <a href="/docs/">Documentation</a>
+          <a href="/docs/demo/web/">Browser adapter</a>
+          <a
+            href="https://github.com/maziyarpanahi/openmed/tree/master/docs/demo/privacy-playground"
+          >Source</a>
+          <button class="om-theme-toggle" type="button" data-openmed-theme>
+            Theme: light
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="om-page">
+      <section class="om-hero" aria-labelledby="page-title">
+        <p class="eyebrow">Local-only browser demonstration</p>
+        <h1 id="page-title">Redact text without an upload</h1>
+        <p class="lede">
+          Enter synthetic text and inspect the aggregate redaction result. The
+          default rules run in this tab; an optional same-origin adapter can
+          use the existing OpenMed browser pipeline contract.
+        </p>
+      </section>
+
+      <div class="grid">
+        <section class="card" aria-labelledby="boundary-heading">
+          <h2 id="boundary-heading">Privacy boundary</h2>
+          <div class="table-wrap">
+            <table>
+              <caption class="om-sr-only">
+                Browser processing and network boundary status
+              </caption>
+              <tbody>
+                <tr>
+                  <th scope="row">Processing</th>
+                  <td id="processing-status">This browser tab</td>
+                </tr>
+                <tr>
+                  <th scope="row">Network policy</th>
+                  <td id="network-status">No script-initiated egress enabled</td>
+                </tr>
+                <tr>
+                  <th scope="row">Blocked egress attempts</th>
+                  <td id="upload-count">0 blocked</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">
+            Bundled rules issue no requests after page load. Upload bodies,
+            query-bearing reads, and cross-origin APIs are blocked; input text
+            is not written to storage or telemetry.
+          </p>
+        </section>
+
+        <section class="card" aria-labelledby="adapter-heading">
+          <h2 id="adapter-heading">Optional local adapter</h2>
+          <p class="note">
+            Leave both fields empty for deterministic local rules. To use a
+            model, provide a same-origin module and model bundle.
+          </p>
+          <div class="field">
+            <label for="runtime-module">Runtime adapter module</label>
+            <input
+              id="runtime-module"
+              name="runtime-module"
+              placeholder="./vendor/openmed-transformers-runtime.js"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="adapter-note"
+            />
+          </div>
+          <div class="field">
+            <label for="model-url">Local model bundle URL</label>
+            <input
+              id="model-url"
+              name="model-url"
+              placeholder="./models/openmed-pii/"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <p id="adapter-note" class="note">
+            The module must export
+            <code>createOpenMedPipeline(options)</code>. Remote URLs are
+            rejected before loading. Adapter modules are trusted same-origin
+            code: use only audited modules, which may read model assets from
+            the configured same-origin directories.
+          </p>
+          <p id="runtime-status" class="status" role="status" aria-live="polite">
+            Deterministic local rules selected.
+          </p>
+        </section>
+
+        <section class="card full" aria-labelledby="input-heading">
+          <h2 id="input-heading">Synthetic input</h2>
+          <label for="input-text">Text to redact locally</label>
+          <textarea
+            id="input-text"
+            name="input-text"
+            maxlength="100000"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+          >Synthetic note: Demo Person uses MRN SYN-MRN-2048 and demo.person@example.invalid on 2030-04-12.</textarea>
+          <div class="actions">
+            <button id="redact-button" type="button">Redact locally</button>
+            <button id="reset-button" class="secondary" type="button">
+              Clear result
+            </button>
+          </div>
+          <p id="status" class="status" role="status" aria-live="polite">
+            Ready. Use synthetic data only.
+          </p>
+        </section>
+
+        <section class="card full" aria-labelledby="result-heading">
+          <h2 id="result-heading">Redacted result</h2>
+          <div id="redacted-output" class="results" aria-live="polite">
+            No local result yet.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <caption class="om-sr-only">Aggregate redaction counts</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Measure</th>
+                  <th scope="col" class="numeric">Count</th>
+                </tr>
+              </thead>
+              <tbody id="redaction-counts">
+                <tr>
+                  <th scope="row">Total redactions</th>
+                  <td id="total-count" class="numeric">0</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">
+            The preview replaces detected spans with labels. Counts and status
+            are aggregate; source values are never placed in a report or log.
+          </p>
+        </section>
+      </div>
+
+      <p class="note">
+        Demonstration only. Results can be incomplete and must not be used to
+        make clinical decisions or certify that text is de-identified.
+      </p>
+    </main>
+
+    <footer class="om-site-footer">
+      <div class="om-site-footer__inner">
+        <span>OpenMed documentation</span>
+        <span>Local-first healthcare NLP · synthetic data only</span>
+      </div>
+    </footer>
+
+    <script src="../../javascripts/openmed-standalone.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
