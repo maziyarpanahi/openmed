@@ -7,6 +7,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Final
 
+from .asset_manifest import (
+    MAX_MANIFEST_COUNT,
+    MAX_MANIFEST_DURATION_SECONDS,
+    AssetManifest,
+)
+
 __all__ = [
     "AUDIO_V1",
     "DICOM_V1",
@@ -34,8 +40,6 @@ _REASON_CODES: Final = frozenset(
         "out_of_range",
     }
 )
-_MAX_COUNT: Final = (1 << 31) - 1
-_MAX_DURATION_SECONDS: Final = float(_MAX_COUNT)
 
 
 class ManifestProfileError(ValueError):
@@ -118,7 +122,7 @@ AUDIO_V1 = ManifestProfile(
 
 
 def validate_manifest_metadata(
-    profile: ManifestProfile, manifest: Mapping[str, Any]
+    profile: ManifestProfile, manifest: Mapping[str, Any] | AssetManifest
 ) -> list[ValidationFinding]:
     """Validate metadata deterministically without opening or decoding an asset.
 
@@ -129,12 +133,15 @@ def validate_manifest_metadata(
 
     if not isinstance(profile, ManifestProfile):
         raise TypeError("profile must be a ManifestProfile")
-    if not isinstance(manifest, Mapping):
-        raise TypeError("manifest metadata must be a mapping")
-    try:
-        fields = dict(manifest)
-    except Exception:
-        raise ManifestProfileError("manifest metadata could not be read") from None
+    if isinstance(manifest, AssetManifest):
+        fields = manifest.to_dict()
+    elif not isinstance(manifest, Mapping):
+        raise TypeError("manifest metadata must be a mapping or AssetManifest")
+    else:
+        try:
+            fields = dict(manifest)
+        except Exception:
+            raise ManifestProfileError("manifest metadata could not be read") from None
 
     findings: list[ValidationFinding] = []
     declared_fields = sorted(
@@ -165,7 +172,7 @@ def _numeric_reason(field_name: str, value: Any) -> str | None:
             return "invalid_type"
         if value == 0:
             return "invalid_zero"
-        if not 0 < value <= _MAX_COUNT:
+        if not 0 < value <= MAX_MANIFEST_COUNT:
             return "out_of_range"
         return None
     if type(value) not in (int, float):
@@ -174,6 +181,6 @@ def _numeric_reason(field_name: str, value: Any) -> str | None:
         return "non_finite_numeric"
     if value == 0:
         return "invalid_zero"
-    if not 0 < value <= _MAX_DURATION_SECONDS:
+    if not 0 < value <= MAX_MANIFEST_DURATION_SECONDS:
         return "out_of_range"
     return None

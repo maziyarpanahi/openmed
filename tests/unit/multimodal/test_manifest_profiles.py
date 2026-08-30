@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from openmed.multimodal.asset_manifest import AssetManifest
 from openmed.multimodal.manifest_profiles import (
     AUDIO_V1,
     DICOM_V1,
@@ -283,3 +284,16 @@ def test_profile_contract_is_available_from_public_multimodal_api() -> None:
     assert multimodal.IMAGE_V1 is IMAGE_V1
     assert multimodal.validate_manifest_metadata is validate_manifest_metadata
     assert multimodal.ValidationFinding is ValidationFinding
+
+
+def test_profile_validates_canonical_asset_manifest_without_decoding() -> None:
+    manifest = AssetManifest(
+        asset_id="synthetic-image-1",
+        media_type="image/png",
+        sha256="a" * 64,
+        byte_size=128,
+        width=800,
+        height=600,
+    )
+
+    assert validate_manifest_metadata(IMAGE_V1, manifest) == []

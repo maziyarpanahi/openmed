@@ -8,6 +8,10 @@ privacy-safe asset manifest contract. They do not open or decode an asset.
 A manifest profile determines whether structurally validated metadata includes
 the fields required for its declared modality.
 
+`validate_manifest_metadata()` accepts either a canonical `AssetManifest`
+instance or a metadata mapping. Mapping callers remain responsible for running
+the structural asset-manifest validator first.
+
 The privacy and safety boundary is strict:
 
 - Validation uses manifest metadata only.
