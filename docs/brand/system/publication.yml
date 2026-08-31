@@ -202,6 +202,7 @@ classification:
     - reference/chat-schema.md
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
+    - training/federated-scheduling.md
     - reference/preference-schema.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md

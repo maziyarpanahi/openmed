@@ -18,6 +18,9 @@ __all__ = [
     "CLINICAL_PRIVACY_TRAINING_SOURCE_IDS",
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
+    "FEDERATED_SCHEDULE_PHASES",
+    "FEDERATED_SCHEDULE_SCHEMA_VERSION",
+    "MAX_FEDERATED_PHASE_DURATION_SECONDS",
     "MAX_LORA_TRAINABLE_RATIO",
     "PRESET_BY_MODE",
     "QLORA_CONFIG_SCHEMA_VERSION",
@@ -97,6 +100,9 @@ __all__ = [
     "DistillationTargets",
     "EntityTypeWeights",
     "FederatedRoundLifecycle",
+    "FederatedRoundSchedule",
+    "FederatedScheduleError",
+    "FederatedSchedulePhase",
     "FederatedRoundState",
     "FederatedRoundStateError",
     "FederatedRoundTransitionError",
@@ -209,6 +215,16 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "FEDERATED_SCHEDULE_PHASES",
+        "FEDERATED_SCHEDULE_SCHEMA_VERSION",
+        "MAX_FEDERATED_PHASE_DURATION_SECONDS",
+        "FederatedRoundSchedule",
+        "FederatedScheduleError",
+        "FederatedSchedulePhase",
+    }:
+        federated_schedule = import_module(".federated_schedule", __name__)
+        return getattr(federated_schedule, name)
     if name in {
         "FEDERATED_ROUND_SCHEMA_VERSION",
         "FEDERATED_ROUND_STATES",
