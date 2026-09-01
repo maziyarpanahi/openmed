@@ -29,7 +29,6 @@ from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from . import documents_text as _documents_text
 from . import pptx as _pptx
-from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .abstention import (
     ABSTENTION_SCHEMA_VERSION,
     AbstentionReason,
@@ -37,6 +36,7 @@ from .abstention import (
     AbstentionStage,
     AbstentionValidationError,
 )
+from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
     ExtractedDocument,
     SourceSpan,
