@@ -205,6 +205,7 @@ classification:
     - reference/preference-schema.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
+    - multimodal/asset-manifests.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/email-ingestion.md
     - multimodal/epub-extraction.md
