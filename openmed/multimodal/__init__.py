@@ -29,6 +29,7 @@ from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from . import documents_text as _documents_text
 from . import pptx as _pptx
+from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .abstention import (
     ABSTENTION_SCHEMA_VERSION,
     AbstentionReason,
@@ -159,6 +160,12 @@ from .layout import (
     LayoutWordSpan,
     parse_layout,
 )
+from .media_type import (
+    MAX_MEDIA_TYPE_PREFIX_BYTES,
+    MediaTypeStatus,
+    detect_media_type,
+    validate_media_type,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -266,6 +273,13 @@ __all__ = [
     "register_handler",
     "ensure_multimodal_available",
     "is_multimodal_available",
+    "AssetManifest",
+    "AssetManifestError",
+    "MANIFEST_VERSION",
+    "MAX_MEDIA_TYPE_PREFIX_BYTES",
+    "MediaTypeStatus",
+    "detect_media_type",
+    "validate_media_type",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "DocumentGraphError",
