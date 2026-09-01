@@ -206,6 +206,7 @@ classification:
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
     - multimodal/asset-manifests.md
+    - multimodal/manifest-profiles.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md

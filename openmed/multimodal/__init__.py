@@ -160,6 +160,16 @@ from .layout import (
     LayoutWordSpan,
     parse_layout,
 )
+from .manifest_profiles import (
+    AUDIO_V1,
+    DICOM_V1,
+    IMAGE_V1,
+    PDF_V1,
+    ManifestProfile,
+    ManifestProfileError,
+    ValidationFinding,
+    validate_manifest_metadata,
+)
 from .media_type import (
     MAX_MEDIA_TYPE_PREFIX_BYTES,
     MediaTypeStatus,
@@ -267,6 +277,14 @@ __all__ = [
     "AbstentionRecord",
     "AbstentionStage",
     "AbstentionValidationError",
+    "AUDIO_V1",
+    "DICOM_V1",
+    "IMAGE_V1",
+    "PDF_V1",
+    "ManifestProfile",
+    "ManifestProfileError",
+    "ValidationFinding",
+    "validate_manifest_metadata",
     "ExtractedDocument",
     "SourceSpan",
     "redact_document",
