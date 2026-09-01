@@ -29,6 +29,14 @@ from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from . import documents_text as _documents_text
 from . import pptx as _pptx
+from .abstention import (
+    ABSTENTION_SCHEMA_VERSION,
+    AbstentionReason,
+    AbstentionRecord,
+    AbstentionStage,
+    AbstentionValidationError,
+)
+from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -152,6 +160,12 @@ from .layout import (
     LayoutWordSpan,
     parse_layout,
 )
+from .media_type import (
+    MAX_MEDIA_TYPE_PREFIX_BYTES,
+    MediaTypeStatus,
+    detect_media_type,
+    validate_media_type,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -248,12 +262,24 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "ABSTENTION_SCHEMA_VERSION",
+    "AbstentionReason",
+    "AbstentionRecord",
+    "AbstentionStage",
+    "AbstentionValidationError",
     "ExtractedDocument",
     "SourceSpan",
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
     "is_multimodal_available",
+    "AssetManifest",
+    "AssetManifestError",
+    "MANIFEST_VERSION",
+    "MAX_MEDIA_TYPE_PREFIX_BYTES",
+    "MediaTypeStatus",
+    "detect_media_type",
+    "validate_media_type",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "DocumentGraphError",
