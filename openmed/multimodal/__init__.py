@@ -30,6 +30,13 @@ from . import documents_markdown as _documents_markdown
 from . import documents_text as _documents_text
 from . import pptx as _pptx
 from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
+from .abstention import (
+    ABSTENTION_SCHEMA_VERSION,
+    AbstentionReason,
+    AbstentionRecord,
+    AbstentionStage,
+    AbstentionValidationError,
+)
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -255,6 +262,11 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "ABSTENTION_SCHEMA_VERSION",
+    "AbstentionReason",
+    "AbstentionRecord",
+    "AbstentionStage",
+    "AbstentionValidationError",
     "ExtractedDocument",
     "SourceSpan",
     "redact_document",
