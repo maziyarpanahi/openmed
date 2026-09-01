@@ -76,13 +76,13 @@
     },
     "supported_pii_languages": {
       "status": "verified",
-      "value": 35,
-      "display": "35 supported PII routes",
+      "value": 36,
+      "display": "36 supported PII routes",
       "definition": "Exact keys in DEFAULT_PII_MODELS, including named placeholder routes; no locale aliases.",
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "35 supported PII language routes",
+      "public_wording": "36 supported PII language routes",
       "qualification": "Supported routes include the separately identified placeholder route; do not call every route model-backed.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -100,6 +100,7 @@
         "el",
         "en",
         "es",
+        "fa",
         "fr",
         "he",
         "hi",
@@ -131,7 +132,7 @@
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, zu",
+      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fa, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, zu",
       "qualification": "Use codes only where the definition is visible.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -199,6 +200,7 @@
     "placeholder_pii_languages": {
       "status": "verified",
       "value": [
+        "fa",
         "ru",
         "ta"
       ],

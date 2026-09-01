@@ -11,6 +11,7 @@ from openmed.core.anonymizer.providers import registry_ids
 from openmed.core.anonymizer.providers.clinical_ids import (
     AfricanPhoneProvider,
     BangladeshNIDProvider,
+    IranNationalIDProvider,
     register_clinical_providers,
 )
 from openmed.core.anonymizer.providers.registry_ids import (
@@ -23,6 +24,7 @@ from openmed.core.anonymizer.providers.registry_ids import (
 from openmed.core.pii_i18n import (
     validate_bangladesh_nid,
     validate_bengali_aadhaar,
+    validate_iran_national_id,
 )
 
 
@@ -45,6 +47,7 @@ EXPECTED_VALIDATOR_KEYS = (
     ("es", "nie"),
     ("nl", "bsn"),
     ("in", "aadhaar"),
+    ("ir", "iran_national_id"),
     ("zh", "resident_id"),
     ("in", "pan"),
     ("in", "gstin"),
@@ -100,6 +103,7 @@ ROUND_TRIP_CASES = (
     ("es", "nie", "es_ES"),
     ("nl", "bsn", "nl_NL"),
     ("in", "aadhaar", "en_IN"),
+    ("ir", "iran_national_id", "fa_IR"),
     ("zh", "resident_id", "zh_CN"),
     ("in", "pan", "en_IN"),
     ("in", "gstin", "en_IN"),
@@ -221,6 +225,40 @@ class TestNationalIdRegistry:
         assert surrogate != original
         assert len(surrogate) == length
         assert spec.validate(surrogate)
+
+    def test_iran_national_id_aliases_resolve_and_generate(self):
+        faker = Faker("fa_IR")
+        register_clinical_providers(faker)
+        faker.seed_instance(295)
+
+        for alias in ("ir", "fa", "fa_IR"):
+            spec = get_national_id(alias, "iran_national_id")
+            assert spec is not None
+            assert spec.validate(faker.iran_national_id())
+
+        assert clinical_faker_provider_classes().count(IranNationalIDProvider) == 1
+
+    @pytest.mark.parametrize(
+        "original",
+        ("1234567891", "۱۲۳۴۵۶۷۸۹۱", "١٢٣٤٥٦٧٨٩١"),
+    )
+    def test_iran_national_id_provider_returns_distinct_valid_id(self, original):
+        faker = Faker("fa_IR")
+        register_clinical_providers(faker)
+        faker.seed_instance(295)
+
+        surrogate = faker.iran_national_id(original)
+
+        assert surrogate != "1234567891"
+        assert validate_iran_national_id(surrogate)
+
+    def test_persian_anonymizer_dispatches_iran_national_id(self):
+        anonymizer = Anonymizer(lang="fa", consistent=True, seed=295)
+
+        surrogate = anonymizer.surrogate("۱۲۳۴۵۶۷۸۹۱", "national_id")
+
+        assert surrogate != "1234567891"
+        assert validate_iran_national_id(surrogate)
 
     @pytest.mark.parametrize(("lang", "id_type"), EXPECTED_VALIDATOR_KEYS)
     def test_pre_existing_validators_are_reachable(self, lang, id_type):

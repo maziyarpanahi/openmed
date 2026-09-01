@@ -24,7 +24,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until dedicated
 # public PII weights are available. They must not be represented as
 # trained/model-backed languages in release claims.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru", "ta"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -180,6 +180,22 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
         "ar_EG",
         ("Arabic",),
+    ),
+    _pack(
+        "fa",
+        "OpenMed/privacy-filter-multilingual",
+        "fa_IR",
+        ("Arabic",),
+        national_id_provider=("fa_IR", "iran_national_id"),
+        routing_markers=(
+            "بیمار",
+            "کد ملی",
+            "خیابان",
+            "کوچه",
+            "پلاک",
+            "فروردین",
+            "اسفند",
+        ),
     ),
     _pack(
         "he",
@@ -414,7 +430,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
         "zu",
         "xh",
     ),
-    "Arabic": ("ar", "ha", "ur"),
+    "Arabic": ("ar", "fa", "ha", "ur"),
     "Cyrillic": ("ru", "uk"),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
@@ -447,6 +463,7 @@ _LOCALE_ORDER = (
     "am",
     "pt",
     "ar",
+    "fa",
     "he",
     "ja",
     "zh",
@@ -496,6 +513,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "ta",
     "am",
     "pt",
+    "fa",
     "tr",
     "he",
     "id",

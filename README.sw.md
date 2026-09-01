@@ -432,7 +432,7 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (njia 35 zinazotumika; 33 zikitumia modeli)
+## PII ya lugha nyingi (njia 36 zinazotumika; 33 zikitumia modeli)
 
 Utoaji na uondoaji utambulisho huunga mkono **misimbo 35 ya lugha za PII**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,

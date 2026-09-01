@@ -275,7 +275,7 @@ Em hosts que não são Apple Silicon, os nomes de modelo MLX são substituídos 
 
 ---
 
-## PII multilíngue (35 rotas suportadas; 33 com suporte de modelos)
+## PII multilíngue (36 rotas suportadas; 33 com suporte de modelos)
 
 Extração e des-identificação em `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` e `tr`, **o catálogo registrado de modelos PII** no total.
 

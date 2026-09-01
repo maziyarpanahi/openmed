@@ -331,7 +331,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII چندزبانه (35 مسیر پشتیبانی‌شده؛ 33 مسیر با مدل)
+## PII چندزبانه (36 مسیر پشتیبانی‌شده؛ 33 مسیر با مدل)
 
 استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr`، در مجموع **فهرست ثبت‌شدهٔ مدل‌های PII**.
 

@@ -77,9 +77,9 @@
           "translation_sha256": "903ecbd112324deef7821e67ce8f0dd96a4e683e0cf24322fb43df777d43d8b9"
         },
         {
-          "source_heading": "Multilingual PII (35 supported routes; 33 model-backed)",
-          "source_sha256": "1adb69340e95b22a6a931a57ab9af31562218da17bcfe014cc8664778dfc2a12",
-          "translation_heading": "बहुभाषी PII (35 समर्थित रूट; 33 मॉडल-समर्थित)",
+          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
+          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
+          "translation_heading": "बहुभाषी PII (36 समर्थित रूट; 33 मॉडल-समर्थित)",
           "translation_sha256": "9b4ae308b42172af074bfadc0832269aef34510e5c10893543b00f6eafdf9f0d"
         },
         {
@@ -213,9 +213,9 @@
           "translation_sha256": "2c16671646ed5d5c9392578dfc826f21b79a7536cef01b40645a6327a851563e"
         },
         {
-          "source_heading": "Multilingual PII (35 supported routes; 33 model-backed)",
-          "source_sha256": "1adb69340e95b22a6a931a57ab9af31562218da17bcfe014cc8664778dfc2a12",
-          "translation_heading": "PII ya lugha nyingi (njia 35 zinazotumika; 33 zikitumia modeli)",
+          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
+          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
+          "translation_heading": "PII ya lugha nyingi (njia 36 zinazotumika; 33 zikitumia modeli)",
           "translation_sha256": "cdc7bd9aba12b767116b23428013ae57bd1dc887a01e8b4c96269fb651ad0765"
         },
         {
@@ -349,9 +349,9 @@
           "translation_sha256": "c86a5f3b107cd56cf58f72bb771934b1b1afc021d24f07f85d5325b14d45b62e"
         },
         {
-          "source_heading": "Multilingual PII (35 supported routes; 33 model-backed)",
-          "source_sha256": "1adb69340e95b22a6a931a57ab9af31562218da17bcfe014cc8664778dfc2a12",
-          "translation_heading": "多语言 PII（35 条支持的路由；33 条由模型支持）",
+          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
+          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
+          "translation_heading": "多语言 PII（36 条支持的路由；33 条由模型支持）",
           "translation_sha256": "f8323da192e3830334567dfe802aa94f114673a68a6744c78628a6489754b8a1"
         },
         {

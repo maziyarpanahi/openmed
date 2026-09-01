@@ -21,7 +21,7 @@ workflows, broad multilingual PII coverage, and fail-closed release evidence:
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
   browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
   Transformers.js export bundles.
-- **35 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr,
+- **36 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr,
   he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr,
   uk, vi, xh, zh, and zu**, with Russian using a documented multilingual default-model
   placeholder and Bengali, Chinese, and Tamil using dedicated registry entries,

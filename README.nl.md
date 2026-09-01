@@ -275,7 +275,7 @@ Op niet-Apple-Silicon-hosts worden MLX-modelnamen automatisch vervangen door het
 
 ---
 
-## Meertalige PII (35 ondersteunde routes; 33 modelondersteund)
+## Meertalige PII (36 ondersteunde routes; 33 modelondersteund)
 
 Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr`, in totaal **de geregistreerde PII-modelcatalogus**.
 
