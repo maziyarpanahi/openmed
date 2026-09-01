@@ -153,6 +153,12 @@ from .layout import (
     LayoutWordSpan,
     parse_layout,
 )
+from .media_type import (
+    MAX_MEDIA_TYPE_PREFIX_BYTES,
+    MediaTypeStatus,
+    detect_media_type,
+    validate_media_type,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -258,6 +264,10 @@ __all__ = [
     "AssetManifest",
     "AssetManifestError",
     "MANIFEST_VERSION",
+    "MAX_MEDIA_TYPE_PREFIX_BYTES",
+    "MediaTypeStatus",
+    "detect_media_type",
+    "validate_media_type",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "DocumentGraphError",

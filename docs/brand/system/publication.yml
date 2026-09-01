@@ -203,6 +203,7 @@ classification:
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
     - reference/preference-schema.md
+    - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
     - multimodal/asset-manifests.md
     - multimodal/pdf-redaction-fidelity.md
