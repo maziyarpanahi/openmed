@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   media and digest validation, bounded metadata-only fields, deterministic
   JSON serialization, and value-free rejection of paths, URLs, free text, and
   unknown fields (#2954).
+- Added bounded streaming SHA-256 asset digests with caller-owned stream
+  position restoration and value-free limit and read failures (#2979).
 - Added bounded, dependency-free detection for PDF, PNG, JPEG, TIFF, DICOM,
   and WAV prefixes, with stable match, mismatch, and unknown validation results
   that do not log source bytes or trust filename extensions (#2955).
