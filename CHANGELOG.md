@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a dependency-free, versioned multimodal asset manifest with strict
+  media and digest validation, bounded metadata-only fields, deterministic
+  JSON serialization, and value-free rejection of paths, URLs, free text, and
+  unknown fields (#2954).
+- Added bounded streaming SHA-256 asset digests with caller-owned stream
+  position restoration and value-free limit and read failures (#2979).
+- Added bounded, dependency-free detection for PDF, PNG, JPEG, TIFF, DICOM,
+  and WAV prefixes, with stable match, mismatch, and unknown validation results
+  that do not log source bytes or trust filename extensions (#2955).
+- Added strict, deterministic multimodal abstention records with typed pipeline
+  stages, stable reason codes, metadata-only JSON, and value-free validation
+  failures (#2977).
+- Added image, PDF, DICOM, and audio profiles that validate canonical manifest
+  metadata into deterministic field-and-reason findings without opening or
+  decoding an asset (#2978).
+- Added a closed, JSON-safe agent outcome vocabulary with success, abstention,
+  reviewer-handoff, policy-denial, and failure classes, deterministic
+  serialization, and value-free rejection of unknown codes or free-text
+  reasons (#2950).
+- Added bounded, deterministic agent-run summaries for closed outcomes,
+  workflow identifiers, tool-call counts, durations, and artifact digests,
+  with direct-construction invariants and value-free privacy failures (#2951).
 - Added deterministic monotonic timing metadata records for agent runs and
   actions with exact integer durations and value-free validation failures
   (#2974).
