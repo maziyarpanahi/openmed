@@ -106,6 +106,7 @@ classification:
     - agent-usage.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
+    - agent/timing-metadata.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md

@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added bounded, deterministic agent-run summaries for closed outcomes,
   workflow identifiers, tool-call counts, durations, and artifact digests,
   with direct-construction invariants and value-free privacy failures (#2951).
+- Added deterministic monotonic timing metadata records for agent runs and
+  actions with exact integer durations and value-free validation failures
+  (#2974).
 
 - Added an audited teacher-ensemble registry for weak labeling with
   manifest-resolved PII and Privacy Filter members, bounded weights and
