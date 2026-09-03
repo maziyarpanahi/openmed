@@ -212,6 +212,7 @@ classification:
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
+    - multimodal/wav-preflight.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
