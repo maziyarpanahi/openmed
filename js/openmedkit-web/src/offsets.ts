@@ -1,4 +1,4 @@
-import type { TokenClassificationEntity } from "./types";
+import type { RawTokenClassificationEntity, TokenClassificationEntity } from "./types";
 
 const CONTINUATION_PREFIX = "##";
 const WORD_START_MARKERS = /^[▁Ġ\s]+/;
@@ -39,7 +39,7 @@ interface NormalizedText {
  */
 export function alignTokenOffsets(
   text: string,
-  tokens: TokenClassificationEntity[],
+  tokens: RawTokenClassificationEntity[],
 ): TokenClassificationEntity[] {
   const normalized = normalizeText(text);
   const aligned: TokenClassificationEntity[] = [];
@@ -95,10 +95,11 @@ function alignmentError(): Error {
   return new Error("Token offset alignment failed; provide source offsets.");
 }
 
-function hasFiniteOffsets(token: TokenClassificationEntity): boolean {
-  const start = Number(token.start);
-  const end = Number(token.end);
-  return Number.isFinite(start) && Number.isFinite(end) && end > start;
+function hasFiniteOffsets(
+  token: RawTokenClassificationEntity,
+): token is TokenClassificationEntity {
+  return typeof token.start === "number" && typeof token.end === "number" &&
+    Number.isFinite(token.start) && Number.isFinite(token.end) && token.end > token.start;
 }
 
 function stripTokenMarkers(word: string): string {

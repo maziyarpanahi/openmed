@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
 workflows, multimodal asset intake, clinical evidence, local training,
 cross-platform runtimes, deployment adapters, and release hardening. The final
-audited `v2.2.0..v2.3.0` release-branch range contains 251 commits and 650 changed
+audited `v2.2.0..v2.3.0` release-branch range contains 252 commits and 651 changed
 files.
 
 The static public Python surface grows from 37,735 to 41,729 symbols with
@@ -356,6 +356,21 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
   letters. Unalignable tokens fail with a content-free error instead of
   silently producing incomplete redaction; custom pipelines can supply exact
   source offsets.
+
+- Preserved the v2.2 numeric-offset TypeScript contracts while adding raw-token
+  input types. Model loaders align output and retain runtime metadata and
+  resource disposal; the browser extension remains source-compatible.
+- Removed obsolete Debian vulnerability exceptions after the current image
+  report confirmed they no longer apply; security thresholds are unchanged.
+
+### Known dependency limitation
+
+- Optional agent, LlamaIndex, QuickUMLS, and scrubadub dependency trees include
+  NLTK 3.10.3, affected by model-artifact path-security advisory
+  [CVE-2026-81726](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp).
+  No fixed release is published as of 2026-09-03. OpenMed does not call the
+  affected APIs, and its service image does not install NLTK. Do not expose
+  NLTK model import/export paths to untrusted input in optional integrations.
 
 ## [2.2.0] - 2026-08-21
 

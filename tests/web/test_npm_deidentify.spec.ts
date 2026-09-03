@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import type {
   OpenMedDeidentifyResult,
   OpenMedSpan,
+  RawTokenClassificationEntity,
+  RawTokenClassificationPipeline,
+  RawTransformersRuntime,
   TokenClassificationEntity,
   TokenClassificationPipeline,
   TransformersRuntime,
@@ -85,7 +91,7 @@ test("local model loading is offline-only by default", async () => {
     { runtime },
   )) as TokenClassificationPipeline;
 
-  assert.equal(loaded, fixturePipeline);
+  assert.deepEqual(await loaded(goldenText), fixturePipeline(goldenText));
   assert.equal(runtime.env?.allowRemoteModels, true);
   assert.equal(runtime.env?.allowLocalModels, false);
 });
@@ -108,7 +114,7 @@ test("OpenMed ONNX loading selects the root INT8 artifact", async () => {
     { runtime },
   )) as TokenClassificationPipeline;
 
-  assert.equal(loaded, fixturePipeline);
+  assert.deepEqual(await loaded(goldenText), fixturePipeline(goldenText));
 });
 
 test("default model is a public -onnx-android repo loaded through loadOnnxModel", async () => {
@@ -119,7 +125,7 @@ test("default model is a public -onnx-android repo loaded through loadOnnxModel"
   );
 
   let seenOptions: Record<string, unknown> | undefined;
-  const runtime: TransformersRuntime = {
+  const runtime: RawTransformersRuntime = {
     pipeline: async (task, model, options) => {
       assert.equal(task, "token-classification");
       assert.equal(model, api.DEFAULT_MODEL_ID);
@@ -296,6 +302,94 @@ test("unalignable classified tokens fail without exposing source text", async ()
   }
 });
 
+test("model loaders return aligned offsets for flat and nested runtime output", async () => {
+  const api = await loadApi();
+  const rawTokens = transformersJsTokens([[1, "alice", "B-PERSON"]]);
+  for (const nested of [false, true]) {
+    const runtime: RawTransformersRuntime = {
+      pipeline: () => () => nested ? [rawTokens] : rawTokens,
+    };
+    const loaded = await api.loadTokenClassificationPipeline("/models/local", { runtime });
+    const output = await loaded("Alice");
+    const expected = [{ ...rawTokens[0], start: 0, end: 5 }];
+    assert.deepEqual(output, nested ? [expected] : expected);
+  }
+});
+
+test("v2.2 numeric-offset public types remain compatible with raw runtime inputs", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "openmed-types-"));
+  try {
+    const sourcePath = join(directory, "compatibility.ts");
+    const importPath = JSON.stringify(join(packageDir, "dist", "index.js").replaceAll("\\", "/"));
+    await writeFile(sourcePath, `
+import {
+  alignTokenOffsets, extractPii, flattenTokenClassificationOutput,
+  loadTokenClassificationPipeline,
+} from ${importPath};
+import type {
+  TokenClassificationEntity, TokenClassificationPipeline, TransformersRuntime,
+  RawTokenClassificationEntity, RawTokenClassificationPipeline, RawTransformersRuntime,
+} from ${importPath};
+
+function numericOffsets(entity: TokenClassificationEntity): number {
+  return entity.end - entity.start;
+}
+const aligned: TokenClassificationPipeline = () => [{ start: 0, end: 5 }];
+const legacyRuntime: TransformersRuntime = { pipeline: () => aligned };
+const loaded: TokenClassificationPipeline = await loadTokenClassificationPipeline(
+  "/models/local", { runtime: legacyRuntime },
+);
+flattenTokenClassificationOutput(await loaded("Alice")).map(numericOffsets);
+const legacyPipeline = await legacyRuntime.pipeline("token-classification", "/models/local");
+flattenTokenClassificationOutput(await legacyPipeline("Alice")).map(numericOffsets);
+
+const rawTokens: RawTokenClassificationEntity[] = [{ word: "alice", entity: "B-PERSON" }];
+const raw: RawTokenClassificationPipeline = () => rawTokens;
+const runtime: RawTransformersRuntime = { pipeline: () => raw };
+alignTokenOffsets("Alice", rawTokens).map(numericOffsets);
+await extractPii("Alice", { pipeline: raw });
+await extractPii("Alice", { loaderOptions: { runtime } });
+const normalized: TokenClassificationPipeline = await loadTokenClassificationPipeline(
+  "/models/local", { runtime },
+);
+flattenTokenClassificationOutput(await normalized("Alice")).map(numericOffsets);
+`);
+    await promisify(execFile)(process.execPath, [
+      join(packageDir, "node_modules", "typescript", "bin", "tsc"),
+      "--noEmit", "--strict", "--skipLibCheck", "--target", "ES2022",
+      "--module", "ESNext", "--moduleResolution", "Bundler",
+      "--types", "node", "--typeRoots", join(packageDir, "node_modules", "@types"),
+      sourcePath,
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("aligned model loading preserves runtime metadata, disposal, and bound calls", async () => {
+  const api = await loadApi();
+  let disposed = false;
+  const pipeline = Object.assign(
+    () => transformersJsTokens([[1, "alice", "B-PERSON"]]),
+    {
+      model: { id: "synthetic" },
+      async dispose() {
+        assert.equal(this, pipeline);
+        disposed = true;
+      },
+    },
+  );
+  const loaded = await api.loadTokenClassificationPipeline("/models/local", {
+    runtime: { pipeline: () => pipeline },
+  });
+  assert.equal(loaded.model, pipeline.model);
+  const output = await loaded.bind(null)("Alice");
+  assert.equal(output[0].start, 0);
+  assert.equal(output[0].end, 5);
+  await loaded.dispose();
+  assert.equal(disposed, true);
+});
+
 async function loadApi() {
   return import(distUrl);
 }
@@ -307,7 +401,7 @@ const goldenRedactedText =
 
 function transformersJsTokens(
   rows: Array<[number, string, string]>,
-): TokenClassificationEntity[] {
+): RawTokenClassificationEntity[] {
   return rows.map(([index, word, entity]) => ({
     entity,
     score: 0.9,
@@ -318,7 +412,7 @@ function transformersJsTokens(
 
 // Shape emitted by the Transformers.js token-classification pipeline with
 // aggregation_strategy "none": lowercased WordPiece words, no start/end.
-const transformersJsFixturePipeline: TokenClassificationPipeline = () =>
+const transformersJsFixturePipeline: RawTokenClassificationPipeline = () =>
   transformersJsTokens([
     [1, "patient", "O"],
     [2, "alice", "B-NAME"],

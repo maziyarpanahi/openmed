@@ -63,6 +63,12 @@ unalignable tokens produce a content-free error instead of incomplete
 redaction. Custom tokenizers and filtered output should supply exact source
 offsets; treat an alignment error as a failed scan, not a PII-free document.
 
+Existing `TokenClassificationEntity` and `TokenClassificationPipeline` outputs
+retain required numeric offsets. Use the additive `RawTokenClassificationEntity`,
+`RawTokenClassificationPipeline`, and `RawTransformersRuntime` input types for
+offset-less runtimes. Model loaders and `alignTokenOffsets()` return aligned
+entities, preserving the v2.2 typed-consumer contract.
+
 ## Local Browser Runtime
 
 The lower-level ONNX Runtime Web loader keeps model and runtime assets on local
