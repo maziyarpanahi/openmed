@@ -5,14 +5,12 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-## [2.3.0] - 2026-09-02
+## [2.3.0] - 2026-09-03
 
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
 workflows, multimodal asset intake, clinical evidence, local training,
 cross-platform runtimes, deployment adapters, and release hardening. The final
-audited `v2.2.0..v2.3.0` candidate range contains 250 commits and 646 changed
+audited `v2.2.0..v2.3.0` release-branch range contains 251 commits and 650 changed
 files.
 
 The static public Python surface grows from 37,735 to 41,729 symbols with
@@ -342,6 +340,22 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
   reuse, equivalent NumPy and pure-Python paths, span-local grapheme work,
   binary32-compatible confidence reconstruction, and opt-in kernel compilation
   controls (#2946).
+
+### Fixed
+
+- The `openmed` npm package now defaults to the public
+  `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android` repository
+  (exported as `DEFAULT_MODEL_ID`) and routes `-onnx-android` model ids through
+  `loadOnnxModel()` instead of the unavailable former default.
+- The `openmed` npm package aligns Transformers.js token-classification output
+  back to the source text before BIO decoding through `alignTokenOffsets()`;
+  `extractPii()` requests `ignore_labels: []` to retain the full sequence. The
+  documented `loadOnnxModel()` to `deidentify()` path no longer silently returns
+  zero spans solely because the runtime omits character offsets.
+- Token alignment preserves decomposed accents and supplementary Unicode
+  letters. Unalignable tokens fail with a content-free error instead of
+  silently producing incomplete redaction; custom pipelines can supply exact
+  source offsets.
 
 ## [2.2.0] - 2026-08-21
 
@@ -2930,7 +2944,7 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v2.2.0...HEAD
+[2.3.0]: https://github.com/maziyarpanahi/openmed/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/maziyarpanahi/openmed/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/maziyarpanahi/openmed/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/maziyarpanahi/openmed/releases/tag/v2.0.0

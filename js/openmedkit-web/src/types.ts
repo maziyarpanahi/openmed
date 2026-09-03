@@ -101,8 +101,9 @@ export interface TokenClassificationEntity {
   entity_group?: string;
   score?: number;
   word?: string;
-  start: number;
-  end: number;
+  /** Character offsets; absent from Transformers.js output and aligned from `word`. */
+  start?: number;
+  end?: number;
   index?: number;
 }
 

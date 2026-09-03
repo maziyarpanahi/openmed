@@ -1,9 +1,10 @@
 import { decodeBioTokenSpans } from "./decoder";
-import { loadTokenClassificationPipeline } from "./model-loader";
+import { loadOnnxModel, loadTokenClassificationPipeline } from "./model-loader";
 import {
   OPENMED_SPAN_SCHEMA_VERSION,
   type DeidentifyOptions,
   type ExtractPiiOptions,
+  type ModelLoader,
   type OpenMedDeidentifyResult,
   type OpenMedSpan,
   type SpanAction,
@@ -43,6 +44,7 @@ export {
   refinePrivacyFilterSpan,
   trimSpanWhitespace,
 } from "./decoder";
+export { alignTokenOffsets } from "./offsets";
 export {
   isLocalModelReference,
   loadOnnxModel,
@@ -120,21 +122,26 @@ export type {
   WebGpuTokenSpan,
 } from "./runtime/webgpu-session";
 
-const DEFAULT_MODEL_ID = "OpenMed/privacy-filter-transformersjs";
+export const DEFAULT_MODEL_ID =
+  "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
 const DEFAULT_HASH_SECRET = "openmedkit-web";
+const ONNX_ANDROID_REPO_PATTERN = /-onnx-android$/i;
 
 export async function extractPii(
   text: string,
   options: ExtractPiiOptions = {},
 ): Promise<OpenMedSpan[]> {
+  const model = options.model ?? DEFAULT_MODEL_ID;
   const pipeline =
     options.pipeline ??
-    (await (options.modelLoader ?? loadTokenClassificationPipeline)(
-      options.model ?? DEFAULT_MODEL_ID,
+    (await (options.modelLoader ?? defaultModelLoaderFor(model))(
+      model,
       options.loaderOptions,
     ));
+  // Keep "O" tokens so offset alignment sees the full token sequence.
   const rawOutput = await pipeline(text, {
     aggregation_strategy: "none",
+    ignore_labels: [],
     ...(options.pipelineOptions ?? {}),
   });
   const decoded = decodeBioTokenSpans(text, rawOutput, {
@@ -167,12 +174,18 @@ export async function extractPii(
       reversible_id: null,
       section: options.section ?? null,
       metadata: {
-        ...(options.model ? { model: options.model } : {}),
+        ...(options.model || !options.pipeline ? { model } : {}),
         ...(options.metadata ?? {}),
       },
     });
   }
   return spans;
+}
+
+function defaultModelLoaderFor(model: string): ModelLoader {
+  return ONNX_ANDROID_REPO_PATTERN.test(model)
+    ? loadOnnxModel
+    : loadTokenClassificationPipeline;
 }
 
 export async function deidentify(

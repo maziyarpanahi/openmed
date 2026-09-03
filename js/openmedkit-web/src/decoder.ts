@@ -1,3 +1,4 @@
+import { alignTokenOffsets } from "./offsets";
 import {
   CANONICAL_LABELS,
   type CanonicalLabel,
@@ -231,7 +232,7 @@ export function decodeBioTokenSpans(
   options: { threshold?: number } = {},
 ): DecodedEntitySpan[] {
   const threshold = options.threshold ?? 0;
-  const tokens = flattenTokenClassificationOutput(output)
+  const tokens = alignTokenOffsets(text, flattenTokenClassificationOutput(output))
     .map((token, fallbackIndex) => prepareToken(token, fallbackIndex))
     .filter((token): token is PreparedToken => token !== null)
     .sort((left, right) => left.index - right.index || left.start - right.start);

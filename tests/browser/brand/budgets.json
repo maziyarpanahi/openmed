@@ -33,8 +33,8 @@
   },
   "notes": [
     "Artifact limits are based on the exact staged v2.3 schema candidate, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The exact v2.3.0 release candidate contains 449 files, 37499269 total bytes, 37161690 unique payload bytes, and 337579 duplicate payload bytes.",
-    "The 35.5 MiB unique-payload ceiling retains 62758 bytes of bounded headroom while total payload remains capped at 36 MiB.",
+    "The exact v2.3.0 release artifact contains 449 files, 37503239 total bytes, 37165660 unique payload bytes, and 337579 duplicate payload bytes.",
+    "The 35.5 MiB unique-payload ceiling retains 58788 bytes of bounded headroom while total payload remains capped at 36 MiB.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
