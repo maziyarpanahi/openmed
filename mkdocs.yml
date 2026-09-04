@@ -88,6 +88,7 @@ nav:
       - Cross-format Offset Properties: structured/offset-properties.md
       - Schema Snapshot Compatibility: structured/schema-snapshots.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Clinical Section-Boundary Provenance: clinical/section-provenance.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
       - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
