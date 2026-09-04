@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from enum import Enum
 from typing import Any, Final, Sequence
 
@@ -14,6 +14,7 @@ FEDERATED_ROUND_STATUS_SCHEMA_VERSION = "openmed.training.federated_status.v1"
 DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE = 5
 
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_STATUS_BUILDER_TOKEN: Final = object()
 
 
 class FederatedQuorumStatus(str, Enum):
@@ -80,7 +81,7 @@ class FederatedRoundStatusError(ValueError):
 
 @dataclass(frozen=True)
 class FederatedRoundStatus:
-    """An immutable round summary that contains only publishable aggregates."""
+    """An immutable summary returned by :func:`build_federated_round_status`."""
 
     state: FederatedRoundState
     quorum_status: FederatedQuorumStatus
@@ -91,8 +92,13 @@ class FederatedRoundStatus:
     aggregate_digest_refs: tuple[str, ...] = ()
     reason_code: FederatedRoundReasonCode | None = None
     schema_version: str = FEDERATED_ROUND_STATUS_SCHEMA_VERSION
+    _builder_token: InitVar[object | None] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _builder_token: object | None) -> None:
+        if _builder_token is not _STATUS_BUILDER_TOKEN:
+            raise FederatedRoundStatusError(
+                "federated round status must be built from aggregate inputs"
+            )
         if not isinstance(self.state, FederatedRoundState):
             raise FederatedRoundStatusError("invalid federated round state")
         if not isinstance(self.quorum_status, FederatedQuorumStatus):
@@ -226,6 +232,7 @@ def build_federated_round_status(
         ),
         aggregate_digest_refs=digest_refs,
         reason_code=reason_code,
+        _builder_token=_STATUS_BUILDER_TOKEN,
     )
 
 

@@ -4,7 +4,9 @@ OpenMed can render a federated training round as a deterministic operator
 summary without publishing participant identities or local training data. The
 summary accepts aggregate counts and digest references only. It has no fields
 for client IDs, site names, patient counts, local losses, gradients, or
-per-client metrics.
+per-client metrics. Build summaries with `build_federated_round_status()`;
+direct construction is rejected so callers cannot forge the derived quorum or
+completion fields.
 
 ## Disclosure rules
 

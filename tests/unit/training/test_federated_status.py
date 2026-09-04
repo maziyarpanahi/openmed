@@ -405,18 +405,18 @@ def test_status_is_immutable() -> None:
         summary.state = S.ABORTED  # type: ignore[misc]
 
 
-@pytest.mark.parametrize(("participants", "completed"), [(None, 5), (5, 6)])
-def test_direct_status_construction_enforces_released_count_relationships(
-    participants: int | None, completed: int
-) -> None:
-    with pytest.raises(FederatedRoundStatusError):
+def test_direct_status_construction_cannot_forge_derived_fields() -> None:
+    with pytest.raises(
+        FederatedRoundStatusError,
+        match="must be built from aggregate inputs",
+    ):
         FederatedRoundStatus(
             state=S.COLLECTING,
-            quorum_status=FederatedQuorumStatus.MET,
-            participant_count=participants,
-            completed_participant_count=completed,
+            quorum_status=FederatedQuorumStatus.NOT_MET,
+            participant_count=8,
+            completed_participant_count=8,
             minimum_group_size=5,
-            completion_band=FederatedCompletionBand.HALF_OR_MORE,
+            completion_band=FederatedCompletionBand.NOT_STARTED,
         )
 
 
