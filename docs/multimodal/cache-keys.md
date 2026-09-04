@@ -52,10 +52,13 @@ nested values, non-finite numbers, and out-of-range numbers fail closed.
 
 ## Privacy boundary
 
-Version fields accept only bounded metadata tokens. Paths, URLs, clinical text,
-credentials, prompts, raw bytes, and free-form option values are rejected
-without being echoed in errors. The returned key contains only a public schema
-prefix and a SHA-256 digest.
+Version fields use a bounded, lowercase version grammar: a single alphanumeric
+component, a hyphen, an optional `v`, one to four numeric components, and an
+optional `alpha`, `beta`, `rc`, or `dev` suffix (for example, `vision-2.1` or
+`policy-3.0-rc1`). Generic identifier-shaped strings are not accepted. Paths,
+URLs, clinical text, credentials, prompts, raw bytes, and free-form option
+values are rejected without being echoed in errors. The returned key contains
+only a public schema prefix and a SHA-256 digest.
 
 The helper performs no file access, network access, media hashing, cache
 storage, eviction, or encryption. Callers remain responsible for computing the

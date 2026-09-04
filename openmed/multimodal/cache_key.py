@@ -51,7 +51,10 @@ NUMERIC_PREPROCESSING_OPTIONS: Final[
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _MEDIA_TYPE_RE = re.compile(r"^[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*$")
-_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
+_VERSION_RE = re.compile(
+    r"^[a-z][a-z0-9]{0,31}-(?:v)?[0-9]+(?:\.[0-9]+){0,3}"
+    r"(?:-(?:alpha|beta|rc|dev)[0-9]*)?$"
+)
 _SUPPORTED_EXACT_MEDIA_TYPES = frozenset(
     {"application/dicom", "application/dicom+json", "application/pdf"}
 )

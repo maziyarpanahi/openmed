@@ -77,6 +77,14 @@ def test_every_declared_processing_version_changes_the_key(
     assert _key() != _key(**{field: replacement})
 
 
+@pytest.mark.parametrize(
+    "version",
+    ["ocr-v2", "vision-2.1.0", "policy-3.0.0-rc1"],
+)
+def test_processing_versions_use_a_bounded_version_grammar(version: str) -> None:
+    assert _key(provider_version=version)
+
+
 def test_preprocessing_option_changes_invalidate_the_key() -> None:
     baseline = _key(preprocessing_options={"resize_mode": "fit"})
 
@@ -163,6 +171,10 @@ def test_invalid_media_types_fail_without_echoing_values(media_type: object) -> 
         "https://internal.invalid/model",
         "Bearer synthetic-credential",
         "prompt: extract diagnosis",
+        "Patient_Jane_Doe",
+        "MRN_123456",
+        "sk-proj-secret-token",
+        "patient-jane-1",
         b"raw-version-bytes",
         "",
         "v" * 65,
