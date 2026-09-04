@@ -213,6 +213,7 @@ classification:
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
+    - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/wav-preflight.md
     - multimodal/pdf-redaction-fidelity.md
