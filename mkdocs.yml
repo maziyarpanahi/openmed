@@ -30,6 +30,7 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Event Correlation: agent/event-correlation.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Agent Timing Metadata: agent/timing-metadata.md
@@ -101,6 +102,7 @@ nav:
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
+      - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
@@ -132,12 +134,17 @@ nav:
       - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
+      - Federated Round Status: training/federated-round-status.md
+      - Federated Round Scheduling: training/federated-scheduling.md
       - Preference Pair Schema: reference/preference-schema.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
+      - Privacy-safe Asset Batches: multimodal/asset-batches.md
+      - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
+      - Processing Summaries: multimodal/processing-summaries.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
@@ -239,6 +246,7 @@ nav:
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
+      - FHIR DiagnosticReport Export: fhir/diagnostic-report-export.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
       - FHIR SDC Privacy Projection: fhir/sdc-privacy.md
       - Document Intake Quarantine: fhir/document-intake-quarantine.md

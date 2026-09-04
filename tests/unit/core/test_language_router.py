@@ -143,13 +143,13 @@ def test_urdu_cues_select_ur_over_ar_once_an_urdu_pack_is_registered():
     assert urdu.language == "ur"
     assert urdu.runs[0].source == "stdlib:urdu-cues"
     assert urdu.runs[0].confidence == pytest.approx(0.99)
-    assert urdu.runs[0].candidates == ("ur", "ar", "ha")
+    assert urdu.runs[0].candidates == ("ur", "ar", "fa", "ha")
     assert arabic.language == "ar"
     assert all(run.language != "ur" for run in arabic.runs)
-    assert arabic.runs[0].candidates == ("ar", "ha", "ur")
+    assert arabic.runs[0].candidates == ("ar", "fa", "ha", "ur")
     assert persian.language == "ar"
     assert all(run.language != "ur" for run in persian.runs)
-    assert persian.runs[0].candidates == ("ar", "ha", "ur")
+    assert persian.runs[0].candidates == ("ar", "fa", "ha", "ur")
 
 
 def test_urdu_disambiguation_never_resolves_the_hausa_candidate():
@@ -187,15 +187,15 @@ def test_urdu_evidence_without_a_registered_pack_falls_back_to_arabic():
     assert urdu.runs[0].source == "stdlib:arabic-fallback"
     assert urdu.runs[0].confidence == pytest.approx(0.8)
     assert arabic.language == "ar"
-    assert arabic.runs[0].source == "stdlib:script"
-    assert arabic.runs[0].confidence == pytest.approx(0.99)
+    assert arabic.runs[0].source == "stdlib:pack-priority"
+    assert arabic.runs[0].confidence == pytest.approx(0.8)
 
     # The evidence is preserved in the run metadata even though no pack can
     # act on it yet: ``ur`` leads the candidate order while ``language``
     # reports the Arabic fallback that actually handled the run.
-    assert urdu.runs[0].candidates == ("ur", "ar", "ha")
+    assert urdu.runs[0].candidates == ("ur", "ar", "fa", "ha")
     assert urdu.runs[0].candidates[0] != urdu.runs[0].language
-    assert arabic.runs[0].candidates == ("ar", "ha", "ur")
+    assert arabic.runs[0].candidates == ("ar", "fa", "ha", "ur")
     assert arabic.runs[0].candidates[0] == arabic.runs[0].language
 
 
@@ -210,7 +210,7 @@ def test_arabic_fallback_confidence_weights_the_document_decision():
     assert (hangul.language, hangul.confidence) == ("ko", pytest.approx(0.99))
     assert (arabic.language, arabic.confidence) == ("ar", pytest.approx(0.8))
     assert arabic.source == "stdlib:arabic-fallback"
-    assert arabic.candidates == ("ur", "ar", "ha")
+    assert arabic.candidates == ("ur", "ar", "fa", "ha")
     assert hangul.candidates == ("ko",)
 
     # The lower per-run confidence must propagate into the length-weighted

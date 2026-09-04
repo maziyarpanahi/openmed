@@ -21,6 +21,14 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added typed, 128-bit opaque correlation identifiers for agent runs and
+  actions, with strict kind-aware parsing, deterministic metadata-only JSON,
+  parent-action validation, and value-free failures (#2973).
+- Added a conservative, deterministic FHIR DiagnosticReport exporter with
+  R4/R5 union allowlisting (32-field), explicit `unknown` status, type-gated
+  scalars and Reference normalization, `effective[x]` mutual exclusivity,
+  deep-copy evidence preservation, field-name-only value-free errors, and
+  no network or clock dependency (#2566).
 - Added a dependency-free, versioned multimodal asset manifest with strict
   media and digest validation, bounded metadata-only fields, deterministic
   JSON serialization, and value-free rejection of paths, URLs, free text, and
@@ -36,6 +44,11 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 - Added image, PDF, DICOM, and audio profiles that validate canonical manifest
   metadata into deterministic field-and-reason findings without opening or
   decoding an asset (#2978).
+- Added privacy-safe multimodal asset batches with opaque batch identifiers,
+  canonical asset ordering, duplicate identifier and digest detection, a
+  bounded asset count, derived byte, page, frame, and duration totals, and
+  sorted value-free findings for invalid, oversized, overflowing, or
+  inconsistent batches (#3002).
 - Added a closed, JSON-safe agent outcome vocabulary with success, abstention,
   reviewer-handoff, policy-denial, and failure classes, deterministic
   serialization, and value-free rejection of unknown codes or free-text

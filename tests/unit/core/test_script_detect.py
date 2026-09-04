@@ -190,7 +190,7 @@ def test_indic_and_arabic_script_language_hints_are_exact():
         "Telugu": ("te",),
         "Kannada": ("kn",),
         "Malayalam": ("ml",),
-        "Arabic": ("ar", "ha", "ur"),
+        "Arabic": ("ar", "fa", "ha", "ur"),
     }
 
     for script, languages in expected_hints.items():
@@ -349,8 +349,8 @@ def test_urdu_evidence_moves_ur_ahead_of_ar_without_dropping_candidates():
     baseline = candidate_languages_for_script("Arabic")
     reordered = candidate_languages_for_text(_ARABIC_STEM + _URDU_LETTERS[0], "Arabic")
 
-    assert baseline == ("ar", "ha", "ur")
-    assert reordered == ("ur", "ar", "ha")
+    assert baseline == ("ar", "fa", "ha", "ur")
+    assert reordered == ("ur", "ar", "fa", "ha")
     assert set(reordered) == set(baseline)
     assert candidate_languages_for_text(_ARABIC_STEM, "Arabic") == baseline
 

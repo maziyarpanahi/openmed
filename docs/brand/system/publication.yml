@@ -105,6 +105,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent/event-correlation.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
     - agent/timing-metadata.md
@@ -176,6 +177,7 @@ classification:
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
+    - clinical/citation-ordering.md
     - clinical/evidence-tables.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
@@ -207,12 +209,17 @@ classification:
     - reference/chat-schema.md
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
+    - training/federated-round-status.md
+    - training/federated-scheduling.md
     - reference/preference-schema.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
+    - multimodal/asset-batches.md
+    - multimodal/cache-keys.md
+    - multimodal/processing-summaries.md
     - multimodal/wav-preflight.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
@@ -313,6 +320,7 @@ classification:
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
     - fhir/bulk-checkpoints.md
+    - fhir/diagnostic-report-export.md
     - fhir/operation-outcome.md
     - fhir/sdc-privacy.md
     - fhir/document-intake-quarantine.md
