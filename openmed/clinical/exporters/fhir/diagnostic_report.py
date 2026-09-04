@@ -93,6 +93,12 @@ _ALLOWED_FIELDS: frozenset[str] = _BASE_FIELDS | _RESOURCE_FIELDS
 # This is exactly the optional-keys API documented for ``report`` plus the
 # FHIR ``subject`` reference (supplied via arg or mapping) and base ``text``.
 _DIRECT_COPY_KEYS: tuple[str, ...] = (
+    "meta",
+    "implicitRules",
+    "language",
+    "contained",
+    "extension",
+    "modifierExtension",
     "identifier",
     "basedOn",
     "category",
@@ -119,6 +125,9 @@ _DIRECT_COPY_KEYS: tuple[str, ...] = (
 _LIST_FIELDS: frozenset[str] = frozenset(
     {
         "identifier",
+        "contained",
+        "extension",
+        "modifierExtension",
         "basedOn",
         "category",
         "performer",
@@ -137,11 +146,11 @@ _LIST_FIELDS: frozenset[str] = frozenset(
 
 # Scalar fields that must be string when present (conservative type gate).
 _STRING_FIELDS: frozenset[str] = frozenset(
-    {"conclusion", "effectiveDateTime", "issued"}
+    {"conclusion", "effectiveDateTime", "implicitRules", "issued", "language"}
 )
 
 # Scalar fields that must be mapping when present.
-_MAPPING_FIELDS: frozenset[str] = frozenset({"effectivePeriod", "text"})
+_MAPPING_FIELDS: frozenset[str] = frozenset({"effectivePeriod", "meta", "text"})
 
 # Reference fields that accept string (normalized to {"reference": ...}) or mapping.
 _REFERENCE_FIELDS: frozenset[str] = frozenset({"encounter", "composition"})
@@ -193,7 +202,7 @@ def _build_code(value: Any) -> dict[str, Any]:
         raise ValueError("invalid value for field 'code'")
     if not value:
         return {"text": "synthetic diagnostic report"}
-    return dict(value)
+    return copy.deepcopy(dict(value))
 
 
 def _validate_shape(resource: Mapping[str, Any]) -> None:
@@ -206,12 +215,23 @@ def _validate_shape(resource: Mapping[str, Any]) -> None:
         resource: The assembled DiagnosticReport mapping.
 
     Raises:
-        ValueError: If any unsupported field is present. The message
-            references only the field name.
+        ValueError: If any unsupported field is present. The message is a
+            fixed category and never includes the rejected key.
     """
     for key in resource:
         if key not in _ALLOWED_FIELDS:
-            raise ValueError(f"unsupported field '{key}'")
+            raise ValueError("DiagnosticReport contains an unsupported field")
+
+
+def _validate_input_fields(report: Mapping[object, Any]) -> None:
+    """Reject unknown input keys before inspecting or copying their values."""
+
+    try:
+        keys = tuple(report.keys())
+    except Exception:
+        raise ValueError("DiagnosticReport fields could not be read") from None
+    if any(type(key) is not str or key not in _ALLOWED_FIELDS for key in keys):
+        raise ValueError("DiagnosticReport contains an unsupported field")
 
 
 def _deep_copy_value(value: Any) -> Any:
@@ -269,6 +289,9 @@ def to_diagnostic_report(
     """
     if not isinstance(report, Mapping):
         raise TypeError("report must be a mapping")
+    _validate_input_fields(report)
+    if "resourceType" in report and report["resourceType"] != "DiagnosticReport":
+        raise ValueError("invalid value for field 'resourceType'")
     # doc_id reserved for deterministic Bundle fullUrl seeding; not used in
     # standalone projection to keep output byte-stable (see bundle.py).
     del doc_id  # noqa: F841
@@ -337,16 +360,10 @@ def to_diagnostic_report(
         if key in _LIST_FIELDS:
             if not isinstance(value, (list, tuple)):
                 raise ValueError(f"invalid value for field '{key}'")
-            # Preserve order deterministically; deep-copy items.
-            copied: list[Any] = []
-            for item in value:
-                if isinstance(item, Mapping):
-                    copied.append(_deep_copy_value(dict(item)))
-                elif isinstance(item, list):
-                    copied.append(_deep_copy_value(list(item)))
-                else:
-                    copied.append(_deep_copy_value(item))
-            resource[key] = copied
+            if any(not isinstance(item, Mapping) for item in value):
+                raise ValueError(f"invalid value for field '{key}'")
+            # FHIR repeating elements are complex records, never raw scalars.
+            resource[key] = [_deep_copy_value(dict(item)) for item in value]
         elif key in _REFERENCE_FIELDS:
             if isinstance(value, bool):
                 raise ValueError(f"invalid value for field '{key}'")
@@ -379,49 +396,6 @@ def to_diagnostic_report(
 
     if "effectiveDateTime" in resource and "effectivePeriod" in resource:
         raise ValueError("invalid value for field 'effectivePeriod'")
-
-    # Capture any unsupported inferred field by projecting it into the
-    # resource so _validate_shape can reject it with the field name only.
-    handled = set(_DIRECT_COPY_KEYS) | {
-        "status",
-        "code",
-        "subject",
-        "id",
-        "resourceType",
-    }
-    for key, value in report.items():
-        if key in handled:
-            continue
-        # Allow base fields that are already handled via _DIRECT_COPY_KEYS
-        # (text) and any still-allowed base extension fields passed
-        # through the report. Unsupported keys are added so validation
-        # raises fail-closed.
-        if key in _ALLOWED_FIELDS:
-            # Base field like ``extension`` or ``modifierExtension``
-            # that was not in _DIRECT_COPY_KEYS but is allowed.
-            if value is None:
-                continue
-            if isinstance(value, Mapping):
-                resource[key] = _deep_copy_value(dict(value))
-            elif isinstance(value, (list, tuple)):
-                resource[key] = [
-                    _deep_copy_value(dict(v))
-                    if isinstance(v, Mapping)
-                    else _deep_copy_value(v)
-                    for v in value
-                ]
-            else:
-                resource[key] = _deep_copy_value(value)
-        else:
-            # Project unsupported field verbatim so shape validation
-            # reports the field name without leaking a raw sensitive
-            # value in logs — the raise path below uses only the key.
-            if isinstance(value, Mapping):
-                resource[key] = _deep_copy_value(dict(value))
-            elif isinstance(value, (list, tuple)):
-                resource[key] = _deep_copy_value(list(value))
-            else:
-                resource[key] = _deep_copy_value(value)
 
     _validate_shape(resource)
     return resource

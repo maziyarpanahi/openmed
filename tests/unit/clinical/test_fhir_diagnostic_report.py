@@ -190,10 +190,10 @@ def test_presented_form_preserved_and_data_not_in_exception() -> None:
     assert out["presentedForm"][0]["contentType"] == "text/plain"
 
     sensitive = "s3cr3t-attachment-data-PHI-XYZ-789"
-    with pytest.raises(ValueError, match="inferredField") as exc:
+    with pytest.raises(ValueError, match="unsupported field") as exc:
         to_diagnostic_report(_synthetic_report(inferredField=sensitive))
     assert sensitive not in str(exc.value)
-    assert "inferredField" in str(exc.value)
+    assert "inferredField" not in str(exc.value)
 
 
 def test_result_references_preserved_order() -> None:
@@ -254,16 +254,33 @@ def test_r4_and_r5_shape_accepted() -> None:
 
 def test_reject_inferred_field_raises() -> None:
     sensitive = "PHI-sensitive-value-should-not-appear-XYZ-123"
-    with pytest.raises(ValueError, match="inferredField") as exc:
+    with pytest.raises(ValueError, match="unsupported field") as exc:
         to_diagnostic_report(_synthetic_report(inferredField=sensitive))
     assert sensitive not in str(exc.value)
-    assert "inferredField" in str(exc.value)
+    assert "inferredField" not in str(exc.value)
 
     # second inferred field variant
-    with pytest.raises(ValueError, match="anotherInferred") as exc2:
+    with pytest.raises(ValueError, match="unsupported field") as exc2:
         to_diagnostic_report(_synthetic_report(anotherInferred="secret"))
-    assert "anotherInferred" in str(exc2.value)
+    assert "anotherInferred" not in str(exc2.value)
     assert "secret" not in str(exc2.value)
+
+
+@pytest.mark.parametrize("field", ["presentedForm", "result"])
+def test_repeating_elements_reject_raw_scalar_items(field: str) -> None:
+    sentinel = "Patient_Jane_Doe_MRN_123456"
+
+    with pytest.raises(ValueError, match=field) as error:
+        to_diagnostic_report(_synthetic_report(**{field: [sentinel, 42]}))
+    assert sentinel not in str(error.value)
+
+
+def test_sensitive_unsupported_key_is_not_echoed() -> None:
+    sentinel = "Patient_Jane_Doe_MRN_123456"
+
+    with pytest.raises(ValueError, match="unsupported field") as error:
+        to_diagnostic_report(_synthetic_report(**{sentinel: "synthetic"}))
+    assert sentinel not in str(error.value)
 
 
 def test_allowed_oracle_locked() -> None:
@@ -502,7 +519,7 @@ def test_result_partition_and_fail_closed_invariants() -> None:
     assert out["conclusion"] == "synthetic"
     assert out["encounter"] == {"reference": "Encounter/syn-1"}
     # Excluded: unsupported key is rejected, not silently dropped
-    with pytest.raises(ValueError, match="inferredField"):
+    with pytest.raises(ValueError, match="unsupported field"):
         to_diagnostic_report(_synthetic_report(inferredField="secret"))
     # Partition: included ∩ excluded = ∅ — allowlisted set never overlaps
     # rejected set; verify via oracle (len check)
