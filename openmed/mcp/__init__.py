@@ -21,6 +21,7 @@ _CONSENT_EXPORTS = (
     "ConsentReceipt",
     "ConsentReceiptIssuer",
     "ConsentReceiptPolicy",
+    "ConsentReceiptVerificationResult",
     "ConsentReceiptVerifier",
     "canonical_argument_digest",
 )
@@ -56,6 +57,7 @@ def __getattr__(name: str) -> Any:
             ConsentReceipt,
             ConsentReceiptIssuer,
             ConsentReceiptPolicy,
+            ConsentReceiptVerificationResult,
             ConsentReceiptVerifier,
             canonical_argument_digest,
         )
@@ -65,6 +67,7 @@ def __getattr__(name: str) -> Any:
             "ConsentReceipt": ConsentReceipt,
             "ConsentReceiptIssuer": ConsentReceiptIssuer,
             "ConsentReceiptPolicy": ConsentReceiptPolicy,
+            "ConsentReceiptVerificationResult": ConsentReceiptVerificationResult,
             "ConsentReceiptVerifier": ConsentReceiptVerifier,
             "canonical_argument_digest": canonical_argument_digest,
         }
