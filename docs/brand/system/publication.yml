@@ -208,6 +208,7 @@ classification:
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
     - training/federated-round-status.md
+    - training/federated-scheduling.md
     - reference/preference-schema.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
