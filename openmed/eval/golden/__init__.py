@@ -19,6 +19,7 @@ from .hard_negatives import (
 from .loader import (
     CRITICAL_FINDINGS_CATEGORY,
     GOLDEN_CATEGORIES,
+    SPECIALIZED_GOLDEN_CATEGORIES,
     ConsensusDocument,
     ConsensusRelation,
     GoldenFixture,
@@ -37,6 +38,7 @@ from .loader import (
 __all__ = [
     "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
+    "SPECIALIZED_GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
     "HARD_NEGATIVE_PACK_VERSION",
     "ConsensusDocument",
