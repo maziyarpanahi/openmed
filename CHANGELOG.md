@@ -36,6 +36,11 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 - Added image, PDF, DICOM, and audio profiles that validate canonical manifest
   metadata into deterministic field-and-reason findings without opening or
   decoding an asset (#2978).
+- Added privacy-safe multimodal asset batches with opaque batch identifiers,
+  canonical asset ordering, duplicate identifier and digest detection, a
+  bounded asset count, derived byte, page, frame, and duration totals, and
+  sorted value-free findings for invalid, oversized, overflowing, or
+  inconsistent batches (#3002).
 - Added a closed, JSON-safe agent outcome vocabulary with success, abstention,
   reviewer-handoff, policy-denial, and failure classes, deterministic
   serialization, and value-free rejection of unknown codes or free-text

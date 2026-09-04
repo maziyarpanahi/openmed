@@ -36,6 +36,14 @@ from .abstention import (
     AbstentionStage,
     AbstentionValidationError,
 )
+from .asset_batch import (
+    BATCH_VERSION,
+    MAX_BATCH_ASSETS,
+    AssetBatch,
+    AssetBatchError,
+    BatchFinding,
+    validate_asset_batch,
+)
 from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
     ExtractedDocument,
@@ -307,6 +315,12 @@ __all__ = [
     "AssetManifest",
     "AssetManifestError",
     "MANIFEST_VERSION",
+    "AssetBatch",
+    "AssetBatchError",
+    "BATCH_VERSION",
+    "BatchFinding",
+    "MAX_BATCH_ASSETS",
+    "validate_asset_batch",
     "MAX_MEDIA_TYPE_PREFIX_BYTES",
     "MediaTypeStatus",
     "detect_media_type",

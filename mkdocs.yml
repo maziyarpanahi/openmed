@@ -138,6 +138,7 @@ nav:
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
+      - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
