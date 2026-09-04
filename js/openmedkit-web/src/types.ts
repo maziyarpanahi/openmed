@@ -106,9 +106,20 @@ export interface TokenClassificationEntity {
   index?: number;
 }
 
+/** Unaligned runtime input; public aligned entities retain numeric offsets. */
+export type RawTokenClassificationEntity =
+  Omit<TokenClassificationEntity, "start" | "end"> & {
+    start?: number;
+    end?: number;
+  };
+
 export type TokenClassificationOutput =
   | TokenClassificationEntity[]
   | TokenClassificationEntity[][];
+
+export type RawTokenClassificationOutput =
+  | RawTokenClassificationEntity[]
+  | RawTokenClassificationEntity[][];
 
 export interface TokenClassificationCallOptions {
   aggregation_strategy?: "none" | "simple" | "first" | "average" | "max";
@@ -121,6 +132,11 @@ export type TokenClassificationPipeline = (
   options?: TokenClassificationCallOptions,
 ) => TokenClassificationOutput | Promise<TokenClassificationOutput>;
 
+export type RawTokenClassificationPipeline = (
+  text: string,
+  options?: TokenClassificationCallOptions,
+) => RawTokenClassificationOutput | Promise<RawTokenClassificationOutput>;
+
 export interface DecodedEntitySpan {
   entity_type: string;
   canonical_label: CanonicalLabel;
@@ -132,7 +148,7 @@ export interface DecodedEntitySpan {
 }
 
 export interface ExtractPiiOptions {
-  pipeline?: TokenClassificationPipeline;
+  pipeline?: RawTokenClassificationPipeline;
   model?: string;
   modelLoader?: ModelLoader;
   loaderOptions?: LoadModelOptions;
@@ -164,7 +180,7 @@ export interface LoadModelOptions {
   quantized?: boolean;
   dtype?: string;
   device?: string;
-  runtime?: TransformersRuntime | (() => Promise<TransformersRuntime>);
+  runtime?: RawTransformersRuntime | (() => Promise<RawTransformersRuntime>);
   pipelineOptions?: Record<string, unknown>;
 }
 
@@ -185,6 +201,15 @@ export interface TransformersRuntime {
     allowLocalModels?: boolean;
     [key: string]: unknown;
   };
+}
+
+/** Runtime input that may omit offsets; model loaders align their output. */
+export interface RawTransformersRuntime extends Omit<TransformersRuntime, "pipeline"> {
+  pipeline: (
+    task: "token-classification",
+    model: string,
+    options?: Record<string, unknown>,
+  ) => Promise<RawTokenClassificationPipeline> | RawTokenClassificationPipeline;
 }
 
 export type ModelLoader = (

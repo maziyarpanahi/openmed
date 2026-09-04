@@ -48,7 +48,7 @@ const service = new ElectronDeidentifyService({
     app.getPath("userData"),
     "openmed",
     "models",
-    "privacy-filter-transformersjs",
+    "OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android",
   ),
 });
 
