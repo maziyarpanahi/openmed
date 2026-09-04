@@ -102,6 +102,7 @@ _LAZY_IMPORTS = {
     "get_model_info": ".core.model_registry",
     "get_model_suggestions": ".core.model_registry",
     "get_models_by_category": ".core.model_registry",
+    "get_ner_models_by_language": ".core.model_registry",
     "get_pii_models_by_language": ".core.model_registry",
     "ground": ".clinical.grounding",
     "list_model_categories": ".core.model_registry",
@@ -904,6 +905,7 @@ __all__ = [
     "get_all_models",
     "list_model_categories",
     "get_model_suggestions",
+    "get_ner_models_by_language",
     "get_pii_models_by_language",
     "get_default_pii_model",
     # Hugging Face Hub model-pull helpers
