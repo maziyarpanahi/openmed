@@ -105,6 +105,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent/event-correlation.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
     - agent/timing-metadata.md

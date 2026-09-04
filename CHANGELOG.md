@@ -21,6 +21,9 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added typed, 128-bit opaque correlation identifiers for agent runs and
+  actions, with strict kind-aware parsing, deterministic metadata-only JSON,
+  parent-action validation, and value-free failures (#2973).
 - Added a dependency-free, versioned multimodal asset manifest with strict
   media and digest validation, bounded metadata-only fields, deterministic
   JSON serialization, and value-free rejection of paths, URLs, free text, and
