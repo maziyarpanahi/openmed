@@ -134,6 +134,8 @@ nav:
       - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
+      - Federated Round Status: training/federated-round-status.md
+      - Federated Round Scheduling: training/federated-scheduling.md
       - Preference Pair Schema: reference/preference-schema.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
