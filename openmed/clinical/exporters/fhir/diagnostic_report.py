@@ -223,7 +223,7 @@ def _validate_shape(resource: Mapping[str, Any]) -> None:
             raise ValueError("DiagnosticReport contains an unsupported field")
 
 
-def _validate_input_fields(report: Mapping[object, Any]) -> None:
+def _validate_input_fields(report: Mapping[Any, Any]) -> None:
     """Reject unknown input keys before inspecting or copying their values."""
 
     try:
