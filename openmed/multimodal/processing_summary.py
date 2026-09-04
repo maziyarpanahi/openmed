@@ -369,10 +369,11 @@ def render_processing_summary_markdown(summary: ProcessingSummary) -> str:
     lines.append("")
     lines.append("| Media Type | Count | Total Bytes | Total Pages | Total Frames |")
     lines.append("| --- | --- | --- | --- | --- |")
-    for entry in summary.by_media_type:
+    for media_total in summary.by_media_type:
         lines.append(
-            f"| {entry.media_type} | {entry.count} | {entry.total_bytes} "
-            f"| {entry.total_pages} | {entry.total_frames} |"
+            f"| {media_total.media_type} | {media_total.count} | "
+            f"{media_total.total_bytes} | {media_total.total_pages} | "
+            f"{media_total.total_frames} |"
         )
     lines.append("")
 
@@ -380,25 +381,29 @@ def render_processing_summary_markdown(summary: ProcessingSummary) -> str:
     lines.append("")
     lines.append("| Outcome | Count |")
     lines.append("| --- | --- |")
-    for entry in summary.outcome_counts:
-        lines.append(f"| {entry.outcome.value} | {entry.count} |")
+    for outcome_count in summary.outcome_counts:
+        lines.append(f"| {outcome_count.outcome.value} | {outcome_count.count} |")
     lines.append("")
 
     lines.append("## Abstentions")
     lines.append("")
     lines.append("| Stage | Reason | Count |")
     lines.append("| --- | --- | --- |")
-    for entry in summary.abstention_counts:
-        lines.append(f"| {entry.stage.value} | {entry.reason.value} | {entry.count} |")
+    for abstention_count in summary.abstention_counts:
+        lines.append(
+            f"| {abstention_count.stage.value} | "
+            f"{abstention_count.reason.value} | {abstention_count.count} |"
+        )
     lines.append("")
 
     lines.append("## Asset Digests")
     lines.append("")
     lines.append("| Asset ID | Input SHA-256 | Output SHA-256 |")
     lines.append("| --- | --- | --- |")
-    for entry in summary.asset_digests:
+    for digest_entry in summary.asset_digests:
         lines.append(
-            f"| {entry.asset_id} | {entry.input_sha256} | {entry.output_sha256 or ''} |"
+            f"| {digest_entry.asset_id} | {digest_entry.input_sha256} | "
+            f"{digest_entry.output_sha256 or ''} |"
         )
 
     return "\n".join(lines) + "\n"
