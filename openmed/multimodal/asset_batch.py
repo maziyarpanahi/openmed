@@ -41,7 +41,7 @@ MAX_BATCH_ASSETS: Final = 10_000
 
 _BATCH_ID_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _PATH_OR_URL_RE: Final = re.compile(r"://|(^|[A-Za-z]):[\\/]|[\\/]|~")
-_DURATION_TOLERANCE: Final = 1e-9
+_DURATION_ABSOLUTE_TOLERANCE: Final = 1e-9
 
 _COUNT_AGGREGATES: Final = ("asset_count", "total_bytes", "total_pages", "total_frames")
 _AGGREGATE_FIELDS: Final = (*_COUNT_AGGREGATES, "total_duration_seconds")
@@ -402,8 +402,8 @@ def _aggregate_findings(
         elif not math.isclose(
             declared,
             computed[field_name],
-            rel_tol=_DURATION_TOLERANCE,
-            abs_tol=_DURATION_TOLERANCE,
+            rel_tol=0.0,
+            abs_tol=_DURATION_ABSOLUTE_TOLERANCE,
         ):
             findings.append(BatchFinding("aggregate_mismatch", field_name=field_name))
     return findings

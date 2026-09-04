@@ -315,6 +315,20 @@ def test_declared_aggregates_must_match_manifests(field, value, reason_code) -> 
         AssetBatch.from_dict(payload)
 
 
+def test_duration_tolerance_is_absolute_not_relative() -> None:
+    duration = float(MAX_MANIFEST_DURATION_SECONDS)
+    audio = _image("audio-large", 9, duration_seconds=duration)
+    batch = AssetBatch.build("packet-duration", [audio])
+    payload = batch.to_dict()
+    payload["total_duration_seconds"] = duration - 1.0
+
+    assert validate_asset_batch(payload) == [
+        BatchFinding("aggregate_mismatch", field_name="total_duration_seconds")
+    ]
+    with pytest.raises(AssetBatchError, match="aggregate_mismatch"):
+        AssetBatch.from_dict(payload)
+
+
 def test_declared_aggregates_are_optional_and_accept_integer_durations() -> None:
     batch = AssetBatch.build("packet-optional", [PDF, IMAGE])
     payload = batch.to_dict()
