@@ -2,6 +2,7 @@
   "exports": [
     "CANONICAL_LABELS",
     "CLASSIFY_WGSL_SOURCE",
+    "DEFAULT_MODEL_ID",
     "DEFAULT_WEBGPU_LOGIT_TOLERANCE",
     "DEFAULT_WEBGPU_MAX_RECALL_DELTA",
     "OPENMED_SPAN_SCHEMA_VERSION",
@@ -11,6 +12,7 @@
     "WebGpuClassificationHead",
     "WebGpuTokenClassificationSession",
     "WebGpuVerificationError",
+    "alignTokenOffsets",
     "assertOfflineAssetPath",
     "certifyWebGpuReference",
     "clearOrtWebSessionCache",
