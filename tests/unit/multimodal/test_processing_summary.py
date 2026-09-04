@@ -6,7 +6,11 @@ import random
 
 import pytest
 
-from openmed.multimodal.abstention import AbstentionReason, AbstentionRecord, AbstentionStage
+from openmed.multimodal.abstention import (
+    AbstentionReason,
+    AbstentionRecord,
+    AbstentionStage,
+)
 from openmed.multimodal.asset_manifest import AssetManifest
 from openmed.multimodal.digest import AssetDigest
 from openmed.multimodal.processing_summary import (
@@ -33,22 +37,33 @@ def _manifest(asset_id: str, media_type: str, **kwargs) -> AssetManifest:
     )
 
 
+def _input_digest(manifest: AssetManifest) -> AssetDigest:
+    return AssetDigest(sha256=manifest.sha256, byte_count=manifest.byte_size)
+
+
 def _success(asset_id: str, media_type: str, **kwargs) -> AssetProcessingResult:
+    manifest = _manifest(asset_id, media_type, **kwargs)
     return AssetProcessingResult(
-        manifest=_manifest(asset_id, media_type, **kwargs),
+        manifest=manifest,
         outcome_code=ProcessingOutcome.SUCCESS,
         duration_seconds=1.5,
-        input_digest=_digest(10),
+        input_digest=_input_digest(manifest),
         output_digest=_digest(5),
     )
 
 
-def _abstained(asset_id: str, media_type: str, stage: AbstentionStage, reason: AbstentionReason) -> AssetProcessingResult:
+def _abstained(
+    asset_id: str,
+    media_type: str,
+    stage: AbstentionStage,
+    reason: AbstentionReason,
+) -> AssetProcessingResult:
+    manifest = _manifest(asset_id, media_type)
     return AssetProcessingResult(
-        manifest=_manifest(asset_id, media_type),
+        manifest=manifest,
         outcome_code=ProcessingOutcome.ABSTAINED,
         duration_seconds=0.2,
-        input_digest=_digest(3),
+        input_digest=_input_digest(manifest),
         abstention=AbstentionRecord(stage=stage, reason=reason),
     )
 
@@ -101,7 +116,9 @@ def test_mixed_modality_run() -> None:
 def test_stable_ordering_regardless_of_input_order() -> None:
     results = [
         _success("a3", "image/png", byte_size=1),
-        _abstained("a1", "audio/wav", AbstentionStage.DECODE, AbstentionReason.LOW_QUALITY),
+        _abstained(
+            "a1", "audio/wav", AbstentionStage.DECODE, AbstentionReason.LOW_QUALITY
+        ),
         _success("a2", "application/pdf", byte_size=2),
     ]
     forward = summarize_processing_run(results).to_json()
@@ -110,6 +127,26 @@ def test_stable_ordering_regardless_of_input_order() -> None:
     random.Random(42).shuffle(shuffled)
     shuffled_run = summarize_processing_run(shuffled).to_json()
     assert forward == reversed_run == shuffled_run
+
+
+def test_duration_total_is_stable_across_float_permutations() -> None:
+    results = []
+    for index, duration in enumerate((1e16, 1.0, 1.0)):
+        manifest = _manifest(f"duration-{index}", "audio/wav", byte_size=1)
+        results.append(
+            AssetProcessingResult(
+                manifest=manifest,
+                outcome_code=ProcessingOutcome.SUCCESS,
+                duration_seconds=duration,
+                input_digest=_input_digest(manifest),
+            )
+        )
+
+    forward = summarize_processing_run(results)
+    reversed_run = summarize_processing_run(reversed(results))
+
+    assert forward.total_duration_seconds == 1.0000000000000002e16
+    assert forward.to_json() == reversed_run.to_json()
 
 
 def test_unknown_outcome_code_fails_closed() -> None:
@@ -134,7 +171,7 @@ def test_sentinel_phi_leak() -> None:
         manifest=manifest,
         outcome_code=ProcessingOutcome.SUCCESS,
         duration_seconds=1.0,
-        input_digest=_digest(1),
+        input_digest=_input_digest(manifest),
         output_digest=_digest(2),
     )
     # Attempt to smuggle raw content past the frozen/slotted type.
@@ -152,7 +189,7 @@ def test_sentinel_phi_leak() -> None:
             manifest=manifest,
             outcome_code=ProcessingOutcome.ABSTAINED,
             duration_seconds=1.0,
-            input_digest=_digest(1),
+            input_digest=_input_digest(manifest),
             abstention=None,
         )
     assert sentinel not in str(excinfo.value)
@@ -161,10 +198,17 @@ def test_sentinel_phi_leak() -> None:
 def test_abstention_aggregation() -> None:
     results = [
         _success("a1", "image/png"),
-        _abstained("a2", "image/png", AbstentionStage.DECODE, AbstentionReason.LOW_QUALITY),
-        _abstained("a3", "image/png", AbstentionStage.DECODE, AbstentionReason.LOW_QUALITY),
         _abstained(
-            "a4", "audio/wav", AbstentionStage.PREFLIGHT, AbstentionReason.UNSUPPORTED_MEDIA
+            "a2", "image/png", AbstentionStage.DECODE, AbstentionReason.LOW_QUALITY
+        ),
+        _abstained(
+            "a3", "image/png", AbstentionStage.DECODE, AbstentionReason.LOW_QUALITY
+        ),
+        _abstained(
+            "a4",
+            "audio/wav",
+            AbstentionStage.PREFLIGHT,
+            AbstentionReason.UNSUPPORTED_MEDIA,
         ),
     ]
     summary = summarize_processing_run(results)
@@ -183,7 +227,7 @@ def test_asset_processing_result_post_init_validation() -> None:
             manifest=manifest,
             outcome_code=ProcessingOutcome.ABSTAINED,
             duration_seconds=1.0,
-            input_digest=_digest(1),
+            input_digest=_input_digest(manifest),
             abstention=None,
         )
     with pytest.raises(ProcessingSummaryError):
@@ -191,7 +235,7 @@ def test_asset_processing_result_post_init_validation() -> None:
             manifest=manifest,
             outcome_code=ProcessingOutcome.SUCCESS,
             duration_seconds=1.0,
-            input_digest=_digest(1),
+            input_digest=_input_digest(manifest),
             abstention=AbstentionRecord(
                 stage=AbstentionStage.DECODE, reason=AbstentionReason.LOW_QUALITY
             ),
@@ -201,16 +245,36 @@ def test_asset_processing_result_post_init_validation() -> None:
             manifest=manifest,
             outcome_code=ProcessingOutcome.SUCCESS,
             duration_seconds=-1.0,
-            input_digest=_digest(1),
+            input_digest=_input_digest(manifest),
         )
     with pytest.raises(ProcessingSummaryError):
         AssetProcessingResult(
             manifest=manifest,
             outcome_code=ProcessingOutcome.ABSTAINED,
             duration_seconds=1.0,
-            input_digest=_digest(1),
+            input_digest=_input_digest(manifest),
             abstention=AbstentionRecord(
                 stage=AbstentionStage.DECODE, reason=AbstentionReason.LOW_QUALITY
             ),
             output_digest=_digest(2),
         )
+
+
+def test_input_digest_must_match_manifest_metadata() -> None:
+    manifest = _manifest("a1", "image/png")
+    mismatches = (
+        AssetDigest(sha256="b" * 64, byte_count=manifest.byte_size),
+        AssetDigest(sha256=manifest.sha256, byte_count=manifest.byte_size + 1),
+    )
+
+    for digest in mismatches:
+        with pytest.raises(
+            ProcessingSummaryError,
+            match="input_digest does not match manifest",
+        ):
+            AssetProcessingResult(
+                manifest=manifest,
+                outcome_code=ProcessingOutcome.SUCCESS,
+                duration_seconds=1.0,
+                input_digest=digest,
+            )

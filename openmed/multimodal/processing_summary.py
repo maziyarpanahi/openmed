@@ -91,6 +91,11 @@ class AssetProcessingResult:
             raise ProcessingSummaryError("manifest must be an AssetManifest")
         if not isinstance(self.input_digest, AssetDigest):
             raise ProcessingSummaryError("input_digest must be an AssetDigest")
+        if (
+            self.input_digest.sha256 != self.manifest.sha256
+            or self.input_digest.byte_count != self.manifest.byte_size
+        ):
+            raise ProcessingSummaryError("input_digest does not match manifest")
         if self.output_digest is not None and not isinstance(
             self.output_digest, AssetDigest
         ):
@@ -232,9 +237,7 @@ class ProcessingSummary:
             "total_duration_seconds": self.total_duration_seconds,
             "by_media_type": [entry.to_dict() for entry in self.by_media_type],
             "outcome_counts": [entry.to_dict() for entry in self.outcome_counts],
-            "abstention_counts": [
-                entry.to_dict() for entry in self.abstention_counts
-            ],
+            "abstention_counts": [entry.to_dict() for entry in self.abstention_counts],
             "asset_digests": [entry.to_dict() for entry in self.asset_digests],
             "asset_count_with_output_digest": self.asset_count_with_output_digest,
         }
@@ -262,9 +265,7 @@ def summarize_processing_run(
     materialized = list(results)
     for result in materialized:
         if not isinstance(result, AssetProcessingResult):
-            raise ProcessingSummaryError(
-                "each result must be an AssetProcessingResult"
-            )
+            raise ProcessingSummaryError("each result must be an AssetProcessingResult")
         _outcome(result.outcome_code)
 
     media_totals: dict[str, MediaTypeTotals] = {}
@@ -272,7 +273,9 @@ def summarize_processing_run(
     abstention_totals: dict[tuple[AbstentionStage, AbstentionReason], int] = {}
     digest_entries: list[AssetDigestEntry] = []
     total_bytes = 0
-    total_duration_seconds = 0.0
+    total_duration_seconds = math.fsum(
+        sorted(float(result.duration_seconds) for result in materialized)
+    )
     asset_count_with_output_digest = 0
 
     for result in materialized:
@@ -306,8 +309,6 @@ def summarize_processing_run(
             abstention_totals[key] = abstention_totals.get(key, 0) + 1
 
         total_bytes += manifest.byte_size
-        total_duration_seconds += result.duration_seconds
-
         output_sha256 = None
         if result.output_digest is not None:
             output_sha256 = result.output_digest.sha256
@@ -340,9 +341,7 @@ def summarize_processing_run(
                 key=lambda item: (item[0][0].value, item[0][1].value),
             )
         ),
-        asset_digests=tuple(
-            sorted(digest_entries, key=lambda entry: entry.asset_id)
-        ),
+        asset_digests=tuple(sorted(digest_entries, key=lambda entry: entry.asset_id)),
         asset_count_with_output_digest=asset_count_with_output_digest,
     )
 
@@ -399,8 +398,7 @@ def render_processing_summary_markdown(summary: ProcessingSummary) -> str:
     lines.append("| --- | --- | --- |")
     for entry in summary.asset_digests:
         lines.append(
-            f"| {entry.asset_id} | {entry.input_sha256} "
-            f"| {entry.output_sha256 or ''} |"
+            f"| {entry.asset_id} | {entry.input_sha256} | {entry.output_sha256 or ''} |"
         )
 
     return "\n".join(lines) + "\n"
