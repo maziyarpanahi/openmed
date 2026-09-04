@@ -509,7 +509,7 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（35 条支持的路由；33 条由模型支持）
+## 多语言 PII（36 条支持的路由；33 条由模型支持）
 
 实体抽取和去标识化支持 **35 个 PII 语言代码**：
 `am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。

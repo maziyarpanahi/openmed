@@ -408,7 +408,7 @@ def test_urdu_cues_disambiguate_the_shared_arabic_script():
         assert any(run.source == "stdlib:urdu-cues" for run in decision.runs)
         for run in decision.runs:
             if run.script == "Arabic":
-                assert run.candidates == ("ur", "ar", "ha")
+                assert run.candidates == ("ur", "ar", "fa", "ha")
 
     for fixture in _i18n_fixtures("ar"):
         decision = router.route(fixture.text)
@@ -417,7 +417,7 @@ def test_urdu_cues_disambiguate_the_shared_arabic_script():
         assert all(run.source != "stdlib:urdu-cues" for run in decision.runs)
         for run in decision.runs:
             if run.script == "Arabic":
-                assert run.candidates == ("ar", "ha", "ur")
+                assert run.candidates == ("ar", "fa", "ha", "ur")
 
 
 def test_urdu_fixtures_fall_back_to_arabic_until_an_urdu_pack_ships():

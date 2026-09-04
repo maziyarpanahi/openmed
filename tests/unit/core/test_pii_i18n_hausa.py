@@ -166,8 +166,8 @@ def test_hausa_synthetic_fixture_leakage_is_zero_offline():
 
 
 def test_arabic_script_routes_to_arabic_and_hausa_without_changing_ar_patterns():
-    assert SCRIPT_LANGUAGE_HINTS["Arabic"] == ("ar", "ha", "ur")
-    assert candidate_languages_for_script("Arabic") == ("ar", "ha", "ur")
+    assert SCRIPT_LANGUAGE_HINTS["Arabic"] == ("ar", "fa", "ha", "ur")
+    assert candidate_languages_for_script("Arabic") == ("ar", "fa", "ha", "ur")
 
     text = "تاريخ الميلاد 01/01/2000، هاتف +20 10 1234 5678"
     observed = {

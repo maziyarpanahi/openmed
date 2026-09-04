@@ -69,6 +69,7 @@ PIILanguage = Literal[
     "ur",
     "pt",
     "ar",
+    "fa",
     "he",
     "ja",
     "tr",

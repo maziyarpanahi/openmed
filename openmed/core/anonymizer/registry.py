@@ -655,6 +655,7 @@ _LOCALE_ID_METHODS = {
     "ar_EG": "egyptian_national_id",
     "ar_MA": "moroccan_cin",
     "bn_BD": "bangladesh_nid",
+    "fa_IR": "iran_national_id",
     "en_ZA": "south_african_id",
     "en_NG": "nigeria_nin",
     "ha_NG": "nigeria_nin",
@@ -725,7 +726,13 @@ _INDIA_ID_METHODS = {
 }
 
 _FIELD_PRESERVING_ID_METHODS = frozenset(
-    {"bangladesh_nid", "rwanda_id", "tanzania_nida", "uganda_nin"}
+    {
+        "bangladesh_nid",
+        "iran_national_id",
+        "rwanda_id",
+        "tanzania_nida",
+        "uganda_nin",
+    }
 )
 
 
