@@ -9,7 +9,7 @@ from typing import Final, Iterable
 
 CITATION_ORDERING_SCHEMA_VERSION: Final[int] = 1
 
-_METADATA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+_OPAQUE_METADATA_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class CitationOrderingError(ValueError):
@@ -18,7 +18,11 @@ class CitationOrderingError(ValueError):
 
 @dataclass(frozen=True)
 class Citation:
-    """Value-free evidence coordinates for one guarded clinical claim."""
+    """Value-free evidence coordinates for one guarded clinical claim.
+
+    Document, section, and evidence identifiers must already be opaque
+    ``sha256:<lowercase hex>`` references. Raw labels are never retained.
+    """
 
     document_id: str
     section: str
@@ -149,7 +153,7 @@ def _citation_key(citation: Citation) -> tuple[str, str, int, int, str]:
 
 
 def _validate_metadata_id(value: object) -> None:
-    if type(value) is not str or _METADATA_ID_RE.fullmatch(value) is None:
+    if type(value) is not str or _OPAQUE_METADATA_ID_RE.fullmatch(value) is None:
         raise CitationOrderingError("invalid citation metadata identifier")
 
 

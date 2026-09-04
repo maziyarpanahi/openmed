@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import FrozenInstanceError
 
@@ -14,6 +15,10 @@ from openmed.clinical.citation_ordering import (
 )
 
 
+def _opaque(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _citation(
     evidence_id: str,
     *,
@@ -24,11 +29,11 @@ def _citation(
     primary: bool = False,
 ) -> Citation:
     return Citation(
-        document_id=document_id,
-        section=section,
+        document_id=_opaque(document_id),
+        section=_opaque(section),
         source_start=start,
         source_end=end,
-        evidence_id=evidence_id,
+        evidence_id=_opaque(evidence_id),
         primary=primary,
     )
 
@@ -45,25 +50,28 @@ def test_ordering_uses_every_declared_key_in_sequence() -> None:
 
     ordered = order_citations(reversed(citations))
 
-    assert [citation.evidence_id for citation in ordered] == [
-        "evidence-f",
-        "evidence-d",
-        "evidence-c",
-        "evidence-a",
-        "evidence-b",
-        "evidence-e",
-    ]
+    assert ordered == tuple(
+        sorted(
+            citations,
+            key=lambda citation: (
+                citation.document_id,
+                citation.section,
+                citation.source_start,
+                citation.source_end,
+                citation.evidence_id,
+            ),
+        )
+    )
 
 
 def test_empty_and_generator_inputs_are_supported() -> None:
     assert order_citations(()) == ()
 
     citations = (_citation(f"evidence-{index}") for index in (3, 1, 2))
-    assert [citation.evidence_id for citation in order_citations(citations)] == [
-        "evidence-1",
-        "evidence-2",
-        "evidence-3",
-    ]
+    ordered = order_citations(citations)
+    assert [citation.evidence_id for citation in ordered] == sorted(
+        _opaque(f"evidence-{index}") for index in (3, 1, 2)
+    )
 
 
 def test_primary_marker_is_preserved_without_overriding_metadata_order() -> None:
@@ -72,9 +80,21 @@ def test_primary_marker_is_preserved_without_overriding_metadata_order() -> None
 
     ordered = order_citations([primary, secondary])
 
-    assert ordered == (secondary, primary)
-    assert ordered[0].is_primary is False
-    assert ordered[1].is_primary is True
+    assert ordered == tuple(
+        sorted(
+            (primary, secondary),
+            key=lambda citation: (
+                citation.document_id,
+                citation.section,
+                citation.source_start,
+                citation.source_end,
+                citation.evidence_id,
+            ),
+        )
+    )
+    assert sum(citation.is_primary for citation in ordered) == 1
+    assert primary.is_primary is True
+    assert secondary.is_primary is False
 
 
 def test_multiple_primary_citations_are_rejected_without_echoing_ids() -> None:
@@ -124,11 +144,13 @@ def test_artifact_is_versioned_byte_stable_and_input_order_independent() -> None
     assert first == second
     assert first.to_json() == second.to_json()
     assert first.to_json() == (
-        '{"citations":[{"document_id":"doc-01","evidence_id":"evidence-a",'
-        '"primary":true,"section":"assessment","source_offset":'
-        '{"end":20,"start":10}},{"document_id":"doc-01",'
-        '"evidence_id":"evidence-b","primary":false,"section":"assessment",'
-        '"source_offset":{"end":30,"start":21}}],"schema_version":1}\n'
+        json.dumps(
+            first.to_dict(),
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
     )
     assert json.loads(first.to_json()) == first.to_dict()
 
@@ -161,11 +183,11 @@ def test_invalid_metadata_fails_without_echoing_values(
     kwargs: dict[str, object],
 ) -> None:
     values: dict[str, object] = {
-        "document_id": "doc-01",
-        "section": "assessment",
+        "document_id": _opaque("doc-01"),
+        "section": _opaque("assessment"),
         "source_start": 10,
         "source_end": 20,
-        "evidence_id": "evidence-01",
+        "evidence_id": _opaque("evidence-01"),
         "primary": False,
     }
     values.update(kwargs)
@@ -200,6 +222,32 @@ def test_artifact_schema_cannot_carry_sensitive_values() -> None:
         "path",
     ):
         assert forbidden not in serialized
+
+
+@pytest.mark.parametrize(
+    ("field", "sentinel"),
+    [
+        ("document_id", "Patient_Jane_Doe"),
+        ("section", "diagnosis_HIV"),
+        ("evidence_id", "MRN_123456"),
+    ],
+)
+def test_token_shaped_sensitive_identifiers_are_rejected(
+    field: str,
+    sentinel: str,
+) -> None:
+    values = {
+        "document_id": _opaque("doc-01"),
+        "section": _opaque("assessment"),
+        "source_start": 10,
+        "source_end": 20,
+        "evidence_id": _opaque("evidence-01"),
+    }
+    values[field] = sentinel
+
+    with pytest.raises(CitationOrderingError) as error:
+        Citation(**values)  # type: ignore[arg-type]
+    assert sentinel not in str(error.value)
 
 
 def test_invalid_collections_and_schema_versions_fail_closed() -> None:

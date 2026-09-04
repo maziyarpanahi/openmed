@@ -11,18 +11,18 @@ from openmed.clinical.citation_ordering import Citation, CitationOrdering
 artifact = CitationOrdering(
     (
         Citation(
-            document_id="doc-02",
-            section="assessment",
+            document_id="sha256:" + "2" * 64,
+            section="sha256:" + "a" * 64,
             source_start=24,
             source_end=31,
-            evidence_id="evidence-02",
+            evidence_id="sha256:" + "4" * 64,
         ),
         Citation(
-            document_id="doc-01",
-            section="history",
+            document_id="sha256:" + "1" * 64,
+            section="sha256:" + "b" * 64,
             source_start=4,
             source_end=13,
-            evidence_id="evidence-01",
+            evidence_id="sha256:" + "3" * 64,
             primary=True,
         ),
     )
@@ -48,11 +48,13 @@ rejected when their primary markers disagree.
 
 ## Privacy boundary
 
-Identifiers must be opaque metadata tokens and source offsets must satisfy
-`0 <= source_start < source_end`. Prompts, tool arguments, clinical outputs,
-evidence text, bearer values, and filesystem paths are not fields in the
-artifact schema. Validation errors are fixed categories and never echo rejected
-values.
+Document, section, and evidence identifiers must be precomputed opaque
+`sha256:<64 lowercase hex>` references, and source offsets must satisfy
+`0 <= source_start < source_end`. Do not derive those references directly from
+PHI or other low-entropy sensitive values. Prompts, tool arguments, clinical
+outputs, evidence text, bearer values, and filesystem paths are not fields in
+the artifact schema. Validation errors are fixed categories and never echo
+rejected values.
 
 The implementation is deterministic, uses only the Python standard library,
 and performs no network calls. It orders evidence metadata for review; it does
