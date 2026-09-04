@@ -5,7 +5,7 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.3.0] - 2026-09-03
+## [2.3.0] - 2026-09-04
 
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
 workflows, multimodal asset intake, clinical evidence, local training,
@@ -368,9 +368,11 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 - Optional agent, LlamaIndex, QuickUMLS, and scrubadub dependency trees include
   NLTK 3.10.3, affected by model-artifact path-security advisory
   [CVE-2026-81726](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp).
-  No fixed release is published as of 2026-09-03. OpenMed does not call the
+  No fixed release is published as of 2026-09-04. OpenMed does not call the
   affected APIs, and its service image does not install NLTK. Do not expose
   NLTK model import/export paths to untrusted input in optional integrations.
+  The CI waiver is scoped to this CVE, the `nltk` package, and `uv.lock`, and
+  expires on 2026-09-11; it cannot suppress a fixed upstream release.
 
 ## [2.2.0] - 2026-08-21
 
