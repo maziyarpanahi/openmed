@@ -12,6 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 2.3.0 Release Notes: release/v2.3.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
       - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
@@ -29,6 +30,9 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+      - Agent Timing Metadata: agent/timing-metadata.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -97,6 +101,7 @@ nav:
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
+      - Clinical Evidence Tables: clinical/evidence-tables.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
@@ -129,8 +134,13 @@ nav:
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Preference Pair Schema: reference/preference-schema.md
+      - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
+      - Bounded Asset Digests: multimodal/asset-digests.md
+      - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
+      - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
+      - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
@@ -288,6 +298,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 2.2 to 2.3: migration/2.2-to-2.3.md
       - Migrate from 2.1 to 2.2: migration/2.1-to-2.2.md
       - Migrate from 2.0 to 2.1: migration/2.0-to-2.1.md
       - Migrate from 1.9 to 2.0: migration/1.9-to-2.0.md
