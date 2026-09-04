@@ -88,6 +88,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v2.3.0.md
     - release/v2.2.0.md
     - release/v2.2-standards-matrix.md
     - release/v2.1.0.md
@@ -369,6 +370,7 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - migration/2.2-to-2.3.md
     - migration/2.1-to-2.2.md
     - migration/2.0-to-2.1.md
     - migration/1.9-to-2.0.md

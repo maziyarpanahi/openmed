@@ -22,6 +22,23 @@ npm install openmed onnxruntime-web
 ## Run an OpenMed ONNX Model
 
 ```ts
+import { deidentify } from "openmed";
+
+const result = await deidentify(
+  "Patient Alice Nguyen was seen in cardiology.",
+);
+
+console.log(result.deidentifiedText);
+console.log(result.spans);
+```
+
+Without a `model` or `pipeline` option, `deidentify()` and `extractPii()` load
+`OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android` (exported as
+`DEFAULT_MODEL_ID`): the root INT8 artifact of a 33M-parameter clinical PII
+model, about 70 MB, served through Transformers.js. Pass `model` to pick any
+other public `OpenMed/<model>-onnx-android` repository, or load one yourself:
+
+```ts
 import { deidentify, loadOnnxModel } from "openmed";
 
 const model = await loadOnnxModel("OpenMed/<model>-onnx-android");
@@ -29,14 +46,28 @@ const result = await deidentify(
   "Patient Alice Nguyen was seen in cardiology.",
   { pipeline: model },
 );
-
-console.log(result.deidentifiedText);
-console.log(result.spans);
 ```
 
 `loadOnnxModel()` selects the root INT8 model by default. Pass
 `{ variant: "fp32" }` or `{ variant: "fp16" }` when a different published
 variant is appropriate.
+
+Transformers.js token-classification output carries no character offsets.
+OpenMed aligns every token back to the source text before decoding spans
+(case- and accent-insensitive, WordPiece `##`, SentencePiece `▁`, and
+byte-level `Ġ` markers handled), so `result.spans` always carry `start` and
+`end` into the original string. `alignTokenOffsets()` is exported for custom
+pipelines that need the same alignment. Offsets use JavaScript UTF-16 indices;
+decomposed accents remain attached to their source character. Unknown or
+unalignable tokens produce a content-free error instead of incomplete
+redaction. Custom tokenizers and filtered output should supply exact source
+offsets; treat an alignment error as a failed scan, not a PII-free document.
+
+Existing `TokenClassificationEntity` and `TokenClassificationPipeline` outputs
+retain required numeric offsets. Use the additive `RawTokenClassificationEntity`,
+`RawTokenClassificationPipeline`, and `RawTransformersRuntime` input types for
+offset-less runtimes. Model loaders and `alignTokenOffsets()` return aligned
+entities, preserving the v2.2 typed-consumer contract.
 
 ## Local Browser Runtime
 

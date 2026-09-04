@@ -56,7 +56,7 @@ def _make_repo_root(tmp_path: Path) -> Path:
     (root / "README.md").write_text("# OpenMed\n", encoding="utf-8")
     (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
-    migration = root / "docs" / "migration" / "2.1-to-2.2.md"
+    migration = root / "docs" / "migration" / "2.2-to-2.3.md"
     migration.parent.mkdir(parents=True)
     migration.write_text("# Migration Guide\n", encoding="utf-8")
 
@@ -66,8 +66,8 @@ def _make_repo_root(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "schema_version": 1,
-                "before_ref": "v1.9.0",
-                "after_ref": "v2.2.0",
+                "before_ref": "v2.2.0",
+                "after_ref": "v2.3.0",
                 "summary": {
                     "before_symbols": 100,
                     "after_symbols": 105,
@@ -189,7 +189,7 @@ def test_quarantined_extraction_gate_propagates(tmp_path):
 
 def test_missing_migration_guide_fails_closed(tmp_path):
     root = _make_repo_root(tmp_path)
-    (root / "docs" / "migration" / "2.1-to-2.2.md").unlink()
+    (root / "docs" / "migration" / "2.2-to-2.3.md").unlink()
 
     report = _evaluate(root)
 
@@ -197,7 +197,7 @@ def test_missing_migration_guide_fails_closed(tmp_path):
     check = next(
         item for item in report.failing_checks() if item.gate == "required_docs"
     )
-    assert "docs/migration/2.1-to-2.2.md" in check.reason
+    assert "docs/migration/2.2-to-2.3.md" in check.reason
 
 
 def test_disclaimer_comment_does_not_satisfy_gate(tmp_path):
