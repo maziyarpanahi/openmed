@@ -36,15 +36,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "0adca61b17aa2d2e8f2a7f1a2ccae1c23075183605996565e0e4cb433eb55904",
+          "source_sha256": "e7d394dcec81e746a211bcdf9052b670ddf82262f7ed6a016b773f84a0aa737b",
           "translation_heading": "Apple डिवाइस पर: Swift, MLX और iOS",
-          "translation_sha256": "4ea4e4a51b65c0d358fdb0a676e6056269efe37eb28ff01f0bb13ed0932b49b5"
+          "translation_sha256": "71c2c5f152572df69c90e2a87d88ab610fbb0c9225d12a06ce3604c25d77baa3"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "71669ec97e2176efe32ab0267dde95f8a18c85870a58121fd62267463d0e5e97",
+          "source_sha256": "1a55067fcca8a152cce0f43e051c15c4279b90b1ae27875147a30f6cc5711e3d",
           "translation_heading": "Android डिवाइस पर — Kotlin और ONNX Runtime Mobile",
-          "translation_sha256": "614fdcdb619dac56e3b3eac94c3aedcf16966813f49ab088b441367af82f9e79"
+          "translation_sha256": "b93eafe71ee57e295142e329e8ebc74faf8aca4056200cb059f5744daf16e176"
         },
         {
           "source_heading": "How it works",
@@ -90,9 +90,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "33fb2c5c3751d55354af8c482261645c97eea15cd05ae52514703c80885a22ed",
+          "source_sha256": "8cf2824e08f2bbb569430d02087c4a89b06f149bf0c74b058a5b96e93f42bb91",
           "translation_heading": "दस्तावेज़ीकरण",
-          "translation_sha256": "75391f87b0fa4d02adc21f25b5157b36cfc434846a5ce76e8c9c29d355611d5c"
+          "translation_sha256": "7499e3f2f830c6a6a02e8898869953dbbfd9419a68f792064880bed8647e40bc"
         },
         {
           "source_heading": "Meet the mascot",
@@ -172,15 +172,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "0adca61b17aa2d2e8f2a7f1a2ccae1c23075183605996565e0e4cb433eb55904",
+          "source_sha256": "e7d394dcec81e746a211bcdf9052b670ddf82262f7ed6a016b773f84a0aa737b",
           "translation_heading": "Kwenye kifaa cha Apple: Swift, MLX na iOS",
-          "translation_sha256": "0e57a94469b45c9857aba3cc8a7c9709e6336ba8cdba8140fe7374f1e99e1182"
+          "translation_sha256": "d154fa30a286e3593568e17021dfdeef5ca9e9c1296c82ae93f6b9725c1c917d"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "71669ec97e2176efe32ab0267dde95f8a18c85870a58121fd62267463d0e5e97",
+          "source_sha256": "1a55067fcca8a152cce0f43e051c15c4279b90b1ae27875147a30f6cc5711e3d",
           "translation_heading": "Kwenye kifaa cha Android — Kotlin na ONNX Runtime Mobile",
-          "translation_sha256": "929c7552d89fbd6324461d1728903325c45503ce0c9931d4e2f9068d60305321"
+          "translation_sha256": "a95830b65b8873646b451443daa8b76eafe914fefb84a2675f2ee71e7f6f76d3"
         },
         {
           "source_heading": "How it works",
@@ -226,9 +226,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "33fb2c5c3751d55354af8c482261645c97eea15cd05ae52514703c80885a22ed",
+          "source_sha256": "8cf2824e08f2bbb569430d02087c4a89b06f149bf0c74b058a5b96e93f42bb91",
           "translation_heading": "Nyaraka",
-          "translation_sha256": "c84a2dbefd1f6c8b778cda11b33ebf935ff5e1ce0adb34bcfe764e3c4c60c4d4"
+          "translation_sha256": "65a320d11163847714345fad4240ca32fa1cb5741c446c2eec4b779acbf66144"
         },
         {
           "source_heading": "Meet the mascot",
@@ -308,15 +308,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "0adca61b17aa2d2e8f2a7f1a2ccae1c23075183605996565e0e4cb433eb55904",
+          "source_sha256": "e7d394dcec81e746a211bcdf9052b670ddf82262f7ed6a016b773f84a0aa737b",
           "translation_heading": "在 Apple 设备上本地运行：Swift、MLX 与 iOS",
-          "translation_sha256": "6a12d71d2f66ff64561b75869f3d77730fcaf91167b9f2f79ebe9295164b9978"
+          "translation_sha256": "e50f420ed0110e09e4472a44709d787ca753f1c447ec2ec19e96a4010ca47262"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "71669ec97e2176efe32ab0267dde95f8a18c85870a58121fd62267463d0e5e97",
+          "source_sha256": "1a55067fcca8a152cce0f43e051c15c4279b90b1ae27875147a30f6cc5711e3d",
           "translation_heading": "在 Android 设备上本地运行：Kotlin 与 ONNX Runtime Mobile",
-          "translation_sha256": "eb220d58c05b1f32252955221e0b31f7370382c24be4bfa005c1c3eace8071e5"
+          "translation_sha256": "fa3dccd8091275d3d2b89001d34fe915071e26de39410fb9fbeec1fa08e6c371"
         },
         {
           "source_heading": "How it works",
@@ -362,9 +362,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "33fb2c5c3751d55354af8c482261645c97eea15cd05ae52514703c80885a22ed",
+          "source_sha256": "8cf2824e08f2bbb569430d02087c4a89b06f149bf0c74b058a5b96e93f42bb91",
           "translation_heading": "文档",
-          "translation_sha256": "5621961ba12830514da2188d2bf37ea7a35d2550eef8cba6d184f1bb59ea3b1c"
+          "translation_sha256": "f6a6765959b182f318ea2c747711b4fee0fd5a40578dda58605228e62db72faf"
         },
         {
           "source_heading": "Meet the mascot",
