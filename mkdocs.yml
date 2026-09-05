@@ -136,6 +136,7 @@ nav:
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
+      - Federated Update Metadata: training/federated-update-metadata.md
       - Preference Pair Schema: reference/preference-schema.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
