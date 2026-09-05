@@ -21,6 +21,10 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added dependency-free base FHIR R4 structural validation for eight exported
+  clinical resource types, including deterministic structured findings,
+  cardinality and primitive datatype checks, fixed required bindings, Bundle
+  aggregation, and a compact CC0-derived constraint table (#2364).
 - Added typed, 128-bit opaque correlation identifiers for agent runs and
   actions, with strict kind-aware parsing, deterministic metadata-only JSON,
   parent-action validation, and value-free failures (#2973).
