@@ -1,0 +1,87 @@
+name: OpenMedMedicalReasoningDemo
+options:
+  bundleIdPrefix: life.openmed
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  OpenMedKit:
+    path: ../OpenMedKit
+targets:
+  OpenMedMedicalReasoningDemo:
+    type: application
+    platform: iOS
+    sources:
+      - path: OpenMedMedicalReasoningDemo
+    dependencies:
+      - package: OpenMedKit
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: G9KGF559KJ
+        ENABLE_PREVIEWS: YES
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: OpenMedMedicalReasoningDemo/Info.plist
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        PRODUCT_BUNDLE_IDENTIFIER: life.openmed.medicalreasoningdemo
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        SUPPORTS_MACCATALYST: NO
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) INTERNAL"
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APPSTORE"
+  OpenMedMedicalReasoningMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: OpenMedMedicalReasoningDemo
+        excludes:
+          - Info.plist
+    dependencies:
+      - package: OpenMedKit
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: life.openmed.medicalreasoningdemo.mac
+        INFOPLIST_FILE: ""
+        INFOPLIST_KEY_LSMinimumSystemVersion: "14.0"
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        SWIFT_VERSION: "5.0"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) INTERNAL"
+  OpenMedMedicalReasoningMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests
+    dependencies:
+      - target: OpenMedMedicalReasoningMac
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        SWIFT_VERSION: "5.0"
+schemes:
+  OpenMedMedicalReasoningMac:
+    build:
+      targets:
+        OpenMedMedicalReasoningMac: all
+    test:
+      targets:
+        - OpenMedMedicalReasoningMacTests

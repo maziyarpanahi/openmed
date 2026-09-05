@@ -21,6 +21,8 @@ Swift MLX supports the first OpenMed artifact families used by the public Apple 
 - `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
 - `cohere-compass` for native-resolution text-and-image generation with North
   Micro Vision
+- LiquidAI `lfm2` causal language models through the dedicated local
+  `OpenMedLFM` runtime
 - DeepGrove `maple` causal language models through the dedicated local
   `OpenMedMaple` runtime
 
@@ -41,9 +43,9 @@ watchOS and visionOS use the CoreML-only `PlatformModel` surface and require an
 INT8 Nano-tier artifact. See [Apple Platform Support](./runtimes/apple-platforms.md)
 for selection limits and simulator validation.
 
-Maple Preview 2-bit is a multi-gigabyte generative model. Test it on recent
-Apple hardware with sufficient storage and memory; keep a smaller specialized
-model available when the product must support constrained devices.
+LFM2.5 2.6B 4-bit is about 1.5 GB on disk. Test it on recent Apple hardware
+with sufficient storage and memory; keep a smaller specialized model available
+when the product must support constrained devices.
 
 ## Apple Platform Matrix
 
@@ -171,6 +173,94 @@ grounding, and structured extraction, but its output is generative. Validate
 every consequential field against the source document, apply OpenMedKit privacy
 policies before an authorized export, and never auto-trigger diagnosis or
 treatment from the result.
+
+## LFM2.5: Local Generative Tasks
+
+`OpenMedLFM` loads LiquidAI's official
+[`LiquidAI/LFM2.5-2.6B-MLX-4bit`](https://huggingface.co/LiquidAI/LFM2.5-2.6B-MLX-4bit)
+checkpoint from a complete local repository directory. The runtime pins its
+tested checkpoint revision. It supports
+de-identification, entity extraction, relation extraction, evidence-grounded
+reasoning, and chat.
+
+LFM2.5 publishes a BPE tokenizer whose `tokenizer_class` is
+`TokenizersBackend` and keeps its prompt template in `chat_template.jinja`.
+OpenMedKit therefore requires `swift-transformers` 1.3.3 or newer, where the
+official tokenizer registry maps that class to `BPETokenizer` and the local Hub
+loader imports the standalone template. Older 0.1.x resolutions fail before
+model loading with an unsupported-tokenizer error.
+
+The host app owns model acquisition. Download the relative paths exposed by
+`OpenMedLFM.requiredRepositoryFiles` into a repository-root cache while
+preserving their relative paths, then initialize the runtime:
+
+```swift
+import OpenMedKit
+
+let modelDirectory = URL(fileURLWithPath: "/path/to/LFM2.5-2.6B-MLX-4bit")
+guard OpenMedLFM.isModelDirectoryReady(modelDirectory) else {
+    fatalError("Download the pinned LFM2.5 4-bit files first")
+}
+
+let lfm = try await OpenMedLFM(modelDirectoryURL: modelDirectory)
+let masked = try await lfm.complete(
+    OpenMedLFMRequest(task: .deidentify, document: scannedText)
+)
+
+let clinical = try await lfm.complete(
+    OpenMedLFMRequest(
+        task: .relationExtraction,
+        document: masked.redactedText ?? "",
+        entityLabels: ["condition", "medication", "dosage", "follow-up plan"],
+        relationLabels: ["treated with", "has dosage", "requires follow-up"]
+    )
+)
+
+var streamedReasoning = ""
+var streamedAnswer = ""
+let answer = try await lfm.complete(
+    OpenMedLFMRequest(
+        task: .chat,
+        document: masked.redactedText ?? "",
+        question: "What follow-up is documented?"
+    ),
+    onReasoningChunk: { chunk in
+        await MainActor.run {
+            streamedReasoning.append(chunk)
+        }
+    },
+    onFinalAnswerChunk: { chunk in
+        await MainActor.run {
+            streamedAnswer.append(chunk)
+        }
+    }
+)
+```
+
+For multi-turn chat, pass prior non-system turns through `messages` and the new
+prompt through `question`. Keep the `document` de-identified. The prompt
+builder treats document text as untrusted input and establishes a clinician-
+review boundary, but application-level data minimization remains required.
+
+Reasoning and chat separate generated `<think>` text through
+`onReasoningChunk` from the final response delivered through
+`onFinalAnswerChunk`. Treat the reasoning trace as model-generated UI context,
+not as a guaranteed faithful explanation. Structured tasks remain buffered
+until OpenMedKit parses complete JSON, validates label vocabularies, repairs
+exact source spans, and drops relations with unverified endpoints. For
+de-identification, OpenMedKit builds the redacted text itself from validated
+source spans rather than trusting a generated rewrite.
+
+The checkpoint is downloaded on demand rather than bundled with OpenMedKit and
+uses the model repository's custom LFM Open License 1.0. Review that license for
+your use case.
+
+The separate medical reasoning demo uses the chat task from this generative
+runtime. OpenMed Scan contains no generative tasks: its PII stage uses a selected
+specialist redactor, and its structured clinical stage uses one downloaded
+token-classification NER model at a time.
+Every explicit NER run loads its model, analyzes the de-identified text, then
+releases the runtime and clears MLX buffers before another model can run.
 
 ## Maple Preview: Local Generative Tasks
 
@@ -429,10 +519,36 @@ On Apple Silicon macOS or a physical iPhone/iPad, the demo can download a suppor
 
 The scanning demo in
 [`swift/OpenMedScanDemo/`](https://github.com/maziyarpanahi/openmed/tree/master/swift/OpenMedScanDemo)
-shows Maple's complete iOS workflow: VisionKit capture, Vision OCR, PII removal,
-entity and relation extraction, a grounded clinical brief, multi-turn document
-chat, and JSON export. All generative tasks run after de-identification, and the
-app unloads competing MLX runtimes before loading the larger Maple model.
+shows a complete local iOS workflow: VisionKit capture, Vision OCR, specialized
+PII removal, sequential disease, medication, or anatomy NER, and JSON export.
+It contains no generative model or prompt-based extraction path. The app retains
+at most one selected PII runtime and swaps it only after an explicit selection
+and run. Each clinical NER runtime is transient: it is loaded for one explicit
+run, unloaded immediately afterward, and never kept while the user selects
+another model.
+
+The separate medical reasoning demo in
+[`swift/OpenMedMedicalReasoningDemo/`](https://github.com/maziyarpanahi/openmed/tree/master/swift/OpenMedMedicalReasoningDemo)
+downloads the pinned LFM2.5 MLX artifact, lets the user provide a de-identified
+clinical context, and runs a local multi-turn evidence chat with separately
+streamed reasoning and final-answer text.
+
+For local development, select its `OpenMedMedicalReasoningMac` scheme and
+`My Mac`. This native Apple-silicon target shares the iOS demo's SwiftUI screens,
+downloader, conversation store and OpenMedKit runtime; it does not use a mock or
+remote inference server. It uses ad-hoc signing, so an iOS provisioning profile
+is not required. Stop cancels generation, and unloading awaits the MLX producer
+before clearing runtime memory. Failed/stopped turns remain visible but are
+excluded from subsequent model history.
+
+Run `bash scripts/test_medical_reasoning_mac.sh /absolute/path/to/pinned/model`
+from the repository root for the real-model test gate. The gate checks package
+and demo tests, retains `.xcresult` evidence, and rejects skips or missing suites.
+See the demo README for model acquisition and the Debug-only local artifact
+override. Native Mac testing catches tokenizer, streaming, multi-turn and
+lifecycle regressions; iPhone memory, thermal and background behaviour still
+require device QA. iOS Simulator remains a layout/build target, not an MLX
+inference proof.
 
 ## CoreML Status
 

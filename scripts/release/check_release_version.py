@@ -137,6 +137,10 @@ def main() -> int:
             "swift/OpenMedScanDemo/OpenMedScanDemo/Info.plist",
             f"<string>{expected_version}</string>",
         ),
+        (
+            "swift/OpenMedMedicalReasoningDemo/OpenMedMedicalReasoningDemo/Info.plist",
+            f"<string>{expected_version}</string>",
+        ),
     )
 
     for path, expected in versioned_surfaces:
