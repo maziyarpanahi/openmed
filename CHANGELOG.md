@@ -21,6 +21,9 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added strict, content-free agent artifact references with opaque identifiers,
+  a closed artifact-kind vocabulary, versioned schema IDs, digest and size
+  metadata, deterministic JSON, and value-free validation failures (#2999).
 - Added typed, 128-bit opaque correlation identifiers for agent runs and
   actions, with strict kind-aware parsing, deterministic metadata-only JSON,
   parent-action validation, and value-free failures (#2973).
