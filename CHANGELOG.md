@@ -5,6 +5,17 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added the canonical grounded-span `to_fhir()` facade with label-driven
+  Condition, Observation, MedicationStatement, and Procedure dispatch,
+  deterministic Bundle assembly, PHI-free exported/unmapped label counts, and
+  graceful skipping for labels without an exporter. The facade remains the
+  same callable as the established grounded exporter and never synthesizes a
+  Patient resource.
+
 ## [2.3.0] - 2026-09-04
 
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace

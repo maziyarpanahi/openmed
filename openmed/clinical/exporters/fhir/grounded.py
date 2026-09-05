@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
@@ -38,6 +39,8 @@ from .observation import to_observation
 
 __all__ = [
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
+    "FHIRBundle",
+    "FHIRExportSummary",
     "FHIR_RESOURCE_TYPES",
     "to_fhir",
 ]
@@ -70,6 +73,82 @@ _RESOURCE_BY_SYSTEM = {
     "LOINC": "Observation",
 }
 
+_DEFAULT_DOCUMENT_ID = "openmed-document"
+_UNLABELED = "UNLABELED"
+
+
+@dataclass(frozen=True)
+class FHIRExportSummary:
+    """Aggregate, PHI-free facts about one grounded-span export.
+
+    Counts are keyed by normalized canonical label. ``exported_by_label``
+    includes mapped labels that produced zero resources, for example because
+    assertion context excluded every non-patient span. ``unmapped_by_label``
+    contains labels for which the facade has no exporter.
+
+    Attributes:
+        exported_by_label: Number of emitted resources for each mapped label.
+        unmapped_by_label: Number of skipped spans for each unmapped label.
+    """
+
+    exported_by_label: Mapping[str, int]
+    unmapped_by_label: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "exported_by_label",
+            dict(sorted(self.exported_by_label.items())),
+        )
+        object.__setattr__(
+            self,
+            "unmapped_by_label",
+            dict(sorted(self.unmapped_by_label.items())),
+        )
+
+    @property
+    def resource_count(self) -> int:
+        """Return the total number of emitted resources."""
+
+        return sum(self.exported_by_label.values())
+
+    @property
+    def unmapped_count(self) -> int:
+        """Return the total number of spans skipped for missing mappings."""
+
+        return sum(self.unmapped_by_label.values())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-safe counts-only summary."""
+
+        return {
+            "exported_by_label": dict(self.exported_by_label),
+            "unmapped_by_label": dict(self.unmapped_by_label),
+            "resource_count": self.resource_count,
+            "unmapped_count": self.unmapped_count,
+        }
+
+
+class FHIRBundle(dict[str, Any]):
+    """FHIR Bundle mapping carrying a counts-only export summary sidecar.
+
+    The mapping contains only the R4 Bundle produced by :func:`to_bundle`, so
+    normal dictionary access and JSON serialization remain unchanged. Summary
+    data is available through :attr:`summary` and is deliberately kept outside
+    the FHIR payload.
+    """
+
+    summary: FHIRExportSummary
+
+    def __init__(
+        self,
+        bundle: Mapping[str, Any],
+        *,
+        summary: FHIRExportSummary,
+    ) -> None:
+        super().__init__(bundle)
+        self.summary = summary
+
 
 @dataclass(frozen=True)
 class _CoreferenceBinding:
@@ -79,9 +158,12 @@ class _CoreferenceBinding:
 def to_fhir(
     grounded: GroundedSpan | Iterable[GroundedSpan],
     *,
+    doc_id: str = _DEFAULT_DOCUMENT_ID,
+    bundle_type: str = "transaction",
+    systems: Mapping[str, str] | None = None,
     resource: str | None = None,
     subject_reference: str = "Patient/openmed-subject",
-    document_id: str = "openmed-document",
+    document_id: str | None = None,
     value: Any = None,
     unit: str | None = None,
     coreference_chains: Sequence[CoreferenceChain] = (),
@@ -89,16 +171,24 @@ def to_fhir(
     """Export grounded spans as valid deterministic FHIR R4 resources.
 
     A single span returns one resource (or ``None`` for a non-patient finding).
-    An iterable returns a transaction ``Bundle`` containing every retained
-    resource. The resource type is inferred from the canonical clinical label,
-    then from the selected coding system; callers may override it explicitly.
+    An iterable returns one ``FHIRBundle`` containing every retained resource.
+    Iterable dispatch is driven by canonical clinical labels. Unmapped labels
+    are skipped and counted in ``bundle.summary`` instead of aborting export.
+    A single-span call retains the legacy resource/system inference behavior.
 
     Args:
         grounded: One grounded span or an iterable from one document.
+        doc_id: Stable Bundle/fullUrl seed and resource-id namespace.
+        bundle_type: FHIR Bundle type for iterable input. Defaults to
+            ``"transaction"``.
+        systems: Optional mapping from grounding system names to supported FHIR
+            resource types. It provides explicit routing for spans without a
+            canonical label; an unrecognized non-empty canonical label remains
+            unmapped and is never inferred from its coding system.
         resource: Optional R4 resource type. Supported values are Condition,
             MedicationStatement, Observation, and Procedure.
         subject_reference: Patient reference used by emitted resources.
-        document_id: Stable Bundle/fullUrl seed and resource-id namespace.
+        document_id: Compatibility alias for ``doc_id``.
         value: Optional Observation value.
         unit: Optional UCUM display/code for a numeric Observation value.
         coreference_chains: Optional document-local clinical coreference chains.
@@ -106,12 +196,21 @@ def to_fhir(
             offsets and HMAC hashes in a privacy-safe FHIR extension.
 
     Returns:
-        One FHIR resource, a transaction Bundle, or ``None`` when a single
-        non-patient span is deliberately excluded.
+        One FHIR resource, a ``FHIRBundle`` with a counts-only ``summary``
+        sidecar, or ``None`` when a single non-patient span is deliberately
+        excluded. No Patient resource is synthesized.
+
+    Raises:
+        ValueError: If ``doc_id`` and ``document_id`` disagree, the resolved
+            document id is empty, or a route names an unsupported resource.
+        TypeError: If iterable values are not ``GroundedSpan`` objects or
+            ``systems`` is not a mapping.
     """
 
     if not isinstance(subject_reference, str) or not subject_reference.strip():
         raise ValueError("subject_reference must be a non-empty FHIR reference")
+    document_id = _resolve_document_id(doc_id, document_id)
+    system_routes = _normalize_system_routes(systems)
     coreference_by_offset = _coreference_bindings(coreference_chains)
     if isinstance(grounded, GroundedSpan):
         return _one_resource(
@@ -122,33 +221,59 @@ def to_fhir(
             value=grounded.metadata.get("value", value),
             unit=grounded.metadata.get("unit", unit),
             coreference=coreference_by_offset.get((grounded.start, grounded.end)),
+            system_routes=system_routes,
+            allow_default_system_fallback=systems is None,
         )
 
     spans = tuple(grounded)
     if any(not isinstance(span, GroundedSpan) for span in spans):
         raise TypeError("to_fhir expects GroundedSpan objects")
+    routed_spans: list[tuple[GroundedSpan, str, str]] = []
+    exported_by_label: Counter[str] = Counter()
+    unmapped_by_label: Counter[str] = Counter()
+    for span in spans:
+        label = _normalized_label(span)
+        resource_type = _resource_type(
+            span,
+            resource,
+            system_routes=system_routes,
+            allow_default_system_fallback=False,
+        )
+        if resource_type is None:
+            unmapped_by_label[label] += 1
+            continue
+        exported_by_label[label] += 0
+        routed_spans.append((span, resource_type, label))
     collapsed_spans = _collapse_grounded_spans(
-        spans,
-        resource=resource,
+        tuple(routed_spans),
         coreference_by_offset=coreference_by_offset,
     )
-    resources = [
-        exported
-        for span, coreference in collapsed_spans
-        if (
-            exported := _one_resource(
-                span,
-                resource=resource,
-                subject_reference=subject_reference,
-                document_id=document_id,
-                value=span.metadata.get("value", value),
-                unit=span.metadata.get("unit", unit),
-                coreference=coreference,
-            )
+    resources: list[dict[str, Any]] = []
+    for span, resource_type, label, coreference in collapsed_spans:
+        exported = _one_resource(
+            span,
+            resource=resource_type,
+            subject_reference=subject_reference,
+            document_id=document_id,
+            value=span.metadata.get("value", value),
+            unit=span.metadata.get("unit", unit),
+            coreference=coreference,
+            system_routes=system_routes,
+            allow_default_system_fallback=False,
         )
-        is not None
-    ]
-    return to_bundle(resources, doc_id=document_id)
+        if exported is not None:
+            resources.append(exported)
+            exported_by_label[label] += 1
+    summary = FHIRExportSummary(
+        exported_by_label=exported_by_label,
+        unmapped_by_label=unmapped_by_label,
+    )
+    bundle = to_bundle(
+        resources,
+        doc_id=document_id,
+        bundle_type=bundle_type,
+    )
+    return FHIRBundle(bundle, summary=summary)
 
 
 def _one_resource(
@@ -160,11 +285,20 @@ def _one_resource(
     value: Any,
     unit: str | None,
     coreference: _CoreferenceBinding | None,
+    system_routes: Mapping[str, str],
+    allow_default_system_fallback: bool,
 ) -> dict[str, Any] | None:
     asserted = _asserted_span(grounded)
     if not asserted.status.patient_subject:
         return None
-    resource_type = _resource_type(grounded, resource)
+    resource_type = _resource_type(
+        grounded,
+        resource,
+        system_routes=system_routes,
+        allow_default_system_fallback=allow_default_system_fallback,
+    )
+    if resource_type is None:
+        return None
     resource_id = _resource_id(
         document_id,
         grounded,
@@ -248,15 +382,18 @@ def _coreference_bindings(
 
 
 def _collapse_grounded_spans(
-    spans: tuple[GroundedSpan, ...],
+    spans: tuple[tuple[GroundedSpan, str, str], ...],
     *,
-    resource: str | None,
     coreference_by_offset: Mapping[tuple[int, int], _CoreferenceBinding],
-) -> tuple[tuple[GroundedSpan, _CoreferenceBinding | None], ...]:
+) -> tuple[
+    tuple[GroundedSpan, str, str, _CoreferenceBinding | None],
+    ...,
+]:
     grouped: dict[
-        tuple[str, str, str], tuple[GroundedSpan, _CoreferenceBinding | None]
+        tuple[str, str, str],
+        tuple[GroundedSpan, str, str, _CoreferenceBinding | None],
     ] = {}
-    for index, span in enumerate(spans):
+    for index, (span, resource_type, label) in enumerate(spans):
         binding = coreference_by_offset.get((span.start, span.end))
         if binding is None or not _asserted_span(span).status.patient_subject:
             key = ("span", str(index), "")
@@ -264,11 +401,11 @@ def _collapse_grounded_spans(
             key = (
                 "coreference",
                 binding.chain.chain_id,
-                _resource_type(span, resource),
+                resource_type,
             )
         current = grouped.get(key)
         if current is None or _is_representative_span(span, binding):
-            grouped[key] = (span, binding)
+            grouped[key] = (span, resource_type, label, binding)
     return tuple(grouped.values())
 
 
@@ -328,25 +465,69 @@ def _attach_coreference_evidence(
     return resource
 
 
-def _resource_type(grounded: GroundedSpan, resource: str | None) -> str:
+def _resource_type(
+    grounded: GroundedSpan,
+    resource: str | None,
+    *,
+    system_routes: Mapping[str, str],
+    allow_default_system_fallback: bool,
+) -> str | None:
     if resource is not None:
-        normalized = resource.strip().casefold()
-        matches = {candidate.casefold(): candidate for candidate in FHIR_RESOURCE_TYPES}
-        if normalized not in matches:
-            raise ValueError(
-                f"resource must be one of {FHIR_RESOURCE_TYPES!r}, got {resource!r}"
-            )
-        return matches[normalized]
-    label = (grounded.canonical_label or "").upper()
-    if label in _RESOURCE_BY_LABEL:
-        return _RESOURCE_BY_LABEL[label]
+        return _normalize_resource_type(resource)
+    label = _normalized_label(grounded)
+    if label != _UNLABELED:
+        resource_type = _RESOURCE_BY_LABEL.get(label)
+        if resource_type is not None or not allow_default_system_fallback:
+            return resource_type
     if grounded.candidates:
-        system = grounded.candidates[0].system.upper()
-        if system in _RESOURCE_BY_SYSTEM:
-            return _RESOURCE_BY_SYSTEM[system]
-    raise ValueError(
-        "cannot infer a FHIR resource type; provide canonical_label or resource="
-    )
+        system = grounded.candidates[0].system.strip().upper()
+        if system in system_routes:
+            return system_routes[system]
+        if allow_default_system_fallback:
+            return _RESOURCE_BY_SYSTEM.get(system)
+    return None
+
+
+def _normalized_label(grounded: GroundedSpan) -> str:
+    label = grounded.canonical_label
+    return label.strip().upper() if label is not None else _UNLABELED
+
+
+def _normalize_resource_type(resource: str) -> str:
+    if not isinstance(resource, str):
+        raise TypeError("FHIR resource type must be a string")
+    normalized = resource.strip().casefold()
+    matches = {candidate.casefold(): candidate for candidate in FHIR_RESOURCE_TYPES}
+    if normalized not in matches:
+        raise ValueError(
+            f"resource must be one of {FHIR_RESOURCE_TYPES!r}, got {resource!r}"
+        )
+    return matches[normalized]
+
+
+def _normalize_system_routes(
+    systems: Mapping[str, str] | None,
+) -> dict[str, str]:
+    if systems is None:
+        return {}
+    if not isinstance(systems, Mapping):
+        raise TypeError("systems must be a mapping")
+    routes: dict[str, str] = {}
+    for system, resource_type in systems.items():
+        if not isinstance(system, str) or not system.strip():
+            raise ValueError("systems keys must be non-empty strings")
+        routes[system.strip().upper()] = _normalize_resource_type(resource_type)
+    return routes
+
+
+def _resolve_document_id(doc_id: str, document_id: str | None) -> str:
+    if document_id is not None and doc_id != _DEFAULT_DOCUMENT_ID:
+        if document_id != doc_id:
+            raise ValueError("doc_id and document_id must match when both are provided")
+    resolved = document_id if document_id is not None else doc_id
+    if not isinstance(resolved, str) or not resolved.strip():
+        raise ValueError("doc_id must be a non-empty string")
+    return resolved
 
 
 def _asserted_span(grounded: GroundedSpan) -> AssertedGroundedSpan:

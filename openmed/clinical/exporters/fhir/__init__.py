@@ -43,9 +43,11 @@ from .exchange import (
     import_fhir,
     validate_exchange,
 )
-from .grounded import (
+from .facade import (
     COREFERENCE_EVIDENCE_EXTENSION_URL,
     FHIR_RESOURCE_TYPES,
+    FHIRBundle,
+    FHIRExportSummary,
     to_fhir,
 )
 from .observation import to_observation
@@ -70,6 +72,8 @@ __all__ = [
     "DIAGNOSTIC_REPORT_FIELDS_R4R5",
     "DIAGNOSTIC_REPORT_STATUS_UNKNOWN",
     "DIAGNOSTIC_REPORT_STATUSES",
+    "FHIRBundle",
+    "FHIRExportSummary",
     "FHIR_RESOURCE_TYPES",
     "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_EXTENSION_URL",

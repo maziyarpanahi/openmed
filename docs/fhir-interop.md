@@ -115,6 +115,24 @@ OpenMed emits R4 `issue.expression` for element paths. It accepts legacy
 
 ## Bundles
 
+Use `to_fhir()` when the inputs are grounded clinical spans. The facade routes
+supported canonical labels, assembles their resources through `to_bundle()`,
+and leaves unknown labels out of the Bundle with counts in a PHI-free sidecar:
+
+```python
+from openmed.clinical.exporters.fhir import to_fhir
+
+bundle = to_fhir(grounded_spans, doc_id="note-123")
+print(bundle.summary.exported_by_label)
+print(bundle.summary.unmapped_by_label)
+```
+
+The sidecar is available as `bundle.summary` but is not a key in the FHIR
+mapping, so `json.dumps(bundle)` contains only the R4 Bundle. The facade does
+not synthesize a Patient resource. It emits `Condition`, `Observation`,
+`MedicationStatement`, and `Procedure` for their supported canonical labels;
+labels whose standalone exporters have not shipped are counted as unmapped.
+
 Use `to_bundle()` to assemble standalone FHIR resources into a deterministic R4
 `Bundle`.
 
