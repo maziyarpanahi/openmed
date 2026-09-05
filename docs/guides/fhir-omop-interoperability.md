@@ -32,9 +32,17 @@ from openmed.clinical.exporters import to_fhir
 
 bundle = to_fhir(
     grounded_spans,
-    document_id="stable-document-id",
+    doc_id="stable-document-id",
     subject_reference="Patient/patient-123",
 )
+
+print(bundle.summary.to_dict())
+# {
+#     "exported_by_label": {"CONDITION": 1, "LAB_TEST": 1},
+#     "unmapped_by_label": {"BODY_SITE": 1},
+#     "resource_count": 2,
+#     "unmapped_count": 1,
+# }
 ```
 
 `to_fhir()` maps supported canonical labels to `Condition`,
@@ -43,6 +51,21 @@ the Bundle assembler, which assigns deterministic `urn:uuid` full URLs,
 rewrites internal references, and adds transaction request blocks. Treat
 grounding as advisory: review coding and assertion context before clinical or
 billing use.
+
+Iterable export never guesses a resource from the coding system when a span
+has an unrecognized canonical label. Such spans are omitted and counted in the
+PHI-free `bundle.summary.unmapped_by_label` sidecar. The summary is not part of
+the FHIR mapping, so normal JSON serialization emits only a valid R4 Bundle.
+Labels awaiting a dedicated exporter can therefore coexist with supported
+labels without aborting the document export. OpenMed never creates a Patient
+resource in this path; `subject_reference` remains an external reference unless
+the caller separately supplies a Patient to `to_bundle()`.
+
+`document_id` remains accepted as a compatibility alias for `doc_id`.
+`bundle_type` can select another Bundle type such as `batch`. For an unlabeled
+span only, callers may opt into a coding-system route such as
+`systems={"LOINC": "Observation"}`; a non-empty unknown canonical label is
+still reported as unmapped.
 
 ## Validate base R4 and declared profiles
 

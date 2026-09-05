@@ -195,7 +195,7 @@ groups = link_medication_attributes(
 
 bundle = to_fhir(
     grounded_medication_spans,
-    document_id="example-note",
+    doc_id="example-note",
     coreference_chains=chains,
 )
 ```
