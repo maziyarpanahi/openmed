@@ -1388,7 +1388,7 @@
             func applyChatTemplate(
                 messages: [Message],
                 tools: [ToolSpec]?,
-                additionalContext: [String: Any]?
+                additionalContext: [String: any Sendable]?
             ) throws -> [Int] {
                 throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
             }
@@ -1419,7 +1419,7 @@
                 truncation: Bool,
                 maxLength: Int?,
                 tools: [ToolSpec]?,
-                additionalContext: [String: Any]?
+                additionalContext: [String: any Sendable]?
             ) throws -> [Int] {
                 throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
             }

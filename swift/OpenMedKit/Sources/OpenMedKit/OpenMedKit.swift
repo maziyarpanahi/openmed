@@ -298,6 +298,48 @@
             )
         }
 
+        /// Run ordinary token-classification NER over long text using
+        /// overlapping token windows.
+        ///
+        /// Unlike ``extractPIIChunked(_:confidenceThreshold:chunkTokenLimit:tokenOverlap:useSmartMerging:)``,
+        /// this method does not apply PII semantic merging or label expansion.
+        /// Returned offsets always reference the original full text.
+        public func analyzeTextChunked(
+            _ text: String,
+            confidenceThreshold: Float = 0.5,
+            chunkTokenLimit: Int = 256,
+            tokenOverlap: Int = 32
+        ) throws -> [EntityPrediction] {
+            let chunks = try makeTokenChunks(
+                for: text,
+                chunkTokenLimit: chunkTokenLimit,
+                tokenOverlap: tokenOverlap
+            )
+            guard chunks.count > 1 else {
+                return try analyzeText(
+                    text,
+                    confidenceThreshold: confidenceThreshold
+                )
+            }
+
+            var chunkEntities: [EntityPrediction] = []
+            for chunk in chunks {
+                let chunkText = Self.substring(text, start: chunk.start, end: chunk.end)
+                let entities = try analyzeText(
+                    chunkText,
+                    confidenceThreshold: confidenceThreshold
+                )
+                chunkEntities.append(
+                    contentsOf: entities.compactMap { entity in
+                        Self.offset(entity, by: chunk.start, in: text)
+                    })
+            }
+
+            return Self.deduplicateOverlappingEntities(
+                PostProcessing.repairEntitySpans(chunkEntities, text: text)
+            )
+        }
+
         // MARK: - Private
 
         struct TextChunk: Equatable {
@@ -730,7 +772,7 @@
             return try result!.get()
         }
 
-        private static func loadTokenizerAsync(
+        static func loadTokenizerAsync(
             tokenizerName: String,
             tokenizerFolderURL: URL?
         ) async throws -> any Tokenizer {

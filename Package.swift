@@ -19,11 +19,15 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
-            from: "0.1.12"
+            from: "1.3.3"
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
-            exact: "0.31.3"
+            exact: "0.31.6"
+        ),
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm.git",
+            revision: "9ee82aae9c024048094a8f53200e8c617e1901b0"
         ),
         .package(
             url: "https://github.com/weichsel/ZIPFoundation.git",
@@ -47,6 +51,16 @@ let package = Package(
                 .product(
                     name: "MLXNN",
                     package: "mlx-swift",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLXLMCommon",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLXLLM",
+                    package: "mlx-swift-lm",
                     condition: .when(platforms: [.iOS, .macOS])
                 ),
                 .product(

@@ -1098,9 +1098,9 @@
         func prepare(
             _ input: LMInput,
             cache: [KVCache],
-            windowSize: Int?
+            state _: LMOutput.State?,
+            prefill: PrefillParameters
         ) throws -> PrepareResult {
-            _ = windowSize
             let frames = input.image?.frames ?? []
             let (positionIDs, ropeDelta) = ropePositions(
                 inputIDs: input.text.tokens,
@@ -1140,6 +1140,8 @@
                 visualMask: visualMask,
                 deepstack: deepstack
             )
+            let totalPositions = input.text.tokens.size
+            prefill.progress?(totalPositions, totalPositions)
             return .logits(LMOutput(logits: logits, state: state))
         }
 

@@ -18,14 +18,15 @@ let package = Package(
         )
     ],
     dependencies: [
-        // swift-transformers for HuggingFace-compatible tokenization
-        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "0.1.12"),
+        // 1.3.3 adds official TokenizersBackend -> BPE support used by LFM2.5.
+        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.3.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
-        // Includes upstream #419, which preserves multimodal RoPE state from
-        // prefill into autoregressive decode. Pin until the next tagged release.
+        // Includes upstream #528's production LFM2.5 loading and hybrid-cache
+        // fixes, plus #419's multimodal RoPE state fix. Pin for hardware QA
+        // until the LFM2.5 work lands in a tagged release.
         .package(
             url: "https://github.com/ml-explore/mlx-swift-lm.git",
-            revision: "42f08a872075fd07f9f1f40ec1a5e191e6aad86e"
+            revision: "9ee82aae9c024048094a8f53200e8c617e1901b0"
         ),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
     ],

@@ -149,7 +149,7 @@
                 temperature: temperature,
                 topP: temperature == 0 ? 1 : 0.8,
                 topK: temperature == 0 ? 0 : 20,
-                prefillStepSize: 2_048
+                prefill: PrefillParameters(stepSize: 2_048)
             )
             let stream = try await container.perform(nonSendable: prepared) {
                 context,
