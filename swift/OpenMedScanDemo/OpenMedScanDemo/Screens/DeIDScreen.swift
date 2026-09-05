@@ -20,7 +20,7 @@ public struct DeIDScreen: View {
             ScanStageHeader(
                 eyebrow: ScanStage.deidentify.eyebrow,
                 spans: [.plain("Redact, then "), .accent("compare"), .plain(".")],
-                subhead: "Four local PII engines can mask the same note. Yellow = detected PHI.",
+                subhead: "Three local PII engines can mask the same note. Yellow = detected PHI.",
                 scale: .lg
             )
 
@@ -36,7 +36,7 @@ public struct DeIDScreen: View {
                 )
             }
 
-            if completedEngineCount >= 2 {
+            if flow.comparisonPIIEngines != nil {
                 comparisonRow
             }
         }
@@ -84,10 +84,10 @@ public struct DeIDScreen: View {
                 HStack {
                     Text(eyebrow).omEyebrow()
                     Spacer()
-                    if let output {
+                    if engine == flow.piiEngine, flow.selectedPIIRequiresRun {
+                        OMBadge(output == nil ? "READY TO RUN" : "RUN SELECTED", tone: .neutral)
+                    } else if let output {
                         OMBadge("\(output.entities.count) spans", tone: .accent)
-                    } else if engine == flow.piiEngine {
-                        OMBadge("READY TO RUN", tone: .neutral)
                     }
                 }
 
@@ -107,35 +107,30 @@ public struct DeIDScreen: View {
         }
     }
 
-    private var completedEngineCount: Int {
-        ScanFlowViewModel.PIIEngine.allCases
-            .filter { flow.output(for: $0) != nil }
-            .count
-    }
-
+    @ViewBuilder
     private var comparisonRow: some View {
-        let diff = EngineDiff.build(
-            left: flow.openMedPIIOutput?.entities ?? [],
-            right: (flow.multilingualPIIOutput ?? flow.privacyFilterPIIOutput)?.entities ?? [],
-            leftLabel: ScanFlowViewModel.PIIEngine.openMed.displayName,
-            rightLabel: flow.multilingualPIIOutput == nil
-                ? ScanFlowViewModel.PIIEngine.privacyFilter.displayName
-                : ScanFlowViewModel.PIIEngine.multilingual.displayName
-        ).summary
+        if let engines = flow.comparisonPIIEngines {
+            let diff = EngineDiff.build(
+                left: flow.output(for: engines.left)?.entities ?? [],
+                right: flow.output(for: engines.right)?.entities ?? [],
+                leftLabel: engines.left.displayName,
+                rightLabel: engines.right.displayName
+            ).summary
 
-        return OMCard(padding: OM.Space.s4) {
-            HStack(alignment: .center, spacing: OM.Space.s3) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(diff.agreements) AGREE · \(diff.onlyLeft) ONLY OPENMED · \(diff.onlyRight) ONLY OTHER")
-                        .omMonoTag(size: 10)
-                        .foregroundStyle(Color.omFgMuted)
-                    Text("Compare side by side")
-                        .font(.om.heading(17, weight: .semibold))
-                        .foregroundStyle(Color.omInk)
+            OMCard(padding: OM.Space.s4) {
+                HStack(alignment: .center, spacing: OM.Space.s3) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(diff.agreements) AGREE · \(diff.onlyLeft) ONLY LEFT · \(diff.onlyRight) ONLY RIGHT")
+                            .omMonoTag(size: 10)
+                            .foregroundStyle(Color.omFgMuted)
+                        Text("Compare side by side")
+                            .font(.om.heading(17, weight: .semibold))
+                            .foregroundStyle(Color.omInk)
+                    }
+                    Spacer()
+                    Button("Open diff") { onShowComparison() }
+                        .buttonStyle(.omGhost)
                 }
-                Spacer()
-                Button("Open diff") { onShowComparison() }
-                    .buttonStyle(.omGhost)
             }
         }
     }

@@ -152,8 +152,9 @@ public struct OMDownloadRow: View {
         case .piiLiteClinical: return "shield.lefthalf.filled"
         case .openaiPrivacyFilter: return "lock.shield.fill"
         case .multilingualPrivacyFilter: return "globe.europe.africa.fill"
-        case .glinerRelex: return "sparkles"
-        case .maplePreview: return "leaf.fill"
+        case .nerDisease: return "waveform.path.ecg"
+        case .nerMedication: return "pill.fill"
+        case .nerAnatomy: return "figure.arms.open"
         }
     }
 

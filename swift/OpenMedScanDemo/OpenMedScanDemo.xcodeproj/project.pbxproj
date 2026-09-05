@@ -35,14 +35,12 @@
 		B1000025 /* OMEnginePickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000026 /* OMEnginePickerCard.swift */; };
 		B1000026 /* ScanStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000027 /* ScanStage.swift */; };
 		B1000027 /* DetectedEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000028 /* DetectedEntity.swift */; };
-		B1000028 /* ClinicalPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000029 /* ClinicalPreset.swift */; };
 		B1000029 /* ModelDownloadEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000030 /* ModelDownloadEvent.swift */; };
 		B1000030 /* PipelinePhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000031 /* PipelinePhase.swift */; };
 		B1000031 /* ByteFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000032 /* ByteFormatter.swift */; };
 		B1000032 /* EntityGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000033 /* EntityGrouping.swift */; };
 		B1000033 /* EngineDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000034 /* EngineDiff.swift */; };
 		B1000034 /* HapticsCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000035 /* HapticsCenter.swift */; };
-		B1000035 /* ClinicalPresetsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000036 /* ClinicalPresetsStore.swift */; };
 		B1000036 /* ModelDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000037 /* ModelDownloadManager.swift */; };
 		B1000037 /* StreamingModelDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000038 /* StreamingModelDownloader.swift */; };
 		B1000038 /* OMPipelineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000039 /* OMPipelineRuntime.swift */; };
@@ -56,7 +54,6 @@
 		B1000046 /* SummaryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000047 /* SummaryScreen.swift */; };
 		B1000047 /* ScannerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000048 /* ScannerSheet.swift */; };
 		B1000048 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000049 /* ModelDownloadSheet.swift */; };
-		B1000049 /* LabelEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000050 /* LabelEditorSheet.swift */; };
 		B1000050 /* PIIComparisonSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000051 /* PIIComparisonSheet.swift */; };
 		B1000051 /* Newsreader.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000052 /* Newsreader.ttf */; };
 		B1000052 /* Newsreader-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000053 /* Newsreader-Italic.ttf */; };
@@ -64,8 +61,6 @@
 		B1000054 /* InterTight-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000055 /* InterTight-Italic.ttf */; };
 		B1000055 /* JetBrainsMono.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000056 /* JetBrainsMono.ttf */; };
 		B1000056 /* JetBrainsMono-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000057 /* JetBrainsMono-Italic.ttf */; };
-		B1000057 /* MapleInsightsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000058 /* MapleInsightsScreen.swift */; };
-		B1000058 /* MapleSimulatorDemoReelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000059 /* MapleSimulatorDemoReelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,14 +92,12 @@
 		B2000026 /* OMEnginePickerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMEnginePickerCard.swift; sourceTree = "<group>"; };
 		B2000027 /* ScanStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStage.swift; sourceTree = "<group>"; };
 		B2000028 /* DetectedEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectedEntity.swift; sourceTree = "<group>"; };
-		B2000029 /* ClinicalPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalPreset.swift; sourceTree = "<group>"; };
 		B2000030 /* ModelDownloadEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadEvent.swift; sourceTree = "<group>"; };
 		B2000031 /* PipelinePhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelinePhase.swift; sourceTree = "<group>"; };
 		B2000032 /* ByteFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteFormatter.swift; sourceTree = "<group>"; };
 		B2000033 /* EntityGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityGrouping.swift; sourceTree = "<group>"; };
 		B2000034 /* EngineDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineDiff.swift; sourceTree = "<group>"; };
 		B2000035 /* HapticsCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsCenter.swift; sourceTree = "<group>"; };
-		B2000036 /* ClinicalPresetsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalPresetsStore.swift; sourceTree = "<group>"; };
 		B2000037 /* ModelDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadManager.swift; sourceTree = "<group>"; };
 		B2000038 /* StreamingModelDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingModelDownloader.swift; sourceTree = "<group>"; };
 		B2000039 /* OMPipelineRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMPipelineRuntime.swift; sourceTree = "<group>"; };
@@ -118,7 +111,6 @@
 		B2000047 /* SummaryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryScreen.swift; sourceTree = "<group>"; };
 		B2000048 /* ScannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSheet.swift; sourceTree = "<group>"; };
 		B2000049 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
-		B2000050 /* LabelEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelEditorSheet.swift; sourceTree = "<group>"; };
 		B2000051 /* PIIComparisonSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIIComparisonSheet.swift; sourceTree = "<group>"; };
 		B2000052 /* Newsreader.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader.ttf; sourceTree = "<group>"; };
 		B2000053 /* Newsreader-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader-Italic.ttf; sourceTree = "<group>"; };
@@ -126,8 +118,6 @@
 		B2000055 /* InterTight-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterTight-Italic.ttf; sourceTree = "<group>"; };
 		B2000056 /* JetBrainsMono.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = JetBrainsMono.ttf; sourceTree = "<group>"; };
 		B2000057 /* JetBrainsMono-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = JetBrainsMono-Italic.ttf; sourceTree = "<group>"; };
-		B2000058 /* MapleInsightsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapleInsightsScreen.swift; sourceTree = "<group>"; };
-		B2000059 /* MapleSimulatorDemoReelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapleSimulatorDemoReelView.swift; sourceTree = "<group>"; };
 		A2000010 /* OpenMedScanDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenMedScanDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -219,7 +209,6 @@
 		children = (
 			B2000027 /* ScanStage.swift */,
 			B2000028 /* DetectedEntity.swift */,
-			B2000029 /* ClinicalPreset.swift */,
 			B2000030 /* ModelDownloadEvent.swift */,
 			B2000031 /* PipelinePhase.swift */,
 		);
@@ -240,7 +229,6 @@
 		isa = PBXGroup;
 		children = (
 			B2000035 /* HapticsCenter.swift */,
-			B2000036 /* ClinicalPresetsStore.swift */,
 			B2000037 /* ModelDownloadManager.swift */,
 			B2000038 /* StreamingModelDownloader.swift */,
 			B2000039 /* OMPipelineRuntime.swift */,
@@ -259,8 +247,6 @@
 			B2000045 /* DeIDScreen.swift */,
 			B2000046 /* ClinicalScreen.swift */,
 			B2000047 /* SummaryScreen.swift */,
-			B2000058 /* MapleInsightsScreen.swift */,
-			B2000059 /* MapleSimulatorDemoReelView.swift */,
 		);
 		path = Screens;
 		sourceTree = "<group>";
@@ -270,7 +256,6 @@
 		children = (
 			B2000048 /* ScannerSheet.swift */,
 			B2000049 /* ModelDownloadSheet.swift */,
-			B2000050 /* LabelEditorSheet.swift */,
 			B2000051 /* PIIComparisonSheet.swift */,
 		);
 		path = Sheets;
@@ -391,14 +376,12 @@
 			B1000025 /* OMEnginePickerCard.swift in Sources */,
 			B1000026 /* ScanStage.swift in Sources */,
 			B1000027 /* DetectedEntity.swift in Sources */,
-			B1000028 /* ClinicalPreset.swift in Sources */,
 			B1000029 /* ModelDownloadEvent.swift in Sources */,
 			B1000030 /* PipelinePhase.swift in Sources */,
 			B1000031 /* ByteFormatter.swift in Sources */,
 			B1000032 /* EntityGrouping.swift in Sources */,
 			B1000033 /* EngineDiff.swift in Sources */,
 			B1000034 /* HapticsCenter.swift in Sources */,
-			B1000035 /* ClinicalPresetsStore.swift in Sources */,
 			B1000036 /* ModelDownloadManager.swift in Sources */,
 			B1000037 /* StreamingModelDownloader.swift in Sources */,
 			B1000038 /* OMPipelineRuntime.swift in Sources */,
@@ -410,11 +393,8 @@
 			B1000044 /* DeIDScreen.swift in Sources */,
 			B1000045 /* ClinicalScreen.swift in Sources */,
 			B1000046 /* SummaryScreen.swift in Sources */,
-			B1000057 /* MapleInsightsScreen.swift in Sources */,
-			B1000058 /* MapleSimulatorDemoReelView.swift in Sources */,
 			B1000047 /* ScannerSheet.swift in Sources */,
 			B1000048 /* ModelDownloadSheet.swift in Sources */,
-			B1000049 /* LabelEditorSheet.swift in Sources */,
 			B1000050 /* PIIComparisonSheet.swift in Sources */,
 		);
 		runOnlyForDeploymentPostprocessing = 0;

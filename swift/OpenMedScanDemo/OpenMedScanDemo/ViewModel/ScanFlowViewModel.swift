@@ -22,7 +22,12 @@ public final class ScanFlowViewModel: ObservableObject {
     #if canImport(UIKit)
         @Published public var documentImages: [UIImage] = []
     #endif
-    @Published public var pastedOrScannedText: String = ""
+    @Published public var pastedOrScannedText: String = "" {
+        didSet {
+            guard oldValue != pastedOrScannedText else { return }
+            invalidateResultsForDocumentChange()
+        }
+    }
     @Published public var needsOCR: Bool = false
     @Published public var pageCount: Int = 0
     @Published public var currentSource: InputSource = .none
@@ -42,12 +47,17 @@ public final class ScanFlowViewModel: ObservableObject {
     // MARK: De-identification
 
     @Published public var piiEngine: PIIEngine = ScanFlowViewModel.loadPersistedEngine() {
-        didSet { ScanFlowViewModel.persistEngine(piiEngine) }
+        didSet {
+            ScanFlowViewModel.persistEngine(piiEngine)
+            if oldValue != piiEngine {
+                selectedPIINeedsRun = true
+            }
+        }
     }
+    @Published public private(set) var selectedPIINeedsRun = true
     @Published public var openMedPIIOutput: PIIOutput?
     @Published public var privacyFilterPIIOutput: PIIOutput?
     @Published public var multilingualPIIOutput: PIIOutput?
-    @Published public var maplePIIOutput: PIIOutput?
 
     private static let engineKey = "com.openmed.scan.pii-engine"
 
@@ -57,7 +67,7 @@ public final class ScanFlowViewModel: ObservableObject {
         {
             return engine
         }
-        return .maple
+        return .openMed
     }
 
     private static func persistEngine(_ engine: PIIEngine) {
@@ -65,12 +75,11 @@ public final class ScanFlowViewModel: ObservableObject {
     }
 
     public enum PIIEngine: String, CaseIterable, Identifiable, Hashable, Sendable {
-        case maple, openMed, privacyFilter, multilingual
+        case openMed, privacyFilter, multilingual
 
         public var id: String { rawValue }
         public var modelID: ScanModelID {
             switch self {
-            case .maple: return .maplePreview
             case .openMed: return .piiLiteClinical
             case .privacyFilter: return .openaiPrivacyFilter
             case .multilingual: return .multilingualPrivacyFilter
@@ -78,7 +87,6 @@ public final class ScanFlowViewModel: ObservableObject {
         }
         public var displayName: String {
             switch self {
-            case .maple: return "Maple Preview"
             case .openMed: return "OpenMed PII"
             case .privacyFilter: return "OpenAI Nemotron Privacy Filter"
             case .multilingual: return "OpenMed Multilingual Privacy Filter"
@@ -86,7 +94,6 @@ public final class ScanFlowViewModel: ObservableObject {
         }
         public var eyebrow: String {
             switch self {
-            case .maple: return "DEEPGROVE MAPLE · 2-BIT"
             case .openMed: return "OPENMED · LOCAL"
             case .privacyFilter: return "OPENAI NEMOTRON · 8-BIT"
             case .multilingual: return "OPENMED MULTILINGUAL · 8-BIT"
@@ -98,49 +105,87 @@ public final class ScanFlowViewModel: ObservableObject {
         output(for: piiEngine)
     }
 
+    public var selectedPIIRequiresRun: Bool {
+        selectedPIINeedsRun || currentPIIOutput == nil
+    }
+
     public func output(for engine: PIIEngine) -> PIIOutput? {
         switch engine {
-        case .maple: return maplePIIOutput
         case .openMed: return openMedPIIOutput
         case .privacyFilter: return privacyFilterPIIOutput
         case .multilingual: return multilingualPIIOutput
         }
     }
 
-    // MARK: Clinical extraction
+    public var completedPIIEngines: [PIIEngine] {
+        PIIEngine.allCases.filter { output(for: $0) != nil }
+    }
 
-    @Published public var clinicalThreshold: Double = 0.6
-    @Published public var clinicalOutput: ClinicalOutput?
+    public var comparisonPIIEngines: (left: PIIEngine, right: PIIEngine)? {
+        let completed = completedPIIEngines
+        guard completed.count >= 2 else { return nil }
+        return (completed[0], completed[1])
+    }
 
-    // MARK: Maple reasoning + chat
+    // MARK: Clinical NER
 
-    public struct MapleChatTurn: Identifiable, Hashable, Sendable {
-        public enum Role: String, Sendable {
-            case user
-            case assistant
+    @Published public var nerModel: NERModel = .disease {
+        didSet {
+            if oldValue != nerModel {
+                selectedNERNeedsRun = true
+            }
+        }
+    }
+    @Published public private(set) var selectedNERNeedsRun = true
+    @Published public private(set) var nerOutputs: [NERModel: NEROutput] = [:]
+
+    public enum NERModel: String, CaseIterable, Identifiable, Hashable, Sendable {
+        case disease
+        case medication
+        case anatomy
+
+        public var id: String { rawValue }
+
+        public var modelID: ScanModelID {
+            switch self {
+            case .disease: return .nerDisease
+            case .medication: return .nerMedication
+            case .anatomy: return .nerAnatomy
+            }
         }
 
-        public let id: UUID
-        public let role: Role
-        public var content: String
-        public var isStreaming: Bool
+        public var displayName: String {
+            switch self {
+            case .disease: return "Disease NER"
+            case .medication: return "Medication NER"
+            case .anatomy: return "Anatomy NER"
+            }
+        }
 
-        public init(
-            id: UUID = UUID(),
-            role: Role,
-            content: String,
-            isStreaming: Bool = false
-        ) {
-            self.id = id
-            self.role = role
-            self.content = content
-            self.isStreaming = isStreaming
+        public var detail: String {
+            switch self {
+            case .disease: return "Disease and condition spans"
+            case .medication: return "Medication and chemical spans"
+            case .anatomy: return "Anatomical structure spans"
+            }
         }
     }
 
-    @Published public var mapleBrief: String?
-    @Published public var mapleChatTurns: [MapleChatTurn] = []
-    @Published public var mapleChatDraft: String = ""
+    public var currentNEROutput: NEROutput? {
+        nerOutputs[nerModel]
+    }
+
+    public var selectedNERRequiresRun: Bool {
+        selectedNERNeedsRun || currentNEROutput == nil
+    }
+
+    public var completedNERModels: [NERModel] {
+        NERModel.allCases.filter { nerOutputs[$0] != nil }
+    }
+
+    public var allNEREntities: [DetectedEntity] {
+        NERModel.allCases.flatMap { nerOutputs[$0]?.entities ?? [] }
+    }
 
     // MARK: Status + errors
 
@@ -156,18 +201,15 @@ public final class ScanFlowViewModel: ObservableObject {
     // MARK: Dependencies
 
     public let downloads: ModelDownloadManager
-    public let presets: ClinicalPresetsStore
     private let runtime: OMPipelineRuntime
     private let log = Logger(subsystem: "com.openmed.scan", category: "flow")
     private var piiRevision: Int = 0
 
     public init(
         downloads: ModelDownloadManager? = nil,
-        presets: ClinicalPresetsStore? = nil,
         runtime: OMPipelineRuntime = .shared
     ) {
         self.downloads = downloads ?? ModelDownloadManager.shared
-        self.presets = presets ?? ClinicalPresetsStore()
         self.runtime = runtime
     }
 
@@ -178,10 +220,6 @@ public final class ScanFlowViewModel: ObservableObject {
     }
 
     public var hasText: Bool { !trimmedText.isEmpty }
-
-    public var activeLabels: [String] { presets.selectedPreset.labels }
-
-    public var clinicalModelID: ScanModelID { .maplePreview }
 
     // MARK: - Input actions
 
@@ -252,6 +290,7 @@ public final class ScanFlowViewModel: ObservableObject {
                 pastedOrScannedText = result.text
                 needsOCR = false
                 pageCount = result.pageCount
+                documentImages.removeAll(keepingCapacity: false)
                 HapticsCenter.notify(.success)
             } catch {
                 errorMessage = error.localizedDescription
@@ -283,197 +322,69 @@ public final class ScanFlowViewModel: ObservableObject {
             )
             guard revision == piiRevision, text == trimmedText else { return }
             setPIIOutput(output, for: engine)
-            hasRunAnalysis = true
-            HapticsCenter.impact(.soft)
-        } catch {
-            guard revision == piiRevision, text == trimmedText else { return }
-            errorMessage = error.localizedDescription
-            HapticsCenter.notify(.error)
-            log.error("PII run failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    public func runPIIForAllEngines() async {
-        // Run current engine first (so user sees their selection complete),
-        // then opportunistically run the other if its model is ready.
-        let selectedEngine = piiEngine
-        let text = trimmedText
-        let revision = piiRevision
-        guard !text.isEmpty, !isWorking else { return }
-        guard downloads.state(for: selectedEngine.modelID) == .ready else {
-            errorMessage = "Model not ready yet — start the download first."
-            return
-        }
-
-        isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Running \(selectedEngine.displayName) on-device")
-        defer {
-            isWorking = false
-            status = nil
-        }
-
-        do {
-            let output = try await runtime.runPII(text: text, modelID: selectedEngine.modelID)
-            guard revision == piiRevision, text == trimmedText else { return }
-            setPIIOutput(output, for: selectedEngine)
-            hasRunAnalysis = true
-            HapticsCenter.impact(.soft)
-        } catch {
-            guard revision == piiRevision, text == trimmedText else { return }
-            errorMessage = error.localizedDescription
-            HapticsCenter.notify(.error)
-            log.error("PII run failed: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-
-        guard revision == piiRevision, text == trimmedText else { return }
-        if selectedEngine == .maple { return }
-        for engine in PIIEngine.allCases where engine != selectedEngine {
-            guard engine != .maple else { continue }
-            guard downloads.state(for: engine.modelID) == .ready else { continue }
-            status = PipelineProgress(phase: .inferencing, detail: "Running \(engine.displayName) on-device")
-            do {
-                let output = try await runtime.runPII(text: text, modelID: engine.modelID)
-                guard revision == piiRevision, text == trimmedText else { return }
-                setPIIOutput(output, for: engine)
-            } catch {
-                guard revision == piiRevision, text == trimmedText else { return }
-                log.error("Secondary PII engine failed: \(error.localizedDescription, privacy: .public)")
+            invalidateNERResults()
+            if engine == piiEngine {
+                selectedPIINeedsRun = false
             }
+            hasRunAnalysis = true
+            HapticsCenter.impact(.soft)
+        } catch {
+            guard revision == piiRevision, text == trimmedText else { return }
+            errorMessage = error.localizedDescription
+            HapticsCenter.notify(.error)
+            log.error("PII run failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    public func runClinical() async {
+    public func runNERForCurrentModel() async {
         guard let masked = currentPIIOutput?.maskedText, !isWorking else { return }
-        let modelID = clinicalModelID
+        let model = nerModel
+        let modelID = model.modelID
+        let revision = piiRevision
         guard downloads.state(for: modelID) == .ready else {
-            errorMessage = "Clinical model not ready — download it first."
+            errorMessage = "NER model not ready — download it first."
             return
         }
         isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Preparing Maple for extraction")
+        status = PipelineProgress(
+            phase: .inferencing,
+            detail: "Loading \(model.displayName)"
+        )
         defer {
             isWorking = false
             status = nil
         }
         do {
-            status = PipelineProgress(phase: .inferencing, detail: "Extracting entities + relations with Maple")
-            let output = try await runtime.runClinical(
-                maskedText: masked,
-                labels: activeLabels,
-                threshold: Float(clinicalThreshold),
+            status = PipelineProgress(
+                phase: .inferencing,
+                detail: "Running \(model.displayName), then unloading it"
+            )
+            let output = try await runtime.runNER(
+                text: masked,
                 modelID: modelID
             )
-            clinicalOutput = output
-            HapticsCenter.impact(.soft)
-        } catch {
-            errorMessage = error.localizedDescription
-            HapticsCenter.notify(.error)
-            log.error("Clinical run failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    public func generateMapleBrief() async {
-        guard let masked = currentPIIOutput?.maskedText, !isWorking else { return }
-        guard downloads.state(for: .maplePreview) == .ready else {
-            errorMessage = "Maple is not ready — download it first."
-            return
-        }
-        isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Maple is reviewing the de-identified note")
-        defer {
-            isWorking = false
-            status = nil
-        }
-        do {
-            mapleBrief = try await runtime.reason(
-                maskedText: masked,
-                question: "What are the key clinical facts, relationships, uncertainties, and follow-up items?",
-                messages: []
-            )
-            HapticsCenter.impact(.soft)
-        } catch {
-            errorMessage = error.localizedDescription
-            HapticsCenter.notify(.error)
-            log.error("Maple brief failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    public func askMaple() async {
-        let question = mapleChatDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let masked = currentPIIOutput?.maskedText,
-            !question.isEmpty,
-            !isWorking
-        else { return }
-        guard downloads.state(for: .maplePreview) == .ready else {
-            errorMessage = "Maple is not ready — download it first."
-            return
-        }
-
-        let history = mapleChatTurns.suffix(8).map { turn in
-            OpenMedMapleMessage(
-                role: turn.role == .user ? .user : .assistant,
-                content: turn.content
-            )
-        }
-        let pendingTurn = MapleChatTurn(role: .user, content: question)
-        let assistantTurn = MapleChatTurn(
-            role: .assistant,
-            content: "",
-            isStreaming: true
-        )
-        mapleChatTurns.append(pendingTurn)
-        mapleChatTurns.append(assistantTurn)
-        mapleChatDraft = ""
-        isWorking = true
-        status = PipelineProgress(
-            phase: .inferencing,
-            detail: "Maple is reasoning privately on-device"
-        )
-        defer {
-            isWorking = false
-            status = nil
-        }
-        do {
-            let answer = try await runtime.reason(
-                maskedText: masked,
-                question: question,
-                messages: history,
-                onFinalAnswerChunk: { [self, assistantID = assistantTurn.id] chunk in
-                    await appendMapleFinalAnswerChunk(chunk, to: assistantID)
-                }
-            )
-            if let index = mapleChatTurns.firstIndex(where: { $0.id == assistantTurn.id }) {
-                mapleChatTurns[index].content = answer
-                mapleChatTurns[index].isStreaming = false
+            guard revision == piiRevision,
+                masked == currentPIIOutput?.maskedText
+            else { return }
+            nerOutputs[model] = output
+            if model == nerModel {
+                selectedNERNeedsRun = false
             }
             HapticsCenter.impact(.soft)
         } catch {
-            mapleChatTurns.removeAll {
-                $0.id == pendingTurn.id || $0.id == assistantTurn.id
-            }
-            mapleChatDraft = question
+            guard revision == piiRevision,
+                masked == currentPIIOutput?.maskedText
+            else { return }
             errorMessage = error.localizedDescription
             HapticsCenter.notify(.error)
-            log.error("Maple chat failed: \(error.localizedDescription, privacy: .public)")
+            log.error("NER run failed: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    private func appendMapleFinalAnswerChunk(_ chunk: String, to turnID: UUID) {
-        guard let index = mapleChatTurns.firstIndex(where: { $0.id == turnID }) else {
-            return
-        }
-        mapleChatTurns[index].content.append(chunk)
-        status = PipelineProgress(
-            phase: .inferencing,
-            detail: "Streaming Maple's final answer"
-        )
     }
 
     // MARK: - Reset
 
     public enum ResetScope {
-        case all, piiOnly, clinicalOnly
+        case all, piiOnly, nerOnly
     }
 
     public func reset(clearing scope: ResetScope = .all) {
@@ -481,6 +392,7 @@ public final class ScanFlowViewModel: ObservableObject {
         switch scope {
         case .all:
             piiRevision += 1
+            selectedPIINeedsRun = true
             #if canImport(UIKit)
                 documentImages = []
             #endif
@@ -491,41 +403,51 @@ public final class ScanFlowViewModel: ObservableObject {
             openMedPIIOutput = nil
             privacyFilterPIIOutput = nil
             multilingualPIIOutput = nil
-            maplePIIOutput = nil
-            clinicalOutput = nil
-            mapleBrief = nil
-            mapleChatTurns = []
-            mapleChatDraft = ""
+            selectedNERNeedsRun = true
+            nerOutputs = [:]
             hasRunAnalysis = false
             status = nil
             summaryCategoryFilter = nil
         case .piiOnly:
             piiRevision += 1
+            selectedPIINeedsRun = true
             openMedPIIOutput = nil
             privacyFilterPIIOutput = nil
             multilingualPIIOutput = nil
-            maplePIIOutput = nil
-            clinicalOutput = nil
-            mapleBrief = nil
-            mapleChatTurns = []
-            mapleChatDraft = ""
+            selectedNERNeedsRun = true
+            nerOutputs = [:]
             hasRunAnalysis = false
             status = nil
             summaryCategoryFilter = nil
-        case .clinicalOnly:
-            clinicalOutput = nil
-            mapleBrief = nil
-            mapleChatTurns = []
-            mapleChatDraft = ""
+        case .nerOnly:
+            selectedNERNeedsRun = true
+            nerOutputs = [:]
         }
     }
 
     private func setPIIOutput(_ output: PIIOutput, for engine: PIIEngine) {
         switch engine {
-        case .maple: maplePIIOutput = output
         case .openMed: openMedPIIOutput = output
         case .privacyFilter: privacyFilterPIIOutput = output
         case .multilingual: multilingualPIIOutput = output
         }
+    }
+
+    private func invalidateResultsForDocumentChange() {
+        piiRevision += 1
+        selectedPIINeedsRun = true
+        openMedPIIOutput = nil
+        privacyFilterPIIOutput = nil
+        multilingualPIIOutput = nil
+        selectedNERNeedsRun = true
+        nerOutputs = [:]
+        hasRunAnalysis = false
+        summaryCategoryFilter = nil
+    }
+
+    private func invalidateNERResults() {
+        selectedNERNeedsRun = true
+        nerOutputs = [:]
+        summaryCategoryFilter = nil
     }
 }

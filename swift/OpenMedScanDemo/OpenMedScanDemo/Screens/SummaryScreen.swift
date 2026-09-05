@@ -27,15 +27,13 @@ public struct SummaryScreen: View {
 
             filterBar
             entitySections
-            relationSection
-            mapleBriefSection
 
             secondaryActions
         }
     }
 
     private var allEntities: [DetectedEntity] {
-        (flow.currentPIIOutput?.entities ?? []) + (flow.clinicalOutput?.entities ?? [])
+        (flow.currentPIIOutput?.entities ?? []) + flow.allNEREntities
     }
 
     private var headlineSpans: [OMDisplayHeadline.Span] {
@@ -135,7 +133,7 @@ public struct SummaryScreen: View {
                             .font(.om.mono(10))
                             .foregroundStyle(Color.omFgSubtle)
                     } else {
-                        Text("GENERATIVE")
+                        Text("UNSCORED")
                             .font(.om.mono(10))
                             .foregroundStyle(Color.omFgSubtle)
                     }
@@ -144,58 +142,6 @@ public struct SummaryScreen: View {
             Spacer()
         }
         .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private var relationSection: some View {
-        let relations = flow.clinicalOutput?.relations ?? []
-        if !relations.isEmpty {
-            OMCard {
-                VStack(alignment: .leading, spacing: OM.Space.s3) {
-                    HStack {
-                        Text("RELATIONSHIPS").omEyebrow()
-                        Spacer()
-                        OMBadge("\(relations.count)", tone: .accent)
-                    }
-                    ForEach(relations) { relation in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 7) {
-                                Text(relation.head)
-                                    .font(.om.body(14, weight: .semibold))
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(Color.omTealAccent)
-                                Text(relation.tail)
-                                    .font(.om.body(14, weight: .semibold))
-                            }
-                            Text(relation.label.uppercased())
-                                .font(.om.mono(10, weight: .medium))
-                                .foregroundStyle(Color.omFgMuted)
-                        }
-                        if relation != relations.last { OMRule() }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var mapleBriefSection: some View {
-        if let brief = flow.mapleBrief {
-            OMCard(elevation: .raised) {
-                VStack(alignment: .leading, spacing: OM.Space.s3) {
-                    HStack {
-                        Text("MAPLE BRIEF").omEyebrow()
-                        Spacer()
-                        OMBadge("On-device", tone: .positive, systemImage: "lock.fill")
-                    }
-                    Text(brief)
-                        .font(.om.body(15))
-                        .foregroundStyle(Color.omInk)
-                        .textSelection(.enabled)
-                }
-            }
-        }
     }
 
     private var secondaryActions: some View {
@@ -251,22 +197,21 @@ public struct SummaryScreen: View {
                     "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
                 ]
             },
-            "clinicalEntities": (flow.clinicalOutput?.entities ?? []).map {
+            "nerRuns": flow.completedNERModels.map { model in
                 [
-                    "label": $0.label, "text": $0.text, "start": $0.start, "end": $0.end,
-                    "category": $0.category.rawValue,
-                    "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
+                    "model": model.modelID.artifactRepoID,
+                    "entities": (flow.nerOutputs[model]?.entities ?? []).map {
+                        [
+                            "label": $0.label,
+                            "text": $0.text,
+                            "start": $0.start,
+                            "end": $0.end,
+                            "category": $0.category.rawValue,
+                            "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
+                        ]
+                    },
                 ]
             },
-            "relations": (flow.clinicalOutput?.relations ?? []).map {
-                [
-                    "label": $0.label,
-                    "head": $0.head,
-                    "tail": $0.tail,
-                    "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
-                ]
-            },
-            "mapleBrief": flow.mapleBrief.map { $0 as Any } ?? NSNull(),
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]) else {
             return "{}"
@@ -281,8 +226,6 @@ public struct SummaryScreen: View {
     }
 
     private var completedPIIOutputs: Int {
-        ScanFlowViewModel.PIIEngine.allCases
-            .filter { flow.output(for: $0) != nil }
-            .count
+        flow.completedPIIEngines.count
     }
 }

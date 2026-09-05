@@ -7,14 +7,13 @@ import OpenMedKit
 #endif
 
 /// Thin, self-contained wrapper around OpenMedKit used by `ScanFlowViewModel`.
-/// Caches PII + clinical runtimes per artifact so returning to the same stage
-/// is instant. Loading work runs on a background queue to keep the main actor free.
+/// Loads model work on a background queue to keep the main actor free. At most
+/// one PII runtime is retained: selecting another engine does not load it, and
+/// the next explicit run unloads the prior engine before loading the new one.
 public actor OMPipelineRuntime {
     public static let shared = OMPipelineRuntime()
 
-    private var piiRuntimes: [String: OpenMed] = [:]
-    private var relationRuntimes: [String: OpenMedRelationExtractor] = [:]
-    private var mapleRuntimes: [String: OpenMedMaple] = [:]
+    private var piiRuntime: (repositoryID: String, runtime: OpenMed)?
     private let blockingQueue = DispatchQueue(label: "com.openmed.scan.pipeline", qos: .userInitiated)
 
     public init() {}
@@ -26,110 +25,34 @@ public actor OMPipelineRuntime {
         modelID: ScanModelID,
         confidenceThreshold: Float = 0.5
     ) async throws -> PIIOutput {
-        if modelID == .maplePreview {
-            await unloadPIIRuntimes()
-            await unloadRelationRuntimes()
-            let runtime = try await loadMapleRuntime(for: modelID)
-            let response = try await runtime.complete(
-                OpenMedMapleRequest(
-                    task: .deidentify,
-                    document: text,
-                    maximumTokens: 1_536
-                )
-            )
-            guard let maskedText = response.redactedText else {
-                throw PipelineError.missingMapleRedaction
-            }
-            return PIIOutput(
-                entities: response.entities.map(DetectedEntity.init(maple:)),
-                maskedText: maskedText
-            )
+        guard Self.piiModelIDs.contains(modelID) else {
+            throw PipelineError.unsupportedPIIModel(modelID)
         }
 
-        await unloadRelationRuntimes()
-        await unloadMapleRuntimes()
-        let runtime = try await loadPIIRuntime(for: modelID)
-        let predictions = try await runBlocking {
-            try runtime.extractPIIChunked(
-                text,
-                confidenceThreshold: confidenceThreshold,
-                chunkTokenLimit: 256,
-                tokenOverlap: 32
-            )
-        }
+        let predictions = try await extractPII(
+            text: text,
+            modelID: modelID,
+            confidenceThreshold: confidenceThreshold
+        )
         let entities = predictions.map(DetectedEntity.init(openMedKit:))
         let masked = Self.mask(text: text, entities: entities)
         return PIIOutput(entities: entities, maskedText: masked)
     }
 
-    public func runClinical(
-        maskedText: String,
-        labels: [String],
-        threshold: Float,
+    public func runNER(
+        text: String,
         modelID: ScanModelID
-    ) async throws -> ClinicalOutput {
-        if modelID == .maplePreview {
-            await unloadPIIRuntimes()
-            await unloadRelationRuntimes()
-            let runtime = try await loadMapleRuntime(for: modelID)
-            let response = try await runtime.complete(
-                OpenMedMapleRequest(
-                    task: .relationExtraction,
-                    document: maskedText,
-                    entityLabels: labels,
-                    relationLabels: Self.defaultRelationLabels,
-                    maximumTokens: 2_048
-                )
-            )
-            return ClinicalOutput(
-                entities: response.entities.map(DetectedEntity.init(maple:)),
-                relations: response.relations.map(DetectedRelation.init(maple:))
-            )
+    ) async throws -> NEROutput {
+        guard Self.nerModelIDs.contains(modelID) else {
+            throw PipelineError.unsupportedNERModel(modelID)
         }
 
-        await unloadPIIRuntimes()
-        await unloadMapleRuntimes()
-        let extractor = try await loadRelationRuntime(for: .glinerRelex)
-        let result = try await runBlocking {
-            try extractor.extract(
-                maskedText,
-                entityLabels: labels,
-                relationLabels: Self.defaultRelationLabels,
-                threshold: threshold,
-                relationThreshold: 0.9,
-                flatNER: true
-            )
-        }
-        return ClinicalOutput(
-            entities: result.entities.map(DetectedEntity.init(zeroShot:)),
-            relations: result.relations.map(DetectedRelation.init(openMedKit:))
+        await unloadPIIRuntime()
+        let predictions = try await extractNERAndUnload(
+            text: text,
+            modelID: modelID
         )
-    }
-
-    public func reason(
-        maskedText: String,
-        question: String,
-        messages: [OpenMedMapleMessage],
-        onFinalAnswerChunk: (@Sendable (String) async -> Void)? = nil
-    ) async throws -> String {
-        await unloadPIIRuntimes()
-        await unloadRelationRuntimes()
-        let runtime = try await loadMapleRuntime(for: .maplePreview)
-        let task: OpenMedMapleTask = messages.isEmpty ? .reasoning : .chat
-        let response = try await runtime.complete(
-            OpenMedMapleRequest(
-                task: task,
-                document: maskedText,
-                messages: messages,
-                question: question,
-                maximumTokens: 1_536
-            ),
-            onFinalAnswerChunk: onFinalAnswerChunk
-        )
-        guard let answer = response.answer, !answer.isEmpty else {
-            throw PipelineError.missingMapleAnswer
-        }
-        return answer
+        return NEROutput(entities: predictions.map(DetectedEntity.init(openMedKit:)))
     }
 
     #if canImport(UIKit)
@@ -168,25 +91,9 @@ public actor OMPipelineRuntime {
 
     // MARK: - Cached runtimes
 
-    public func unloadPIIRuntimes() async {
-        guard !piiRuntimes.isEmpty else { return }
-        piiRuntimes.removeAll(keepingCapacity: false)
-        await clearRuntimeMemoryCacheOnPipelineQueue()
-    }
-
-    public func unloadRelationRuntimes() async {
-        guard !relationRuntimes.isEmpty else { return }
-        relationRuntimes.removeAll(keepingCapacity: false)
-        await clearRuntimeMemoryCacheOnPipelineQueue()
-    }
-
-    public func unloadMapleRuntimes() async {
-        guard !mapleRuntimes.isEmpty else { return }
-        let runtimes = mapleRuntimes.values
-        mapleRuntimes.removeAll(keepingCapacity: false)
-        for runtime in runtimes {
-            await runtime.unload()
-        }
+    public func unloadPIIRuntime() async {
+        guard piiRuntime != nil else { return }
+        piiRuntime = nil
         await clearRuntimeMemoryCacheOnPipelineQueue()
     }
 
@@ -210,7 +117,10 @@ public actor OMPipelineRuntime {
     #endif
 
     private func loadPIIRuntime(for modelID: ScanModelID) async throws -> OpenMed {
-        if let cached = piiRuntimes[modelID.artifactRepoID] { return cached }
+        if let cached = piiRuntime, cached.repositoryID == modelID.artifactRepoID {
+            return cached.runtime
+        }
+        await unloadPIIRuntime()
         let directory = try OpenMedModelStore.cachedMLXModelDirectory(
             repoID: modelID.artifactRepoID,
             revision: modelID.revision
@@ -221,26 +131,52 @@ public actor OMPipelineRuntime {
         let runtime = try await runBlocking {
             try OpenMed(backend: .mlx(modelDirectoryURL: directory))
         }
-        piiRuntimes[modelID.artifactRepoID] = runtime
+        piiRuntime = (modelID.artifactRepoID, runtime)
         return runtime
     }
 
-    private func loadMapleRuntime(for modelID: ScanModelID) async throws -> OpenMedMaple {
-        if let cached = mapleRuntimes[modelID.artifactRepoID] { return cached }
-        let directory = try OpenMedModelStore.cachedMLXModelDirectory(
-            repoID: modelID.artifactRepoID,
-            revision: modelID.revision
-        )
-        guard OpenMedMaple.isModelDirectoryReady(directory) else {
-            throw PipelineError.modelNotReady(modelID)
+    /// Keeps the strong local runtime reference inside this helper. Once it
+    /// returns, `unloadPIIRuntime()` can drop the actor-owned reference before
+    /// clearing MLX's buffer cache.
+    private func extractPII(
+        text: String,
+        modelID: ScanModelID,
+        confidenceThreshold: Float
+    ) async throws -> [EntityPrediction] {
+        let runtime = try await loadPIIRuntime(for: modelID)
+        return try await runBlocking {
+            try runtime.extractPIIChunked(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                chunkTokenLimit: 256,
+                tokenOverlap: 32
+            )
         }
-        let runtime = try await OpenMedMaple(modelDirectoryURL: directory)
-        mapleRuntimes[modelID.artifactRepoID] = runtime
-        return runtime
     }
 
-    private func loadRelationRuntime(for modelID: ScanModelID) async throws -> OpenMedRelationExtractor {
-        if let cached = relationRuntimes[modelID.artifactRepoID] { return cached }
+    /// NER models are deliberately transient. Each explicit run creates one
+    /// runtime, completes inference, drops the final strong reference, and
+    /// clears MLX's buffer cache before returning to the UI.
+    private func extractNERAndUnload(
+        text: String,
+        modelID: ScanModelID
+    ) async throws -> [EntityPrediction] {
+        do {
+            let predictions = try await runTransientNER(text: text, modelID: modelID)
+            await clearRuntimeMemoryCacheOnPipelineQueue()
+            return predictions
+        } catch {
+            await clearRuntimeMemoryCacheOnPipelineQueue()
+            throw error
+        }
+    }
+
+    /// The runtime is owned only by this function. Returning guarantees its
+    /// final strong reference has left scope before the caller clears MLX.
+    private func runTransientNER(
+        text: String,
+        modelID: ScanModelID
+    ) async throws -> [EntityPrediction] {
         let directory = try OpenMedModelStore.cachedMLXModelDirectory(
             repoID: modelID.artifactRepoID,
             revision: modelID.revision
@@ -249,10 +185,16 @@ public actor OMPipelineRuntime {
             throw PipelineError.modelNotReady(modelID)
         }
         let runtime = try await runBlocking {
-            try OpenMedRelationExtractor(modelDirectoryURL: directory)
+            try OpenMed(backend: .mlx(modelDirectoryURL: directory))
         }
-        relationRuntimes[modelID.artifactRepoID] = runtime
-        return runtime
+        return try await runBlocking {
+            try runtime.analyzeTextChunked(
+                text,
+                confidenceThreshold: 0.5,
+                chunkTokenLimit: 256,
+                tokenOverlap: 32
+            )
+        }
     }
 
     private func runBlocking<T>(_ work: @escaping () throws -> T) async throws -> T {
@@ -305,16 +247,16 @@ public actor OMPipelineRuntime {
         return output
     }
 
-    // MARK: - Default relation labels (used by clinical extractor)
-    fileprivate static let defaultRelationLabels: [String] = [
-        "has symptom",
-        "diagnosed with",
-        "treated with",
-        "takes medication",
-        "allergic to",
-        "requires test",
-        "follow-up for",
-        "care plan includes",
+    private static let piiModelIDs: Set<ScanModelID> = [
+        .piiLiteClinical,
+        .openaiPrivacyFilter,
+        .multilingualPrivacyFilter,
+    ]
+
+    private static let nerModelIDs: Set<ScanModelID> = [
+        .nerDisease,
+        .nerMedication,
+        .nerAnatomy,
     ]
 }
 
@@ -329,12 +271,10 @@ public struct PIIOutput: Sendable {
     }
 }
 
-public struct ClinicalOutput: Sendable {
+public struct NEROutput: Sendable {
     public let entities: [DetectedEntity]
-    public let relations: [DetectedRelation]
-    public init(entities: [DetectedEntity], relations: [DetectedRelation] = []) {
+    public init(entities: [DetectedEntity]) {
         self.entities = entities
-        self.relations = relations
     }
 }
 
@@ -345,20 +285,20 @@ public struct TextRecognitionResult: Sendable {
 
 public enum PipelineError: LocalizedError {
     case modelNotReady(ScanModelID)
+    case unsupportedPIIModel(ScanModelID)
+    case unsupportedNERModel(ScanModelID)
     case invalidImage
-    case missingMapleRedaction
-    case missingMapleAnswer
 
     public var errorDescription: String? {
         switch self {
         case .modelNotReady(let id):
             return "The \(id.displayName) model is not yet prepared. Tap download first."
+        case .unsupportedPIIModel(let id):
+            return "The \(id.displayName) model is not a PII redaction engine."
+        case .unsupportedNERModel(let id):
+            return "The \(id.displayName) model is not a supported clinical NER model."
         case .invalidImage:
             return "Could not read the scanned image."
-        case .missingMapleRedaction:
-            return "Maple did not return a validated redacted document. Please try again."
-        case .missingMapleAnswer:
-            return "Maple did not return a final answer. Please try a more specific question."
         }
     }
 }
@@ -376,44 +316,6 @@ extension DetectedEntity {
         )
     }
 
-    fileprivate init(zeroShot entity: OpenMedZeroShotEntity) {
-        self.init(
-            label: entity.label,
-            text: entity.text,
-            confidence: Double(entity.score),
-            start: entity.start,
-            end: entity.end
-        )
-    }
-
-    fileprivate init(maple entity: OpenMedMapleEntity) {
-        self.init(
-            label: entity.label,
-            text: entity.text,
-            confidence: nil,
-            start: entity.start,
-            end: entity.end
-        )
-    }
-}
-
-extension DetectedRelation {
-    fileprivate init(openMedKit relation: OpenMedRelation) {
-        self.init(
-            label: relation.label,
-            head: relation.head.text,
-            tail: relation.tail.text,
-            confidence: Double(relation.score)
-        )
-    }
-
-    fileprivate init(maple relation: OpenMedMapleRelation) {
-        self.init(
-            label: relation.label,
-            head: relation.head,
-            tail: relation.tail
-        )
-    }
 }
 
 extension EntityCategory {

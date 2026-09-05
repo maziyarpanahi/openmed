@@ -5,8 +5,9 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
     case piiLiteClinical
     case openaiPrivacyFilter
     case multilingualPrivacyFilter
-    case glinerRelex
-    case maplePreview
+    case nerDisease
+    case nerMedication
+    case nerAnatomy
 
     public var id: String { rawValue }
 
@@ -15,8 +16,9 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
         case .piiLiteClinical: return "OpenMed PII"
         case .openaiPrivacyFilter: return "OpenAI Nemotron Privacy Filter"
         case .multilingualPrivacyFilter: return "OpenMed Multilingual Privacy Filter"
-        case .glinerRelex: return "GLiNER Clinical"
-        case .maplePreview: return "Maple Preview"
+        case .nerDisease: return "Disease NER"
+        case .nerMedication: return "Medication NER"
+        case .nerAnatomy: return "Anatomy NER"
         }
     }
 
@@ -28,8 +30,7 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
         case .piiLiteClinical: return "~265 MB"
         case .openaiPrivacyFilter: return "~1.5 GB"
         case .multilingualPrivacyFilter: return "~1.5 GB"
-        case .glinerRelex: return "~220 MB"
-        case .maplePreview: return "~5.0 GB"
+        case .nerDisease, .nerMedication, .nerAnatomy: return "~134 MB"
         }
     }
 
@@ -38,8 +39,7 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
         case .piiLiteClinical: return "PII"
         case .openaiPrivacyFilter: return "PRIVACY"
         case .multilingualPrivacyFilter: return "MULTI"
-        case .glinerRelex: return "CLINICAL"
-        case .maplePreview: return "MAPLE"
+        case .nerDisease, .nerMedication, .nerAnatomy: return "NER"
         }
     }
 }

@@ -9,11 +9,9 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var flow: ScanFlowViewModel
     @EnvironmentObject private var downloads: ModelDownloadManager
-    @EnvironmentObject private var presets: ClinicalPresetsStore
 
     @State private var isShowingScanner = false
     @State private var isShowingModelSheet = false
-    @State private var isShowingLabelEditor = false
     @State private var isShowingComparison = false
     @State private var furthestReached: ScanStage = .input
 
@@ -55,18 +53,16 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $isShowingLabelEditor) {
-            LabelEditorSheet(presets: presets)
-                .presentationDetents([.large])
-        }
         .sheet(isPresented: $isShowingComparison) {
-            PIIComparisonSheet(
-                sourceText: flow.trimmedText,
-                leftOutput: flow.openMedPIIOutput,
-                rightOutput: flow.multilingualPIIOutput ?? flow.privacyFilterPIIOutput,
-                leftEngine: .openMed,
-                rightEngine: flow.multilingualPIIOutput == nil ? .privacyFilter : .multilingual
-            )
+            if let engines = flow.comparisonPIIEngines {
+                PIIComparisonSheet(
+                    sourceText: flow.trimmedText,
+                    leftOutput: flow.output(for: engines.left),
+                    rightOutput: flow.output(for: engines.right),
+                    leftEngine: engines.left,
+                    rightEngine: engines.right
+                )
+            }
         }
         .alert(
             "Something went wrong",
@@ -106,12 +102,8 @@ struct ContentView: View {
         case .clinical:
             ClinicalScreen(
                 flow: flow,
-                downloads: downloads,
-                presets: presets,
-                onSaveAsNewPreset: { isShowingLabelEditor = true }
+                downloads: downloads
             )
-        case .insights:
-            MapleInsightsScreen(flow: flow, downloads: downloads)
         case .summary:
             SummaryScreen(
                 flow: flow,
@@ -154,13 +146,18 @@ struct ContentView: View {
         case .input: return flow.hasText ? "Review document" : "Add document or text"
         case .review: return flow.needsOCR ? "Run OCR" : "Continue to de-identification"
         case .deidentify:
-            if flow.currentPIIOutput == nil { return "Run PII redaction" }
+            if flow.selectedPIIRequiresRun {
+                return flow.currentPIIOutput == nil
+                    ? "Run PII redaction"
+                    : "Run selected PII model"
+            }
             return "Continue to clinical"
         case .clinical:
-            if flow.clinicalOutput == nil { return "Extract clinical signals" }
-            return "Explore with Maple"
-        case .insights:
-            if flow.mapleBrief == nil { return "Generate Maple brief" }
+            if flow.selectedNERRequiresRun {
+                return flow.currentNEROutput == nil
+                    ? "Run selected NER model"
+                    : "Rerun selected NER model"
+            }
             return "Review summary"
         case .summary: return "Start a new scan"
         }
@@ -175,25 +172,17 @@ struct ContentView: View {
             if flow.needsOCR { return !flow.documentImages.isEmpty }
             return flow.hasText
         case .deidentify:
-            if flow.currentPIIOutput == nil {
+            if flow.selectedPIIRequiresRun {
                 return downloads.state(for: flow.piiEngine.modelID) == .ready && flow.hasText
             }
             return true
         case .clinical:
-            if flow.clinicalOutput == nil {
-                return downloads.state(for: flow.clinicalModelID) == .ready
-                    && flow.currentPIIOutput != nil
-                    && !flow.activeLabels.isEmpty
-            }
-            return true
-        case .insights:
-            if flow.mapleBrief == nil {
-                return downloads.state(for: .maplePreview) == .ready
+            if flow.selectedNERRequiresRun {
+                return downloads.state(for: flow.nerModel.modelID) == .ready
                     && flow.currentPIIOutput != nil
             }
             return true
-        case .summary:
-            return true
+        case .summary: return true
         }
     }
 
@@ -210,20 +199,14 @@ struct ContentView: View {
                 flow.advance()
             }
         case .deidentify:
-            if flow.currentPIIOutput == nil {
-                await flow.runPIIForAllEngines()
+            if flow.selectedPIIRequiresRun {
+                await flow.runPIIForCurrentEngine()
             } else {
                 flow.advance()
             }
         case .clinical:
-            if flow.clinicalOutput == nil {
-                await flow.runClinical()
-            } else {
-                flow.advance()
-            }
-        case .insights:
-            if flow.mapleBrief == nil {
-                await flow.generateMapleBrief()
+            if flow.selectedNERRequiresRun {
+                await flow.runNERForCurrentModel()
             } else {
                 flow.advance()
             }
@@ -248,5 +231,4 @@ struct ContentView: View {
     ContentView()
         .environmentObject(ScanFlowViewModel())
         .environmentObject(ModelDownloadManager.shared)
-        .environmentObject(ClinicalPresetsStore())
 }

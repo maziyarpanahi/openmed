@@ -1,6 +1,6 @@
 import Foundation
 
-/// The six pipeline stages the user walks through in order.
+/// The five extraction pipeline stages the user walks through in order.
 /// Name kept distinct from ContentView's private enum so both can coexist
 /// during the migration; the private one is removed once all screens ship.
 public enum ScanStage: Int, CaseIterable, Identifiable, Sendable, Hashable {
@@ -8,7 +8,6 @@ public enum ScanStage: Int, CaseIterable, Identifiable, Sendable, Hashable {
     case review
     case deidentify
     case clinical
-    case insights
     case summary
 
     public var id: Int { rawValue }
@@ -19,8 +18,7 @@ public enum ScanStage: Int, CaseIterable, Identifiable, Sendable, Hashable {
         case .input: return "Input"
         case .review: return "Review"
         case .deidentify: return "De-ID"
-        case .clinical: return "Clinical"
-        case .insights: return "Maple"
+        case .clinical: return "NER"
         case .summary: return "Summary"
         }
     }

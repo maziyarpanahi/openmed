@@ -37,12 +37,7 @@ public actor StreamingModelDownloader {
         let directory = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID, revision: revision)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        if repoID == OpenMedMaple.repositoryID {
-            if OpenMedMaple.isModelDirectoryReady(directory) {
-                progress("ready", 0, 0, 0)
-                return directory
-            }
-        } else if (try? OpenMedModelStore.mlxModelCacheState(
+        if (try? OpenMedModelStore.mlxModelCacheState(
             repoID: repoID,
             revision: revision
         )) == .ready {
@@ -54,32 +49,25 @@ public actor StreamingModelDownloader {
         let manifestPath = "openmed-mlx.json"
         let manifestURL = directory.appending(path: manifestPath)
         let manifest: MLXManifest?
-        if repoID == OpenMedMaple.repositoryID {
-            manifest = nil
-        } else {
-            let manifestExists = try await downloadFileIfMissing(
-                repoID: repoID,
-                revision: revision,
-                relativePath: manifestPath,
-                destination: manifestURL,
-                requiredStatusCodes: nil,  // tolerate 404
-                progress: { _, _, _, _ in }
-            )
-            manifest = try await decodeManifestIfPresent(
-                repoID: repoID,
-                revision: revision,
-                manifestURL: manifestURL,
-                manifestExists: manifestExists
-            )
-        }
+        let manifestExists = try await downloadFileIfMissing(
+            repoID: repoID,
+            revision: revision,
+            relativePath: manifestPath,
+            destination: manifestURL,
+            requiredStatusCodes: nil,  // tolerate 404
+            progress: { _, _, _, _ in }
+        )
+        manifest = try await decodeManifestIfPresent(
+            repoID: repoID,
+            revision: revision,
+            manifestURL: manifestURL,
+            manifestExists: manifestExists
+        )
         var aggregate: Int64 = sizeOf(manifestURL)
 
         // 2. Either manifest-driven or legacy layout.
         let filesToDownload: [(path: String, optional: Bool)] = {
-            if repoID == OpenMedMaple.repositoryID {
-                return OpenMedMaple.requiredModelFiles.map { ($0, false) }
-                    + OpenMedMaple.optionalTokenizerFiles.map { ($0, true) }
-            } else if let manifest {
+            if let manifest {
                 var list: [(String, Bool)] = []
                 list.append((manifest.configPath, false))
                 if let labelMap = manifest.labelMapPath { list.append((labelMap, true)) }

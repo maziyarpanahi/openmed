@@ -194,15 +194,6 @@ public final class ModelDownloadManager: ObservableObject {
     }
 
     private func currentCacheState(for id: ScanModelID) -> OpenMedMLXModelCacheState {
-        if id == .maplePreview,
-            let directory = try? OpenMedModelStore.cachedMLXModelDirectory(
-                repoID: id.artifactRepoID,
-                revision: id.revision
-            )
-        {
-            if OpenMedMaple.isModelDirectoryReady(directory) { return .ready }
-            return directoryBytes(for: id) > 0 ? .partial : .missing
-        }
         return
             (try? OpenMedModelStore.mlxModelCacheState(
                 repoID: id.artifactRepoID,
@@ -240,15 +231,24 @@ extension ScanModelID {
         case .piiLiteClinical: return "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
         case .openaiPrivacyFilter: return "OpenMed/privacy-filter-nemotron-mlx-8bit"
         case .multilingualPrivacyFilter: return "OpenMed/privacy-filter-multilingual-mlx-8bit"
-        case .glinerRelex: return "OpenMed/gliner-relex-base-v1.0-mlx"
-        case .maplePreview: return OpenMedMaple.repositoryID
+        case .nerDisease:
+            return "OpenMed/OpenMed-NER-DiseaseDetect-ElectraMed-33M-mlx"
+        case .nerMedication:
+            return "OpenMed/OpenMed-NER-PharmaDetect-ElectraMed-33M-mlx"
+        case .nerAnatomy:
+            return "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M-mlx"
         }
     }
 
     /// Immutable model revision used for reproducible local inference.
     public var revision: String {
         switch self {
-        case .maplePreview: return OpenMedMaple.pinnedRevision
+        case .nerDisease:
+            return "20c10234c1ee4cbe02fe529189c8c4cb64dfe1f5"
+        case .nerMedication:
+            return "520f3235d577ceee5f6423a0c7833390e4709301"
+        case .nerAnatomy:
+            return "70bcf3d3c4e37781723795830772d4a4ad8f2f1c"
         default: return "main"
         }
     }
@@ -260,8 +260,7 @@ extension ScanModelID {
         case .piiLiteClinical: return 278 * 1024 * 1024
         case .openaiPrivacyFilter: return 1_550 * 1024 * 1024
         case .multilingualPrivacyFilter: return 1_550 * 1024 * 1024
-        case .glinerRelex: return 230 * 1024 * 1024
-        case .maplePreview: return OpenMedMaple.estimatedDownloadBytes
+        case .nerDisease, .nerMedication, .nerAnatomy: return 136 * 1024 * 1024
         }
     }
 }

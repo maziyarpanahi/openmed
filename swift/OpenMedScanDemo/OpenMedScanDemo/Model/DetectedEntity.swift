@@ -7,8 +7,7 @@ public struct DetectedEntity: Identifiable, Hashable, Sendable {
     public let id: UUID
     public let label: String
     public let text: String
-    /// Calibrated model score when the backend exposes one. Generative
-    /// backends leave this nil instead of presenting invented confidence.
+    /// Calibrated model score when the backend exposes one.
     public let confidence: Double?
     public let start: Int
     public let end: Int
@@ -30,28 +29,6 @@ public struct DetectedEntity: Identifiable, Hashable, Sendable {
         self.start = start
         self.end = end
         self.category = category ?? EntityCategory.classify(label: label)
-    }
-}
-
-/// A directed relation between two extracted concepts.
-public struct DetectedRelation: Identifiable, Hashable, Sendable {
-    public var id: String { "\(head)|\(label)|\(tail)" }
-
-    public let label: String
-    public let head: String
-    public let tail: String
-    public let confidence: Double?
-
-    public init(
-        label: String,
-        head: String,
-        tail: String,
-        confidence: Double? = nil
-    ) {
-        self.label = label
-        self.head = head
-        self.tail = tail
-        self.confidence = confidence
     }
 }
 

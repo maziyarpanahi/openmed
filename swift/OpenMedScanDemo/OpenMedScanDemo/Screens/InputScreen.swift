@@ -71,16 +71,18 @@ public struct InputScreen: View {
         OMCard(padding: OM.Space.s4) {
             HStack(alignment: .top, spacing: OM.Space.s3) {
                 VStack(alignment: .leading, spacing: OM.Space.s2) {
-                    Text("CLINICAL COPILOT").omEyebrow()
-                    Text("Maple Preview · 2-bit")
+                    Text("CLINICAL NER").omEyebrow()
+                    Text("Three focused NER models · ~134 MB each")
                         .font(.om.heading(17, weight: .semibold))
                         .foregroundStyle(Color.omInk)
-                    Text("One local sparse model for redaction, entities, relations, reasoning, and chat.")
+                    Text("Disease, medication, and anatomy token classifiers. Each model loads for one explicit run, then unloads.")
                         .font(.om.body(12))
                         .foregroundStyle(Color.omFgMuted)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    clinicalStateRow
+                    Text("\(cachedNERModelCount) of 3 cached")
+                        .font(.om.mono(11, weight: .medium))
+                        .foregroundStyle(cachedNERModelCount > 0 ? Color.omTealAccent : Color.omFgSubtle)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -90,62 +92,10 @@ public struct InputScreen: View {
         }
     }
 
-    @ViewBuilder
-    private var clinicalStateRow: some View {
-        let entry = downloads.entries[.maplePreview]
-        let state = entry?.state ?? .missing
-        switch state {
-        case .ready:
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.omTealAccent)
-                Text("Cached")
-                    .font(.om.mono(11, weight: .medium))
-                    .foregroundStyle(Color.omTealAccent)
-            }
-            .padding(.top, 4)
-        case .downloading(let bytes, let total, _):
-            VStack(alignment: .leading, spacing: 4) {
-                OMProgressBar(
-                    mode: (entry?.fraction).map { .determinate(progress: $0) } ?? .indeterminate,
-                    height: 4
-                )
-                HStack {
-                    Text(ByteFormatter.percent(entry?.fraction))
-                        .font(.om.mono(10, weight: .semibold))
-                    Spacer()
-                    Text(ByteFormatter.progressString(bytes: bytes, total: total ?? entry?.bytesEstimatedTotal))
-                        .font(.om.mono(9))
-                        .foregroundStyle(Color.omFgSubtle)
-                }
-                Button("Cancel") { downloads.cancel(.maplePreview) }
-                    .buttonStyle(.omGhost(.ink))
-            }
-            .padding(.top, 4)
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message)
-                    .font(.om.body(11))
-                    .foregroundStyle(Color.omSignal)
-                    .lineLimit(2)
-                Button("Retry") { downloads.prepare(.maplePreview) }
-                    .buttonStyle(.omSecondary(.sm))
-            }
-            .padding(.top, 4)
-        default:
-            Button {
-                downloads.prepare(.maplePreview)
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 11))
-                    Text("Download · \(ScanModelID.maplePreview.estimatedSizeLabel.replacingOccurrences(of: "~", with: ""))")
-                }
-            }
-            .buttonStyle(.omSecondary(.sm))
-            .padding(.top, 4)
-        }
+    private var cachedNERModelCount: Int {
+        ScanFlowViewModel.NERModel.allCases.filter {
+            downloads.state(for: $0.modelID) == .ready
+        }.count
     }
 
     // MARK: Input choice cards
@@ -289,7 +239,7 @@ public struct InputScreen: View {
         HStack(spacing: 6) {
             Image(systemName: "lock.shield")
                 .font(.system(size: 11))
-            Text("All redaction and extraction runs on-device. Nothing leaves your iPhone.")
+            Text("All redaction and clinical NER runs on-device. Nothing leaves your iPhone.")
                 .font(.om.body(12))
         }
         .foregroundStyle(Color.omFgSubtle)
