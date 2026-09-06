@@ -19,6 +19,8 @@ __all__ = [
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
     "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
+    "DEFAULT_FEDERATED_METRIC_MINIMUM_GROUP_SIZE",
+    "FEDERATED_METRIC_SCHEMA_VERSION",
     "FEDERATED_SCHEDULE_PHASES",
     "FEDERATED_SCHEDULE_SCHEMA_VERSION",
     "MAX_FEDERATED_PHASE_DURATION_SECONDS",
@@ -102,6 +104,11 @@ __all__ = [
     "DistillationTargets",
     "EntityTypeWeights",
     "FederatedRoundLifecycle",
+    "FederatedMetricEnvelope",
+    "FederatedMetricError",
+    "FederatedMetricKind",
+    "FederatedParticipantCountBand",
+    "FederatedPrivacyMechanism",
     "FederatedCompletionBand",
     "FederatedQuorumStatus",
     "FederatedRoundReasonCode",
@@ -113,6 +120,7 @@ __all__ = [
     "FederatedRoundStatus",
     "FederatedRoundStatusError",
     "FederatedRoundTransitionError",
+    "FederatedUncertaintyMethod",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
@@ -153,6 +161,7 @@ __all__ = [
     "build_clinical_family_release",
     "build_directid_dataset_evidence",
     "build_federated_round_status",
+    "build_federated_metric_envelope",
     "config_hash",
     "clinical_family_recipe_hash",
     "clinical_model_family_spec",
@@ -223,6 +232,19 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "DEFAULT_FEDERATED_METRIC_MINIMUM_GROUP_SIZE",
+        "FEDERATED_METRIC_SCHEMA_VERSION",
+        "FederatedMetricEnvelope",
+        "FederatedMetricError",
+        "FederatedMetricKind",
+        "FederatedParticipantCountBand",
+        "FederatedPrivacyMechanism",
+        "FederatedUncertaintyMethod",
+        "build_federated_metric_envelope",
+    }:
+        federated_metrics = import_module(".federated_metrics", __name__)
+        return getattr(federated_metrics, name)
     if name in {
         "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
         "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
