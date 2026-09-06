@@ -5,6 +5,15 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added a versioned federated update metadata envelope with coordinator-owned
+  parameter expectations, bounded exact shape arithmetic, deterministic JSON,
+  clipping declarations, and value-free rejection of unknown or identifying
+  fields (#3010).
+
 ## [2.3.0] - 2026-09-04
 
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace

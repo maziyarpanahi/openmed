@@ -21,6 +21,7 @@ __all__ = [
     "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
     "FEDERATED_SCHEDULE_PHASES",
     "FEDERATED_SCHEDULE_SCHEMA_VERSION",
+    "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
     "MAX_FEDERATED_PHASE_DURATION_SECONDS",
     "MAX_LORA_TRAINABLE_RATIO",
     "PRESET_BY_MODE",
@@ -113,6 +114,10 @@ __all__ = [
     "FederatedRoundStatus",
     "FederatedRoundStatusError",
     "FederatedRoundTransitionError",
+    "FederatedParameterMetadata",
+    "FederatedUpdateMetadata",
+    "FederatedUpdateMetadataError",
+    "FederatedUpdatePolicy",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
@@ -223,6 +228,17 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
+        "FederatedParameterMetadata",
+        "FederatedUpdateMetadata",
+        "FederatedUpdateMetadataError",
+        "FederatedUpdatePolicy",
+    }:
+        federated_update_metadata = import_module(
+            ".federated_update_metadata", __name__
+        )
+        return getattr(federated_update_metadata, name)
     if name in {
         "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
         "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
