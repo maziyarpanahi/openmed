@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import traceback
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -153,10 +154,13 @@ def test_participant_count_bands_follow_the_minimum_group_rule(
     [
         {"aggregate_value": 101},
         {"aggregate_value": 1.5},
+        {"aggregate_value": 18.0},
         {"aggregate_value": float("nan")},
         {"aggregate_value": float("inf")},
         {"clipping_lower_bound": -1},
+        {"clipping_lower_bound": 0.0},
         {"clipping_lower_bound": 100},
+        {"clipping_upper_bound": 100.0},
         {"clipping_upper_bound": float("inf")},
         {"participant_count": -1},
         {"participant_count": True},
@@ -237,6 +241,24 @@ def test_uncertainty_values_require_a_confidence_interval() -> None:
         )
 
 
+def test_large_integer_counts_preserve_exact_bounds_without_float_conversion() -> None:
+    lower = 1 << 60
+    envelope = build_federated_metric_envelope(
+        metric_id="large_document_count",
+        metric_kind=K.COUNT,
+        aggregate_value=lower + 1,
+        clipping_lower_bound=lower,
+        clipping_upper_bound=lower + 2,
+        privacy_mechanism=P.THRESHOLD_ONLY,
+        privacy_mechanism_version="v1",
+        participant_count=12,
+    )
+
+    assert envelope.aggregate_value == lower + 1
+    assert envelope.clipping_lower_bound == lower
+    assert envelope.clipping_upper_bound == lower + 2
+
+
 @pytest.mark.parametrize(
     "forbidden_field",
     [
@@ -274,6 +296,29 @@ def test_unknown_and_client_level_fields_cannot_enter_the_schema(
         not in inspect.signature(build_federated_metric_envelope).parameters
     )
     assert forbidden_field not in inspect.signature(FederatedMetricEnvelope).parameters
+
+
+def test_invalid_enum_errors_do_not_chain_submitted_values() -> None:
+    marker = "SYNTHETIC_PRIVATE_SENTINEL_3011"
+    envelope = build_federated_metric_envelope(
+        metric_id="safe_completion_rate",
+        metric_kind=K.RATE,
+        aggregate_value=0.82,
+        clipping_lower_bound=0.0,
+        clipping_upper_bound=1.0,
+        privacy_mechanism=P.THRESHOLD_ONLY,
+        privacy_mechanism_version="v1",
+        participant_count=12,
+    )
+    payload = envelope.to_dict()
+    payload["metric_kind"] = marker
+
+    with pytest.raises(FederatedMetricError) as error:
+        FederatedMetricEnvelope.from_dict(payload)
+
+    rendered = "".join(traceback.format_exception(error.value))
+    assert marker not in rendered
+    assert error.value.__cause__ is None
 
 
 def test_direct_construction_and_unknown_versions_are_rejected() -> None:

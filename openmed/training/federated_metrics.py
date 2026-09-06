@@ -7,7 +7,7 @@ import math
 import re
 from dataclasses import InitVar, dataclass
 from enum import Enum
-from typing import Any, Final, Mapping
+from typing import Any, Final
 
 from .federated_status import DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE
 
@@ -127,10 +127,10 @@ class FederatedMetricEnvelope:
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> FederatedMetricEnvelope:
+    def from_dict(cls, payload: dict[str, Any]) -> FederatedMetricEnvelope:
         """Parse a closed envelope mapping and reject unknown fields."""
 
-        if not isinstance(payload, Mapping) or set(payload) != _ENVELOPE_FIELDS:
+        if type(payload) is not dict or set(payload) != _ENVELOPE_FIELDS:
             raise FederatedMetricError("invalid federated metric envelope fields")
         try:
             metric_kind = FederatedMetricKind(payload["metric_kind"])
@@ -141,10 +141,10 @@ class FederatedMetricEnvelope:
             uncertainty_method = FederatedUncertaintyMethod(
                 payload["uncertainty_method"]
             )
-        except (TypeError, ValueError) as error:
+        except (TypeError, ValueError):
             raise FederatedMetricError(
                 "invalid federated metric envelope enum value"
-            ) from error
+            ) from None
         return cls(
             metric_id=payload["metric_id"],
             metric_kind=metric_kind,
@@ -295,8 +295,12 @@ def _validate_suppressed_envelope(envelope: FederatedMetricEnvelope) -> None:
 
 def _validate_released_envelope(envelope: FederatedMetricEnvelope) -> None:
     value = _require_finite_number(envelope.aggregate_value, "aggregate value")
-    lower = float(envelope.clipping_lower_bound)
-    upper = float(envelope.clipping_upper_bound)
+    lower = _require_finite_number(
+        envelope.clipping_lower_bound, "clipping lower bound"
+    )
+    upper = _require_finite_number(
+        envelope.clipping_upper_bound, "clipping upper bound"
+    )
     if not lower <= value <= upper:
         raise FederatedMetricError("aggregate value falls outside clipping bounds")
     if envelope.metric_kind is FederatedMetricKind.COUNT and not _is_int_number(
@@ -343,14 +347,16 @@ def _participant_count_band(
     return FederatedParticipantCountBand.FOURFOLD_OR_MORE
 
 
-def _require_finite_number(value: object, field: str) -> float:
-    if type(value) not in (int, float) or not math.isfinite(value):
-        raise FederatedMetricError(f"{field} must be finite")
-    return float(value)
+def _require_finite_number(value: object, field: str) -> int | float:
+    if type(value) is int:
+        return value
+    if type(value) is float and math.isfinite(value):
+        return value
+    raise FederatedMetricError(f"{field} must be finite")
 
 
 def _is_int_number(value: object) -> bool:
-    return type(value) is int or (type(value) is float and value.is_integer())
+    return type(value) is int
 
 
 def _require_non_negative_int(value: object, field: str) -> None:
