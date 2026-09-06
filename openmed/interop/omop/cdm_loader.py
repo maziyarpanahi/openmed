@@ -285,6 +285,56 @@ _SCHEMA_COLUMNS: Mapping[str, tuple[str, ...]] = {
     ),
 }
 
+_FOREIGN_KEY_TARGETS: Mapping[
+    str,
+    Mapping[str, tuple[str, str]],
+] = {
+    "visit_occurrence": {"person_id": ("person", "person_id")},
+    "note": {
+        "person_id": ("person", "person_id"),
+        "visit_occurrence_id": ("visit_occurrence", "visit_occurrence_id"),
+    },
+    "note_nlp": {"note_id": ("note", "note_id")},
+    "condition_occurrence": {
+        "person_id": ("person", "person_id"),
+        "visit_occurrence_id": ("visit_occurrence", "visit_occurrence_id"),
+        "note_id": ("note", "note_id"),
+        "note_nlp_id": ("note_nlp", "note_nlp_id"),
+    },
+    "drug_exposure": {
+        "person_id": ("person", "person_id"),
+        "visit_occurrence_id": ("visit_occurrence", "visit_occurrence_id"),
+        "note_id": ("note", "note_id"),
+        "note_nlp_id": ("note_nlp", "note_nlp_id"),
+    },
+    "measurement": {
+        "person_id": ("person", "person_id"),
+        "visit_occurrence_id": ("visit_occurrence", "visit_occurrence_id"),
+        "note_id": ("note", "note_id"),
+        "note_nlp_id": ("note_nlp", "note_nlp_id"),
+    },
+    "procedure_occurrence": {
+        "person_id": ("person", "person_id"),
+        "visit_occurrence_id": ("visit_occurrence", "visit_occurrence_id"),
+        "note_id": ("note", "note_id"),
+        "note_nlp_id": ("note_nlp", "note_nlp_id"),
+    },
+    "observation": {
+        "person_id": ("person", "person_id"),
+        "visit_occurrence_id": ("visit_occurrence", "visit_occurrence_id"),
+        "note_id": ("note", "note_id"),
+        "note_nlp_id": ("note_nlp", "note_nlp_id"),
+    },
+    "source_to_concept_map": {"note_nlp_id": ("note_nlp", "note_nlp_id")},
+}
+
+_MISSING_REFERENCE_REASON: Mapping[str, str] = {
+    "person_id": "missing_person",
+    "visit_occurrence_id": "missing_visit_occurrence",
+    "note_id": "missing_note",
+    "note_nlp_id": "missing_note_nlp",
+}
+
 _SQL_DDL: Mapping[str, str] = {
     "concept": """
         CREATE TABLE IF NOT EXISTS concept (
@@ -963,28 +1013,73 @@ def emit_postgres_ddl() -> str:
 def validate_omop_tables(
     tables: OmopCdmTables,
 ) -> tuple[OmopConstraintViolation, ...]:
-    """Validate concept references, NOTE_NLP offsets, and domain reachability."""
+    """Validate the loader-owned OMOP CDM structural subset.
+
+    The check is deliberately database-free and returns value-free findings
+    instead of raising on malformed rows. It covers the complete emitted row
+    shape, primary-key integrity, concept and foreign-key references,
+    ``NOTE_NLP`` offsets, and bidirectional domain-event reachability.
+    """
 
     violations: list[OmopConstraintViolation] = []
-    concept_ids = {int(row["concept_id"]) for row in tables.table("concept")}
-    note_rows = {int(row["note_id"]): row for row in tables.table("note")}
-    note_nlp_rows = {int(row["note_nlp_id"]): row for row in tables.table("note_nlp")}
+    row_indexes: dict[str, dict[int, Mapping[str, Any]]] = {}
 
-    for table in (
-        "visit_occurrence",
-        "note",
-        "note_nlp",
-        "condition_occurrence",
-        "drug_exposure",
-        "measurement",
-        "procedure_occurrence",
-        "observation",
-        "source_to_concept_map",
-    ):
+    for table in _TABLE_ORDER:
+        primary_key = _PRIMARY_KEYS[table]
+        index: dict[int, Mapping[str, Any]] = {}
         for row in tables.table(table):
-            row_id = int(row[_PRIMARY_KEYS[table]])
+            row_id = _strict_int(row.get(primary_key))
+            for column in _SCHEMA_COLUMNS[table]:
+                if column not in row:
+                    violations.append(
+                        OmopConstraintViolation(
+                            table=table,
+                            column=column,
+                            reason="missing_column",
+                            row_id=row_id,
+                        )
+                    )
+            if row_id is None or (table != "concept" and row_id <= 0) or row_id < 0:
+                violations.append(
+                    OmopConstraintViolation(
+                        table=table,
+                        column=primary_key,
+                        reason="invalid_primary_key",
+                        row_id=None,
+                    )
+                )
+                continue
+            if row_id in index:
+                violations.append(
+                    OmopConstraintViolation(
+                        table=table,
+                        column=primary_key,
+                        reason="duplicate_primary_key",
+                        row_id=row_id,
+                    )
+                )
+                continue
+            index[row_id] = row
+        row_indexes[table] = index
+
+    concept_ids = set(row_indexes["concept"])
+    for table in _TABLE_ORDER[1:]:
+        for row in tables.table(table):
+            row_id = _strict_int(row.get(_PRIMARY_KEYS[table]))
             for column in _concept_reference_columns(table):
-                if int(row[column]) not in concept_ids:
+                if column not in row:
+                    continue
+                concept_id = _strict_int(row[column])
+                if concept_id is None or concept_id < 0:
+                    violations.append(
+                        OmopConstraintViolation(
+                            table=table,
+                            column=column,
+                            reason="invalid_concept_id",
+                            row_id=row_id,
+                        )
+                    )
+                elif concept_id not in concept_ids:
                     violations.append(
                         OmopConstraintViolation(
                             table=table,
@@ -994,22 +1089,49 @@ def validate_omop_tables(
                         )
                     )
 
-    for row_id, row in note_nlp_rows.items():
-        note = note_rows.get(int(row["note_id"]))
+    for table, references in _FOREIGN_KEY_TARGETS.items():
+        for row in tables.table(table):
+            row_id = _strict_int(row.get(_PRIMARY_KEYS[table]))
+            for column, (target_table, _) in references.items():
+                if column not in row or row[column] is None:
+                    continue
+                reference_id = _strict_int(row[column])
+                if reference_id is None or reference_id <= 0:
+                    violations.append(
+                        OmopConstraintViolation(
+                            table=table,
+                            column=column,
+                            reason="invalid_foreign_key",
+                            row_id=row_id,
+                        )
+                    )
+                elif reference_id not in row_indexes[target_table]:
+                    violations.append(
+                        OmopConstraintViolation(
+                            table=table,
+                            column=column,
+                            reason=_MISSING_REFERENCE_REASON[column],
+                            row_id=row_id,
+                        )
+                    )
+
+    note_rows = row_indexes["note"]
+    note_nlp_rows = row_indexes["note_nlp"]
+    for row_id, note_nlp_row in note_nlp_rows.items():
+        note_id = _strict_int(note_nlp_row.get("note_id"))
+        note = note_rows.get(note_id) if note_id is not None else None
         if note is None:
-            violations.append(
-                OmopConstraintViolation(
-                    table="note_nlp",
-                    column="note_id",
-                    reason="missing_note",
-                    row_id=row_id,
-                )
-            )
             continue
         note_text = str(note.get("note_text") or "")
-        start = int(row["offset"])
-        end = int(row["offset_end"])
-        if start < 0 or end < start or end > len(note_text):
+        start = _strict_int(note_nlp_row.get("offset"))
+        end = _strict_int(note_nlp_row.get("offset_end"))
+        if (
+            start is None
+            or end is None
+            or start < 0
+            or end < start
+            or end > len(note_text)
+        ):
             violations.append(
                 OmopConstraintViolation(
                     table="note_nlp",
@@ -1022,19 +1144,17 @@ def validate_omop_tables(
     domain_rows_by_event_id: dict[int, list[tuple[str, Mapping[str, Any]]]] = {}
     for table in _DOMAIN_SOURCE_CONCEPT_COLUMNS:
         for row in tables.table(table):
-            row_id = int(row[_PRIMARY_KEYS[table]])
+            row_id = _strict_int(row.get(_PRIMARY_KEYS[table]))
+            if row_id is None or row_id <= 0:
+                continue
             domain_rows_by_event_id.setdefault(row_id, []).append((table, row))
-            note_nlp = note_nlp_rows.get(int(row["note_nlp_id"]))
-            if note_nlp is None:
-                violations.append(
-                    OmopConstraintViolation(
-                        table=table,
-                        column="note_nlp_id",
-                        reason="missing_note_nlp",
-                        row_id=row_id,
-                    )
-                )
-            elif _optional_int(note_nlp.get("note_nlp_event_id")) != row_id:
+            note_nlp_id = _strict_int(row.get("note_nlp_id"))
+            note_nlp = (
+                note_nlp_rows.get(note_nlp_id) if note_nlp_id is not None else None
+            )
+            if note_nlp is not None and (
+                _strict_int(note_nlp.get("note_nlp_event_id")) != row_id
+            ):
                 violations.append(
                     OmopConstraintViolation(
                         table=table,
@@ -1044,9 +1164,19 @@ def validate_omop_tables(
                     )
                 )
 
-    for row_id, row in note_nlp_rows.items():
-        event_id = _optional_int(row.get("note_nlp_event_id"))
-        event_rows = domain_rows_by_event_id.get(event_id or -1, ())
+    for row_id, note_nlp_row in note_nlp_rows.items():
+        event_id = _strict_int(note_nlp_row.get("note_nlp_event_id"))
+        if event_id is None or event_id <= 0:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="invalid_domain_event",
+                    row_id=row_id,
+                )
+            )
+            continue
+        event_rows = domain_rows_by_event_id.get(event_id, ())
         if not event_rows:
             violations.append(
                 OmopConstraintViolation(
@@ -1060,7 +1190,7 @@ def validate_omop_tables(
         matching_rows = [
             event_row
             for _, event_row in event_rows
-            if _optional_int(event_row.get("note_nlp_id")) == row_id
+            if _strict_int(event_row.get("note_nlp_id")) == row_id
         ]
         if not matching_rows:
             violations.append(
@@ -1847,6 +1977,12 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _strict_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
 
 
 def _normalize_load_mode(mode: str) -> LoadMode:

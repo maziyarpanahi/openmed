@@ -54,13 +54,6 @@ ConceptResolver: TypeAlias = (
     | Callable[[GroundedSpan, Candidate | None], int | None]
 )
 
-_CONCEPT_COLUMN_BY_TABLE = {
-    "condition_occurrence": "condition_concept_id",
-    "drug_exposure": "drug_concept_id",
-    "measurement": "measurement_concept_id",
-    "procedure_occurrence": "procedure_concept_id",
-}
-
 
 def to_omop(
     grounded: GroundedSpan | Iterable[GroundedSpan],
@@ -164,9 +157,10 @@ def achilles_smoke_check(
     """Run an offline ACHILLES-style structural preflight over core tables.
 
     Full OHDSI ACHILLES requires a deployed CDM database and is deliberately
-    not bundled. This smoke subset checks expected tables/columns,
-    nonnegative standard concept IDs, positive deterministic keys, and all
-    concept/note references validated by :func:`validate_omop_tables`.
+    not bundled. This smoke subset checks the expected core tables, complete
+    loader-owned row shapes, primary-key integrity, concept and foreign-key
+    references, NOTE_NLP offsets, and bidirectional event reachability through
+    :func:`validate_omop_tables`.
     """
 
     violations = list(validate_omop_tables(tables))
@@ -179,39 +173,6 @@ def achilles_smoke_check(
                     reason="missing_core_table",
                 )
             )
-            continue
-        concept_column = _CONCEPT_COLUMN_BY_TABLE[table]
-        for row in tables.table(table):
-            row_id = _row_id(row)
-            if concept_column not in row:
-                violations.append(
-                    OmopConstraintViolation(
-                        table=table,
-                        column=concept_column,
-                        reason="missing_concept_column",
-                        row_id=row_id,
-                    )
-                )
-                continue
-            concept = row[concept_column]
-            if isinstance(concept, bool) or not isinstance(concept, int) or concept < 0:
-                violations.append(
-                    OmopConstraintViolation(
-                        table=table,
-                        column=concept_column,
-                        reason="invalid_concept_id",
-                        row_id=row_id,
-                    )
-                )
-            if not isinstance(row.get("person_id"), int) or row["person_id"] <= 0:
-                violations.append(
-                    OmopConstraintViolation(
-                        table=table,
-                        column="person_id",
-                        reason="invalid_person_id",
-                        row_id=row_id,
-                    )
-                )
     return tuple(violations)
 
 
@@ -277,10 +238,3 @@ def _vocabulary_version(spans: tuple[GroundedSpan, ...]) -> str:
         return versions[0]
     digest = hashlib.sha256("\n".join(versions).encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
-
-
-def _row_id(row: Mapping[str, Any]) -> int | None:
-    for key, value in row.items():
-        if key.endswith("_id") and isinstance(value, int):
-            return value
-    return None
