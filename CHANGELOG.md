@@ -30,6 +30,11 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added local, deterministic FHIR ValueSet expansion over caller-loaded free
+  vocabulary snapshots plus explicit FHIR `$expand` and ECL delegation to a
+  caller-supplied terminology endpoint. Results include versioned provenance;
+  caching is user-controlled, and restricted member codes are never persisted
+  without a second explicit policy opt-in (#926).
 - Added typed, 128-bit opaque correlation identifiers for agent runs and
   actions, with strict kind-aware parsing, deterministic metadata-only JSON,
   parent-action validation, and value-free failures (#2973).
