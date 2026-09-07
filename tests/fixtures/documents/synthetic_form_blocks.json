@@ -1,0 +1,73 @@
+{
+  "format": "synthetic-ocr",
+  "pages": [
+    {
+      "page": 0,
+      "blocks": [
+        {
+          "text": "Right column one",
+          "page": 0,
+          "bbox": [320, 20, 500, 30]
+        },
+        {
+          "text": "Left column one",
+          "page": 0,
+          "bbox": [40, 20, 220, 30]
+        },
+        {
+          "text": "Right column two",
+          "page": 0,
+          "bbox": [320, 42, 500, 52]
+        },
+        {
+          "text": "Left column two",
+          "page": 0,
+          "bbox": [40, 42, 220, 52]
+        },
+        {
+          "text": "Field: SYNTH-FIELD-01",
+          "page": 0,
+          "bbox": [40, 70, 220, 80]
+        },
+        {
+          "text": "Result",
+          "page": 0,
+          "bbox": [40, 100, 110, 110],
+          "kind": "table_cell",
+          "table_id": "synthetic-table",
+          "row": 0,
+          "column": 0,
+          "metadata": {"is_header": true}
+        },
+        {
+          "text": "Value",
+          "page": 0,
+          "bbox": [120, 100, 190, 110],
+          "kind": "table_cell",
+          "table_id": "synthetic-table",
+          "row": 0,
+          "column": 1,
+          "metadata": {"is_header": true}
+        },
+        {
+          "text": "Glucose",
+          "page": 0,
+          "bbox": [40, 120, 110, 130],
+          "kind": "table_cell",
+          "table_id": "synthetic-table",
+          "row": 1,
+          "column": 0
+        },
+        {
+          "text": "5.2",
+          "page": 0,
+          "bbox": [120, 120, 190, 130],
+          "kind": "table_cell",
+          "table_id": "synthetic-table",
+          "row": 1,
+          "column": 1
+        }
+      ]
+    }
+  ]
+}

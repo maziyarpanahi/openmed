@@ -362,7 +362,7 @@ def test_committed_public_leaderboard_does_not_drift(tmp_path: Path) -> None:
     assert _snapshot(generated) == _snapshot(PUBLIC_LEADERBOARD)
 
 
-def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None:
+def test_pages_workflow_builds_prs_and_deploys_only_master() -> None:
     workflow_text = PAGES_WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.load(
         workflow_text,
@@ -379,10 +379,10 @@ def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None
     )
 
     assert push["branches"] == ["master"]
-    assert push["tags"] == ["v*"]
+    assert "tags" not in push
     assert pull_request["branches"] == ["master"]
     assert "docs/**" in pull_request["paths"]
-    assert workflow_text.count('tags: ["v*"]') == 1
+    assert 'tags: ["v*"]' not in workflow_text
     assert (
         "github.event.pull_request.number || 'deploy'"
         in workflow["concurrency"]["group"]
