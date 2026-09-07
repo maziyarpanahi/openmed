@@ -26,6 +26,7 @@ __all__ = [
     "date_value",
     "domain_for_span",
     "foreign_key",
+    "first_context_value",
     "iter_spans",
     "resolve_concept",
     "source_value",
@@ -145,6 +146,16 @@ def context_value(span: GroundedSpan, *names: str) -> Any:
         for name in names:
             if name in mapping and mapping[name] is not None:
                 return mapping[name]
+    return None
+
+
+def first_context_value(spans: Iterable[GroundedSpan], *names: str) -> Any:
+    """Return the first non-null export metadata value across spans."""
+
+    for span in spans:
+        value = context_value(span, *names)
+        if value is not None:
+            return value
     return None
 
 
