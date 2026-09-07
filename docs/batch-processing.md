@@ -610,3 +610,10 @@ with open("results.json", "w") as f:
 # Export summary only
 summary = result.summary()
 ```
+## Clinical privacy batches
+
+The [clinical-preserving privacy processor](privacy/clinical-preserve.md) combines
+ONNX tensor batches with per-document language, role/category policy and output
+methods. Its preview contract reports unqualified or uncertain routes as
+review-required and keeps processing completeness separate from clinical
+qualification.

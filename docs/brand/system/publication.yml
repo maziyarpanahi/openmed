@@ -394,6 +394,7 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - privacy/clinical-preserve.md
     - benchmarks/golden.md
     - clinical-domains.md
     - compliance/dpa-template.md
