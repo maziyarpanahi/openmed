@@ -141,10 +141,9 @@ class ArtifactReference:
         try:
             data = json.loads(payload, object_pairs_hook=_strict_json_object)
         except (
-            json.JSONDecodeError,
-            ArtifactReferenceError,
+            ValueError,
             TypeError,
-            UnicodeDecodeError,
+            RecursionError,
         ):
             pass
         else:

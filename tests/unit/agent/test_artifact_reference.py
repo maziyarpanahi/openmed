@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import json
+import sys
 import traceback
 import urllib.request
 from typing import Any
@@ -199,3 +200,29 @@ def test_contract_is_exported_from_public_agent_api() -> None:
     assert agent.ARTIFACT_REFERENCE_VERSION == ARTIFACT_REFERENCE_VERSION
     assert agent.MAX_ARTIFACT_BYTE_SIZE == MAX_ARTIFACT_BYTE_SIZE
     assert agent.validate_artifact_references is validate_artifact_references
+
+
+def test_deeply_nested_json_fails_with_a_value_free_contract_error() -> None:
+    marker = "SYNTHETIC_PRIVATE_ARTIFACT_SENTINEL"
+    payload = "[" * (sys.getrecursionlimit() + 1) + json.dumps(marker)
+    payload += "]" * (sys.getrecursionlimit() + 1)
+
+    with pytest.raises(ArtifactReferenceError) as caught:
+        ArtifactReference.from_json(payload)
+
+    assert caught.value.code == "malformed_json"
+    assert marker not in "".join(traceback.format_exception(caught.value))
+    assert caught.value.__context__ is None
+
+
+def test_oversized_json_integer_fails_with_a_contract_error() -> None:
+    get_limit = getattr(sys, "get_int_max_str_digits", None)
+    if get_limit is None or get_limit() == 0:
+        pytest.skip("runtime does not impose an integer parsing limit")
+    payload = '{"byte_size":' + "9" * (get_limit() + 1) + "}"
+
+    with pytest.raises(ArtifactReferenceError) as caught:
+        ArtifactReference.from_json(payload)
+
+    assert caught.value.code == "malformed_json"
+    assert caught.value.__context__ is None
