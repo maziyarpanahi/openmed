@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 459,
-    "maximum_total_bytes": 39059456,
-    "maximum_unique_payload_bytes": 38687316,
+    "maximum_files": 461,
+    "maximum_total_bytes": 39314303,
+    "maximum_unique_payload_bytes": 38976724,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -33,8 +33,8 @@
   },
   "notes": [
     "Artifact limits are based on the exact staged v2.3 schema candidate plus the audited ten-PR documentation campaign, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The combined audited candidate contains 458 files, 38761997 total bytes, 38424418 unique payload bytes, and 337579 duplicate payload bytes.",
-    "The 36.75 MiB unique-payload ceiling retains 110750 bytes of bounded headroom while total payload remains capped at 37.25 MiB.",
+    "The audited combined candidate for artifact references and federated metrics, including current FHIR/OMOP documentation, contains 461 files, 39203553 total bytes, 38865974 unique payload bytes, and 337579 duplicate payload bytes.",
+    "The 38976724-byte unique-payload ceiling and 39314303-byte total-payload ceiling retain 110750 bytes of bounded documentation headroom.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",

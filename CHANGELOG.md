@@ -41,6 +41,10 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added closed, versioned federated aggregate metric envelopes with finite
+  clipping bounds, minimum-group suppression, coarse participant bands,
+  controlled privacy mechanisms, confidence intervals, deterministic JSON,
+  and value-free rejection of client-level or unknown fields (#3011).
 - Added dependency-free base FHIR R4 structural validation for eight exported
   clinical resource types, including deterministic structured findings,
   cardinality and primitive datatype checks, fixed required bindings, Bundle
