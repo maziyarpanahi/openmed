@@ -164,6 +164,10 @@ system, code, and text retained; OpenMed never invents an Athena concept ID.
 Pass `table="measurement"` or `table="procedure_occurrence"` to return exact
 CDM v5.4 row dictionaries for one table. Measurement rows retain caller-supplied
 numeric values, units, and reference ranges from grounded span metadata.
+The `visit_occurrence` and `observation_period` routes add deterministic
+encounter context and date bounds. The `note_nlp` route retains source offsets
+and assertion axes in the standard OHDSI term fields; its default `nlp_system`
+is `openmed` and it never substitutes the current clock for a missing NLP date.
 `achilles_smoke_check()` provides a deterministic offline structural preflight.
 A full OHDSI ACHILLES run still requires a deployed CDM database.
 
