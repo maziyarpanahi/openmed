@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added dependency-free US Core 9.0.0 conformance checks for exported
+  Condition, laboratory Observation, MedicationRequest, and
+  AllergyIntolerance resources, including base-R4-first validation,
+  must-support warnings, required-binding errors, canonical profile resolution,
+  and compact CC0 constraint metadata (#2366).
 - Added a versioned federated update metadata envelope with coordinator-owned
   parameter expectations, bounded exact shape arithmetic, deterministic JSON,
   clipping declarations, and value-free rejection of unknown or identifying
