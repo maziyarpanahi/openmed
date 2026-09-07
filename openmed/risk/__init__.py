@@ -108,6 +108,13 @@ from .l_diversity import (
     check_l_diversity,
     l_diversity_report,
 )
+from .longitudinal_mitigation import (
+    LONGITUDINAL_MITIGATION_SCHEMA_VERSION,
+    LongitudinalMitigationAction,
+    LongitudinalMitigationPolicy,
+    LongitudinalMitigationResult,
+    mitigate_longitudinal_linkage,
+)
 from .membership import (
     MembershipSelfTestError,
     MembershipSelfTestResult,
@@ -257,8 +264,12 @@ __all__ = [
     "RiskBudgetViolation",
     "LongitudinalCorpus",
     "LongitudinalEvidence",
+    "LongitudinalMitigationAction",
+    "LongitudinalMitigationPolicy",
+    "LongitudinalMitigationResult",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "LONGITUDINAL_MITIGATION_SCHEMA_VERSION",
     "MembershipSelfTestError",
     "MembershipSelfTestResult",
     "MembershipInferenceReport",
@@ -303,6 +314,7 @@ __all__ = [
     "release_sum",
     "fit_tabular_profile",
     "longitudinal_attack_fingerprint",
+    "mitigate_longitudinal_linkage",
     "longitudinal_risk_report",
     "l_diversity_report",
     "release_aggregate",
