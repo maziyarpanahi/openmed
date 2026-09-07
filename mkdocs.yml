@@ -47,6 +47,7 @@ nav:
       - Async Python API: async-api.md
       - REST Service (MVP): rest-service.md
       - Self-hosted Redaction Service: service/self-hosted-redaction.md
+      - Inbound Placeholder Restoration: service/inbound-restoration.md
       - MCP Client Connections: mcp-clients.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
