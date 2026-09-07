@@ -191,12 +191,54 @@ Results also expose `.issues`, so `from_validation_result(result)` can render a
 standard R4 `OperationOutcome`.
 
 The bundled subset covers the resources OpenMed emits: `Condition`,
-`Observation`, `MedicationStatement`, `Procedure`, `DiagnosticReport`,
-`AllergyIntolerance`, `Immunization`, and `Encounter`. A different resource type
-produces a `not-supported` warning rather than a false conformance claim. The
-constraint table contains only OpenMed's compact derivation of CC0-licensed base
-R4 structure and fixed code-system metadata; it does not include clinical
-terminology content, proprietary profiles, or implementation-guide packages.
+`Observation`, `MedicationRequest`, `MedicationStatement`, `Procedure`,
+`DiagnosticReport`, `AllergyIntolerance`, `Immunization`, and `Encounter`. A
+different resource type produces a `not-supported` warning rather than a false
+conformance claim. The constraint table contains only OpenMed's compact
+derivation of CC0-licensed base R4 structure and fixed code-system metadata; it
+does not include clinical terminology content, proprietary profiles, or
+implementation-guide packages.
+
+## US Core STU9 Conformance
+
+Use `check_us_core()` for the bundled US Core 9.0.0 subset covering exported
+`Condition`, laboratory `Observation`, `MedicationRequest`, and
+`AllergyIntolerance` resources. It always runs base R4 validation first, reports
+missing must-support elements as warnings, and reports required cardinality or
+locally enumerable binding violations as errors:
+
+```python
+from openmed.clinical.exporters.fhir import check_us_core
+
+result = check_us_core(
+    {
+        "resourceType": "Condition",
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": (
+                            "http://terminology.hl7.org/CodeSystem/condition-category"
+                        ),
+                        "code": "problem-list-item",
+                    }
+                ]
+            }
+        ],
+        "code": {"text": "synthetic condition"},
+        "subject": {"reference": "Patient/synthetic"},
+    }
+)
+assert result.is_valid
+```
+
+Pass a supported canonical URL or StructureDefinition id as `profile` to select
+the encounter-diagnosis `Condition` profile or override the resource default.
+The checker resolves supported `meta.profile` declarations as well. Its compact
+constraint table is OpenMed-authored from the
+[US Core STU9 definitions](https://hl7.org/fhir/us/core/STU9/) and does not
+bundle clinical terminology expansions. Use the full HL7 validator or the
+receiving server for complete invariants and terminology validation.
 
 This base validator is intentionally distinct from `check_bundle()`. The latter
 loads caller-supplied `StructureDefinition` and `ValueSet` resources to check

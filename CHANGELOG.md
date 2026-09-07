@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added exact OMOP CDM v5.4 `measurement` and `procedure_occurrence` row
+  exporters with shared Athena concept resolution, deterministic unmapped
+  fallback, and preservation of numeric lab values, units, and ranges (#275).
+- Added dependency-free US Core 9.0.0 conformance checks for exported
+  Condition, laboratory Observation, MedicationRequest, and
+  AllergyIntolerance resources, including base-R4-first validation,
+  must-support warnings, required-binding errors, canonical profile resolution,
+  and compact CC0 constraint metadata (#2366).
 - Added a versioned federated update metadata envelope with coordinator-owned
   parameter expectations, bounded exact shape arithmetic, deterministic JSON,
   clipping declarations, and value-free rejection of unknown or identifying
@@ -30,10 +38,6 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
-- Added strict, content-free agent artifact references with opaque identifiers,
-  a closed artifact-kind vocabulary, versioned schema IDs, digest and size
-  metadata, deterministic JSON, and value-free validation failures, including
-  oversized integers and deeply nested JSON (#2999).
 - Added dependency-free base FHIR R4 structural validation for eight exported
   clinical resource types, including deterministic structured findings,
   cardinality and primitive datatype checks, fixed required bindings, Bundle
@@ -41,6 +45,10 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 - Added typed, 128-bit opaque correlation identifiers for agent runs and
   actions, with strict kind-aware parsing, deterministic metadata-only JSON,
   parent-action validation, and value-free failures (#2973).
+- Added strict, content-free agent artifact references with opaque identifiers,
+  a closed artifact-kind vocabulary, versioned schema IDs, digest and size
+  metadata, deterministic JSON, and value-free validation failures, including
+  oversized integers and deeply nested JSON (#2999).
 - Added a conservative, deterministic FHIR DiagnosticReport exporter with
   R4/R5 union allowlisting (32-field), explicit `unknown` status, type-gated
   scalars and Reference normalization, `effective[x]` mutual exclusivity,
