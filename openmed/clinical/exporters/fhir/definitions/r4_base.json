@@ -85,6 +85,42 @@
         {"path": "component.referenceRange", "min": 0, "max": "*", "types": ["BackboneElement"]}
       ]
     },
+    "MedicationRequest": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "medication-request-status"},
+        {"path": "statusReason", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "intent", "min": 1, "max": 1, "types": ["code"], "binding": "medication-request-intent"},
+        {"path": "category", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "priority", "min": 0, "max": 1, "types": ["code"], "binding": "request-priority"},
+        {"path": "doNotPerform", "min": 0, "max": 1, "types": ["boolean"]},
+        {"path": "reported[x]", "min": 0, "max": 1, "types": ["boolean", "Reference"]},
+        {"path": "medication[x]", "min": 1, "max": 1, "types": ["CodeableConcept", "Reference"]},
+        {"path": "subject", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "supportingInformation", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "authoredOn", "min": 0, "max": 1, "types": ["dateTime"]},
+        {"path": "requester", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "performer", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "performerType", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "recorder", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "reasonCode", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "reasonReference", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "instantiatesCanonical", "min": 0, "max": "*", "types": ["canonical"]},
+        {"path": "instantiatesUri", "min": 0, "max": "*", "types": ["uri"]},
+        {"path": "basedOn", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "groupIdentifier", "min": 0, "max": 1, "types": ["Identifier"]},
+        {"path": "courseOfTherapyType", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "insurance", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]},
+        {"path": "dosageInstruction", "min": 0, "max": "*", "types": ["Dosage"]},
+        {"path": "dispenseRequest", "min": 0, "max": 1, "types": ["BackboneElement"]},
+        {"path": "substitution", "min": 0, "max": 1, "types": ["BackboneElement"]},
+        {"path": "priorPrescription", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "detectedIssue", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "eventHistory", "min": 0, "max": "*", "types": ["Reference"]}
+      ]
+    },
     "MedicationStatement": {
       "elements": [
         {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
@@ -252,6 +288,15 @@
     "observation-status": {
       "system": "http://hl7.org/fhir/observation-status",
       "codes": ["registered", "preliminary", "final", "amended", "corrected", "cancelled", "entered-in-error", "unknown"]
+    },
+    "medication-request-status": {
+      "codes": ["active", "on-hold", "cancelled", "completed", "entered-in-error", "stopped", "draft", "unknown"]
+    },
+    "medication-request-intent": {
+      "codes": ["proposal", "plan", "order", "original-order", "reflex-order", "filler-order", "instance-order", "option"]
+    },
+    "request-priority": {
+      "codes": ["routine", "urgent", "asap", "stat"]
     },
     "medication-statement-status": {
       "codes": ["active", "completed", "entered-in-error", "intended", "stopped", "on-hold", "unknown", "not-taken"]
