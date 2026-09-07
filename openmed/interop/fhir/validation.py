@@ -307,15 +307,33 @@ def _validate_resource(
             reason = "resource contains a field outside the supported FHIR subset"
         issues.append(_issue("error", "not-supported", path_value, reason))
 
+    if version == FHIRVersion.R4:
+        _append_base_r4_issues(resource, resource_type, path, issues)
+
     required_by_resource: dict[str, tuple[str, ...]] = {
         "Composition": ("status", "type", "date", "author", "title"),
-        "Condition": ("code", "subject"),
-        "Observation": ("status", "code"),
-        "MedicationStatement": ("status", "subject"),
-        "AllergyIntolerance": ("code", "patient"),
-        "Procedure": ("status", "subject"),
         "DocumentReference": ("status", "content"),
     }
+    if version == FHIRVersion.R4:
+        # These are exchange-workbench expectations beyond base R4's 0..1
+        # cardinality. The shared base validator owns all other overlapping
+        # R4 required fields, datatypes, cardinalities, and fixed bindings.
+        required_by_resource.update(
+            {
+                "AllergyIntolerance": ("code",),
+                "Condition": ("code",),
+            }
+        )
+    else:
+        required_by_resource.update(
+            {
+                "AllergyIntolerance": ("code", "patient"),
+                "Condition": ("code", "subject"),
+                "MedicationStatement": ("status", "subject"),
+                "Observation": ("status", "code"),
+                "Procedure": ("status", "subject"),
+            }
+        )
     for field in required_by_resource.get(resource_type, ()):
         if field not in resource or resource[field] in (None, [], ""):
             issues.append(
@@ -327,11 +345,8 @@ def _validate_resource(
                 )
             )
 
-    if resource_type == "MedicationStatement":
-        if version == FHIRVersion.R4:
-            medication_fields = {"medicationCodeableConcept", "medicationReference"}
-        else:
-            medication_fields = {"medication"}
+    if resource_type == "MedicationStatement" and version != FHIRVersion.R4:
+        medication_fields = {"medication"}
         if not medication_fields & set(resource):
             issues.append(
                 _issue(
@@ -353,6 +368,41 @@ def _validate_resource(
                     "Patient has no name or birthDate for summary use",
                 )
             )
+
+
+def _append_base_r4_issues(
+    resource: Mapping[str, Any],
+    resource_type: str,
+    path: str,
+    issues: list[_ValidationIssue],
+) -> None:
+    """Append canonical base-R4 findings to the exchange result."""
+
+    from openmed.clinical.exporters.fhir.validate import (
+        BASE_R4_RESOURCE_TYPES,
+    )
+    from openmed.clinical.exporters.fhir.validate import (
+        validate_resource as validate_base_resource,
+    )
+
+    if resource_type not in BASE_R4_RESOURCE_TYPES:
+        return
+    result = validate_base_resource(resource)
+    for finding in result.findings:
+        finding_path = finding.location
+        if path:
+            if finding_path == resource_type:
+                finding_path = path
+            elif finding_path.startswith(f"{resource_type}."):
+                finding_path = f"{path}.{finding_path[len(resource_type) + 1 :]}"
+        issues.append(
+            _issue(
+                finding.severity,
+                finding.code,
+                finding_path,
+                finding.message,
+            )
+        )
 
 
 def _validate_profile_release(

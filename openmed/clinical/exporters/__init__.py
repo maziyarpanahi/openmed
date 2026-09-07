@@ -71,7 +71,9 @@ from .omop import (
     achilles_smoke_check,
     to_condition_occurrence,
     to_drug_exposure,
+    to_measurement,
     to_omop,
+    to_procedure_occurrence,
 )
 from .openehr import (
     DEFAULT_OPENEHR_BINDINGS,
@@ -152,9 +154,11 @@ __all__ = [
     "document_type_codeable_concept",
     "to_csv",
     "to_drug_exposure",
+    "to_measurement",
     "to_dataframe",
     "to_fhir",
     "to_omop",
+    "to_procedure_occurrence",
     "to_openehr_composition",
     "validate_openehr_composition",
     "validate_exchange",

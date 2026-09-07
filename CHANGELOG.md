@@ -5,6 +5,23 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added exact OMOP CDM v5.4 `measurement` and `procedure_occurrence` row
+  exporters with shared Athena concept resolution, deterministic unmapped
+  fallback, and preservation of numeric lab values, units, and ranges (#275).
+- Added dependency-free US Core 9.0.0 conformance checks for exported
+  Condition, laboratory Observation, MedicationRequest, and
+  AllergyIntolerance resources, including base-R4-first validation,
+  must-support warnings, required-binding errors, canonical profile resolution,
+  and compact CC0 constraint metadata (#2366).
+- Added a versioned federated update metadata envelope with coordinator-owned
+  parameter expectations, bounded exact shape arithmetic, deterministic JSON,
+  clipping declarations, and value-free rejection of unknown or identifying
+  fields (#3010).
+
 ## [2.3.0] - 2026-09-04
 
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
@@ -24,6 +41,10 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 - Added strict, content-free agent artifact references with opaque identifiers,
   a closed artifact-kind vocabulary, versioned schema IDs, digest and size
   metadata, deterministic JSON, and value-free validation failures (#2999).
+- Added dependency-free base FHIR R4 structural validation for eight exported
+  clinical resource types, including deterministic structured findings,
+  cardinality and primitive datatype checks, fixed required bindings, Bundle
+  aggregation, and a compact CC0-derived constraint table (#2364).
 - Added typed, 128-bit opaque correlation identifiers for agent runs and
   actions, with strict kind-aware parsing, deterministic metadata-only JSON,
   parent-action validation, and value-free failures (#2973).
