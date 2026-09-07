@@ -30,12 +30,6 @@ _SEMVER_RE = re.compile(
     r"(?:\.(?P<patch>0|[1-9][0-9]*))?"
     r"(?:\+[0-9A-Za-z.-]+)?$"
 )
-_SEMVER_FROM_ID_RE = re.compile(
-    r"(?:^|[-_/])v(?P<major>[0-9]+)"
-    r"(?:\.(?P<minor>[0-9]+))?"
-    r"(?:\.(?P<patch>[0-9]+))?(?:[-_/]|$)",
-    re.IGNORECASE,
-)
 _CONSTRAINT_RE = re.compile(r"^(?P<operator>\^|~=|~|>=|<=|==|!=|>|<|=)?(?P<value>.+)$")
 _CONSTRAINT_SPLIT_RE = re.compile(r"\s*,\s*|\s+(?=[<>=~^])")
 _WILDCARD_VALUES = frozenset({"*", "x", "X"})
@@ -379,6 +373,7 @@ def build_rollback_compatibility_report(
     target: CheckpointInput | None = None,
     candidate: CheckpointInput | None = None,
     registry_state: Mapping[str, Any] | None = None,
+    slot: str | None = None,
     family: str | None = None,
     requirements: Mapping[str, Any] | None = None,
     constraints: Mapping[str, Any] | None = None,
@@ -396,9 +391,11 @@ def build_rollback_compatibility_report(
     ``constraints`` mappings may provide the expected SemVer or contract when
     the current checkpoint does not carry it.
 
-    When ``registry_state`` and ``family`` are supplied, omitted checkpoints
-    are derived from that state's ``latest`` and ``last_green`` pointers.  The
-    state is used as metadata only; no files or network resources are read.
+    When ``registry_state`` and a schema-v2 ``slot`` are supplied, omitted
+    checkpoints are derived from that slot's ``latest`` and ``last_green``
+    pointers. Assigned versions come only from the slot's ``checkpoints``
+    mapping; version-looking model-id text is never treated as registry state.
+    The state is used as metadata only; no files or network resources are read.
     """
 
     if target is not None:
@@ -414,6 +411,7 @@ def build_rollback_compatibility_report(
     if registry_state is not None:
         current, rollback = _state_checkpoints(
             registry_state,
+            slot=slot,
             family=family,
             current=current,
             rollback=rollback,
@@ -862,8 +860,6 @@ def _normalise_checkpoint(
     model_id = _identifier_or_none(checkpoint.model_id)
     family = _identifier_or_none(checkpoint.family)
     version = _normalise_version_text(checkpoint.version)
-    if version is None and model_id:
-        version = _version_from_model_id(model_id)
     constraints = _normalise_constraints(checkpoint.semver_constraint)
     constraint_error = checkpoint.semver_constraint is not None and constraints is None
     constraint_ref = _safe_digest(checkpoint.semver_constraint)
@@ -905,32 +901,41 @@ def _normalise_checkpoint(
 def _state_checkpoints(
     state: Mapping[str, Any],
     *,
+    slot: str | None,
     family: str | None,
     current: CheckpointInput | None,
     rollback: CheckpointInput | None,
 ) -> tuple[CheckpointInput | None, CheckpointInput | None]:
     if not isinstance(state, Mapping):
         return current, rollback
-    families = state.get("families")
-    if not isinstance(families, Mapping) or not family:
+    if state.get("schema_version") != 2:
         return current, rollback
-    entry = next(
+    slots = state.get("slots")
+    if not isinstance(slots, Mapping) or not slot:
+        return current, rollback
+    matched = next(
         (
-            value
-            for key, value in families.items()
-            if str(key).casefold() == family.casefold()
+            (str(key), value)
+            for key, value in slots.items()
+            if str(key).casefold() == slot.casefold()
         ),
         None,
     )
+    if matched is None:
+        return current, rollback
+    slot_key, entry = matched
     if not isinstance(entry, Mapping):
         return current, rollback
-    pointers = entry.get("pointers")
-    versions = entry.get("versions")
-    if not isinstance(pointers, Mapping):
+    slot_parts = slot_key.split("::")
+    if len(slot_parts) != 3 or not all(slot_parts):
         return current, rollback
-    versions = versions if isinstance(versions, Mapping) else {}
+    slot_family = slot_parts[0]
+    pointers = entry.get("pointers")
+    checkpoints = entry.get("checkpoints")
+    if not isinstance(pointers, Mapping) or not isinstance(checkpoints, Mapping):
+        return current, rollback
     state_lineage = entry.get("lineage", ())
-    metadata_by_id = state.get("checkpoints") or state.get("artifacts") or {}
+    metadata_by_id = state.get("checkpoint_metadata") or state.get("artifacts") or {}
     if not isinstance(metadata_by_id, Mapping):
         metadata_by_id = {}
 
@@ -941,9 +946,9 @@ def _state_checkpoints(
             if isinstance(value, str):
                 base = metadata_by_id.get(value)
                 payload = dict(base) if isinstance(base, Mapping) else {}
-                payload.setdefault("model_id", value)
-                payload.setdefault("family", family)
-                payload.setdefault("version", versions.get(value))
+                payload["model_id"] = value
+                payload["family"] = slot_family
+                payload["version"] = checkpoints.get(value)
                 if not payload.get("lineage"):
                     payload["lineage"] = state_lineage
                 return payload
@@ -953,9 +958,9 @@ def _state_checkpoints(
             return None
         base = metadata_by_id.get(model_id)
         payload = dict(base) if isinstance(base, Mapping) else {}
-        payload.setdefault("model_id", model_id)
-        payload.setdefault("family", family)
-        payload.setdefault("version", versions.get(model_id))
+        payload["model_id"] = model_id
+        payload["family"] = slot_family
+        payload["version"] = checkpoints.get(model_id)
         if not payload.get("lineage"):
             payload["lineage"] = state_lineage
         return payload
@@ -1079,20 +1084,6 @@ def _normalise_version_text(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
-
-
-def _version_from_model_id(model_id: str) -> str | None:
-    matches = list(_SEMVER_FROM_ID_RE.finditer(model_id))
-    if not matches:
-        return None
-    match = matches[-1]
-    return ".".join(
-        (
-            match.group("major"),
-            match.group("minor") or "0",
-            match.group("patch") or "0",
-        )
-    )
 
 
 def _parse_version(value: str) -> _Version:

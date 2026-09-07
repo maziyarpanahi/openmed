@@ -67,10 +67,14 @@ same evaluator can derive those pointers without I/O:
 ```python
 report = build_rollback_compatibility_report(
     registry_state=local_registry_state,
+    slot="pii::small::mlx-fp",
     family="PII",
 )
 ```
 
-The state must include the contract metadata required by the checks (usually
-under a local `checkpoints` or `artifacts` mapping). Otherwise the result is
-correctly blocked rather than assuming that a last-green pointer is enough.
+The state must use the slot-keyed schema v2 and include the contract metadata
+required by the checks under a local `checkpoint_metadata` or `artifacts`
+mapping. Assigned versions are read only from the selected slot's
+`checkpoints` mapping; version-like text in a model ID is never used as
+registry state. A missing slot, assigned version, or contract produces a
+blocked report rather than assuming that a last-green pointer is enough.

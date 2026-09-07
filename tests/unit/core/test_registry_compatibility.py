@@ -131,15 +131,15 @@ def test_missing_contract_metadata_fails_closed_and_is_deterministic() -> None:
 
 def test_semver_ranges_and_state_pointers_are_local_only() -> None:
     state = {
-        "schema_version": 1,
-        "families": {
-            "PII": {
+        "schema_version": 2,
+        "slots": {
+            "pii::small::mlx-fp": {
                 "pointers": {
                     "latest": "synthetic-model-v2",
                     "canary": None,
                     "last_green": "synthetic-model-v1",
                 },
-                "versions": {
+                "checkpoints": {
                     "synthetic-model-v1": "1.0.0",
                     "synthetic-model-v2": "2.0.0",
                 },
@@ -152,7 +152,7 @@ def test_semver_ranges_and_state_pointers_are_local_only() -> None:
                 ],
             }
         },
-        "checkpoints": {
+        "checkpoint_metadata": {
             "synthetic-model-v1": _checkpoint(
                 "synthetic-model-v1",
                 version="1.0.0",
@@ -168,11 +168,59 @@ def test_semver_ranges_and_state_pointers_are_local_only() -> None:
 
     report = build_rollback_compatibility_report(
         registry_state=state,
+        slot="pii::small::mlx-fp",
         family="PII",
     )
 
     assert report.decision == DECISION_COMPATIBLE
     assert report.check("semver").code == "SEMVER_CONSTRAINT_SATISFIED"
+
+
+def test_schema_v2_state_requires_an_unambiguous_slot() -> None:
+    state = {
+        "schema_version": 2,
+        "slots": {
+            "pii::small::mlx-fp": {
+                "pointers": {
+                    "latest": "synthetic-model-v2",
+                    "canary": None,
+                    "last_green": "synthetic-model-v1",
+                },
+                "checkpoints": {
+                    "synthetic-model-v1": "1.0.0",
+                    "synthetic-model-v2": "2.0.0",
+                },
+                "lineage": [],
+            }
+        },
+    }
+
+    report = build_rollback_compatibility_report(
+        registry_state=state,
+        family="PII",
+    )
+
+    assert report.decision == DECISION_BLOCKED
+    assert "INPUT_INVALID" in report.blocked_reasons
+
+
+def test_model_id_version_text_is_not_registry_version_state() -> None:
+    current = _checkpoint(
+        "synthetic-model-v2",
+        version="2.0.0",
+        lineage=["synthetic-model-v1"],
+    )
+    rollback = _checkpoint(
+        "synthetic-model-v1",
+        version="1.0.0",
+        lineage=(),
+    )
+    del rollback["version"]
+
+    report = build_rollback_compatibility_report(current, rollback)
+
+    assert report.decision == DECISION_BLOCKED
+    assert "SEMVER_MISSING" in report.blocked_reasons
 
 
 def test_invalid_semver_constraint_blocks_without_echoing_input() -> None:
