@@ -147,3 +147,59 @@ missing resources and does not validate external FHIR profiles.
 For an opt-in, offline check of profiles declared in `meta.profile`, including
 post-de-identification comparison, see
 [WHO SMART Guidelines Profile Checks](./fhir-smart-guidelines.md).
+
+## Base R4 Structural Validation
+
+Use `validate_resource()` or `validate_bundle()` before handing an OpenMed
+export to a FHIR server. Both functions run entirely offline against a bundled,
+minimal table of base FHIR R4 (4.0.1) cardinalities, datatypes, and small fixed
+required bindings:
+
+```python
+from openmed.clinical.exporters.fhir import validate_bundle, validate_resource
+
+resource_result = validate_resource(
+    {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": {"text": "synthetic measurement"},
+    }
+)
+assert resource_result.is_valid
+
+bundle_result = validate_bundle(
+    {
+        "resourceType": "Bundle",
+        "type": "collection",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "code": {"text": "synthetic measurement"},
+                }
+            }
+        ],
+    }
+)
+assert bundle_result.errors[0].location == "Bundle.entry[0].resource.status"
+```
+
+`ValidationResult.errors` and `.warnings` contain immutable
+`ValidationFinding` objects with `severity`, `location`, `message`, and a FHIR
+issue `code`. Messages describe structure only and never quote resource values.
+Results also expose `.issues`, so `from_validation_result(result)` can render a
+standard R4 `OperationOutcome`.
+
+The bundled subset covers the resources OpenMed emits: `Condition`,
+`Observation`, `MedicationStatement`, `Procedure`, `DiagnosticReport`,
+`AllergyIntolerance`, `Immunization`, and `Encounter`. A different resource type
+produces a `not-supported` warning rather than a false conformance claim. The
+constraint table contains only OpenMed's compact derivation of CC0-licensed base
+R4 structure and fixed code-system metadata; it does not include clinical
+terminology content, proprietary profiles, or implementation-guide packages.
+
+This base validator is intentionally distinct from `check_bundle()`. The latter
+loads caller-supplied `StructureDefinition` and `ValueSet` resources to check
+declared implementation-guide profiles. Neither checker contacts a terminology
+server or replaces the complete HL7 validator for invariants, extensions, and
+full profile conformance.

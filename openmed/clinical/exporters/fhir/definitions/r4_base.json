@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "fhirVersion": "4.0.1",
+  "license": "CC0-1.0",
+  "source": "https://hl7.org/fhir/R4/",
+  "description": "OpenMed-authored minimal base R4 constraint table; no terminology expansion or implementation-guide content.",
+  "bundleTypes": [
+    "batch",
+    "batch-response",
+    "collection",
+    "document",
+    "history",
+    "message",
+    "searchset",
+    "transaction",
+    "transaction-response"
+  ],
+  "commonElements": [
+    {"path": "id", "min": 0, "max": 1, "types": ["id"]},
+    {"path": "meta", "min": 0, "max": 1, "types": ["Meta"]},
+    {"path": "implicitRules", "min": 0, "max": 1, "types": ["uri"]},
+    {"path": "language", "min": 0, "max": 1, "types": ["code"]},
+    {"path": "text", "min": 0, "max": 1, "types": ["Narrative"]},
+    {"path": "contained", "min": 0, "max": "*", "types": ["Resource"]},
+    {"path": "extension", "min": 0, "max": "*", "types": ["Extension"]},
+    {"path": "modifierExtension", "min": 0, "max": "*", "types": ["Extension"]}
+  ],
+  "resources": {
+    "Condition": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "clinicalStatus", "min": 0, "max": 1, "types": ["CodeableConcept"], "binding": "condition-clinical"},
+        {"path": "verificationStatus", "min": 0, "max": 1, "types": ["CodeableConcept"], "binding": "condition-verification"},
+        {"path": "category", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "severity", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "code", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "bodySite", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "subject", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "onset[x]", "min": 0, "max": 1, "types": ["dateTime", "Age", "Period", "Range", "string"]},
+        {"path": "abatement[x]", "min": 0, "max": 1, "types": ["dateTime", "Age", "Period", "Range", "string"]},
+        {"path": "recordedDate", "min": 0, "max": 1, "types": ["dateTime"]},
+        {"path": "recorder", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "asserter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "stage", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "evidence", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]}
+      ]
+    },
+    "Observation": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "basedOn", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "partOf", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "observation-status"},
+        {"path": "category", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "code", "min": 1, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "subject", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "focus", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "effective[x]", "min": 0, "max": 1, "types": ["dateTime", "Period", "Timing", "instant"]},
+        {"path": "issued", "min": 0, "max": 1, "types": ["instant"]},
+        {"path": "performer", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "value[x]", "min": 0, "max": 1, "types": ["Quantity", "CodeableConcept", "string", "boolean", "integer", "Range", "Ratio", "SampledData", "time", "dateTime", "Period"]},
+        {"path": "valueQuantity.value", "min": 0, "max": 1, "types": ["decimal"]},
+        {"path": "valueQuantity.comparator", "min": 0, "max": 1, "types": ["code"]},
+        {"path": "valueQuantity.unit", "min": 0, "max": 1, "types": ["string"]},
+        {"path": "valueQuantity.system", "min": 0, "max": 1, "types": ["uri"]},
+        {"path": "valueQuantity.code", "min": 0, "max": 1, "types": ["code"]},
+        {"path": "dataAbsentReason", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "interpretation", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]},
+        {"path": "bodySite", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "method", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "specimen", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "device", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "referenceRange", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "hasMember", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "derivedFrom", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "component", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "component.code", "min": 1, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "component.value[x]", "min": 0, "max": 1, "types": ["Quantity", "CodeableConcept", "string", "boolean", "integer", "Range", "Ratio", "SampledData", "time", "dateTime", "Period"]},
+        {"path": "component.dataAbsentReason", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "component.interpretation", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "component.referenceRange", "min": 0, "max": "*", "types": ["BackboneElement"]}
+      ]
+    },
+    "MedicationStatement": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "basedOn", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "partOf", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "medication-statement-status"},
+        {"path": "statusReason", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "category", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "medication[x]", "min": 1, "max": 1, "types": ["CodeableConcept", "Reference"]},
+        {"path": "subject", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "context", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "effective[x]", "min": 0, "max": 1, "types": ["dateTime", "Period"]},
+        {"path": "dateAsserted", "min": 0, "max": 1, "types": ["dateTime"]},
+        {"path": "informationSource", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "derivedFrom", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "reasonCode", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "reasonReference", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]},
+        {"path": "dosage", "min": 0, "max": "*", "types": ["Dosage"]}
+      ]
+    },
+    "Procedure": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "instantiatesCanonical", "min": 0, "max": "*", "types": ["canonical"]},
+        {"path": "instantiatesUri", "min": 0, "max": "*", "types": ["uri"]},
+        {"path": "basedOn", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "partOf", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "event-status"},
+        {"path": "statusReason", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "category", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "code", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "subject", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "performed[x]", "min": 0, "max": 1, "types": ["dateTime", "Period", "string", "Age", "Range"]},
+        {"path": "recorder", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "asserter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "performer", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "location", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "reasonCode", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "reasonReference", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "bodySite", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "outcome", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "report", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "complication", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "complicationDetail", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "followUp", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]},
+        {"path": "focalDevice", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "usedReference", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "usedCode", "min": 0, "max": "*", "types": ["CodeableConcept"]}
+      ]
+    },
+    "DiagnosticReport": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "basedOn", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "diagnostic-report-status"},
+        {"path": "category", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "code", "min": 1, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "subject", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "effective[x]", "min": 0, "max": 1, "types": ["dateTime", "Period"]},
+        {"path": "issued", "min": 0, "max": 1, "types": ["instant"]},
+        {"path": "performer", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "resultsInterpreter", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "specimen", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "result", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "imagingStudy", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "media", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "conclusion", "min": 0, "max": 1, "types": ["string"]},
+        {"path": "conclusionCode", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "presentedForm", "min": 0, "max": "*", "types": ["Attachment"]}
+      ]
+    },
+    "AllergyIntolerance": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "clinicalStatus", "min": 0, "max": 1, "types": ["CodeableConcept"], "binding": "allergy-clinical"},
+        {"path": "verificationStatus", "min": 0, "max": 1, "types": ["CodeableConcept"], "binding": "allergy-verification"},
+        {"path": "type", "min": 0, "max": 1, "types": ["code"], "binding": "allergy-type"},
+        {"path": "category", "min": 0, "max": "*", "types": ["code"], "binding": "allergy-category"},
+        {"path": "criticality", "min": 0, "max": 1, "types": ["code"], "binding": "allergy-criticality"},
+        {"path": "code", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "patient", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "onset[x]", "min": 0, "max": 1, "types": ["dateTime", "Age", "Period", "Range", "string"]},
+        {"path": "recordedDate", "min": 0, "max": 1, "types": ["dateTime"]},
+        {"path": "recorder", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "asserter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "lastOccurrence", "min": 0, "max": 1, "types": ["dateTime"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]},
+        {"path": "reaction", "min": 0, "max": "*", "types": ["BackboneElement"]}
+      ]
+    },
+    "Immunization": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "immunization-status"},
+        {"path": "statusReason", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "vaccineCode", "min": 1, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "patient", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "encounter", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "occurrence[x]", "min": 1, "max": 1, "types": ["dateTime", "string"]},
+        {"path": "recorded", "min": 0, "max": 1, "types": ["dateTime"]},
+        {"path": "primarySource", "min": 0, "max": 1, "types": ["boolean"]},
+        {"path": "reportOrigin", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "location", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "manufacturer", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "lotNumber", "min": 0, "max": 1, "types": ["string"]},
+        {"path": "expirationDate", "min": 0, "max": 1, "types": ["date"]},
+        {"path": "site", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "route", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "doseQuantity", "min": 0, "max": 1, "types": ["Quantity"]},
+        {"path": "performer", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "note", "min": 0, "max": "*", "types": ["Annotation"]},
+        {"path": "reasonCode", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "reasonReference", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "isSubpotent", "min": 0, "max": 1, "types": ["boolean"]},
+        {"path": "subpotentReason", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "education", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "programEligibility", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "fundingSource", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "reaction", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "protocolApplied", "min": 0, "max": "*", "types": ["BackboneElement"]}
+      ]
+    },
+    "Encounter": {
+      "elements": [
+        {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "encounter-status"},
+        {"path": "statusHistory", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "class", "min": 1, "max": 1, "types": ["Coding"]},
+        {"path": "classHistory", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "type", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "serviceType", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "priority", "min": 0, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "subject", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "episodeOfCare", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "basedOn", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "participant", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "appointment", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "period", "min": 0, "max": 1, "types": ["Period"]},
+        {"path": "length", "min": 0, "max": 1, "types": ["Duration"]},
+        {"path": "reasonCode", "min": 0, "max": "*", "types": ["CodeableConcept"]},
+        {"path": "reasonReference", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "diagnosis", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "account", "min": 0, "max": "*", "types": ["Reference"]},
+        {"path": "hospitalization", "min": 0, "max": 1, "types": ["BackboneElement"]},
+        {"path": "location", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "serviceProvider", "min": 0, "max": 1, "types": ["Reference"]},
+        {"path": "partOf", "min": 0, "max": 1, "types": ["Reference"]}
+      ]
+    }
+  },
+  "valueSets": {
+    "condition-clinical": {
+      "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+      "codes": ["active", "recurrence", "relapse", "inactive", "remission", "resolved"]
+    },
+    "condition-verification": {
+      "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+      "codes": ["unconfirmed", "provisional", "differential", "confirmed", "refuted", "entered-in-error"]
+    },
+    "observation-status": {
+      "system": "http://hl7.org/fhir/observation-status",
+      "codes": ["registered", "preliminary", "final", "amended", "corrected", "cancelled", "entered-in-error", "unknown"]
+    },
+    "medication-statement-status": {
+      "codes": ["active", "completed", "entered-in-error", "intended", "stopped", "on-hold", "unknown", "not-taken"]
+    },
+    "event-status": {
+      "codes": ["preparation", "in-progress", "not-done", "on-hold", "stopped", "completed", "entered-in-error", "unknown"]
+    },
+    "diagnostic-report-status": {
+      "codes": ["registered", "partial", "preliminary", "final", "amended", "corrected", "appended", "cancelled", "entered-in-error", "unknown"]
+    },
+    "allergy-clinical": {
+      "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+      "codes": ["active", "inactive", "resolved"]
+    },
+    "allergy-verification": {
+      "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+      "codes": ["unconfirmed", "confirmed", "refuted", "entered-in-error"]
+    },
+    "allergy-type": {"codes": ["allergy", "intolerance"]},
+    "allergy-category": {"codes": ["food", "medication", "environment", "biologic"]},
+    "allergy-criticality": {"codes": ["low", "high", "unable-to-assess"]},
+    "immunization-status": {"codes": ["completed", "entered-in-error", "not-done"]},
+    "encounter-status": {
+      "codes": ["planned", "arrived", "triaged", "in-progress", "onleave", "finished", "cancelled", "entered-in-error", "unknown"]
+    }
+  }
+}
