@@ -204,8 +204,10 @@ def test_contract_is_exported_from_public_agent_api() -> None:
 
 def test_deeply_nested_json_fails_with_a_value_free_contract_error() -> None:
     marker = "SYNTHETIC_PRIVATE_ARTIFACT_SENTINEL"
-    payload = "[" * (sys.getrecursionlimit() + 1) + json.dumps(marker)
-    payload += "]" * (sys.getrecursionlimit() + 1)
+    # Python 3.12 uses a separate C recursion limit for the JSON decoder.
+    # Exceed both that limit and the Python-level recursion guard.
+    depth = max(10_000, sys.getrecursionlimit() + 1)
+    payload = "[" * depth + json.dumps(marker) + "]" * depth
 
     with pytest.raises(ArtifactReferenceError) as caught:
         ArtifactReference.from_json(payload)
