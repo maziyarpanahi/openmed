@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from .action_phases import (
+    ACTION_PHASE_TRANSITIONS,
+    ActionPhase,
+    ActionPhaseError,
+    is_resumable_phase,
+    is_terminal_phase,
+    validate_action_transition,
+)
 from .artifact_reference import (
     ARTIFACT_REFERENCE_VERSION,
     MAX_ARTIFACT_BYTE_SIZE,
@@ -36,6 +44,9 @@ from .run_summary import (
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 
 __all__ = [
+    "ACTION_PHASE_TRANSITIONS",
+    "ActionPhase",
+    "ActionPhaseError",
     "ARTIFACT_REFERENCE_VERSION",
     "ActionTiming",
     "AgentRunTiming",
@@ -62,6 +73,9 @@ __all__ = [
     "TimingValidationError",
     "WorkflowOutcome",
     "allowed_reason_codes",
+    "is_resumable_phase",
+    "is_terminal_phase",
     "security",
+    "validate_action_transition",
     "validate_artifact_references",
 ]
