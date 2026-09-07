@@ -24,6 +24,74 @@ from openmed.service.batcher import (
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 
 
+def test_bounded_dispatch_keeps_interactive_priority_over_waiting_bulk():
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def dispatch(items):
+            calls.append(list(items))
+            started.set()
+            await release.wait()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=1,
+            max_wait_ms=0,
+            max_concurrent_batches=1,
+            max_queue_wait_ms=5000,
+        )
+        first = asyncio.create_task(batcher.submit("bulk-1", priority="bulk"))
+        await started.wait()
+        bulk = asyncio.create_task(batcher.submit("bulk-2", priority="bulk"))
+        interactive = asyncio.create_task(batcher.submit("interactive"))
+        await asyncio.sleep(0)
+        assert calls == [["bulk-1"]]
+        assert await batcher.queue_depths() == {"interactive": 1, "bulk": 1}
+        release.set()
+        assert await asyncio.gather(first, bulk, interactive) == [
+            "bulk-1",
+            "bulk-2",
+            "interactive",
+        ]
+        assert calls == [["bulk-1"], ["interactive"], ["bulk-2"]]
+        await batcher.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            await batcher.submit("late")
+
+    asyncio.run(scenario())
+
+
+def test_close_cancels_queued_jobs_and_drains_running_dispatch():
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def dispatch(items):
+            started.set()
+            await release.wait()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch, max_batch_size=1, max_wait_ms=0, max_concurrent_batches=1
+        )
+        first = asyncio.create_task(batcher.submit(1))
+        await started.wait()
+        pending = asyncio.create_task(batcher.submit(2))
+        await asyncio.sleep(0)
+        closing = asyncio.create_task(batcher.close())
+        await asyncio.sleep(0)
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+        assert not closing.done()
+        release.set()
+        assert await first == 1
+        await closing
+        assert await batcher.queue_depths() == {"interactive": 0, "bulk": 0}
+
+    asyncio.run(scenario())
+
+
 class FakeLoader:
     """Minimal loader double for service runtime tests."""
 

@@ -142,15 +142,26 @@ class DynamicBatcher(Generic[T, R]):
         queue_name: str = "batch",
         priority_weights: Optional[Mapping[str, int]] = None,
         metrics: Optional[Any] = None,
+        max_concurrent_batches: int | None = None,
     ) -> None:
         if max_batch_size <= 0:
             raise ValueError("max_batch_size must be positive")
         if max_wait_ms < 0:
             raise ValueError("max_wait_ms must be greater than or equal to 0")
+        if max_concurrent_batches is not None and (
+            isinstance(max_concurrent_batches, bool)
+            or not isinstance(max_concurrent_batches, int)
+            or max_concurrent_batches < 1
+        ):
+            raise ValueError("max_concurrent_batches must be a positive integer")
 
         self.max_batch_size = int(max_batch_size)
         self.max_wait_ms = float(max_wait_ms)
         self._dispatch = dispatch
+        self.max_concurrent_batches = max_concurrent_batches
+        self._active_batches = 0
+        self._running_tasks: set[asyncio.Task[None]] = set()
+        self._closed = False
         self._queue_limits = _normalize_queue_limits(max_queue_size_per_priority)
         admission_high = (
             sum(self._queue_limits.values())
@@ -198,6 +209,8 @@ class DynamicBatcher(Generic[T, R]):
             requested_priority = priority_handle.priority
 
         async with self._lock:
+            if self._closed:
+                raise RuntimeError("batcher is closed")
             queue = self._queues[requested_priority]
             queue_limit = self._queue_limits[requested_priority]
             if len(queue) >= queue_limit:
@@ -289,6 +302,33 @@ class DynamicBatcher(Generic[T, R]):
         async with self._lock:
             return self._admission.snapshot()
 
+    async def close(self) -> None:
+        """Cancel queued work, reject new submissions, and drain active batches.
+
+        Active dispatches retain admission capacity until completion. Bounding
+        concurrent batches keeps queued work available to weighted priority
+        selection instead of creating a second unprioritized executor backlog.
+        """
+        async with self._lock:
+            self._closed = True
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+            for job in self._jobs.values():
+                if job.wait_timeout is not None:
+                    job.wait_timeout.cancel()
+                if job.priority_handle is not None:
+                    job.priority_handle._clear(job.job_id)
+                job.future.cancel()
+                self._release_admission_locked(job)
+            self._jobs.clear()
+            for priority, queue in self._queues.items():
+                queue.clear()
+                self._record_queue_depth(priority)
+            running = tuple(self._running_tasks)
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+
     def _schedule_wait_timeout_locked(
         self,
         job: _QueuedJob[T, R],
@@ -355,7 +395,12 @@ class DynamicBatcher(Generic[T, R]):
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None
-        if not self._jobs:
+        if not self._jobs or self._closed:
+            return
+        if (
+            self.max_concurrent_batches is not None
+            and self._active_batches >= self.max_concurrent_batches
+        ):
             return
 
         batch = self._next_batch_locked()
@@ -364,7 +409,10 @@ class DynamicBatcher(Generic[T, R]):
         if not batch:
             return
 
-        loop.create_task(self._run_batch(batch))
+        self._active_batches += 1
+        task = loop.create_task(self._run_batch(batch))
+        self._running_tasks.add(task)
+        task.add_done_callback(self._running_tasks.discard)
 
     def _next_batch_locked(self) -> list[_QueuedJob[T, R]]:
         batch: list[_QueuedJob[T, R]] = []
@@ -422,6 +470,10 @@ class DynamicBatcher(Generic[T, R]):
                         job.future.set_exception(result)
                     else:
                         job.future.set_result(result)
+        except asyncio.CancelledError:
+            for job in active_jobs:
+                job.future.cancel()
+            raise
         except Exception as exc:
             for job in active_jobs:
                 if not job.future.done():
@@ -430,6 +482,9 @@ class DynamicBatcher(Generic[T, R]):
             async with self._lock:
                 for job in batch:
                     self._release_admission_locked(job)
+                self._active_batches -= 1
+                if self.max_concurrent_batches is not None and not self._closed:
+                    self._flush_locked(asyncio.get_running_loop())
 
     async def _remove_pending_job(self, job_id: int) -> None:
         async with self._lock:
