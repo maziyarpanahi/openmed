@@ -51,6 +51,7 @@ DEFAULT_ROUTE_SCOPES = {
     ("POST", "/analyze"): ("analyze:write",),
     ("POST", "/pii/extract"): ("pii:read",),
     ("POST", "/pii/deidentify"): ("pii:write",),
+    ("POST", "/pii/deidentify/stream"): ("pii:write",),
 }
 
 _BOOLEAN_TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}
@@ -444,6 +445,9 @@ class ServiceAuth:
 
         authorization = request.headers.get("authorization")
         if not authorization:
+            mtls_principal = request.scope.get("openmed.auth")
+            if isinstance(mtls_principal, AuthPrincipal):
+                return mtls_principal
             raise missing_credentials()
 
         scheme, _, value = authorization.strip().partition(" ")
