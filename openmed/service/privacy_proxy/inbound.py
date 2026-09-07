@@ -551,6 +551,7 @@ def _restore_value(value: Any, *, depth: int, tracker: _RestoreTracker) -> Any:
         try:
             items = value.items()
             for key, item in items:
+                restored_key: Any
                 if isinstance(key, str):
                     restored_key = _restore_text(key, tracker)
                 elif key is None or isinstance(key, (bool, int, float)):
