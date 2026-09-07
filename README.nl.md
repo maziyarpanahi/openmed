@@ -24,7 +24,7 @@ De lokale kernruntime van OpenMed voert extractie en de-identificatie uit nadat 
 </p>
 
 <p>
-  <b>Lokale uitvoering voorop</b> &nbsp;·&nbsp; <b>33 modelondersteunde PII-talen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifestvermeldingen</b> &nbsp;·&nbsp; <b>33 modelondersteunde PII-talen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

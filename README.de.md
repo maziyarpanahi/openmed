@@ -24,7 +24,7 @@ Die lokale Kernlaufzeit von OpenMed führt Extraktion und De-Identifikation aus,
 </p>
 
 <p>
-  <b>Local-First-Laufzeit</b> &nbsp;·&nbsp; <b>33 modellgestützte PII-Sprachen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 Manifesteinträge</b> &nbsp;·&nbsp; <b>33 modellgestützte PII-Sprachen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

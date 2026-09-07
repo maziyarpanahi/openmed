@@ -24,7 +24,7 @@ OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和
 </p>
 
 <p>
-  <b>本地优先运行</b> &nbsp;·&nbsp; <b>33 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>33 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
