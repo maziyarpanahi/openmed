@@ -199,6 +199,13 @@ def test_all_bundled_resource_types_have_a_clean_minimal_resource() -> None:
         _condition(),
         _observation(),
         {
+            "resourceType": "MedicationRequest",
+            "status": "active",
+            "intent": "order",
+            "medicationCodeableConcept": {"text": "synthetic medication"},
+            "subject": {"reference": "Patient/synthetic"},
+        },
+        {
             "resourceType": "MedicationStatement",
             "status": "active",
             "medicationCodeableConcept": {"text": "synthetic medication"},

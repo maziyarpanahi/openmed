@@ -41,6 +41,7 @@ BASE_R4_RESOURCE_TYPES = frozenset(
         "DiagnosticReport",
         "Encounter",
         "Immunization",
+        "MedicationRequest",
         "MedicationStatement",
         "Observation",
         "Procedure",
@@ -112,10 +113,11 @@ class ValidationResult:
 def validate_resource(resource: Mapping[str, Any]) -> ValidationResult:
     """Validate one resource against OpenMed's bundled FHIR R4 base subset.
 
-    Supported resource types are Condition, Observation, MedicationStatement,
-    Procedure, DiagnosticReport, AllergyIntolerance, Immunization, and
-    Encounter. Other resource types produce a warning because no claim of base
-    conformance can be made for a type outside the bundled subset.
+    Supported resource types are Condition, Observation, MedicationRequest,
+    MedicationStatement, Procedure, DiagnosticReport, AllergyIntolerance,
+    Immunization, and Encounter. Other resource types produce a warning because
+    no claim of base conformance can be made for a type outside the bundled
+    subset.
 
     Args:
         resource: Resource-like input. Non-mappings and malformed mappings are
