@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import hmac
 import json
 
 import httpx
 
+from openmed.service.signing import (
+    NONCE_HEADER,
+    NonceCache,
+    sign_request,
+    verify_request_signature,
+)
 from openmed.service.webhooks import (
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
@@ -19,32 +24,50 @@ from openmed.service.webhooks import (
 def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:
     payload = {"status": "done", "job_id": "abc", "label_histogram": {"NAME": 1}}
 
-    body, timestamp, signature = sign_webhook_payload(
+    body, timestamp, nonce, signature = sign_webhook_payload(
         payload,
         secret="secret",
+        path="/openmed?source=jobs",
         timestamp=1_800_000_000,
+        nonce="webhook-nonce",
     )
 
     assert body == canonical_json_bytes(payload)
     assert timestamp == "1800000000"
-    expected = hmac.digest(
-        b"secret",
-        b"1800000000." + body,
-        "sha256",
-    ).hex()
-    assert signature == f"sha256={expected}"
+    assert nonce == "webhook-nonce"
+    expected = sign_request(
+        "POST",
+        "/openmed?source=jobs",
+        body,
+        secret="secret",
+        timestamp=1_800_000_000,
+        nonce="webhook-nonce",
+    )
+    assert signature == expected[SIGNATURE_HEADER]
 
 
 def test_deliver_webhook_retries_with_backoff_until_success() -> None:
     attempts = 0
     delays: list[float] = []
+    seen_nonces: list[str] = []
     seen_request: httpx.Request | None = None
+    nonce_cache = NonceCache()
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal attempts
         nonlocal seen_request
         attempts += 1
         seen_request = request
+        seen_nonces.append(request.headers[NONCE_HEADER])
+        assert verify_request_signature(
+            request.method,
+            request.url.raw_path.decode("ascii"),
+            request.content,
+            request.headers,
+            secret="secret",
+            nonce_cache=nonce_cache,
+            now=int(request.headers[TIMESTAMP_HEADER]),
+        )
         if attempts == 1:
             return httpx.Response(503)
         return httpx.Response(204)
@@ -67,6 +90,8 @@ def test_deliver_webhook_retries_with_backoff_until_success() -> None:
     assert seen_request is not None
     assert seen_request.headers[SIGNATURE_HEADER].startswith("sha256=")
     assert seen_request.headers[TIMESTAMP_HEADER]
+    assert seen_request.headers[NONCE_HEADER]
+    assert len(seen_nonces) == len(set(seen_nonces))
 
 
 def test_deliver_webhook_reports_failure_after_attempts() -> None:
