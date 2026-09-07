@@ -146,7 +146,12 @@ class OnnxTokenClassificationPipeline:
         """Run one or more inputs without importing a Torch runtime."""
         threshold = float(kwargs.pop("threshold", 0.0))
         max_length = kwargs.pop("max_length", None)
-        kwargs.pop("batch_size", None)
+        batch_size = kwargs.pop("batch_size", 8)
+        if batch_size is None:
+            batch_size = 8
+        max_batch_tokens = kwargs.pop("max_batch_tokens", 4096)
+        max_windows = kwargs.pop("max_windows", 4096)
+        stride = kwargs.pop("stride", None)
         kwargs.pop("num_workers", None)
         if kwargs:
             logger.debug(
@@ -155,6 +160,15 @@ class OnnxTokenClassificationPipeline:
 
         single = isinstance(inputs, str)
         texts = [inputs] if single else list(inputs)
+        batches = self.model.predict_batch(
+            texts,
+            threshold=threshold,
+            max_length=max_length,
+            stride=stride,
+            batch_size=batch_size,
+            max_batch_tokens=max_batch_tokens,
+            max_windows=max_windows,
+        )
         predictions = [
             [
                 {
@@ -164,13 +178,9 @@ class OnnxTokenClassificationPipeline:
                     "start": entity.start,
                     "end": entity.end,
                 }
-                for entity in self.model.predict(
-                    text,
-                    threshold=threshold,
-                    max_length=max_length,
-                )
+                for entity in entities
             ]
-            for text in texts
+            for entities in batches
         ]
         return predictions[0] if single else predictions
 

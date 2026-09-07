@@ -39,9 +39,9 @@ class _FakeOnnxModel:
     tokenizer = object()
     variant = "int8"
 
-    def predict(self, text, *, threshold=0.0, max_length=None):
-        del text, threshold, max_length
-        return [_FakeEntity()]
+    def predict_batch(self, texts, **kwargs):
+        assert kwargs["batch_size"] == 1
+        return [[_FakeEntity()] for _text in texts]
 
 
 def test_low_resource_profile_has_bounded_runtime_defaults():
