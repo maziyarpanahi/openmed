@@ -115,13 +115,15 @@ def test_coherence_workflow_is_offline_and_diff_guarded() -> None:
     )
 
     assert "scripts/manifest/regenerate_surfaces.py" in workflow
-    assert "git diff --exit-code" in workflow
+    assert "run: git diff --exit-code" in workflow
+    assert "docs/i18n/readme_section_hashes.json" in workflow
     assert "generate_manifest.py" not in workflow
     assert "huggingface" not in workflow.casefold()
     assert "schedule:" not in workflow
     assert "cron:" not in workflow
     assert "permissions:\n  contents: read" in workflow
     assert "--refresh-github-stars" not in regenerator
+    assert "check_readme_drift.py" in regenerator
 
 
 def _copy_catalog_inputs(destination: Path) -> None:

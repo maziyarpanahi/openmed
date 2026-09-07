@@ -28,6 +28,7 @@ from openmed.core.registry_service import load_registry_state
 ROOT = Path(__file__).resolve().parents[2]
 _BRAND_CLAIMS_SCRIPT = ROOT / "scripts" / "brand" / "update_claims.py"
 _BRAND_README_SCRIPT = ROOT / "scripts" / "brand" / "update_readme_brand.py"
+_README_HASH_SCRIPT = ROOT / "scripts" / "i18n" / "check_readme_drift.py"
 
 
 def _paths(root: Path) -> dict[str, Path]:
@@ -159,6 +160,7 @@ def regenerate_surfaces(root: Path = ROOT) -> dict[str, int]:
     )
     if root.resolve() == ROOT:
         _run_governed_tool(_BRAND_README_SCRIPT, "--write")
+        _run_governed_tool(_README_HASH_SCRIPT, "--update")
     return {
         "manifest_entries": len(rows),
         "registry_keys": len(snapshot.registry_keys),
@@ -169,8 +171,13 @@ def regenerate_surfaces(root: Path = ROOT) -> dict[str, int]:
 
 def _governed_surface_errors() -> list[str]:
     errors: list[str] = []
-    for script in (_BRAND_CLAIMS_SCRIPT, _BRAND_README_SCRIPT):
-        completed = _run_governed_tool(script, "--check", check=False)
+    checks = (
+        (_BRAND_CLAIMS_SCRIPT, ("--check",)),
+        (_BRAND_README_SCRIPT, ("--check",)),
+        (_README_HASH_SCRIPT, ()),
+    )
+    for script, args in checks:
+        completed = _run_governed_tool(script, *args, check=False)
         if completed.returncode:
             detail = completed.stderr.strip() or completed.stdout.strip()
             errors.append(detail or f"{script.name} reported generated-surface drift")
@@ -179,12 +186,11 @@ def _governed_surface_errors() -> list[str]:
 
 def _run_governed_tool(
     script: Path,
-    mode: str,
-    *,
+    *args: str,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(
-        [sys.executable, str(script), mode],
+        [sys.executable, str(script), *args],
         cwd=ROOT,
         check=False,
         capture_output=True,

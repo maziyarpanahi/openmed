@@ -14,9 +14,11 @@ on:
       - "openmed/core/registry_service.py"
       - "scripts/brand/update_claims.py"
       - "scripts/brand/update_readme_brand.py"
+      - "scripts/i18n/check_readme_drift.py"
       - "scripts/manifest/regenerate_surfaces.py"
       - "README*.md"
       - "docs/brand/system/claims.yml"
+      - "docs/i18n/readme_section_hashes.json"
       - "docs/model-cards/registry/**"
       - "docs/model-registry.md"
       - "docs/website/index.html"
@@ -36,9 +38,11 @@ on:
       - "openmed/core/registry_service.py"
       - "scripts/brand/update_claims.py"
       - "scripts/brand/update_readme_brand.py"
+      - "scripts/i18n/check_readme_drift.py"
       - "scripts/manifest/regenerate_surfaces.py"
       - "README*.md"
       - "docs/brand/system/claims.yml"
+      - "docs/i18n/readme_section_hashes.json"
       - "docs/model-cards/registry/**"
       - "docs/model-registry.md"
       - "docs/website/index.html"
@@ -68,10 +72,4 @@ jobs:
         run: PYTHONPATH=. python scripts/manifest/regenerate_surfaces.py
 
       - name: Fail on generated surface drift
-        run: >-
-          git diff --exit-code --
-          'README*.md'
-          docs/brand/system/claims.yml
-          docs/model-cards/registry
-          docs/model-registry.md
-          docs/website/index.html
+        run: git diff --exit-code
