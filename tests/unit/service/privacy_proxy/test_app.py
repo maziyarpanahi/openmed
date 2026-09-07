@@ -79,6 +79,25 @@ def test_chat_completion_redacts_payload_before_transport_and_restores_response(
     assert "OPENMED_PHI" in forwarded
 
 
+def test_chat_completion_rejects_duplicated_response_placeholders():
+    def transport(payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        token = payload["messages"][0]["content"]
+        return {"content": f"{token} {token}"}
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "messages": [{"role": "user", "content": SYNTHETIC_NAME}],
+            },
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["details"]["reason"] == "duplicate_placeholder"
+    assert SYNTHETIC_NAME not in response.text
+
+
 def test_streaming_completion_restores_split_placeholders_without_mapping():
     seen_payloads: list[dict[str, Any]] = []
 
@@ -117,6 +136,28 @@ def test_streaming_completion_restores_split_placeholders_without_mapping():
     assert "mapping" not in stream_text
     assert seen_payloads
     assert SYNTHETIC_NAME not in json.dumps(seen_payloads[0])
+
+
+def test_streaming_completion_stops_before_restoring_a_duplicate_placeholder():
+    def transport(payload: dict[str, Any], **_: Any):
+        token = payload["messages"][0]["content"]
+        yield token
+        yield token
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "stream": True,
+                "messages": [{"role": "user", "content": SYNTHETIC_NAME}],
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.text.count(SYNTHETIC_NAME) == 1
+    assert '"reason":"duplicate_placeholder"' in response.text
+    assert "data: [DONE]" not in response.text
 
 
 def test_streaming_openai_chunks_restore_placeholder_split_across_events():

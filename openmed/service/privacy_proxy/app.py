@@ -32,6 +32,11 @@ from ..privacy_gateway import (
     safety_sweep_tripwire,
     sha256_text,
 )
+from .inbound import (
+    InboundPlaceholderRestorer,
+    InboundRestorationError,
+    InboundRestorationState,
+)
 
 DEFAULT_MODEL = "openmed-local"
 DEFAULT_REDACTION_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -40,6 +45,7 @@ CHAT_COMPLETIONS_COMPATIBILITY_PATH = "/chat/completions"
 _REQUEST_ID_HEADER = "x-request-id"
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _PLACEHOLDER_PREFIX = "<<OPENMED_PHI_"
+_PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6,}>>")
 _DONE = object()
 
 EntityExtractor = Callable[..., Any]
@@ -127,8 +133,13 @@ class RedactedChatRequest:
 class _IncrementalRestorer:
     """Restore text chunks while retaining a placeholder split across chunks."""
 
-    def __init__(self, placeholder_map: Mapping[str, str]) -> None:
+    def __init__(
+        self,
+        placeholder_map: Mapping[str, str],
+        seen_placeholders: set[str],
+    ) -> None:
         self._placeholder_map = placeholder_map
+        self._seen_placeholders = seen_placeholders
         self._buffer = ""
 
     def feed(self, text: str) -> str:
@@ -138,7 +149,11 @@ class _IncrementalRestorer:
         if candidate_start >= 0 and ">>" not in self._buffer[candidate_start:]:
             safe = self._buffer[:candidate_start]
             self._buffer = self._buffer[candidate_start:]
-            return reidentify_placeholders(safe, self._placeholder_map)
+            return _restore_stream_text(
+                safe,
+                self._placeholder_map,
+                self._seen_placeholders,
+            )
 
         hold = _placeholder_prefix_suffix_length(self._buffer)
         if hold:
@@ -147,11 +162,19 @@ class _IncrementalRestorer:
         else:
             safe = self._buffer
             self._buffer = ""
-        return reidentify_placeholders(safe, self._placeholder_map)
+        return _restore_stream_text(
+            safe,
+            self._placeholder_map,
+            self._seen_placeholders,
+        )
 
     def finish(self) -> str:
         """Restore the final buffered text and reject unknown placeholders."""
-        safe = reidentify_placeholders(self._buffer, self._placeholder_map)
+        safe = _restore_stream_text(
+            self._buffer,
+            self._placeholder_map,
+            self._seen_placeholders,
+        )
         self._buffer = ""
         return safe
 
@@ -161,7 +184,11 @@ class _StreamState:
 
     def __init__(self, prepared: RedactedChatRequest) -> None:
         self.prepared = prepared
-        self.raw_restorer = _IncrementalRestorer(prepared.placeholder_map)
+        self.seen_placeholders: set[str] = set()
+        self.raw_restorer = _IncrementalRestorer(
+            prepared.placeholder_map,
+            self.seen_placeholders,
+        )
         self.mapping_restorers: dict[tuple[str, ...], _IncrementalRestorer] = {}
         self.role_sent = False
         self.finish_sent = False
@@ -253,7 +280,21 @@ class PrivacyProxy:
     ) -> dict[str, Any]:
         """Restore a non-streaming transport response into OpenAI shape."""
         try:
-            restored = _restore_json_value(response, prepared.placeholder_map)
+            value = (
+                response.text
+                if isinstance(response, PrivacyGatewayTransportResponse)
+                else response
+            )
+            state = InboundRestorationState(
+                prepared.request_id,
+                prepared.placeholder_map,
+            )
+            with InboundPlaceholderRestorer(state) as restorer:
+                restored = restorer.restore(value)
+        except InboundRestorationError as exc:
+            raise PrivacyProxyResponseError(
+                reason_code=getattr(exc, "reason_code", "response_rejected")
+            ) from None
         except PrivacyProxyError:
             raise
         except Exception:
@@ -641,23 +682,6 @@ async def _iterate_response(response: Any) -> AsyncIterable[Any]:
         yield item
 
 
-def _restore_json_value(value: Any, placeholder_map: Mapping[str, str]) -> Any:
-    if isinstance(value, PrivacyGatewayTransportResponse):
-        return _restore_json_value(value.text, placeholder_map)
-    if isinstance(value, str):
-        return reidentify_placeholders(value, placeholder_map)
-    if isinstance(value, Mapping):
-        return {
-            str(key): _restore_json_value(child, placeholder_map)
-            for key, child in value.items()
-        }
-    if isinstance(value, list):
-        return [_restore_json_value(child, placeholder_map) for child in value]
-    if isinstance(value, tuple):
-        return [_restore_json_value(child, placeholder_map) for child in value]
-    return value
-
-
 def _transport_content(response: Any) -> str:
     if isinstance(response, str):
         return response
@@ -785,10 +809,17 @@ def _restore_stream_value(
         if path and path[-1] == "content":
             restorer = state.mapping_restorers.setdefault(
                 path,
-                _IncrementalRestorer(state.prepared.placeholder_map),
+                _IncrementalRestorer(
+                    state.prepared.placeholder_map,
+                    state.seen_placeholders,
+                ),
             )
             return restorer.feed(value)
-        return reidentify_placeholders(value, state.prepared.placeholder_map)
+        return _restore_stream_text(
+            value,
+            state.prepared.placeholder_map,
+            state.seen_placeholders,
+        )
     if isinstance(value, Mapping):
         return {
             str(key): _restore_stream_value(child, state, (*path, str(key)))
@@ -868,6 +899,18 @@ def _placeholder_prefix_suffix_length(text: str) -> int:
         if text.endswith(_PLACEHOLDER_PREFIX[:length]):
             return length
     return 0
+
+
+def _restore_stream_text(
+    text: str,
+    placeholder_map: Mapping[str, str],
+    seen_placeholders: set[str],
+) -> str:
+    for token in _PLACEHOLDER_PATTERN.findall(text):
+        if token in seen_placeholders:
+            raise PrivacyProxyResponseError(reason_code="duplicate_placeholder")
+        seen_placeholders.add(token)
+    return reidentify_placeholders(text, placeholder_map)
 
 
 def _error_payload(exc: PrivacyProxyError) -> dict[str, Any]:
