@@ -29,6 +29,22 @@ from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from . import documents_text as _documents_text
 from . import pptx as _pptx
+from .abstention import (
+    ABSTENTION_SCHEMA_VERSION,
+    AbstentionReason,
+    AbstentionRecord,
+    AbstentionStage,
+    AbstentionValidationError,
+)
+from .asset_batch import (
+    BATCH_VERSION,
+    MAX_BATCH_ASSETS,
+    AssetBatch,
+    AssetBatchError,
+    BatchFinding,
+    validate_asset_batch,
+)
+from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -152,6 +168,22 @@ from .layout import (
     LayoutWordSpan,
     parse_layout,
 )
+from .manifest_profiles import (
+    AUDIO_V1,
+    DICOM_V1,
+    IMAGE_V1,
+    PDF_V1,
+    ManifestProfile,
+    ManifestProfileError,
+    ValidationFinding,
+    validate_manifest_metadata,
+)
+from .media_type import (
+    MAX_MEDIA_TYPE_PREFIX_BYTES,
+    MediaTypeStatus,
+    detect_media_type,
+    validate_media_type,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -184,6 +216,19 @@ from .pptx import (
     extract_pptx,
     map_text_spans_to_pptx_runs,
     write_redacted_pptx,
+)
+from .processing_summary import (
+    PROCESSING_SUMMARY_SCHEMA_VERSION,
+    AbstentionCount,
+    AssetDigestEntry,
+    AssetProcessingResult,
+    MediaTypeTotals,
+    OutcomeCount,
+    ProcessingOutcome,
+    ProcessingSummary,
+    ProcessingSummaryError,
+    render_processing_summary_markdown,
+    summarize_processing_run,
 )
 from .render_pdf import (
     PdfLayoutFidelityError,
@@ -248,12 +293,38 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "ABSTENTION_SCHEMA_VERSION",
+    "AbstentionReason",
+    "AbstentionRecord",
+    "AbstentionStage",
+    "AbstentionValidationError",
+    "AUDIO_V1",
+    "DICOM_V1",
+    "IMAGE_V1",
+    "PDF_V1",
+    "ManifestProfile",
+    "ManifestProfileError",
+    "ValidationFinding",
+    "validate_manifest_metadata",
     "ExtractedDocument",
     "SourceSpan",
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
     "is_multimodal_available",
+    "AssetManifest",
+    "AssetManifestError",
+    "MANIFEST_VERSION",
+    "AssetBatch",
+    "AssetBatchError",
+    "BATCH_VERSION",
+    "BatchFinding",
+    "MAX_BATCH_ASSETS",
+    "validate_asset_batch",
+    "MAX_MEDIA_TYPE_PREFIX_BYTES",
+    "MediaTypeStatus",
+    "detect_media_type",
+    "validate_media_type",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "DocumentGraphError",
@@ -419,6 +490,17 @@ __all__ = [
     "assert_redacted_text_removed",
     "verify_redacted_pdf",
     "verify_redacted_text_removed",
+    "PROCESSING_SUMMARY_SCHEMA_VERSION",
+    "AbstentionCount",
+    "AssetDigestEntry",
+    "AssetProcessingResult",
+    "MediaTypeTotals",
+    "OutcomeCount",
+    "ProcessingOutcome",
+    "ProcessingSummary",
+    "ProcessingSummaryError",
+    "render_processing_summary_markdown",
+    "summarize_processing_run",
     "PdfLayoutFidelityError",
     "PdfLayoutFidelityReport",
     "PdfPageFidelity",

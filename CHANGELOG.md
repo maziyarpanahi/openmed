@@ -9,6 +9,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline manifest-coherence regenerator and CI drift gate for the
+  runtime model registry, PII language defaults, governed README counts,
+  registry model cards, and generated model and benchmark documentation (#77).
+- Added exact OMOP CDM v5.4 `visit_occurrence`, `observation_period`, and
+  `note_nlp` exporters with deterministic local keys, bounded clinical dates,
+  source offsets, and assertion-derived NLP term fields (#2360).
+- Added exact OMOP CDM v5.4 `measurement` and `procedure_occurrence` row
+  exporters with shared Athena concept resolution, deterministic unmapped
+  fallback, and preservation of numeric lab values, units, and ranges (#275).
+- Added dependency-free US Core 9.0.0 conformance checks for exported
+  Condition, laboratory Observation, MedicationRequest, and
+  AllergyIntolerance resources, including base-R4-first validation,
+  must-support warnings, required-binding errors, canonical profile resolution,
+  and compact CC0 constraint metadata (#2366).
+- Added a versioned federated update metadata envelope with coordinator-owned
+  parameter expectations, bounded exact shape arithmetic, deterministic JSON,
+  clipping declarations, and value-free rejection of unknown or identifying
+  fields (#3010).
+
+### Security
+
+- Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
+  DOM-based search-suggestion XSS tracked as CVE-2026-73295.
+
+## [2.3.0] - 2026-09-04
+
+OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
+workflows, multimodal asset intake, clinical evidence, local training,
+cross-platform runtimes, deployment adapters, and release hardening. The final
+audited `v2.2.0..v2.3.0` release-branch range contains 252 commits and 651 changed
+files.
+
+The static public Python surface grows from 37,735 to 41,729 symbols with
+3,994 additions, zero removals or narrowed signatures, and zero new
+deprecations. Python, Swift, Kotlin/Android, JavaScript, REST, CLI,
+configuration, serialized evidence, and deployment contracts are reviewed in
+the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
+
+### Added
+
+- Added closed, versioned federated aggregate metric envelopes with finite
+  clipping bounds, minimum-group suppression, coarse participant bands,
+  controlled privacy mechanisms, confidence intervals, deterministic JSON,
+  and value-free rejection of client-level or unknown fields (#3011).
+- Added dependency-free base FHIR R4 structural validation for eight exported
+  clinical resource types, including deterministic structured findings,
+  cardinality and primitive datatype checks, fixed required bindings, Bundle
+  aggregation, and a compact CC0-derived constraint table (#2364).
+- Added typed, 128-bit opaque correlation identifiers for agent runs and
+  actions, with strict kind-aware parsing, deterministic metadata-only JSON,
+  parent-action validation, and value-free failures (#2973).
+- Added strict, content-free agent artifact references with opaque identifiers,
+  a closed artifact-kind vocabulary, versioned schema IDs, digest and size
+  metadata, deterministic JSON, and value-free validation failures, including
+  oversized integers and deeply nested JSON (#2999).
+- Added a conservative, deterministic FHIR DiagnosticReport exporter with
+  R4/R5 union allowlisting (32-field), explicit `unknown` status, type-gated
+  scalars and Reference normalization, `effective[x]` mutual exclusivity,
+  deep-copy evidence preservation, field-name-only value-free errors, and
+  no network or clock dependency (#2566).
+- Added a dependency-free, versioned multimodal asset manifest with strict
+  media and digest validation, bounded metadata-only fields, deterministic
+  JSON serialization, and value-free rejection of paths, URLs, free text, and
+  unknown fields (#2954).
+- Added bounded streaming SHA-256 asset digests with caller-owned stream
+  position restoration and value-free limit and read failures (#2979).
+- Added bounded, dependency-free detection for PDF, PNG, JPEG, TIFF, DICOM,
+  and WAV prefixes, with stable match, mismatch, and unknown validation results
+  that do not log source bytes or trust filename extensions (#2955).
+- Added strict, deterministic multimodal abstention records with typed pipeline
+  stages, stable reason codes, metadata-only JSON, and value-free validation
+  failures (#2977).
+- Added image, PDF, DICOM, and audio profiles that validate canonical manifest
+  metadata into deterministic field-and-reason findings without opening or
+  decoding an asset (#2978).
+- Added privacy-safe multimodal asset batches with opaque batch identifiers,
+  canonical asset ordering, duplicate identifier and digest detection, a
+  bounded asset count, derived byte, page, frame, and duration totals, and
+  sorted value-free findings for invalid, oversized, overflowing, or
+  inconsistent batches (#3002).
+- Added a closed, JSON-safe agent outcome vocabulary with success, abstention,
+  reviewer-handoff, policy-denial, and failure classes, deterministic
+  serialization, and value-free rejection of unknown codes or free-text
+  reasons (#2950).
+- Added bounded, deterministic agent-run summaries for closed outcomes,
+  workflow identifiers, tool-call counts, durations, and artifact digests,
+  with direct-construction invariants and value-free privacy failures (#2951).
+- Added deterministic monotonic timing metadata records for agent runs and
+  actions with exact integer durations and value-free validation failures
+  (#2974).
+- Added deterministic clinical evidence tables with source offsets, controlled
+  assertion and review metadata, optional protected-value hashes, and
+  value-free JSON and Markdown rendering (#2567).
+- Added immutable, non-throwing consent receipt verification results with stable
+  content-free outcome codes while preserving one-time receipt consumption.
+
 - Added an audited teacher-ensemble registry for weak labeling with
   manifest-resolved PII and Privacy Filter members, bounded weights and
   agreement thresholds, checksum-validator policies, and fail-closed runtime
@@ -297,6 +393,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reuse, equivalent NumPy and pure-Python paths, span-local grapheme work,
   binary32-compatible confidence reconstruction, and opt-in kernel compilation
   controls (#2946).
+
+### Fixed
+
+- The `openmed` npm package now defaults to the public
+  `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android` repository
+  (exported as `DEFAULT_MODEL_ID`) and routes `-onnx-android` model ids through
+  `loadOnnxModel()` instead of the unavailable former default.
+- The `openmed` npm package aligns Transformers.js token-classification output
+  back to the source text before BIO decoding through `alignTokenOffsets()`;
+  `extractPii()` requests `ignore_labels: []` to retain the full sequence. The
+  documented `loadOnnxModel()` to `deidentify()` path no longer silently returns
+  zero spans solely because the runtime omits character offsets.
+- Token alignment preserves decomposed accents and supplementary Unicode
+  letters. Unalignable tokens fail with a content-free error instead of
+  silently producing incomplete redaction; custom pipelines can supply exact
+  source offsets.
+
+- Preserved the v2.2 numeric-offset TypeScript contracts while adding raw-token
+  input types. Model loaders align output and retain runtime metadata and
+  resource disposal; the browser extension remains source-compatible.
+- Removed obsolete Debian vulnerability exceptions after the current image
+  report confirmed they no longer apply; security thresholds are unchanged.
+
+### Known dependency limitation
+
+- Optional agent, LlamaIndex, QuickUMLS, and scrubadub dependency trees include
+  NLTK 3.10.3, affected by model-artifact path-security advisory
+  [CVE-2026-81726](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp).
+  No fixed release is published as of 2026-09-04. OpenMed does not call the
+  affected APIs, and its service image does not install NLTK. Do not expose
+  NLTK model import/export paths to untrusted input in optional integrations.
+  The CI waiver is scoped to this CVE, the `nltk` package, and `uv.lock`, and
+  expires on 2026-09-11; it cannot suppress a fixed upstream release.
 
 ## [2.2.0] - 2026-08-21
 
@@ -2894,7 +3023,7 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v2.2.0...HEAD
+[2.3.0]: https://github.com/maziyarpanahi/openmed/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/maziyarpanahi/openmed/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/maziyarpanahi/openmed/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/maziyarpanahi/openmed/releases/tag/v2.0.0

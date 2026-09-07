@@ -43,6 +43,7 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_vietnamese_cmnd,
     register_clinical_providers,
 )
+from openmed.core.pii import _prepare_pii_text
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     AADHAAR_PII_PATTERNS,
@@ -89,6 +90,7 @@ from openmed.core.pii_i18n import (
     validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
+    validate_iran_national_id,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
@@ -156,6 +158,7 @@ class TestConstants:
             "ta",
             "pt",
             "ar",
+            "fa",
             "he",
             "ja",
             "tr",
@@ -218,6 +221,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
         assert LANGUAGE_MODEL_PREFIX["pt"] == "Portuguese-"
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
+        assert LANGUAGE_MODEL_PREFIX["fa"] == "Persian-"
         assert LANGUAGE_MODEL_PREFIX["he"] == "Hebrew-"
         assert LANGUAGE_MODEL_PREFIX["ja"] == "Japanese-"
         assert LANGUAGE_MODEL_PREFIX["tr"] == "Turkish-"
@@ -446,6 +450,138 @@ class TestBengaliValidators:
     )
     def test_bengali_postcode_rejects_invalid_formats(self, value):
         assert not validate_bengali_postcode(value)
+
+
+class TestValidateIranNationalID:
+    """Tests for the Iranian national identity code checksum."""
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1234567891",
+            "۱۲۳۴۵۶۷۸۹۱",
+            "١٢٣٤٥٦٧٨٩١",
+            " 1234567891 ",
+        ),
+    )
+    def test_accepts_ascii_persian_and_arabic_indic_digits(self, value):
+        assert validate_iran_national_id(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1234567892",
+            "۱۲۳۴۵۶۷۸۹۲",
+            "0000000000",
+            "۱۱۱۱۱۱۱۱۱۱",
+            "123456789",
+            "12345678910",
+            "12345-67891",
+            "",
+            None,
+        ),
+    )
+    def test_rejects_bad_checksum_repeated_digits_and_invalid_shapes(self, value):
+        assert not validate_iran_national_id(value)
+
+
+class TestPersianPIIPatterns:
+    """Persian RTL pattern, month-name, and synthetic-data coverage."""
+
+    @staticmethod
+    def _matches(entity_type, value):
+        for pattern in LANGUAGE_PII_PATTERNS["fa"]:
+            if pattern.entity_type != entity_type:
+                continue
+            match = re.fullmatch(pattern.pattern, value, pattern.flags)
+            if match is None:
+                continue
+            if pattern.validator is None or pattern.validator(match.group(0)):
+                return True
+        return False
+
+    def test_patterns_are_registered_and_discoverable(self):
+        persian_patterns = LANGUAGE_PII_PATTERNS["fa"]
+        combined = get_patterns_for_language("fa")
+
+        assert persian_patterns
+        assert all(
+            any(pattern is observed for observed in combined)
+            for pattern in persian_patterns
+        )
+
+    def test_all_solar_hijri_month_names_are_registered(self):
+        assert LANGUAGE_MONTH_NAMES["fa"] == [
+            "فروردین",
+            "اردیبهشت",
+            "خرداد",
+            "تیر",
+            "مرداد",
+            "شهریور",
+            "مهر",
+            "آبان",
+            "آذر",
+            "دی",
+            "بهمن",
+            "اسفند",
+        ]
+
+    @pytest.mark.parametrize(
+        ("entity_type", "value"),
+        (
+            ("date", "۱۴۰۵/۰۵/۲۹"),
+            ("date", "5 فروردین 1405"),
+            ("phone_number", "+98 912 345 6789"),
+            ("phone_number", "۰۹۱۲ ۳۴۵ ۶۷۸۹"),
+            ("phone_number", "٠٩١٢ ٣٤٥ ٦٧٨٩"),
+            ("national_id", "۱۲۳۴۵۶۷۸۹۱"),
+            ("postcode", "۱۴۳۹۸۱۴۵۶۷"),
+            ("street_address", "خیابان ولیعصر، کوچه بهار، پلاک ۱۲"),
+        ),
+    )
+    def test_required_entities_match_all_supported_digit_styles(
+        self,
+        entity_type,
+        value,
+    ):
+        assert self._matches(entity_type, value)
+
+    def test_fake_data_is_complete_and_persian(self):
+        data = LANGUAGE_FAKE_DATA["fa"]
+
+        assert {"NAME", "EMAIL", "PHONE", "DATE", "LOCATION"} <= data.keys()
+        assert any("احمدی" in name or "رضایی" in name for name in data["NAME"])
+        assert all("example" in email for email in data["EMAIL"])
+        assert any(phone.startswith(("+98", "09", "۰۹")) for phone in data["PHONE"])
+
+    @pytest.mark.parametrize(
+        ("language", "native_digits"),
+        (
+            ("fa", "۱۲۳۴۵۶۷۸۹۱"),
+            ("fa_IR", "١٢٣٤٥٦٧٨٩١"),
+            ("fa-IR", "۱۲۳۴۵۶۷۸۹۱"),
+        ),
+    )
+    def test_main_pipeline_folds_eastern_digits_without_shifting_offsets(
+        self,
+        language,
+        native_digits,
+    ):
+        text = f"بیمار: کد ملی {native_digits}."
+        start = text.index(native_digits)
+        end = start + len(native_digits)
+
+        prepared = _prepare_pii_text(
+            text,
+            lang=language,
+            normalize_accents=False,
+            preserve_whitespace=True,
+        )
+
+        assert prepared.original_text == text
+        assert prepared.inference_text[start:end] == "1234567891"
+        assert len(prepared.inference_text) == len(text)
+        assert prepared.detection_normalization.folded_native_digits == 10
 
 
 class TestEastAfricanNationalIds:

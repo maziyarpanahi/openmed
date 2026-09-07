@@ -18,6 +18,13 @@ __all__ = [
     "CLINICAL_PRIVACY_TRAINING_SOURCE_IDS",
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
+    "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
+    "DEFAULT_FEDERATED_METRIC_MINIMUM_GROUP_SIZE",
+    "FEDERATED_METRIC_SCHEMA_VERSION",
+    "FEDERATED_SCHEDULE_PHASES",
+    "FEDERATED_SCHEDULE_SCHEMA_VERSION",
+    "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
+    "MAX_FEDERATED_PHASE_DURATION_SECONDS",
     "MAX_LORA_TRAINABLE_RATIO",
     "PRESET_BY_MODE",
     "QLORA_CONFIG_SCHEMA_VERSION",
@@ -64,6 +71,7 @@ __all__ = [
     "DIRECTID_TRAINING_REPORT_SCHEMA_VERSION",
     "DIRECTID_TINY_HEAD_CONTRACT",
     "FEDERATED_ROUND_SCHEMA_VERSION",
+    "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
     "FEDERATED_ROUND_STATES",
     "FEDERATED_ROUND_TERMINAL_STATES",
     "FEDERATED_ROUND_TRANSITIONS",
@@ -97,9 +105,27 @@ __all__ = [
     "DistillationTargets",
     "EntityTypeWeights",
     "FederatedRoundLifecycle",
+    "FederatedMetricEnvelope",
+    "FederatedMetricError",
+    "FederatedMetricKind",
+    "FederatedParticipantCountBand",
+    "FederatedPrivacyMechanism",
+    "FederatedCompletionBand",
+    "FederatedQuorumStatus",
+    "FederatedRoundReasonCode",
+    "FederatedRoundSchedule",
+    "FederatedScheduleError",
+    "FederatedSchedulePhase",
     "FederatedRoundState",
     "FederatedRoundStateError",
+    "FederatedRoundStatus",
+    "FederatedRoundStatusError",
     "FederatedRoundTransitionError",
+    "FederatedUncertaintyMethod",
+    "FederatedParameterMetadata",
+    "FederatedUpdateMetadata",
+    "FederatedUpdateMetadataError",
+    "FederatedUpdatePolicy",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
@@ -139,6 +165,8 @@ __all__ = [
     "build_clinical_privacy_checkpoint_manifest",
     "build_clinical_family_release",
     "build_directid_dataset_evidence",
+    "build_federated_round_status",
+    "build_federated_metric_envelope",
     "config_hash",
     "clinical_family_recipe_hash",
     "clinical_model_family_spec",
@@ -209,6 +237,52 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "DEFAULT_FEDERATED_METRIC_MINIMUM_GROUP_SIZE",
+        "FEDERATED_METRIC_SCHEMA_VERSION",
+        "FederatedMetricEnvelope",
+        "FederatedMetricError",
+        "FederatedMetricKind",
+        "FederatedParticipantCountBand",
+        "FederatedPrivacyMechanism",
+        "FederatedUncertaintyMethod",
+        "build_federated_metric_envelope",
+    }:
+        federated_metrics = import_module(".federated_metrics", __name__)
+        return getattr(federated_metrics, name)
+    if name in {
+        "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
+        "FederatedParameterMetadata",
+        "FederatedUpdateMetadata",
+        "FederatedUpdateMetadataError",
+        "FederatedUpdatePolicy",
+    }:
+        federated_update_metadata = import_module(
+            ".federated_update_metadata", __name__
+        )
+        return getattr(federated_update_metadata, name)
+    if name in {
+        "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
+        "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
+        "FederatedCompletionBand",
+        "FederatedQuorumStatus",
+        "FederatedRoundReasonCode",
+        "FederatedRoundStatus",
+        "FederatedRoundStatusError",
+        "build_federated_round_status",
+    }:
+        federated_status = import_module(".federated_status", __name__)
+        return getattr(federated_status, name)
+    if name in {
+        "FEDERATED_SCHEDULE_PHASES",
+        "FEDERATED_SCHEDULE_SCHEMA_VERSION",
+        "MAX_FEDERATED_PHASE_DURATION_SECONDS",
+        "FederatedRoundSchedule",
+        "FederatedScheduleError",
+        "FederatedSchedulePhase",
+    }:
+        federated_schedule = import_module(".federated_schedule", __name__)
+        return getattr(federated_schedule, name)
     if name in {
         "FEDERATED_ROUND_SCHEMA_VERSION",
         "FEDERATED_ROUND_STATES",

@@ -83,6 +83,7 @@ routing is first requested, and do not download or bundle model weights.
 | `el`   | Greek      | `OpenMed/privacy-filter-multilingual`                       | `el_GR`      | AMKA Luhn-aware surrogates.                                  |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
 | `es`   | Spanish    | `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1`   | `es_ES`      | DNI/NIE checksum-aware surrogates.                           |
+| `fa`   | Persian    | `OpenMed/privacy-filter-multilingual`                      | `fa_IR`      | Iranian NID, RTL, Eastern digits, and Jalali date patterns. |
 | `fr`   | French     | `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1`    | `fr_FR`      | NIR / INSEE; `fr_SN`, `fr_CI`, and `fr_CM` locale overlays.  |
 | `gu`   | Gujarati   | `env:OPENMED_INDIC_NER_MODEL`                               | `gu_IN`      | Optional Indic NER weights.                                  |
 | `he`   | Hebrew     | `OpenMed/privacy-filter-multilingual`                      | `he_IL`      | Served by the multilingual privacy filter.                   |
@@ -316,6 +317,20 @@ After:  Patient [NAME] was seen on [DATE]; call [PHONE]
 ```text
 Before: Paciente Maria Garcia, DNI 12345678Z
 After:  Paciente [NAME], DNI [ID]
+```
+
+### Persian — `fa`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `fa_IR`
+
+The multilingual checkpoint is a compatibility placeholder until dedicated
+Persian weights are published and evaluated. The built-in pack adds RTL
+Persian patterns, Eastern-digit normalization, Jalali dates, and checksum-valid
+Iranian national-ID surrogates.
+
+```text
+Before: بیمار با کد ملی ۱۲۳۴۵۶۷۸۹۱ در تاریخ ۱۴۰۵/۰۵/۲۹ مراجعه کرد.
+After:  بیمار با کد ملی [ID] در تاریخ [DATE] مراجعه کرد.
 ```
 
 ### French — `fr`

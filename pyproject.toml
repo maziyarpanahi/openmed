@@ -215,7 +215,7 @@ zh-hanlp = [
 
 awq = [
   "autoawq==0.2.9; sys_platform == 'linux'",
-  "transformers==5.5.0; sys_platform == 'linux'",
+  "transformers==5.12.1; sys_platform == 'linux'",
 ]
 
 gptq = [

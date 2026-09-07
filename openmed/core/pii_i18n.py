@@ -136,6 +136,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
+    "fa": "Persian",
     "he": "Hebrew",
     "ja": "Japanese",
     "tr": "Turkish",
@@ -180,6 +181,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
+    "fa": "Persian-",
     "he": "Hebrew-",
     "ja": "Japanese-",
     "tr": "Turkish-",
@@ -1307,6 +1309,38 @@ def validate_bangladesh_nid(text: str) -> bool:
         return False
     normalized = normalize_bengali_assamese_digits(text).strip()
     return re.fullmatch(r"(?:[0-9]{10}|[0-9]{13}|[0-9]{17})", normalized) is not None
+
+
+def validate_iran_national_id(text: str) -> bool:
+    """Validate a 10-digit Iranian national identity code (کد ملی).
+
+    Persian and Arabic-Indic digits are normalized to ASCII before applying
+    the public modulo-11 checksum. Repeated-digit values are invalid.
+
+    Args:
+        text: Candidate national identity code.
+
+    Returns:
+        ``True`` when the value has ten digits and a valid check digit.
+    """
+
+    if not isinstance(text, str):
+        return False
+
+    digits = normalize_arabic_indic_digits(text).strip()
+    if re.fullmatch(r"[0-9]{10}", digits) is None or len(set(digits)) == 1:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    remainder = (
+        sum(
+            digit * weight
+            for digit, weight in zip(numbers[:9], range(10, 1, -1), strict=True)
+        )
+        % 11
+    )
+    expected_check_digit = remainder if remainder < 2 else 11 - remainder
+    return numbers[-1] == expected_check_digit
 
 
 def validate_bengali_mobile(text: str) -> bool:
@@ -3351,6 +3385,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0623\u0643\u062a\u0648\u0628\u0631",
         "\u0646\u0648\u0641\u0645\u0628\u0631",
         "\u062f\u064a\u0633\u0645\u0628\u0631",
+    ],
+    "fa": [
+        "فروردین",
+        "اردیبهشت",
+        "خرداد",
+        "تیر",
+        "مرداد",
+        "شهریور",
+        "مهر",
+        "آبان",
+        "آذر",
+        "دی",
+        "بهمن",
+        "اسفند",
     ],
     "he": [
         "\u05d9\u05e0\u05d5\u05d0\u05e8",
@@ -6897,6 +6945,110 @@ _AMHARIC_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_PERSIAN_DIGIT_CLASS = "0-9\u0660-\u0669\u06f0-\u06f9"
+_PERSIAN_DECIMAL_DIGIT = rf"[{_PERSIAN_DIGIT_CLASS}]"
+_PERSIAN_ZERO_DIGITS = "0۰٠"
+_PERSIAN_EIGHT_DIGITS = "8۸٨"
+_PERSIAN_NINE_DIGITS = "9۹٩"
+_PERSIAN_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["fa"]
+)
+_PERSIAN_DATE_CONTEXT = ["تاریخ", "تولد", "تاریخ تولد", "پذیرش", "ترخیص"]
+_PERSIAN_PHONE_CONTEXT = ["تلفن", "موبایل", "شماره تماس", "تماس"]
+_PERSIAN_ID_CONTEXT = ["کد ملی", "شماره ملی", "شناسه ملی"]
+_PERSIAN_POSTCODE_CONTEXT = ["کد پستی", "نشانی", "آدرس"]
+_PERSIAN_ADDRESS_CONTEXT = ["آدرس", "نشانی", "محل سکونت"]
+
+_PERSIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}}[/-]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{1,2}}[/-]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{1,2}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_PERSIAN_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{1,2}}\s+"
+        rf"(?:{_PERSIAN_MONTH_PATTERN})\s+"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.75,
+        context_words=_PERSIAN_DATE_CONTEXT,
+        context_boost=0.2,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])(?:"
+        rf"(?:\+[{_PERSIAN_NINE_DIGITS}][{_PERSIAN_EIGHT_DIGITS}]|"
+        rf"[{_PERSIAN_ZERO_DIGITS}]{{2}}"
+        rf"[{_PERSIAN_NINE_DIGITS}][{_PERSIAN_EIGHT_DIGITS}])"
+        rf"[\s.-]?[{_PERSIAN_NINE_DIGITS}]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{2}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{3}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}}|"
+        rf"[{_PERSIAN_ZERO_DIGITS}][{_PERSIAN_NINE_DIGITS}]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{2}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{3}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}})"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "phone_number",
+        priority=11,
+        base_score=0.75,
+        context_words=_PERSIAN_PHONE_CONTEXT,
+        context_boost=0.2,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{10}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=_PERSIAN_ID_CONTEXT,
+        context_boost=0.5,
+        validator=validate_iran_national_id,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{10}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "postcode",
+        priority=7,
+        base_score=0.35,
+        context_words=_PERSIAN_POSTCODE_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<!\w)(?:خیابان|کوچه)\s+[\u0600-\u06FF\u200c]+"
+        rf"(?:\s+[\u0600-\u06FF\u200c]+){{0,4}}"
+        rf"(?:[،,]\s*کوچه\s+[\u0600-\u06FF\u200c]+"
+        rf"(?:\s+[\u0600-\u06FF\u200c]+){{0,3}})?"
+        rf"(?:[،,]\s*پلاک\s+{_PERSIAN_DECIMAL_DIGIT}{{1,5}})?",
+        "street_address",
+        priority=10,
+        base_score=0.75,
+        context_words=_PERSIAN_ADDRESS_CONTEXT,
+        context_boost=0.2,
+        flags=0,
+    ),
+]
+
 _ARABIC_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -10218,6 +10370,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "ar": _ARABIC_PII_PATTERNS,
+    "fa": _PERSIAN_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "zh": [
@@ -10847,6 +11000,24 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
             "\u062f\u0628\u064a",
         ],
         "ZIPCODE": ["11511", "12345", "54321"],
+    },
+    "fa": {
+        "NAME": ["سارا احمدی", "علی رضایی", "مریم کریمی", "رضا حسینی"],
+        "FIRST_NAME": ["سارا", "علی", "مریم", "رضا"],
+        "LAST_NAME": ["احمدی", "رضایی", "کریمی", "حسینی"],
+        "EMAIL": ["bimar@example.ir", "tamas@example.org"],
+        "PHONE": ["+98 912 345 6789", "0912 765 4321", "۰۹۱۲ ۳۴۵ ۶۷۸۹"],
+        "ID_NUM": ["1234567891", "۱۲۳۴۵۶۷۸۹۱"],
+        "STREET_ADDRESS": [
+            "خیابان ولیعصر، کوچه بهار، پلاک ۱۲",
+            "خیابان آزادی، پلاک ۴۵",
+        ],
+        "URL_PERSONAL": ["https://example.ir"],
+        "USERNAME": ["bimar123", "karbar456"],
+        "DATE": ["۱۴۰۵/۰۵/۲۹", "۵ فروردین ۱۴۰۵"],
+        "AGE": ["۳۸", "۴۵", "۶۲"],
+        "LOCATION": ["تهران", "شیراز", "اصفهان"],
+        "ZIPCODE": ["۱۴۳۹۸۱۴۵۶۷", "۱۹۸۷۶۵۴۳۲۱"],
     },
     "ur": {
         "NAME": [

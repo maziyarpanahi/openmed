@@ -397,8 +397,8 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **35 supported PII
-language codes: am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja,
+**Cause.** PII extraction and de-identification support **36 supported PII
+language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, he, hi, id, it, ja,
 ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
 Russian currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.

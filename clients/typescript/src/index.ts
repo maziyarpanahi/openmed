@@ -32,6 +32,7 @@ export type PIILanguage =
   | "ur"
   | "pt"
   | "ar"
+  | "fa"
   | "he"
   | "ja"
   | "tr"

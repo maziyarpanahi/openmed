@@ -10,6 +10,7 @@
     "el": "OpenMed/privacy-filter-multilingual",
     "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
+    "fa": "OpenMed/privacy-filter-multilingual",
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
     "he": "OpenMed/privacy-filter-multilingual",
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
@@ -50,6 +51,7 @@
     "en": "en_US",
     "es": "es_ES",
     "et": "et_EE",
+    "fa": "fa_IR",
     "fi": "fi_FI",
     "fr": "fr_FR",
     "gu": "gu_IN",
@@ -162,6 +164,10 @@
     "et": [
       "et_EE",
       "isikukood"
+    ],
+    "fa": [
+      "fa_IR",
+      "iran_national_id"
     ],
     "fi": [
       "fi_FI",
@@ -319,6 +325,7 @@
   "script_language_hints": {
     "Arabic": [
       "ar",
+      "fa",
       "ha",
       "ur"
     ],
@@ -409,6 +416,7 @@
     "el",
     "en",
     "es",
+    "fa",
     "fr",
     "he",
     "hi",

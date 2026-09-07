@@ -378,7 +378,7 @@ def test_model_release_workflow_is_separate_from_sdk_tags():
     assert "if: github.event_name == 'workflow_dispatch'" in model_workflow
     assert "scripts/release/api_surface_diff.py" in model_workflow
     assert 'pip install -e ".[dev,hf,zh,indic]"' in model_workflow
-    assert "default: v2.1.0" in model_workflow
-    assert "default: docs/migration/2.1-to-2.2.md" in model_workflow
+    assert "default: v2.2.0" in model_workflow
+    assert "default: docs/migration/2.2-to-2.3.md" in model_workflow
     assert "API migration guide completeness gate passed." in model_workflow
     assert "tags:\n      - 'v*'" in publish_workflow

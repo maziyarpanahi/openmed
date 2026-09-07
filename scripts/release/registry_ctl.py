@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Sequence
 
 from openmed.core.manifest_diff import (
+    DEFAULT_CATALOG_DOC_PATH,
     DEFAULT_README_PATH,
     DEFAULT_REGISTRY_CARD_DIR,
     regenerate_registry_surfaces,
@@ -34,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--state", type=Path, default=REGISTRY_STATE_PATH)
     parser.add_argument("--readme", type=Path, default=DEFAULT_README_PATH)
     parser.add_argument("--card-dir", type=Path, default=DEFAULT_REGISTRY_CARD_DIR)
+    parser.add_argument("--catalog-doc", type=Path, default=DEFAULT_CATALOG_DOC_PATH)
     commands = parser.add_subparsers(dest="command", required=True)
 
     list_parser = commands.add_parser("list", help="List named pointers.")
@@ -82,6 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 state_path=args.state,
                 readme_path=args.readme,
                 card_dir=args.card_dir,
+                catalog_doc_path=args.catalog_doc,
             )
             print(
                 json.dumps(
@@ -100,6 +103,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 state_path=args.state,
                 readme_path=args.readme,
                 card_dir=args.card_dir,
+                catalog_doc_path=args.catalog_doc,
             )
             errors.extend(data_license_gate_errors(manifest_path=args.manifest))
             if errors:

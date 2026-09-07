@@ -3,7 +3,7 @@
 This page inventories the main surfaced capabilities in OpenMed and maps them
 back to source modules, docs, and runnable examples. For release-specific
 coverage, see
-[OpenMed v2.2.0 Release Notes](./release/v2.2.0.md), the
+[OpenMed v2.3.0 Release Notes](./release/v2.3.0.md), the
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
 [OpenMed v1.8.0 Release Notes](./release/v1.8.0.md), and the historical
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
@@ -18,7 +18,7 @@ For the model families available by clinical specialty, use the
 | Canonical span contracts | Versioned `OpenMedSpan`, schema fingerprints, redaction action schemas, provenance, and compatibility gates. | `openmed/core/schemas/`, [De-identification API](./api/deidentification.md), `examples/v16_policy_audit_release_gates.py` |
 | Audit and review evidence | Signed audit reports, reproducibility hashes, review bundles, FHIR `Provenance`/`AuditEvent`, audit diffs, and PHI-safe previews. | `openmed/core/audit.py`, `openmed/core/redaction_preview.py`, `openmed/risk/audit_diff.py`, `openmed/clinical/exporters/fhir/provenance.py`, `examples/v16_policy_audit_release_gates.py` |
 | Runtime de-identification features | `DeidentificationResult.to_dataframe`, surrogate vaults, patient-keyed date shifting, format-preserving redaction, minimum-necessary action selection, streaming redaction, explain traces, section stamping, and risk budgets. | `openmed/core/pii.py`, `openmed/core/surrogate_vault.py`, `openmed/core/date_shift.py`, `openmed/core/anonymizer/format_preserve.py`, `openmed/core/redaction_strength.py`, `openmed/core/streaming.py`, `openmed/core/explain.py`, `openmed/risk/budget.py` |
-| Multilingual PII | 35 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter adds four optional routes and can also serve Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
+| Multilingual PII | 36 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter adds four optional routes and can also serve Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
 
 ## Multimodal And Structured Inputs
 
@@ -35,7 +35,7 @@ For the model families available by clinical specialty, use the
 
 | Area | What it covers | Where to look |
 | --- | --- | --- |
-| FHIR helpers | Deterministic R4 Bundles, stable `urn:uuid` references, `OperationOutcome`, `Provenance`, `AuditEvent`, CodeableConcept builders/checkers, SMART-on-FHIR bulk ingestion, and coding provenance. | `openmed/clinical/exporters/fhir/`, `openmed/clinical/exporters/codeable_concept.py`, `openmed/clinical/exporters/codeable_concept_check.py`, `openmed/service/smart_backend.py`, [FHIR Interop Helpers](./fhir-interop.md) |
+| FHIR helpers | Deterministic R4 Bundles, bundled base-R4 structural validation, local IG profile checks, stable `urn:uuid` references, `OperationOutcome`, `Provenance`, `AuditEvent`, CodeableConcept builders/checkers, SMART-on-FHIR bulk ingestion, and coding provenance. | `openmed/clinical/exporters/fhir/`, `openmed/clinical/exporters/codeable_concept.py`, `openmed/clinical/exporters/codeable_concept_check.py`, `openmed/service/smart_backend.py`, [FHIR Interop Helpers](./fhir-interop.md) |
 | OMOP and CDM loading | Deterministic note-to-CDM extraction and OMOP CDM loader foundations. | `openmed/interop/cdm_etl.py`, `openmed/interop/omop/cdm_loader.py` |
 | FHIR operations and bulk export | `$de-identify` resource/Bundle wrappers and FHIR Bulk NDJSON de-identification summaries. | `openmed/interop/fhir_operations.py`, `openmed/interop/fhir_bulk.py`, `examples/v17_multimodal_browser_interop.py` |
 | HL7 v2 and CDA/C-CDA | HL7 v2 segment/field redaction, CDA/C-CDA XML de-identification, and multimodal XML dispatch. | `openmed/interop/hl7v2.py`, `openmed/interop/cda.py`, [HL7 v2 De-identification](./hl7v2-deidentification.md) |
@@ -93,7 +93,7 @@ For the model families available by clinical specialty, use the
 ## Suggested Reading Order
 
 1. [Quick Start](./getting-started.md) - install plus first inference.
-2. [OpenMed 2.2.0 Release Notes](./release/v2.2.0.md) - review the current v2 feature release, coverage, and migration notes.
+2. [OpenMed 2.3.0 Release Notes](./release/v2.3.0.md) - review the current v2 feature release, coverage, and migration notes.
 3. [Examples](./examples.md) - runnable notebooks and scripts.
 4. [PII Anonymization](./anonymization.md) - de-identification methods and policy workflows.
 5. [REST Service](./rest-service.md), [Swift Package](./swift-openmedkit.md), and [Transformers.js Export](./export-transformersjs.md) - deployment surfaces.

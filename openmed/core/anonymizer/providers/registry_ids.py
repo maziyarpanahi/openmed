@@ -54,6 +54,7 @@ from openmed.core.pii_i18n import (
     validate_indian_passport,
     validate_indian_ration_card,
     validate_indonesian_nik,
+    validate_iran_national_id,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
@@ -126,6 +127,7 @@ from .clinical_ids import (
     IndiaHealthIdProvider,
     IndiaSurrogateProvider,
     IndonesianNIKProvider,
+    IranNationalIDProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
@@ -500,6 +502,13 @@ def _register_builtin_specs() -> None:
         validate=validate_bangladesh_nid,
         faker_method="bangladesh_nid",
         faker_provider=BangladeshNIDProvider,
+    )
+    _register_aliases(
+        ("ir", "fa", "fa_IR"),
+        id_type="iran_national_id",
+        validate=validate_iran_national_id,
+        faker_method="iran_national_id",
+        faker_provider=IranNationalIDProvider,
     )
     for id_type, validate, faker_method in (
         ("abha_number", validate_abha_number, "abha_number"),

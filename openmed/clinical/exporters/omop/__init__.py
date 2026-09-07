@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Iterable, Mapping
+from datetime import date, datetime
 from typing import Any, TypeAlias
 
 from openmed.clinical.grounding.assertion_grounding import (
@@ -30,16 +31,39 @@ from .condition_occurrence import (
     to_condition_occurrence,
 )
 from .drug_exposure import DRUG_EXPOSURE_COLUMNS, to_drug_exposure
+from .measurement import MEASUREMENT_COLUMNS, to_measurement
+from .note_nlp import NOTE_NLP_COLUMNS, to_note_nlp
+from .observation_period import (
+    OBSERVATION_PERIOD_COLUMNS,
+    to_observation_period,
+)
+from .procedure_occurrence import (
+    PROCEDURE_OCCURRENCE_COLUMNS,
+    to_procedure_occurrence,
+)
+from .visit_occurrence import VISIT_OCCURRENCE_COLUMNS, to_visit_occurrence
 
 __all__ = [
     "CONDITION_OCCURRENCE_COLUMNS",
     "CORE_OMOP_TABLES",
     "ConceptResolver",
     "DRUG_EXPOSURE_COLUMNS",
+    "MEASUREMENT_COLUMNS",
+    "NOTE_NLP_COLUMNS",
+    "OBSERVATION_PERIOD_COLUMNS",
+    "OMOP_EXPORT_TABLES",
+    "PROCEDURE_OCCURRENCE_COLUMNS",
+    "SUPPORTING_OMOP_TABLES",
+    "VISIT_OCCURRENCE_COLUMNS",
     "achilles_smoke_check",
     "to_condition_occurrence",
     "to_drug_exposure",
+    "to_measurement",
+    "to_note_nlp",
+    "to_observation_period",
     "to_omop",
+    "to_procedure_occurrence",
+    "to_visit_occurrence",
 ]
 
 CORE_OMOP_TABLES: tuple[str, ...] = (
@@ -48,6 +72,12 @@ CORE_OMOP_TABLES: tuple[str, ...] = (
     "measurement",
     "procedure_occurrence",
 )
+SUPPORTING_OMOP_TABLES: tuple[str, ...] = (
+    "visit_occurrence",
+    "observation_period",
+    "note_nlp",
+)
+OMOP_EXPORT_TABLES: tuple[str, ...] = CORE_OMOP_TABLES + SUPPORTING_OMOP_TABLES
 
 ConceptResolver: TypeAlias = (
     Mapping[tuple[str, str], int]
@@ -68,9 +98,9 @@ def to_omop(
     table: str | None = None,
     document_text: str | None = None,
     document_id: str = "openmed-document",
-    person_id: str | None = None,
-    visit_id: str | None = None,
-    note_date: str | None = None,
+    person_id: int | str | None = None,
+    visit_id: int | str | None = None,
+    note_date: str | date | datetime | None = None,
     concept_resolver: ConceptResolver | None = None,
     resolver: ConceptResolver | Any | None = None,
     vocabulary_version: str | None = None,
@@ -80,9 +110,9 @@ def to_omop(
     With no ``table`` argument this preserves the existing local-first export:
     an :class:`~openmed.interop.omop.OmopCdmTables` containing the four core
     clinical tables plus supporting concept, person, visit, note, NOTE_NLP, and
-    source-to-concept rows. When ``table`` is ``condition_occurrence`` or
-    ``drug_exposure``, the function returns only that table's exact CDM v5.4
-    row dicts through the table-specific exporters.
+    source-to-concept rows. When ``table`` names one of ``OMOP_EXPORT_TABLES``,
+    the function returns only that table's exact CDM v5.4 row dicts through the
+    table-specific exporter.
 
     A caller-supplied resolver maps grounded source codes to Athena standard
     concept IDs. Missing mappings remain concept ID ``0`` while source text and
@@ -98,9 +128,11 @@ def to_omop(
         raise TypeError("to_omop expects GroundedSpan objects")
 
     if table is not None:
-        if table not in {"condition_occurrence", "drug_exposure"}:
+        if table not in OMOP_EXPORT_TABLES:
             raise ValueError(
-                "table must be 'condition_occurrence', 'drug_exposure', or None"
+                "table must be 'condition_occurrence', 'drug_exposure', "
+                "'measurement', 'procedure_occurrence', 'visit_occurrence', "
+                "'observation_period', 'note_nlp', or None"
             )
         if table == "condition_occurrence":
             return to_condition_occurrence(
@@ -111,11 +143,51 @@ def to_omop(
                 document_id=document_id,
                 note_date=note_date,
             )
-        return to_drug_exposure(
+        if table == "drug_exposure":
+            return to_drug_exposure(
+                spans,
+                concept_resolver=active_resolver,
+                person_id=person_id,
+                visit_id=visit_id,
+                document_id=document_id,
+                note_date=note_date,
+            )
+        if table == "measurement":
+            return to_measurement(
+                spans,
+                concept_resolver=active_resolver,
+                person_id=person_id,
+                visit_id=visit_id,
+                document_id=document_id,
+                note_date=note_date,
+            )
+        if table == "procedure_occurrence":
+            return to_procedure_occurrence(
+                spans,
+                concept_resolver=active_resolver,
+                person_id=person_id,
+                visit_id=visit_id,
+                document_id=document_id,
+                note_date=note_date,
+            )
+        if table == "visit_occurrence":
+            return to_visit_occurrence(
+                spans,
+                person_id=person_id,
+                visit_id=visit_id,
+                document_id=document_id,
+                note_date=note_date,
+            )
+        if table == "observation_period":
+            return to_observation_period(
+                spans,
+                person_id=person_id,
+                document_id=document_id,
+                note_date=note_date,
+            )
+        return to_note_nlp(
             spans,
             concept_resolver=active_resolver,
-            person_id=person_id,
-            visit_id=visit_id,
             document_id=document_id,
             note_date=note_date,
         )

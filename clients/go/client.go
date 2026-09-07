@@ -92,6 +92,7 @@ const (
 	LangUR PIILanguage = "ur"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"
+	LangFA PIILanguage = "fa"
 	LangHE PIILanguage = "he"
 	LangJA PIILanguage = "ja"
 	LangTR PIILanguage = "tr"

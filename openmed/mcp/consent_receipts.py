@@ -31,6 +31,20 @@ DEFAULT_CONSENT_SCOPE = "mcp:state-changing"
 _DIGEST_PREFIX = "sha256:"
 _SIGNATURE_PREFIX = "hmac-sha256:"
 _MISSING = object()
+_CONSENT_VERIFICATION_CODES = frozenset(
+    {
+        "binding_mismatch",
+        "decision_denied",
+        "expired",
+        "invalid_receipt",
+        "invalid_signature",
+        "key_unavailable",
+        "missing_receipt",
+        "not_yet_valid",
+        "replay",
+        "verified",
+    }
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +98,22 @@ class ConsentReceiptDeniedError(ConsentReceiptVerificationError):
 
 class ConsentReceiptRequiredError(ConsentReceiptVerificationError):
     """Raised when a configured policy requires a receipt but none was sent."""
+
+
+@dataclass(frozen=True, slots=True)
+class ConsentReceiptVerificationResult:
+    """Content-free outcome from non-throwing consent receipt verification."""
+
+    verified: bool
+    code: str
+
+    def __post_init__(self) -> None:
+        if type(self.verified) is not bool:
+            raise TypeError("verified must be a boolean")
+        if type(self.code) is not str or self.code not in _CONSENT_VERIFICATION_CODES:
+            raise ValueError("code must be a supported verification outcome")
+        if self.verified != (self.code == "verified"):
+            raise ValueError("verified and code must describe the same outcome")
 
 
 # Descriptive aliases for callers that prefer shorter exception names.
@@ -540,6 +570,46 @@ class ConsentReceiptVerifier:
                 raise ConsentReceiptReplayError("receipt has already been consumed")
             self._consumed.add(candidate.receipt_id)
         return candidate
+
+    def verify_result(
+        self,
+        receipt: ConsentReceipt | Mapping[str, Any] | str | bytes | None,
+        client: str,
+        tool: str,
+        resource: str,
+        scope: str,
+        arguments: Any = _MISSING,
+        *,
+        argument_digest: str | None = None,
+        canonical_argument_digest: str | None = None,
+    ) -> ConsentReceiptVerificationResult:
+        """Verify without raising and return only a stable categorical outcome.
+
+        Successful calls retain the one-time consumption behavior of
+        :meth:`verify`. The result never includes request arguments, signatures,
+        key material, or exception messages.
+        """
+
+        if receipt is None:
+            return ConsentReceiptVerificationResult(False, "missing_receipt")
+        try:
+            self.verify(
+                receipt,
+                client,
+                tool,
+                resource,
+                scope,
+                arguments,
+                argument_digest=argument_digest,
+                canonical_argument_digest=canonical_argument_digest,
+            )
+        except ConsentReceiptError as exc:
+            return ConsentReceiptVerificationResult(False, _reason_code(exc))
+        except Exception:
+            # Provider and clock implementations are application-owned. Preserve
+            # the non-throwing contract without retaining their exception data.
+            return ConsentReceiptVerificationResult(False, "invalid_receipt")
+        return ConsentReceiptVerificationResult(True, "verified")
 
     verify_and_consume = verify
 
@@ -1010,6 +1080,7 @@ __all__ = [
     "ConsentReceiptSignatureError",
     "ConsentReceiptValidationError",
     "ConsentReceiptVerifier",
+    "ConsentReceiptVerificationResult",
     "ConsentReceiptVerificationError",
     "MappingConsentKeyProvider",
     "StaticConsentKeyProvider",

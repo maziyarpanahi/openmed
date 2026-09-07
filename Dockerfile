@@ -23,7 +23,7 @@ RUN apt-get update \
         "libsqlite3-0=3.53.4-2" \
         "libssl3t64=3.6.3-1" \
         "libuuid1=2.42.2-2" \
-        "netbase=6.5" \
+        "netbase=6.6" \
         "openssl=3.6.3-1" \
         "openssl-provider-legacy=3.6.3-1" \
         "readline-common=8.3-4" \

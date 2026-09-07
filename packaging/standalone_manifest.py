@@ -26,7 +26,7 @@ from typing import Final, Protocol, TypeVar
 MANIFEST_FORMAT: Final = "openmed-standalone-redactor"
 MANIFEST_SCHEMA_VERSION: Final = "1.0"
 STANDALONE_PACKAGE_NAME: Final = "openmed-redactor-standalone"
-STANDALONE_PACKAGE_VERSION: Final = "2.2.0"
+STANDALONE_PACKAGE_VERSION: Final = "2.3.0"
 STANDALONE_LICENSE: Final = "Apache-2.0"
 PLATFORM_ANY: Final = "any"
 _MAX_TEXT_LENGTH: Final = 512

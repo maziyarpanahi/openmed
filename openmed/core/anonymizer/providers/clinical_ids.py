@@ -744,6 +744,48 @@ class BangladeshNIDProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Iranian National ID (10 digits with a mod-11 checksum)
+# ---------------------------------------------------------------------------
+def generate_iran_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid Iranian national ID distinct from ``original``."""
+
+    from openmed.core.pii_i18n import (
+        normalize_arabic_indic_digits,
+        validate_iran_national_id,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+    if original is not None and validate_iran_national_id(original):
+        normalized = normalize_arabic_indic_digits(original).strip()
+
+    candidate = ""
+    for _ in range(100):
+        body = [source.randint(0, 9) for _ in range(9)]
+        total = sum(
+            digit * weight for digit, weight in zip(body, range(10, 1, -1), strict=True)
+        )
+        remainder = total % 11
+        check_digit = remainder if remainder < 2 else 11 - remainder
+        candidate = "".join(str(digit) for digit in (*body, check_digit))
+        if candidate != normalized and validate_iran_national_id(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Iranian national ID")
+
+
+class IranNationalIDProvider(BaseProvider):
+    """Generate checksum-valid Iranian national ID surrogates."""
+
+    def iran_national_id(self, original: str | None = None) -> str:
+        return generate_iran_national_id(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Pakistani CNIC
 # ---------------------------------------------------------------------------
 class PakistaniCnicProvider(BaseProvider):
@@ -3963,6 +4005,7 @@ __all__ = [
     "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
     "IndonesianNIKProvider",
+    "IranNationalIDProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "KENYA_MFL_SYNTHETIC_MAX",
@@ -4035,6 +4078,7 @@ __all__ = [
     "generate_ontario_health_card",
     "generate_rwanda_id",
     "generate_indonesian_nik",
+    "generate_iran_national_id",
     "generate_indian_ration_card",
     "generate_vehicle_registration",
     "generate_voter_id_epic",
