@@ -61,6 +61,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install offline catalog runtime
+        run: python -m pip install -e .
+
       - name: Regenerate manifest-derived surfaces
         run: PYTHONPATH=. python scripts/manifest/regenerate_surfaces.py
 
