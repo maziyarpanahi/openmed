@@ -88,7 +88,7 @@ def test_runtime_registry_and_pii_defaults_derive_from_manifest() -> None:
             "The committed manifest contains 9,999 entries",
         ),
         (
-            Path("docs/model-cards/registry/pii-latest.md"),
+            Path("docs/model-cards/registry/pii-small-mlx-fp-latest.md"),
             "<!-- Registry pointer:",
             "<!-- Stale registry pointer:",
         ),
