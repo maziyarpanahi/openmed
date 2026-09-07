@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # Model Registry
 
 OpenMed ships a manifest-backed registry (`openmed.core.model_registry.OPENMED_MODELS`) that annotates every official

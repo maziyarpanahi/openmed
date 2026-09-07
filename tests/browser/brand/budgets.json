@@ -2,8 +2,8 @@
   "schema_version": 2,
   "artifact": {
     "maximum_files": 459,
-    "maximum_total_bytes": 39059456,
-    "maximum_unique_payload_bytes": 38687316,
+    "maximum_total_bytes": 39583744,
+    "maximum_unique_payload_bytes": 39321600,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -32,9 +32,10 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits are based on the exact staged v2.3 schema candidate plus the audited ten-PR documentation campaign, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The combined audited candidate contains 458 files, 38761997 total bytes, 38424418 unique payload bytes, and 337579 duplicate payload bytes.",
-    "The 36.75 MiB unique-payload ceiling retains 110750 bytes of bounded headroom while total payload remains capped at 37.25 MiB.",
+    "Artifact limits are based on the exact staged v2.3 schema candidate plus the audited documentation and manifest-backed catalog surfaces, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
+    "The combined audited candidate contains 459 files, 39339724 total bytes, 39002145 unique payload bytes, and 337579 duplicate payload bytes.",
+    "The 37.75 MiB total-payload ceiling retains 244020 bytes of bounded headroom, while the 37.5 MiB unique-payload ceiling retains 319455 bytes.",
+    "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
