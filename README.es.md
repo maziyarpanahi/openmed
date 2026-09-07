@@ -24,7 +24,7 @@ El entorno local principal de OpenMed realiza la extracción y la desidentificac
 </p>
 
 <p>
-  <b>Ejecución local primero</b> &nbsp;·&nbsp; <b>33 idiomas PII respaldados por modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 entradas del manifiesto</b> &nbsp;·&nbsp; <b>33 idiomas PII respaldados por modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

@@ -24,7 +24,7 @@ O runtime local principal do OpenMed realiza extração e desidentificação dep
 </p>
 
 <p>
-  <b>Execução local em primeiro lugar</b> &nbsp;·&nbsp; <b>33 idiomas PII com suporte de modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 entradas do manifesto</b> &nbsp;·&nbsp; <b>33 idiomas PII com suporte de modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
