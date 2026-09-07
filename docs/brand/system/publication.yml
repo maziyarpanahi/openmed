@@ -122,6 +122,7 @@ classification:
     - async-api.md
     - rest-service.md
     - service/self-hosted-redaction.md
+    - service/privacy-proxy.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md

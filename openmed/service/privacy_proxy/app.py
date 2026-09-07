@@ -15,7 +15,7 @@ import json
 import re
 from collections.abc import AsyncIterable, Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -293,7 +293,7 @@ class PrivacyProxy:
                         state.done_sent = True
                     else:
                         state.emitted = True
-                        if _event_finishes(event):
+                        if _event_finishes(cast(dict[str, Any], event)):
                             state.finish_sent = True
                     yield event
 
@@ -588,10 +588,12 @@ def _default_extractor(text: str, **kwargs: Any) -> Any:
 
 def _invoke_transport(transport: ChatTransport, prepared: RedactedChatRequest) -> Any:
     target = transport
-    if prepared.stream and callable(getattr(transport, "stream", None)):
-        target = transport.stream
-    elif not callable(target) and callable(getattr(transport, "complete", None)):
-        target = transport.complete
+    stream = getattr(transport, "stream", None)
+    complete = getattr(transport, "complete", None)
+    if prepared.stream and callable(stream):
+        target = stream
+    elif not callable(target) and callable(complete):
+        target = complete
     if not callable(target):
         raise PrivacyProxyTransportError(reason_code="transport_not_callable")
     metadata = {
@@ -720,7 +722,9 @@ def _stream_item_events(
                 if parsed is _DONE:
                     events.append(_DONE)
                 else:
-                    events.extend(_stream_mapping_events(parsed, state))
+                    events.extend(
+                        _stream_mapping_events(cast(dict[str, Any], parsed), state)
+                    )
             return events
         if item.strip() == "[DONE]":
             return [_DONE]
