@@ -5,6 +5,9 @@ metadata. It composes deterministic ConText-style axes, section priors, scoped
 modifier hits, and lightweight normalization helpers so downstream exporters can
 keep clinical text extraction transparent.
 
+For a bounded composition of sections, source-aligned entities, assertions, and
+cue evidence, see the [clinical context analysis API](context-analysis.md).
+
 !!! warning "Advisory annotations only"
     Context and extraction-depth outputs are advisory annotations for review,
     quality checks, and downstream processing. They must not automatically
