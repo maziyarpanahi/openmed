@@ -74,6 +74,13 @@ uncertainty; `coding_eligible` is false. They are unconfirmed candidates.
   `DRUG_STRENGTH` relation, and cannot become a prescribed dose. Its amount/unit
   use the quantity normalizer. Partial units, different quantities and source
   scope/context changes cannot be joined.
+  Original-source quantity boundaries are checked before normalization. A
+  decimal tail cannot become a smaller dose, including when model fragments
+  have conflicting Dose/Strength labels. Unrecognized or incomplete quantities
+  expose only a finite reason and `recognized=false`, without a guessed value,
+  unit or source-bearing parser message. Unsafe quantity tails cannot form
+  dosage relations. Section-header predictions remain in the entity result but
+  cannot become structured medication/lab findings.
 - **Labs and measurements:** supplied analyte/value/range/flag spans link only
   within one source scope. Canonical magnitudes and range bounds include their
   units; for example, `55 %` becomes `0.55` in unit `1`, with the original value

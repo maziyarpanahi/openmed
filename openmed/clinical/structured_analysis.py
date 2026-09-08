@@ -143,8 +143,41 @@ def _context(entity, assertions):
     return assertions[entity["id"]]
 
 
-def _measurement(value, language):
-    result = parse_measurement(value, language=language)
+def _quantity_boundary_complete(text, start, end):
+    """Reject a number or unit cut out of a larger original-source quantity."""
+    if start and (text[start - 1].isalnum() or text[start - 1] in "_µμ"):
+        return False
+    if start and text[start - 1] in "+-" and text[start].isdigit():
+        return False
+    if (
+        start > 1
+        and text[start - 1] in ".,/"
+        and text[start - 2].isdigit()
+        and text[start].isdigit()
+    ):
+        return False
+    if end < len(text) and (text[end].isalnum() or text[end] in "_/^*%µμ"):
+        return False
+    if (
+        end + 1 < len(text)
+        and text[end] in ".,/"
+        and text[end - 1].isdigit()
+        and text[end + 1].isdigit()
+    ):
+        return False
+    return True
+
+
+def _measurement(text, entity, language):
+    if not _quantity_boundary_complete(text, entity["start"], entity["end"]):
+        return {
+            "status": "unknown",
+            "canonical_magnitude": None,
+            "canonical_unit": None,
+            "dimension": None,
+            "reason": "incomplete_quantity_span",
+        }, {}
+    result = parse_measurement(text[entity["start"] : entity["end"]], language=language)
     return {
         key: result.get(key)
         for key in ("status", "canonical_magnitude", "canonical_unit", "dimension")
@@ -206,11 +239,25 @@ def _medications(text, entities, sections, assertions, language, check):
                 language=language,
             )
             if normalized is not None:
-                normalized = {
-                    key: value
-                    for key, value in normalized.items()
-                    if key not in {"raw", "cue", "advisory"}
-                }
+                if link.type in {
+                    "dose",
+                    "strength",
+                } and not _quantity_boundary_complete(text, tail["start"], tail["end"]):
+                    normalized = {
+                        "recognized": False,
+                        "reason": "incomplete_quantity_span",
+                    }
+                elif not normalized.get("recognized"):
+                    normalized = {
+                        "recognized": False,
+                        "reason": "unrecognized_medication_attribute",
+                    }
+                else:
+                    normalized = {
+                        key: value
+                        for key, value in normalized.items()
+                        if key not in {"raw", "cue", "advisory", "reason"}
+                    }
             attributes[head["id"]].append(
                 {
                     "type": link.type,
@@ -264,9 +311,7 @@ def _labs(text, entities, sections, assertions, language, check):
         }
         if value:
             used_values.add(value_id)
-            measurement, parsed = _measurement(
-                text[value["start"] : value["end"]], language
-            )
+            measurement, parsed = _measurement(text, value, language)
             record["measurement"] = measurement
             record["extraction_status"] = (
                 "parsed" if measurement["status"] == "ok" else "unparsed"
@@ -277,7 +322,12 @@ def _labs(text, entities, sections, assertions, language, check):
             reference = None
             if range_entity:
                 reference = parse_reference_range(
-                    text[range_entity["start"] : range_entity["end"]], language=language
+                    text[range_entity["start"] : range_entity["end"]]
+                    if _quantity_boundary_complete(
+                        text, range_entity["start"], range_entity["end"]
+                    )
+                    else "",
+                    language=language,
                 )
                 record["evidence"].append(
                     {"role": "reference_range", **_reference(range_entity)}
@@ -356,6 +406,12 @@ def _relations(text, entities, sections, assertions, language, check):
     entities, assertions = _repair_numeric_attributes(
         text, entities, assertions, language, check
     )
+    entities = [
+        e
+        for e in entities
+        if e["label"] not in {"Dose", "Strength"}
+        or _quantity_boundary_complete(text, e["start"], e["end"])
+    ]
     records = []
     for group in _scopes(text, entities, sections, check):
         check()
@@ -405,6 +461,16 @@ def _structure_clinical_tasks(
     from openmed.clinical.analysis import ClinicalAnalysisError
 
     context = {record["entity_id"]: record for record in assertions}
+    entities = [
+        entity
+        for entity in entities
+        if not any(
+            "header_start" in section
+            and entity["start"] < section["header_end"]
+            and section["header_start"] < entity["end"]
+            for section in sections
+        )
+    ]
     ambiguous_offsets = len({(e["start"], e["end"]) for e in entities}) != len(entities)
     processors = {
         "medications": _medications,

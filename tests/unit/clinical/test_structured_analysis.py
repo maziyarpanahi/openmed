@@ -137,6 +137,76 @@ def test_english_decimal_repair_uses_explicit_language():
     assert attr["source"]["span_repair"] == "adjacent_decimal_fragments"
 
 
+def test_different_model_labels_cannot_turn_decimal_tail_into_a_dose():
+    text = "Metoprolol 47,5 mg"
+    result = analyze(
+        text,
+        [
+            ("Metoprolol", "Drug", 0.99),
+            ("47", "Strength", 0.67),
+            ("5 mg", "Dose", 0.96),
+        ],
+        ["entities", "medications", "relations"],
+    )
+    assert len(result["tasks"]["entities"]["records"]) == 3
+    attrs = result["tasks"]["medications"]["records"][0]["attributes"]
+    assert len(attrs) == 2
+    assert all(
+        a["normalized"] == {"recognized": False, "reason": "incomplete_quantity_span"}
+        for a in attrs
+    )
+    assert result["tasks"]["relations"]["records"] == []
+
+
+def test_unknown_medication_unit_cannot_echo_source_in_normalization_error():
+    text = "Metformin 5 privateunitmarker"
+    result = analyze(
+        text,
+        [("Metformin", "Drug", 0.99), ("5 privateunitmarker", "Dose", 0.9)],
+        ["medications"],
+    )
+    attr = result["tasks"]["medications"]["records"][0]["attributes"][0]
+    assert attr["normalized"] == {
+        "recognized": False,
+        "reason": "unrecognized_medication_attribute",
+    }
+    assert "privateunitmarker" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "full,partial",
+    [("55 %", "5 %"), ("47,5 mg", "5 mg"), ("-5 mg", "5 mg"), ("5 mg/kg", "5 mg")],
+)
+def test_measurement_numeric_or_unit_fragments_cannot_be_normalized(full, partial):
+    text = "Measurement " + full
+    start = text.rindex(partial)
+    spans = [
+        {"start": 0, "end": 11, "label": "Lab Test", "score": 0.9},
+        {
+            "start": start,
+            "end": start + len(partial),
+            "label": "Lab Value",
+            "score": 0.9,
+        },
+    ]
+    result = analyze_clinical_context(text, spans, language="de", tasks=["labs"])
+    record = result["tasks"]["labs"]["records"][0]
+    assert record["extraction_status"] == "unparsed"
+    assert record["measurement"]["canonical_magnitude"] is None
+
+
+def test_section_header_model_predictions_are_inspectable_but_not_structured_labs():
+    text = "Befund: LVEF 55 %"
+    result = analyze(
+        text,
+        [("Befund", "Lab Test", 0.6), ("LVEF 55 %", "Vital Sign", 0.9)],
+        ["entities", "labs", "vitals"],
+    )
+    assert len(result["tasks"]["entities"]["records"]) == 2
+    assert result["tasks"]["labs"]["records"] == []
+    assert result["tasks"]["vitals"]["records"][0]["extraction_status"] == "unparsed"
+
+
 @pytest.mark.parametrize("separator", ["\n", "; ", ". ", " aber "])
 def test_medication_dose_cannot_cross_source_scope(separator):
     text = "Metformin" + separator + "500 mg"
@@ -163,10 +233,13 @@ def test_two_regimens_keep_their_own_dose_and_original_offsets():
     )
     records = result["tasks"]["medications"]["records"]
     assert len(records) == 2
-    assert [record["attributes"][0]["normalized"]["value"] for record in records] == [
-        500,
-        10,
-    ]
+    assert records[0]["attributes"][0]["normalized"]["value"] == 500
+    # The SDK treats generic "units" as ambiguous. Keep the second regimen's
+    # evidence without presenting its captured number as normalized dosage.
+    second = records[1]["attributes"][0]
+    assert second["normalized"]["recognized"] is False
+    assert "value" not in second["normalized"]
+    assert text[second["source"]["start"] : second["source"]["end"]] == "10 units"
 
 
 def test_negated_and_family_medications_keep_context_without_becoming_current_facts():
