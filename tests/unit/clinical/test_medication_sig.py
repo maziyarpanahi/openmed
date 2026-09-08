@@ -205,6 +205,18 @@ def test_simple_mass_dose_does_not_trigger_observation_filter():
     ]
 
 
+@pytest.mark.parametrize(
+    "text,accepted",
+    [("K 4,2 mmol/L", False), ("LVEF 55,5 %", False), ("ASA 47,5 mg", True)],
+)
+def test_german_observation_filter_understands_decimal_comma_without_dropping_drug_dose(
+    text, accepted
+):
+    surface = text.split()[0]
+    entity = {"start": 0, "end": len(surface), "label": "CHEM", "score": 0.99}
+    assert bool(filter_medication_candidates(text, [entity], language="de")) == accepted
+
+
 def test_observation_filter_does_not_inspect_the_next_line():
     text = "PP\n202mg/dL"
     entity = {

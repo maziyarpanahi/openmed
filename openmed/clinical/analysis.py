@@ -17,8 +17,10 @@ from openmed.clinical.experiencer import resolve_experiencer
 from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.clinical_language import resolve_clinical_language
 
-CLINICAL_CONTEXT_VERSION = "clinical-context-v1"
-CONTEXT_TASKS = ("sections", "entities", "assertions")
+CLINICAL_CONTEXT_VERSION = "clinical-context-v2"
+DEFAULT_CONTEXT_TASKS = ("sections", "entities", "assertions")
+STRUCTURED_TASKS = ("medications", "labs", "vitals", "relations")
+CONTEXT_TASKS = (*DEFAULT_CONTEXT_TASKS, *STRUCTURED_TASKS)
 CONTEXT_LANGUAGES = ("en", "de")
 MAX_ANALYSIS_ENTITIES = 2000
 _LABELS = {
@@ -149,19 +151,21 @@ def analyze_clinical_context(
     entities: Iterable[Mapping[str, Any]],
     *,
     language: str = "auto",
-    tasks: Sequence[str] = CONTEXT_TASKS,
+    tasks: Sequence[str] = DEFAULT_CONTEXT_TASKS,
     entity_coverage_complete: bool = True,
     timeout_seconds: float = 30,
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    """Compose sections, clinical spans, assertions and source cue evidence.
+    """Compose sections, clinical spans, context and structured source evidence.
 
     Args:
         text: Original, unmodified clinical source, at most 100,000 characters.
         entities: Upstream spans whose full input coverage was verified by the
             caller. Entity source surfaces are excluded from returned records.
         language: Explicit language/locale or conservative automatic detection.
-        tasks: Requested context tasks, drawn from CONTEXT_TASKS.
+        tasks: Requested tasks drawn from CONTEXT_TASKS; sections, entities and
+            assertions are the default. Medication/lab/vital/relation tasks
+            consume compatible, already-extracted entity and attribute spans.
         entity_coverage_complete: Whether the upstream engine processed every
             input token. False cannot produce successful entity/assertion tasks.
         timeout_seconds: Cooperative postprocessing deadline, at most 30 seconds.
@@ -235,7 +239,7 @@ def analyze_clinical_context(
                 "records": [],
                 "error": "incomplete_entity_coverage",
             }
-        elif task == "assertions" and (
+        elif task not in {"sections", "entities"} and (
             resolved.mixed
             or resolved.needs_review
             or resolved.language not in CONTEXT_LANGUAGES
@@ -244,7 +248,9 @@ def analyze_clinical_context(
                 "status": "unsupported",
                 "complete": False,
                 "records": [],
-                "error": "assertion_language_requires_supported_override",
+                "error": "assertion_language_requires_supported_override"
+                if task == "assertions"
+                else "structured_language_requires_supported_override",
             }
         else:
             results[task] = {
@@ -257,7 +263,10 @@ def analyze_clinical_context(
         results["sections"]["records"] = visible_sections
     if "entities" in results and results["entities"]["complete"]:
         results["entities"]["records"] = spans
-    if "assertions" in results and results["assertions"]["complete"]:
+    if any(
+        results.get(task, {}).get("complete")
+        for task in ("assertions", *STRUCTURED_TASKS)
+    ):
         assertions = assert_context(
             text, spans, language=resolved.language, sections=sections
         )
@@ -334,7 +343,25 @@ def analyze_clinical_context(
                     "evidence": evidence,
                 }
             )
-        results["assertions"]["records"] = records
+        if "assertions" in results:
+            results["assertions"]["records"] = records
+        requested_structured = [
+            task for task in STRUCTURED_TASKS if results.get(task, {}).get("complete")
+        ]
+        if requested_structured:
+            from openmed.clinical.structured_analysis import _structure_clinical_tasks
+
+            results.update(
+                _structure_clinical_tasks(
+                    text,
+                    spans,
+                    visible_sections,
+                    records,
+                    language=resolved.language,
+                    tasks=requested_structured,
+                    check=check,
+                )
+            )
     check()
     complete = all(result["complete"] for result in results.values())
     return {
@@ -360,5 +387,6 @@ def analyze_clinical_context(
             "status": "preview",
             "qualified_languages": [],
             "assertion_preview_languages": list(CONTEXT_LANGUAGES),
+            "structured_preview_languages": list(CONTEXT_LANGUAGES),
         },
     }
