@@ -10,6 +10,43 @@ pip install "openmed[multimodal]"
 
 ## Render A Redacted PDF
 
+For an in-memory service that already renders or OCRs pages, use
+`render_redacted_raster_pages` with `RasterRedactionPage` inputs. It takes no file
+paths and returns verified bytes, excluding all source text layers, metadata,
+annotations and attachments. PDF output requires explicit source page sizes in
+points; PNG accepts one page and does not invent physical resolution.
+
+```python
+from openmed.multimodal import RasterRedactionPage, render_redacted_raster_pages
+
+# rendered_image is a bounded Pillow image; the caller retains ownership.
+# Rectangles use integer pixels, top-left origin and exclusive right/bottom edges.
+page = RasterRedactionPage(
+    image=rendered_image,
+    regions=[(80, 100, 280, 140)],
+    size_points=(595.2756, 841.8898),
+)
+export = render_redacted_raster_pages([page], output_format="pdf")
+file_bytes = export.content  # Pass to a private response or atomic output writer.
+safe_report = export.to_dict()  # Geometry/counts/hashes; never file bytes or PHI.
+```
+
+The memory exporter pads each rectangle by three pixels by default, burns black
+pixels, and verifies that every padded rectangle is black and all outside RGB
+pixels are unchanged. It reopens the encoded output to verify exact decoded
+pixel hashes and the restricted image-only object graph. PNG output contains
+only image chunks. Transparent source pixels are composited on white and input
+images are not mutated. PDF output has no searchable text layer.
+
+Limits bound pages, total/per-page pixels, region count and encoded bytes during
+writing. Cancellation is checked between pages and encoding/verification steps;
+services should also enforce a native-process deadline. These checks verify
+selected pixels and encoding, not OCR completeness, detection accuracy or every
+PDF viewer's rendering. Compare output with the source in the intended workflow.
+
+The path-based API below has a separate selectable-text and layout-fidelity
+contract and remains unchanged.
+
 `render_redacted_pdf` accepts the top-origin, 0-based page rectangles returned
 by `project_text_spans`:
 
