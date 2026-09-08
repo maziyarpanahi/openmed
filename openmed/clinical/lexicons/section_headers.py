@@ -193,6 +193,13 @@ GERMAN_SECTION_LEXICON = SectionLexicon(
             "Aktuelle Anamnese",
             "Aktuelle Beschwerden",
         ),
+        "medications": (
+            "Medikation",
+            "Medikamente",
+            "Aktuelle Medikation",
+            "Entlassmedikation",
+        ),
+        "allergies": ("Allergien", "Unverträglichkeiten", "Unvertraeglichkeiten"),
         "assessment": ("Beurteilung", "Einschätzung", "Einschaetzung"),
         "plan": ("Plan", "Therapieplan"),
     },
