@@ -55,6 +55,11 @@ German and English context rules supplement partial model names in explicit
 patient/clinician headers and recognize anchored birth dates, phone numbers and
 record identifiers. These bounded rules do not qualify free narrative text.
 
+For German postal fields such as `Anschrift: Beispielweg 18, 10115 Berlin`,
+the context detector covers the complete street, house number, postcode and
+city span. It requires an explicit address header and a bounded postal grammar;
+it does not treat an unanchored five-digit clinical number as a postcode.
+
 `redact_categories` selects the explicit category expansion in
 `openmed.core.clinical_policy.CATEGORY_LABELS`. Reducing the default set marks the
 policy narrowed. `redact_roles` can select patient, clinician, or both. Unknown
@@ -75,6 +80,12 @@ negation cues. Context distinguishes a clinical eponym from an explicit name
 field: `Morbus Parkinson` is preserved while `Patient: Parkinson` is masked.
 This vocabulary is intentionally small and is not a substitute for an
 independently reviewed clinical holdout.
+
+Fragment protection also recognizes complete bundled phrases such as
+`Morbus Parkinson` and `Morbus Crohn`. A prediction covering only `Mor` inside
+the clinical phrase is suppressed; a matching fragment in
+`Patient: Morbus Parkinson` still belongs to a person field and remains masked.
+Spans that extend outside a protected phrase are not exempted by partial overlap.
 
 ## Output methods and privacy boundaries
 

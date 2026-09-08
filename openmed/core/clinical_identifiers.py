@@ -11,9 +11,9 @@ from datetime import date
 
 from openmed.processing.outputs import EntityPrediction
 
-from .labels import DATE_OF_BIRTH, ID_NUM, PERSON, PHONE
+from .labels import DATE_OF_BIRTH, ID_NUM, PERSON, PHONE, STREET_ADDRESS
 
-CLINICAL_IDENTIFIER_VERSION = "clinical-identifiers-de-en-v1"
+CLINICAL_IDENTIFIER_VERSION = "clinical-identifiers-de-en-v2"
 _WORD = r"[A-ZÀ-ÖØ-Þ][^\W\d_]*(?:[\u0300-\u036f][^\W\d_]*)*(?:[’'-][^\W\d_]+)*"
 _INITIAL = r"[A-ZÀ-ÖØ-Þ]\."
 _PART = rf"(?:{_INITIAL}|{_WORD})"
@@ -43,6 +43,17 @@ _PHONE = re.compile(
     r"\b(?i:phone|telephone|telefon|tel\.|fax|mobile|mobil|handy)"
     r"[ \t]*:[ \t]*(?P<value>\+?\d[\d ()/.-]{5,30}\d)(?!\d)"
 )
+_ADDRESS_WORD = r"(?:[^\W\d_]|[\u0300-\u036f])+(?:[’'-](?:[^\W\d_]|[\u0300-\u036f])+)*"
+_CITY = (
+    rf"(?:(?i:bad|sankt|st\.)[ \t]+)?{_WORD}"
+    rf"(?:[ \t]+(?i:am|im|bei|an[ \t]+der|vor[ \t]+der|ob[ \t]+der)[ \t]+{_WORD}){{0,2}}"
+)
+_GERMAN_POSTAL_ADDRESS = re.compile(
+    r"\b(?i:anschrift|adresse|wohnadresse|patientenadresse)[ \t]*:[ \t]*"
+    rf"(?P<value>(?:{_ADDRESS_WORD}[ \t]+){{0,3}}{_ADDRESS_WORD}[ \t]+"
+    r"\d{1,4}[a-zA-Z]?(?:[-/]\d{1,4}[a-zA-Z]?)?[ \t]*,[ \t]*"
+    rf"\d{{5}}(?!\d)[ \t]+{_CITY})(?![\w’'-])"
+)
 
 
 def personal_name_spans(text: str) -> tuple[tuple[int, int, str], ...]:
@@ -68,7 +79,7 @@ def personal_name_role(text: str, start: int, end: int) -> str | None:
 
 
 def detect_clinical_identifiers(text: str, *, language: str) -> list[EntityPrediction]:
-    """Return complete anchored names, IDs and validated numeric birth dates.
+    """Return anchored names, IDs, birth dates and bounded German postal addresses.
 
     All offsets address the supplied text. The caller must remap offsets if
     it applies normalization. Unsupported language requests fail explicitly.
@@ -79,6 +90,19 @@ def detect_clinical_identifiers(text: str, *, language: str) -> list[EntityPredi
         _entity(text, start, end, PERSON, role, "name_context")
         for start, end, role in personal_name_spans(text)
     ]
+    if language == "de":
+        for match in _GERMAN_POSTAL_ADDRESS.finditer(text):
+            start, end = match.span("value")
+            entities.append(
+                _entity(
+                    text,
+                    start,
+                    end,
+                    STREET_ADDRESS,
+                    "patient",
+                    "postal_address_context",
+                )
+            )
     for pattern, label, rule in (
         (_DOB, DATE_OF_BIRTH, "birth_context"),
         (_ID, ID_NUM, "id_context"),

@@ -50,6 +50,8 @@ Tourette
 Down syndrome
 Parkinson disease
 Parkinson's disease
+Morbus Parkinson
+Morbus Crohn
 
 # Ward, service, and department words
 cardiology

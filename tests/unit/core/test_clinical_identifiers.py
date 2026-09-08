@@ -187,3 +187,95 @@ def test_pipeline_merges_full_name_and_preserves_source_layout():
 def test_unsupported_language_has_no_silent_english_context_fallback():
     with pytest.raises(ValueError, match="support de and en"):
         detect_clinical_identifiers("Patient: Jean Meier", language="fr")
+
+
+@pytest.mark.parametrize(
+    "text,surface,protected",
+    [
+        ("Diagnose: Morbus Parkinson.", " Mor", True),
+        ("Diagnose: Morbus Crohn.", "Morbus Cr", True),
+        ("Diagnose: Morbus   Parkinson.", "bus   Park", True),
+        ("Patient: Morbus Parkinson.", " Mor", False),
+        ("Arzt: Dr. Morbus Parkinson.", " Mor", False),
+        ("Morbusmann Parkinson berichtet.", "Morb", False),
+        ("Anna Morbus Parkinson.", "Anna Mor", False),
+    ],
+)
+def test_known_clinical_phrases_protect_fragments_without_exempting_person_fields(
+    text, surface, protected
+):
+    entity = _entity(text, surface, "FIRST_NAME")
+    result = filter_protected_spans(
+        [entity], text, lang="de", protect_word_fragments=True
+    )
+    assert (result.spans == []) is protected
+
+
+def test_phrase_protection_does_not_apply_to_direct_identifier_labels():
+    text = "Morbus Parkinson."
+    entity = _entity(text, "Morbus", "ID_NUM")
+    assert filter_protected_spans(
+        [entity], text, lang="de", protect_word_fragments=True
+    ).spans == [entity]
+
+
+@pytest.mark.parametrize(
+    "source,address",
+    [
+        (
+            "Anschrift: Beispielweg 18, 10115 Berlin. LVEF 55 %.",
+            "Beispielweg 18, 10115 Berlin",
+        ),
+        (
+            "Adresse: Unter den Linden 17, 10117 Berlin; Metoprolol 47,5 mg.",
+            "Unter den Linden 17, 10117 Berlin",
+        ),
+        (
+            "Wohnadresse: Hauptstraße 12a, 60313 Frankfurt am Main\nDiagnose: Asthma.",
+            "Hauptstraße 12a, 60313 Frankfurt am Main",
+        ),
+        (
+            "Patientenadresse: Müllerstraße 12-14, 61348 Bad Homburg vor der Höhe Diagnose: Asthma.",
+            "Müllerstraße 12-14, 61348 Bad Homburg vor der Höhe",
+        ),
+    ],
+)
+def test_complete_explicit_german_postal_address_preserves_original_offsets(
+    source, address
+):
+    entities = [
+        e
+        for e in detect_clinical_identifiers(source, language="de")
+        if e.label == "STREET_ADDRESS"
+    ]
+    assert len(entities) == 1
+    entity = entities[0]
+    assert entity.text == source[entity.start : entity.end] == address
+    assert entity.metadata["rule"] == "postal_address_context"
+    assert entity.confidence == 1.0
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "LVEF 55 %. Troponin 10115 ng/l. Berlin-Heart-System.",
+        "Anschrift: Metoprolol 50 mg; LVEF 55 %; Kontrolle in Berlin.",
+        "Beispielweg 18, 10115 Berlin.",
+        "Adresse: Beispielweg 18, 101150 Berlin.",
+    ],
+)
+def test_postal_address_context_requires_its_complete_bounded_grammar(source):
+    assert not [
+        e
+        for e in detect_clinical_identifiers(source, language="de")
+        if e.label == "STREET_ADDRESS"
+    ]
+
+
+def test_german_postal_context_is_not_silently_applied_to_other_languages():
+    assert (
+        detect_clinical_identifiers(
+            "Anschrift: Beispielweg 18, 10115 Berlin.", language="en"
+        )
+        == []
+    )

@@ -237,3 +237,41 @@ def test_unreviewed_custom_term_cannot_produce_a_qualified_result():
     assert "Anna" in result.deidentified_text
     assert result.status == "needs_review"
     assert "custom_protection_requires_review" in result.warnings
+
+
+@pytest.mark.parametrize("method", ["mask", "remove", "replace"])
+def test_partial_model_names_and_addresses_do_not_damage_clinical_text_or_leave_postal_tails(
+    method,
+):
+    class FragmentModel(Model):
+        def predict_batch_detailed(self, texts, **kwargs):
+            outputs = []
+            for text in texts:
+                entities = tuple(
+                    OnnxEntity(label, 0.99, match.start(), match.end(), match[0])
+                    for pattern, label in ((r" Mor", "first_name"), (r"101", "zipcode"))
+                    for match in re.finditer(pattern, text)
+                )
+                outputs.append(OnnxPrediction(entities, 30, 30, 1, True))
+            return outputs
+
+    source = (
+        "Patient: Morbus Parkinson.\r\nAnschrift: Beispielweg 18, 10115 Berlin.\n"
+        "Diagnose: Morbus Parkinson. Keine Dyspnoe. Metoprolol 47,5 mg."
+    )
+    engine = ClinicalPrivacyProcessor(
+        FragmentModel(), model_id="fixture", revision="f" * 40
+    )
+    result = engine.process_batch([doc(source, method=method)])[0]
+    assert result.complete and result.status == "needs_review"
+    assert result.deidentified_text.endswith(
+        "Diagnose: Morbus Parkinson. Keine Dyspnoe. Metoprolol 47,5 mg."
+    )
+    assert (
+        "\r\n" in result.deidentified_text and "\nDiagnose:" in result.deidentified_text
+    )
+    assert all(
+        value not in result.deidentified_text
+        for value in ("Beispielweg", "10115", "Berlin")
+    )
+    assert result.deidentified_text.count("Morbus Parkinson") == 1

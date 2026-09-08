@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added complete detection of bounded German postal-address fields and fragment
+  protection inside known clinical phrases, with person-name counterexamples
+  and independent mask/remove/replace regression checks.
 - Added preview clinical-preserving privacy processing with explicit language,
   category and role controls, full-document ONNX tensor batching, bounded
   cancellation and per-document review status. Clinical protection, source
