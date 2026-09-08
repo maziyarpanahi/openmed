@@ -178,6 +178,23 @@ def test_source_mode_retains_interleaved_om060_order(
     assert "source_page_word_index" not in document.spans[0].metadata
 
 
+def test_line_preservation_respects_reconstructed_columns(
+    fake_two_column_pdf: None,
+) -> None:
+    legacy = extract_pdf("synthetic_phi_twocol.pdf")
+    lines = extract_pdf("synthetic_phi_twocol.pdf", preserve_lines=True)
+    assert lines.text == (
+        "Patient Avery Sample\nAddress 12 Synthetic Lane\nStudy Cardiology\nFinding Stable"
+    )
+    assert lines.spans == legacy.spans
+    source = extract_pdf(
+        "synthetic_phi_twocol.pdf", reading_order="source", preserve_lines=True
+    )
+    assert source.text == (
+        "Patient Avery Sample Study Cardiology\nAddress 12 Synthetic Lane Finding Stable"
+    )
+
+
 def test_single_column_auto_output_is_identical_to_source_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

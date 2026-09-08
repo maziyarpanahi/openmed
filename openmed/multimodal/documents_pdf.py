@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -69,7 +70,10 @@ def _import_pdfplumber() -> Any:
 
 
 def extract_pdf(
-    path: str | Path, *, reading_order: PdfReadingOrder = "auto"
+    path: str | Path,
+    *,
+    reading_order: PdfReadingOrder = "auto",
+    preserve_lines: bool = False,
 ) -> ExtractedDocument:
     """Extract normalized PDF text plus char-offset source spans.
 
@@ -84,14 +88,21 @@ def extract_pdf(
         path: Local PDF path. Document bytes are never sent elsewhere.
         reading_order: ``"auto"`` for conservative multi-column reconstruction
             or ``"source"`` for the original pdfplumber text-flow order.
+        preserve_lines: Replace inter-word spaces with newlines at visual line
+            or reconstructed column boundaries. This retains clinical section
+            headings without changing word order, offsets, or page rectangles.
+            The default preserves the legacy single-space-per-page contract.
 
     Returns:
         Extracted text with one bbox-preserving source span per word.
 
     Raises:
-        ValueError: If ``reading_order`` is unsupported.
+        ValueError: If a control is invalid, or line preservation encounters
+            nonfinite or nonpositive word geometry.
     """
     reading_order = validate_pdf_reading_order(reading_order)
+    if type(preserve_lines) is not bool:
+        raise ValueError("preserve_lines must be a boolean")
     pdfplumber = _import_pdfplumber()
     parts: list[str] = []
     spans: list[SourceSpan] = []
@@ -116,16 +127,33 @@ def extract_pdf(
             if parts:
                 parts.append("\n")
                 cursor += 1
+            previous_bbox = None
+            previous_column = None
             for word_index, source_word_index in enumerate(word_indexes):
                 word = words[source_word_index]
+                bbox = _word_bbox(word)
+                column = (
+                    layout.word_columns[source_word_index]
+                    if layout is not None and layout.is_multicolumn
+                    else None
+                )
+                if preserve_lines and (
+                    not all(math.isfinite(value) for value in bbox)
+                    or bbox[2] <= bbox[0]
+                    or bbox[3] <= bbox[1]
+                ):
+                    raise ValueError("line preservation requires valid word geometry")
                 if word_index > 0:
-                    parts.append(" ")
+                    new_line = preserve_lines and (
+                        column != previous_column
+                        or not _same_text_line(previous_bbox, bbox)
+                    )
+                    parts.append("\n" if new_line else " ")
                     cursor += 1
                 text = str(word.get("text", "")).strip()
                 start = cursor
                 parts.append(text)
                 cursor += len(text)
-                bbox = _word_bbox(word)
                 span_metadata: dict[str, Any] = {
                     "format": "pdf",
                     "block_type": "word",
@@ -149,12 +177,16 @@ def extract_pdf(
                     )
                 )
                 word_count += 1
+                previous_bbox, previous_column = bbox, column
 
     metadata: dict[str, Any] = {
         "format": "pdf",
         "page_count": page_count,
         "word_count": word_count,
     }
+    if preserve_lines:
+        metadata["line_breaks_preserved"] = True
+        metadata["line_break_method"] = "word-vertical-overlap-v1"
     if reconstructed_layouts:
         metadata.update(
             {
@@ -253,6 +285,16 @@ def _page_layout(
 
 def _word_bbox(word: Mapping[str, Any]) -> tuple[float, float, float, float]:
     return tuple(float(word[field]) for field in _PDF_WORD_FIELDS)  # type: ignore[return-value]
+
+
+def _same_text_line(
+    first: tuple[float, float, float, float] | None,
+    second: tuple[float, float, float, float],
+) -> bool:
+    if first is None:
+        return False
+    overlap = min(first[3], second[3]) - max(first[1], second[1])
+    return overlap >= 0.5 * min(first[3] - first[1], second[3] - second[1])
 
 
 def _coerce_entity(

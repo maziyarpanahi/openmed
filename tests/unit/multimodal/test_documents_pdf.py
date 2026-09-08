@@ -170,6 +170,86 @@ def test_synthetic_pdf_fixture_extracts_with_real_pdfplumber(tmp_path):
     assert rectangles[0].bbox[1] < rectangles[0].bbox[3]
 
 
+def test_visual_lines_keep_clinical_headers_and_source_coordinates(monkeypatch):
+    lines = [
+        ("Familienanamnese:", 10, 20),
+        ("Vater mit Diabetes.", 30, 42),
+        ("Befund:", 55, 65),
+        ("Keine Dyspnoe.", 75, 87),
+        ("Medikation:", 100, 110),
+        ("Metoprolol 47,5 mg", 120, 132),
+    ]
+    words = []
+    for text, top, bottom in lines:
+        x = 10
+        for word in text.split():
+            width = len(word) * 6
+            words.append(dict(text=word, x0=x, top=top, x1=x + width, bottom=bottom))
+            x += width + 4
+    module = SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)]))
+    monkeypatch.setitem(sys.modules, "pdfplumber", module)
+    legacy = extract_pdf("synthetic.pdf")
+    clinical = extract_pdf("synthetic.pdf", preserve_lines=True)
+    assert clinical.text == "\n".join(line[0] for line in lines)
+    assert legacy.text == clinical.text.replace("\n", " ")
+    assert clinical.spans == legacy.spans
+    assert clinical.metadata["line_breaks_preserved"] is True
+    assert "line_breaks_preserved" not in legacy.metadata
+    start = clinical.text.index("47,5")
+    assert project_text_spans(clinical, [(start, start + 7)])[0].bbox == (
+        74.0,
+        120.0,
+        114.0,
+        132.0,
+    )
+    from openmed.clinical.analysis import analyze_clinical_context
+
+    result = analyze_clinical_context(
+        clinical.text, [], tasks=["sections"], language="de"
+    )
+    assert [s["label"] for s in result["tasks"]["sections"]["records"]] == [
+        "family_history",
+        "findings",
+        "medications",
+    ]
+
+
+def test_line_preservation_keeps_small_font_tokens_on_same_line(monkeypatch):
+    words = [
+        dict(text="Metoprolol", x0=10, x1=70, top=20, bottom=32),
+        dict(text="47,5", x0=74, x1=98, top=23, bottom=30),
+        dict(text="mg", x0=102, x1=114, top=20, bottom=32),
+    ]
+    monkeypatch.setitem(
+        sys.modules,
+        "pdfplumber",
+        SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)])),
+    )
+    assert (
+        extract_pdf("synthetic.pdf", preserve_lines=True).text == "Metoprolol 47,5 mg"
+    )
+
+
+@pytest.mark.parametrize("value", [1, "true", None])
+def test_line_preservation_rejects_untyped_control(value):
+    with pytest.raises(ValueError, match="preserve_lines must be a boolean"):
+        extract_pdf("unopened.pdf", preserve_lines=value)
+
+
+@pytest.mark.parametrize(
+    "top,bottom", [(float("nan"), 30), (20, float("inf")), (30, 20), (20, 20)]
+)
+def test_line_preservation_rejects_invalid_word_geometry(monkeypatch, top, bottom):
+    words = [dict(text="Patient", x0=10, x1=40, top=top, bottom=bottom)]
+    monkeypatch.setitem(
+        sys.modules,
+        "pdfplumber",
+        SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)])),
+    )
+    with pytest.raises(ValueError, match="valid word geometry"):
+        extract_pdf("synthetic.pdf", preserve_lines=True)
+
+
 def test_project_text_spans_merges_same_line_words(fake_pdfplumber):
     doc = extract_pdf("synthetic_phi.pdf")
     start = doc.text.index("John")

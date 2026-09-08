@@ -62,6 +62,31 @@ single-column document returned by auto mode compares equal to the same
 document returned by source mode, including its text, word bboxes, offsets, and
 metadata.
 
+## Clinical line boundaries
+
+Use explicit visual line preservation before passing extracted PDF text to
+clinical section or assertion processing:
+
+```python
+document = extract_pdf("local-report.pdf", preserve_lines=True)
+```
+
+The default joins words on a page with spaces for compatibility. With
+`preserve_lines=True`, a separator becomes a newline when adjacent words do not
+share at least half of the smaller word's vertical extent, or when the
+reconstructed reading order changes columns. Word order, offsets, page indexes
+and bounding boxes stay identical: each separator is still one character.
+This keeps headings such as `Familienanamnese:` and `Befund:` on separate lines
+so they can establish distinct clinical context. The document metadata records
+`line_breaks_preserved=true` and the versioned geometric heuristic.
+
+This is visual line reconstruction, not restoration of the original author's
+paragraphs or a guarantee of correct reading order. Font changes, rotated text,
+ambiguous columns, headers and footers still need review. Text-free or scanned
+pages require a separate OCR/completeness workflow; this option does not perform
+OCR or sanitize a PDF. Nonfinite or nonpositive word geometry is rejected when
+line preservation is requested.
+
 ## Positioned-word API
 
 Call `detect_pdf_columns` when positioned words have already been extracted:
