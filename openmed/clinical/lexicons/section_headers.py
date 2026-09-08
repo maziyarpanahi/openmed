@@ -200,6 +200,7 @@ GERMAN_SECTION_LEXICON = SectionLexicon(
             "Entlassmedikation",
         ),
         "allergies": ("Allergien", "Unverträglichkeiten", "Unvertraeglichkeiten"),
+        "findings": ("Befund", "Befunde", "Untersuchungsbefund"),
         "assessment": ("Beurteilung", "Einschätzung", "Einschaetzung"),
         "plan": ("Plan", "Therapieplan"),
     },

@@ -23,6 +23,12 @@ from .abbreviation import (
     load_abbreviation_inventory,
     load_sense_inventory,
 )
+from .analysis import (
+    CLINICAL_CONTEXT_VERSION,
+    ClinicalAnalysisError,
+    analyze_clinical_context,
+    validated_clinical_entities,
+)
 from .assertion_graph import (
     ASSERTION_GRAPH_ADVISORY,
     ASSERTION_GRAPH_AXES,
@@ -598,6 +604,10 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "CLINICAL_CONTEXT_VERSION",
+    "ClinicalAnalysisError",
+    "analyze_clinical_context",
+    "validated_clinical_entities",
     "OPENMED_CLINICAL_DISCLAIMER",
     "COORDINATE_TYPES",
     "GENOMICS_ADVISORY",
