@@ -64,6 +64,79 @@ def test_german_cardiology_dose_frequency_lvef_and_blood_pressure():
     )
 
 
+@pytest.mark.parametrize("label", ["Dose", "Strength"])
+def test_decimal_fragments_rejoin_source_quantity_without_changing_semantic_label(
+    label,
+):
+    text = "Metoprolol 47,5 mg."
+    result = analyze(
+        text,
+        [("Metoprolol", "Drug", 0.99), ("47", label, 0.82), ("5 mg", label, 0.9)],
+        ["entities", "medications", "relations"],
+    )
+    original = result["tasks"]["entities"]["records"]
+    assert text[original[1]["start"] : original[1]["end"]] == "47"
+    attr = result["tasks"]["medications"]["records"][0]["attributes"][0]
+    assert attr["type"] == label.lower()
+    assert attr["normalized"]["value"] == 47.5 and attr["normalized"]["unit"] == "mg"
+    source = attr["source"]
+    assert (
+        source["label"] == label
+        and source["span_repair"] == "adjacent_decimal_fragments"
+    )
+    assert source["score"] == 0.82
+    assert text[source["start"] : source["end"]] == "47,5 mg"
+    assert [p["id"] for p in source["source_parts"]] == [
+        original[1]["id"],
+        original[2]["id"],
+    ]
+    relation = result["tasks"]["relations"]["records"][0]
+    assert relation["tail"]["end"] == source["end"]
+    assert relation["tail_context"]["entity_id"] == source["id"]
+    assert relation["type"] == ("DRUG_STRENGTH" if label == "Strength" else "DRUG_DOSE")
+
+
+@pytest.mark.parametrize(
+    "text,left,right",
+    [
+        ("Metoprolol 47;5 mg.", "47", "5 mg"),
+        ("Metoprolol 47, 5 mg.", "47", "5 mg"),
+        ("Metoprolol 47,5 mg/kg.", "47", "5 mg"),
+        ("Metoprolol 147,5 mg.", "47", "5 mg"),
+        ("Metoprolol 47 mg,5 mg.", "47 mg", "5 mg"),
+    ],
+)
+def test_numeric_repair_cannot_join_distinct_quantities_or_partial_units(
+    text, left, right
+):
+    result = analyze(
+        text,
+        [
+            ("Metoprolol", "Drug", 0.99),
+            (left, "Strength", 0.82),
+            (right, "Strength", 0.9),
+        ],
+        ["medications"],
+    )
+    assert all(
+        "span_repair" not in attr["source"]
+        for attr in result["tasks"]["medications"]["records"][0]["attributes"]
+    )
+
+
+def test_english_decimal_repair_uses_explicit_language():
+    text = "metoprolol 47.5 mg"
+    spans = [
+        {"start": 0, "end": 10, "label": "Drug", "score": 0.99},
+        {"start": 11, "end": 13, "label": "Strength", "score": 0.8},
+        {"start": 14, "end": 18, "label": "Strength", "score": 0.9},
+    ]
+    result = analyze_clinical_context(text, spans, language="en", tasks=["medications"])
+    attr = result["tasks"]["medications"]["records"][0]["attributes"][0]
+    assert attr["normalized"]["value"] == 47.5
+    assert attr["source"]["span_repair"] == "adjacent_decimal_fragments"
+
+
 @pytest.mark.parametrize("separator", ["\n", "; ", ". ", " aber "])
 def test_medication_dose_cannot_cross_source_scope(separator):
     text = "Metformin" + separator + "500 mg"

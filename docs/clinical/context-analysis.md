@@ -67,6 +67,13 @@ uncertainty; `coding_eligible` is false. They are unconfirmed candidates.
   Linked dose/frequency/duration spans use localized normalization; other
   attributes retain evidence without invented normalization. Pattern and link
   scores are heuristic, not calibrated clinical probabilities.
+  Same-label adjacent fragments of an explicitly localized decimal quantity can
+  be rejoined only when the original text parses as one valid amount/unit. The
+  structured reference records both source parts and the repair rule; original
+  entity records stay unchanged. Strength remains strength, including a
+  `DRUG_STRENGTH` relation, and cannot become a prescribed dose. Its amount/unit
+  use the quantity normalizer. Partial units, different quantities and source
+  scope/context changes cannot be joined.
 - **Labs and measurements:** supplied analyte/value/range/flag spans link only
   within one source scope. Canonical magnitudes and range bounds include their
   units; for example, `55 %` becomes `0.55` in unit `1`, with the original value

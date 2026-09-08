@@ -65,9 +65,78 @@ def _scopes(text, entities, sections, check):
 
 def _reference(entity):
     return {
-        key: entity.get(key)
-        for key in ("id", "start", "end", "label", "score", "section_id")
+        **{
+            key: entity.get(key)
+            for key in ("id", "start", "end", "label", "score", "section_id")
+        },
+        **{
+            key: entity[key] for key in ("span_repair", "source_parts") if key in entity
+        },
     }
+
+
+def _repair_numeric_attributes(text, entities, assertions, language, check):
+    """Join only same-label adjacent fragments of one valid decimal quantity."""
+    separator = {"de": ",", "en": "."}.get(language)
+    repaired, contexts = [], dict(assertions)
+    position = 0
+    axes = ("negation", "uncertainty", "temporality", "experiencer")
+    while position < len(entities):
+        check()
+        left = entities[position]
+        right = entities[position + 1] if position + 1 < len(entities) else None
+        if (
+            right
+            and separator
+            and left["label"] in {"Dose", "Strength"}
+            and right["label"] == left["label"]
+            and left["section_id"] == right["section_id"]
+            and left["end"] < right["start"]
+            and text[left["end"] : right["start"]] == separator
+            and re.fullmatch(r"[+-]?\d+", text[left["start"] : left["end"]])
+            and (
+                left["start"] == 0 or not re.match(r"[\w.,+-]", text[left["start"] - 1])
+            )
+            and (
+                right["end"] == len(text)
+                or not re.match(r"[\w/^*%µμ]", text[right["end"]])
+            )
+            and all(
+                assertions[left["id"]][axis] == assertions[right["id"]][axis]
+                for axis in axes
+            )
+            and normalize_medication_attribute(
+                "dose", text[left["start"] : right["end"]], language=language
+            )["recognized"]
+        ):
+            combined = {
+                **left,
+                "id": f"repair:{left['id']}:{right['id']}",
+                "end": right["end"],
+                "score": min(left["score"], right["score"])
+                if left["score"] is not None and right["score"] is not None
+                else None,
+                "span_repair": "adjacent_decimal_fragments",
+                "source_parts": [_reference(left), _reference(right)],
+            }
+            context = {
+                **assertions[left["id"]],
+                "entity_id": combined["id"],
+                "end": combined["end"],
+            }
+            context["evidence"] = [
+                dict(record) for record in assertions[left["id"]]["evidence"]
+            ]
+            for record in assertions[right["id"]]["evidence"]:
+                if record not in context["evidence"]:
+                    context["evidence"].append(dict(record))
+            contexts[combined["id"]] = context
+            repaired.append(combined)
+            position += 2
+        else:
+            repaired.append(left)
+            position += 1
+    return repaired, contexts
 
 
 def _context(entity, assertions):
@@ -100,6 +169,9 @@ def _normalized_range(reference, unit, language):
 
 
 def _medications(text, entities, sections, assertions, language, check):
+    entities, assertions = _repair_numeric_attributes(
+        text, entities, assertions, language, check
+    )
     accepted = {
         (c.start, c.end)
         for c in filter_medication_candidates(text, entities, language=language)
@@ -129,7 +201,9 @@ def _medications(text, entities, sections, assertions, language, check):
             if head["id"] not in attributes:
                 continue
             normalized = normalize_medication_attribute(
-                link.type, text[tail["start"] : tail["end"]], language=language
+                "dose" if link.type == "strength" else link.type,
+                text[tail["start"] : tail["end"]],
+                language=language,
             )
             if normalized is not None:
                 normalized = {
@@ -279,6 +353,9 @@ def _vitals(text, entities, sections, assertions, language, check):
 
 
 def _relations(text, entities, sections, assertions, language, check):
+    entities, assertions = _repair_numeric_attributes(
+        text, entities, assertions, language, check
+    )
     records = []
     for group in _scopes(text, entities, sections, check):
         check()
@@ -307,7 +384,10 @@ def _relations(text, entities, sections, assertions, language, check):
                 {
                     "head": _reference(head),
                     "tail": _reference(tail),
-                    "type": relation.relation_type,
+                    "type": "DRUG_STRENGTH"
+                    if relation.relation_type == "DRUG_DOSE"
+                    and tail["label"] == "Strength"
+                    else relation.relation_type,
                     "score": relation.confidence,
                     "score_kind": "heuristic",
                     "head_context": _context(head, assertions),
