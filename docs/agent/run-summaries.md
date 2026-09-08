@@ -19,6 +19,14 @@ identifiers, incomplete outcome-count mappings, non-finite values, and direct
 construction that bypasses canonical ordering fail with stable value-free
 errors.
 
+Serialized summaries carry the exact schema identifier
+`openmed.agent.run_summary.v1`. Use `RunSummary.from_dict()` or
+`RunSummary.from_json()` at trust boundaries. Both reject missing or unknown
+fields, unsupported versions, invalid counts, and unsafe strings;
+`from_json()` additionally rejects duplicate keys, non-standard non-finite
+numbers, malformed JSON, and documents larger than 1 MiB. Validation errors
+name only stable fields and error codes, never submitted values.
+
 ## Example
 
 ```python
@@ -34,6 +42,7 @@ event = RunEvent(
 
 summary = RunSummary.from_events([event])
 json_payload = summary.to_json()
+assert RunSummary.from_json(json_payload) == summary
 markdown_report = summary.to_markdown()
 ```
 

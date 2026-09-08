@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections.abc import Callable
 
 import pytest
 
 from openmed.agent import OutcomeClass, WorkflowOutcome
 from openmed.agent.run_summary import (
+    MAX_RUN_SUMMARY_JSON_BYTES,
+    RUN_SUMMARY_SCHEMA_VERSION,
     RunEvent,
     RunSummary,
     RunSummaryError,
@@ -194,6 +197,7 @@ def test_to_dict_contains_only_safe_metadata() -> None:
     payload = summary.to_dict()
 
     assert payload == {
+        "schema_version": RUN_SUMMARY_SCHEMA_VERSION,
         "workflow_ids": ["workflow-1"],
         "outcome_counts": _counts(success=1),
         "tool_call_count": 2,
@@ -213,12 +217,96 @@ def test_to_json_is_byte_deterministic() -> None:
     expected = (
         '{"artifact_digests":[],"duration_seconds":0.0,'
         '"outcome_counts":{"abstained":0,"failed":1,"policy_denied":0,'
-        '"review_required":0,"success":1},"tool_call_count":3,'
+        '"review_required":0,"success":1},'
+        f'"schema_version":"{RUN_SUMMARY_SCHEMA_VERSION}","tool_call_count":3,'
         '"workflow_ids":["workflow-1","workflow-2"]}'
     )
 
     assert summary.to_json() == expected
     assert summary.to_json() == expected
+
+
+def test_summary_round_trips_byte_stably_through_dict_and_json() -> None:
+    summary = RunSummary.from_events(
+        [RunEvent("workflow-1", _outcome(), tool_call_count=2)]
+    )
+
+    from_dict = RunSummary.from_dict(summary.to_dict())
+    from_json = RunSummary.from_json(summary.to_json())
+
+    assert from_dict == summary
+    assert from_json == summary
+    assert from_dict.to_json() == summary.to_json()
+    assert from_json.to_json() == summary.to_json()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        (
+            lambda payload, sentinel: payload.update({sentinel: sentinel}),
+            "unknown_field",
+        ),
+        (lambda payload, sentinel: payload.pop("workflow_ids"), "missing_field"),
+        (
+            lambda payload, sentinel: payload.update({"schema_version": sentinel}),
+            "unsupported_version",
+        ),
+        (
+            lambda payload, sentinel: payload.update({"tool_call_count": -1}),
+            "invalid_count",
+        ),
+        (
+            lambda payload, sentinel: payload.update(
+                {"workflow_ids": [f"{sentinel} private note"]}
+            ),
+            "invalid_identifier",
+        ),
+    ],
+)
+def test_from_dict_rejects_invalid_shapes_without_echoing_values(
+    mutation: Callable[[dict[str, object], str], object], error: str
+) -> None:
+    summary = RunSummary.from_events([RunEvent("workflow-1", _outcome())])
+    payload = summary.to_dict()
+    sentinel = "Synthetic_Patient_Secret_987"
+    mutation(payload, sentinel)
+
+    with pytest.raises(RunSummaryError, match=error) as exc_info:
+        RunSummary.from_dict(payload)
+
+    assert sentinel not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        ("{", "invalid_json"),
+        (
+            '{"schema_version":"openmed.agent.run_summary.v1",'
+            '"schema_version":"openmed.agent.run_summary.v1"}',
+            "duplicate_field",
+        ),
+        (
+            '{"schema_version":"openmed.agent.run_summary.v1",'
+            '"workflow_ids":[],"outcome_counts":{},"tool_call_count":0,'
+            '"duration_seconds":NaN,"artifact_digests":[]}',
+            "non_finite_number",
+        ),
+    ],
+)
+def test_from_json_rejects_malformed_duplicate_and_non_finite_values(
+    payload: str, error: str
+) -> None:
+    with pytest.raises(RunSummaryError, match=error):
+        RunSummary.from_json(payload)
+
+
+def test_from_json_rejects_oversized_input_without_parsing() -> None:
+    payload = " " * (MAX_RUN_SUMMARY_JSON_BYTES + 1)
+
+    with pytest.raises(RunSummaryError, match="json_too_large"):
+        RunSummary.from_json(payload)
 
 
 def test_markdown_contains_metadata_only() -> None:
