@@ -1739,6 +1739,7 @@ def assert_context(
             section_text,
             {"start": start, "end": end},
             section_experiencer=section_experiencer or assertion.experiencer,
+            language=language,
         )
         context_fields = {
             "negation": assertion.negation or AFFIRMED,

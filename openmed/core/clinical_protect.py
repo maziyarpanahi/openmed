@@ -25,7 +25,7 @@ T = TypeVar("T")
 
 DATA_FILE = Path(__file__).with_name("data") / "clinical_protect_terms.txt"
 PROTECTION_SOURCE = "openmed/core/data/clinical_protect_terms.txt"
-PROTECTION_VERSION = "clinical-protect-terms-v1"
+PROTECTION_VERSION = "clinical-protect-terms-v4"
 
 _PROTECTED_CANONICAL_LABELS = frozenset(
     {
@@ -221,6 +221,7 @@ def filter_protected_spans(
     include_builtin: bool = True,
     lang: str = "en",
     enabled: bool = True,
+    protect_word_fragments: bool = False,
 ) -> ClinicalProtectionResult:
     """Filter protected clinical terms and return aggregate metadata.
 
@@ -231,6 +232,8 @@ def filter_protected_spans(
         include_builtin: Include the bundled OpenMed-maintained term list.
         lang: Label normalization language hint.
         enabled: Return spans unchanged when false.
+        protect_word_fragments: Also protect a subword prediction contained in
+            a whole protected source word or phrase, outside personal-name contexts.
 
     Returns:
         A :class:`ClinicalProtectionResult` with retained spans and counts.
@@ -249,14 +252,30 @@ def filter_protected_spans(
     retained: list[T] = []
     checked_count = 0
     suppressed_count = 0
+    from .clinical_identifiers import personal_name_spans
+
+    name_contexts = personal_name_spans(text)
+    phrase_ranges = (
+        _protected_phrase_ranges(text, terms) if protect_word_fragments else ()
+    )
     for span in span_list:
         if _is_ambiguous_label(span, lang):
             checked_count += 1
             surface = _span_surface(span, text)
             if (
                 surface is not None
-                and normalize_term(surface) in terms
+                and (
+                    normalize_term(surface) in terms
+                    or (
+                        protect_word_fragments
+                        and (
+                            _enclosing_word(span, text) in terms
+                            or _within_protected_phrase(span, text, phrase_ranges)
+                        )
+                    )
+                )
                 and not _looks_like_direct_identifier(surface)
+                and not _in_personal_context(span, name_contexts)
             ):
                 suppressed_count += 1
                 continue
@@ -268,6 +287,65 @@ def filter_protected_spans(
         checked_count=checked_count,
         protected_term_count=len(terms),
     )
+
+
+def _in_personal_context(span: Any, contexts: Sequence[tuple[int, int, str]]) -> bool:
+    start, end = getattr(span, "start", None), getattr(span, "end", None)
+    if not isinstance(start, int) or not isinstance(end, int):
+        # A protected surface without source coordinates cannot prove that it
+        # is clinical rather than an actual person's eponym-like surname.
+        return True
+    return any(left < end and start < right for left, right, _role in contexts)
+
+
+def _protected_phrase_ranges(
+    text: str, terms: frozenset[str]
+) -> tuple[tuple[int, int], ...]:
+    """Find complete literal phrases once, retaining original source offsets."""
+    phrases = [
+        r"\s+".join(re.escape(word) for word in term.split())
+        for term in sorted(terms, key=len, reverse=True)
+        if " " in term
+    ]
+    if not phrases:
+        return ()
+    pattern = re.compile(r"(?<!\w)(?:" + "|".join(phrases) + r")(?!\w)", re.I)
+    return tuple(match.span() for match in pattern.finditer(text))
+
+
+def _within_protected_phrase(
+    span: Any, text: str, ranges: Sequence[tuple[int, int]]
+) -> bool:
+    start, end = getattr(span, "start", None), getattr(span, "end", None)
+    if not isinstance(start, int) or not isinstance(end, int):
+        return False
+    if not 0 <= start < end <= len(text):
+        return False
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start < end and any(left <= start < end <= right for left, right in ranges)
+
+
+def _enclosing_word(span: Any, text: str) -> str | None:
+    """Expand a lexical fragment to its complete source word, never a substring."""
+    start, end = getattr(span, "start", None), getattr(span, "end", None)
+    if not isinstance(start, int) or not isinstance(end, int):
+        return None
+    if not 0 <= start < end <= len(text):
+        return None
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    if start == end or not all(char.isalpha() for char in text[start:end]):
+        return None
+    while start > 0 and text[start - 1].isalpha():
+        start -= 1
+    while end < len(text) and text[end].isalpha():
+        end += 1
+    return normalize_term(text[start:end])
 
 
 def _is_ambiguous_label(span: Any, lang: str) -> bool:

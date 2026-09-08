@@ -31,6 +31,7 @@ class PolicyName(str, Enum):
     RESEARCH_LIMITED_DATASET = "research_limited_dataset"
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
+    CLINICAL_PRESERVE = "clinical_preserve"
     CANADA_PIPEDA = "canada_pipeda"
     UK_ICO_ANONYMISATION = "uk_ico_anonymisation"
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"

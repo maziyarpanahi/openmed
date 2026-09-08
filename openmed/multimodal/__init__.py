@@ -241,6 +241,12 @@ from .render_pdf import (
     render_redacted_pdf,
     write_redacted_pdf,
 )
+from .render_raster import (
+    RasterExportError,
+    RasterExportResult,
+    RasterRedactionPage,
+    render_redacted_raster_pages,
+)
 from .rtf import extract_rtf, write_redacted_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
@@ -510,6 +516,10 @@ __all__ = [
     "measure_pdf_layout_fidelity",
     "render_redacted_pdf",
     "write_redacted_pdf",
+    "RasterExportError",
+    "RasterExportResult",
+    "RasterRedactionPage",
+    "render_redacted_raster_pages",
     "XlsxCellRedaction",
     "XlsxRedactionResult",
     "redact_xlsx",

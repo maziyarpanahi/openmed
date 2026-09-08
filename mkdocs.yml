@@ -145,6 +145,7 @@ nav:
       - Preference Pair Schema: reference/preference-schema.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
+      - OCR Through Memory: multimodal/ocr-streaming.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
