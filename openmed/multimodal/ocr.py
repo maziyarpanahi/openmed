@@ -36,7 +36,7 @@ from typing import (
     runtime_checkable,
 )
 
-from .base import ExtractedDocument, register_handler
+from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
 
 
@@ -62,13 +62,40 @@ class OcrResult:
         """The recognized words joined into a single normalized string."""
         return " ".join(word.text for word in self.words)
 
-    def to_document(self, *, separator: str = " ") -> ExtractedDocument:
+    def to_document(
+        self, *, separator: str = " ", preserve_lines: bool = False
+    ) -> ExtractedDocument:
         """Bridge OCR words into an :class:`ExtractedDocument`.
 
         Each word becomes a block so its ``SourceSpan`` carries the source pixel
         bbox and page, letting downstream redaction project a detected PHI
         offset back to its location in the image.
+
+        With ``preserve_lines=True``, insert a newline between native OCR lines
+        and pages, retaining the engine's word order. This requires one positive
+        integer ``(block, paragraph, line)`` identifier per word in the result's
+        ``line_ids`` metadata (provided by ``StreamingTesseractEngine``).
+        Missing, malformed or noncontiguous line identifiers fail explicitly;
+        this option does not infer lines from geometry or qualify OCR accuracy.
+
+        Args:
+            separator: Text placed between words on the same native line, or
+                between all words when line preservation is disabled.
+            preserve_lines: Preserve native line and page boundaries explicitly.
+
+        Returns:
+            Recognized text with a character-to-source map for every word.
+
+        Raises:
+            TypeError: A conversion option has the wrong type.
+            ValueError: Line preservation lacks valid native line identifiers.
         """
+        if type(preserve_lines) is not bool:
+            raise TypeError("preserve_lines must be a boolean")
+        if not isinstance(separator, str):
+            raise TypeError("separator must be a string")
+        if preserve_lines:
+            return self._document_with_native_lines(separator)
         blocks = [
             {
                 "text": word.text,
@@ -80,6 +107,56 @@ class OcrResult:
         ]
         return ExtractedDocument.from_blocks(
             blocks, separator=separator, metadata=dict(self.metadata)
+        )
+
+    def _document_with_native_lines(self, separator: str) -> ExtractedDocument:
+        line_ids = self.metadata.get("line_ids")
+        if not isinstance(line_ids, (list, tuple)) or len(line_ids) != len(self.words):
+            raise ValueError("ocr_line_ids_required")
+        parts: list[str] = []
+        spans: list[SourceSpan] = []
+        cursor = 0
+        previous = None
+        seen = set()
+        for word, line_id in zip(self.words, line_ids):
+            if (
+                not isinstance(line_id, (list, tuple))
+                or len(line_id) != 3
+                or any(type(value) is not int or value < 1 for value in line_id)
+                or type(word.page) is not int
+                or word.page < 0
+            ):
+                raise ValueError("ocr_invalid_line_ids")
+            current = (word.page, *line_id)
+            if current != previous:
+                if current in seen:
+                    raise ValueError("ocr_noncontiguous_line_ids")
+                seen.add(current)
+            if previous is not None:
+                boundary = "\n" if current != previous else separator
+                parts.append(boundary)
+                cursor += len(boundary)
+            start = cursor
+            parts.append(word.text)
+            cursor += len(word.text)
+            spans.append(
+                SourceSpan(
+                    start=start,
+                    end=cursor,
+                    page=word.page,
+                    bbox=word.bbox,
+                    metadata={"confidence": word.confidence},
+                )
+            )
+            previous = current
+        return ExtractedDocument(
+            text="".join(parts),
+            spans=tuple(spans),
+            metadata={
+                **self.metadata,
+                "line_breaks_preserved": True,
+                "line_boundary_method": "native-ocr-line-ids-v1",
+            },
         )
 
     def to_layout(self, **kwargs: Any) -> Any:

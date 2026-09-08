@@ -218,6 +218,7 @@ classification:
     - reference/preference-schema.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
+    - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md

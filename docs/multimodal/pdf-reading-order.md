@@ -83,7 +83,7 @@ so they can establish distinct clinical context. The document metadata records
 This is visual line reconstruction, not restoration of the original author's
 paragraphs or a guarantee of correct reading order. Font changes, rotated text,
 ambiguous columns, headers and footers still need review. Text-free or scanned
-pages require a separate OCR/completeness workflow; this option does not perform
+pages require a separate [OCR](ocr-streaming.md)/completeness workflow; this option does not perform
 OCR or sanitize a PDF. Nonfinite or nonpositive word geometry is rejected when
 line preservation is requested.
 
