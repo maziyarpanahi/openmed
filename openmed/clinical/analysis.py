@@ -7,8 +7,10 @@ contact a service, and it does not qualify an extraction as a patient fact.
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import date
 from itertools import islice
 from typing import Any
 
@@ -17,10 +19,11 @@ from openmed.clinical.experiencer import resolve_experiencer
 from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.clinical_language import resolve_clinical_language
 
-CLINICAL_CONTEXT_VERSION = "clinical-context-v2"
+CLINICAL_CONTEXT_VERSION = "clinical-context-v3"
 DEFAULT_CONTEXT_TASKS = ("sections", "entities", "assertions")
 STRUCTURED_TASKS = ("medications", "labs", "vitals", "relations")
-CONTEXT_TASKS = (*DEFAULT_CONTEXT_TASKS, *STRUCTURED_TASKS)
+TEMPORAL_TASKS = ("events", "timeline")
+CONTEXT_TASKS = (*DEFAULT_CONTEXT_TASKS, *STRUCTURED_TASKS, *TEMPORAL_TASKS)
 CONTEXT_LANGUAGES = ("en", "de")
 MAX_ANALYSIS_ENTITIES = 2000
 _LABELS = {
@@ -155,6 +158,7 @@ def analyze_clinical_context(
     entity_coverage_complete: bool = True,
     timeout_seconds: float = 30,
     cancel_check: Callable[[], bool] | None = None,
+    reference_date: str | None = None,
 ) -> dict[str, Any]:
     """Compose sections, clinical spans, context and structured source evidence.
 
@@ -170,6 +174,9 @@ def analyze_clinical_context(
             input token. False cannot produce successful entity/assertion tasks.
         timeout_seconds: Cooperative postprocessing deadline, at most 30 seconds.
         cancel_check: Optional cancellation predicate checked between stages.
+        reference_date: Explicit ISO calendar date for the timeline task's
+            relative expressions. None leaves them unanchored; the current
+            clock and patient birth date are never substituted.
 
     Returns:
         Per-task status, records, offset-based evidence and language provenance.
@@ -190,6 +197,17 @@ def analyze_clinical_context(
         raise ClinicalAnalysisError("invalid_clinical_tasks")
     if type(entity_coverage_complete) is not bool:
         raise ClinicalAnalysisError("invalid_clinical_coverage")
+    if reference_date is not None:
+        if (
+            "timeline" not in tasks
+            or not isinstance(reference_date, str)
+            or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reference_date)
+        ):
+            raise ClinicalAnalysisError("invalid_clinical_reference_date")
+        try:
+            date.fromisoformat(reference_date)
+        except ValueError:
+            raise ClinicalAnalysisError("invalid_clinical_reference_date") from None
     if (
         type(timeout_seconds) not in (float, int)
         or not math.isfinite(timeout_seconds)
@@ -265,7 +283,7 @@ def analyze_clinical_context(
         results["entities"]["records"] = spans
     if any(
         results.get(task, {}).get("complete")
-        for task in ("assertions", *STRUCTURED_TASKS)
+        for task in ("assertions", *STRUCTURED_TASKS, *TEMPORAL_TASKS)
     ):
         assertions = assert_context(
             text, spans, language=resolved.language, sections=sections
@@ -359,6 +377,24 @@ def analyze_clinical_context(
                     records,
                     language=resolved.language,
                     tasks=requested_structured,
+                    check=check,
+                )
+            )
+        requested_temporal = [
+            task for task in TEMPORAL_TASKS if results.get(task, {}).get("complete")
+        ]
+        if requested_temporal:
+            from openmed.clinical.temporal_analysis import _temporal_tasks
+
+            results.update(
+                _temporal_tasks(
+                    text,
+                    spans,
+                    visible_sections,
+                    records,
+                    language=resolved.language,
+                    tasks=requested_temporal,
+                    reference_date=reference_date,
                     check=check,
                 )
             )

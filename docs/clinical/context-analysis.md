@@ -47,7 +47,7 @@ this function on their controlled worker, never the HTTP event loop.
 
 ## Structured tasks
 
-Contract `clinical-context-v2` adds opt-in `medications`, `labs`, `vitals`, and
+Contract `clinical-context-v3` includes opt-in `medications`, `labs`, `vitals`, and
 `relations` tasks. The default remains sections/entities/assertions. The upstream
 extractor must supply compatible attribute spans: Drug/Chemical, Dose, Route,
 Frequency, Duration, Form, Strength, Lab Test, Lab Value, Reference Range,
@@ -102,3 +102,56 @@ structured findings for that task. Other independent tasks can remain complete.
 Unexpected helper failures use a finite error code without exception/source text.
 Cancellation or timeout still aborts the entire composition. These synthetic
 regressions and bounds do not provide independent language qualification.
+
+## Events and timelines
+
+`events` and `timeline` are additional opt-in EN/DE preview tasks. The SDK composes
+its medication-change/lab-trend frame builders and timeline assembler over the
+validated entities. Drug heads retain the 0.75 candidate threshold. Original
+head, trigger, attribute and date offsets accompany each candidate; source
+surfaces and raw helper messages are excluded. Numeric fragment guards also apply
+to old/new event doses. Strength is not reinterpreted as dose.
+
+German trigger rules distinguish start, restart, stop, increase, decrease and hold,
+and rising/falling/stable laboratory trends. A continued regimen is not inferred
+to have restarted. Competing heads in one clause remain clinical mentions when
+the action cannot be assigned unambiguously. An elevated lab beside a medication
+must not become a dose-increase event. Events cannot link across sentence, line,
+semicolon, contrastive or section boundaries. Source dates are protected from
+being split at internal punctuation when those scopes are constructed.
+
+Event head context and trigger context are both retained. A `stopped` trigger
+with negated trigger context does not assert that the medication was stopped.
+Family, historical, uncertain and negated findings remain reviewable candidates;
+every event has `coding_eligible=false`.
+
+```python
+result = analyze_clinical_context(
+    text,
+    entities,
+    language="de",
+    tasks=["events", "timeline"],
+    reference_date="2026-09-08",  # Only when this is the document's known date.
+)
+```
+
+The optional ISO `reference_date` is accepted only with the timeline task.
+Relative expressions remain unanchored without it. The implementation does not
+substitute the current date or the document date for an event that lacks usable
+date evidence. A clinical event can use one unambiguous date from its own scope;
+competing dates, invalid dates and birth-date contexts remain unanchored. German
+numeric dates follow explicit DMY rules, full German month names and relative
+day/week/month/year phrases are supported, and two-digit years remain ambiguous.
+English ambiguous slash dates remain unresolved. No text translation occurs.
+
+The timeline presents anchored events in timestamp order and unanchored events
+in a separate source-order group. Presentation order is not a claimed temporal
+or causal relation. Interval anchors retain both endpoints; an unanchored event
+is not asserted to occur after the anchored group. The original four context axes
+are retained rather than narrowed to the assembler's historical context enums.
+
+At most 2,048 temporal spans, 64 entities per source scope, 128 event triggers per
+scope/engine and 4,096 output event records are admitted. Dependent task failures
+return empty results with finite errors; independent sections/entities remain
+available. These are deterministic preview rules, with no independent event or
+timeline accuracy qualification.
