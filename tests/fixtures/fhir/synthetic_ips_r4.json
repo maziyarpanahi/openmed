@@ -1,0 +1,297 @@
+{
+  "resourceType": "Bundle",
+  "id": "ips-bundle-original",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:synthetic-composition",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "composition-original",
+        "meta": {
+          "profile": [
+            "http://hl7.org/fhir/uv/ips/StructureDefinition/Composition-uv-ips|2.0.1"
+          ]
+        },
+        "status": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "60591-5",
+              "display": "Patient summary Document"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-original"
+        },
+        "date": "2026-01-01T00:00:00Z",
+        "author": [
+          {
+            "reference": "Device/openmed"
+          }
+        ],
+        "title": "Synthetic International Patient Summary",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Summary for Avery Example</p></div>"
+        },
+        "section": [
+          {
+            "title": "Problems and Conditions",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "11348-0"
+                }
+              ]
+            },
+            "entry": [
+              {
+                "reference": "Condition/condition-original"
+              }
+            ]
+          },
+          {
+            "title": "Results",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "30954-2"
+                }
+              ]
+            },
+            "entry": [
+              {
+                "reference": "Observation/observation-original"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-patient",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-original",
+        "meta": {
+          "profile": [
+            "http://hl7.org/fhir/uv/ips/StructureDefinition/Patient-uv-ips|2.0.1"
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://openmed.example/synthetic/mrn",
+            "value": "SYNTH-MRN-001"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "family": "Example",
+            "given": [
+              "Avery"
+            ],
+            "text": "Avery Example"
+          }
+        ],
+        "gender": "unknown",
+        "birthDate": "1980-01-01"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-condition",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-original",
+        "identifier": [
+          {
+            "system": "https://openmed.example/synthetic/condition",
+            "value": "SYNTH-COND-001"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "44054006",
+              "display": "Diabetes mellitus type 2"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-original"
+        },
+        "note": [
+          {
+            "text": "Synthetic note for Avery Example."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-observation",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-original",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4",
+              "display": "Hemoglobin A1c/Hemoglobin.total in Blood"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-original"
+        },
+        "effectiveDateTime": "2025-12-01",
+        "valueQuantity": {
+          "value": 7.2,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "note": [
+          {
+            "text": "Result reviewed by Avery Example."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-medication",
+      "resource": {
+        "resourceType": "MedicationStatement",
+        "id": "medication-original",
+        "status": "active",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "860975",
+              "display": "Synthetic tablet"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-original"
+        },
+        "note": [
+          {
+            "text": "Avery Example reports taking one tablet daily."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-allergy",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergy-original",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "764146007",
+              "display": "Synthetic medication allergy"
+            }
+          ]
+        },
+        "patient": {
+          "reference": "Patient/patient-original"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-procedure",
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "procedure-original",
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "71341001",
+              "display": "Synthetic procedure"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-original"
+        },
+        "performedDateTime": "2025-11-01"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:synthetic-provenance",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "provenance-original",
+        "target": [
+          {
+            "reference": "Condition/condition-original"
+          },
+          {
+            "reference": "Observation/observation-original"
+          }
+        ],
+        "recorded": "2026-01-01T00:00:00Z",
+        "activity": {
+          "coding": [
+            {
+              "system": "https://openmed.dev/fhir/CodeSystem/audit-activity",
+              "code": "synthetic-export"
+            }
+          ]
+        },
+        "agent": [
+          {
+            "who": {
+              "reference": "Device/openmed"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

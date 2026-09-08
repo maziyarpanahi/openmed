@@ -15,10 +15,24 @@ lives in **[docs/contributing.md](docs/contributing.md)**.
 
 ## Development setup
 
+The canonical development environment is managed by [uv](https://docs.astral.sh/uv/).
+From the repository root, run:
+
 ```bash
-uv pip install -e ".[dev]"      # editable install with test + lint deps
-# stack extras as needed, e.g. ".[dev,hf]" for Hugging Face model work
-pre-commit install              # auto-format staged files on commit
+uv sync --frozen --extra dev    # create .venv and install from uv.lock
+# stack extras as needed, e.g. --extra hf for Hugging Face model work
+uv run --frozen --extra dev pre-commit install  # auto-format staged files on commit
+```
+
+Use `uv run --frozen --extra dev <command>` or the Makefile targets so commands
+run inside the locked environment. If uv is unavailable, the supported fallback
+is a regular virtual environment and editable pip install:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/pre-commit install
 ```
 
 The pre-commit hooks also run the Gitleaks secret scanner on staged changes.
@@ -28,7 +42,7 @@ behavior, and baseline maintenance.
 ## Run the checks before opening a PR
 
 ```bash
-.venv/bin/python -m pytest tests/ -q     # run the test suite
+uv run --frozen --extra dev pytest tests/ -q
 make format                              # apply canonical Ruff formatting
 make lint                                # lint
 make type-check                          # scoped public-module type check
@@ -44,6 +58,9 @@ runs both gates. Do not run Black, isort, or flake8. For Swift changes under
 
 - Keep each PR focused on a single feature or fix; avoid unrelated formatting
   churn.
+- Name branches `<type>/issue-<number>-<short-kebab-slug>`, using a suitable type
+  such as `feat`, `fix`, `docs`, `test`, `chore`, or `refactor`; for example,
+  `docs/issue-280-maintainers`.
 - Write clear, imperative commit messages (the project uses concise prefixes
   such as `fix:`, `feat:`, and `docs:`).
 - Reference the issue you are closing and complete the
