@@ -19,7 +19,7 @@ from openmed.clinical.experiencer import resolve_experiencer
 from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.clinical_language import resolve_clinical_language
 
-CLINICAL_CONTEXT_VERSION = "clinical-context-v4"
+CLINICAL_CONTEXT_VERSION = "clinical-context-v5"
 DEFAULT_CONTEXT_TASKS = ("sections", "entities", "assertions")
 STRUCTURED_TASKS = ("medications", "labs", "vitals", "relations")
 TEMPORAL_TASKS = ("events", "timeline")

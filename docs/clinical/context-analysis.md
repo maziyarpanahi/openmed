@@ -47,7 +47,7 @@ this function on their controlled worker, never the HTTP event loop.
 
 ## Structured tasks
 
-Contract `clinical-context-v4` includes opt-in `medications`, `labs`, `vitals`, and
+Contract `clinical-context-v5` includes opt-in `medications`, `labs`, `vitals`, and
 `relations` tasks. The default remains sections/entities/assertions. The upstream
 extractor must supply compatible attribute spans: Drug/Chemical, Dose, Route,
 Frequency, Duration, Form, Strength, Lab Test, Lab Value, Reference Range,
@@ -89,6 +89,18 @@ uncertainty; `coding_eligible` is false. They are unconfirmed candidates.
   unit. Unknown units, unparsed values, unlinked analytes and orphan value spans
   remain inspectable without fabricated values. Explicit lab flags take
   precedence over reference comparisons. No critical threshold is invented.
+  A single combined Lab Test span containing a single-token name and one complete, parseable
+  written quantity may supply both parts. A combined Vital Sign span may do so
+  only for explicit LVEF (or the English/German full name) and a written percent.
+  This treats LVEF as a named measurement in `labs`; it does not add a vital-sign
+  class. The original entity and any unparsed vital record remain inspectable.
+  Derived name/value references have deterministic pattern provenance and no
+  assigned confidence; `source_parts` retains the original model offsets,
+  label and score. Context is inherited from that model span. Overlapping model
+  evidence, incomplete quantities, comparisons, ranges, multiple values and
+  scope crossings cannot supply such a derived measurement. It borrows no
+  reference range or abnormal flag from neighboring observations, supplies no
+  missing unit or code, and remains an unconfirmed review candidate.
 - **Vitals:** each located source span must describe one measurement. A span
   containing both blood pressure and heart rate is unparsed, rather than silently
   retaining the first measurement. Blood-pressure components retain their source

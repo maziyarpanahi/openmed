@@ -319,8 +319,165 @@ def test_section_header_model_predictions_are_inspectable_but_not_structured_lab
         ["entities", "labs", "vitals"],
     )
     assert len(result["tasks"]["entities"]["records"]) == 2
-    assert result["tasks"]["labs"]["records"] == []
+    lab = result["tasks"]["labs"]["records"][0]
+    assert text[lab["source"]["start"] : lab["source"]["end"]] == "LVEF"
+    assert lab["measurement"]["canonical_magnitude"] == 0.55
+    assert lab["source"]["source_parts"] == [result["tasks"]["entities"]["records"][1]]
     assert result["tasks"]["vitals"]["records"][0]["extraction_status"] == "unparsed"
+
+
+@pytest.mark.parametrize(
+    "source,label,language,expected",
+    [
+        ("LVEF 55 %", "Vital Sign", "de", 0.55),
+        ("LVEF: 55,5%", "Vital Sign", "de", 0.555),
+        ("left ventricular ejection fraction 55.5 %", "Vital Sign", "en", 0.555),
+        ("linksventrikuläre Ejektionsfraktion 55 %", "Vital Sign", "de", 0.55),
+        ("LVEF 55 %", "Lab Test", "de", 0.55),
+        ("HbA1c 5,5 %", "Lab Test", "de", 0.055),
+    ],
+)
+def test_composite_measurement_retains_exact_parts_and_model_context(
+    source, label, language, expected
+):
+    prefix = "Familienanamnese: " if language == "de" else "Family history: "
+    text = prefix + source
+    original = {"start": len(prefix), "end": len(text), "label": label, "score": 0.91}
+    result = analyze_clinical_context(
+        text, [original], language=language, tasks=["entities", "assertions", "labs"]
+    )
+    assert result["status"] == "needs_review" and result["complete"]
+    entities = result["tasks"]["entities"]["records"]
+    assert entities[0]["start"] == original["start"]
+    assert entities[0]["end"] == original["end"]
+    assert entities[0]["label"] == label
+    record = result["tasks"]["labs"]["records"][0]
+    assert record["measurement"]["canonical_magnitude"] == pytest.approx(expected)
+    assert record["measurement"]["canonical_unit"] == "1"
+    assert record["abnormal_flag"] == "unknown" and record["reference_range"] is None
+    assert not record["coding_eligible"]
+    assert record["context"]["experiencer"] == "family"
+    assert record["context"]["entity_id"] == record["source"]["id"]
+    for part in (record["source"], record["evidence"][0]):
+        assert part["source_parts"] == entities
+        assert part["score"] is None
+        assert part["score_kind"] == "deterministic_source_pattern"
+        assert part["span_repair"] == "composite_named_measurement"
+    assert text[record["evidence"][0]["start"] : record["evidence"][0]["end"]] in source
+    assert source not in json.dumps(result, ensure_ascii=False)
+
+
+@pytest.mark.parametrize(
+    "source,label",
+    [
+        ("patient 55 %", "Vital Sign"),
+        ("CRP 5 mg/L", "Vital Sign"),
+        ("LVEF 55", "Vital Sign"),
+        ("LVEF 55 mg", "Vital Sign"),
+        ("LVEF <55 %", "Vital Sign"),
+        ("LVEF approximately 55 %", "Vital Sign"),
+        ("LVEF 55–60 %", "Vital Sign"),
+        ("LVEF 55 % 60 %", "Vital Sign"),
+        ("LVEF 55 % RR 120/80 mmHg", "Vital Sign"),
+        ("LVEF\n55 %", "Vital Sign"),
+        ("LVEF 55 unknownunit", "Lab Test"),
+        ("LVEF approximately 55 %", "Lab Test"),
+        ("LVEF etwa 55 %", "Lab Test"),
+        ("LVEF <55 %", "Lab Test"),
+        ("LVEF 55–60 %", "Lab Test"),
+        ("LVEF 55 % 60 %", "Lab Test"),
+    ],
+)
+def test_ambiguous_composite_cannot_supply_a_measurement(source, label):
+    result = analyze(source, [(source, label, 0.9)], ["labs"])
+    assert all(r.get("measurement") is None for r in result["tasks"]["labs"]["records"])
+
+
+@pytest.mark.parametrize(
+    "suffix", ["/d", " / d", "foo", " - 60 %", " bis 60 %", ", 60 %"]
+)
+def test_composite_value_cannot_end_inside_a_larger_quantity(suffix):
+    source = "LVEF 55 %"
+    result = analyze(source + suffix, [(source, "Vital Sign", 0.9)], ["labs"])
+    assert result["tasks"]["labs"]["records"] == []
+
+
+def test_composite_does_not_duplicate_overlapping_model_name_and_value():
+    source = "LVEF 55 %"
+    result = analyze(
+        source,
+        [
+            (source, "Vital Sign", 0.9),
+            ("LVEF", "Lab Test", 0.9),
+            ("55 %", "Lab Value", 0.9),
+        ],
+        ["labs"],
+    )
+    records = result["tasks"]["labs"]["records"]
+    assert (
+        len(records) == 1 and records[0]["measurement"]["canonical_magnitude"] == 0.55
+    )
+    assert "span_repair" not in records[0]["source"]
+
+
+def test_combined_analyte_uses_existing_unit_normalizer():
+    from openmed.clinical.units import parse_measurement
+
+    source = "CRP: 5 mg/L"
+    result = analyze(source, [(source, "Lab Test", 0.9)], ["labs"])
+    record = result["tasks"]["labs"]["records"][0]
+    expected = parse_measurement("5 mg/L", language="de")
+    assert (
+        record["measurement"]["canonical_magnitude"] == expected["canonical_magnitude"]
+    )
+    assert record["measurement"]["canonical_unit"] == expected["canonical_unit"]
+    assert source[record["source"]["start"] : record["source"]["end"]] == "CRP"
+
+
+def test_composite_cannot_borrow_another_analytes_value_or_range():
+    source = "LVEF 55 %, CRP 5 mg/L (0-10 mg/L)"
+    result = analyze(
+        source,
+        [
+            ("LVEF 55 %", "Vital Sign", 0.9),
+            ("CRP", "Lab Test", 0.9),
+            ("5 mg/L", "Lab Value", 0.9),
+            ("0-10 mg/L", "Reference Range", 0.9),
+        ],
+        ["labs"],
+    )
+    lvef, crp = result["tasks"]["labs"]["records"]
+    assert lvef["measurement"]["canonical_magnitude"] == 0.55
+    assert lvef["reference_range"] is None and lvef["abnormal_flag"] == "unknown"
+    assert source[crp["source"]["start"] : crp["source"]["end"]] == "CRP"
+    assert crp["measurement"]["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    "prefix,axis,value",
+    [
+        ("Keine ", "negation", "negated"),
+        ("Möglicherweise ", "uncertainty", "uncertain"),
+    ],
+)
+def test_composite_inherits_assertion_without_becoming_a_confirmed_fact(
+    prefix, axis, value
+):
+    source = "LVEF 55 %"
+    result = analyze(prefix + source, [(source, "Vital Sign", 0.9)], ["labs"])
+    record = result["tasks"]["labs"]["records"][0]
+    assert record["context"][axis] == value and not record["coding_eligible"]
+
+
+def test_composite_spans_obey_the_existing_scope_quota():
+    source = "LVEF 55 % " * 65
+    spans = [
+        {"start": i * 10, "end": i * 10 + 9, "label": "Vital Sign", "score": 0.9}
+        for i in range(65)
+    ]
+    result = analyze_clinical_context(source, spans, language="de", tasks=["labs"])
+    assert result["tasks"]["labs"]["error"] == "clinical_scope_entity_limit"
+    assert result["tasks"]["labs"]["records"] == []
 
 
 @pytest.mark.parametrize("separator", ["\n", "; ", ". ", " aber "])

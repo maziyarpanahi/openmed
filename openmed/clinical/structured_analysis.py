@@ -36,6 +36,21 @@ _LAB_ROLES = {
     "Reference Range": "reference_range",
     "Abnormal Flag": "abnormal_flag",
 }
+_COMPOSITE_MEASUREMENT = re.compile(
+    r"(?P<name>[^\W\d_][\w/-]*(?:[ \t]+[^\W\d_][\w/-]*){0,5})"
+    r"(?:[ \t]*:[ \t]*|[ \t]+)"
+    r"(?P<value>[+-]?\d+(?:[.,]\d+)?[ \t]*[^\d\s][^\r\n;!?<>≤≥≈=]{0,63})"
+)
+# A model's broad Vital Sign label is insufficient evidence for an arbitrary
+# analyte. Only this explicit name plus a written percent is routed to labs.
+_EJECTION_FRACTION_NAME = re.compile(
+    r"LVEF|left[ \t]+ventricular[ \t]+ejection[ \t]+fraction|"
+    r"linksventrikuläre[ \t]+Ejektionsfraktion",
+    re.IGNORECASE,
+)
+_MEASUREMENT_CONTINUATION = re.compile(
+    r"[ \t]*(?:[-–—/<>≤≥≈]|(?:bis|to)\b|,[ \t]*\d)", re.IGNORECASE
+)
 
 
 def _scopes(text, entities, sections, check):
@@ -290,8 +305,85 @@ def _medications(text, entities, sections, assertions, language, check):
     ]
 
 
+def _composite_measurements(text, entities, sections, assertions, language, check):
+    """Split one complete model span into source-backed name/value evidence."""
+    records = []
+    for group in _scopes(text, entities, sections, check):
+        for entity in group:
+            check()
+            if entity["label"] not in {"Lab Test", "Vital Sign"}:
+                continue
+            start, end = entity["start"], entity["end"]
+            surface = text[start:end]
+            if len(surface) > 192 or not _quantity_boundary_complete(text, start, end):
+                continue
+            match = _COMPOSITE_MEASUREMENT.fullmatch(surface)
+            if not match or _MEASUREMENT_CONTINUATION.match(text, end):
+                continue
+            named_ejection_fraction = _EJECTION_FRACTION_NAME.fullmatch(match["name"])
+            if re.search(r"[ \t]", match["name"]) and not named_ejection_fraction:
+                continue  # Do not consume prose qualifiers as part of a name.
+            if entity["label"] == "Vital Sign" and not (
+                named_ejection_fraction
+                and re.fullmatch(r"\d+(?:[.,]\d+)?[ \t]*%", match["value"])
+            ):
+                continue
+            if any(
+                other["id"] != entity["id"]
+                and other["start"] < end
+                and start < other["end"]
+                for other in entities
+            ):
+                continue  # Existing overlapping evidence is not silently replaced.
+            parts = {}
+            for role, label in (("name", "Lab Test"), ("value", "Lab Value")):
+                parts[role] = {
+                    **entity,
+                    "id": f"measurement-{role}:{entity['id']}",
+                    "start": start + match.start(role),
+                    "end": start + match.end(role),
+                    "label": label,
+                    "score": None,
+                    "score_kind": "deterministic_source_pattern",
+                    "span_repair": "composite_named_measurement",
+                    "source_parts": [_reference(entity)],
+                }
+            measurement, _ = _measurement(text, parts["value"], language)
+            if measurement["status"] != "ok":
+                continue
+            head = parts["name"]
+            records.append(
+                {
+                    "source": _reference(head),
+                    "context": {
+                        **_context(entity, assertions),
+                        "entity_id": head["id"],
+                        "start": head["start"],
+                        "end": head["end"],
+                    },
+                    "measurement": measurement,
+                    "reference_range": None,
+                    "abnormal_flag": "unknown",
+                    "abnormal_flag_source": None,
+                    "evidence": [{"role": "value", **_reference(parts["value"])}],
+                    "extraction_status": "parsed",
+                    "coding_eligible": False,
+                }
+            )
+    return records
+
+
 def _labs(text, entities, sections, assertions, language, check):
-    relevant = [e for e in entities if e["label"] in _LAB_ROLES]
+    candidates = [e for e in entities if e["label"] in {*_LAB_ROLES, "Vital Sign"}]
+    records = _composite_measurements(
+        text, candidates, sections, assertions, language, check
+    )
+    composite_ids = {r["source"]["source_parts"][0]["id"] for r in records}
+    relevant = [
+        e
+        for e in candidates
+        if e["label"] in _LAB_ROLES and e["id"] not in composite_ids
+    ]
     by_id = {e["id"]: e for e in relevant}
     links = {}
     for group in _scopes(text, relevant, sections, check):
@@ -301,7 +393,7 @@ def _labs(text, entities, sections, assertions, language, check):
         )
         for edge in graph.edges:
             links[edge.head, edge.label] = edge.tail
-    records, used_values = [], set()
+    used_values = set()
     for head in relevant:
         if head["label"] != "Lab Test":
             continue
