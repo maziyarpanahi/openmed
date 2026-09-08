@@ -712,24 +712,33 @@ def _dose_role_score(
     normalized_action = trigger.normalized
     german = trigger.provenance.get("language") == "de"
 
-    if role == "old_dose":
-        if re.search(
+    explicit_old = bool(
+        re.search(
             r"\b(?:von|zuvor|bisher)\s*$"
             if german
             else r"\b(?:from|prior|previous|former|was)\s*$",
             preceding,
-        ):
-            return 0.20
+        )
+    )
+    explicit_new = bool(
+        re.search(
+            r"\b(?:auf|jetzt|nun)\s*$" if german else r"\b(?:to|at|now|new)\s*$",
+            preceding,
+        )
+    )
+    # Explicit source roles override proximity for both requested roles.
+    # A missing counterpart must not recycle the available dose twice.
+    if explicit_old or explicit_new:
+        matches = explicit_old if role == "old_dose" else explicit_new
+        return 0.20 if matches else None
+
+    if role == "old_dose":
         if normalized_action in {"increased", "decreased"} and before_trigger:
             return 0.12
         if normalized_action in {"held", "stopped"}:
             return 0.08
         return None
 
-    if re.search(
-        r"\b(?:auf|jetzt|nun)\s*$" if german else r"\b(?:to|at|now|new)\s*$", preceding
-    ):
-        return 0.20
     if normalized_action in {"started", "restarted"} and following_trigger:
         return 0.16
     if normalized_action in {"increased", "decreased"} and following_trigger:

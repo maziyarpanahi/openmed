@@ -110,7 +110,11 @@ its medication-change/lab-trend frame builders and timeline assembler over the
 validated entities. Drug heads retain the 0.75 candidate threshold. Original
 head, trigger, attribute and date offsets accompany each candidate; source
 surfaces and raw helper messages are excluded. Numeric fragment guards also apply
-to old/new event doses. Strength is not reinterpreted as dose.
+to old/new event doses. Strength is not reinterpreted as dose. An explicit
+`from`/`von` quantity cannot fill the new-dose role, and a `to`/`auf` quantity
+cannot fill the old-dose role when the counterpart is missing. Actual GLiNER
+diagnostics labeled the new 50 mg amount as Strength in German and English
+change statements; that missing event dose remains an extraction limitation.
 
 German trigger rules distinguish start, restart, stop, increase, decrease and hold,
 and rising/falling/stable laboratory trends. A continued regimen is not inferred

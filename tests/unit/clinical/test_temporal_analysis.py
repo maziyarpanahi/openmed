@@ -127,6 +127,19 @@ def test_elevated_lab_beside_medication_is_not_a_dose_increase():
     )
 
 
+def test_native_strength_prediction_leaves_new_dose_missing_without_reusing_old():
+    text = "Metoprolol increased from 25 mg to 50 mg."
+    result = analyze(
+        text,
+        [("Metoprolol", "Drug"), ("25 mg", "Dose"), ("50 mg", "Strength")],
+        language="en",
+    )
+    attributes = result["tasks"]["events"]["records"][0]["attributes"]
+    assert [(a["role"], a["normalized"]["value"]) for a in attributes] == [
+        ("old_dose", 25)
+    ]
+
+
 def test_event_actions_do_not_link_across_sentences_or_competing_heads():
     text = "Metoprolol. Ramipril und Amlodipin wurden begonnen."
     result = analyze(

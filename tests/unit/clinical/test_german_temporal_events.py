@@ -117,6 +117,28 @@ def test_german_lab_trend_has_analyte_and_trigger_evidence():
     assert frames[0].role_slots("analyte")[0].value == "CRP"
 
 
+@pytest.mark.parametrize(
+    "language,text,surface,expected_role",
+    [
+        ("en", "Metoprolol increased from 25 mg to 50 mg.", "25 mg", "old_dose"),
+        ("de", "Metoprolol von 25 mg auf 50 mg erhöht.", "50 mg", "new_dose"),
+        ("en", "Metoprolol was reduced to 25 mg.", "25 mg", "new_dose"),
+        ("de", "Metoprolol von 50 mg reduziert.", "50 mg", "old_dose"),
+    ],
+)
+def test_explicit_dose_role_cannot_fill_its_missing_counterpart(
+    language, text, surface, expected_role
+):
+    frame = extract_medication_change_events(
+        text,
+        [mention(text, "Metoprolol", "Drug"), mention(text, surface, "Dose")],
+        language=language,
+    )[0]
+    assert frame.role_slots(expected_role)[0].value == surface
+    other_role = "old_dose" if expected_role == "new_dose" else "new_dose"
+    assert not frame.role_slots(other_role)
+
+
 def test_continuation_and_other_language_are_not_silently_restarts():
     for cue in ("fortgesetzt", "started"):
         text = f"Metoprolol {cue}."
