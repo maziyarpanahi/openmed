@@ -156,6 +156,122 @@ def test_different_model_labels_cannot_turn_decimal_tail_into_a_dose():
         for a in attrs
     )
     assert result["tasks"]["relations"]["records"] == []
+    written = result["tasks"]["medications"]["records"][0]["written_amounts"][0]
+    assert written["normalized"]["value"] == 47.5
+    assert written["normalized"]["unit"] == "mg"
+    assert written["semantic_type"] == "unspecified" and written["requires_review"]
+    assert {part["label"] for part in written["source_parts"]} == {"Dose", "Strength"}
+    assert text[written["source"]["start"] : written["source"]["end"]] == "47,5 mg"
+
+
+@pytest.mark.parametrize(
+    "language,text,head,amount",
+    [
+        (
+            "de",
+            "Keine Dyspnoe. Patient nimmt Metoprolol 47,5 mg.",
+            "Metoprolol 47",
+            "47,5 mg",
+        ),
+        ("en", "Patient takes metoprolol 47.5 mg.", "metoprolol 47", "47.5 mg"),
+        ("de", "Medikation: Vitamin B12 1,5 mg.", "Vitamin B12 1", "1,5 mg"),
+    ],
+)
+def test_drug_partial_decimal_boundary_retains_model_evidence(
+    language, text, head, amount
+):
+    start = text.index(head)
+    original = {
+        "start": start,
+        "end": start + len(head),
+        "label": "Drug",
+        "score": 0.98,
+        "text": head,
+    }
+    result = analyze_clinical_context(
+        text,
+        [original],
+        language=language,
+        tasks=["entities", "assertions", "medications"],
+    )
+    entity = result["tasks"]["entities"]["records"][0]
+    assert text[entity["start"] : entity["end"]] == head.rsplit(" ", 1)[0]
+    assert entity["source_parts"][0]["end"] == original["end"]
+    assert entity["score_kind"] == "model_score_before_boundary_repair"
+    assert result["tasks"]["assertions"]["records"][0]["end"] == entity["end"]
+    written = result["tasks"]["medications"]["records"][0]["written_amounts"][0]
+    assert text[written["source"]["start"] : written["source"]["end"]] == amount
+    assert written["semantic_type"] == "unspecified"
+    assert original["text"] == head and original["end"] == start + len(head)
+    assert head not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "text,head",
+    [
+        ("Vitamin B12 1 mg.", "Vitamin B12"),
+        ("Humalog Mix 25 mg.", "Humalog Mix 25"),
+        ("Metoprolol 47,5.", "Metoprolol 47"),
+        ("Metoprolol 47,5 mg/kg.", "Metoprolol 47"),
+        ("Metoprolol 47,5 unknownunit.", "Metoprolol 47"),
+        ("Metoprolol 47, 5 mg.", "Metoprolol 47"),
+    ],
+)
+def test_drug_numeric_suffix_is_not_trimmed_without_full_decimal_quantity(text, head):
+    result = analyze(text, [(head, "Drug", 0.99)], ["entities"])
+    entity = result["tasks"]["entities"]["records"][0]
+    assert text[entity["start"] : entity["end"]] == head and "span_repair" not in entity
+
+
+@pytest.mark.parametrize(
+    "text,head",
+    [
+        ("Metoprolol 47, 5 mg.", "Metoprolol 47"),
+        ("Metoprolol 147 mg.", "Metoprolol 1"),
+        ("Metoprolol 5 mg/kg.", "Metoprolol"),
+        ("Metoprolol 5 mg / kg.", "Metoprolol"),
+        ("Metoprolol.\n5 mg.", "Metoprolol"),
+        ("Metoprolol und Ramipril 5 mg.", "Metoprolol"),
+    ],
+)
+def test_written_amount_does_not_recover_partial_or_distant_quantities(text, head):
+    result = analyze(text, [(head, "Drug", 0.99)], ["medications"])
+    assert result["tasks"]["medications"]["records"][0]["written_amounts"] == []
+
+
+def test_german_treatment_and_course_sections_end_family_attribution():
+    text = "Familienanamnese:\nVater mit Diabetes.\nTherapie:\nMetoprolol begonnen.\nVerlauf:\nKeine Dyspnoe."
+    result = analyze(
+        text,
+        [
+            ("Diabetes", "Disease", 0.9),
+            ("Metoprolol", "Drug", 0.9),
+            ("Dyspnoe", "Symptom", 0.9),
+        ],
+        ["sections", "entities", "assertions"],
+    )
+    sections = result["tasks"]["sections"]["records"]
+    assert [s["label"] for s in sections] == [
+        "family_history",
+        "treatment",
+        "clinical_course",
+    ]
+    assert all(not s.get("coding") for s in sections[1:])
+    assertions = result["tasks"]["assertions"]["records"]
+    assert [a["experiencer"] for a in assertions] == ["family", "patient", "patient"]
+    assert assertions[-1]["negation"] == "negated"
+
+
+def test_quantity_scan_limit_does_not_apply_without_a_drug():
+    text = "5 mg " * 2001
+    result = analyze_clinical_context(text, [], language="de", tasks=["entities"])
+    assert result["complete"] and result["tasks"]["entities"]["records"] == []
+
+
+def test_quantity_scan_limit_is_explicit_for_medication_work():
+    text = "Metoprolol " + "5 mg " * 2001
+    with pytest.raises(ClinicalAnalysisError, match="clinical_quantity_limit"):
+        analyze(text, [("Metoprolol", "Drug", 0.99)], ["medications"])
 
 
 def test_unknown_medication_unit_cannot_echo_source_in_normalization_error():

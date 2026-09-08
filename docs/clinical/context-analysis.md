@@ -47,13 +47,14 @@ this function on their controlled worker, never the HTTP event loop.
 
 ## Structured tasks
 
-Contract `clinical-context-v3` includes opt-in `medications`, `labs`, `vitals`, and
+Contract `clinical-context-v4` includes opt-in `medications`, `labs`, `vitals`, and
 `relations` tasks. The default remains sections/entities/assertions. The upstream
 extractor must supply compatible attribute spans: Drug/Chemical, Dose, Route,
 Frequency, Duration, Form, Strength, Lab Test, Lab Value, Reference Range,
-Abnormal Flag, Vital Sign, Anatomy and Severity. This API does not find missing
-attributes itself. A complete task means all supplied spans were processed, not
-that every clinical concept in the source was extracted.
+Abnormal Flag, Vital Sign, Anatomy and Severity. A bounded source pattern can
+also recover a written amount immediately after a detected drug; other missing
+attributes still require extraction. A complete task means all supplied spans
+were processed, not that every clinical concept in the source was extracted.
 
 Structured tasks also require complete upstream coverage and a supported EN/DE
 preview language. They compute context even when `assertions` is not explicitly
@@ -70,8 +71,8 @@ uncertainty; `coding_eligible` is false. They are unconfirmed candidates.
   Same-label adjacent fragments of an explicitly localized decimal quantity can
   be rejoined only when the original text parses as one valid amount/unit. The
   structured reference records both source parts and the repair rule; original
-  entity records stay unchanged. Strength remains strength, including a
-  `DRUG_STRENGTH` relation, and cannot become a prescribed dose. Its amount/unit
+  entity records stay unchanged for this repair. Strength remains strength,
+  including a `DRUG_STRENGTH` relation, and cannot become a prescribed dose. Its amount/unit
   use the quantity normalizer. Partial units, different quantities and source
   scope/context changes cannot be joined.
   Original-source quantity boundaries are checked before normalization. A
@@ -103,6 +104,30 @@ Unexpected helper failures use a finite error code without exception/source text
 Cancellation or timeout still aborts the entire composition. These synthetic
 regressions and bounds do not provide independent language qualification.
 
+German `Therapie`/`Behandlung` and `Verlauf`/`Klinischer Verlauf` headings map to
+neutral `treatment` and `clinical_course` sections. They end inherited family
+history scope without assigning an unverified terminology code or a future/past
+temporal prior.
+
+For a Drug prediction ending *inside* a decimal amount followed by a recognized
+unit, the SDK can trim the drug boundary to the preceding word. It retains the
+original prediction in `source_parts`, the complete quantity offsets, and
+`score_kind=model_score_before_boundary_repair`: that confidence describes the
+original span, not a new calibrated boundary. Integer suffixes in drug names,
+unknown units and partial compound units cannot trigger this repair.
+
+Medication records also carry `written_amounts`. These are normalized complete
+amounts immediately following the drug on the same line, with source offsets,
+supporting Dose/Strength predictions and `semantic_type=unspecified`. They recover
+the written `47,5 mg` when conflicting model labels prevent an attribute merge,
+without converting it into a confirmed prescribed dose or product strength.
+They do not infer a missing amount or attach a distant measurement. Existing
+partial-dose rejection remains in force. These rules remain unqualified and
+require review alongside the source.
+Medication quantity scanning admits at most 2,000 source quantity candidates;
+an excess fails explicitly with `clinical_quantity_limit`. Documents without a
+drug prediction do not invoke this scan or inherit its limit.
+
 ## Events and timelines
 
 `events` and `timeline` are additional opt-in EN/DE preview tasks. The SDK composes
@@ -110,11 +135,12 @@ its medication-change/lab-trend frame builders and timeline assembler over the
 validated entities. Drug heads retain the 0.75 candidate threshold. Original
 head, trigger, attribute and date offsets accompany each candidate; source
 surfaces and raw helper messages are excluded. Numeric fragment guards also apply
-to old/new event doses. Strength is not reinterpreted as dose. An explicit
+to old/new event doses. Strength retains its original label. An explicit
 `from`/`von` quantity cannot fill the new-dose role, and a `to`/`auf` quantity
-cannot fill the old-dose role when the counterpart is missing. Actual GLiNER
-diagnostics labeled the new 50 mg amount as Strength in German and English
-change statements; that missing event dose remains an extraction limitation.
+cannot fill the old-dose role when the counterpart is missing. Explicit change
+grammar can assign a complete Strength span to an old/new event amount, with
+`role_source=explicit_change_grammar` and the original label/offsets retained.
+An isolated strength without such wording cannot become an event dose.
 
 German trigger rules distinguish start, restart, stop, increase, decrease and hold,
 and rising/falling/stable laboratory trends. A continued regimen is not inferred

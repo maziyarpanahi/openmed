@@ -203,6 +203,8 @@ GERMAN_SECTION_LEXICON = SectionLexicon(
         "findings": ("Befund", "Befunde", "Untersuchungsbefund"),
         "assessment": ("Beurteilung", "Einschätzung", "Einschaetzung"),
         "plan": ("Plan", "Therapieplan"),
+        "treatment": ("Therapie", "Behandlung"),
+        "clinical_course": ("Verlauf", "Klinischer Verlauf"),
     },
 )
 

@@ -127,17 +127,45 @@ def test_elevated_lab_beside_medication_is_not_a_dose_increase():
     )
 
 
-def test_native_strength_prediction_leaves_new_dose_missing_without_reusing_old():
-    text = "Metoprolol increased from 25 mg to 50 mg."
+@pytest.mark.parametrize(
+    "language,text",
+    [
+        ("en", "Metoprolol increased from 25 mg to 50 mg."),
+        ("de", "Metoprolol wurde von 25 mg auf 50 mg erhöht."),
+    ],
+)
+def test_explicit_change_grammar_recovers_native_strength_role(language, text):
     result = analyze(
         text,
         [("Metoprolol", "Drug"), ("25 mg", "Dose"), ("50 mg", "Strength")],
-        language="en",
+        language=language,
     )
     attributes = result["tasks"]["events"]["records"][0]["attributes"]
-    assert [(a["role"], a["normalized"]["value"]) for a in attributes] == [
-        ("old_dose", 25)
-    ]
+    assert {a["role"]: a["normalized"]["value"] for a in attributes} == {
+        "old_dose": 25,
+        "new_dose": 50,
+    }
+    new = next(a for a in attributes if a["role"] == "new_dose")
+    assert new["source"]["label"] == "Strength"
+    assert new["role_source"] == "explicit_change_grammar"
+    assert text[new["source"]["start"] : new["source"]["end"]] == "50 mg"
+
+
+@pytest.mark.parametrize(
+    "text,language",
+    [
+        ("Metoprolol 50 mg increased.", "en"),
+        ("Metoprolol 50 mg erhöht.", "de"),
+        ("Metoprolol started. New tablet strength 50 mg.", "en"),
+    ],
+)
+def test_strength_without_local_explicit_role_does_not_become_event_dose(
+    text, language
+):
+    result = analyze(
+        text, [("Metoprolol", "Drug"), ("50 mg", "Strength")], language=language
+    )
+    assert all(not e["attributes"] for e in result["tasks"]["events"]["records"])
 
 
 def test_event_actions_do_not_link_across_sentences_or_competing_heads():

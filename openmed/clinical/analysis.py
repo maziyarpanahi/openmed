@@ -19,7 +19,7 @@ from openmed.clinical.experiencer import resolve_experiencer
 from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.clinical_language import resolve_clinical_language
 
-CLINICAL_CONTEXT_VERSION = "clinical-context-v3"
+CLINICAL_CONTEXT_VERSION = "clinical-context-v4"
 DEFAULT_CONTEXT_TASKS = ("sections", "entities", "assertions")
 STRUCTURED_TASKS = ("medications", "labs", "vitals", "relations")
 TEMPORAL_TASKS = ("events", "timeline")
@@ -229,6 +229,15 @@ def analyze_clinical_context(
     except (TypeError, ValueError):
         raise ClinicalAnalysisError("invalid_clinical_language") from None
     check()
+    if (
+        entity_coverage_complete
+        and not resolved.needs_review
+        and not resolved.mixed
+        and resolved.language in CONTEXT_LANGUAGES
+    ):
+        from openmed.clinical.quantity_evidence import _repair_drug_decimal_boundaries
+
+        spans = _repair_drug_decimal_boundaries(text, spans, resolved.language, check)
     section_language = (
         resolved.language
         if resolved.source == "explicit" or not resolved.needs_review

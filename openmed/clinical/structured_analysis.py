@@ -70,7 +70,14 @@ def _reference(entity):
             for key in ("id", "start", "end", "label", "score", "section_id")
         },
         **{
-            key: entity[key] for key in ("span_repair", "source_parts") if key in entity
+            key: entity[key]
+            for key in (
+                "span_repair",
+                "source_parts",
+                "quantity_evidence",
+                "score_kind",
+            )
+            if key in entity
         },
     }
 
@@ -202,6 +209,8 @@ def _normalized_range(reference, unit, language):
 
 
 def _medications(text, entities, sections, assertions, language, check):
+    from openmed.clinical.quantity_evidence import _written_amounts
+
     entities, assertions = _repair_numeric_attributes(
         text, entities, assertions, language, check
     )
@@ -272,6 +281,7 @@ def _medications(text, entities, sections, assertions, language, check):
             "source": _reference(drug),
             "context": _context(drug, assertions),
             "attributes": attributes[drug["id"]],
+            "written_amounts": _written_amounts(text, drug, entities, language, check),
             "grounding_performed": False,
             "candidate_status": "unconfirmed",
             "coding_eligible": False,

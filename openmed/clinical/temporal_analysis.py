@@ -197,12 +197,33 @@ def _events(text, entities, sections, assertions, language, timexes, check):
                 for e in selected_heads
             ]
             for entity in group:
+                # A model Strength span can supply an event amount only when
+                # explicit change grammar supplies the role; retain its label.
+                explicit_strength_role = None
+                if label == "drug" and entity["label"] == "Strength":
+                    prefix = text[max(left, entity["start"] - 24) : entity["start"]]
+                    if re.search(
+                        r"\b(?:von|zuvor|bisher)\s*$"
+                        if language == "de"
+                        else r"\b(?:from|prior|previous|former)\s*$",
+                        prefix,
+                        re.IGNORECASE,
+                    ):
+                        explicit_strength_role = "old_dose"
+                    elif re.search(
+                        r"\b(?:auf|jetzt|nun)\s*$"
+                        if language == "de"
+                        else r"\b(?:to|now|new)\s*$",
+                        prefix,
+                        re.IGNORECASE,
+                    ):
+                        explicit_strength_role = "new_dose"
                 attr_label = (
                     "dose"
                     if label == "drug" and entity["label"] == "Dose"
                     else "lab_value"
                     if label == "analyte" and entity["label"] == "Lab Value"
-                    else None
+                    else explicit_strength_role
                 )
                 if attr_label and _quantity_boundary_complete(
                     text, entity["start"], entity["end"]
@@ -258,6 +279,11 @@ def _events(text, entities, sections, assertions, language, timexes, check):
                 for slot in slots:
                     entity = by_id[slot.source_id]
                     attribute = {"role": role, "source": _reference(entity)}
+                    if (
+                        role in {"old_dose", "new_dose"}
+                        and entity["label"] == "Strength"
+                    ):
+                        attribute["role_source"] = "explicit_change_grammar"
                     if role in {"old_dose", "new_dose"}:
                         parsed = normalize_medication_attribute(
                             "dose",
