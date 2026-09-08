@@ -34,6 +34,10 @@
       "action": "keep",
       "field_type": "internal-linkage"
     },
+    "person.person_source_value": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
     "person.year_of_birth": "keep",
     "person.month_of_birth": "keep",
     "person.day_of_birth": "keep",

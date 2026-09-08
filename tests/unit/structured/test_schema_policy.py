@@ -11,6 +11,7 @@ import pytest
 
 from openmed.core.date_shift import stable_offset_for
 from openmed.structured.schema_policy import (
+    SchemaPolicyError,
     apply_omop_file,
     apply_schema_policy,
     lint_schema_policy,
@@ -135,7 +136,7 @@ def test_apply_schema_policy_to_linked_omop_rows_is_subject_consistent():
     assert "month_of_birth" not in person
     assert "day_of_birth" not in person
     assert "location_id" not in person
-    assert person["person_source_value"] == "Synthetic [NAME]"
+    assert "person_source_value" not in person
     assert visit["visit_source_value"] == "Visit for Synthetic [NAME]"
 
     birth_offset = _date_offset("1980-01-15", person["birth_datetime"])
@@ -172,6 +173,186 @@ def test_uncovered_identifier_fails_closed_and_lint_reports_uncovered_fields():
         "id": "synthetic-patient-2",
         "customClinicalField": "non-identifying value",
     }
+
+
+def test_fhir_bundle_sanitizes_wrapper_narrative_and_reference_aliases():
+    patient_url = "https://example.invalid/Patient/Avery-Example"
+    bundle = {
+        "resourceType": "Bundle",
+        "type": "transaction",
+        "identifier": {"value": "MRN-LEAK"},
+        "link": [{"url": "https://example.invalid/Avery-Example"}],
+        "signature": {"who": {"display": "Avery Example"}},
+        "entry": [
+            {
+                "fullUrl": patient_url,
+                "request": {"method": "PUT", "url": "Patient/Avery-Example"},
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "patient-1",
+                    "birthDate": "1980-01-15",
+                    "text": {
+                        "status": "generated",
+                        "div": "<div>Avery Example 555-0100</div>",
+                    },
+                },
+            },
+            {
+                "fullUrl": "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "observation-1",
+                    "status": "final",
+                    "code": {"text": "Result for Avery Example"},
+                    "subject": {"reference": patient_url},
+                    "effectiveDateTime": "2024-03-20T09:30:00Z",
+                },
+            },
+        ],
+    }
+
+    transformed = apply_schema_policy(
+        bundle,
+        "fhir_hipaa_safe_harbor",
+        date_shift_secret=DATE_SECRET,
+        deidentifier=_fake_deidentify,
+    )
+
+    patient_entry, observation_entry = transformed["entry"]
+    patient = patient_entry["resource"]
+    observation = observation_entry["resource"]
+    assert "fullUrl" not in patient_entry
+    assert "request" not in patient_entry
+    assert observation_entry["fullUrl"].startswith("urn:uuid:")
+    assert observation["subject"]["reference"] == "Patient/patient-1"
+    assert _date_offset("1980-01-15", patient["birthDate"]) == _date_offset(
+        "2024-03-20T09:30:00Z",
+        observation["effectiveDateTime"],
+    )
+    assert patient["text"]["div"] == "<div>[NAME] [PHONE]</div>"
+    assert "identifier" not in transformed
+    assert "link" not in transformed
+    assert "signature" not in transformed
+    serialized = json.dumps(transformed, sort_keys=True)
+    assert "Avery Example" not in serialized
+    assert "MRN-LEAK" not in serialized
+    assert lint_schema_policy(bundle, "fhir_hipaa_safe_harbor") == ()
+
+
+def test_fhir_resource_without_policy_rules_is_rejected():
+    with pytest.raises(SchemaPolicyError, match="has no schema-policy rules"):
+        apply_schema_policy(
+            {"resourceType": "Condition", "id": "condition-1"},
+            "fhir_hipaa_safe_harbor",
+        )
+
+
+def test_fhir_bundle_preserves_opaque_urn_linkage_for_date_shift():
+    patient_urn = "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    bundle = {
+        "resourceType": "Bundle",
+        "type": "collection",
+        "entry": [
+            {
+                "fullUrl": patient_urn,
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "patient-1",
+                    "birthDate": "1980-01-15",
+                },
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "observation-1",
+                    "status": "final",
+                    "code": {"text": "synthetic result"},
+                    "subject": {"reference": patient_urn},
+                    "effectiveDate": "2024-03-20",
+                }
+            },
+        ],
+    }
+
+    transformed = apply_schema_policy(
+        bundle,
+        "fhir_hipaa_safe_harbor",
+        date_shift_secret=DATE_SECRET,
+        deidentifier=_fake_deidentify,
+    )
+
+    patient = transformed["entry"][0]["resource"]
+    observation = transformed["entry"][1]["resource"]
+    assert transformed["entry"][0]["fullUrl"] == patient_urn
+    assert observation["subject"]["reference"] == patient_urn
+    assert _date_offset("1980-01-15", patient["birthDate"]) == _date_offset(
+        "2024-03-20",
+        observation["effectiveDate"],
+    )
+
+
+def test_omop_blank_optional_date_is_preserved_and_source_identifier_removed():
+    transformed = apply_schema_policy(
+        [
+            {
+                "person_id": "1001",
+                "birth_datetime": "",
+                "person_source_value": "SOURCE-MRN-123",
+            }
+        ],
+        "omop_hipaa_safe_harbor",
+        table_name="person",
+        date_shift_secret=DATE_SECRET,
+        deidentifier=lambda text, **_: _FakeResult(text),
+    )
+
+    assert transformed == [{"person_id": "1001", "birth_datetime": ""}]
+
+
+def test_camel_case_identifier_is_inferred_and_suppressed():
+    patient = {
+        "resourceType": "Patient",
+        "id": "patient-1",
+        "medicalRecordNumber": "MRN-123",
+    }
+
+    finding = lint_schema_policy(patient, "fhir_hipaa_safe_harbor")
+    assert [(item.code, item.path) for item in finding] == [
+        ("uncovered-identifier", "Patient.medicalRecordNumber")
+    ]
+    assert "medicalRecordNumber" not in apply_schema_policy(
+        patient,
+        "fhir_hipaa_safe_harbor",
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"fields": []},
+        {"resources": []},
+    ],
+)
+def test_policy_rejects_falsy_wrong_container_types(payload):
+    policy = {
+        "schema_version": 1,
+        "name": "invalid_policy",
+        "schema": "fhir",
+        "fields": {"Patient.resourceType": "keep"},
+        **payload,
+    }
+
+    with pytest.raises(SchemaPolicyError):
+        load_schema_policy(policy)
+
+
+def test_non_string_schema_override_has_domain_error():
+    with pytest.raises(SchemaPolicyError, match="schema override must be a string"):
+        apply_schema_policy(
+            {"resourceType": "Patient", "id": "patient-1"},
+            "fhir_hipaa_safe_harbor",
+            schema=1,  # type: ignore[arg-type]
+        )
 
 
 def test_validate_policy_reports_unknown_and_uncovered_schema_paths():

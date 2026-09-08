@@ -187,18 +187,6 @@ from .scan import (
     TableRoleScan,
 )
 from .scan import scan_table as scan_column_roles
-from .schema_snapshot import (
-    COMPATIBILITY_RULES_VERSION,
-    SCHEMA_SNAPSHOT_FORMAT_VERSION,
-    SchemaChange,
-    SchemaCompatibilityReport,
-    SchemaField,
-    SchemaSnapshot,
-    build_schema_snapshot,
-    check_schema_compatibility,
-    compare_schema_snapshots,
-    is_schema_compatible,
-)
 from .schema_policy import (
     ACTION_DATE_SHIFT,
     ACTION_DEIDENTIFY,
@@ -214,6 +202,18 @@ from .schema_policy import (
     list_schema_policies,
     load_schema_policy,
     validate_schema_policy,
+)
+from .schema_snapshot import (
+    COMPATIBILITY_RULES_VERSION,
+    SCHEMA_SNAPSHOT_FORMAT_VERSION,
+    SchemaChange,
+    SchemaCompatibilityReport,
+    SchemaField,
+    SchemaSnapshot,
+    build_schema_snapshot,
+    check_schema_compatibility,
+    compare_schema_snapshots,
+    is_schema_compatible,
 )
 from .streaming import (
     DEFAULT_CHUNK_SIZE,

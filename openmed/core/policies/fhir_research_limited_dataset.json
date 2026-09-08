@@ -11,12 +11,39 @@
     "*.contact[]"
   ],
   "fields": {
+    "Bundle.resourceType": "keep",
+    "Bundle.id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Bundle.meta": "suppress",
+    "Bundle.type": "keep",
+    "Bundle.timestamp": "suppress",
+    "Bundle.total": "keep",
+    "Bundle.identifier": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "Bundle.link": "suppress",
+    "Bundle.signature": "suppress",
+    "Bundle.entry[].fullUrl": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "Bundle.entry[].request": "suppress",
+    "Bundle.entry[].response": "suppress",
+    "Bundle.entry[].search": "keep",
+    "*.text.status": "keep",
+    "*.text.div": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    },
     "Patient.resourceType": "keep",
     "Patient.id": {
       "action": "keep",
       "field_type": "internal-linkage"
     },
-    "Patient.meta": "keep",
+    "Patient.meta": "suppress",
     "Patient.identifier[].system": "keep",
     "Patient.identifier[].value": {
       "action": "suppress",
@@ -75,12 +102,7 @@
     "Patient.address[].country": "keep",
     "Patient.maritalStatus": "keep",
     "Patient.multipleBirthBoolean": "keep",
-    "Patient.multipleBirthInteger": {
-      "action": "generalize",
-      "field_type": "quasi-identifier",
-      "generalization": "age",
-      "level": 0
-    },
+    "Patient.multipleBirthInteger": "keep",
     "Patient.communication": "keep",
     "Patient.contact": {
       "action": "suppress",
@@ -99,7 +121,7 @@
       "action": "keep",
       "field_type": "internal-linkage"
     },
-    "Observation.meta": "keep",
+    "Observation.meta": "suppress",
     "Observation.identifier[].system": "keep",
     "Observation.identifier[].value": {
       "action": "suppress",

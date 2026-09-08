@@ -18,7 +18,7 @@ import copy
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from fnmatch import fnmatchcase
 from functools import lru_cache
@@ -106,6 +106,13 @@ _IDENTIFIER_SEGMENTS: Final = frozenset(
 )
 _REMOVE: Final = object()
 _ISO_DATE_PREFIX = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(.*)$", re.DOTALL)
+_SAFE_FHIR_REFERENCE = re.compile(
+    r"^(?:[A-Za-z][A-Za-z0-9]{0,63}/[A-Za-z0-9.-]{1,64}"
+    r"|#[A-Za-z0-9.-]{1,64}"
+    r"|urn:uuid:[0-9A-Fa-f-]{36}"
+    r"|urn:oid:[0-9.]+)$"
+)
+_SAFE_FHIR_FULL_URL = re.compile(r"^(?:urn:uuid:[0-9A-Fa-f-]{36}|urn:oid:[0-9.]+)$")
 
 TextDeidentifier = Callable[..., Any]
 
@@ -471,34 +478,88 @@ def apply_omop_file(
 @dataclass(frozen=True)
 class _ApplicationContext:
     policy: SchemaPolicy
-    subject_key: str | bytes | None
-    date_shift_secret: str | bytes | None
+    subject_key: str | bytes | None = field(repr=False)
+    date_shift_secret: str | bytes | None = field(repr=False)
     date_shift_max_days: int
     deidentifier: TextDeidentifier | None
     text_policy: str
     text_method: str
+    reference_aliases: Mapping[str, str] = field(default_factory=dict, repr=False)
 
 
 def _apply_fhir(data: Any, context: _ApplicationContext) -> Any:
     if isinstance(data, Mapping):
         resource_type = data.get("resourceType")
         if resource_type == "Bundle":
-            transformed = copy.deepcopy(dict(data))
-            entries = transformed.get("entry")
-            if isinstance(entries, list):
-                for entry in entries:
-                    if not isinstance(entry, dict):
-                        continue
-                    resource = entry.get("resource")
-                    if isinstance(resource, Mapping):
-                        entry["resource"] = _apply_fhir_resource(resource, context)
-            return transformed
+            return _apply_fhir_bundle(data, context)
         return _apply_fhir_resource(data, context)
     if isinstance(data, Sequence) and not isinstance(data, (str, bytes, bytearray)):
         if not all(isinstance(resource, Mapping) for resource in data):
             raise SchemaPolicyError("every FHIR resource must be a mapping")
         return [_apply_fhir_resource(resource, context) for resource in data]
     raise SchemaPolicyError("FHIR policy input must be a resource, Bundle, or sequence")
+
+
+def _apply_fhir_bundle(
+    bundle: Mapping[str, Any],
+    context: _ApplicationContext,
+) -> dict[str, Any]:
+    if not _policy_supports_fhir_resource(context.policy, "Bundle"):
+        raise SchemaPolicyError(
+            "FHIR resource type 'Bundle' has no schema-policy rules"
+        )
+    entries = bundle.get("entry", [])
+    if not isinstance(entries, list):
+        raise SchemaPolicyError("FHIR Bundle.entry must be a list")
+
+    aliases: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            raise SchemaPolicyError("every FHIR Bundle entry must be a mapping")
+        resource = entry.get("resource")
+        full_url = entry.get("fullUrl")
+        relative = _relative_resource_reference(resource)
+        if isinstance(full_url, str) and full_url and relative is not None:
+            aliases[full_url] = relative
+
+    bundle_context = replace(context, reference_aliases=aliases)
+    wrapper = dict(bundle)
+    wrapper.pop("entry", None)
+    transformed = _transform_node(
+        wrapper,
+        path="Bundle",
+        context=bundle_context,
+        row_subject_key=context.subject_key,
+        root=True,
+    )
+    if not isinstance(transformed, dict):  # pragma: no cover - root is retained
+        raise SchemaPolicyError("FHIR Bundle root cannot be suppressed")
+
+    transformed_entries: list[dict[str, Any]] = []
+    for entry in entries:
+        resource = entry.get("resource")
+        entry_wrapper = dict(entry)
+        entry_wrapper.pop("resource", None)
+        transformed_entry = _transform_node(
+            entry_wrapper,
+            path="Bundle.entry[]",
+            context=bundle_context,
+            row_subject_key=context.subject_key,
+            root=True,
+        )
+        if not isinstance(transformed_entry, dict):  # pragma: no cover
+            raise SchemaPolicyError("FHIR Bundle entry cannot be suppressed")
+        if resource is not None:
+            if not isinstance(resource, Mapping):
+                raise SchemaPolicyError("FHIR Bundle entry.resource must be a mapping")
+            transformed_entry["resource"] = _apply_fhir_resource(
+                resource,
+                bundle_context,
+            )
+        transformed_entries.append(transformed_entry)
+    if "entry" in bundle:
+        transformed["entry"] = transformed_entries
+    return transformed
 
 
 def _apply_fhir_resource(
@@ -508,7 +569,14 @@ def _apply_fhir_resource(
     resource_type = resource.get("resourceType")
     if not isinstance(resource_type, str) or not resource_type:
         raise SchemaPolicyError("FHIR resource is missing resourceType")
-    subject_key = context.subject_key or _fhir_subject_key(resource)
+    if not _policy_supports_fhir_resource(context.policy, resource_type):
+        raise SchemaPolicyError(
+            f"FHIR resource type {resource_type!r} has no schema-policy rules"
+        )
+    subject_key = context.subject_key or _fhir_subject_key(
+        resource,
+        aliases=context.reference_aliases,
+    )
     transformed = _transform_node(
         dict(resource),
         path=resource_type,
@@ -635,7 +703,15 @@ def _apply_rule(
 ) -> Any:
     if rule.action == ACTION_SUPPRESS:
         return _REMOVE
-    if rule.action == ACTION_KEEP or value is None:
+    if rule.action == ACTION_KEEP:
+        if rule.field_type == "internal-linkage" and isinstance(value, str):
+            return _safe_internal_linkage(
+                value,
+                path=path,
+                aliases=context.reference_aliases,
+            )
+        return copy.deepcopy(value)
+    if value is None:
         return copy.deepcopy(value)
     if rule.action == ACTION_GENERALIZE:
         if isinstance(value, (Mapping, list, tuple)):
@@ -651,6 +727,12 @@ def _apply_rule(
     if rule.action == ACTION_DATE_SHIFT:
         if isinstance(value, (Mapping, list, tuple)):
             raise SchemaPolicyError(f"date-shift action requires a scalar at {path}")
+        if (
+            context.policy.schema == "omop"
+            and isinstance(value, str)
+            and not value.strip()
+        ):
+            return value
         if row_subject_key is None:
             raise SchemaPolicyError(f"date-shift field lacks a subject key at {path}")
         if context.date_shift_secret is None:
@@ -727,9 +809,15 @@ def _shift_temporal(
         raise SchemaPolicyError(f"invalid date-shift configuration at {path}") from None
 
     if isinstance(value, datetime):
-        return value + timedelta(days=offset)
+        try:
+            return value + timedelta(days=offset)
+        except OverflowError:
+            raise SchemaPolicyError(f"date-shift overflow at {path}") from None
     if isinstance(value, date):
-        return value + timedelta(days=offset)
+        try:
+            return value + timedelta(days=offset)
+        except OverflowError:
+            raise SchemaPolicyError(f"date-shift overflow at {path}") from None
     if not isinstance(value, str):
         raise SchemaPolicyError(f"date-shift requires an ISO date at {path}")
     match = _ISO_DATE_PREFIX.fullmatch(value.strip())
@@ -748,10 +836,18 @@ def _shift_temporal(
             raise SchemaPolicyError(
                 f"date-shift requires an ISO date at {path}"
             ) from None
-    return f"{(parsed + timedelta(days=offset)).isoformat()}{suffix}"
+    try:
+        shifted = parsed + timedelta(days=offset)
+    except OverflowError:
+        raise SchemaPolicyError(f"date-shift overflow at {path}") from None
+    return f"{shifted.isoformat()}{suffix}"
 
 
-def _fhir_subject_key(resource: Mapping[str, Any]) -> str | bytes | None:
+def _fhir_subject_key(
+    resource: Mapping[str, Any],
+    *,
+    aliases: Mapping[str, str] | None = None,
+) -> str | bytes | None:
     if resource.get("resourceType") == "Patient":
         return _subject_scalar(resource.get("id"))
     for key in _FHIR_SUBJECT_KEYS:
@@ -760,6 +856,8 @@ def _fhir_subject_key(resource: Mapping[str, Any]) -> str | bytes | None:
             continue
         value = reference.get("reference")
         if isinstance(value, str) and value:
+            if aliases is not None:
+                value = aliases.get(value, value)
             marker = "/Patient/"
             if marker in value:
                 return value.rsplit(marker, maxsplit=1)[-1]
@@ -767,6 +865,42 @@ def _fhir_subject_key(resource: Mapping[str, Any]) -> str | bytes | None:
                 return value.split("/", maxsplit=1)[-1]
             return value
     return None
+
+
+def _relative_resource_reference(resource: Any) -> str | None:
+    if not isinstance(resource, Mapping):
+        return None
+    resource_type = resource.get("resourceType")
+    resource_id = resource.get("id")
+    if not isinstance(resource_type, str) or not isinstance(resource_id, str):
+        return None
+    candidate = f"{resource_type}/{resource_id}"
+    return candidate if _SAFE_FHIR_REFERENCE.fullmatch(candidate) else None
+
+
+def _safe_internal_linkage(
+    value: str,
+    *,
+    path: str,
+    aliases: Mapping[str, str],
+) -> Any:
+    if path.endswith(".fullUrl"):
+        if _SAFE_FHIR_FULL_URL.fullmatch(value):
+            return value
+        return _REMOVE
+    if path.endswith(".reference"):
+        if _SAFE_FHIR_REFERENCE.fullmatch(value):
+            return value
+        alias = aliases.get(value)
+        if alias is not None and _SAFE_FHIR_REFERENCE.fullmatch(alias):
+            return alias
+        return _REMOVE
+    return value
+
+
+def _policy_supports_fhir_resource(policy: SchemaPolicy, resource_type: str) -> bool:
+    prefix = f"{resource_type}."
+    return any(rule.path.startswith(prefix) for rule in policy.rules)
 
 
 def _omop_subject_key(row: Mapping[str, Any]) -> str | bytes | None:
@@ -794,12 +928,26 @@ def _observed_paths(
 ) -> set[str]:
     if policy.schema == "fhir":
         resources_to_scan: list[Mapping[str, Any]] = []
+        observed: set[str] = set()
         if isinstance(data, Mapping) and data.get("resourceType") == "Bundle":
-            for entry in data.get("entry") or []:
-                if isinstance(entry, Mapping) and isinstance(
-                    entry.get("resource"), Mapping
-                ):
-                    resources_to_scan.append(entry["resource"])
+            entries = data.get("entry", [])
+            if not isinstance(entries, list):
+                raise SchemaPolicyError("FHIR Bundle.entry must be a list")
+            wrapper = dict(data)
+            wrapper.pop("entry", None)
+            observed.update(_leaf_paths(wrapper, root="Bundle"))
+            for entry in entries:
+                if not isinstance(entry, Mapping):
+                    raise SchemaPolicyError("every FHIR Bundle entry must be a mapping")
+                entry_wrapper = dict(entry)
+                resource = entry_wrapper.pop("resource", None)
+                observed.update(_leaf_paths(entry_wrapper, root="Bundle.entry[]"))
+                if resource is not None:
+                    if not isinstance(resource, Mapping):
+                        raise SchemaPolicyError(
+                            "FHIR Bundle entry.resource must be a mapping"
+                        )
+                    resources_to_scan.append(resource)
         elif isinstance(data, Mapping):
             resources_to_scan.append(data)
         elif isinstance(data, Sequence) and not isinstance(
@@ -812,7 +960,6 @@ def _observed_paths(
             raise SchemaPolicyError(
                 "FHIR policy input must be a resource, Bundle, or sequence"
             )
-        observed: set[str] = set()
         for resource in resources_to_scan:
             resource_type = resource.get("resourceType")
             if not isinstance(resource_type, str) or not resource_type:
@@ -937,6 +1084,8 @@ def _normalize_table_name(value: str) -> str:
 def _validate_schema_override(policy: SchemaPolicy, schema: str | None) -> None:
     if schema is None:
         return
+    if not isinstance(schema, str):
+        raise SchemaPolicyError("schema override must be a string")
     normalized = schema.strip().lower()
     if normalized != policy.schema:
         raise SchemaPolicyError(
@@ -946,7 +1095,9 @@ def _validate_schema_override(policy: SchemaPolicy, schema: str | None) -> None:
 
 @lru_cache(maxsize=len(_BUNDLED_POLICIES))
 def _load_bundled_policy(name: str) -> SchemaPolicy:
-    resource = resources.files("openmed.core").joinpath("policies", f"{name}.json")
+    resource = (
+        resources.files("openmed.core").joinpath("policies").joinpath(f"{name}.json")
+    )
     try:
         with resource.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -990,13 +1141,13 @@ def _policy_from_mapping(payload: Mapping[str, Any], *, source: str) -> SchemaPo
     default_action = _normalize_action(payload.get("default_action", ACTION_KEEP))
 
     rule_payloads: list[tuple[str, Any]] = []
-    fields = payload.get("fields") or {}
+    fields = payload.get("fields", {})
     if not isinstance(fields, Mapping):
         raise SchemaPolicyError("fields must be an object")
     rule_payloads.extend((str(path), rule) for path, rule in fields.items())
 
     container_key = "resources" if schema == "fhir" else "tables"
-    containers = payload.get(container_key) or {}
+    containers = payload.get(container_key, {})
     if not isinstance(containers, Mapping):
         raise SchemaPolicyError(f"{container_key} must be an object")
     container_identifiers: list[str] = []
@@ -1018,14 +1169,14 @@ def _policy_from_mapping(payload: Mapping[str, Any], *, source: str) -> SchemaPo
         container_identifiers.extend(
             f"{prefix}.{path}"
             for path in _string_sequence(
-                container_payload.get("identifier_fields") or (),
+                container_payload.get("identifier_fields", ()),
                 f"{container_key}.{prefix}.identifier_fields",
             )
         )
         container_known.extend(
             f"{prefix}.{path}"
             for path in _string_sequence(
-                container_payload.get("known_fields") or (),
+                container_payload.get("known_fields", ()),
                 f"{container_key}.{prefix}.known_fields",
             )
         )
@@ -1047,18 +1198,16 @@ def _policy_from_mapping(payload: Mapping[str, Any], *, source: str) -> SchemaPo
         _normalize_path(path)
         for path in (
             *_string_sequence(
-                payload.get("identifier_fields") or (), "identifier_fields"
+                payload.get("identifier_fields", ()), "identifier_fields"
             ),
             *container_identifiers,
         )
     )
     explicit_known = (
-        *_string_sequence(payload.get("known_fields") or (), "known_fields"),
+        *_string_sequence(payload.get("known_fields", ()), "known_fields"),
         *container_known,
     )
     known_fields = tuple(_normalize_path(path) for path in explicit_known)
-    if not known_fields:
-        known_fields = tuple(rule.path for rule in rules)
 
     return SchemaPolicy(
         name=name,
@@ -1205,10 +1354,21 @@ def _patterns_overlap(left: str, right: str) -> bool:
 
 
 def _looks_like_identifier_path(path: str) -> bool:
-    segments = [segment.removesuffix("[]").lower() for segment in path.split(".")]
-    if any(segment in _IDENTIFIER_SEGMENTS for segment in segments[1:]):
+    segments = [segment.removesuffix("[]") for segment in path.split(".")]
+    semantic_tokens: list[str] = []
+    for segment in segments[1:]:
+        snake_case = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", segment)
+        semantic_tokens.extend(
+            token for token in re.split(r"[^A-Za-z0-9]+", snake_case.lower()) if token
+        )
+    if any(token in _IDENTIFIER_SEGMENTS for token in semantic_tokens):
         return True
-    leaf = segments[-1]
+    if semantic_tokens[-1:] == ["number"] and any(
+        token in {"account", "beneficiary", "medical", "member", "patient", "record"}
+        for token in semantic_tokens[:-1]
+    ):
+        return True
+    leaf = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", segments[-1]).lower()
     return (
         leaf == "id"
         or leaf.endswith("_id")
