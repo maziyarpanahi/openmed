@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, PHI-free local release compute, cost, energy, and
+  carbon tracking with orchestrator-linked stage timings, per-run and rolling
+  budget verdicts, family/tier/workload breakdowns, optional advisory queue
+  throttling, and hash-verified ledger replay (#1244).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

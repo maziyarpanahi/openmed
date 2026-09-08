@@ -74,7 +74,9 @@ def _number(value: Any, field: str) -> float:
 
 
 def _identifier(value: Any, field: str) -> str:
-    text = str(value).strip()
+    if not isinstance(value, str):
+        raise BudgetTrackingError(f"{field} must be a safe identifier")
+    text = value.strip()
     if not _SAFE_IDENTIFIER_RE.fullmatch(text):
         raise BudgetTrackingError(f"{field} must be a safe identifier")
     if any(pattern.search(text) for pattern in _PHI_PATTERNS):
@@ -87,9 +89,29 @@ def _reject_unknown_fields(
     allowed: set[str],
     label: str,
 ) -> None:
+    if not isinstance(value, Mapping):
+        raise BudgetTrackingError(f"{label} must be an object")
     unknown = sorted(set(value) - allowed)
     if unknown:
         raise BudgetTrackingError(f"{label} contains unsupported fields: {unknown}")
+
+
+def _positive_integer(value: Any, field: str) -> int:
+    if type(value) is not int or value <= 0:
+        raise BudgetTrackingError(f"{field} must be a positive integer")
+    return value
+
+
+def _boolean(value: Any, field: str) -> bool:
+    if type(value) is not bool:
+        raise BudgetTrackingError(f"{field} must be a boolean")
+    return value
+
+
+def _string_array(value: Any, field: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise BudgetTrackingError(f"{field} must be an array of strings")
+    return tuple(value)
 
 
 def _canonical_json(value: Any) -> str:
@@ -112,11 +134,13 @@ def _utc_datetime(value: datetime | str | None) -> datetime:
         return datetime.now(timezone.utc)
     if isinstance(value, datetime):
         parsed = value
-    else:
+    elif isinstance(value, str):
         try:
-            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError as exc:
             raise BudgetTrackingError("timestamp must be ISO-8601") from exc
+    else:
+        raise BudgetTrackingError("timestamp must be ISO-8601")
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
@@ -287,14 +311,8 @@ class StageTiming:
             ) from exc
 
 
-def _stage_sort_key(stage: StageTiming) -> tuple[str, ...]:
-    return (
-        stage.candidate_id,
-        stage.stage,
-        stage.family,
-        stage.tier,
-        stage.workload,
-    )
+def _stage_sort_key(stage: StageTiming) -> str:
+    return _canonical_json(stage.to_dict())
 
 
 @dataclass(frozen=True)
@@ -346,7 +364,7 @@ class StageTimingDocument:
         )
 
         raw_stages = value.get("stages")
-        if not isinstance(raw_stages, Sequence) or isinstance(raw_stages, str):
+        if not isinstance(raw_stages, list):
             raise BudgetTrackingError("stage timings must be an array")
         if any(not isinstance(stage, Mapping) for stage in raw_stages):
             raise BudgetTrackingError("each stage timing must be an object")
@@ -466,9 +484,12 @@ class BudgetTotals:
         return cls(
             stage_count=sum(item.stage_count for item in items),
             **{
-                metric: sum(
-                    (_decimal(getattr(item, metric), metric) for item in items),
-                    Decimal(0),
+                metric: _number(
+                    sum(
+                        (_decimal(getattr(item, metric), metric) for item in items),
+                        Decimal(0),
+                    ),
+                    metric,
                 )
                 for metric in _METRIC_NAMES
             },
@@ -517,12 +538,12 @@ def aggregate_stage_timings(
     )
     return BudgetTotals(
         stage_count=len(materialized),
-        gpu_hours=gpu_hours,
-        runner_minutes=runner_minutes,
-        wall_clock_seconds=wall_clock_seconds,
-        energy_kwh=energy_kwh,
-        carbon_kg=carbon_kg,
-        estimated_cost_usd=estimated_cost_usd,
+        gpu_hours=_number(gpu_hours, "gpu_hours"),
+        runner_minutes=_number(runner_minutes, "runner_minutes"),
+        wall_clock_seconds=_number(wall_clock_seconds, "wall_clock_seconds"),
+        energy_kwh=_number(energy_kwh, "energy_kwh"),
+        carbon_kg=_number(carbon_kg, "carbon_kg"),
+        estimated_cost_usd=_number(estimated_cost_usd, "estimated_cost_usd"),
     )
 
 
@@ -577,12 +598,7 @@ class BudgetPolicy:
     window_days: int = 7
 
     def __post_init__(self) -> None:
-        if (
-            not isinstance(self.window_days, int)
-            or isinstance(self.window_days, bool)
-            or self.window_days <= 0
-        ):
-            raise BudgetTrackingError("window_days must be a positive integer")
+        _positive_integer(self.window_days, "window_days")
         for warning, maximum, label in (
             (self.per_run_warn, self.per_run_over, "per-run"),
             (self.weekly_warn, self.weekly_over, "weekly"),
@@ -626,7 +642,7 @@ class BudgetPolicy:
                 per_run_over=BudgetThresholds.from_mapping(value["per_run_over"]),
                 weekly_warn=BudgetThresholds.from_mapping(value["weekly_warn"]),
                 weekly_over=BudgetThresholds.from_mapping(value["weekly_over"]),
-                window_days=int(value.get("window_days", 7)),
+                window_days=value.get("window_days", 7),
             )
         except (KeyError, TypeError) as exc:
             raise BudgetTrackingError("budget policy is malformed") from exc
@@ -644,8 +660,17 @@ class BudgetDecision:
     def __post_init__(self) -> None:
         if self.verdict not in {WITHIN, WARN, OVER}:
             raise BudgetTrackingError("budget verdict is invalid")
+        _boolean(self.gating, "budget decision gating")
         if self.gating:
             raise BudgetTrackingError("release compute budgets must remain advisory")
+        for field, metrics in (
+            ("exceeded_metrics", self.exceeded_metrics),
+            ("warned_metrics", self.warned_metrics),
+        ):
+            if not isinstance(metrics, tuple) or any(
+                not isinstance(metric, str) for metric in metrics
+            ):
+                raise BudgetTrackingError(f"{field} must be a tuple of strings")
         for metric in (*self.exceeded_metrics, *self.warned_metrics):
             if metric not in _METRIC_NAMES:
                 raise BudgetTrackingError("budget decision names an unknown metric")
@@ -672,9 +697,13 @@ class BudgetDecision:
 
         return cls(
             verdict=str(value.get("verdict", "")),
-            exceeded_metrics=tuple(value.get("exceeded_metrics") or ()),
-            warned_metrics=tuple(value.get("warned_metrics") or ()),
-            gating=bool(value.get("gating", False)),
+            exceeded_metrics=_string_array(
+                value.get("exceeded_metrics", []), "exceeded_metrics"
+            ),
+            warned_metrics=_string_array(
+                value.get("warned_metrics", []), "warned_metrics"
+            ),
+            gating=_boolean(value.get("gating", False), "budget decision gating"),
         )
 
 
@@ -769,6 +798,9 @@ class BudgetLedgerEntry:
             raise BudgetTrackingError("unsupported release budget schema version")
         if self.verdict not in {WITHIN, WARN, OVER}:
             raise BudgetTrackingError("budget ledger verdict is invalid")
+        if not self.stages:
+            raise BudgetTrackingError("budget ledger stages must not be empty")
+        _boolean(self.throttle_recommended, "throttle_recommended")
         if self.throttle_recommended != (self.verdict == OVER):
             raise BudgetTrackingError("throttle recommendation is inconsistent")
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", self.aggregation_hash):
@@ -840,7 +872,7 @@ class BudgetLedgerEntry:
         try:
             raw_stages = value["stages"]
             breakdown = value["breakdown"]
-            if not isinstance(raw_stages, Sequence) or isinstance(raw_stages, str):
+            if not isinstance(raw_stages, list):
                 raise BudgetTrackingError("budget ledger stages must be an array")
             if not isinstance(breakdown, Mapping):
                 raise BudgetTrackingError("budget ledger breakdown must be an object")
@@ -880,7 +912,7 @@ class BudgetLedgerEntry:
                     value["rolling_weekly_budget"]
                 ),
                 verdict=str(value["verdict"]),
-                throttle_recommended=bool(value["throttle_recommended"]),
+                throttle_recommended=value["throttle_recommended"],
                 aggregation_hash=str(value["aggregation_hash"]),
                 record_hash=str(value["record_hash"]),
                 schema_version=str(value.get("schema_version", "")),
@@ -1174,8 +1206,7 @@ def budget_entries_in_window(
 ) -> tuple[BudgetLedgerEntry, ...]:
     """Return entries in the inclusive rolling window ending at *as_of*."""
 
-    if window_days <= 0:
-        raise BudgetTrackingError("window_days must be positive")
+    _positive_integer(window_days, "window_days")
     end = _utc_datetime(as_of)
     start = end - timedelta(days=window_days)
     return tuple(

@@ -219,6 +219,34 @@ def test_releasable_candidate_runs_every_stage_and_audits_offline(
     assert outcome[candidate.candidate_id]["smoke_test"] == orchestrate.SMOKE_PASSED
 
 
+def test_long_numeric_workflow_run_id_is_safe_and_auditable(tmp_path: Path) -> None:
+    run_id = "31251528330"
+    candidate = _candidate("numeric-run")
+
+    _, ledger = _run(tmp_path, [candidate], _FakeRuntime(tmp_path), run_id=run_id)
+
+    row = json.loads(ledger.read_text(encoding="utf-8"))
+    assert row["run_id"] == run_id
+    assert (
+        orchestrate.audit_nightly_run(
+            run_id,
+            ledger_path=ledger,
+            repository_root=tmp_path,
+        )[candidate.candidate_id]["published"]
+        is True
+    )
+
+
+def test_ssn_shaped_run_id_remains_rejected(tmp_path: Path) -> None:
+    with pytest.raises(orchestrate.ReleaseManifestError, match="PHI-shaped"):
+        _run(
+            tmp_path,
+            [_candidate("unsafe-run")],
+            _FakeRuntime(tmp_path),
+            run_id="123-45-6789",
+        )
+
+
 def test_orchestrator_commits_phi_free_stage_timings(tmp_path: Path) -> None:
     candidate = _candidate("timed")
     runtime = _FakeRuntime(tmp_path)
@@ -363,6 +391,14 @@ def test_committed_queue_has_two_reviewed_candidates_per_weekday() -> None:
         assert all(
             candidate.source_model_id in manifest_repo_ids for candidate in candidates
         )
+
+
+def test_queue_rejects_family_labels_that_budget_timing_cannot_persist() -> None:
+    payload = _candidate("unsafe-family").to_dict()
+    payload["family"] = "Clinical PII"
+
+    with pytest.raises(orchestrate.ReleaseManifestError, match="budget identifier"):
+        orchestrate.NightlyCandidate.from_mapping(payload, expected_theme="synthetic")
 
 
 def test_fresh_venv_smoke_installs_downloads_and_probes_without_output(

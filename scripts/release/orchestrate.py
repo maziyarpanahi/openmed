@@ -31,6 +31,7 @@ Design notes
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import re
@@ -79,6 +80,7 @@ SMOKE_NOT_RUN = "NOT_RUN"
 
 _WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday")
 _SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_SAFE_BUDGET_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _SAFE_REPO_ID_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 _SUPPORTED_NIGHTLY_FORMATS = frozenset({"onnx", "webgpu", "int8"})
 
@@ -128,10 +130,11 @@ _NIGHTLY_REQUIRED_RECORD_FIELDS = frozenset(
 
 # Conservative PHI-shaped patterns. The builder controls its own inputs, so this
 # is a defensive guard (and the subject of a no-raw-PHI test), not a scrubber.
+_LONG_DIGIT_PATTERN = re.compile(r"\b\d{10,}\b")
 _PHI_PATTERNS = (
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # US SSN
     re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),  # email
-    re.compile(r"\b\d{10,}\b"),  # long digit runs (MRN / phone / account)
+    _LONG_DIGIT_PATTERN,  # long digit runs (MRN / phone / account)
 )
 
 # Format-constrained hash/identifier fields. These are exactly the "hashes and
@@ -179,6 +182,14 @@ class NightlyCandidate(NamedTuple):
                 )
             return item.strip()
 
+        def budget_label(name: str) -> str:
+            item = required(name)
+            if not _SAFE_BUDGET_LABEL_RE.fullmatch(item):
+                raise ReleaseManifestError(
+                    f"nightly queue field {name!r} must be a safe budget identifier"
+                )
+            return item
+
         candidate_id = required("id")
         if not _SAFE_ID_RE.fullmatch(candidate_id):
             raise ReleaseManifestError(
@@ -221,8 +232,8 @@ class NightlyCandidate(NamedTuple):
             theme=theme,
             source_model_id=source_model_id,
             repo_id=repo_id,
-            family=required("family"),
-            tier=required("tier"),
+            family=budget_label("family"),
+            tier=budget_label("tier"),
             param_count=param_count,
             format=format_name,
             fixture_path=required("fixture_path"),
@@ -313,8 +324,8 @@ def _verified_artifact_digest(family: str, digest: str | None) -> str:
     return digest
 
 
-def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[str]:
-    def walk(key: str, value: Any) -> Iterable[str]:
+def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[tuple[str, str]]:
+    def walk(key: str, value: Any) -> Iterable[tuple[str, str]]:
         if (
             key in _HASH_FIELDS
             or key.endswith(("_hash", "_digest"))
@@ -330,7 +341,7 @@ def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[str]:
             for nested_value in value:
                 yield from walk(key, nested_value)
         elif isinstance(value, str):
-            yield value
+            yield key, value
 
     for key, value in record.items():
         yield from walk(str(key), value)
@@ -339,8 +350,21 @@ def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[str]:
 def _assert_no_phi(record: Mapping[str, Any]) -> None:
     """Reject a record whose values look like raw PHI before it is written."""
 
-    for value in _iter_record_strings(record):
+    run_id = record.get("run_id")
+    for key, value in _iter_record_strings(record):
         for pattern in _PHI_PATTERNS:
+            if key == "run_id" and pattern is _LONG_DIGIT_PATTERN:
+                continue
+            if (
+                key == "gate_report_path"
+                and pattern is _LONG_DIGIT_PATTERN
+                and isinstance(run_id, str)
+            ):
+                remaining_path = "/".join(
+                    part for part in value.split("/") if part != run_id
+                )
+                if not pattern.search(remaining_path):
+                    continue
             if pattern.search(value):
                 raise ReleaseManifestError(
                     "refusing to write PHI-shaped value to the release ledger"
@@ -1142,11 +1166,11 @@ class ReleaseRuntime:
 
     def smoke(self, candidate: NightlyCandidate) -> None:
         try:
-            from scripts.release.smoke_test import run_fresh_venv_smoke
+            smoke_test = importlib.import_module("scripts.release.smoke_test")
         except ImportError:  # pragma: no cover - direct script execution path
-            from smoke_test import run_fresh_venv_smoke
+            smoke_test = importlib.import_module("smoke_test")
 
-        run_fresh_venv_smoke(
+        smoke_test.run_fresh_venv_smoke(
             candidate.repo_id,
             format_name=candidate.format,
             repository_root=self.root,

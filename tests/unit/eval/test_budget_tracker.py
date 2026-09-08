@@ -12,6 +12,8 @@ from openmed.eval.budget_tracker import (
     BENCHMARK_REFRESH,
     OVER,
     TRAINING,
+    BudgetDecision,
+    BudgetLedgerEntry,
     BudgetPolicy,
     BudgetThresholds,
     BudgetTrackingError,
@@ -136,6 +138,57 @@ def test_aggregation_is_deterministic_and_splits_training_from_refresh() -> None
     assert first.by_workload[BENCHMARK_REFRESH].estimated_cost_usd == 5.0
 
 
+def test_aggregation_order_includes_numeric_stage_measurements() -> None:
+    short = _stage("same", "PII", "Small", runner_minutes=1)
+    long = _stage("same", "PII", "Small", runner_minutes=2)
+
+    first = build_budget_entry(
+        run_id="run-duplicate-identity",
+        stages=(short, long),
+        recorded_at=AS_OF,
+        factors=FACTORS,
+    )
+    replay = build_budget_entry(
+        run_id="run-duplicate-identity",
+        stages=(long, short),
+        recorded_at=AS_OF,
+        factors=FACTORS,
+    )
+
+    assert first.stages == replay.stages
+    assert first.aggregation_hash == replay.aggregation_hash
+    assert first.record_hash == replay.record_hash
+
+
+@pytest.mark.parametrize("window_days", [1.9, "7", True, 0])
+def test_budget_policy_mapping_rejects_coerced_window_days(window_days: object) -> None:
+    payload = BudgetPolicy().to_dict()
+    payload["window_days"] = window_days
+
+    with pytest.raises(BudgetTrackingError, match="positive integer"):
+        BudgetPolicy.from_mapping(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("gating", "false", "boolean"),
+        ("exceeded_metrics", "estimated_cost_usd", "array of strings"),
+        ("warned_metrics", [1], "array of strings"),
+    ],
+)
+def test_budget_decision_mapping_rejects_coerced_types(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    payload = BudgetDecision(verdict="WITHIN").to_dict()
+    payload[field] = value
+
+    with pytest.raises(BudgetTrackingError, match=message):
+        BudgetDecision.from_mapping(payload)
+
+
 def test_per_run_budget_excess_has_advisory_over_verdict() -> None:
     entry = build_budget_entry(
         run_id="run-over",
@@ -238,6 +291,29 @@ def test_ledger_requires_orchestrator_link_and_excludes_raw_phi(tmp_path: Path) 
             ledger_path=tmp_path / "other-budget-ledger.jsonl",
             orchestrator_ledger_path=release_ledger,
         )
+
+
+def test_budget_ledger_mapping_rejects_invalid_container_and_boolean_types() -> None:
+    entry = build_budget_entry(
+        run_id="run-strict-ledger",
+        stages=(_stage("strict", "PII", "Small", runner_minutes=1),),
+        recorded_at=AS_OF,
+    )
+
+    invalid_boolean = entry.to_dict()
+    invalid_boolean["throttle_recommended"] = "false"
+    with pytest.raises(BudgetTrackingError, match="must be a boolean"):
+        BudgetLedgerEntry.from_mapping(invalid_boolean)
+
+    invalid_array = entry.to_dict()
+    invalid_array["stages"] = tuple(invalid_array["stages"])
+    with pytest.raises(BudgetTrackingError, match="stages must be an array"):
+        BudgetLedgerEntry.from_mapping(invalid_array)
+
+    empty_stages = entry.to_dict()
+    empty_stages["stages"] = []
+    with pytest.raises(BudgetTrackingError, match="stages must not be empty"):
+        BudgetLedgerEntry.from_mapping(empty_stages)
 
 
 def test_rolling_weekly_and_family_cost_match_committed_entries(
