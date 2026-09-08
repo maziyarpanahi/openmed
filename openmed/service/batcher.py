@@ -6,7 +6,7 @@ import asyncio
 import inspect
 import time
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Generic, Optional, Sequence, TypeVar, Union
 
@@ -42,6 +42,7 @@ _PRIORITY_ALIASES = {
     "low": PRIORITY_BULK,
 }
 _PRIORITY_RANK = {priority: index for index, priority in enumerate(PRIORITY_CLASSES)}
+_ANY_BATCH_KEY = object()
 
 
 def normalize_priority(priority: object = PRIORITY_INTERACTIVE) -> str:
@@ -121,6 +122,7 @@ class _QueuedJob(Generic[T, R]):
     queued_at: float
     priority_handle: Optional[BatchPriorityHandle]
     wait_timeout: Optional[asyncio.TimerHandle]
+    batch_key: Hashable | None = None
     admission_released: bool = False
 
 
@@ -143,6 +145,7 @@ class DynamicBatcher(Generic[T, R]):
         priority_weights: Optional[Mapping[str, int]] = None,
         metrics: Optional[Any] = None,
         max_concurrent_batches: int | None = None,
+        batch_key: Callable[[T], Hashable] | None = None,
     ) -> None:
         if max_batch_size <= 0:
             raise ValueError("max_batch_size must be positive")
@@ -154,11 +157,17 @@ class DynamicBatcher(Generic[T, R]):
             or max_concurrent_batches < 1
         ):
             raise ValueError("max_concurrent_batches must be a positive integer")
+        if batch_key is not None and (
+            not callable(batch_key) or max_concurrent_batches is None
+        ):
+            raise ValueError("batch_key requires a callable and bounded concurrency")
 
         self.max_batch_size = int(max_batch_size)
         self.max_wait_ms = float(max_wait_ms)
         self._dispatch = dispatch
         self.max_concurrent_batches = max_concurrent_batches
+        self._batch_key = batch_key
+        self._active_keys: set[Hashable] = set()
         self._active_batches = 0
         self._running_tasks: set[asyncio.Task[None]] = set()
         self._closed = False
@@ -198,7 +207,17 @@ class DynamicBatcher(Generic[T, R]):
         priority: object = PRIORITY_INTERACTIVE,
         priority_handle: Optional[BatchPriorityHandle] = None,
     ) -> R:
-        """Submit one job and wait for its per-request result."""
+        """Submit one job and wait for its per-request result.
+
+        When configured, ``batch_key`` is evaluated once before admission. Only
+        equal keys coalesce, and at most one batch for a key runs at a time.
+        Other keys can progress within the shared concurrency/admission limits.
+        Keys should describe model/settings compatibility, never patient data.
+        Keyed priority weights select batches; compatible fill cannot consume
+        another model's next priority turn. Unkeyed weights select documents.
+        """
+        key = self._batch_key(item) if self._batch_key is not None else None
+        hash(key)  # Reject invalid keys before retaining/admitting the input.
         loop = asyncio.get_running_loop()
         future: asyncio.Future[R] = loop.create_future()
         requested_priority = normalize_priority(priority)
@@ -233,6 +252,7 @@ class DynamicBatcher(Generic[T, R]):
                 queued_at=time.monotonic(),
                 priority_handle=priority_handle,
                 wait_timeout=None,
+                batch_key=key,
             )
             if priority_handle is not None:
                 priority_handle._bind(self, job.job_id, loop)
@@ -241,9 +261,10 @@ class DynamicBatcher(Generic[T, R]):
             self._schedule_wait_timeout_locked(job, loop)
             self._record_queue_depth(job.priority)
 
-            if self._pending_count_locked() == 1:
-                self._schedule_flush_locked(loop)
-            if self._pending_count_locked() >= self.max_batch_size:
+            # A previous timer may have found only busy keys. A newly ready
+            # key still needs its own flush even when older work remains queued.
+            self._schedule_flush_locked(loop)
+            if self._full_batch_ready_locked():
                 self._flush_locked(loop)
 
         try:
@@ -404,22 +425,32 @@ class DynamicBatcher(Generic[T, R]):
             return
 
         batch = self._next_batch_locked()
-        if self._jobs:
-            self._schedule_flush_locked(loop)
         if not batch:
             return
+        if self._jobs:
+            self._schedule_flush_locked(loop)
 
         self._active_batches += 1
+        if self._batch_key is not None:
+            self._active_keys.add(batch[0].batch_key)
         task = loop.create_task(self._run_batch(batch))
         self._running_tasks.add(task)
         task.add_done_callback(self._running_tasks.discard)
 
     def _next_batch_locked(self) -> list[_QueuedJob[T, R]]:
         batch: list[_QueuedJob[T, R]] = []
+        next_turn = None
         while len(batch) < self.max_batch_size and self._jobs:
-            job = self._pop_next_job_locked()
+            key = (
+                batch[0].batch_key
+                if batch and self._batch_key is not None
+                else _ANY_BATCH_KEY
+            )
+            job = self._pop_next_job_locked(key)
             if job is None:
                 break
+            if self._batch_key is not None and not batch:
+                next_turn = self._scheduler_index
             self._jobs.pop(job.job_id, None)
             if job.wait_timeout is not None:
                 job.wait_timeout.cancel()
@@ -431,22 +462,50 @@ class DynamicBatcher(Generic[T, R]):
             if job.priority_handle is not None:
                 job.priority_handle._clear(job.job_id)
             batch.append(job)
+        if next_turn is not None:
+            self._scheduler_index = next_turn
         return batch
 
-    def _pop_next_job_locked(self) -> Optional[_QueuedJob[T, R]]:
+    def _full_batch_ready_locked(self) -> bool:
+        if self._batch_key is None:
+            return self._pending_count_locked() >= self.max_batch_size
+        counts: dict[Hashable, int] = {}
+        for job in self._jobs.values():
+            if job.batch_key not in self._active_keys:
+                counts[job.batch_key] = counts.get(job.batch_key, 0) + 1
+                if counts[job.batch_key] >= self.max_batch_size:
+                    return True
+        return False
+
+    def _pop_next_job_locked(
+        self, key: object = _ANY_BATCH_KEY
+    ) -> Optional[_QueuedJob[T, R]]:
+        def take(queue):
+            for index, job in enumerate(queue):
+                if self._batch_key is not None and (
+                    job.batch_key in self._active_keys
+                    or (key is not _ANY_BATCH_KEY and job.batch_key != key)
+                ):
+                    continue
+                del queue[index]
+                return job
+            return None
+
         for _ in range(len(self._scheduler_cycle)):
             priority = self._scheduler_cycle[self._scheduler_index]
             self._scheduler_index = (self._scheduler_index + 1) % len(
                 self._scheduler_cycle
             )
             queue = self._queues[priority]
-            if queue:
-                return queue.popleft()
+            job = take(queue)
+            if job is not None:
+                return job
 
         for priority in PRIORITY_CLASSES:
             queue = self._queues[priority]
-            if queue:
-                return queue.popleft()
+            job = take(queue)
+            if job is not None:
+                return job
         return None
 
     async def _run_batch(self, batch: Sequence[_QueuedJob[T, R]]) -> None:
@@ -483,6 +542,8 @@ class DynamicBatcher(Generic[T, R]):
                 for job in batch:
                     self._release_admission_locked(job)
                 self._active_batches -= 1
+                if self._batch_key is not None:
+                    self._active_keys.discard(batch[0].batch_key)
                 if self.max_concurrent_batches is not None and not self._closed:
                     self._flush_locked(asyncio.get_running_loop())
 
