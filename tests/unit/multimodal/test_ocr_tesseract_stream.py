@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -174,7 +175,10 @@ def test_native_pipes_drain_output_while_feeding_large_input(monkeypatch):
         "data=sys.stdin.buffer.read(); print(len(data), 'HF_TOKEN' in os.environ)",
         payload=b"p" * 3_000_000,
     )
-    assert output == b"x" * 100_000 + b"3000000 False\n"
+    trailer = b"3000000 False" + os.linesep.encode()
+    assert len(output) == 100_000 + len(trailer)
+    assert output[:100_000].count(b"x") == 100_000
+    assert output[100_000:] == trailer
 
 
 @pytest.mark.parametrize("mode", ["timeout", "cancel", "output", "exit"])
@@ -216,7 +220,7 @@ def test_native_failures_reap_processes_and_threads(monkeypatch, mode):
     assert not any(
         thread.name.startswith("openmed-ocr-") for thread in threading.enumerate()
     )
-    assert execute("print('recovered')") == b"recovered\n"
+    assert execute("print('recovered')") == b"recovered" + os.linesep.encode()
 
 
 def test_cancelled_work_never_spawns(monkeypatch):
