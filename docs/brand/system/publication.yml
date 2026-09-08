@@ -224,6 +224,7 @@ classification:
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
+    - multimodal/preflight.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
