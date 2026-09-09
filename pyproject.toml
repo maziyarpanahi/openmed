@@ -295,6 +295,15 @@ hf = [
   "tokenizers>=0.15"
 ]
 
+# Health Universe document intake and A2A serving are opt-in. The agent forces
+# model inference offline and does not configure SDK telemetry exporters.
+health-universe-agent = [
+  "a2a-sdk[http-server]>=0.3.10,<1.0.0",
+  "health-universe-a2a==0.5.1",
+  "torch>=2.0",
+  "uvicorn>=0.27",
+]
+
 # Core pipeline observability. The SDK enables caller-owned in-process
 # providers and test exporters; no network exporter is included or configured.
 otel = [

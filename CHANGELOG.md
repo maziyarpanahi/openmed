@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an optional Health Universe A2A agent that uses platform-extracted
+  Markdown, forces local offline PHI replacement, emits opaque review drafts,
+  and records count-only replacement safety evidence.
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

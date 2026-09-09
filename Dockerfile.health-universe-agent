@@ -1,0 +1,30 @@
+FROM python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd521731aafc0d76
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DO_NOT_TRACK=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    HF_HUB_OFFLINE=1 \
+    OPENMED_OFFLINE=1 \
+    OTEL_SDK_DISABLED=true \
+    TRANSFORMERS_OFFLINE=1 \
+    PHI_AGENT_MODEL_PATH=/app/model \
+    PHI_AGENT_MODEL_CACHE_DIR=/app/model_cache
+
+WORKDIR /app
+COPY . /app
+
+RUN python -m pip install --no-cache-dir --upgrade \
+        "pip==26.1.2" \
+        "setuptools==83.0.0" \
+        "wheel==0.47.0" \
+        "jaraco.context==6.1.2" \
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
+    && pip install --no-cache-dir ".[hf,health-universe-agent]" \
+    && HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 OPENMED_OFFLINE=0 \
+        python scripts/download_health_universe_phi_model.py --output /app/model
+
+EXPOSE 8000
+
+CMD ["uvicorn", "deployment:app", "--host", "0.0.0.0", "--port", "8000"]
