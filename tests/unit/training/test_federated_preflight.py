@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+
 import pytest
+
 from openmed.core.repro_hash import compute_environment_lock_digest
 from openmed.training import (
     FederatedMetricKind,
