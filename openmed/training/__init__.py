@@ -126,6 +126,15 @@ __all__ = [
     "FederatedUpdateMetadata",
     "FederatedUpdateMetadataError",
     "FederatedUpdatePolicy",
+    "FEDERATED_PREFLIGHT_SCHEMA_VERSION",
+    "FederatedPreflightFinding",
+    "FederatedPreflightReport",
+    "FederatedPreflightStatus",
+    "check_federated_environment",
+    "check_federated_schedule",
+    "check_federated_update_schema",
+    "check_federated_metric_schema",
+    "run_federated_preflight",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
@@ -261,6 +270,21 @@ def __getattr__(name: str) -> Any:
             ".federated_update_metadata", __name__
         )
         return getattr(federated_update_metadata, name)
+    if name in {
+        "FEDERATED_PREFLIGHT_SCHEMA_VERSION",
+        "FederatedPreflightFinding",
+        "FederatedPreflightReport",
+        "FederatedPreflightStatus",
+        "check_federated_environment",
+        "check_federated_metric_schema",
+        "check_federated_schedule",
+        "check_federated_update_schema",
+        "run_federated_preflight",
+    }:
+        federated_preflight = import_module(
+            ".federated_preflight", __name__
+        )
+        return getattr(federated_preflight, name)
     if name in {
         "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
         "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
