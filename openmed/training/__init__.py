@@ -281,9 +281,7 @@ def __getattr__(name: str) -> Any:
         "check_federated_update_schema",
         "run_federated_preflight",
     }:
-        federated_preflight = import_module(
-            ".federated_preflight", __name__
-        )
+        federated_preflight = import_module(".federated_preflight", __name__)
         return getattr(federated_preflight, name)
     if name in {
         "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",

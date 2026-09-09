@@ -93,12 +93,8 @@ def test_findings_are_ordered_deterministically() -> None:
         reason_code="SCHEDULE_REVIEW",
     )
 
-    report_one = FederatedPreflightReport.from_findings(
-        [finding_a, finding_b]
-    )
-    report_two = FederatedPreflightReport.from_findings(
-        [finding_b, finding_a]
-    )
+    report_one = FederatedPreflightReport.from_findings([finding_a, finding_b])
+    report_two = FederatedPreflightReport.from_findings([finding_b, finding_a])
 
     assert report_one.findings == report_two.findings
     assert report_one.to_json() == report_two.to_json()
@@ -156,6 +152,7 @@ def test_digest_references_are_deterministically_ordered() -> None:
         digest_z,
     )
 
+
 def test_report_rejects_invalid_digest_reference() -> None:
     with pytest.raises(ValueError):
         FederatedPreflightReport.from_findings(
@@ -193,6 +190,7 @@ def test_report_accepts_canonical_sha256_digest_reference() -> None:
     )
 
     assert report.digest_refs == (digest,)
+
 
 def test_finding_rejects_empty_check() -> None:
     try:
@@ -237,6 +235,7 @@ def test_report_rejects_status_that_does_not_match_findings() -> None:
     else:
         raise AssertionError("expected ValueError")
 
+
 def test_preflight_runner_preserves_independent_check_results() -> None:
     checks = [
         FederatedPreflightFinding(
@@ -257,10 +256,7 @@ def test_preflight_runner_preserves_independent_check_results() -> None:
 
     assert report.status is FederatedPreflightStatus.BLOCKED
     assert len(report.findings) == 2
-    assert {
-        finding.check
-        for finding in report.findings
-    } == {"schedule", "privacy"}
+    assert {finding.check for finding in report.findings} == {"schedule", "privacy"}
 
 
 def test_missing_mandatory_check_fails_closed() -> None:
@@ -316,15 +312,9 @@ def test_preflight_runner_is_deterministic_for_check_order() -> None:
 def _schedule() -> FederatedRoundSchedule:
     return FederatedRoundSchedule(
         enrollment_starts_at=datetime(2026, 9, 9, 10, 0, tzinfo=timezone.utc),
-        update_submission_starts_at=datetime(
-            2026, 9, 9, 12, 0, tzinfo=timezone.utc
-        ),
-        aggregation_starts_at=datetime(
-            2026, 9, 9, 14, 0, tzinfo=timezone.utc
-        ),
-        evaluation_starts_at=datetime(
-            2026, 9, 9, 16, 0, tzinfo=timezone.utc
-        ),
+        update_submission_starts_at=datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc),
+        aggregation_starts_at=datetime(2026, 9, 9, 14, 0, tzinfo=timezone.utc),
+        evaluation_starts_at=datetime(2026, 9, 9, 16, 0, tzinfo=timezone.utc),
         finishes_at=datetime(2026, 9, 9, 18, 0, tzinfo=timezone.utc),
     )
 
@@ -361,6 +351,7 @@ def test_schedule_check_blocks_after_round_finishes() -> None:
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert finding.reason_code == "SCHEDULE_EXPIRED"
 
+
 def test_environment_check_passes_for_matching_lock_digest(tmp_path) -> None:
     lock = tmp_path / "uv.lock"
     lock.write_text("environment-lock", encoding="utf-8")
@@ -378,6 +369,7 @@ def test_environment_check_passes_for_matching_lock_digest(tmp_path) -> None:
     assert finding.reason_code == "ENVIRONMENT_LOCK_VALID"
     assert finding.reference == expected
 
+
 def test_environment_check_blocks_missing_lock_digest(tmp_path) -> None:
     lock = tmp_path / "uv.lock"
     lock.write_text("environment-lock", encoding="utf-8")
@@ -390,6 +382,7 @@ def test_environment_check_blocks_missing_lock_digest(tmp_path) -> None:
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert finding.reason_code == "ENVIRONMENT_LOCK_MISSING"
 
+
 def test_environment_check_blocks_mismatched_lock_digest(tmp_path) -> None:
     lock = tmp_path / "uv.lock"
     lock.write_text("environment-lock", encoding="utf-8")
@@ -401,6 +394,7 @@ def test_environment_check_blocks_mismatched_lock_digest(tmp_path) -> None:
 
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert finding.reason_code == "ENVIRONMENT_LOCK_MISMATCH"
+
 
 def test_update_schema_passes_with_valid_metadata():
     model_digest = "sha256:" + "a" * 64
@@ -455,6 +449,7 @@ def test_update_schema_passes_with_valid_metadata():
     assert finding.reason_code == "UPDATE_SCHEMA_VALID"
     assert finding.reference == update_digest
 
+
 def test_update_schema_blocks_unsupported_schema():
     model_digest = "sha256:" + "a" * 64
 
@@ -493,6 +488,7 @@ def test_update_schema_blocks_unsupported_schema():
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert finding.reason_code == "UPDATE_SCHEMA_INVALID"
 
+
 def test_metric_schema_blocks_unsupported_schema() -> None:
     envelope = build_federated_metric_envelope(
         metric_id="documents_processed",
@@ -512,6 +508,7 @@ def test_metric_schema_blocks_unsupported_schema() -> None:
 
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert finding.reason_code == "METRIC_SCHEMA_INVALID"
+
 
 def test_update_schema_blocks_policy_mismatch():
     model_digest = "sha256:" + "a" * 64
@@ -550,6 +547,7 @@ def test_update_schema_blocks_policy_mismatch():
 
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert finding.reason_code == "UPDATE_SCHEMA_INVALID"
+
 
 def test_update_schema_does_not_expose_invalid_payload():
     model_digest = "sha256:" + "a" * 64
@@ -590,6 +588,7 @@ def test_update_schema_does_not_expose_invalid_payload():
 
     assert finding.status is FederatedPreflightStatus.BLOCKED
     assert sentinel not in str(finding.to_dict())
+
 
 def test_metric_schema_accepts_valid_envelope() -> None:
     envelope = build_federated_metric_envelope(

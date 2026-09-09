@@ -24,6 +24,7 @@ from .federated_update_metadata import (
 FEDERATED_PREFLIGHT_SCHEMA_VERSION = "openmed.training.federated_preflight.v1"
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
+
 class FederatedPreflightStatus(str, Enum):
     """Overall status of a federated preflight report."""
 
@@ -31,11 +32,13 @@ class FederatedPreflightStatus(str, Enum):
     REVIEW_REQUIRED = "review-required"
     BLOCKED = "blocked"
 
+
 _STATUS_PRECEDENCE = {
     FederatedPreflightStatus.ELIGIBLE: 0,
     FederatedPreflightStatus.REVIEW_REQUIRED: 1,
     FederatedPreflightStatus.BLOCKED: 2,
 }
+
 
 @dataclass(frozen=True, slots=True)
 class FederatedPreflightFinding:
@@ -68,6 +71,7 @@ class FederatedPreflightFinding:
             "status": self.status.value,
         }
 
+
 @dataclass(frozen=True, slots=True)
 class FederatedPreflightReport:
     """Immutable, deterministic result of federated round preflight."""
@@ -94,9 +98,7 @@ class FederatedPreflightReport:
 
         expected_status = self._status_from_findings(self.findings)
         if self.status != expected_status:
-            raise ValueError(
-                "report status must be derived from finding statuses"
-            )
+            raise ValueError("report status must be derived from finding statuses")
         if len(set(self.digest_refs)) != len(self.digest_refs):
             raise ValueError("digest_refs must not contain duplicates")
 
@@ -145,8 +147,7 @@ class FederatedPreflightReport:
     def from_findings(
         cls,
         findings: (
-            tuple[FederatedPreflightFinding, ...]
-            | list[FederatedPreflightFinding]
+            tuple[FederatedPreflightFinding, ...] | list[FederatedPreflightFinding]
         ),
         *,
         digest_refs: tuple[str, ...] | list[str] = (),
@@ -171,12 +172,16 @@ class FederatedPreflightReport:
 
     def to_json(self) -> str:
         """Return deterministic canonical JSON."""
-        return json.dumps(
-            self.to_dict(),
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        ) + "\n"
+        return (
+            json.dumps(
+                self.to_dict(),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+
 
 def check_federated_schedule(
     schedule: FederatedRoundSchedule,
@@ -211,11 +216,9 @@ def check_federated_schedule(
         reference=reference,
     )
 
+
 def run_federated_preflight(
-    findings: (
-        tuple[FederatedPreflightFinding, ...]
-        | list[FederatedPreflightFinding]
-    ),
+    findings: (tuple[FederatedPreflightFinding, ...] | list[FederatedPreflightFinding]),
     *,
     mandatory_checks: tuple[str, ...] | list[str] = (),
     digest_refs: tuple[str, ...] | list[str] = (),
@@ -233,9 +236,7 @@ def run_federated_preflight(
 
     for finding in normalized_findings:
         if not isinstance(finding, FederatedPreflightFinding):
-            raise TypeError(
-                "findings must contain FederatedPreflightFinding values"
-            )
+            raise TypeError("findings must contain FederatedPreflightFinding values")
 
     present_checks = {finding.check for finding in normalized_findings}
 
@@ -256,6 +257,7 @@ def run_federated_preflight(
         normalized_findings,
         digest_refs=digest_refs,
     )
+
 
 def check_federated_environment(
     declared_digest: str | None,
@@ -290,6 +292,7 @@ def check_federated_environment(
         reference=reference,
     )
 
+
 def check_federated_update_schema(
     payload: object,
     *,
@@ -314,6 +317,7 @@ def check_federated_update_schema(
         reason_code="UPDATE_SCHEMA_VALID",
         reference=reference,
     )
+
 
 def check_federated_metric_schema(
     payload: object,
