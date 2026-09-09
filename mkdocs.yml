@@ -151,6 +151,7 @@ nav:
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
+      - Content-free Provider Results: multimodal/provider-results.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
