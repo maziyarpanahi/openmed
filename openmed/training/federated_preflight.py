@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import Enum
 
 from openmed.core.repro_hash import compute_environment_lock_digest
+
 from .federated_metrics import (
     FederatedMetricEnvelope,
     FederatedMetricError,
@@ -19,7 +20,6 @@ from .federated_update_metadata import (
     FederatedUpdateMetadataError,
     FederatedUpdatePolicy,
 )
-
 
 FEDERATED_PREFLIGHT_SCHEMA_VERSION = "openmed.training.federated_preflight.v1"
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
