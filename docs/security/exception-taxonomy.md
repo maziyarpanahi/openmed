@@ -6,8 +6,8 @@ allowance. This taxonomy makes those exceptions reviewable without carrying a
 reason string, patient value, source path, or other arbitrary payload into
 telemetry or audit artifacts.
 
-The implementation is [`openmed/risk/exception_taxonomy.py`](../../openmed/risk/exception_taxonomy.py).
-It is versioned independently of application configuration:
+The implementation is `openmed/risk/exception_taxonomy.py`. It is versioned
+independently of application configuration:
 
 | Field | Value |
 |---|---|
@@ -17,7 +17,9 @@ It is versioned independently of application configuration:
 
 ## Closed record schema
 
-Every telemetry or audit exception record must contain exactly these fields:
+Every telemetry or audit exception record must contain exactly these fields.
+The validator accepts at most 16 input fields while reporting unknown fields,
+then emits only the eight-field canonical schema:
 
 | Field | Allowed value |
 |---|---|
@@ -69,9 +71,11 @@ The canonical shape is therefore bounded and content-free:
 | `operational_fallback` | `bounded_degradation` | `incident` and `test` | 7 days |
 
 An expiry is measured from `approval.approved_at` and must not exceed the
-category bound. Callers that need time-aware validation pass an explicit
-`as_of` value; omitting it performs structural validation without reading the
-system clock. This keeps repeated validation deterministic and offline.
+category bound. Timestamp strings and `datetime` values must carry a zero UTC
+offset; local offsets and date-only values fail closed. Callers that need
+time-aware validation pass an explicit `as_of` value; omitting it performs
+structural validation without reading the system clock. This keeps repeated
+validation deterministic and offline.
 
 ## Validation API
 
@@ -95,6 +99,10 @@ stable record digest. An invalid result exposes fixed finding codes, structural
 paths, and fixed messages; it never includes rejected values. Unknown fields,
 free-form reasons, owner fields, raw payloads, duplicate evidence, unsupported
 versions, missing evidence, invalid digests, and expired records fail closed.
+Mappings are copied into bounded plain dictionaries before inspection, and
+oversized evidence is rejected before its entries are traversed. Public typed
+records, rules, approvals, findings, and results enforce the same closed
+invariants when constructed directly.
 
 This is an operational review aid, not a compliance certification or clinical
 decision guarantee. The validator performs no mandatory network call and does

@@ -17,8 +17,9 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Final
+from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
+from typing import Any, Final, cast
 
 EXCEPTION_TAXONOMY_SCHEMA_VERSION: Final = 1
 EXCEPTION_TAXONOMY_VERSION: Final = "1.0"
@@ -55,7 +56,13 @@ _DIGEST_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
 _UTC: Final = timezone.utc
 _MAX_EVIDENCE_REFERENCES: Final = 8
 _MAX_RECORD_KEYS: Final = 8
+_MAX_RECORD_INPUT_KEYS: Final = 16
+_MAX_NESTED_KEYS: Final = 5
+_MAX_FINDINGS: Final = 32
+_MAX_TOKEN_LENGTH: Final = 64
 _MAX_DATETIME_LENGTH: Final = 40
+_MAX_MAPPING_KEY_LENGTH: Final = 64
+_EVIDENCE_ORDER: Final = {kind: index for index, kind in enumerate(EVIDENCE_KINDS)}
 
 _RECORD_FIELDS: Final = frozenset(
     {
@@ -76,6 +83,15 @@ _APPROVAL_FIELDS: Final = frozenset(
 _TAXONOMY_FIELDS: Final = frozenset(
     {"schema_version", "taxonomy_version", "report_type", "categories"}
 )
+_TAXONOMY_RULE_FIELDS: Final = frozenset(
+    {
+        "category",
+        "reason_codes",
+        "required_evidence",
+        "max_expiry_days",
+        "allowed_scopes",
+    }
+)
 
 _REASON_CODES: Final = frozenset(
     {
@@ -86,6 +102,13 @@ _REASON_CODES: Final = frozenset(
         "bounded_degradation",
     }
 )
+
+
+def _is_allowed_token(
+    value: Any,
+    allowed: tuple[str, ...] | frozenset[str],
+) -> bool:
+    return type(value) is str and len(value) <= _MAX_TOKEN_LENGTH and value in allowed
 
 
 class ExceptionTaxonomyError(ValueError):
@@ -128,9 +151,13 @@ class TaxonomyFinding:
     path: str
 
     def __post_init__(self) -> None:
-        if self.code not in _FINDING_MESSAGES:
+        if (
+            type(self.code) is not str
+            or len(self.code) > _MAX_TOKEN_LENGTH
+            or self.code not in _FINDING_MESSAGES
+        ):
             raise ValueError("unknown taxonomy finding code")
-        if self.path not in {
+        if type(self.path) is not str or self.path not in {
             "$",
             "$.schema_version",
             "$.taxonomy_version",
@@ -171,7 +198,7 @@ class EvidenceReference:
     digest: str
 
     def __post_init__(self) -> None:
-        if type(self.kind) is not str or self.kind not in EVIDENCE_KINDS:
+        if not _is_allowed_token(self.kind, EVIDENCE_KINDS):
             raise ExceptionTaxonomyError("unsupported evidence kind")
         _require_digest(self.digest)
 
@@ -195,12 +222,15 @@ class ApprovalMetadata:
     approved_at: datetime
 
     def __post_init__(self) -> None:
-        if type(self.status) is not str or self.status not in APPROVAL_STATUSES:
+        if not _is_allowed_token(self.status, APPROVAL_STATUSES):
             raise ExceptionTaxonomyError("unsupported approval status")
-        if type(self.role) is not str or self.role not in APPROVAL_ROLES:
+        if not _is_allowed_token(self.role, APPROVAL_ROLES):
             raise ExceptionTaxonomyError("unsupported approval role")
         _require_digest(self.approval_digest)
-        normalized = _require_utc_datetime(self.approved_at)
+        try:
+            normalized = _require_utc_datetime(self.approved_at)
+        except Exception:
+            raise ExceptionTaxonomyError("invalid approval timestamp") from None
         object.__setattr__(self, "approved_at", normalized)
 
     def to_dict(self) -> dict[str, Any]:
@@ -224,6 +254,48 @@ class TaxonomyRule:
     max_expiry_days: int
     allowed_scopes: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        if not _is_allowed_token(self.category, EXCEPTION_CATEGORIES):
+            raise ExceptionTaxonomyError("unsupported taxonomy category")
+        if (
+            type(self.reason_codes) is not tuple
+            or not self.reason_codes
+            or len(self.reason_codes) > len(_REASON_CODES)
+            or any(
+                not _is_allowed_token(value, _REASON_CODES)
+                for value in self.reason_codes
+            )
+            or len(set(self.reason_codes)) != len(self.reason_codes)
+        ):
+            raise ExceptionTaxonomyError("invalid taxonomy reason codes")
+        if (
+            type(self.required_evidence) is not tuple
+            or not self.required_evidence
+            or len(self.required_evidence) > len(EVIDENCE_KINDS)
+            or any(
+                not _is_allowed_token(value, EVIDENCE_KINDS)
+                for value in self.required_evidence
+            )
+            or len(set(self.required_evidence)) != len(self.required_evidence)
+        ):
+            raise ExceptionTaxonomyError("invalid taxonomy evidence requirements")
+        if (
+            type(self.max_expiry_days) is not int
+            or not 1 <= self.max_expiry_days <= 365
+        ):
+            raise ExceptionTaxonomyError("invalid taxonomy expiry bound")
+        if (
+            type(self.allowed_scopes) is not tuple
+            or not self.allowed_scopes
+            or len(self.allowed_scopes) > len(EXCEPTION_SURFACES)
+            or any(
+                not _is_allowed_token(value, EXCEPTION_SURFACES)
+                for value in self.allowed_scopes
+            )
+            or len(set(self.allowed_scopes)) != len(self.allowed_scopes)
+        ):
+            raise ExceptionTaxonomyError("invalid taxonomy scopes")
+
     def to_dict(self) -> dict[str, Any]:
         """Return the versioned rule in deterministic order."""
 
@@ -236,36 +308,38 @@ class TaxonomyRule:
         }
 
 
-_RULE_DEFINITIONS: Final = {
-    "local_suppression": TaxonomyRule(
-        category="local_suppression",
-        reason_codes=("false_positive_reviewed", "policy_exclusion"),
-        required_evidence=("test", "review"),
-        max_expiry_days=90,
-        allowed_scopes=EXCEPTION_SURFACES,
-    ),
-    "local_allowance": TaxonomyRule(
-        category="local_allowance",
-        reason_codes=("false_positive_reviewed", "compatibility_boundary"),
-        required_evidence=("test", "review"),
-        max_expiry_days=90,
-        allowed_scopes=EXCEPTION_SURFACES,
-    ),
-    "synthetic_fixture": TaxonomyRule(
-        category="synthetic_fixture",
-        reason_codes=("synthetic_only",),
-        required_evidence=("fixture", "test"),
-        max_expiry_days=30,
-        allowed_scopes=EXCEPTION_SURFACES,
-    ),
-    "operational_fallback": TaxonomyRule(
-        category="operational_fallback",
-        reason_codes=("bounded_degradation",),
-        required_evidence=("incident", "test"),
-        max_expiry_days=7,
-        allowed_scopes=EXCEPTION_SURFACES,
-    ),
-}
+_RULE_DEFINITIONS: Final[Mapping[str, TaxonomyRule]] = MappingProxyType(
+    {
+        "local_suppression": TaxonomyRule(
+            category="local_suppression",
+            reason_codes=("false_positive_reviewed", "policy_exclusion"),
+            required_evidence=("test", "review"),
+            max_expiry_days=90,
+            allowed_scopes=EXCEPTION_SURFACES,
+        ),
+        "local_allowance": TaxonomyRule(
+            category="local_allowance",
+            reason_codes=("false_positive_reviewed", "compatibility_boundary"),
+            required_evidence=("test", "review"),
+            max_expiry_days=90,
+            allowed_scopes=EXCEPTION_SURFACES,
+        ),
+        "synthetic_fixture": TaxonomyRule(
+            category="synthetic_fixture",
+            reason_codes=("synthetic_only",),
+            required_evidence=("fixture", "test"),
+            max_expiry_days=30,
+            allowed_scopes=EXCEPTION_SURFACES,
+        ),
+        "operational_fallback": TaxonomyRule(
+            category="operational_fallback",
+            reason_codes=("bounded_degradation",),
+            required_evidence=("incident", "test"),
+            max_expiry_days=7,
+            allowed_scopes=EXCEPTION_SURFACES,
+        ),
+    }
+)
 
 
 def _default_rules() -> tuple[TaxonomyRule, ...]:
@@ -301,34 +375,38 @@ class ExceptionRecord:
             or self.taxonomy_version != EXCEPTION_TAXONOMY_VERSION
         ):
             raise ExceptionTaxonomyError("unsupported taxonomy version")
-        if type(self.category) is not str or self.category not in EXCEPTION_CATEGORIES:
+        if not _is_allowed_token(self.category, EXCEPTION_CATEGORIES):
             raise ExceptionTaxonomyError("unsupported exception category")
         rule = _RULE_DEFINITIONS[self.category]
-        if (
-            type(self.reason_code) is not str
-            or self.reason_code not in rule.reason_codes
-        ):
+        if not _is_allowed_token(self.reason_code, rule.reason_codes):
             raise ExceptionTaxonomyError("unsupported exception reason code")
-        if type(self.scope) is not str or self.scope not in rule.allowed_scopes:
+        if not _is_allowed_token(self.scope, rule.allowed_scopes):
             raise ExceptionTaxonomyError("unsupported exception scope")
-        if not isinstance(self.evidence, tuple):
+        if type(self.evidence) is not tuple:
             raise ExceptionTaxonomyError("evidence must be a tuple")
         if len(self.evidence) > _MAX_EVIDENCE_REFERENCES:
             raise ExceptionTaxonomyError("too many evidence references")
         evidence_kinds: set[str] = set()
         for reference in self.evidence:
-            if not isinstance(reference, EvidenceReference):
+            if type(reference) is not EvidenceReference:
                 raise ExceptionTaxonomyError("invalid evidence reference")
             if reference.kind in evidence_kinds:
                 raise ExceptionTaxonomyError("duplicate evidence kind")
             evidence_kinds.add(reference.kind)
-        normalized_expiry = _require_utc_datetime(self.expires_at)
-        if not isinstance(self.approval, ApprovalMetadata):
+        try:
+            normalized_expiry = _require_utc_datetime(self.expires_at)
+        except Exception:
+            raise ExceptionTaxonomyError("invalid expiry timestamp") from None
+        if type(self.approval) is not ApprovalMetadata:
             raise ExceptionTaxonomyError("invalid approval metadata")
         if normalized_expiry <= self.approval.approved_at:
             raise ExceptionTaxonomyError("expiry must be after approval")
         object.__setattr__(self, "expires_at", normalized_expiry)
-        object.__setattr__(self, "evidence", tuple(self.evidence))
+        object.__setattr__(
+            self,
+            "evidence",
+            tuple(sorted(self.evidence, key=lambda item: _EVIDENCE_ORDER[item.kind])),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return the exact canonical record schema."""
@@ -359,7 +437,17 @@ class ExceptionRecord:
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExceptionRecord":
         """Construct a record only when the complete taxonomy is satisfied."""
 
-        result = validate_exception_record(payload, surface="telemetry")
+        try:
+            normalized = _snapshot_mapping(payload, _MAX_RECORD_INPUT_KEYS)
+            scope = normalized.get("scope")
+        except Exception:
+            raise ExceptionTaxonomyError("invalid exception record") from None
+        surface = (
+            cast(str, scope)
+            if _is_allowed_token(scope, EXCEPTION_SURFACES)
+            else "telemetry"
+        )
+        result = validate_exception_record(normalized, surface=surface)
         if not result.valid or result.record is None:
             raise ExceptionTaxonomyError("invalid exception record")
         return result.record
@@ -390,14 +478,18 @@ class ExceptionTaxonomy:
             or self.report_type != EXCEPTION_TAXONOMY_REPORT_TYPE
         ):
             raise ExceptionTaxonomyError("unsupported taxonomy report type")
-        if not isinstance(self.rules, tuple):
+        if type(self.rules) is not tuple:
             raise ExceptionTaxonomyError("taxonomy rules must be a tuple")
+        if any(type(rule) is not TaxonomyRule for rule in self.rules):
+            raise ExceptionTaxonomyError("taxonomy rules are not supported")
         if tuple(self.rules) != _default_rules():
             raise ExceptionTaxonomyError("taxonomy rules are not supported")
 
     def rule_for(self, category: str) -> TaxonomyRule | None:
         """Return the fixed rule for a category, or ``None``."""
 
+        if type(category) is not str or len(category) > _MAX_TOKEN_LENGTH:
+            return None
         return _RULE_DEFINITIONS.get(category)
 
     def to_dict(self) -> dict[str, Any]:
@@ -419,24 +511,51 @@ class ExceptionTaxonomy:
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExceptionTaxonomy":
         """Load only the exact bundled taxonomy schema."""
 
-        if not isinstance(payload, Mapping):
-            raise ExceptionTaxonomyError("invalid taxonomy")
-        if set(payload) != _TAXONOMY_FIELDS:
-            raise ExceptionTaxonomyError("invalid taxonomy")
         try:
-            candidate = {
-                "schema_version": payload["schema_version"],
-                "taxonomy_version": payload["taxonomy_version"],
-                "report_type": payload["report_type"],
-                "categories": payload["categories"],
-            }
-            if _canonical_json(candidate) != _canonical_json(
-                DEFAULT_EXCEPTION_TAXONOMY.to_dict()
+            if cls is not ExceptionTaxonomy:
+                raise ExceptionTaxonomyError("invalid taxonomy")
+            candidate = _snapshot_mapping(payload, _MAX_NESTED_KEYS)
+            if set(candidate) != _TAXONOMY_FIELDS:
+                raise ExceptionTaxonomyError("invalid taxonomy")
+            categories = candidate["categories"]
+            if type(categories) is not list or len(categories) != len(
+                EXCEPTION_CATEGORIES
             ):
                 raise ExceptionTaxonomyError("invalid taxonomy")
-        except (TypeError, ValueError, KeyError):
+            rules: list[TaxonomyRule] = []
+            for category in categories:
+                rule = _snapshot_mapping(category, _MAX_NESTED_KEYS)
+                if set(rule) != _TAXONOMY_RULE_FIELDS:
+                    raise ExceptionTaxonomyError("invalid taxonomy")
+                reason_codes = rule["reason_codes"]
+                required_evidence = rule["required_evidence"]
+                allowed_scopes = rule["allowed_scopes"]
+                if (
+                    type(reason_codes) is not list
+                    or len(reason_codes) > len(_REASON_CODES)
+                    or type(required_evidence) is not list
+                    or len(required_evidence) > len(EVIDENCE_KINDS)
+                    or type(allowed_scopes) is not list
+                    or len(allowed_scopes) > len(EXCEPTION_SURFACES)
+                ):
+                    raise ExceptionTaxonomyError("invalid taxonomy")
+                rules.append(
+                    TaxonomyRule(
+                        category=rule["category"],
+                        reason_codes=tuple(reason_codes),
+                        required_evidence=tuple(required_evidence),
+                        max_expiry_days=rule["max_expiry_days"],
+                        allowed_scopes=tuple(allowed_scopes),
+                    )
+                )
+            return cls(
+                schema_version=candidate["schema_version"],
+                taxonomy_version=candidate["taxonomy_version"],
+                report_type=candidate["report_type"],
+                rules=tuple(rules),
+            )
+        except Exception:
             raise ExceptionTaxonomyError("invalid taxonomy") from None
-        return cls()
 
 
 @dataclass(frozen=True)
@@ -451,14 +570,43 @@ class TaxonomyValidationResult:
     record: ExceptionRecord | None = None
 
     def __post_init__(self) -> None:
-        if self.surface not in EXCEPTION_SURFACES:
+        if type(self.surface) is not str or self.surface not in EXCEPTION_SURFACES:
             raise ValueError("unsupported validation surface")
-        if not isinstance(self.errors, tuple):
+        if type(self.valid) is not bool:
+            raise TypeError("valid must be a boolean")
+        if type(self.errors) is not tuple:
             raise TypeError("errors must be a tuple")
+        if len(self.errors) > _MAX_FINDINGS or any(
+            type(finding) is not TaxonomyFinding for finding in self.errors
+        ):
+            raise TypeError("errors must contain taxonomy findings")
+        if (
+            type(self.taxonomy_version) is not str
+            or self.taxonomy_version != EXCEPTION_TAXONOMY_VERSION
+        ):
+            raise ValueError("unsupported taxonomy version")
+        if self.record_digest is not None:
+            _require_digest(self.record_digest)
         if self.valid != (not self.errors):
             raise ValueError("validation result validity does not match findings")
-        if self.record is not None and not isinstance(self.record, ExceptionRecord):
+        if self.record is not None and type(self.record) is not ExceptionRecord:
             raise TypeError("record must be an ExceptionRecord")
+        if self.valid:
+            if self.record is None or self.record_digest != self.record.digest:
+                raise ValueError(
+                    "valid result must contain its canonical record digest"
+                )
+            record_findings: list[TaxonomyFinding] = []
+            _validate_candidate(
+                self.record,
+                surface=self.surface,
+                as_of=None,
+                findings=record_findings,
+            )
+            if record_findings:
+                raise ValueError("valid result must contain a taxonomy-valid record")
+        elif self.record is not None or self.record_digest is not None:
+            raise ValueError("invalid result cannot contain record data")
 
     @property
     def error_codes(self) -> tuple[str, ...]:
@@ -494,7 +642,7 @@ def validate_exception_record(
     record: Mapping[str, Any] | ExceptionRecord,
     *,
     surface: str = "telemetry",
-    as_of: datetime | date | str | None = None,
+    as_of: datetime | str | None = None,
     taxonomy: ExceptionTaxonomy = DEFAULT_EXCEPTION_TAXONOMY,
 ) -> TaxonomyValidationResult:
     """Validate one canonical exception record for telemetry or audit use.
@@ -505,27 +653,36 @@ def validate_exception_record(
     and messages; arbitrary record values are never returned.
     """
 
-    if surface not in EXCEPTION_SURFACES:
+    if not _is_allowed_token(surface, EXCEPTION_SURFACES):
         return _result(
             surface="telemetry",
             errors=("UNSUPPORTED_SURFACE", "$.surface"),
         )
-    if not isinstance(taxonomy, ExceptionTaxonomy):
+    if type(taxonomy) is not ExceptionTaxonomy:
         return _result(surface=surface, errors=("INVALID_TAXONOMY", "$"))
 
-    if isinstance(record, ExceptionRecord):
-        candidate = record
-        findings: list[TaxonomyFinding] = []
-    elif isinstance(record, Mapping):
-        candidate, findings = _parse_record_mapping(record)
-    else:
-        return _result(
-            surface=surface,
-            errors=("RECORD_NOT_MAPPING", "$"),
-        )
+    try:
+        candidate: ExceptionRecord | None
+        if type(record) is ExceptionRecord:
+            candidate = record
+            findings: list[TaxonomyFinding] = []
+        elif isinstance(record, Mapping):
+            candidate, findings = _parse_record_mapping(record)
+        else:
+            return _result(
+                surface=surface,
+                errors=("RECORD_NOT_MAPPING", "$"),
+            )
 
-    if candidate is not None and not findings:
-        _validate_candidate(candidate, surface=surface, as_of=as_of, findings=findings)
+        if candidate is not None and not findings:
+            _validate_candidate(
+                candidate,
+                surface=surface,
+                as_of=as_of,
+                findings=findings,
+            )
+    except Exception:
+        return _result(surface=surface, errors=("INVALID_TYPE", "$"))
 
     if findings:
         return _result(surface=surface, errors=tuple(findings))
@@ -543,7 +700,7 @@ def validate_exception_record(
 def validate_telemetry_record(
     record: Mapping[str, Any] | ExceptionRecord,
     *,
-    as_of: datetime | date | str | None = None,
+    as_of: datetime | str | None = None,
     taxonomy: ExceptionTaxonomy = DEFAULT_EXCEPTION_TAXONOMY,
 ) -> TaxonomyValidationResult:
     """Validate a PHI-free exception record emitted as telemetry."""
@@ -559,7 +716,7 @@ def validate_telemetry_record(
 def validate_audit_record(
     record: Mapping[str, Any] | ExceptionRecord,
     *,
-    as_of: datetime | date | str | None = None,
+    as_of: datetime | str | None = None,
     taxonomy: ExceptionTaxonomy = DEFAULT_EXCEPTION_TAXONOMY,
 ) -> TaxonomyValidationResult:
     """Validate a PHI-free exception record emitted to an audit log."""
@@ -582,12 +739,16 @@ def _parse_record_mapping(
     payload: Mapping[str, Any],
 ) -> tuple[ExceptionRecord | None, list[TaxonomyFinding]]:
     findings: list[TaxonomyFinding] = []
-    if len(payload) > _MAX_RECORD_KEYS or set(payload) - _RECORD_FIELDS:
+    try:
+        normalized = _snapshot_mapping(payload, _MAX_RECORD_INPUT_KEYS)
+    except ExceptionTaxonomyError:
+        return None, [TaxonomyFinding("UNSUPPORTED_FIELD", "$")]
+    if set(normalized) - _RECORD_FIELDS:
         findings.append(TaxonomyFinding("UNSUPPORTED_FIELD", "$"))
-    for field in sorted(_RECORD_FIELDS - set(payload)):
+    for field in sorted(_RECORD_FIELDS - set(normalized)):
         findings.append(TaxonomyFinding("MISSING_FIELD", _field_path(field)))
 
-    schema_version = payload.get("schema_version")
+    schema_version = normalized.get("schema_version")
     if type(schema_version) is not int:
         findings.append(TaxonomyFinding("INVALID_TYPE", "$.schema_version"))
     elif schema_version != EXCEPTION_TAXONOMY_SCHEMA_VERSION:
@@ -595,7 +756,7 @@ def _parse_record_mapping(
             TaxonomyFinding("UNSUPPORTED_SCHEMA_VERSION", "$.schema_version")
         )
 
-    taxonomy_version = payload.get("taxonomy_version")
+    taxonomy_version = normalized.get("taxonomy_version")
     if type(taxonomy_version) is not str:
         findings.append(TaxonomyFinding("INVALID_TYPE", "$.taxonomy_version"))
     elif taxonomy_version != EXCEPTION_TAXONOMY_VERSION:
@@ -603,31 +764,31 @@ def _parse_record_mapping(
             TaxonomyFinding("UNSUPPORTED_TAXONOMY_VERSION", "$.taxonomy_version")
         )
 
-    category = payload.get("category")
+    category = normalized.get("category")
     if type(category) is not str:
         findings.append(TaxonomyFinding("INVALID_TYPE", "$.category"))
-    elif category not in EXCEPTION_CATEGORIES:
+    elif not _is_allowed_token(category, EXCEPTION_CATEGORIES):
         findings.append(TaxonomyFinding("UNSUPPORTED_CATEGORY", "$.category"))
 
-    reason_code = payload.get("reason_code")
+    reason_code = normalized.get("reason_code")
     if type(reason_code) is not str:
         findings.append(TaxonomyFinding("INVALID_TYPE", "$.reason_code"))
-    elif reason_code not in _REASON_CODES:
+    elif not _is_allowed_token(reason_code, _REASON_CODES):
         findings.append(TaxonomyFinding("UNSUPPORTED_REASON_CODE", "$.reason_code"))
 
-    scope = payload.get("scope")
+    scope = normalized.get("scope")
     if type(scope) is not str:
         findings.append(TaxonomyFinding("INVALID_TYPE", "$.scope"))
-    elif scope not in EXCEPTION_SURFACES:
+    elif not _is_allowed_token(scope, EXCEPTION_SURFACES):
         findings.append(TaxonomyFinding("UNSUPPORTED_SCOPE", "$.scope"))
 
-    evidence = _parse_evidence(payload.get("evidence"), findings)
+    evidence = _parse_evidence(normalized.get("evidence"), findings)
     expires_at = _parse_timestamp(
-        payload.get("expires_at"),
+        normalized.get("expires_at"),
         "$.expires_at",
         findings,
     )
-    approval = _parse_approval(payload.get("approval"), findings)
+    approval = _parse_approval(normalized.get("approval"), findings)
 
     if findings:
         return None, findings
@@ -637,6 +798,8 @@ def _parse_record_mapping(
     assert evidence is not None
     assert expires_at is not None
     assert approval is not None
+    safe_taxonomy_version = cast(str, taxonomy_version)
+    safe_schema_version = cast(int, schema_version)
     try:
         return (
             ExceptionRecord(
@@ -646,8 +809,8 @@ def _parse_record_mapping(
                 evidence=evidence,
                 expires_at=expires_at,
                 approval=approval,
-                taxonomy_version=taxonomy_version,
-                schema_version=schema_version,
+                taxonomy_version=safe_taxonomy_version,
+                schema_version=safe_schema_version,
             ),
             findings,
         )
@@ -661,30 +824,44 @@ def _parse_evidence(
     value: Any,
     findings: list[TaxonomyFinding],
 ) -> tuple[EvidenceReference, ...] | None:
-    if not isinstance(value, (list, tuple)):
+    if type(value) not in (list, tuple):
         findings.append(TaxonomyFinding("INVALID_TYPE", "$.evidence"))
         return None
     if len(value) > _MAX_EVIDENCE_REFERENCES:
         findings.append(TaxonomyFinding("TOO_MANY_EVIDENCE", "$.evidence"))
+        return None
     parsed: list[EvidenceReference] = []
     seen: set[str] = set()
     for item in value:
-        if not isinstance(item, Mapping) or set(item) != _EVIDENCE_FIELDS:
+        if not isinstance(item, Mapping):
             findings.append(TaxonomyFinding("INVALID_EVIDENCE", "$.evidence[*]"))
             continue
-        kind = item.get("kind")
-        digest = item.get("digest")
-        if type(kind) is not str or kind not in EVIDENCE_KINDS:
+        try:
+            normalized = _snapshot_mapping(item, len(_EVIDENCE_FIELDS))
+        except ExceptionTaxonomyError:
+            findings.append(TaxonomyFinding("INVALID_EVIDENCE", "$.evidence[*]"))
+            continue
+        if set(normalized) != _EVIDENCE_FIELDS:
+            findings.append(TaxonomyFinding("INVALID_EVIDENCE", "$.evidence[*]"))
+            continue
+        kind = normalized.get("kind")
+        digest = normalized.get("digest")
+        if not _is_allowed_token(kind, EVIDENCE_KINDS):
             findings.append(TaxonomyFinding("INVALID_EVIDENCE", "$.evidence[*].kind"))
             continue
         if kind in seen:
             findings.append(TaxonomyFinding("DUPLICATE_EVIDENCE", "$.evidence[*]"))
             continue
-        if type(digest) is not str or not _DIGEST_RE.fullmatch(digest):
+        if (
+            type(digest) is not str
+            or len(digest) != 71
+            or not _DIGEST_RE.fullmatch(digest)
+        ):
             findings.append(TaxonomyFinding("INVALID_DIGEST", "$.evidence[*].digest"))
             continue
-        seen.add(kind)
-        parsed.append(EvidenceReference(kind=kind, digest=digest))
+        safe_kind = cast(str, kind)
+        seen.add(safe_kind)
+        parsed.append(EvidenceReference(kind=safe_kind, digest=digest))
     return tuple(parsed)
 
 
@@ -692,28 +869,36 @@ def _parse_approval(
     value: Any,
     findings: list[TaxonomyFinding],
 ) -> ApprovalMetadata | None:
-    if not isinstance(value, Mapping) or set(value) != _APPROVAL_FIELDS:
+    if not isinstance(value, Mapping):
         findings.append(TaxonomyFinding("INVALID_APPROVAL", "$.approval"))
         return None
-    status = value.get("status")
-    role = value.get("role")
-    digest = value.get("approval_digest")
+    try:
+        normalized = _snapshot_mapping(value, len(_APPROVAL_FIELDS))
+    except ExceptionTaxonomyError:
+        findings.append(TaxonomyFinding("INVALID_APPROVAL", "$.approval"))
+        return None
+    if set(normalized) != _APPROVAL_FIELDS:
+        findings.append(TaxonomyFinding("INVALID_APPROVAL", "$.approval"))
+        return None
+    status = normalized.get("status")
+    role = normalized.get("role")
+    digest = normalized.get("approval_digest")
     approved_at = _parse_timestamp(
-        value.get("approved_at"),
+        normalized.get("approved_at"),
         "$.approval.approved_at",
         findings,
     )
     if type(status) is not str:
         findings.append(TaxonomyFinding("INVALID_APPROVAL", "$.approval.status"))
-    elif status not in APPROVAL_STATUSES:
+    elif not _is_allowed_token(status, APPROVAL_STATUSES):
         findings.append(
             TaxonomyFinding("UNSUPPORTED_APPROVAL_STATUS", "$.approval.status")
         )
     if type(role) is not str:
         findings.append(TaxonomyFinding("INVALID_APPROVAL", "$.approval.role"))
-    elif role not in APPROVAL_ROLES:
+    elif not _is_allowed_token(role, APPROVAL_ROLES):
         findings.append(TaxonomyFinding("UNSUPPORTED_APPROVAL_ROLE", "$.approval.role"))
-    if type(digest) is not str or not _DIGEST_RE.fullmatch(digest):
+    if type(digest) is not str or len(digest) != 71 or not _DIGEST_RE.fullmatch(digest):
         findings.append(TaxonomyFinding("INVALID_DIGEST", "$.approval.approval_digest"))
     if findings and any(finding.path.startswith("$.approval") for finding in findings):
         return None
@@ -740,7 +925,7 @@ def _parse_timestamp(
 ) -> datetime | None:
     try:
         return _require_utc_datetime(value)
-    except (TypeError, ValueError):
+    except Exception:
         findings.append(TaxonomyFinding("INVALID_TIMESTAMP", path))
         return None
 
@@ -749,7 +934,7 @@ def _validate_candidate(
     candidate: ExceptionRecord,
     *,
     surface: str,
-    as_of: datetime | date | str | None,
+    as_of: datetime | str | None,
     findings: list[TaxonomyFinding],
 ) -> None:
     rule = _RULE_DEFINITIONS.get(candidate.category)
@@ -763,7 +948,7 @@ def _validate_candidate(
     present_evidence = {reference.kind for reference in candidate.evidence}
     if not set(rule.required_evidence).issubset(present_evidence):
         findings.append(TaxonomyFinding("MISSING_REQUIRED_EVIDENCE", "$.evidence"))
-    if candidate.expires_at > candidate.approval.approved_at + timedelta(
+    if candidate.expires_at - candidate.approval.approved_at > timedelta(
         days=rule.max_expiry_days
     ):
         findings.append(TaxonomyFinding("EXPIRY_TOO_LONG", "$.expires_at"))
@@ -771,7 +956,7 @@ def _validate_candidate(
         return
     try:
         comparison_time = _require_utc_datetime(as_of)
-    except (TypeError, ValueError):
+    except Exception:
         findings.append(TaxonomyFinding("INVALID_TIMESTAMP", "$.expires_at"))
         return
     if candidate.approval.approved_at > comparison_time:
@@ -787,12 +972,12 @@ def _result(
     surface: str,
     errors: tuple[TaxonomyFinding, ...] | tuple[str, str],
 ) -> TaxonomyValidationResult:
-    if surface not in EXCEPTION_SURFACES:
+    if not _is_allowed_token(surface, EXCEPTION_SURFACES):
         surface = "telemetry"
-    if errors and isinstance(errors[0], TaxonomyFinding):
-        findings = errors
+    if errors and type(errors[0]) is TaxonomyFinding:
+        findings = cast(tuple[TaxonomyFinding, ...], errors)
     else:
-        code, path = errors
+        code, path = cast(tuple[str, str], errors)
         findings = (TaxonomyFinding(code, path),)
     return TaxonomyValidationResult(
         surface=surface,
@@ -820,29 +1005,56 @@ def _field_path(field: str) -> str:
 
 
 def _require_digest(value: Any) -> None:
-    if type(value) is not str or not _DIGEST_RE.fullmatch(value):
+    if type(value) is not str or len(value) != 71 or not _DIGEST_RE.fullmatch(value):
         raise ExceptionTaxonomyError("invalid digest")
 
 
 def _require_utc_datetime(value: Any) -> datetime:
-    if isinstance(value, date) and not isinstance(value, datetime):
-        value = datetime.combine(value, time.min, tzinfo=_UTC)
-    elif isinstance(value, str):
+    if type(value) is str:
         if len(value) > _MAX_DATETIME_LENGTH:
             raise ValueError("timestamp is too long")
         if value.endswith("Z"):
             value = value[:-1] + "+00:00"
+        elif not value.endswith("+00:00"):
+            raise ValueError("timestamp must use UTC")
         try:
             value = datetime.fromisoformat(value)
         except ValueError:
             raise ValueError("invalid timestamp") from None
-    if not isinstance(value, datetime):
+    if type(value) is not datetime:
         raise TypeError("timestamp must be a datetime")
-    if value.tzinfo is None or value.utcoffset() is None:
+    if value.tzinfo is None or value.utcoffset() != timedelta(0):
         raise ValueError("timestamp must include a timezone")
     normalized = value.astimezone(_UTC)
     if normalized.year < 1 or normalized.year > 9999:
         raise ValueError("timestamp is outside the supported range")
+    return normalized
+
+
+def _snapshot_mapping(value: Any, max_items: int) -> dict[str, Any]:
+    """Copy a bounded mapping without retaining custom container behavior."""
+
+    if not isinstance(value, Mapping):
+        raise ExceptionTaxonomyError("value must be a mapping")
+    try:
+        declared_length = len(value)
+        if declared_length > max_items:
+            raise ExceptionTaxonomyError("mapping exceeds the field limit")
+        normalized: dict[str, Any] = {}
+        for index, (key, item) in enumerate(value.items()):
+            if index >= max_items:
+                raise ExceptionTaxonomyError("mapping exceeds the field limit")
+            if type(key) is not str or len(key) > _MAX_MAPPING_KEY_LENGTH:
+                raise ExceptionTaxonomyError("mapping key is invalid")
+            if key in normalized:
+                raise ExceptionTaxonomyError("mapping key is duplicated")
+            normalized[key] = item
+        if len(normalized) != declared_length:
+            raise ExceptionTaxonomyError("mapping length is inconsistent")
+    except ExceptionTaxonomyError:
+        raise
+    except Exception:
+        raise ExceptionTaxonomyError("mapping could not be read") from None
     return normalized
 
 
