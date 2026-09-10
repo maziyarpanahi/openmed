@@ -9,6 +9,7 @@ import pytest
 
 from openmed.core.arbitration import MODE_HIGH_RECALL_UNION
 from openmed.core.cascade import R3_ACCURATE, CascadeRouter
+from openmed.core.errors import PolicyError
 from openmed.core.labels import (
     CANONICAL_LABELS,
     CLINICAL_CONCEPT,
@@ -953,11 +954,13 @@ def test_unknown_policy_raises_before_detection(monkeypatch):
 
     monkeypatch.setattr(pii, "extract_pii", fail_extract)
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(PolicyError) as exc_info:
         deidentify("Patient John Doe", policy="not_a_profile")
 
     message = str(exc_info.value)
-    assert "not_a_profile" in message
+    assert "not_a_profile" not in message
+    assert exc_info.value.details["argument"] == "policy"
+    assert "not_a_profile" not in exc_info.value.details["policy"]
     for name in CANONICAL_POLICY_NAMES:
         assert name in message
 
