@@ -54,10 +54,18 @@ and a stable reason code, but never record or cell values. Keep the projected
 row under the caller's normal data-handling controls; the selection explanation
 is suitable for an audit trail because it is value-free.
 
+Unknown source keys are not copied into the explanation. Unknown purpose or
+profile declarations are denied before the selector inspects the record. Public
+`FieldSelection` objects are created only by a selector, preventing direct
+construction from being used as a projection bypass.
+
 ## Safety boundaries
 
 This helper is configuration-driven and makes no mandatory network call. It
 does not infer a purpose from record contents, authorize the caller's stated
 purpose, classify clinical fields, or provide a HIPAA, GDPR, or other legal
 certification. Operators must define and review purpose mappings and policy
-profiles for their own data contract. Examples above use synthetic values only.
+profiles for their own data contract. A selector accepts at most 256 purpose
+mappings, 256 profiles, 512 fields per declaration, and 4,096 available fields;
+the corresponding `MAX_*` constants are public. Identifiers must use a compact
+ASCII-safe form. Examples above use synthetic values only.

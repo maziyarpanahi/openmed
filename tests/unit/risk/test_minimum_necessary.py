@@ -7,9 +7,15 @@ import json
 import pytest
 
 from openmed.risk.minimum_necessary import (
+    MAX_AVAILABLE_FIELDS,
+    MAX_FIELDS_PER_DECLARATION,
+    MAX_POLICY_PROFILES,
+    MAX_PURPOSE_MAPPINGS,
     FieldPolicyProfile,
+    FieldSelection,
     MinimumNecessarySelector,
     PurposeMapping,
+    SelectionExplanation,
     select_fields,
 )
 
@@ -198,7 +204,7 @@ def test_invalid_configuration_and_record_shape_use_value_free_errors() -> None:
     assert "SECRET" not in str(purpose_error.value)
 
     selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
-    with pytest.raises(TypeError, match="field collections") as record_error:
+    with pytest.raises(TypeError, match="available fields") as record_error:
         selector.select(
             "not-a-record", purpose="cohort_review", policy_profile="research_limited"
         )  # type: ignore[arg-type]
@@ -227,6 +233,10 @@ def test_selector_is_exported_from_the_risk_package() -> None:
     for name in (
         "FieldPolicyProfile",
         "FieldSelection",
+        "MAX_AVAILABLE_FIELDS",
+        "MAX_FIELDS_PER_DECLARATION",
+        "MAX_POLICY_PROFILES",
+        "MAX_PURPOSE_MAPPINGS",
         "MinimumNecessarySelector",
         "PurposeMapping",
         "SelectionExplanation",
@@ -235,3 +245,172 @@ def test_selector_is_exported_from_the_risk_package() -> None:
     ):
         assert name in risk.__all__
         assert hasattr(risk, name)
+
+
+def test_explanation_never_includes_undeclared_source_keys() -> None:
+    selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
+
+    result = selector.select(
+        {
+            "condition_code": "SYNTHETIC-CODE",
+            "visit_month": "synthetic-month",
+            "patient_SYNTHETIC-SECRET": "SYNTHETIC-SECRET",
+        },
+        purpose="cohort_review",
+        policy_profile="strict_export",
+    )
+
+    report = result.to_json()
+    assert result.allowed is True
+    assert "patient_SYNTHETIC-SECRET" not in report
+    assert "SYNTHETIC-SECRET" not in report
+    assert result.explanation.omitted_fields == ("age_band", "visit_month")
+
+
+def test_unknown_declarations_fail_closed_without_reading_the_record() -> None:
+    class HostileRecord(dict[str, str]):
+        def __iter__(self):  # type: ignore[no-untyped-def]
+            raise RuntimeError("SYNTHETIC-SECRET")
+
+    selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
+    record = HostileRecord(condition_code="SYNTHETIC-CODE")
+
+    unknown_purpose = selector.select(
+        record,
+        purpose="unknown_purpose",
+        policy_profile="research_limited",
+    )
+    unknown_profile = selector.select(
+        record,
+        purpose="cohort_review",
+        policy_profile="unknown_profile",
+    )
+
+    assert unknown_purpose.reason == "unknown_purpose_mapping"
+    assert unknown_profile.reason == "unknown_policy_profile"
+    assert unknown_purpose.explanation.available_field_count == 0
+    assert unknown_profile.explanation.available_field_count == 0
+
+
+def test_hostile_inputs_use_value_free_errors() -> None:
+    class HostileRegistry(dict[str, object]):
+        def items(self):  # type: ignore[no-untyped-def]
+            raise RuntimeError("SYNTHETIC-SECRET")
+
+    with pytest.raises(ValueError, match="could not be read") as registry_error:
+        MinimumNecessarySelector(HostileRegistry(), POLICY_PROFILES)
+    assert "SYNTHETIC-SECRET" not in str(registry_error.value)
+
+    selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
+
+    def hostile_fields():  # type: ignore[no-untyped-def]
+        yield "condition_code"
+        raise RuntimeError("SYNTHETIC-SECRET")
+
+    with pytest.raises(ValueError, match="could not be read") as fields_error:
+        selector.select(
+            hostile_fields(),
+            purpose="cohort_review",
+            policy_profile="research_limited",
+        )
+    assert "SYNTHETIC-SECRET" not in str(fields_error.value)
+
+
+def test_projection_sanitizes_caller_mapping_failures() -> None:
+    class HostileRecord(dict[str, str]):
+        def __getitem__(self, key: str) -> str:
+            raise RuntimeError("SYNTHETIC-SECRET")
+
+    selection = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES).select(
+        ("condition_code",),
+        purpose="cohort_review",
+        policy_profile="research_limited",
+    )
+
+    with pytest.raises(ValueError, match="projected safely") as error:
+        selection.project(HostileRecord(condition_code="SYNTHETIC-CODE"))
+    assert "SYNTHETIC-SECRET" not in str(error.value)
+
+
+def test_public_result_cannot_be_constructed_as_a_projection_bypass() -> None:
+    explanation = SelectionExplanation(
+        allowed=True,
+        reason="purpose_and_policy_allowlisted",
+        purpose="cohort_review",
+        policy_profile="research_limited",
+        selected_fields=("raw_secret",),
+        omitted_fields=(),
+        required_fields=(),
+        available_field_count=1,
+    )
+
+    with pytest.raises(TypeError, match="created by a selector"):
+        FieldSelection(("raw_secret",), explanation)
+
+    with pytest.raises(ValueError, match="outcome is inconsistent"):
+        SelectionExplanation(
+            allowed=True,
+            reason="unknown_purpose_mapping",
+            purpose=None,
+            policy_profile=None,
+            selected_fields=(),
+            omitted_fields=(),
+            required_fields=(),
+            available_field_count=0,
+        )
+
+
+def test_configuration_is_closed_and_bounded() -> None:
+    with pytest.raises(ValueError, match="unsupported fields"):
+        MinimumNecessarySelector(
+            {"cohort_review": {"fields": ("condition_code",), "extra": ()}},
+            POLICY_PROFILES,
+        )
+    with pytest.raises(ValueError, match="duplicate allowlist aliases"):
+        MinimumNecessarySelector(
+            PURPOSE_MAPPINGS,
+            {
+                "research_limited": {
+                    "fields": ("condition_code",),
+                    "allowed_fields": ("condition_code",),
+                }
+            },
+        )
+    with pytest.raises(ValueError, match="item limit"):
+        PurposeMapping(
+            tuple(f"field_{index}" for index in range(MAX_FIELDS_PER_DECLARATION + 1))
+        )
+    with pytest.raises(ValueError, match="item limit"):
+        MinimumNecessarySelector(
+            {
+                f"purpose_{index}": ("field",)
+                for index in range(MAX_PURPOSE_MAPPINGS + 1)
+            },
+            {},
+        )
+    with pytest.raises(ValueError, match="item limit"):
+        MinimumNecessarySelector(
+            {},
+            {
+                f"profile_{index}": ("field",)
+                for index in range(MAX_POLICY_PROFILES + 1)
+            },
+        )
+
+
+def test_available_fields_are_bounded_and_identifiers_are_strict() -> None:
+    selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
+
+    with pytest.raises(ValueError, match="item limit"):
+        selector.select(
+            (f"field_{index}" for index in range(MAX_AVAILABLE_FIELDS + 1)),
+            purpose="cohort_review",
+            policy_profile="research_limited",
+        )
+    with pytest.raises(ValueError, match="safe bounded identifier") as error:
+        selector.select(
+            ("condition_code",),
+            purpose="cohort_review\nSYNTHETIC-SECRET",
+            policy_profile="research_limited",
+        )
+    assert "SYNTHETIC-SECRET" not in str(error.value)
