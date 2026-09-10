@@ -53,6 +53,13 @@ not pass source identifiers to the auditor. Parallel `key_hashes` and
 metadata are also accepted. `entry_count` and `key_hashes` may be supplied as
 additional metadata when a release manifest declares them.
 
+Inputs are bounded to 64 maps, 100,000 bindings per map, and 4,096 explicit
+relationships. Map definitions, bindings, relationships, and metadata use
+closed schemas: unknown fields, duplicate aliases, duplicate relationships,
+self-references, and metadata for unknown maps are rejected. Rejections use
+fixed, value-free messages, including when a caller-supplied iterator or
+mapping fails while it is being read.
+
 ## Counts-only result
 
 `report.to_dict()` is JSON-compatible and contains only aggregate fields. The

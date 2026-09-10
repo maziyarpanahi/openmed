@@ -15,16 +15,17 @@ outside the audit report's privacy boundary.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, cast
 
 __all__ = [
     "CARDINALITY_FAILURE",
     "COLLISION_FAILURE",
     "CROSS_TABLE_CONSISTENCY_FAILURE",
-    "FAILURE_CATEGORIES",
+    "SURROGATE_AUDIT_FAILURE_CATEGORIES",
     "ORPHAN_FAILURE",
     "SurrogateAuditInputError",
     "SurrogateMapAuditFailure",
@@ -36,11 +37,18 @@ __all__ = [
 
 SCHEMA_VERSION: Final = 1
 
+_MAX_MAPS: Final = 64
+_MAX_ENTRIES_PER_MAP: Final = 100_000
+_MAX_RELATIONSHIPS: Final = 4_096
+_MAX_TEXT_CHARS: Final = 16_384
+_MAX_METADATA_FIELDS: Final = 32
+_MAX_COUNT: Final = 2**63 - 1
+
 CARDINALITY_FAILURE: Final = "cardinality"
 COLLISION_FAILURE: Final = "collision"
 ORPHAN_FAILURE: Final = "orphan"
 CROSS_TABLE_CONSISTENCY_FAILURE: Final = "cross_table_consistency"
-FAILURE_CATEGORIES: Final[tuple[str, ...]] = (
+SURROGATE_AUDIT_FAILURE_CATEGORIES: Final[tuple[str, ...]] = (
     CARDINALITY_FAILURE,
     COLLISION_FAILURE,
     ORPHAN_FAILURE,
@@ -143,6 +151,10 @@ _MAP_STRUCTURAL_FIELDS: Final[frozenset[str]] = frozenset(
 _MAP_METADATA_FIELDS: Final[frozenset[str]] = frozenset(
     {*_CARDINALITY_ALIASES, *_ENTRY_COUNT_ALIASES, *_KEY_LIST_ALIASES}
 )
+_MAP_DEFINITION_FIELDS: Final = _MAP_STRUCTURAL_FIELDS | _MAP_METADATA_FIELDS
+_MAP_DEFINITION_MARKERS: Final = _MAP_DEFINITION_FIELDS - frozenset(_MAP_NAME_ALIASES)
+_ENTRY_FIELDS: Final = frozenset({*_KEY_FIELD_ALIASES, *_SURROGATE_FIELD_ALIASES})
+_RELATIONSHIP_FIELDS: Final = frozenset({*_PARENT_ALIASES, *_CHILD_ALIASES})
 
 
 class SurrogateAuditInputError(ValueError):
@@ -150,7 +162,7 @@ class SurrogateAuditInputError(ValueError):
 
 
 def _empty_failure_counts() -> dict[str, int]:
-    return {category: 0 for category in FAILURE_CATEGORIES}
+    return {category: 0 for category in SURROGATE_AUDIT_FAILURE_CATEGORIES}
 
 
 @dataclass(frozen=True)
@@ -161,11 +173,11 @@ class SurrogateMapAuditFailure:
     count: int
 
     def __post_init__(self) -> None:
-        if self.category not in FAILURE_CATEGORIES:
+        if self.category not in SURROGATE_AUDIT_FAILURE_CATEGORIES:
             raise ValueError("unknown surrogate-audit failure category")
         if isinstance(self.count, bool) or not isinstance(self.count, int):
             raise TypeError("failure count must be an integer")
-        if self.count < 0:
+        if self.count < 0 or self.count > _MAX_COUNT:
             raise ValueError("failure count must be non-negative")
 
     def to_dict(self) -> dict[str, Any]:
@@ -200,22 +212,47 @@ class SurrogateMapAuditReport:
             value = getattr(self, field_name)
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{field_name} must be an integer")
-            if value < 0:
+            if value < 0 or value > _MAX_COUNT:
                 raise ValueError(f"{field_name} must be non-negative")
+
+        if self.checked_maps > _MAX_MAPS:
+            raise ValueError("checked_maps exceeds the map limit")
+        if self.checked_entries > self.checked_maps * _MAX_ENTRIES_PER_MAP:
+            raise ValueError("checked_entries exceeds the entry limit")
+        if self.relationships_checked > _MAX_RELATIONSHIPS:
+            raise ValueError("relationships_checked exceeds the relationship limit")
 
         if not isinstance(self.failure_categories, Mapping):
             raise TypeError("failure_categories must be a mapping")
-        unknown = set(self.failure_categories) - set(FAILURE_CATEGORIES)
-        if unknown:
-            raise ValueError("failure_categories contains an unknown category")
         counts = _empty_failure_counts()
-        for category in FAILURE_CATEGORIES:
-            value = self.failure_categories.get(category, 0)
+        items = _mapping_items(
+            self.failure_categories,
+            "failure categories",
+            limit=len(SURROGATE_AUDIT_FAILURE_CATEGORIES),
+        )
+        seen: set[str] = set()
+        for category, value in items:
+            if category not in counts:
+                raise ValueError("failure_categories contains an unknown category")
+            if category in seen:
+                raise ValueError("failure_categories contains duplicate categories")
+            seen.add(category)
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError("failure category counts must be integers")
-            if value < 0:
+            if value < 0 or value > _MAX_COUNT:
                 raise ValueError("failure category counts must be non-negative")
             counts[category] = value
+
+        if self.checked_keys > self.checked_entries:
+            raise ValueError("checked_keys cannot exceed checked_entries")
+        if self.checked_maps < 2 and self.relationships_checked:
+            raise ValueError("relationships require at least two checked maps")
+        if not self.relationships_checked and (
+            counts[ORPHAN_FAILURE] or counts[CROSS_TABLE_CONSISTENCY_FAILURE]
+        ):
+            raise ValueError("relationship failures require a checked relationship")
+        if not self.checked_maps and (self.checked_entries or any(counts.values())):
+            raise ValueError("an empty audit cannot contain entries or failures")
         object.__setattr__(self, "failure_categories", MappingProxyType(counts))
 
     @property
@@ -242,7 +279,7 @@ class SurrogateMapAuditReport:
 
         return tuple(
             SurrogateMapAuditFailure(category, self.failure_categories[category])
-            for category in FAILURE_CATEGORIES
+            for category in SURROGATE_AUDIT_FAILURE_CATEGORIES
             if self.failure_categories[category]
         )
 
@@ -291,7 +328,7 @@ class _MapData:
     invalid_entry_count: int = 0
 
 
-def audit_surrogate_maps(
+def _audit_surrogate_maps(
     surrogate_maps: Mapping[str, Any] | Iterable[Any],
     relationships: Mapping[str, str] | Iterable[Any] | None = None,
     *,
@@ -335,14 +372,14 @@ def audit_surrogate_maps(
     map_source, embedded_relationships, embedded_metadata = _unwrap_bundle(
         surrogate_maps
     )
-    global_metadata = _merge_metadata_sources(metadata, embedded_metadata)
+    global_metadata = _merge_metadata_sources(embedded_metadata, metadata)
     effective_map_metadata = _merge_map_metadata(
+        global_metadata.get("metadata"),
         global_metadata.get("map_metadata"),
-        map_metadata,
     )
     effective_map_metadata = _merge_map_metadata(
         effective_map_metadata,
-        global_metadata.get("metadata"),
+        map_metadata,
     )
     effective_map_metadata = _apply_expected_cardinality(
         effective_map_metadata,
@@ -350,6 +387,9 @@ def audit_surrogate_maps(
     )
 
     maps = _coerce_maps(map_source, effective_map_metadata)
+    unknown_metadata = set(effective_map_metadata) - {item.name for item in maps}
+    if unknown_metadata:
+        raise SurrogateAuditInputError("map metadata references an unknown map")
     relationship_source = relationships
     if relationship_source is None:
         relationship_source = embedded_relationships
@@ -447,8 +487,17 @@ def _unwrap_bundle(
     if not isinstance(map_value, Mapping) and not _is_iterable(map_value):
         return value, None, {}
     embedded_metadata: dict[str, Any] = {}
-    if isinstance(value.get("metadata"), Mapping):
-        embedded_metadata.update(value["metadata"])
+    raw_metadata = value.get("metadata")
+    if raw_metadata is not None:
+        if not isinstance(raw_metadata, Mapping):
+            raise SurrogateAuditInputError("metadata must be a mapping")
+        for key, item in _mapping_items(
+            raw_metadata,
+            "metadata",
+            limit=_MAX_METADATA_FIELDS,
+        ):
+            if isinstance(key, str):
+                embedded_metadata[key] = item
     if "map_metadata" in value:
         embedded_metadata["map_metadata"] = value.get("map_metadata")
     if "relationships" in value:
@@ -466,7 +515,11 @@ def _merge_metadata_sources(
             continue
         if not isinstance(source, Mapping):
             raise SurrogateAuditInputError("metadata must be a mapping")
-        merged.update(source)
+        for key, value in _mapping_items(
+            source, "metadata", limit=_MAX_METADATA_FIELDS
+        ):
+            if isinstance(key, str):
+                merged[key] = value
     return merged
 
 
@@ -480,14 +533,23 @@ def _merge_map_metadata(
             continue
         if not isinstance(source, Mapping):
             raise SurrogateAuditInputError("map_metadata must be a mapping")
-        for name, value in source.items():
+        for name, value in _mapping_items(source, "map metadata", limit=_MAX_MAPS):
             normalized_name = _map_name(name)
             if value is None:
                 continue
             if not isinstance(value, Mapping):
                 raise SurrogateAuditInputError("map metadata entries must be mappings")
             current = merged.setdefault(normalized_name, {})
-            current.update(value)
+            for key, item in _mapping_items(
+                value,
+                "map metadata entry",
+                limit=_MAX_METADATA_FIELDS,
+            ):
+                if not isinstance(key, str) or key not in _MAP_METADATA_FIELDS:
+                    raise SurrogateAuditInputError(
+                        "map metadata contains unsupported fields"
+                    )
+                current[key] = item
     return merged
 
 
@@ -500,8 +562,18 @@ def _apply_expected_cardinality(
         return result
     if not isinstance(expected, Mapping):
         raise SurrogateAuditInputError("expected_cardinality must be a mapping")
-    for name, value in expected.items():
+    seen: set[str] = set()
+    for name, value in _mapping_items(
+        expected,
+        "expected cardinality",
+        limit=_MAX_MAPS,
+    ):
         normalized_name = _map_name(name)
+        if normalized_name in seen:
+            raise SurrogateAuditInputError(
+                "expected_cardinality contains duplicate map names"
+            )
+        seen.add(normalized_name)
         current = result.setdefault(normalized_name, {})
         current["expected_cardinality"] = value
     return result
@@ -533,8 +605,15 @@ def _map_specs(source: Any) -> list[tuple[str, Any]]:
         ):
             name = _field_value(source, _MAP_NAME_ALIASES, default=_DEFAULT_MAP_NAME)
             return [(_map_name(name), source)]
-        return [(str(name), definition) for name, definition in source.items()]
-    items = _materialize(source, "surrogate_maps")
+        return [
+            (name, definition)
+            for name, definition in _mapping_items(
+                source,
+                "surrogate maps",
+                limit=_MAX_MAPS,
+            )
+        ]
+    items = _materialize(source, "surrogate maps", limit=_MAX_MAPS)
     if not items:
         return []
     if all(_looks_like_entry(item) or _looks_like_pair(item) for item in items):
@@ -563,11 +642,27 @@ def _coerce_map_definition(
     source: Any = definition
 
     if isinstance(definition, Mapping):
+        if _looks_like_map_definition(definition):
+            definition = _copy_closed_mapping(
+                definition,
+                allowed=_MAP_DEFINITION_FIELDS,
+                label="map definition",
+            )
+            source = definition
         nested_metadata = definition.get("metadata")
         if nested_metadata is not None:
             if not isinstance(nested_metadata, Mapping):
                 raise SurrogateAuditInputError("map metadata must be a mapping")
-            local_metadata.update(nested_metadata)
+            for key, item in _mapping_items(
+                nested_metadata,
+                "map metadata",
+                limit=_MAX_METADATA_FIELDS,
+            ):
+                if not isinstance(key, str) or key not in _MAP_METADATA_FIELDS:
+                    raise SurrogateAuditInputError(
+                        "map metadata contains unsupported fields"
+                    )
+                local_metadata[key] = item
         for field_name in _MAP_METADATA_FIELDS:
             if field_name in definition:
                 local_metadata[field_name] = definition[field_name]
@@ -628,9 +723,17 @@ def _coerce_entries(source: Any) -> tuple[list[_Binding], int]:
         if _looks_like_entry(source):
             raw_items: Iterable[Any] = (source,)
         else:
-            raw_items = source.items()
+            raw_items = _mapping_items(
+                source,
+                "map entries",
+                limit=_MAX_ENTRIES_PER_MAP,
+            )
     else:
-        raw_items = _materialize(source, "map entries")
+        raw_items = _materialize(
+            source,
+            "map entries",
+            limit=_MAX_ENTRIES_PER_MAP,
+        )
 
     bindings: list[_Binding] = []
     invalid_entries = 0
@@ -647,6 +750,11 @@ def _coerce_binding(item: Any) -> _Binding | None:
     key_hash: Any = _MISSING
     surrogate: Any = _MISSING
     if isinstance(item, Mapping):
+        item = _copy_closed_mapping(
+            item,
+            allowed=_ENTRY_FIELDS,
+            label="surrogate binding",
+        )
         key_hash = _field_value(item, _KEY_FIELD_ALIASES, default=_MISSING)
         surrogate = _field_value(
             item,
@@ -655,14 +763,6 @@ def _coerce_binding(item: Any) -> _Binding | None:
         )
     elif _looks_like_pair(item):
         key_hash, surrogate = item
-    else:
-        key_hash = _object_field(item, _KEY_FIELD_ALIASES)
-        surrogate = _object_field(item, _SURROGATE_FIELD_ALIASES)
-        if key_hash is _MISSING:
-            key = _object_field(item, ("key",))
-            key_hash = _object_field(key, ("text_hash", "key_hash", "hash"))
-        if surrogate is _MISSING:
-            surrogate = _object_field(item, ("surrogate", "replacement"))
 
     if not _valid_text(key_hash) or not _valid_text(surrogate):
         return None
@@ -670,7 +770,7 @@ def _coerce_binding(item: Any) -> _Binding | None:
 
 
 def _row_entries(definition: Mapping[str, Any], rows: Any) -> tuple[Any, ...]:
-    row_items = _materialize(rows, "map rows")
+    row_items = _materialize(rows, "map rows", limit=_MAX_ENTRIES_PER_MAP)
     key_field = _field_value(definition, _KEY_COLUMN_ALIASES, default="key_hash")
     surrogate_field = _field_value(
         definition,
@@ -711,8 +811,16 @@ def _parallel_entries(definition: Mapping[str, Any]) -> tuple[tuple[Any, Any], .
         raise SurrogateAuditInputError(
             "parallel key and surrogate sequences are both required"
         )
-    keys = _materialize(definition[key_name], "key hashes")
-    surrogates = _materialize(definition[surrogate_name], "surrogates")
+    keys = _materialize(
+        definition[key_name],
+        "key hashes",
+        limit=_MAX_ENTRIES_PER_MAP,
+    )
+    surrogates = _materialize(
+        definition[surrogate_name],
+        "surrogates",
+        limit=_MAX_ENTRIES_PER_MAP,
+    )
     if len(keys) != len(surrogates):
         raise SurrogateAuditInputError("parallel key and surrogate sequences differ")
     return tuple(zip(keys, surrogates))
@@ -724,7 +832,11 @@ def _declared_hashes(
     name = _first_present_name(metadata, _KEY_LIST_ALIASES)
     if name is None:
         return None, None
-    values = _materialize(metadata[name], "declared key hashes")
+    values = _materialize(
+        metadata[name],
+        "declared key hashes",
+        limit=_MAX_ENTRIES_PER_MAP,
+    )
     if not all(_valid_text(value) for value in values):
         raise SurrogateAuditInputError("declared key hashes must be strings")
     declared = tuple(values)
@@ -741,18 +853,38 @@ def _coerce_relationships(
         if _first_present_name(source, _PARENT_ALIASES) is not None:
             items: Iterable[Any] = (source,)
         elif "relationships" in source:
-            items = _materialize(source["relationships"], "relationships")
+            items = _materialize(
+                source["relationships"],
+                "relationships",
+                limit=_MAX_RELATIONSHIPS,
+            )
         else:
-            items = tuple((parent, child) for child, parent in source.items())
+            items = tuple(
+                (parent, child)
+                for child, parent in _mapping_items(
+                    source,
+                    "relationships",
+                    limit=_MAX_RELATIONSHIPS,
+                )
+            )
     elif _looks_like_pair(source):
         items = (source,)
     else:
-        items = _materialize(source, "relationships")
+        items = _materialize(
+            source,
+            "relationships",
+            limit=_MAX_RELATIONSHIPS,
+        )
 
     known = {item.name for item in maps}
     normalized: set[tuple[str, str]] = set()
     for item in items:
         if isinstance(item, Mapping):
+            item = _copy_closed_mapping(
+                item,
+                allowed=_RELATIONSHIP_FIELDS,
+                label="relationship",
+            )
             parent = _field_value(item, _PARENT_ALIASES, default=_MISSING)
             child = _field_value(item, _CHILD_ALIASES, default=_MISSING)
         elif _looks_like_pair(item):
@@ -765,6 +897,10 @@ def _coerce_relationships(
         child_name = _map_name(child)
         if parent_name not in known or child_name not in known:
             raise SurrogateAuditInputError("relationship references an unknown map")
+        if parent_name == child_name:
+            raise SurrogateAuditInputError("relationships must reference distinct maps")
+        if (parent_name, child_name) in normalized:
+            raise SurrogateAuditInputError("relationships must be unique")
         normalized.add((parent_name, child_name))
     return tuple(sorted(normalized))
 
@@ -778,40 +914,30 @@ def _field_value(
     present = [name for name in aliases if name in mapping]
     if not present:
         return default
-    value = mapping[present[0]]
-    for name in present[1:]:
-        if mapping[name] != value:
-            raise SurrogateAuditInputError("conflicting input fields")
-    return value
+    if len(present) > 1:
+        raise SurrogateAuditInputError("input contains ambiguous aliases")
+    return mapping[present[0]]
 
 
 def _first_present_name(
     mapping: Mapping[str, Any],
     aliases: Sequence[str],
 ) -> str | None:
-    for name in aliases:
-        if name in mapping:
-            return name
-    return None
-
-
-def _object_field(value: Any, aliases: Sequence[str]) -> Any:
-    if value is None:
-        return _MISSING
-    for name in aliases:
-        try:
-            result = getattr(value, name)
-        except AttributeError:
-            continue
-        if result is not None:
-            return result
-    return _MISSING
+    present = [name for name in aliases if name in mapping]
+    if len(present) > 1:
+        raise SurrogateAuditInputError("input contains ambiguous aliases")
+    return present[0] if present else None
 
 
 def _optional_nonnegative_int(value: Any, field_name: str) -> int | None:
     if value is None or value is _MISSING:
         return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > _MAX_COUNT
+    ):
         raise SurrogateAuditInputError(f"{field_name} must be a non-negative integer")
     return value
 
@@ -819,20 +945,72 @@ def _optional_nonnegative_int(value: Any, field_name: str) -> int | None:
 def _map_name(value: Any) -> str:
     if not _valid_text(value):
         raise SurrogateAuditInputError("map names must be non-empty strings")
-    return value
+    normalized = unicodedata.normalize("NFC", value.strip())
+    if not normalized or len(normalized) > _MAX_TEXT_CHARS:
+        raise SurrogateAuditInputError("map names must be non-empty strings")
+    return normalized
 
 
 def _valid_text(value: Any) -> bool:
-    return isinstance(value, str) and bool(value)
+    return isinstance(value, str) and 0 < len(value) <= _MAX_TEXT_CHARS
 
 
-def _materialize(value: Any, field_name: str) -> tuple[Any, ...]:
+def _materialize(value: Any, field_name: str, *, limit: int) -> tuple[Any, ...]:
     if isinstance(value, (str, bytes, bytearray)) or not _is_iterable(value):
         raise SurrogateAuditInputError(f"{field_name} must be an iterable")
     try:
-        return tuple(value)
-    except (TypeError, ValueError) as exc:
-        raise SurrogateAuditInputError(f"{field_name} must be an iterable") from exc
+        iterator = iter(value)
+    except MemoryError:
+        raise
+    except Exception:
+        raise SurrogateAuditInputError(f"{field_name} must be an iterable") from None
+    items: list[Any] = []
+    for _ in range(limit + 1):
+        try:
+            items.append(next(iterator))
+        except StopIteration:
+            return tuple(items)
+        except MemoryError:
+            raise
+        except Exception:
+            raise SurrogateAuditInputError(
+                f"{field_name} must be an iterable"
+            ) from None
+    raise SurrogateAuditInputError(f"{field_name} exceeds the item limit")
+
+
+def _mapping_items(
+    value: Mapping[Any, Any],
+    field_name: str,
+    *,
+    limit: int,
+) -> list[tuple[Any, Any]]:
+    try:
+        raw_items = value.items()
+    except MemoryError:
+        raise
+    except Exception:
+        raise SurrogateAuditInputError(f"{field_name} must be a mapping") from None
+    items = _materialize(raw_items, field_name, limit=limit)
+    if not all(isinstance(item, tuple) and len(item) == 2 for item in items):
+        raise SurrogateAuditInputError(f"{field_name} must be a mapping")
+    return cast(list[tuple[Any, Any]], list(items))
+
+
+def _copy_closed_mapping(
+    value: Mapping[Any, Any],
+    *,
+    allowed: frozenset[str],
+    label: str,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, item in _mapping_items(value, label, limit=len(allowed)):
+        if not isinstance(key, str) or key not in allowed:
+            raise SurrogateAuditInputError(f"{label} contains unsupported fields")
+        if key in result:
+            raise SurrogateAuditInputError(f"{label} contains duplicate fields")
+        result[key] = item
+    return result
 
 
 def _is_iterable(value: Any) -> bool:
@@ -864,20 +1042,28 @@ def _looks_like_pair(value: Any) -> bool:
 
 
 def _looks_like_direct_map(value: Mapping[str, Any]) -> bool:
-    if not value:
+    items = _mapping_items(
+        value,
+        "surrogate map",
+        limit=_MAX_ENTRIES_PER_MAP,
+    )
+    if not items:
         return False
     if any(
-        key in _MAP_STRUCTURAL_FIELDS or key in _MAP_METADATA_FIELDS for key in value
+        key in _MAP_STRUCTURAL_FIELDS or key in _MAP_METADATA_FIELDS for key, _ in items
     ):
         return False
-    return all(
-        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
-    )
+    return all(isinstance(key, str) and isinstance(item, str) for key, item in items)
 
 
 def _looks_like_map_definition(value: Mapping[str, Any]) -> bool:
     return any(
-        key in _MAP_STRUCTURAL_FIELDS or key in _MAP_METADATA_FIELDS for key in value
+        key in _MAP_DEFINITION_MARKERS
+        for key, _ in _mapping_items(
+            value,
+            "surrogate map",
+            limit=_MAX_ENTRIES_PER_MAP,
+        )
     )
 
 
@@ -889,6 +1075,47 @@ def _looks_like_named_definition(value: Any) -> bool:
         and isinstance(value[0], str)
         and not isinstance(value[1], str)
     )
+
+
+def audit_surrogate_maps(
+    surrogate_maps: Mapping[str, Any] | Iterable[Any],
+    relationships: Mapping[str, str] | Iterable[Any] | None = None,
+    *,
+    map_metadata: Mapping[str, Any] | None = None,
+    expected_cardinality: Mapping[str, int] | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> SurrogateMapAuditReport:
+    """Audit hashed surrogate maps and return deterministic aggregate counts.
+
+    Args:
+        surrogate_maps: Named map definitions or an iterable of definitions.
+        relationships: Optional explicit parent/child map relationships.
+        map_metadata: Optional map-specific cardinality metadata.
+        expected_cardinality: Optional expected distinct-key counts by map.
+        metadata: Optional bundle metadata containing relationships or map metadata.
+
+    Returns:
+        A counts-only report with stable failure categories.
+
+    Raises:
+        SurrogateAuditInputError: If an input is invalid, ambiguous, or exceeds
+            a resource limit.
+    """
+
+    try:
+        return _audit_surrogate_maps(
+            surrogate_maps,
+            relationships,
+            map_metadata=map_metadata,
+            expected_cardinality=expected_cardinality,
+            metadata=metadata,
+        )
+    except MemoryError:
+        raise
+    except SurrogateAuditInputError:
+        raise
+    except Exception:
+        raise SurrogateAuditInputError("surrogate audit input is invalid") from None
 
 
 audit_surrogate_map = audit_surrogate_maps

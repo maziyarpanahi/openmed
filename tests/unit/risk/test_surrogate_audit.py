@@ -3,14 +3,35 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
+from typing import Any
 
 import pytest
 
 from openmed.risk import (
-    FAILURE_CATEGORIES,
+    SURROGATE_AUDIT_FAILURE_CATEGORIES,
     SurrogateAuditInputError,
+    SurrogateMapAuditReport,
     audit_surrogate_maps,
 )
+
+
+class _EndlessMaps:
+    def __iter__(self) -> Iterator[dict[str, object]]:
+        while True:
+            yield {"entries": []}
+
+
+class _ExplodingMapping(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise RuntimeError("synthetic-sensitive-exception")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("synthetic-sensitive-exception")
+
+    def __len__(self) -> int:
+        return 1
 
 
 def _clean_maps() -> dict[str, dict[str, object]]:
@@ -53,7 +74,9 @@ def test_clean_audit_is_deterministic_and_counts_only() -> None:
 
     assert first.passed
     assert first.to_dict() == second.to_dict()
-    assert first.failure_categories == {category: 0 for category in FAILURE_CATEGORIES}
+    assert first.failure_categories == {
+        category: 0 for category in SURROGATE_AUDIT_FAILURE_CATEGORIES
+    }
     assert json.loads(json.dumps(first.to_dict())) == first.to_dict()
 
 
@@ -148,3 +171,82 @@ def test_parallel_metadata_and_package_alias_are_supported() -> None:
     assert report.checked_maps == 1
     assert report.checked_entries == 2
     assert report.checked_keys == 2
+
+
+@pytest.mark.parametrize(
+    "surrogate_maps",
+    [
+        {"entries": [{"key_hash": "hash", "hash": "hash", "surrogate": "S"}]},
+        {"entries": [], "bindings": []},
+        {"entries": [], "unsupported": "synthetic-sensitive-value"},
+        {
+            "entries": [
+                {
+                    "key_hash": "hash",
+                    "surrogate": "S",
+                    "unsupported": "synthetic-sensitive-value",
+                }
+            ]
+        },
+    ],
+)
+def test_ambiguous_or_open_input_mappings_are_rejected_without_values(
+    surrogate_maps: object,
+) -> None:
+    with pytest.raises(SurrogateAuditInputError) as error:
+        audit_surrogate_maps(surrogate_maps)  # type: ignore[arg-type]
+
+    assert "synthetic-sensitive-value" not in str(error.value)
+
+
+def test_relationships_and_metadata_must_reference_known_distinct_maps() -> None:
+    maps = {
+        "parent": {"hash": "S"},
+        "child": {"hash": "S"},
+    }
+
+    with pytest.raises(SurrogateAuditInputError):
+        audit_surrogate_maps(maps, [("parent", "parent")])
+    with pytest.raises(SurrogateAuditInputError):
+        audit_surrogate_maps(
+            maps,
+            [("parent", "child"), ("parent", "child")],
+        )
+    with pytest.raises(SurrogateAuditInputError):
+        audit_surrogate_maps(maps, map_metadata={"missing": {"cardinality": 0}})
+
+
+def test_normalized_map_names_cannot_collide() -> None:
+    with pytest.raises(SurrogateAuditInputError):
+        audit_surrogate_maps(
+            [
+                {"name": "\u00e9", "entries": []},
+                {"name": "e\u0301", "entries": []},
+            ]
+        )
+
+
+def test_unbounded_and_hostile_containers_fail_closed() -> None:
+    with pytest.raises(SurrogateAuditInputError, match="item limit"):
+        audit_surrogate_maps(_EndlessMaps())
+
+    with pytest.raises(SurrogateAuditInputError) as error:
+        audit_surrogate_maps(_ExplodingMapping())
+    assert "synthetic-sensitive-exception" not in str(error.value)
+
+
+def test_report_is_immutable_and_rejects_cross_field_inconsistency() -> None:
+    report = audit_surrogate_maps({"table": {"hash": "S"}})
+
+    with pytest.raises(TypeError):
+        report.failure_categories["cardinality"] = 1  # type: ignore[index]
+    with pytest.raises(ValueError):
+        replace(report, checked_keys=2)
+    with pytest.raises(ValueError):
+        SurrogateMapAuditReport(
+            checked_maps=1,
+            checked_entries=1,
+            checked_keys=1,
+            relationships_checked=0,
+            failure_categories={"orphan": 1},
+        )

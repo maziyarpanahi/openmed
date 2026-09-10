@@ -293,8 +293,13 @@ def test_missing_or_invalid_credentials_return_401_without_phi(
     assert "Maria Garcia" not in invalid.text
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["/pii/deidentify", "/pii/deidentify/stream"],
+)
 def test_scope_enforcement_blocks_underprivileged_api_key(
     monkeypatch: pytest.MonkeyPatch,
+    path: str,
 ) -> None:
     monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
     monkeypatch.setenv(
@@ -309,7 +314,7 @@ def test_scope_enforcement_blocks_underprivileged_api_key(
         raise_server_exceptions=False,
     ) as client:
         response = client.post(
-            "/pii/deidentify",
+            path,
             headers={"X-API-Key": "test-secret"},
             json={"text": "Patient Maria Garcia", "method": "mask"},
         )
