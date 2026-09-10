@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import math
 import re
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -45,8 +46,14 @@ _BARE_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 _LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 _HASH_PREFIXES = frozenset({"sha256", "hmac-sha256"})
 _MISSING = object()
+_MAX_FILE_BYTES = 16 * 1024 * 1024
+_MAX_ARTIFACTS = 100_000
+_MAX_DEPENDENCIES_PER_ARTIFACT = 4_096
+_MAX_DEPENDENCY_LINKS = 1_000_000
+_MAX_TARGETS = 100_000
+_MAX_REFERENCE_CHARS = 4_096
 
-ManifestInput: TypeAlias = Mapping[str, Any] | Sequence[Any] | Path
+ManifestInput: TypeAlias = Mapping[str, Any] | Sequence[Any] | str | Path
 DeletionExecutor: TypeAlias = Callable[["DeletionArtifact"], None]
 
 
@@ -70,6 +77,8 @@ def _canonical_hash(value: Any) -> str:
     reference = value.strip()
     if not reference:
         raise DeletionPlanError("artifact references must not be empty")
+    if len(reference) > _MAX_REFERENCE_CHARS:
+        raise DeletionPlanError("artifact references exceed the size limit")
 
     if _HASH_RE.fullmatch(reference):
         return reference.lower()
@@ -99,11 +108,16 @@ def _safe_label(value: Any, *, default: str) -> str:
     return label
 
 
+def _validate_digest(value: Any, *, field_name: str) -> None:
+    if not isinstance(value, str) or _HASH_RE.fullmatch(value) is None:
+        raise ValueError(f"{field_name} is invalid")
+
+
 def _field(mapping: Mapping[str, Any], names: Sequence[str]) -> Any:
-    for name in names:
-        if name in mapping:
-            return mapping[name]
-    return _MISSING
+    present = [name for name in names if name in mapping]
+    if len(present) > 1:
+        raise DeletionPlanError("manifest contains ambiguous field aliases")
+    return mapping[present[0]] if present else _MISSING
 
 
 def _dependency_value(value: Any) -> Any:
@@ -122,9 +136,15 @@ def _normalize_dependencies(value: Any) -> tuple[str, ...]:
         return ()
     if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
         raise DeletionPlanError("dependency links must be a sequence")
+    dependencies: set[str] = set()
     try:
-        dependencies = {_canonical_hash(_dependency_value(item)) for item in value}
-    except TypeError as exc:
+        for index, item in enumerate(value):
+            if index >= _MAX_DEPENDENCIES_PER_ARTIFACT:
+                raise DeletionPlanError(
+                    "dependency links exceed the per-artifact limit"
+                )
+            dependencies.add(_canonical_hash(_dependency_value(item)))
+    except TypeError:
         raise DeletionPlanError("dependency links must be a sequence") from None
     return tuple(sorted(dependencies))
 
@@ -154,23 +174,32 @@ class DeletionArtifact:
     owned: bool = True
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "artifact_hash", _canonical_hash(self.artifact_hash))
-        object.__setattr__(
-            self,
-            "kind",
-            _safe_label(self.kind, default="artifact"),
-        )
-        object.__setattr__(
-            self,
-            "retention_class",
-            _safe_label(self.retention_class, default="unspecified"),
-        )
-        object.__setattr__(
-            self,
-            "dependencies",
-            _normalize_dependencies(self.dependencies),
-        )
-        object.__setattr__(self, "owned", _normalize_owned(self.owned))
+        try:
+            object.__setattr__(
+                self,
+                "artifact_hash",
+                _canonical_hash(self.artifact_hash),
+            )
+            object.__setattr__(
+                self,
+                "kind",
+                _safe_label(self.kind, default="artifact"),
+            )
+            object.__setattr__(
+                self,
+                "retention_class",
+                _safe_label(self.retention_class, default="unspecified"),
+            )
+            object.__setattr__(
+                self,
+                "dependencies",
+                _normalize_dependencies(self.dependencies),
+            )
+            object.__setattr__(self, "owned", _normalize_owned(self.owned))
+        except (DeletionPlanError, MemoryError):
+            raise
+        except Exception:
+            raise DeletionPlanError("manifest entry could not be normalized") from None
 
     @property
     def digest(self) -> str:
@@ -205,6 +234,17 @@ class DeletionExecutionResult:
     deleted_count: int
     dry_run: bool = False
     executed: bool = True
+
+    def __post_init__(self) -> None:
+        _validate_digest(self.plan_digest, field_name="plan digest")
+        if (
+            type(self.requested_count) is not int
+            or type(self.deleted_count) is not int
+            or not 0 <= self.deleted_count <= self.requested_count <= _MAX_TARGETS
+        ):
+            raise ValueError("deletion execution counts are invalid")
+        if self.dry_run is not False or self.executed is not True:
+            raise ValueError("deletion execution state is invalid")
 
     @property
     def failed_count(self) -> int:
@@ -258,6 +298,14 @@ class DeletionImpactPlan:
     _target_hashes: tuple[str, ...] = field(repr=False, compare=False)
     _affected_hashes: tuple[str, ...] = field(repr=False, compare=False)
     dry_run: bool = True
+
+    def __post_init__(self) -> None:
+        try:
+            _validate_plan(self)
+        except (ValueError, MemoryError):
+            raise
+        except Exception:
+            raise ValueError("deletion plan is invalid") from None
 
     @property
     def counts_by_kind(self) -> dict[str, int]:
@@ -402,6 +450,10 @@ def _parse_artifact(value: Any) -> DeletionArtifact:
         return value
     if not isinstance(value, Mapping):
         raise DeletionPlanError("manifest entries must be mappings")
+    if len(value) > 32:
+        raise DeletionPlanError("manifest entries contain too many fields")
+    if any(not isinstance(key, str) for key in value):
+        raise DeletionPlanError("manifest field names must be strings")
 
     artifact_hash = _field(
         value,
@@ -438,19 +490,21 @@ def _parse_manifest_payload(payload: Any) -> tuple[DeletionArtifact, ...]:
 
     if isinstance(entries, (str, bytes)) or not isinstance(entries, Iterable):
         raise DeletionPlanError("manifest artifacts must be a sequence")
+    parsed_entries: list[DeletionArtifact] = []
     try:
-        parsed = tuple(
-            sorted(
-                (_parse_artifact(item) for item in entries),
-                key=lambda item: item.artifact_hash,
-            )
-        )
+        for index, item in enumerate(entries):
+            if index >= _MAX_ARTIFACTS:
+                raise DeletionPlanError("manifest exceeds the artifact limit")
+            parsed_entries.append(_parse_artifact(item))
     except TypeError:
         raise DeletionPlanError("manifest artifacts must be a sequence") from None
+    parsed = tuple(sorted(parsed_entries, key=lambda item: item.artifact_hash))
     if not parsed:
         raise DeletionPlanError("manifest must contain at least one artifact")
     if len({entry.artifact_hash for entry in parsed}) != len(parsed):
         raise DeletionPlanError("manifest artifact hashes must be unique")
+    if sum(len(entry.dependencies) for entry in parsed) > _MAX_DEPENDENCY_LINKS:
+        raise DeletionPlanError("manifest exceeds the dependency-link limit")
     return parsed
 
 
@@ -463,16 +517,47 @@ def load_deletion_manifest(path: str | Path) -> tuple[DeletionArtifact, ...]:
     """
 
     try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        with Path(path).open("rb") as handle:
+            raw = handle.read(_MAX_FILE_BYTES + 1)
+        if len(raw) > _MAX_FILE_BYTES:
+            raise DeletionPlanError("deletion manifest exceeds the file-size limit")
+        payload = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_json_object,
+            parse_constant=_reject_json_constant,
+            parse_float=_parse_json_float,
+        )
+    except DeletionPlanError:
+        raise
+    except (OSError, TypeError, UnicodeError, ValueError, RecursionError):
         raise DeletionPlanError("deletion manifest could not be loaded") from None
     return _parse_manifest_payload(payload)
 
 
+def _json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DeletionPlanError("deletion manifest contains duplicate fields")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> None:
+    raise DeletionPlanError("deletion manifest contains a non-finite number")
+
+
+def _parse_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise DeletionPlanError("deletion manifest contains a non-finite number")
+    return parsed
+
+
 def _normalize_manifest(manifest: ManifestInput) -> tuple[DeletionArtifact, ...]:
-    if isinstance(manifest, Path):
+    if isinstance(manifest, (str, Path)):
         return load_deletion_manifest(manifest)
-    if isinstance(manifest, (str, bytes)):
+    if isinstance(manifest, bytes):
         raise DeletionPlanError("manifest must be a mapping, sequence, or local path")
     return _parse_manifest_payload(manifest)
 
@@ -486,16 +571,47 @@ def _normalize_targets(value: Iterable[str] | str | None) -> tuple[str, ...]:
         if isinstance(value, bytes) or not isinstance(value, Iterable):
             raise DeletionPlanError("deletion targets must be a sequence")
         values = value
+    normalized: set[str] = set()
     try:
-        targets = tuple(sorted({_canonical_hash(item) for item in values}))
+        for index, item in enumerate(values):
+            if index >= _MAX_TARGETS:
+                raise DeletionPlanError("deletion targets exceed the limit")
+            normalized.add(_canonical_hash(item))
     except TypeError:
         raise DeletionPlanError("deletion targets must be a sequence") from None
+    targets = tuple(sorted(normalized))
     if not targets:
         raise DeletionPlanError("at least one deletion target is required")
     return targets
 
 
 def plan_deletion_impact(
+    manifest: ManifestInput,
+    artifact_hashes: Iterable[str] | str | None = None,
+    *,
+    targets: Iterable[str] | str | None = None,
+    dry_run: bool = True,
+) -> DeletionImpactPlan:
+    """Build a bounded, deterministic deletion impact plan.
+
+    Invalid inputs and custom-container failures are converted to closed,
+    content-free :class:`DeletionPlanError` messages.
+    """
+
+    try:
+        return _plan_deletion_impact(
+            manifest,
+            artifact_hashes,
+            targets=targets,
+            dry_run=dry_run,
+        )
+    except (DeletionPlanError, MemoryError):
+        raise
+    except Exception:
+        raise DeletionPlanError("deletion manifest could not be inspected") from None
+
+
+def _plan_deletion_impact(
     manifest: ManifestInput,
     artifact_hashes: Iterable[str] | str | None = None,
     *,
@@ -603,6 +719,120 @@ def _count_labels(labels: Iterable[str]) -> tuple[tuple[str, int], ...]:
     return tuple(sorted(counts.items()))
 
 
+def _validate_plan(plan: DeletionImpactPlan) -> None:
+    _validate_digest(plan.manifest_digest, field_name="manifest digest")
+    _validate_digest(plan.plan_digest, field_name="plan digest")
+    if plan.dry_run is not True:
+        raise ValueError("deletion plans must remain dry-run objects")
+    if not all(
+        isinstance(value, tuple)
+        for value in (
+            plan._kind_counts,
+            plan._retention_counts,
+            plan._entries,
+            plan._target_hashes,
+            plan._affected_hashes,
+        )
+    ):
+        raise ValueError("deletion plan collections are invalid")
+    if not plan._entries or len(plan._entries) > _MAX_ARTIFACTS:
+        raise ValueError("deletion plan entries are invalid")
+    if any(not isinstance(entry, DeletionArtifact) for entry in plan._entries):
+        raise ValueError("deletion plan entries are invalid")
+    entries = tuple(sorted(plan._entries, key=lambda item: item.artifact_hash))
+    if entries != plan._entries:
+        raise ValueError("deletion plan entries are not canonical")
+    by_hash = {entry.artifact_hash: entry for entry in entries}
+    if len(by_hash) != len(entries):
+        raise ValueError("deletion plan entries are not unique")
+
+    requested = plan._target_hashes
+    affected = plan._affected_hashes
+    if (
+        not requested
+        or len(requested) > _MAX_TARGETS
+        or any(
+            not isinstance(value, str) or _HASH_RE.fullmatch(value) is None
+            for value in requested + affected
+        )
+        or requested != tuple(sorted(set(requested)))
+        or affected != tuple(sorted(set(affected)))
+        or any(value not in by_hash for value in requested + affected)
+    ):
+        raise ValueError("deletion plan artifact sets are invalid")
+
+    dependents: defaultdict[str, set[str]] = defaultdict(set)
+    for entry in entries:
+        for dependency in entry.dependencies:
+            if dependency in by_hash:
+                dependents[dependency].add(entry.artifact_hash)
+    expected_affected = set(requested)
+    pending = deque(requested)
+    while pending:
+        dependency = pending.popleft()
+        for dependent in sorted(dependents.get(dependency, ())):
+            if dependent not in expected_affected:
+                expected_affected.add(dependent)
+                pending.append(dependent)
+    if affected != tuple(sorted(expected_affected)):
+        raise ValueError("deletion plan impact closure is invalid")
+
+    affected_entries = tuple(
+        entry for entry in entries if entry.artifact_hash in expected_affected
+    )
+    target_entries = tuple(by_hash[target] for target in requested)
+    expected_values = (
+        len(target_entries),
+        len(affected_entries),
+        sum(entry.owned for entry in affected_entries),
+        sum(not entry.owned for entry in affected_entries),
+        sum(not entry.owned for entry in target_entries),
+        sum(
+            dependency not in by_hash
+            for entry in affected_entries
+            for dependency in entry.dependencies
+        ),
+        sum(len(entry.dependencies) for entry in affected_entries),
+    )
+    actual_values = (
+        plan.target_count,
+        plan.affected_count,
+        plan.owned_affected_count,
+        plan.unowned_affected_count,
+        plan.blocked_target_count,
+        plan.unresolved_dependency_count,
+        plan.dependency_edge_count,
+    )
+    if any(type(value) is not int for value in actual_values):
+        raise ValueError("deletion plan safety counters are invalid")
+    if actual_values != expected_values:
+        raise ValueError("deletion plan safety counters are invalid")
+    if plan._kind_counts != _count_labels(entry.kind for entry in affected_entries):
+        raise ValueError("deletion plan kind counts are invalid")
+    if plan._retention_counts != _count_labels(
+        entry.retention_class for entry in affected_entries
+    ):
+        raise ValueError("deletion plan retention counts are invalid")
+
+    expected_manifest_digest = stable_hash(
+        {
+            "schema_version": _SCHEMA_VERSION,
+            "artifacts": [entry.to_dict() for entry in entries],
+        }
+    )
+    expected_plan_digest = stable_hash(
+        {
+            "schema_version": _SCHEMA_VERSION,
+            "manifest_digest": expected_manifest_digest,
+            "targets": list(requested),
+        }
+    )
+    if plan.manifest_digest != expected_manifest_digest:
+        raise ValueError("deletion plan manifest digest is invalid")
+    if plan.plan_digest != expected_plan_digest:
+        raise ValueError("deletion plan digest is invalid")
+
+
 def execute_deletion_plan(
     plan: DeletionImpactPlan,
     *,
@@ -621,6 +851,10 @@ def execute_deletion_plan(
 
     if not isinstance(plan, DeletionImpactPlan):
         raise DeletionPlanError("execution requires a deletion impact plan")
+    try:
+        _validate_plan(plan)
+    except (ValueError, TypeError):
+        raise DeletionPlanError("execution requires a valid deletion plan") from None
     if confirmation is not None and confirm is not None:
         raise ConfirmationRequiredError("provide confirmation only once")
     supplied_confirmation = confirmation if confirmation is not None else confirm
@@ -634,9 +868,9 @@ def execute_deletion_plan(
     if executor is not None and delete_fn is not None:
         raise DeletionPlanError("provide a deletion callback only once")
     callback = executor if executor is not None else delete_fn
-    if callback is None:
+    if callback is None or not callable(callback):
         raise DeletionPlanError("an injected deletion callback is required")
-    if plan.blocked_target_count or plan.unresolved_dependency_count:
+    if plan.unowned_affected_count or plan.unresolved_dependency_count:
         raise DeletionPlanError("deletion plan failed manifest safety checks")
 
     deleted_count = 0

@@ -10,6 +10,7 @@
     "el": "OpenMed/privacy-filter-multilingual",
     "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
+    "fa": "OpenMed/privacy-filter-multilingual",
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
     "he": "OpenMed/privacy-filter-multilingual",
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
@@ -26,7 +27,7 @@
     "ru": "OpenMed/privacy-filter-multilingual",
     "sv": "OpenMed/privacy-filter-multilingual",
     "sw": "OpenMed/privacy-filter-multilingual",
-    "ta": "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+    "ta": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
@@ -50,6 +51,7 @@
     "en": "en_US",
     "es": "es_ES",
     "et": "et_EE",
+    "fa": "fa_IR",
     "fi": "fi_FI",
     "fr": "fr_FR",
     "gu": "gu_IN",
@@ -131,6 +133,10 @@
       "bg_BG",
       "egn"
     ],
+    "bn": [
+      "bn_BD",
+      "bangladesh_nid"
+    ],
     "cs": [
       "cs_CZ",
       "rodne_cislo"
@@ -158,6 +164,10 @@
     "et": [
       "et_EE",
       "isikukood"
+    ],
+    "fa": [
+      "fa_IR",
+      "iran_national_id"
     ],
     "fi": [
       "fi_FI",
@@ -315,6 +325,7 @@
   "script_language_hints": {
     "Arabic": [
       "ar",
+      "fa",
       "ha",
       "ur"
     ],
@@ -405,6 +416,7 @@
     "el",
     "en",
     "es",
+    "fa",
     "fr",
     "he",
     "hi",

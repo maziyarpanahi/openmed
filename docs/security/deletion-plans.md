@@ -7,9 +7,10 @@ data is discoverable.
 
 ## Manifest shape
 
-Pass a mapping with an `artifacts` list, a sequence of entries, or a path to a
-local JSON manifest. Each entry contains an artifact hash, a safe kind, a
-retention class, optional dependency links, and an ownership flag:
+Pass a mapping with an `artifacts` list, a sequence of entries, or a `str` or
+`Path` pointing to a local JSON manifest. Each entry contains an artifact hash,
+a safe kind, a retention class, optional dependency links, and an ownership
+flag:
 
 ```python
 from openmed.risk.deletion_plan import plan_deletion_impact
@@ -55,8 +56,18 @@ unknown manifest fields, or individual resource values. The plan object can
 provide canonical hash references to an injected local executor, but those
 references are not emitted by the report serializers.
 
-Unowned targets and unresolved dependency links are reported as blocked safety
-counters. Execution refuses to proceed while either counter is non-zero.
+Unowned affected artifacts and unresolved dependency links are reported as
+blocked safety counters. Execution refuses to proceed while either counter is
+non-zero, including when an owned target has an unowned dependent.
+
+## Bounded manifest handling
+
+Local files, manifest entries, dependency links, deletion targets, and opaque
+references have fixed size limits. JSON files reject duplicate object fields
+and non-finite numbers. In-memory manifests reject ambiguous aliases and
+unsupported field-name types. Cyclic, infinite, or hostile custom containers
+fail with a closed `DeletionPlanError` that does not include input values or a
+container-provided exception message.
 
 ## Explicit execution boundary
 
@@ -83,6 +94,9 @@ The callback receives only a normalized `DeletionArtifact`, and target
 callbacks run in stable hash order. Dependents are included in the impact
 preview but are not deleted automatically. Callers remain responsible for
 retention policy, legal holds, access control, backups, and human review.
+
+Execution revalidates the manifest digest, plan digest, target and impact sets,
+counts, and ownership state immediately before invoking the first callback.
 
 The module has no network dependency or mandatory outbound call. Use synthetic
 offline fixtures for tests and never place protected health information,

@@ -2,6 +2,12 @@
 
 OpenMed includes built-in performance profiling utilities to measure and optimize your NLP pipelines.
 
+The privacy `Pipeline` always returns local, no-PHI stage durations through
+`PipelineResult.stage_durations_ms`. To mirror those same `Timer` measurements
+into opt-in OpenTelemetry spans and aggregate histograms, use
+[Core Pipeline Observability](core-observability.md). No exporter is configured
+by OpenMed.
+
 ## Quick Start
 
 ```python
