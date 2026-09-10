@@ -182,6 +182,7 @@ def _coerce_parent(value: Any) -> ArtifactLineageParent:
 def _normalise_parents(value: Any) -> tuple[ArtifactLineageParent, ...]:
     if value is None:
         return ()
+    values: Iterable[Any]
     if isinstance(value, Mapping):
         values = (
             {"type": parent_type, "hash": parent_hash}
