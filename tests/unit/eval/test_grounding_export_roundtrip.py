@@ -161,6 +161,37 @@ def test_official_validator_fails_closed_without_operation_outcome(
     assert result.failure_reason == "validator_output_missing"
 
 
+def test_suite_does_not_count_validator_failure_as_negative_control(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+    calls = 0
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            output = Path(command[command.index("-output") + 1])
+            output.write_text(
+                json.dumps({"resourceType": "OperationOutcome", "issue": []}),
+                encoding="utf-8",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+
+    report = run_grounding_export_suite(validator_jar=validator_jar)
+
+    assert report.metrics["passed"] is False
+    assert report.metrics["fhir"]["errors"] == 0
+    assert report.metrics["fhir"]["malformed_resource_detected"] is False
+    assert report.metrics["fhir"]["malformed_validator_failure_reason"] == (
+        "validator_output_missing"
+    )
+
+
 def test_suite_fails_when_official_validator_reports_export_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -303,6 +303,7 @@ def test_achilles_smoke_reports_missing_columns_and_foreign_keys() -> None:
     }
     corrupted["measurement"][0].pop("measurement_concept_id")
     corrupted["drug_exposure"][0]["drug_concept_id"] = "not-an-id"
+    corrupted["condition_occurrence"][0]["note_id"] = None
     corrupted["procedure_occurrence"][0]["person_id"] = 999_999_999
 
     violations = achilles_smoke_check(replace(tables, tables=corrupted))
@@ -323,6 +324,12 @@ def test_achilles_smoke_reports_missing_columns_and_foreign_keys() -> None:
         item.table == "procedure_occurrence"
         and item.column == "person_id"
         and item.reason == "missing_person"
+        for item in violations
+    )
+    assert any(
+        item.table == "condition_occurrence"
+        and item.column == "note_id"
+        and item.reason == "invalid_foreign_key"
         for item in violations
     )
 

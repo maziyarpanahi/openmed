@@ -195,7 +195,10 @@ def run_grounding_export_suite(
     omop_violations = achilles_smoke_check(omop)
     omop_by_table = Counter(item.table for item in omop_violations)
     omop_by_reason = Counter(item.reason for item in omop_violations)
-    malformed_resource_detected = malformed_fhir_result.errors > 0
+    malformed_resource_detected = (
+        malformed_fhir_result.errors > 0
+        and malformed_fhir_result.failure_reason is None
+    )
     passed = (
         fhir_result.errors == 0 and malformed_resource_detected and not omop_violations
     )

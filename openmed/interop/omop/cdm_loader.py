@@ -328,6 +328,18 @@ _FOREIGN_KEY_TARGETS: Mapping[
     "source_to_concept_map": {"note_nlp_id": ("note_nlp", "note_nlp_id")},
 }
 
+_REQUIRED_FOREIGN_KEYS: Mapping[str, frozenset[str]] = {
+    "visit_occurrence": frozenset({"person_id"}),
+    "note": frozenset({"person_id"}),
+    "note_nlp": frozenset({"note_id"}),
+    "condition_occurrence": frozenset({"person_id", "note_id", "note_nlp_id"}),
+    "drug_exposure": frozenset({"person_id", "note_id", "note_nlp_id"}),
+    "measurement": frozenset({"person_id", "note_id", "note_nlp_id"}),
+    "procedure_occurrence": frozenset({"person_id", "note_id", "note_nlp_id"}),
+    "observation": frozenset({"person_id", "note_id", "note_nlp_id"}),
+    "source_to_concept_map": frozenset({"note_nlp_id"}),
+}
+
 _MISSING_REFERENCE_REASON: Mapping[str, str] = {
     "person_id": "missing_person",
     "visit_occurrence_id": "missing_visit_occurrence",
@@ -1093,7 +1105,18 @@ def validate_omop_tables(
         for row in tables.table(table):
             row_id = _strict_int(row.get(_PRIMARY_KEYS[table]))
             for column, (target_table, _) in references.items():
-                if column not in row or row[column] is None:
+                if column not in row:
+                    continue
+                if row[column] is None:
+                    if column in _REQUIRED_FOREIGN_KEYS.get(table, frozenset()):
+                        violations.append(
+                            OmopConstraintViolation(
+                                table=table,
+                                column=column,
+                                reason="invalid_foreign_key",
+                                row_id=row_id,
+                            )
+                        )
                     continue
                 reference_id = _strict_int(row[column])
                 if reference_id is None or reference_id <= 0:
