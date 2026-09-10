@@ -48,17 +48,48 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 90
+    assert len(entries) == 100
     assert len(records) == len(entries)
-    assert {record.classification for record in records} == {
-        inventory.LicenseClass.PERMISSIVE
-    }
+    assert {
+        record.name
+        for record in records
+        if record.classification == inventory.LicenseClass.RESTRICTED
+    } == {"extract-msg"}
+    assert not inventory.gate_failures(records)
     assert {record.name for record in records} >= {
         "faker",
         "jieba",
         "pysbd",
         "pyyaml",
     }
+
+
+def test_restricted_bridge_is_explicitly_scoped_and_other_restricted_entries_fail() -> (
+    None
+):
+    records = inventory.audit_inventory(
+        [
+            inventory.InventoryEntry(
+                "extract-msg", "GPL-3.0-only", scope="email-msg-gpl"
+            ),
+            inventory.InventoryEntry("other-gpl", "GPL-3.0-only", scope="other"),
+        ]
+    )
+
+    failures = inventory.gate_failures(records)
+
+    assert "extract-msg" not in {record.name for record in failures}
+    assert [record.name for record in failures] == ["other-gpl"]
+
+
+def test_quarantined_bridge_does_not_allow_an_unknown_license() -> None:
+    records = inventory.audit_inventory(
+        [inventory.InventoryEntry("extract-msg", "", scope="email-msg-gpl")]
+    )
+
+    assert [record.name for record in inventory.gate_failures(records)] == [
+        "extract-msg"
+    ]
 
 
 def test_missing_dependency_is_unknown_and_fails_closed() -> None:

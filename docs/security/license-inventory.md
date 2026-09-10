@@ -1,7 +1,7 @@
 # Dependency License Inventory
 
 This is OpenMed's checked-in review inventory for the dependency declarations
-in [`pyproject.toml`](../../pyproject.toml). It covers the base dependency set
+in `pyproject.toml`. It covers the base dependency set
 and every optional integration except the `dev` extra. Version constraints stay
 in `pyproject.toml`; this file records the locally reviewed SPDX-like license
 expression and the extras that use each distribution.
@@ -13,14 +13,20 @@ python scripts/licenses/inventory.py
 ```
 
 The gate reads this table and `pyproject.toml`, then fails closed if a declared
-distribution is missing here or has an unknown or restricted license. Add a
-reviewed row before adding a dependency. Do not paste package metadata, URLs,
-credentials, or application data into this inventory.
+distribution is missing here or has an unknown or restricted license without an
+explicit policy exception. Add a reviewed row before adding a dependency. Do
+not paste package metadata, URLs, credentials, or application data into this
+inventory.
+
+The `extract-msg` row is intentionally restricted: it is allowed only for the
+`email-msg-gpl` extra's documented out-of-process bridge, and remains excluded
+from the bundled and in-process runtime.
 
 | Dependency | Scope | License expression |
 | --- | --- | --- |
 | `accelerate` | `hf` | `Apache-2.0` |
 | `adlfs` | `cloud` | `BSD-3-Clause` |
+| `apache-airflow` | `airflow` | `Apache-2.0` |
 | `apache-beam` | `beam` | `Apache-2.0` |
 | `auto-gptq` | `gptq` | `MIT` |
 | `autoawq` | `awq` | `MIT` |
@@ -28,13 +34,16 @@ credentials, or application data into this inventory.
 | `confluent-kafka` | `kafka` | `Apache-2.0` |
 | `coremltools` | `coreml` | `BSD-3-Clause` |
 | `cryptography` | `integrity` | `Apache-2.0 OR BSD-3-Clause` |
+| `dagster` | `dagster` | `Apache-2.0` |
 | `dask` | `dask` | `BSD-3-Clause` |
 | `duckdb` | `duckdb` | `MIT` |
 | `easyocr` | `multimodal` | `Apache-2.0` |
+| `extract-msg` | `email-msg-gpl` | `GPL-3.0-only` |
 | `faker` | `default` | `MIT` |
 | `fastapi` | `service` | `MIT` |
 | `fsspec` | `cloud` | `BSD-3-Clause` |
 | `gcsfs` | `cloud` | `BSD-3-Clause` |
+| `gitpython` | `docs` | `BSD-3-Clause` |
 | `gliner` | `gliner` | `Apache-2.0` |
 | `griffe` | `docs` | `ISC` |
 | `grpcio` | `service` | `Apache-2.0` |
@@ -45,6 +54,7 @@ credentials, or application data into this inventory.
 | `huggingface-hub` | `coreml, hf, mlx, onnx-runtime` | `Apache-2.0` |
 | `indic-nlp-library` | `indic` | `MIT` |
 | `jieba` | `default, zh` | `MIT` |
+| `kopf` | `operator` | `MIT` |
 | `langchain-core` | `agents, langchain` | `MIT` |
 | `langgraph` | `agents, langgraph` | `MIT` |
 | `llama-index-core` | `agents, llamaindex` | `MIT` |
@@ -59,6 +69,7 @@ credentials, or application data into this inventory.
 | `mkdocstrings` | `docs` | `ISC` |
 | `mlx` | `mlx` | `MIT` |
 | `mlx-lm` | `mlx` | `MIT` |
+| `nbformat` | `notebook` | `BSD-3-Clause` |
 | `nncf` | `openvino` | `Apache-2.0` |
 | `numpy` | `duckdb, grounding, multimodal, onnx-runtime` | `BSD-3-Clause` |
 | `onnx` | `multimodal, onnx` | `Apache-2.0` |
@@ -68,6 +79,7 @@ credentials, or application data into this inventory.
 | `opentelemetry-api` | `service` | `Apache-2.0` |
 | `opentelemetry-exporter-otlp-proto-http` | `service` | `Apache-2.0` |
 | `opentelemetry-sdk` | `service` | `Apache-2.0` |
+| `openpyxl` | `multimodal` | `MIT` |
 | `openvino` | `openvino` | `Apache-2.0` |
 | `paddleocr` | `ocr-paddle` | `Apache-2.0` |
 | `pandas` | `pandas, spark` | `BSD-3-Clause` |
@@ -92,6 +104,7 @@ credentials, or application data into this inventory.
 | `pytesseract` | `multimodal` | `Apache-2.0` |
 | `python-doctr` | `multimodal` | `Apache-2.0` |
 | `python-docx` | `multimodal` | `MIT` |
+| `python-pptx` | `multimodal` | `MIT` |
 | `pyyaml` | `default` | `MIT` |
 | `quickumls` | `quickumls` | `MIT` |
 | `rapidfuzz` | `grounding` | `MIT` |
@@ -102,6 +115,8 @@ credentials, or application data into this inventory.
 | `scispacy` | `scispacy` | `Apache-2.0` |
 | `scrubadub` | `scrubadub` | `Apache-2.0` |
 | `spacy` | `spacy` | `MIT` |
+| `sqlalchemy` | `sqlalchemy` | `MIT` |
+| `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
 | `torch` | `coreml, gliner, onnx` | `BSD-3-Clause` |

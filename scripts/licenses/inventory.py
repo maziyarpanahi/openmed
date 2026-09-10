@@ -124,6 +124,11 @@ SENSITIVE_IDENTIFIER_RE = re.compile(
     r"(?:sk-[a-z0-9]|(?:api|secret|token|password|ssn|mrn|patient)[-_:=])",
     re.IGNORECASE,
 )
+# This is the only currently reviewed restricted dependency. It is allowed
+# only in the explicit subprocess bridge extra, matching the release policy.
+QUARANTINED_BRIDGE_SCOPES = {
+    "extract-msg": frozenset({"email-msg-gpl"}),
+}
 
 
 @dataclass(frozen=True)
@@ -586,6 +591,27 @@ def audit_project(
     )
 
 
+def is_quarantined_bridge(entry: InventoryEntry) -> bool:
+    """Return whether a restricted entry has an explicit bridge exception."""
+
+    allowed_scopes = QUARANTINED_BRIDGE_SCOPES.get(entry.name, frozenset())
+    return entry.scope in allowed_scopes
+
+
+def gate_failures(records: Iterable[InventoryRecord]) -> tuple[InventoryRecord, ...]:
+    """Return records that fail the inventory policy after explicit exceptions."""
+
+    return tuple(
+        record
+        for record in sorted(records, key=lambda item: item.name)
+        if record.classification != LicenseClass.PERMISSIVE
+        and not (
+            record.classification == LicenseClass.RESTRICTED
+            and is_quarantined_bridge(record.entry)
+        )
+    )
+
+
 def safe_report(records: Iterable[InventoryRecord]) -> dict[str, Any]:
     """Build deterministic report data that excludes raw license values."""
 
@@ -659,9 +685,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"license inventory gate failed: {exc}", file=sys.stderr)
         return 1
 
-    failures = tuple(
-        record for record in records if record.classification != LicenseClass.PERMISSIVE
-    )
+    failures = gate_failures(records)
     if failures:
         print("license inventory gate failed:", file=sys.stderr)
         for record in failures:
@@ -672,7 +696,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return 1
 
-    print(f"license inventory gate passed: {len(records)} permissive entries")
+    permissive_count = sum(
+        record.classification == LicenseClass.PERMISSIVE for record in records
+    )
+    print(
+        "license inventory gate passed: "
+        f"{len(records)} reviewed entries ({permissive_count} permissive)"
+    )
     return 0
 
 
