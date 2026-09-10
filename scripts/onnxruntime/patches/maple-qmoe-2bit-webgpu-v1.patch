@@ -1,0 +1,25 @@
+diff --git a/onnxruntime/contrib_ops/webgpu/moe/qmoe.cc b/onnxruntime/contrib_ops/webgpu/moe/qmoe.cc
+index 6334fd8c5..ad53f00d5 100644
+--- a/onnxruntime/contrib_ops/webgpu/moe/qmoe.cc
++++ b/onnxruntime/contrib_ops/webgpu/moe/qmoe.cc
+@@ -153,5 +153,5 @@ Status QMoE::ComputeInternal(ComputeContext& context) const {
+       fc1_experts_weights, fc1_experts_bias_optional, fc1_scales, fc1_zero_points,
+       fc2_experts_weights, fc2_experts_bias_optional, fc2_scales, fc2_zero_points,
+       fc3_experts_weights_optional, fc3_experts_bias_optional, fc3_scales_optional, fc3_zero_points,
+-      expert_weight_bits_ == 4 ? 2 : 1,
++      8 / expert_weight_bits_,
+       activation_type_ == MoEActivationType::SwiGLU, block_size_));
+diff --git a/onnxruntime/contrib_ops/webgpu/moe/qmoe.h b/onnxruntime/contrib_ops/webgpu/moe/qmoe.h
+index 106869b42..c56c4905c 100644
+--- a/onnxruntime/contrib_ops/webgpu/moe/qmoe.h
++++ b/onnxruntime/contrib_ops/webgpu/moe/qmoe.h
+@@ -19,6 +19,6 @@ class QMoE final : public MoE {
+  public:
+   QMoE(const OpKernelInfo& info) : MoE(info) {
+     ORT_ENFORCE(info.GetAttr<int64_t>("expert_weight_bits", &expert_weight_bits_).IsOK());
+-    ORT_ENFORCE(expert_weight_bits_ == 8 || expert_weight_bits_ == 4,
+-                "expert_weight_bits must be 4 or 8, but got ", expert_weight_bits_);
++    ORT_ENFORCE(expert_weight_bits_ == 8 || expert_weight_bits_ == 4 || expert_weight_bits_ == 2,
++                "expert_weight_bits must be 2, 4 or 8, but got ", expert_weight_bits_);
+     block_size_ = static_cast<int>(info.GetAttrOrDefault<int64_t>("block_size", 0));
+   }
