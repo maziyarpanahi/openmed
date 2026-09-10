@@ -251,6 +251,7 @@ nav:
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
+      - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR DiagnosticReport Export: fhir/diagnostic-report-export.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
