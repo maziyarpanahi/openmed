@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import socket
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
@@ -29,6 +31,17 @@ MAPPING = {
     "<SURROGATE_A>": "<SYNTHETIC_SOURCE_A>",
     "<SURROGATE_B>": "<SYNTHETIC_SOURCE_B>",
 }
+
+
+class _HostileMapping(Mapping[str, str]):
+    def __getitem__(self, _key: str) -> str:
+        raise RuntimeError("<SYNTHETIC_SOURCE_A>")
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(("<SURROGATE_A>",))
+
+    def __len__(self) -> int:
+        return 1
 
 
 def test_encryption_is_deterministic_authenticated_and_round_trips() -> None:
@@ -76,18 +89,23 @@ def test_tampering_and_wrong_keys_fail_without_mapping_values() -> None:
     ciphertext[-1] ^= 1
     envelope["ciphertext"] = base64.b64encode(ciphertext).decode("ascii")
 
-    for candidate in (json.dumps(envelope), serialized):
-        with pytest.raises(
-            SurrogateVaultPayloadError, match="authentication"
-        ) as raised:
-            SurrogateVaultCrypto(OTHER_KEY).decrypt(candidate)
-        assert all(value not in str(raised.value) for value in MAPPING.values())
+    with pytest.raises(SurrogateVaultPayloadError, match="authentication") as raised:
+        SurrogateVaultCrypto(KEY).decrypt(json.dumps(envelope))
+    assert all(value not in str(raised.value) for value in MAPPING.values())
+
+    with pytest.raises(SurrogateVaultPayloadError, match="authentication") as raised:
+        SurrogateVaultCrypto(OTHER_KEY).decrypt(serialized)
+    assert all(value not in str(raised.value) for value in MAPPING.values())
 
 
 def test_malformed_mapping_and_payload_errors_are_phi_safe() -> None:
     crypto = SurrogateVaultCrypto(KEY)
     with pytest.raises(SurrogateVaultCryptoError) as raised:
         crypto.encrypt({"<SYNTHETIC_SOURCE_A>": None})  # type: ignore[dict-item]
+    assert "SYNTHETIC_SOURCE_A" not in str(raised.value)
+
+    with pytest.raises(SurrogateVaultCryptoError) as raised:
+        crypto.encrypt(_HostileMapping())
     assert "SYNTHETIC_SOURCE_A" not in str(raised.value)
 
     raw_payload = json.dumps({"source": "<SYNTHETIC_SOURCE_A>"})
@@ -114,6 +132,24 @@ def test_file_helpers_store_only_ciphertext_and_clean_up_temporary_files(
     alternate = tmp_path / "alternate.json"
     save_mapping(alternate, MAPPING, KEY)
     assert load_mapping(alternate, KEY) == MAPPING
+
+
+def test_failed_write_removes_ciphertext_temporary_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "surrogate-mapping.json"
+
+    def fail_replace(_source: str | Path, _destination: str | Path) -> None:
+        raise OSError("synthetic write failure")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+
+    with pytest.raises(SurrogateVaultCryptoError, match="could not write"):
+        SurrogateVaultCrypto(KEY).write(path, MAPPING)
+
+    assert not path.exists()
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_crypto_path_is_local_only(monkeypatch: pytest.MonkeyPatch) -> None:

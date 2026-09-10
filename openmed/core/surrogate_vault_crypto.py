@@ -76,9 +76,16 @@ class SurrogateVaultCrypto:
         a temporary file, logged, or included in an exception.
         """
 
-        plaintext = _serialize_mapping(mapping)
-        aessiv = _new_aessiv(self._key)
-        ciphertext = aessiv.encrypt(plaintext, [_associated_data()])
+        try:
+            plaintext = _serialize_mapping(mapping)
+            aessiv = _new_aessiv(self._key)
+            ciphertext = aessiv.encrypt(plaintext, [_associated_data()])
+        except SurrogateVaultCryptoError:
+            raise
+        except Exception:
+            raise SurrogateVaultCryptoError(
+                "surrogate mapping could not be encrypted"
+            ) from None
         envelope = {
             "schema_version": SCHEMA_VERSION,
             "encryption_scheme": ENCRYPTION_SCHEME,
@@ -89,11 +96,18 @@ class SurrogateVaultCrypto:
     def decrypt(self, serialized: SerializedMapping) -> dict[str, str]:
         """Authenticate and return a previously encrypted surrogate mapping."""
 
-        envelope = _parse_envelope(serialized)
-        ciphertext = _decode_ciphertext(envelope["ciphertext"])
-        aessiv = _new_aessiv(self._key)
-        plaintext = _decrypt_ciphertext(aessiv, ciphertext)
-        return _deserialize_mapping(plaintext)
+        try:
+            envelope = _parse_envelope(serialized)
+            ciphertext = _decode_ciphertext(envelope["ciphertext"])
+            aessiv = _new_aessiv(self._key)
+            plaintext = _decrypt_ciphertext(aessiv, ciphertext)
+            return _deserialize_mapping(plaintext)
+        except SurrogateVaultCryptoError:
+            raise
+        except Exception:
+            raise SurrogateVaultPayloadError(
+                "encrypted surrogate mapping could not be decoded"
+            ) from None
 
     def write(self, path: str | Path, mapping: Mapping[str, str]) -> None:
         """Atomically write an encrypted mapping to ``path``.

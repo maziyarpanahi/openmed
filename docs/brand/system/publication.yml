@@ -274,6 +274,7 @@ classification:
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
     - security/key-management.md
+    - security/encrypted-surrogate-vault.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
