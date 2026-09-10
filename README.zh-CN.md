@@ -24,7 +24,7 @@ OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和
 </p>
 
 <p>
-  <b>本地优先运行</b> &nbsp;·&nbsp; <b>34 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>33 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -124,7 +124,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
 ]
 ```
 
@@ -166,11 +166,11 @@ dependencyResolutionManagement {
 }
 ```
 
-然后使用不可变的 OpenMed `v2.0.0` 版本：
+然后使用不可变的 OpenMed `v2.3.0` 版本：
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.3.0")
 }
 ```
 
@@ -509,7 +509,7 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（35 条支持的路由；34 条由模型支持）
+## 多语言 PII（36 条支持的路由；33 条由模型支持）
 
 实体抽取和去标识化支持 **35 个 PII 语言代码**：
 `am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
@@ -643,7 +643,7 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [常见问题](docs/faq.md) | [匿名化](docs/anonymization.md) | [批处理](https://openmed.life/docs/batch-processing) |
 | [配置档案](https://openmed.life/docs/profiles) | [REST 服务](docs/rest-service.md) | [MLX 后端](docs/mlx-backend.md) |
 | [Transformers.js 导出](docs/export-transformersjs.md) | [FHIR 互操作](docs/fhir-interop.md) | [HL7 v2 去标识化](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.0.0 发行说明](docs/release/v2.0.0.md) | [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [示例](docs/examples.md) |
+| [OpenMed 2.3.0 发行说明](docs/release/v2.3.0.md) | [OpenMed 2.2.0 发行说明](docs/release/v2.2.0.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
 | [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [扩展插件 SDK](docs/plugin-sdk.md) |
 | [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |
@@ -667,7 +667,7 @@ OpenMed 的守护者是一只蓬松的波斯猫，化身为小小的**阿维森�
 欢迎贡献：bug 报告、功能请求和 PR 都欢迎。请先阅读[贡献指南](CONTRIBUTING.md)和[行为准则](CODE_OF_CONDUCT.md)。
 
 - [提交 issue](https://github.com/maziyarpanahi/openmed/issues)
-- [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [安全策略](SECURITY.md)
+- [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [维护者](MAINTAINERS.md) · [安全策略](SECURITY.md)
 - **欢迎翻译**：帮助完善顶部语言切换栏中链接的其他语言 README。
 
 ---
@@ -711,7 +711,7 @@ OpenMed SDK 源代码基于 [Apache-2.0 License](LICENSE) 发布。第三方资�
 
 如果 OpenMed 对你有帮助，点个 star 能帮助更多人发现它。
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
