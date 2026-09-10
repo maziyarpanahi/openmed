@@ -294,6 +294,7 @@ nav:
       - Local Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
+      - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
