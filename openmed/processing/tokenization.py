@@ -195,10 +195,17 @@ class UserDictionaryEntry:
     pos: str | None = None
 
 
+_OPAQUE_EXCEPTION_SIGNATURE = object()
+
+
 class DictionaryIngestionError(InputError):
     """Base class for fail-closed dictionary ingestion errors."""
 
     reason = "dictionary_rejected"
+    # These legacy ValueError subclasses had no inspectable constructor. Keep
+    # that introspection contract even though InputError now has structured
+    # keyword fields; instances still receive code/message/details normally.
+    __signature__ = _OPAQUE_EXCEPTION_SIGNATURE
 
 
 class DictionarySourceError(DictionaryIngestionError):
@@ -229,6 +236,7 @@ class DictionaryEntryLimitError(DictionaryIngestionError):
     """Raised as soon as a dictionary crosses its entry-count cap."""
 
     reason = "entry_limit"
+    __signature__ = None
 
     def __init__(self, observed_count: int) -> None:
         self.observed_count = observed_count
@@ -239,6 +247,7 @@ class DictionaryRecordLimitError(DictionaryIngestionError):
     """Raised as soon as physical dictionary records cross their cap."""
 
     reason = "record_limit"
+    __signature__ = None
 
     def __init__(self, observed_count: int) -> None:
         self.observed_count = observed_count
@@ -255,6 +264,7 @@ class DictionaryEntryValidationError(DictionaryIngestionError):
     """Raised when one entry violates a named validation rule."""
 
     reason = "entry_validation"
+    __signature__ = None
 
     def __init__(self, rule: str, line_number: int) -> None:
         self.rule = rule
