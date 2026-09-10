@@ -3,22 +3,39 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
 
 import pytest
 
+import openmed.risk.policy_schema as policy_schema_module
 from openmed.risk import (
     DEFAULT_ACTION,
     DEFAULT_AUDIT_RETENTION_DAYS,
     DEFAULT_CRITICAL_RECALL_FLOOR,
     DEFAULT_DIRECT_IDENTIFIER_RECALL_FLOOR,
     DEFAULT_RECALL_FLOOR,
+    MAX_AUDIT_RETENTION_DAYS,
+    MAX_POLICY_ACTIONS,
+    MAX_POLICY_RECALL_OVERRIDES,
     AuditRetention,
     PrivacyPolicy,
+    RecallFloors,
     SurrogateStrategy,
     default_policy_schema,
     lint_policy_schema,
     load_policy_schema,
 )
+
+
+class _HostileMapping(Mapping[str, object]):
+    def __getitem__(self, key: str) -> object:
+        raise ValueError("synthetic-sensitive-value")
+
+    def __iter__(self) -> Iterator[str]:
+        raise ValueError("synthetic-sensitive-value")
+
+    def __len__(self) -> int:
+        return 1
 
 
 def test_defaults_are_explicit_and_preserve_legacy_local_behavior() -> None:
@@ -150,6 +167,10 @@ def test_audit_retention_rejects_raw_text_and_mapping_storage() -> None:
         AuditRetention.from_value(
             {"enabled": True, "retention_days": 7, "store_mappings": True}
         )
+    with pytest.raises(ValueError, match="privacy-safe"):
+        AuditRetention.from_value(
+            {"enabled": True, "retention_days": 7, "source_text": True}
+        )
 
 
 def test_local_loader_and_linter_do_not_need_network(tmp_path) -> None:
@@ -167,3 +188,70 @@ def test_local_loader_and_linter_do_not_need_network(tmp_path) -> None:
 def test_unknown_top_level_fields_fail_closed() -> None:
     with pytest.raises(ValueError, match="unsupported"):
         PrivacyPolicy.from_mapping({"not_a_policy_field": True})
+
+
+@pytest.mark.parametrize("version", [True, 1.0, "1"])
+def test_schema_version_requires_the_exact_integer_type(version: object) -> None:
+    with pytest.raises(ValueError, match="schema_version"):
+        PrivacyPolicy(schema_version=version)  # type: ignore[arg-type]
+
+
+def test_duplicate_json_fields_and_aliases_fail_closed() -> None:
+    with pytest.raises(ValueError, match="invalid policy JSON"):
+        PrivacyPolicy.from_json(
+            '{"schema_version":1,"schema_version":2,"default_action":"mask"}'
+        )
+    with pytest.raises(ValueError, match="conflicting aliases"):
+        PrivacyPolicy.from_mapping({"schema_version": 1, "version": 1})
+    with pytest.raises(ValueError, match="conflicting aliases"):
+        PrivacyPolicy.from_mapping(
+            {
+                "default_action": "mask",
+                "actions": {"default": "mask"},
+            }
+        )
+
+
+def test_non_finite_json_numbers_fail_closed() -> None:
+    with pytest.raises(ValueError, match="invalid policy JSON"):
+        PrivacyPolicy.from_json('{"recall_floor":NaN}')
+
+
+def test_policy_cardinality_and_retention_are_bounded() -> None:
+    actions = {f"CUSTOM_{index}": "mask" for index in range(MAX_POLICY_ACTIONS + 1)}
+    with pytest.raises(ValueError, match="item limit"):
+        PrivacyPolicy(actions=actions)
+
+    recall_overrides = {
+        f"CUSTOM_{index}": 0.99 for index in range(MAX_POLICY_RECALL_OVERRIDES + 1)
+    }
+    with pytest.raises(ValueError, match="item limit"):
+        RecallFloors(by_label=recall_overrides)
+
+    with pytest.raises(ValueError, match="maximum"):
+        AuditRetention(
+            enabled=True,
+            retention_days=MAX_AUDIT_RETENTION_DAYS + 1,
+        )
+
+
+def test_loader_caps_local_json_before_parsing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(policy_schema_module, "MAX_POLICY_JSON_BYTES", 16)
+    path = tmp_path / "oversized-policy.json"
+    path.write_bytes(b"{" + b" " * 16)
+
+    with pytest.raises(ValueError, match="size limit"):
+        load_policy_schema(path)
+
+
+def test_hostile_mappings_and_validation_errors_do_not_expose_values() -> None:
+    sensitive = "SYNTHETIC_PRIVATE_LABEL"
+
+    with pytest.raises(ValueError) as exc_info:
+        PrivacyPolicy.from_mapping(_HostileMapping())
+    assert "synthetic-sensitive-value" not in str(exc_info.value)
+    assert lint_policy_schema(_HostileMapping()) == ("policy schema is invalid",)
+
+    with pytest.raises(TypeError) as exc_info:
+        PrivacyPolicy.from_mapping({"actions": {sensitive: object()}})
+    assert sensitive not in str(exc_info.value)

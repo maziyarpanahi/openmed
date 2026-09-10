@@ -10,6 +10,7 @@ valid schema fields.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import re
@@ -17,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from openmed.core.labels import (
     CANONICAL_LABELS,
@@ -38,6 +39,12 @@ DEFAULT_CRITICAL_RECALL_FLOOR: Final = 1.0
 DEFAULT_ACTION: Final = "mask"
 DEFAULT_SURROGATE_STRATEGY: Final = "none"
 DEFAULT_AUDIT_RETENTION_DAYS: Final = 0
+MAX_AUDIT_RETENTION_DAYS: Final = 36_500
+MAX_POLICY_ACTIONS: Final = 512
+MAX_POLICY_JSON_BYTES: Final = 1_048_576
+MAX_POLICY_RECALL_OVERRIDES: Final = 512
+
+_MAX_POLICY_OBJECT_ITEMS: Final = 64
 
 SUPPORTED_ACTIONS: Final = frozenset(ACTION_VALUES)
 SUPPORTED_SURROGATE_STRATEGIES: Final = frozenset(
@@ -69,7 +76,7 @@ _JURISDICTION_CODE_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{1,31}$")
 
 
 def _safe_text(value: Any, field_name: str, *, max_length: int = 128) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if type(value) is not str or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
     text = value.strip()
     if len(text) > max_length or "\n" in text or "\r" in text:
@@ -85,7 +92,7 @@ def _safe_identifier(value: Any, field_name: str) -> str:
 
 
 def _bounded_probability(value: Any, field_name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if type(value) not in {int, float}:
         raise TypeError(f"{field_name} must be a numeric probability")
     result = float(value)
     if not math.isfinite(result) or not 0.0 <= result <= 1.0:
@@ -94,30 +101,91 @@ def _bounded_probability(value: Any, field_name: str) -> float:
 
 
 def _strict_bool(value: Any, field_name: str) -> bool:
-    if not isinstance(value, bool):
+    if type(value) is not bool:
         raise TypeError(f"{field_name} must be a boolean")
     return value
 
 
-def _positive_or_zero_int(value: Any, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
+def _positive_or_zero_int(
+    value: Any,
+    field_name: str,
+    *,
+    maximum: int | None = None,
+) -> int:
+    if type(value) is not int:
         raise TypeError(f"{field_name} must be a non-negative integer")
     if value < 0:
         raise ValueError(f"{field_name} must be a non-negative integer")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{field_name} exceeds the supported maximum")
     return value
+
+
+def _snapshot_mapping(
+    value: Any,
+    field_name: str,
+    *,
+    maximum_items: int,
+) -> dict[str, Any]:
+    """Copy an external mapping without allowing its exceptions to leak values."""
+
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{field_name} must be an object")
+    try:
+        items = list(itertools.islice(value.items(), maximum_items + 1))
+    except Exception:
+        raise ValueError(f"{field_name} must be a readable object") from None
+    if len(items) > maximum_items:
+        raise ValueError(f"{field_name} exceeds the supported item limit")
+
+    snapshot: dict[str, Any] = {}
+    for pair in items:
+        if type(pair) not in {list, tuple} or len(pair) != 2:
+            raise ValueError(f"{field_name} must be a readable object")
+        key, item = pair
+        if type(key) is not str:
+            raise TypeError(f"{field_name} field names must be strings")
+        if key in snapshot:
+            raise ValueError(f"{field_name} contains duplicate field names")
+        snapshot[key] = item
+    return snapshot
+
+
+def _aliased_value(
+    value: Mapping[str, Any],
+    names: tuple[str, ...],
+    field_name: str,
+    *,
+    default: Any = None,
+) -> Any:
+    present = [name for name in names if name in value]
+    if len(present) > 1:
+        raise ValueError(f"{field_name} uses conflicting aliases")
+    return value[present[0]] if present else default
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate policy JSON field")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> None:
+    raise ValueError("non-finite policy JSON number")
 
 
 def _unknown_fields(
     value: Mapping[str, Any], allowed: set[str], field_name: str
 ) -> None:
-    if any(not isinstance(key, str) for key in value):
-        raise TypeError(f"{field_name} field names must be strings")
     if set(value) - allowed:
         raise ValueError(f"{field_name} contains unsupported field(s)")
 
 
 def _canonical_action(value: Any, field_name: str) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError(f"{field_name} must be a supported action")
     action = value.strip().lower()
     action = _ACTION_ALIASES.get(action, action)
@@ -152,10 +220,12 @@ def _freeze_actions(
     actions: dict[str, str] = {}
     for raw_label, raw_action in value.items():
         label = _canonical_mapping_key(raw_label, f"{field_name} label")
-        action = _canonical_action(raw_action, f"{field_name}.{label}")
-        if label in actions and actions[label] != action:
+        action = _canonical_action(raw_action, f"{field_name} value")
+        if label in actions:
             raise ValueError(f"{field_name} contains duplicate labels")
         actions[label] = action
+    if len(actions) > MAX_POLICY_ACTIONS:
+        raise ValueError(f"{field_name} exceeds the supported item limit")
     return MappingProxyType(dict(sorted(actions.items())))
 
 
@@ -185,11 +255,11 @@ class Jurisdiction:
     def from_value(cls, value: Any) -> "Jurisdiction":
         """Parse a jurisdiction string or the version-one object form."""
 
-        if isinstance(value, cls):
+        if type(value) is cls:
             return value
         if value is None:
             return cls()
-        if isinstance(value, str):
+        if type(value) is str:
             text = _safe_text(value, "jurisdiction")
             code = (
                 text.upper()
@@ -197,17 +267,24 @@ class Jurisdiction:
                 else "CUSTOM"
             )
             return cls(code=code, name=text)
-        if not isinstance(value, Mapping):
-            raise TypeError("jurisdiction must be a string or object")
+        value = _snapshot_mapping(value, "jurisdiction", maximum_items=6)
         _unknown_fields(
             value,
             {"code", "country_code", "id", "name", "country", "region"},
             "jurisdiction",
         )
-        code = value.get(
-            "code", value.get("country_code", value.get("id", DEFAULT_JURISDICTION))
+        code = _aliased_value(
+            value,
+            ("code", "country_code", "id"),
+            "jurisdiction.code",
+            default=DEFAULT_JURISDICTION,
         )
-        name = value.get("name", value.get("country", code))
+        name = _aliased_value(
+            value,
+            ("name", "country"),
+            "jurisdiction.name",
+            default=code,
+        )
         return cls(code=code, name=name, region=value.get("region"))
 
     def to_dict(self) -> dict[str, str | None]:
@@ -244,14 +321,19 @@ class RecallFloors:
             "critical",
             _bounded_probability(self.critical, "recall_floors.critical"),
         )
-        if not isinstance(self.by_label, Mapping):
-            raise TypeError("recall_floors.by_label must be an object")
+        by_label = _snapshot_mapping(
+            self.by_label,
+            "recall_floors.by_label",
+            maximum_items=MAX_POLICY_RECALL_OVERRIDES,
+        )
         floors: dict[str, float] = {}
-        for raw_label, value in self.by_label.items():
+        for raw_label, value in by_label.items():
             label = _canonical_label(raw_label, "recall_floors.by_label label")
+            if label in floors:
+                raise ValueError("recall_floors.by_label contains duplicate labels")
             floors[label] = _bounded_probability(
                 value,
-                f"recall_floors.by_label.{label}",
+                "recall_floors.by_label value",
             )
         object.__setattr__(
             self, "by_label", MappingProxyType(dict(sorted(floors.items())))
@@ -261,34 +343,13 @@ class RecallFloors:
     def from_value(cls, value: Any) -> "RecallFloors":
         """Parse nested, flat-label, and legacy scalar recall configurations."""
 
-        if isinstance(value, cls):
+        if type(value) is cls:
             return value
         if value is None:
             return cls()
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if type(value) in {int, float}:
             floor = _bounded_probability(value, "recall_floor")
             return cls(default=floor, direct_identifier=floor, critical=floor)
-        if not isinstance(value, Mapping):
-            raise TypeError("recall_floors must be a probability or object")
-
-        default = value.get(
-            "default",
-            value.get("overall", value.get("recall_floor", DEFAULT_RECALL_FLOOR)),
-        )
-        direct = value.get(
-            "direct_identifier",
-            value.get("direct_identifiers", DEFAULT_DIRECT_IDENTIFIER_RECALL_FLOOR),
-        )
-        critical = value.get(
-            "critical",
-            value.get("critical_identifier", DEFAULT_CRITICAL_RECALL_FLOOR),
-        )
-        configured = value.get("by_label", value.get("per_label", {}))
-        if configured is None:
-            configured = {}
-        if not isinstance(configured, Mapping):
-            raise TypeError("recall_floors.by_label must be an object")
-
         structural = {
             "default",
             "overall",
@@ -300,11 +361,52 @@ class RecallFloors:
             "by_label",
             "per_label",
         }
+        value = _snapshot_mapping(
+            value,
+            "recall_floors",
+            maximum_items=MAX_POLICY_RECALL_OVERRIDES + len(structural),
+        )
+
+        default = _aliased_value(
+            value,
+            ("default", "overall", "recall_floor"),
+            "recall_floors.default",
+            default=DEFAULT_RECALL_FLOOR,
+        )
+        direct = _aliased_value(
+            value,
+            ("direct_identifier", "direct_identifiers"),
+            "recall_floors.direct_identifier",
+            default=DEFAULT_DIRECT_IDENTIFIER_RECALL_FLOOR,
+        )
+        critical = _aliased_value(
+            value,
+            ("critical", "critical_identifier"),
+            "recall_floors.critical",
+            default=DEFAULT_CRITICAL_RECALL_FLOOR,
+        )
+        configured = _aliased_value(
+            value,
+            ("by_label", "per_label"),
+            "recall_floors.by_label",
+            default={},
+        )
+        if configured is None:
+            configured = {}
+        configured = _snapshot_mapping(
+            configured,
+            "recall_floors.by_label",
+            maximum_items=MAX_POLICY_RECALL_OVERRIDES,
+        )
         flat_labels = {
             key: item for key, item in value.items() if key not in structural
         }
         combined = dict(flat_labels)
-        combined.update(dict(configured))
+        if set(combined) & set(configured):
+            raise ValueError("recall_floors.by_label contains duplicate labels")
+        combined.update(configured)
+        if len(combined) > MAX_POLICY_RECALL_OVERRIDES:
+            raise ValueError("recall_floors.by_label exceeds the supported item limit")
         return cls(
             default=default,
             direct_identifier=direct,
@@ -342,7 +444,7 @@ class RecallFloors:
 
 
 def _canonical_surrogate_strategy(value: Any) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise TypeError("surrogate_strategy.kind must be a supported strategy")
     strategy = value.strip().lower().replace("-", "_")
     strategy = _SURROGATE_ALIASES.get(strategy, strategy)
@@ -385,18 +487,21 @@ class SurrogateStrategy:
     def from_value(cls, value: Any) -> "SurrogateStrategy":
         """Parse a strategy string or bounded strategy object."""
 
-        if isinstance(value, cls):
+        if type(value) is cls:
             return value
         if value is None:
             return cls()
-        if isinstance(value, str):
+        if type(value) is str:
             kind = _canonical_surrogate_strategy(value)
             return cls(
                 kind=kind,
                 consistent=kind in {"deterministic", "format_preserving", "vault"},
             )
-        if not isinstance(value, Mapping):
-            raise TypeError("surrogate_strategy must be a string or object")
+        value = _snapshot_mapping(
+            value,
+            "surrogate_strategy",
+            maximum_items=10,
+        )
 
         forbidden = {
             "secret",
@@ -427,18 +532,31 @@ class SurrogateStrategy:
             },
             "surrogate_strategy",
         )
-        raw_kind = value.get(
-            "kind",
-            value.get(
-                "type",
-                value.get("mode", value.get("strategy", DEFAULT_SURROGATE_STRATEGY)),
-            ),
+        raw_kind = _aliased_value(
+            value,
+            ("kind", "type", "mode", "strategy"),
+            "surrogate_strategy.kind",
+            default=DEFAULT_SURROGATE_STRATEGY,
         )
         kind = _canonical_surrogate_strategy(raw_kind)
         default_consistent = kind in {"deterministic", "format_preserving", "vault"}
-        consistent = value.get("consistent", value.get("stable", default_consistent))
-        reversible = value.get("reversible", value.get("reversible_id", False))
-        key_ref = value.get("key_ref", value.get("key_id"))
+        consistent = _aliased_value(
+            value,
+            ("consistent", "stable"),
+            "surrogate_strategy.consistent",
+            default=default_consistent,
+        )
+        reversible = _aliased_value(
+            value,
+            ("reversible", "reversible_id"),
+            "surrogate_strategy.reversible",
+            default=False,
+        )
+        key_ref = _aliased_value(
+            value,
+            ("key_ref", "key_id"),
+            "surrogate_strategy.key_ref",
+        )
         return cls(
             kind=kind,
             consistent=consistent,
@@ -477,6 +595,7 @@ class AuditRetention:
         days = _positive_or_zero_int(
             self.retention_days,
             "audit_retention.retention_days",
+            maximum=MAX_AUDIT_RETENTION_DAYS,
         )
         include_text = _strict_bool(self.include_text, "audit_retention.include_text")
         include_mappings = _strict_bool(
@@ -500,15 +619,22 @@ class AuditRetention:
     def from_value(cls, value: Any) -> "AuditRetention":
         """Parse retention days or the explicit version-one object form."""
 
-        if isinstance(value, cls):
+        if type(value) is cls:
             return value
         if value is None:
             return cls()
-        if isinstance(value, int) and not isinstance(value, bool):
-            days = _positive_or_zero_int(value, "audit_retention.retention_days")
+        if type(value) is int:
+            days = _positive_or_zero_int(
+                value,
+                "audit_retention.retention_days",
+                maximum=MAX_AUDIT_RETENTION_DAYS,
+            )
             return cls(enabled=days > 0, retention_days=days)
-        if not isinstance(value, Mapping):
-            raise TypeError("audit_retention must be an integer or object")
+        value = _snapshot_mapping(
+            value,
+            "audit_retention",
+            maximum_items=13,
+        )
         _unknown_fields(
             value,
             {
@@ -526,25 +652,32 @@ class AuditRetention:
             },
             "audit_retention",
         )
-        days = value.get("retention_days", value.get("days", 0))
-        enabled_value = value.get("enabled")
-        if enabled_value is None:
-            enabled_value = days != 0
+        days = _aliased_value(
+            value,
+            ("retention_days", "days"),
+            "audit_retention.retention_days",
+            default=0,
+        )
+        enabled_value = value["enabled"] if "enabled" in value else days != 0
         return cls(
             enabled=enabled_value,
             retention_days=days,
-            include_text=value.get(
-                "include_text", value.get("store_text", value.get("raw_text", False))
+            include_text=_aliased_value(
+                value,
+                ("include_text", "store_text", "raw_text", "source_text"),
+                "audit_retention.include_text",
+                default=False,
             ),
-            include_mappings=value.get(
-                "include_mappings",
-                value.get(
+            include_mappings=_aliased_value(
+                value,
+                (
+                    "include_mappings",
                     "store_mappings",
-                    value.get(
-                        "store_surrogate_mappings",
-                        value.get("surrogate_mapping", False),
-                    ),
+                    "store_surrogate_mappings",
+                    "surrogate_mapping",
                 ),
+                "audit_retention.include_mappings",
+                default=False,
             ),
         )
 
@@ -600,41 +733,63 @@ _TOP_LEVEL_FIELDS: Final = {
 }
 
 
-def _action_mapping_from_payload(value: Any) -> dict[str, Any]:
+def _merge_action_entries(
+    target: dict[str, Any],
+    incoming: Mapping[str, Any],
+    field_name: str,
+) -> None:
+    for key, item in incoming.items():
+        if key in target:
+            raise ValueError(f"{field_name} contains duplicate labels")
+        target[key] = item
+
+
+def _action_mapping_from_payload(value: Any) -> tuple[dict[str, Any], Any]:
     if value is None:
-        return {}
-    if not isinstance(value, Mapping):
-        raise TypeError("actions must be an object")
+        return {}, None
+    value = _snapshot_mapping(
+        value,
+        "actions",
+        maximum_items=MAX_POLICY_ACTIONS + 3,
+    )
     result: dict[str, Any] = {}
     by_label = value.get("by_label")
     if by_label is not None:
-        if not isinstance(by_label, Mapping):
-            raise TypeError("actions.by_label must be an object")
-        result.update(dict(by_label))
+        by_label = _snapshot_mapping(
+            by_label,
+            "actions.by_label",
+            maximum_items=MAX_POLICY_ACTIONS,
+        )
+        _merge_action_entries(result, by_label, "actions")
     for key, item in value.items():
         if key in {"by_label", "default", "default_action"}:
             continue
-        result[key] = item
-    return result
-
-
-def _embedded_default_action(value: Any) -> Any:
-    if not isinstance(value, Mapping):
-        return None
-    if "default_action" in value:
-        return value["default_action"]
-    return value.get("default")
+        _merge_action_entries(result, {key: item}, "actions")
+    if len(result) > MAX_POLICY_ACTIONS:
+        raise ValueError("actions exceeds the supported item limit")
+    embedded_default = _aliased_value(
+        value,
+        ("default_action", "default"),
+        "actions.default_action",
+    )
+    return result, embedded_default
 
 
 def _legacy_surrogate(value: Mapping[str, Any]) -> Any:
-    if "surrogate_strategy" in value:
-        return value["surrogate_strategy"]
-    if "surrogate" in value:
-        return value["surrogate"]
-    if "method" not in value:
+    present = [
+        name for name in ("surrogate_strategy", "surrogate", "method") if name in value
+    ]
+    if not present:
         return None
-    method = value["method"]
-    if not isinstance(method, str):
+    selected = _aliased_value(
+        value,
+        ("surrogate_strategy", "surrogate", "method"),
+        "surrogate_strategy",
+    )
+    if present[0] != "method":
+        return selected
+    method = selected
+    if type(method) is not str:
         raise TypeError("method must be a supported de-identification method")
     kind = _SURROGATE_ALIASES.get(method.strip().lower().replace("-", "_"), "none")
     if method.strip().lower() not in {
@@ -650,7 +805,12 @@ def _legacy_surrogate(value: Mapping[str, Any]) -> Any:
     consistent = value.get(
         "consistent", kind in {"deterministic", "format_preserving", "vault"}
     )
-    reversible = value.get("reversible_id", value.get("keep_mapping", False))
+    reversible = _aliased_value(
+        value,
+        ("reversible_id", "keep_mapping"),
+        "surrogate_strategy.reversible",
+        default=False,
+    )
     return {
         "kind": kind,
         "consistent": consistent,
@@ -671,24 +831,24 @@ class PrivacyPolicy:
 
     schema_version: int = CURRENT_POLICY_SCHEMA_VERSION
     name: str = DEFAULT_POLICY_NAME
-    jurisdiction: Jurisdiction | Mapping[str, Any] | str = field(
+    jurisdiction: Jurisdiction | Mapping[str, Any] | str | None = field(
         default_factory=Jurisdiction
     )
-    recall_floors: RecallFloors | Mapping[str, Any] | float = field(
+    recall_floors: RecallFloors | Mapping[str, Any] | float | None = field(
         default_factory=RecallFloors
     )
     default_action: str = DEFAULT_ACTION
     actions: Mapping[str, Any] = field(default_factory=dict)
-    surrogate_strategy: SurrogateStrategy | Mapping[str, Any] | str = field(
+    surrogate_strategy: SurrogateStrategy | Mapping[str, Any] | str | None = field(
         default_factory=SurrogateStrategy
     )
-    audit_retention: AuditRetention | Mapping[str, Any] | int = field(
+    audit_retention: AuditRetention | Mapping[str, Any] | int | None = field(
         default_factory=AuditRetention
     )
 
     def __post_init__(self) -> None:
         if (
-            isinstance(self.schema_version, bool)
+            type(self.schema_version) is not int
             or self.schema_version != CURRENT_POLICY_SCHEMA_VERSION
         ):
             raise ValueError("policy schema_version is unsupported; expected version 1")
@@ -704,15 +864,13 @@ class PrivacyPolicy:
             RecallFloors.from_value(self.recall_floors),
         )
 
-        embedded_default = _embedded_default_action(self.actions)
+        actions, embedded_default = _action_mapping_from_payload(self.actions)
         resolved_default = (
             embedded_default if embedded_default is not None else self.default_action
         )
         resolved_default = _canonical_action(resolved_default, "default_action")
         object.__setattr__(self, "default_action", resolved_default)
-        object.__setattr__(
-            self, "actions", _freeze_actions(_action_mapping_from_payload(self.actions))
-        )
+        object.__setattr__(self, "actions", _freeze_actions(actions))
         object.__setattr__(
             self,
             "surrogate_strategy",
@@ -730,24 +888,33 @@ class PrivacyPolicy:
     ) -> "PrivacyPolicy":
         """Build a policy from version-one or supported legacy mapping data."""
 
-        if isinstance(value, cls):
+        if type(value) is cls:
             return value
-        if not isinstance(value, Mapping):
-            raise TypeError("policy schema must be an object")
+        value = _snapshot_mapping(
+            value,
+            "policy schema",
+            maximum_items=_MAX_POLICY_OBJECT_ITEMS,
+        )
         _unknown_fields(value, _TOP_LEVEL_FIELDS, "policy")
 
-        schema_version = value.get(
-            "schema_version", value.get("version", CURRENT_POLICY_SCHEMA_VERSION)
+        schema_version = _aliased_value(
+            value,
+            ("schema_version", "version"),
+            "policy schema_version",
+            default=CURRENT_POLICY_SCHEMA_VERSION,
         )
-        name = value.get(
-            "name",
-            value.get(
-                "policy_name",
-                value.get("policy_id", value.get("id", DEFAULT_POLICY_NAME)),
-            ),
+        name = _aliased_value(
+            value,
+            ("name", "policy_name", "policy_id", "id"),
+            "policy name",
+            default=DEFAULT_POLICY_NAME,
         )
         recall_value = value.get("recall_floors")
-        if recall_value is None:
+        if "recall_floors" in value and (
+            "recall_floor" in value or "label_recall_floors" in value
+        ):
+            raise ValueError("recall_floors uses conflicting aliases")
+        if "recall_floors" not in value:
             if "label_recall_floors" in value:
                 recall_value = {
                     "default": value.get("recall_floor", DEFAULT_RECALL_FLOOR),
@@ -756,25 +923,33 @@ class PrivacyPolicy:
             else:
                 recall_value = value.get("recall_floor")
 
-        actions = _action_mapping_from_payload(value.get("actions"))
+        actions, embedded_default = _action_mapping_from_payload(value.get("actions"))
         policy_label_actions = value.get("policy_label_actions")
         if policy_label_actions is not None:
-            if not isinstance(policy_label_actions, Mapping):
-                raise TypeError("policy_label_actions must be an object")
-            actions.update(dict(policy_label_actions))
-        default_action = value.get(
-            "default_action",
-            _embedded_default_action(value.get("actions")) or DEFAULT_ACTION,
+            policy_label_actions = _snapshot_mapping(
+                policy_label_actions,
+                "policy_label_actions",
+                maximum_items=MAX_POLICY_ACTIONS,
+            )
+            _merge_action_entries(actions, policy_label_actions, "actions")
+        if len(actions) > MAX_POLICY_ACTIONS:
+            raise ValueError("actions exceeds the supported item limit")
+        if "default_action" in value and embedded_default is not None:
+            raise ValueError("default_action uses conflicting aliases")
+        default_action = (
+            value["default_action"]
+            if "default_action" in value
+            else (embedded_default if embedded_default is not None else DEFAULT_ACTION)
         )
 
         surrogate = _legacy_surrogate(value)
-        audit = value.get("audit_retention")
-        if audit is None and "audit" in value:
-            audit = (
-                value["audit"]
-                if isinstance(value["audit"], Mapping)
-                else {"enabled": value["audit"]}
-            )
+        audit = _aliased_value(
+            value,
+            ("audit_retention", "audit"),
+            "audit_retention",
+        )
+        if "audit" in value and audit is not None:
+            audit = audit if isinstance(audit, Mapping) else {"enabled": audit}
 
         return cls(
             schema_version=schema_version,
@@ -791,10 +966,22 @@ class PrivacyPolicy:
     def from_json(cls, value: str | bytes) -> "PrivacyPolicy":
         """Parse a JSON object without accessing the network."""
 
+        if type(value) not in {str, bytes}:
+            raise TypeError("policy JSON must be text or bytes")
         try:
-            payload = json.loads(value)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise ValueError("invalid policy JSON") from exc
+            size = len(value.encode("utf-8") if type(value) is str else value)
+        except UnicodeError:
+            raise ValueError("invalid policy JSON") from None
+        if size > MAX_POLICY_JSON_BYTES:
+            raise ValueError("policy JSON exceeds the supported size limit")
+        try:
+            payload = json.loads(
+                value,
+                object_pairs_hook=_unique_json_object,
+                parse_constant=_reject_json_constant,
+            )
+        except (TypeError, ValueError, UnicodeError, RecursionError):
+            raise ValueError("invalid policy JSON") from None
         return cls.from_mapping(payload)
 
     def action_for(self, label: str) -> str:
@@ -815,7 +1002,10 @@ class PrivacyPolicy:
     def recall_floor_for(self, label: str, *, category: str | None = None) -> float:
         """Return the configured recall floor for a label."""
 
-        return self.recall_floors.floor_for(label, category=category)
+        return cast(RecallFloors, self.recall_floors).floor_for(
+            label,
+            category=category,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic, JSON-compatible policy data."""
@@ -823,12 +1013,18 @@ class PrivacyPolicy:
         return {
             "schema_version": self.schema_version,
             "name": self.name,
-            "jurisdiction": self.jurisdiction.to_dict(),
-            "recall_floors": self.recall_floors.to_dict(),
+            "jurisdiction": cast(Jurisdiction, self.jurisdiction).to_dict(),
+            "recall_floors": cast(RecallFloors, self.recall_floors).to_dict(),
             "default_action": self.default_action,
             "actions": dict(self.actions),
-            "surrogate_strategy": self.surrogate_strategy.to_dict(),
-            "audit_retention": self.audit_retention.to_dict(),
+            "surrogate_strategy": cast(
+                SurrogateStrategy,
+                self.surrogate_strategy,
+            ).to_dict(),
+            "audit_retention": cast(
+                AuditRetention,
+                self.audit_retention,
+            ).to_dict(),
         }
 
     def canonical_json(self) -> str:
@@ -883,6 +1079,17 @@ def default_policy_schema() -> PrivacyPolicy:
     return PrivacyPolicy()
 
 
+def _read_policy_json(path: Path) -> bytes:
+    try:
+        with path.open("rb") as handle:
+            payload = handle.read(MAX_POLICY_JSON_BYTES + 1)
+    except OSError:
+        raise ValueError("could not read a valid local policy JSON document") from None
+    if len(payload) > MAX_POLICY_JSON_BYTES:
+        raise ValueError("policy JSON exceeds the supported size limit")
+    return payload
+
+
 def load_policy_schema(source: Any = None) -> PrivacyPolicy:
     """Load a policy from a mapping, JSON text, or a local JSON path.
 
@@ -892,25 +1099,21 @@ def load_policy_schema(source: Any = None) -> PrivacyPolicy:
 
     if source is None:
         return default_policy_schema()
-    if isinstance(source, PrivacyPolicy):
+    if type(source) is PrivacyPolicy:
         return source
     if isinstance(source, Mapping):
         return PrivacyPolicy.from_mapping(source)
-    if isinstance(source, bytes):
+    if type(source) is bytes:
         return PrivacyPolicy.from_json(source)
-    if not isinstance(source, (str, Path)):
+    if type(source) is not str and not isinstance(source, Path):
         raise TypeError("policy source must be a mapping, JSON text, or local path")
 
-    if isinstance(source, str) and source.lstrip().startswith("{"):
+    if type(source) is str and source.lstrip().startswith(("{", "[")):
         return PrivacyPolicy.from_json(source)
     path_text = str(source)
     if "://" in path_text:
         raise ValueError("policy schema source must be local; URLs are unsupported")
-    try:
-        payload = json.loads(Path(source).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("could not read a valid local policy JSON document") from exc
-    return PrivacyPolicy.from_mapping(payload)
+    return PrivacyPolicy.from_json(_read_policy_json(Path(source)))
 
 
 def validate_policy_schema(source: Any) -> None:
@@ -924,8 +1127,8 @@ def lint_policy_schema(source: Any) -> tuple[str, ...]:
 
     try:
         validate_policy_schema(source)
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        return (str(exc),)
+    except Exception:
+        return ("policy schema is invalid",)
     return ()
 
 
@@ -941,6 +1144,10 @@ __all__ = [
     "DEFAULT_RECALL_FLOOR",
     "DEFAULT_SURROGATE_STRATEGY",
     "Jurisdiction",
+    "MAX_AUDIT_RETENTION_DAYS",
+    "MAX_POLICY_ACTIONS",
+    "MAX_POLICY_JSON_BYTES",
+    "MAX_POLICY_RECALL_OVERRIDES",
     "POLICY_SCHEMA_VERSION",
     "PolicyDefinition",
     "PolicySchema",

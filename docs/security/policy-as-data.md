@@ -82,6 +82,10 @@ print(policy.digest)  # stable sha256 digest of canonical policy data
 Loading accepts mappings, JSON text, and local paths only. It never fetches a
 URL or makes a mandatory network call. Canonical JSON sorts keys and uses
 finite numeric values, so equivalent policy objects have the same digest.
+JSON documents are capped at 1 MiB, action and per-label recall maps at 512
+entries each, and audit retention at 36,500 days. Duplicate JSON fields,
+conflicting legacy aliases, non-finite numbers, and oversized policy objects
+fail closed before a policy is constructed.
 
 Surrogate configuration may contain an operator-managed `key_ref`, such as an
 environment-variable or vault identifier, but never key material, seeds, raw

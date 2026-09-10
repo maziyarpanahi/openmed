@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a versioned, bounded privacy policy-as-data schema for jurisdiction,
+  recall floors, de-identification actions, surrogate strategy, and
+  privacy-safe audit retention, with deterministic local-only loading,
+  strict duplicate and alias handling, and value-free validation failures
+  (#2406).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
