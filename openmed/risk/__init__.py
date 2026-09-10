@@ -4,6 +4,8 @@ Intended contents include quasi-identifier detection, uniqueness/k-anonymity
 measurement, and adversarial re-identification analysis.
 """
 
+from typing import Any
+
 from .access_review import (
     ACCESS_MODES,
     ACCESS_REVIEW_SCHEMA_VERSION,
@@ -20,6 +22,17 @@ from .access_review import (
     render_access_review,
     review_access,
     review_structured_access,
+)
+from .aggregate_dp import (
+    AggregateDPBudgetLedger,
+    AggregateDPRelease,
+    DPAggregateBudgetExceeded,
+    DPBudgetComposition,
+    DPBudgetExhausted,
+    DPBudgetLedger,
+    DPBudgetSpend,
+    laplace_aggregate,
+    release_aggregate,
 )
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
@@ -59,6 +72,33 @@ from .dashboard import (
     write_release_assessment_dashboard,
     write_risk_dashboard,
 )
+from .differential_privacy import (
+    AggregateKind,
+    DifferentialPrivacy,
+    DPMechanism,
+    PrivacyBudget,
+    PrivacyBudgetExceeded,
+    PrivacyBudgetStatus,
+    PrivacySpend,
+    UtilityPoint,
+    UtilityReport,
+    gaussian_mechanism,
+    gaussian_noise,
+    gaussian_scale,
+    gaussian_stddev,
+    laplace_mechanism,
+    laplace_noise,
+    laplace_scale,
+    release_count,
+    release_histogram,
+    release_mean,
+    release_sum,
+    utility_report,
+    utility_vs_epsilon,
+)
+from .differential_privacy import (
+    release_aggregate as release_dp_aggregate,
+)
 from .k_anonymity import (
     EquivalenceClass,
     KAnonymityEngine,
@@ -76,7 +116,58 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
+from .l_diversity import (
+    DiversityClass,
+    LDiversityChecker,
+    LDiversityEngine,
+    LDiversityReport,
+    analyze_l_diversity,
+    check_l_diversity,
+    l_diversity_report,
+)
+from .longitudinal_mitigation import (
+    LONGITUDINAL_MITIGATION_SCHEMA_VERSION,
+    LongitudinalMitigationAction,
+    LongitudinalMitigationPolicy,
+    LongitudinalMitigationResult,
+    mitigate_longitudinal_linkage,
+)
+from .membership import (
+    MembershipSelfTestError,
+    MembershipSelfTestResult,
+    bounded_membership_inference_self_test,
+)
+from .membership import (
+    membership_inference_self_test as _bounded_membership_inference_self_test,
+)
+from .membership import (
+    run_membership_inference_self_test as _run_bounded_membership_inference_self_test,
+)
+from .membership_inference import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_BUDGET,
+    DEFAULT_RISKIEST_RECORD_COUNT,
+    MembershipInferenceReport,
+    MembershipInferenceResult,
+)
+from .membership_inference import (
+    membership_inference_self_test as _table_membership_inference_self_test,
+)
+from .membership_inference import (
+    run_membership_inference_self_test as _run_table_membership_inference_self_test,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
+from .qi_profiler import (
+    GeneralizationPlan,
+    QIColumnProfile,
+    QIGeneralization,
+    QIProfiler,
+    QIProfilerReport,
+    QuasiIdentifierProfiler,
+    apply_generalization_plan,
+    profile_qi,
+    profile_quasi_identifier_risk,
+    profile_quasi_identifiers,
+)
 from .reid import (
     LongitudinalCorpus,
     LongitudinalEvidence,
@@ -115,14 +206,44 @@ from .synthetic_tabular import (
     tabular_fidelity_report,
 )
 
+
+def membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
+    """Run the bounded-QI or table membership self-test.
+
+    Calls that declare ``quasi_identifiers`` retain the bounded exact-match
+    API. Other calls use the table attack-advantage API.
+    """
+
+    if "quasi_identifiers" in kwargs:
+        return _bounded_membership_inference_self_test(*args, **kwargs)
+    return _table_membership_inference_self_test(*args, **kwargs)
+
+
+def run_membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
+    """Compatibility dispatcher for both membership self-test APIs."""
+
+    if "quasi_identifiers" in kwargs:
+        return _run_bounded_membership_inference_self_test(*args, **kwargs)
+    return _run_table_membership_inference_self_test(*args, **kwargs)
+
+
 __all__ = [
     "ACCESS_MODES",
     "ACCESS_REVIEW_SCHEMA_VERSION",
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
+    "AggregateDPBudgetLedger",
+    "AggregateDPRelease",
+    "DPBudgetExhausted",
+    "DPBudgetComposition",
+    "DPBudgetLedger",
+    "DPBudgetSpend",
+    "DPAggregateBudgetExceeded",
+    "AggregateKind",
     "CompositionRule",
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_CORRELATION_TOLERANCE",
     "DEFAULT_MARGINAL_TOLERANCE",
+    "DEFAULT_MEMBERSHIP_ADVANTAGE_BUDGET",
     "DEFAULT_POLICY_BUDGETS",
     "DEFAULT_QI_WEIGHTS",
     "DEFAULT_RDP_ORDERS",
@@ -138,22 +259,42 @@ __all__ = [
     "DPSurrogateSensitivity",
     "DPSurrogateSensitivityRegistry",
     "DPSurrogateSpend",
+    "DiversityClass",
+    "DPMechanism",
     "EpsilonPolicy",
     "EXPORT_ACCESS",
     "GenerationSpend",
     "READ_ACCESS",
+    "DifferentialPrivacy",
     "ColumnDistribution",
     "EquivalenceClass",
+    "GeneralizationPlan",
     "KAnonymityEngine",
     "KAnonymityReport",
+    "QIColumnProfile",
+    "QIGeneralization",
+    "QIProfiler",
+    "QIProfilerReport",
+    "QuasiIdentifierProfiler",
+    "LDiversityChecker",
+    "LDiversityEngine",
+    "LDiversityReport",
     "RiskBudget",
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
     "RiskBudgetViolation",
     "LongitudinalCorpus",
     "LongitudinalEvidence",
+    "LongitudinalMitigationAction",
+    "LongitudinalMitigationPolicy",
+    "LongitudinalMitigationResult",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "LONGITUDINAL_MITIGATION_SCHEMA_VERSION",
+    "MembershipSelfTestError",
+    "MembershipSelfTestResult",
+    "MembershipInferenceReport",
+    "MembershipInferenceResult",
     "PopulationRiskAssessment",
     "SurrogateDrawKind",
     "SuppressionProposal",
@@ -165,24 +306,53 @@ __all__ = [
     "WorkflowAccessReview",
     "WorkflowRequirement",
     "access_review_report",
+    "DEFAULT_RISKIEST_RECORD_COUNT",
     "analyze_k_anonymity",
+    "analyze_l_diversity",
     "apply_suppression",
+    "apply_generalization_plan",
     "assess_population_risk",
     "budget_for_policy",
     "build_longitudinal_corpus",
     "build_access_review_report",
+    "bounded_membership_inference_self_test",
     "cross_modal_linkage_risk_report",
+    "check_l_diversity",
     "epsilon_policy_for",
     "evaluate_budget",
     "load_epsilon_policies",
+    "laplace_aggregate",
+    "membership_inference_self_test",
+    "PrivacyBudget",
+    "PrivacyBudgetExceeded",
+    "PrivacyBudgetStatus",
+    "PrivacySpend",
+    "UtilityPoint",
+    "UtilityReport",
+    "gaussian_mechanism",
+    "gaussian_noise",
+    "gaussian_scale",
+    "gaussian_stddev",
+    "laplace_mechanism",
+    "laplace_noise",
+    "laplace_scale",
+    "release_dp_aggregate",
+    "release_count",
+    "release_histogram",
+    "release_mean",
+    "release_sum",
     "fit_tabular_profile",
     "longitudinal_attack_fingerprint",
+    "mitigate_longitudinal_linkage",
     "longitudinal_risk_report",
+    "l_diversity_report",
+    "release_aggregate",
     "quasi_identifier_key",
     "quasi_identifier_key_bytes",
     "risk_report",
     "review_access",
     "review_structured_access",
+    "run_membership_inference_self_test",
     "sample_synthetic_table",
     "tabular_fidelity_report",
     "MemoryCeilingError",
@@ -192,6 +362,9 @@ __all__ = [
     "enforce_kanon",
     "kanon_report",
     "propose_suppression",
+    "profile_qi",
+    "profile_quasi_identifier_risk",
+    "profile_quasi_identifiers",
     "diff_audit_reports",
     "AuditDiff",
     "AnonymityPolicy",
@@ -212,4 +385,6 @@ __all__ = [
     "validate_released_output",
     "write_release_assessment_dashboard",
     "write_risk_dashboard",
+    "utility_report",
+    "utility_vs_epsilon",
 ]

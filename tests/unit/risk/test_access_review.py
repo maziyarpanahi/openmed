@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import pytest
 
 from openmed.risk import (
+    AccessModeReview,
     AccessReviewReport,
     AccessReviewValidationError,
+    WorkflowAccessReview,
     WorkflowRequirement,
     render_access_review,
     review_structured_access,
@@ -138,3 +141,118 @@ def test_public_report_payload_contains_no_mapping_metadata() -> None:
     payload = report.to_dict()
     assert payload["resource_fields"] == ["patient_id"]
     assert "RAW-PATIENT-DESCRIPTION" not in json.dumps(payload)
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, TypeError])
+def test_iterator_errors_are_value_free_and_unchained(error_type: type[Exception]):
+    secret = "RAW-SYNTHETIC-PATIENT"
+
+    class ExplodingFields:
+        def __iter__(self):
+            raise error_type(secret)
+
+    with pytest.raises(AccessReviewValidationError) as exc_info:
+        review_structured_access(
+            {"triage": ExplodingFields()},
+            ["patient_id"],
+        )
+
+    assert str(exc_info.value) == "structured access review declarations are invalid"
+    assert exc_info.value.__cause__ is None
+    assert secret not in str(exc_info.value)
+
+
+def test_schema_attribute_errors_are_value_free_and_unchained():
+    secret = "RAW-SYNTHETIC-PATIENT"
+
+    class ExplodingSchema:
+        @property
+        def fields(self):
+            raise RuntimeError(secret)
+
+    with pytest.raises(AccessReviewValidationError) as exc_info:
+        review_structured_access({"triage": ["patient_id"]}, ExplodingSchema())
+
+    assert str(exc_info.value) == "structured access review declarations are invalid"
+    assert exc_info.value.__cause__ is None
+    assert secret not in str(exc_info.value)
+
+
+def test_field_and_workflow_iterables_are_bounded():
+    with pytest.raises(AccessReviewValidationError):
+        review_structured_access(
+            {"triage": itertools.repeat("patient_id")},
+            ["patient_id"],
+        )
+
+    requirement = WorkflowRequirement("triage", read_fields=["patient_id"])
+    with pytest.raises(AccessReviewValidationError):
+        review_structured_access(
+            itertools.repeat(requirement),
+            ["patient_id"],
+        )
+
+
+@pytest.mark.parametrize(
+    ("workflows", "denied_fields"),
+    [
+        (
+            {"read": ["patient_id"], "read_fields": ["diagnosis"]},
+            (),
+        ),
+        (
+            {"triage": {"read": ["patient_id"], "unexpected": ["diagnosis"]}},
+            (),
+        ),
+        (
+            {"triage": {"read": ["patient_id"]}},
+            {"read": ["diagnosis"], "unexpected": ["patient_id"]},
+        ),
+    ],
+)
+def test_ambiguous_or_unknown_policy_fields_are_rejected(workflows, denied_fields):
+    with pytest.raises(AccessReviewValidationError):
+        review_structured_access(
+            workflows,
+            ["patient_id", "diagnosis"],
+            denied_fields=denied_fields,
+        )
+
+
+def test_public_report_types_reject_contradictory_findings():
+    with pytest.raises(AccessReviewValidationError):
+        AccessModeReview(
+            mode="read",
+            requested_fields=("patient_id",),
+            available_fields=("patient_id",),
+            allowed_fields=("diagnosis",),
+            missing_fields=(),
+            excessive_fields=(),
+            denied_fields=(),
+        )
+
+    read = AccessModeReview(
+        mode="read",
+        requested_fields=("patient_id",),
+        available_fields=("patient_id",),
+        allowed_fields=("patient_id",),
+        missing_fields=(),
+        excessive_fields=(),
+        denied_fields=(),
+    )
+    export = AccessModeReview(
+        mode="export",
+        requested_fields=(),
+        available_fields=("patient_id",),
+        allowed_fields=(),
+        missing_fields=(),
+        excessive_fields=("patient_id",),
+        denied_fields=(),
+    )
+    workflow = WorkflowAccessReview("triage", read=read, export=export)
+
+    with pytest.raises(AccessReviewValidationError):
+        AccessReviewReport(
+            resource_fields=("diagnosis",),
+            workflows=(workflow,),
+        )

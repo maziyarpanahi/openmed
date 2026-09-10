@@ -19,7 +19,7 @@ import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 
 ACCESS_REVIEW_SCHEMA_VERSION = 1
 READ_ACCESS = "read"
@@ -28,6 +28,12 @@ ACCESS_MODES = (READ_ACCESS, EXPORT_ACCESS)
 _DEFAULT_WORKFLOW_NAME = "default"
 _MISSING = object()
 _SAFE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_.:-]{0,127}\Z")
+_MAX_FIELDS = 4_096
+_MAX_WORKFLOWS = 128
+_MODE_DECLARATION_KEYS = frozenset(
+    {READ_ACCESS, EXPORT_ACCESS, "read_fields", "export_fields", "name", "workflow"}
+)
+_DENY_POLICY_KEYS = frozenset({READ_ACCESS, EXPORT_ACCESS, "all"})
 
 FieldCollection: TypeAlias = Iterable[str] | Mapping[str, Any] | str | None
 ResourceSchema: TypeAlias = Mapping[str, Any] | Iterable[str]
@@ -73,12 +79,25 @@ def _identifier(value: Any, *, kind: str) -> str:
     and echoing it in an exception would defeat the report's privacy boundary.
     """
 
-    if not isinstance(value, str) or _SAFE_IDENTIFIER.fullmatch(value) is None:
-        value_type = type(value).__name__
-        raise _validation_error(
-            f"{kind} must be a safe structural identifier ({value_type})"
-        )
+    if type(value) is not str or _SAFE_IDENTIFIER.fullmatch(value) is None:
+        raise _validation_error(f"{kind} must be a safe structural identifier")
     return value
+
+
+def _bounded_tuple(values: Iterable[Any], *, limit: int, kind: str) -> tuple[Any, ...]:
+    """Materialize a caller iterable without retaining an unbounded input."""
+
+    items: list[Any] = []
+    try:
+        for item in values:
+            if len(items) >= limit:
+                raise _validation_error(f"{kind} exceeds the supported count")
+            items.append(item)
+    except (AccessReviewValidationError, MemoryError):
+        raise
+    except Exception:
+        raise _validation_error(f"{kind} could not be read safely") from None
+    return tuple(items)
 
 
 def _field_tuple(value: FieldCollection, *, kind: str) -> tuple[str, ...]:
@@ -86,23 +105,23 @@ def _field_tuple(value: FieldCollection, *, kind: str) -> tuple[str, ...]:
 
     if value is None:
         return ()
-    if isinstance(value, str):
-        candidates: Iterable[Any] = (value,)
-    elif isinstance(value, Mapping):
-        # A mapping is a convenient schema/field declaration. Its values may
-        # contain examples or defaults and are intentionally never traversed.
-        candidates = value.keys()
-    else:
-        try:
+    try:
+        if isinstance(value, str):
+            candidates: Iterable[Any] = (value,)
+        elif isinstance(value, Mapping):
+            # A mapping is a convenient schema/field declaration. Its values may
+            # contain examples or defaults and are intentionally never traversed.
+            candidates = value.keys()
+        else:
             candidates = iter(value)
-        except TypeError as exc:
-            raise _validation_error(
-                f"{kind} must be an iterable of field names"
-            ) from exc
-
-    fields: set[str] = set()
-    for item in candidates:
-        fields.add(_identifier(item, kind="field name"))
+        fields = {
+            _identifier(item, kind="field name")
+            for item in _bounded_tuple(candidates, limit=_MAX_FIELDS, kind=kind)
+        }
+    except (AccessReviewValidationError, MemoryError):
+        raise
+    except Exception:
+        raise _validation_error(f"{kind} could not be read safely") from None
     return tuple(sorted(fields))
 
 
@@ -129,7 +148,10 @@ def _resource_fields(resource_schema: ResourceSchema) -> tuple[str, ...]:
     for attribute in ("fields", "columns", "names"):
         candidate = getattr(resource_schema, attribute, _MISSING)
         if candidate is not _MISSING:
-            return _field_tuple(candidate, kind="resource schema fields")
+            return _field_tuple(
+                cast(FieldCollection, candidate),
+                kind="resource schema fields",
+            )
 
     return _field_tuple(resource_schema, kind="resource schema fields")
 
@@ -139,6 +161,8 @@ def _mode_fields(declaration: Mapping[str, Any], mode: str) -> FieldCollection:
 
     short_key = mode
     long_key = f"{mode}_fields"
+    if short_key in declaration and long_key in declaration:
+        raise _validation_error("workflow access mode is declared more than once")
     if short_key in declaration:
         return declaration[short_key]
     if long_key in declaration:
@@ -175,9 +199,9 @@ class WorkflowRequirement:
         """Return the declared fields for ``read`` or ``export``."""
 
         if mode == READ_ACCESS:
-            return self.read_fields
+            return cast(tuple[str, ...], self.read_fields)
         if mode == EXPORT_ACCESS:
-            return self.export_fields
+            return cast(tuple[str, ...], self.export_fields)
         raise _validation_error("access mode is unsupported")
 
     def to_dict(self) -> dict[str, Any]:
@@ -185,8 +209,8 @@ class WorkflowRequirement:
 
         return {
             "workflow": self.name,
-            "read_fields": list(self.read_fields),
-            "export_fields": list(self.export_fields),
+            "read_fields": list(cast(tuple[str, ...], self.read_fields)),
+            "export_fields": list(cast(tuple[str, ...], self.export_fields)),
         }
 
 
@@ -203,7 +227,7 @@ class AccessModeReview:
     denied_fields: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if self.mode not in ACCESS_MODES:
+        if type(self.mode) is not str or self.mode not in ACCESS_MODES:
             raise _validation_error("access mode is unsupported")
         for attribute in (
             "requested_fields",
@@ -221,6 +245,20 @@ class AccessModeReview:
                     kind=f"{self.mode} review fields",
                 ),
             )
+        requested = set(self.requested_fields)
+        available = set(self.available_fields)
+        allowed = set(self.allowed_fields)
+        missing = set(self.missing_fields)
+        excessive = set(self.excessive_fields)
+        denied = set(self.denied_fields)
+        if denied - requested:
+            raise _validation_error("denied fields must be requested")
+        if missing != requested - available:
+            raise _validation_error("missing fields do not match the declaration")
+        if excessive != available - requested:
+            raise _validation_error("excessive fields do not match the declaration")
+        if allowed != (requested & available) - denied:
+            raise _validation_error("allowed fields do not match the declaration")
 
     @property
     def complete(self) -> bool:
@@ -259,6 +297,8 @@ class WorkflowAccessReview:
             raise _validation_error("workflow review modes must be access mode reviews")
         if self.read.mode != READ_ACCESS or self.export.mode != EXPORT_ACCESS:
             raise _validation_error("workflow review modes are in the wrong order")
+        if self.read.available_fields != self.export.available_fields:
+            raise _validation_error("workflow review modes use different schemas")
 
     @property
     def modes(self) -> tuple[AccessModeReview, AccessModeReview]:
@@ -328,15 +368,29 @@ class AccessReviewReport:
             "policy_denied_fields",
             _field_tuple(self.policy_denied_fields, kind="denied fields"),
         )
-        if not isinstance(self.workflows, Iterable) or isinstance(
-            self.workflows, (str, bytes, Mapping)
-        ):
+        if isinstance(self.workflows, (str, bytes, Mapping)):
             raise _validation_error("workflows must be an iterable of workflow reviews")
-        workflows = tuple(self.workflows)
+        try:
+            workflows = _bounded_tuple(
+                self.workflows,
+                limit=_MAX_WORKFLOWS,
+                kind="workflow reviews",
+            )
+        except TypeError:
+            raise _validation_error(
+                "workflows must be an iterable of workflow reviews"
+            ) from None
         if not all(isinstance(item, WorkflowAccessReview) for item in workflows):
             raise _validation_error("workflows must contain workflow reviews")
         if len({item.workflow for item in workflows}) != len(workflows):
             raise _validation_error("workflow names must be unique")
+        resource_fields = self.resource_fields
+        denied_fields = set(self.policy_denied_fields)
+        for workflow in workflows:
+            if workflow.read.available_fields != resource_fields:
+                raise _validation_error("workflow review schema does not match report")
+            if set(workflow.denied_fields) - denied_fields:
+                raise _validation_error("workflow denial is absent from report policy")
         object.__setattr__(
             self,
             "workflows",
@@ -495,7 +549,7 @@ def _union_fields(groups: Iterable[Iterable[str]]) -> tuple[str, ...]:
 
 def _markdown_fields(fields: Sequence[str]) -> str:
     if not fields:
-        return "—"
+        return "-"
     return ", ".join(f"`{field}`" for field in fields)
 
 
@@ -511,6 +565,15 @@ def _requirement_from_declaration(
     if isinstance(declaration, Mapping):
         mode_keys = {READ_ACCESS, EXPORT_ACCESS, "read_fields", "export_fields"}
         if mode_keys.intersection(declaration):
+            declaration_keys = set(
+                _bounded_tuple(
+                    declaration.keys(),
+                    limit=len(_MODE_DECLARATION_KEYS),
+                    kind="workflow declaration fields",
+                )
+            )
+            if declaration_keys - _MODE_DECLARATION_KEYS:
+                raise _validation_error("workflow declaration contains unknown fields")
             return WorkflowRequirement(
                 name,
                 _mode_fields(declaration, READ_ACCESS),
@@ -530,7 +593,12 @@ def _normalize_workflows(
         return (declarations,)
 
     if isinstance(declarations, Mapping):
-        keys = set(declarations)
+        declaration_items = _bounded_tuple(
+            declarations.items(),
+            limit=_MAX_WORKFLOWS,
+            kind="workflow declarations",
+        )
+        keys = {key for key, _ in declaration_items}
         if keys and keys <= {
             READ_ACCESS,
             EXPORT_ACCESS,
@@ -539,25 +607,40 @@ def _normalize_workflows(
         }:
             declarations = {_DEFAULT_WORKFLOW_NAME: declarations}
         elif {"name", "workflow"}.intersection(keys):
+            if "name" in declarations and "workflow" in declarations:
+                raise _validation_error("workflow declaration has multiple names")
+            if not keys.intersection(
+                {READ_ACCESS, EXPORT_ACCESS, "read_fields", "export_fields"}
+            ):
+                raise _validation_error("workflow declaration requires an access mode")
             name = declarations.get("name", declarations.get("workflow", _MISSING))
             if name is _MISSING:
                 raise _validation_error("workflow declaration requires a name")
-            declarations = {str(name): declarations}
+            declarations = {_workflow_name(name): declarations}
 
     if isinstance(declarations, Mapping):
+        declaration_items = _bounded_tuple(
+            declarations.items(),
+            limit=_MAX_WORKFLOWS,
+            kind="workflow declarations",
+        )
         workflows = tuple(
             _requirement_from_declaration(_workflow_name(name), declaration)
-            for name, declaration in declarations.items()
+            for name, declaration in declaration_items
         )
     else:
         if isinstance(declarations, (str, bytes)):
             declarations = (declarations,)
         try:
-            items = tuple(declarations)
-        except TypeError as exc:
+            items = _bounded_tuple(
+                declarations,
+                limit=_MAX_WORKFLOWS,
+                kind="workflow requirements",
+            )
+        except TypeError:
             raise _validation_error(
                 "workflow requirements must be a mapping or iterable"
-            ) from exc
+            ) from None
 
         normalized: list[WorkflowRequirement] = []
         for index, item in enumerate(items):
@@ -569,6 +652,10 @@ def _normalize_workflows(
                 if name is _MISSING:
                     raise _validation_error(
                         f"workflow declaration at position {index} requires a name"
+                    )
+                if "name" in item and "workflow" in item:
+                    raise _validation_error(
+                        f"workflow declaration at position {index} has multiple names"
                     )
                 normalized.append(
                     _requirement_from_declaration(_workflow_name(name), item)
@@ -596,6 +683,15 @@ def _normalize_denied_fields(
     mode_keys = {READ_ACCESS, EXPORT_ACCESS, "all"}
     if not mode_keys.intersection(denied_fields):
         return _field_tuple(denied_fields, kind="denied fields"), {}
+    policy_keys = set(
+        _bounded_tuple(
+            denied_fields.keys(),
+            limit=len(_DENY_POLICY_KEYS),
+            kind="deny policy fields",
+        )
+    )
+    if policy_keys - _DENY_POLICY_KEYS:
+        raise _validation_error("deny policy contains unknown fields")
 
     global_fields = _field_tuple(denied_fields.get("all"), kind="denied fields")
     by_mode = {
@@ -635,6 +731,26 @@ def review_structured_access(
     performed.
     """
 
+    try:
+        return _build_access_review(
+            workflow_requirements,
+            resource_schema,
+            denied_fields=denied_fields,
+        )
+    except MemoryError:
+        raise
+    except Exception:
+        raise _validation_error(
+            "structured access review declarations are invalid"
+        ) from None
+
+
+def _build_access_review(
+    workflow_requirements: Mapping[str, Any] | Sequence[Any] | WorkflowRequirement,
+    resource_schema: ResourceSchema,
+    *,
+    denied_fields: FieldCollection | Mapping[str, Any],
+) -> AccessReviewReport:
     resource_fields = _resource_fields(resource_schema)
     global_denied, mode_denied = _normalize_denied_fields(denied_fields)
     normalized_workflows = _normalize_workflows(workflow_requirements)
