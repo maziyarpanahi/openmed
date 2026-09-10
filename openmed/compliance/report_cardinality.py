@@ -151,7 +151,15 @@ class _CardinalityEvaluator:
     def evaluate(self, report: Any) -> ReportCardinalityReport:
         """Evaluate *report* without retaining any of its values."""
 
-        self._walk(report, "$", 0)
+        try:
+            self._walk(report, "$", 0)
+        except Exception:
+            self._add_violation(
+                path="$",
+                rule="unsupported_shape",
+                count=1,
+                limit=0,
+            )
         violations = tuple(
             sorted(
                 self._violations,
@@ -224,8 +232,55 @@ class _CardinalityEvaluator:
             return
 
         try:
-            pairs = list(value.items())
+            item_count = len(value)
         except Exception:
+            self._add_violation(
+                path=path,
+                rule="unsupported_shape",
+                count=1,
+                limit=0,
+            )
+            return
+
+        if item_count > self._budget.max_items_per_field:
+            self._begin_container(
+                path=path,
+                depth=depth,
+                item_count=item_count,
+                unique_key_count=item_count,
+            )
+            return
+
+        pairs: list[tuple[Any, Any]] = []
+        try:
+            for position, pair in enumerate(value.items()):
+                if position >= item_count or not isinstance(pair, tuple):
+                    self._add_violation(
+                        path=path,
+                        rule="unsupported_shape",
+                        count=1,
+                        limit=0,
+                    )
+                    return
+                if len(pair) != 2:
+                    self._add_violation(
+                        path=path,
+                        rule="unsupported_shape",
+                        count=1,
+                        limit=0,
+                    )
+                    return
+                pairs.append(pair)
+        except Exception:
+            self._add_violation(
+                path=path,
+                rule="unsupported_shape",
+                count=1,
+                limit=0,
+            )
+            return
+
+        if len(pairs) != item_count:
             self._add_violation(
                 path=path,
                 rule="unsupported_shape",
@@ -244,7 +299,17 @@ class _CardinalityEvaluator:
             )
             return
 
-        unique_key_count = len({key for key, _ in pairs})
+        try:
+            unique_key_count = len({key for key, _ in pairs})
+            sorted_pairs = sorted(pairs, key=lambda pair: pair[0])
+        except Exception:
+            self._add_violation(
+                path=path,
+                rule="unsupported_shape",
+                count=1,
+                limit=0,
+            )
+            return
         if not self._begin_container(
             path=path,
             depth=depth,
@@ -255,10 +320,18 @@ class _CardinalityEvaluator:
 
         self._active_containers.add(container_id)
         try:
-            for key, item in sorted(pairs, key=lambda pair: pair[0]):
-                self._walk(item, _append_field(path, key), depth + 1)
-                if self._stopped:
-                    return
+            try:
+                for key, item in sorted_pairs:
+                    self._walk(item, _append_field(path, key), depth + 1)
+                    if self._stopped:
+                        return
+            except Exception:
+                self._add_violation(
+                    path=path,
+                    rule="unsupported_shape",
+                    count=1,
+                    limit=0,
+                )
         finally:
             self._active_containers.remove(container_id)
 
@@ -291,10 +364,18 @@ class _CardinalityEvaluator:
 
         self._active_containers.add(container_id)
         try:
-            for item in value:
-                self._walk(item, _append_item(path), depth + 1)
-                if self._stopped:
-                    return
+            try:
+                for item in value:
+                    self._walk(item, _append_item(path), depth + 1)
+                    if self._stopped:
+                        return
+            except Exception:
+                self._add_violation(
+                    path=path,
+                    rule="unsupported_shape",
+                    count=1,
+                    limit=0,
+                )
         finally:
             self._active_containers.remove(container_id)
 

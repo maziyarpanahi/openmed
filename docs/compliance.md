@@ -40,6 +40,9 @@ issue, and without including real patient data.
 - [Pan-African Malabo Convention baseline](compliance/africa-malabo-baseline.md)
   maps Article 14(1) sensitive-data categories to conservative, non-`keep`
   canonical-label actions while preserving national-law precedence.
+- [Privacy report cardinality budgets](compliance/report-cardinality.md)
+  bound typed report containers and emit only safe paths and counts when a
+  report exceeds its local budget.
 
 ## Deployment Templates
 

@@ -233,6 +233,7 @@ nav:
       - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Offline Artifact Inventory: interop/artifact-inventory.md
       - Compliance Posture: compliance.md
+      - Privacy Report Cardinality Budgets: compliance/report-cardinality.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md

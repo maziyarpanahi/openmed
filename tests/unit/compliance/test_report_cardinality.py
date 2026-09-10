@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
 
 import pytest
 
@@ -12,6 +13,25 @@ from openmed.compliance import (
 )
 
 SENSITIVE_VALUE = "synthetic-sensitive-value"
+
+
+class _OversizedMapping(Mapping[str, object]):
+    def __getitem__(self, key: str) -> object:
+        return SENSITIVE_VALUE
+
+    def __iter__(self) -> Iterator[str]:
+        raise AssertionError("oversized mappings must not be enumerated")
+
+    def __len__(self) -> int:
+        return 3
+
+    def items(self):
+        raise AssertionError("oversized mappings must not materialize items")
+
+
+class _MalformedSequence(list[object]):
+    def __iter__(self) -> Iterator[object]:
+        raise RuntimeError(SENSITIVE_VALUE)
 
 
 def test_typed_report_within_budget_is_deterministic() -> None:
@@ -153,3 +173,21 @@ def test_budget_rejects_boolean_and_negative_limits() -> None:
         ReportCardinalityBudget(max_items_per_field=True)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="non-negative integer"):
         ReportCardinalityBudget(max_unique_keys=-1)
+
+
+def test_oversized_and_malformed_containers_fail_closed_without_values() -> None:
+    oversized_result = check_report_cardinality(
+        _OversizedMapping(),
+        ReportCardinalityBudget(max_items_per_field=2),  # type: ignore[arg-type]
+    )
+    malformed_result = check_report_cardinality(_MalformedSequence([1]))
+
+    assert any(
+        violation.rule == "items_per_field" for violation in oversized_result.violations
+    )
+    assert any(
+        violation.rule == "unsupported_shape"
+        for violation in malformed_result.violations
+    )
+    serialized = oversized_result.to_json() + malformed_result.to_json()
+    assert SENSITIVE_VALUE not in serialized
