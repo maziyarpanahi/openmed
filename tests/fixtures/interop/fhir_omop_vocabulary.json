@@ -1,0 +1,28 @@
+{
+  "http://snomed.info/sct|73211009": {
+    "concept_id": 201826,
+    "source_concept_id": 9001001,
+    "source_concept_name": "Synthetic SNOMED source condition",
+    "source_vocabulary_id": "SNOMED",
+    "target_vocabulary_id": "SNOMED",
+    "target_concept_name": "Diabetes mellitus",
+    "standard_concept": "S",
+    "target_concept_code": "73211009"
+  },
+  "http://loinc.org|4548-4": {
+    "concept_id": 3004410,
+    "source_vocabulary_id": "LOINC",
+    "target_vocabulary_id": "LOINC",
+    "target_concept_name": "Hemoglobin A1c",
+    "standard_concept": "S",
+    "target_concept_code": "4548-4"
+  },
+  "http://www.nlm.nih.gov/research/umls/rxnorm|860975": {
+    "concept_id": 1511248,
+    "source_vocabulary_id": "RxNorm",
+    "target_vocabulary_id": "RxNorm",
+    "target_concept_name": "Synthetic aspirin tablet",
+    "standard_concept": "S",
+    "target_concept_code": "860975"
+  }
+}

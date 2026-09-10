@@ -9,10 +9,12 @@ from .audit_chain import (
     append_to_chain_file,
     verify_chain,
 )
-from .budget import BudgetExceededError, RequestBudget, coerce_budget
+from .budget import RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
+    ConfigValidationError,
     OpenMedConfig,
+    config_schema_path,
     delete_profile,
     get_profile,
     list_profiles,
@@ -20,6 +22,20 @@ from .config import (
     save_profile,
 )
 from .custom_recognizer import CustomRecognizer
+from .errors import (
+    ERROR_CODES,
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    ModelLoadError,
+    OpenMedError,
+    PolicyError,
+    redact_detail,
+)
 from .hf_hub import (
     CachedModel,
     clear_cached_model,
@@ -35,6 +51,7 @@ from .indic_name_match import (
     detect_name_script,
     indic_names_match,
 )
+from .key_lifecycle import KeyLifecycle, KeyMetadata
 from .language_pack import (
     LANGUAGE_PACK_REGISTRY,
     LanguagePack,
@@ -57,6 +74,20 @@ from .language_router import (
     LanguageRouter,
     LanguageRun,
     PyCLD2LanguageIdentifier,
+)
+from .model_cache_policy import (
+    CACHE_POLICY_MANIFEST,
+    CACHE_POLICY_SCHEMA,
+    CacheArtifact,
+    CacheIntegrityError,
+    CacheOwnershipError,
+    EvictionCandidate,
+    EvictionPlan,
+    EvictionResult,
+    ModelCachePolicy,
+    ModelCachePolicyError,
+    sha256_path,
+    verify_artifact_checksum,
 )
 from .model_integrity import ModelIntegrityError
 from .model_search import ModelQuery, ModelSearchResult, search_models
@@ -119,20 +150,43 @@ from .surrogate_vault import (
     VaultConsistencyReport,
     VaultRotationResult,
 )
+from .telemetry import (
+    PipelineTelemetry,
+    StageTelemetry,
+    otel_available,
+    safe_stage_attributes,
+    telemetry_enabled_from_env,
+)
 
 __all__ = [
     "ModelLoader",
     "ModelIntegrityError",
+    "ModelCachePolicy",
+    "ModelCachePolicyError",
+    "CacheArtifact",
+    "CacheIntegrityError",
+    "CacheOwnershipError",
+    "EvictionCandidate",
+    "EvictionPlan",
+    "EvictionResult",
+    "CACHE_POLICY_MANIFEST",
+    "CACHE_POLICY_SCHEMA",
+    "sha256_path",
+    "verify_artifact_checksum",
     "load_model",
     "ModelQuery",
     "ModelSearchResult",
     "search_models",
     "OpenMedConfig",
+    "ConfigValidationError",
+    "config_schema_path",
     "CustomRecognizer",
     "AuditReport",
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "KeyLifecycle",
+    "KeyMetadata",
     "AuditChain",
     "AuditChainEntry",
     "AuditChainSpan",
@@ -203,7 +257,6 @@ __all__ = [
     "segment_by_script",
     "OfflineModeError",
     "RequestBudget",
-    "BudgetExceededError",
     "coerce_budget",
     "prefetch_model",
     "list_cached_models",
@@ -228,4 +281,21 @@ __all__ = [
     "DocumentLanguageDecision",
     "LanguageRouter",
     "PyCLD2LanguageIdentifier",
+    "ERROR_CODES",
+    "OpenMedError",
+    "InputError",
+    "ConfigurationError",
+    "CapabilityError",
+    "MissingExtraError",
+    "ModelLoadError",
+    "PolicyError",
+    "BudgetExceededError",
+    "InternalError",
+    "InferenceError",
+    "redact_detail",
+    "PipelineTelemetry",
+    "StageTelemetry",
+    "otel_available",
+    "safe_stage_attributes",
+    "telemetry_enabled_from_env",
 ]
