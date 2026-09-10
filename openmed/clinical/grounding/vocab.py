@@ -27,6 +27,8 @@ from xml.etree import ElementTree
 
 from openmed.core.offline import is_local_only, raise_offline_error
 
+from .systems import canonical_system, system_uri
+
 FREE_VOCAB_SYSTEMS = ("rxnorm", "icd10cm", "loinc", "hpo", "mesh")
 RESTRICTED_VOCAB_SYSTEMS = ("umls", "snomed")
 DEFAULT_CACHE_DIR = Path("~/.cache/openmed/grounding")
@@ -101,6 +103,7 @@ class VocabSource:
         archive_member: Optional archive member to extract from a zip file.
         artifact_name: Cached filename for non-archive downloads.
         license_note: Human-readable provenance and redistribution note.
+        version: Optional release/version label for the snapshot.
     """
 
     system: str
@@ -111,6 +114,69 @@ class VocabSource:
     archive_member: str | None = None
     artifact_name: str = "concepts.tsv"
     license_note: str = ""
+    version: str | None = None
+
+
+@dataclass(frozen=True)
+class SnapshotManifest:
+    """Immutable metadata for one locally imported terminology snapshot."""
+
+    system: str
+    version: str
+    artifact: str
+    sha256: str
+    system_uri: str
+    format: str
+    license_note: str = ""
+
+    def __post_init__(self) -> None:
+        normalized = canonical_system(self.system)
+        if normalized not in FREE_VOCAB_SYSTEMS:
+            raise ValueError("snapshot manifests are limited to free vocabularies")
+        if not self.version.strip():
+            raise ValueError("snapshot version must not be blank")
+        if not self.artifact.strip():
+            raise ValueError("snapshot artifact must not be blank")
+        if not _CHECKSUM_RE.fullmatch(self.sha256.removeprefix("sha256:")):
+            raise VocabularyChecksumError(
+                f"Invalid snapshot SHA-256 checksum for {self.artifact!r}."
+            )
+        object.__setattr__(self, "system", normalized)
+        object.__setattr__(self, "sha256", _digest_label(self.sha256))
+        object.__setattr__(self, "system_uri", system_uri(normalized) or "")
+
+    def to_dict(self) -> dict[str, str]:
+        """Return deterministic JSON metadata without source content."""
+
+        return {
+            "artifact": self.artifact,
+            "format": self.format,
+            "license_note": self.license_note,
+            "sha256": self.sha256,
+            "system": self.system,
+            "system_uri": self.system_uri,
+            "version": self.version,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "SnapshotManifest":
+        """Parse and validate a manifest mapping."""
+
+        required = ("system", "version", "artifact", "sha256", "format")
+        missing = [key for key in required if not payload.get(key)]
+        if missing:
+            raise VocabularyChecksumError(
+                "snapshot manifest is missing required fields: " + ", ".join(missing)
+            )
+        return cls(
+            system=str(payload["system"]),
+            version=str(payload["version"]),
+            artifact=str(payload["artifact"]),
+            sha256=str(payload["sha256"]),
+            system_uri=str(payload.get("system_uri") or ""),
+            format=str(payload["format"]),
+            license_note=str(payload.get("license_note") or ""),
+        )
 
 
 @dataclass(frozen=True)
@@ -436,10 +502,176 @@ class VocabLoader:
         self._indexes[normalized] = index
         return index
 
+    def import_snapshot(
+        self,
+        system: str,
+        path: str | Path,
+        *,
+        version: str,
+        sha256: str | None = None,
+        license_note: str = "",
+        replace: bool = False,
+    ) -> SnapshotManifest:
+        """Import and checksum-pin a local free-vocabulary snapshot.
+
+        The source is copied into the loader cache and paired with a small
+        deterministic manifest. Import never opens a network connection and
+        never stores caller credentials or source-note content.
+        """
+
+        normalized = _normalize_system(system)
+        source_path = Path(path).expanduser()
+        data_path = _resolve_local_source(normalized, source_path, sha256)
+        actual_sha256 = _file_sha256(data_path)
+        expected = _digest_label(sha256) if sha256 is not None else actual_sha256
+        if expected != actual_sha256:
+            raise VocabularyChecksumError(
+                f"Checksum mismatch for {data_path}: expected {expected}, "
+                f"got {actual_sha256}."
+            )
+
+        cache_root = self.cache_dir / normalized
+        cache_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = cache_root / "manifest.json"
+        if manifest_path.exists() and not replace:
+            raise VocabLoaderError(
+                f"A {normalized!r} snapshot is already imported; pass replace=True."
+            )
+
+        artifact_name = f"concepts{data_path.suffix.lower()}"
+        destination = cache_root / artifact_name
+        shutil.copy2(data_path, destination)
+        manifest = SnapshotManifest(
+            system=normalized,
+            version=version,
+            artifact=artifact_name,
+            sha256=actual_sha256,
+            system_uri=system_uri(normalized) or "",
+            format=data_path.suffix.lower().lstrip(".") or "text",
+            license_note=license_note,
+        )
+        _write_manifest(manifest_path, manifest)
+        self._indexes.pop(normalized, None)
+        return manifest
+
+    def download_snapshot(self, system: str) -> SnapshotManifest:
+        """Download, verify, materialize, and manifest one configured snapshot."""
+
+        normalized = _normalize_system(system)
+        source = self.registry.get(normalized)
+        if source is None:
+            raise VocabularyNotFoundError(
+                f"No free vocabulary source is registered for {normalized!r}."
+            )
+        if self.local_only or is_local_only():
+            raise_offline_error(f"vocabulary download for {normalized}")
+        if source.url is None:
+            raise VocabularyNotFoundError(
+                f"No download URL is configured for {normalized!r}."
+            )
+        expected_sha256 = source.sha256 or _fetch_checksum(source.checksum_url)
+        if not expected_sha256:
+            raise VocabularyChecksumError(
+                f"Refusing to download {normalized!r} without a SHA-256 checksum."
+            )
+        cache_root = self.cache_dir / normalized
+        cache_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=f"openmed-{normalized}-") as tmp:
+            download_path = Path(tmp) / (
+                source.artifact_name or f"{normalized}.download"
+            )
+            self.downloader(source.url, download_path, self.timeout)
+            _verify_sha256(download_path, expected_sha256)
+            data_path = _materialize_artifact(
+                normalized, download_path, cache_root, source
+            )
+        manifest = SnapshotManifest(
+            system=normalized,
+            version=source.version or _digest_label(expected_sha256),
+            artifact=_artifact_name(cache_root, data_path),
+            sha256=_file_sha256(data_path),
+            system_uri=system_uri(normalized) or "",
+            format=data_path.suffix.lower().lstrip(".") or "text",
+            license_note=source.license_note,
+        )
+        _write_manifest(cache_root / "manifest.json", manifest)
+        self._indexes.pop(normalized, None)
+        return manifest
+
+    def snapshot_manifest(self, system: str) -> SnapshotManifest:
+        """Return the verified manifest for a loaded local snapshot."""
+
+        normalized = _normalize_system(system)
+        source = self.registry.get(normalized)
+        data_path = self._resolve_data_path(normalized, source)
+        manifest = _read_manifest(data_path.parent / "manifest.json")
+        if manifest is not None:
+            if manifest.system != normalized:
+                raise VocabularyChecksumError(
+                    f"Snapshot manifest system does not match {normalized!r}."
+                )
+            _verify_sha256(data_path, manifest.sha256)
+            return manifest
+
+        digest = _file_sha256(data_path)
+        return SnapshotManifest(
+            system=normalized,
+            version=(source.version if source is not None else None)
+            or _digest_label(digest),
+            artifact=data_path.name,
+            sha256=digest,
+            system_uri=system_uri(normalized) or "",
+            format=data_path.suffix.lower().lstrip(".") or "text",
+            license_note=source.license_note if source is not None else "",
+        )
+
+    def snapshot_provenance(self, systems: Sequence[str]) -> dict[str, dict[str, str]]:
+        """Return stable, PHI-free provenance for requested snapshots."""
+
+        result: dict[str, dict[str, str]] = {}
+        for system in systems:
+            normalized = _normalize_system(system)
+            index = self.get_index(normalized)
+            manifest = self.snapshot_manifest(normalized)
+            result[normalized] = {
+                "system": normalized,
+                "system_uri": manifest.system_uri,
+                "version": manifest.version,
+                "sha256": manifest.sha256,
+                "content_hash": index.content_hash,
+                "artifact": manifest.artifact,
+            }
+        return result
+
+    def list_snapshots(self) -> tuple[SnapshotManifest, ...]:
+        """List imported snapshots in deterministic system order."""
+
+        manifests: list[SnapshotManifest] = []
+        for system in sorted(self.registry):
+            manifest_path = self.cache_dir / system / "manifest.json"
+            manifest = _read_manifest(manifest_path)
+            if manifest is not None:
+                manifests.append(manifest)
+        return tuple(manifests)
+
     def _resolve_data_path(self, system: str, source: VocabSource) -> Path:
         cache_root = self.cache_dir / system
+        manifest = _read_manifest(cache_root / "manifest.json")
+        if manifest is not None:
+            data_path = (cache_root / manifest.artifact).resolve()
+            if not data_path.is_file() or not data_path.is_relative_to(
+                cache_root.resolve()
+            ):
+                raise VocabularyChecksumError(
+                    f"Snapshot artifact for {system!r} is missing or unsafe."
+                )
+            _verify_sha256(data_path, manifest.sha256)
+            return data_path
+
         cached = _find_index_file(cache_root, system)
         if cached is not None:
+            if source.sha256 is not None:
+                _verify_sha256(cached, source.sha256)
             return cached
 
         if source.path is not None:
@@ -471,7 +703,18 @@ class VocabLoader:
             download_path = Path(tmp) / (source.artifact_name or f"{system}.download")
             self.downloader(source.url, download_path, self.timeout)
             _verify_sha256(download_path, expected_sha256)
-            return _materialize_artifact(system, download_path, cache_root, source)
+            data_path = _materialize_artifact(system, download_path, cache_root, source)
+            manifest = SnapshotManifest(
+                system=system,
+                version=source.version or _digest_label(expected_sha256),
+                artifact=_artifact_name(cache_root, data_path),
+                sha256=_file_sha256(data_path),
+                system_uri=system_uri(system) or "",
+                format=data_path.suffix.lower().lstrip(".") or "text",
+                license_note=source.license_note,
+            )
+            _write_manifest(cache_root / "manifest.json", manifest)
+            return data_path
 
 
 def get_index(
@@ -576,7 +819,7 @@ def _fetch_checksum(url: str | None) -> str | None:
 
 
 def _verify_sha256(path: Path, expected_sha256: str) -> None:
-    expected = expected_sha256.strip().lower()
+    expected = expected_sha256.strip().lower().removeprefix("sha256:")
     if not _CHECKSUM_RE.fullmatch(expected):
         raise VocabularyChecksumError(
             f"Invalid SHA-256 checksum for {path}: {expected_sha256!r}"
@@ -591,6 +834,65 @@ def _verify_sha256(path: Path, expected_sha256: str) -> None:
         raise VocabularyChecksumError(
             f"Checksum mismatch for {path}: expected {expected}, got {actual}."
         )
+
+
+def _file_sha256(path: Path) -> str:
+    """Return a content digest in the manifest's stable labeled form."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return _digest_label(digest.hexdigest())
+
+
+def _artifact_name(root: Path, path: Path) -> str:
+    """Return a safe manifest-relative artifact path."""
+
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise VocabularyChecksumError(
+            f"Snapshot artifact {path.name!r} is outside its cache directory."
+        ) from exc
+    return relative.as_posix()
+
+
+def _digest_label(value: str) -> str:
+    """Normalize a bare or labeled SHA-256 digest."""
+
+    digest = value.strip().lower().removeprefix("sha256:")
+    if not _CHECKSUM_RE.fullmatch(digest):
+        raise VocabularyChecksumError(f"Invalid SHA-256 checksum: {value!r}")
+    return f"sha256:{digest}"
+
+
+def _read_manifest(path: Path) -> SnapshotManifest | None:
+    """Read a manifest if present, rejecting malformed metadata."""
+
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise VocabularyChecksumError(
+            f"Unable to read snapshot manifest {path.name!r}."
+        ) from exc
+    if not isinstance(payload, Mapping):
+        raise VocabularyChecksumError("snapshot manifest must contain an object")
+    return SnapshotManifest.from_dict(payload)
+
+
+def _write_manifest(path: Path, manifest: SnapshotManifest) -> None:
+    """Write a canonical manifest atomically."""
+
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(
+        json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
 
 
 def _materialize_artifact(

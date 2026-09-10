@@ -3,11 +3,33 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any
 
-from openmed.risk import check_idempotence
+import pytest
+
+from openmed.risk import (
+    IdempotenceDifference,
+    IdempotenceInputError,
+    RedactionEvent,
+    ShapeNode,
+    check_idempotence,
+)
 
 _POLICY = "sha256:" + "a" * 64
+
+
+class _ExplodingMapping(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise RuntimeError("synthetic-sensitive-exception")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("synthetic-sensitive-exception")
+
+    def __len__(self) -> int:
+        return 1
 
 
 def _fhir_pass(*, surrogate: str, action: str = "replace") -> dict[str, object]:
@@ -221,3 +243,100 @@ def test_unknown_action_and_policy_metadata_are_fingerprinted() -> None:
     assert "synthetic-private-policy-name" not in serialized
     assert "synthetic-private-action" not in serialized
     assert "synthetic-surrogate-a" not in serialized
+
+
+def test_scalar_change_without_event_metadata_is_not_idempotent() -> None:
+    first_value = "synthetic-private-first-value"
+    second_value = "synthetic-private-second-value"
+
+    report = check_idempotence(
+        {"resource": {"patient_name": first_value}},
+        {"resource": {"patient_name": second_value}},
+    )
+    serialized = report.to_json()
+
+    assert report.is_idempotent is False
+    assert report.surrogates_match is False
+    assert any(item.path.startswith("$.key:") for item in report.differences)
+    assert first_value not in serialized
+    assert second_value not in serialized
+    assert "patient_name" not in serialized
+
+
+def test_cycles_depth_and_hostile_mappings_fail_with_sanitized_errors() -> None:
+    cyclic: list[object] = []
+    cyclic.append(cyclic)
+    with pytest.raises(IdempotenceInputError):
+        check_idempotence(cyclic, [])
+
+    nested: object = None
+    for _ in range(70):
+        nested = [nested]
+    with pytest.raises(IdempotenceInputError):
+        check_idempotence(nested, [])
+
+    with pytest.raises(IdempotenceInputError) as error:
+        check_idempotence(_ExplodingMapping(), {})
+    assert "synthetic-sensitive-exception" not in str(error.value)
+
+
+def test_duplicate_json_keys_and_nonfinite_values_are_rejected(
+    tmp_path: Path,
+) -> None:
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text(
+        '{"resource":{"id":"synthetic-a","id":"synthetic-b"}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(IdempotenceInputError):
+        check_idempotence(duplicate, duplicate)
+
+    nonfinite = tmp_path / "nonfinite.json"
+    nonfinite.write_text('{"resource":{"value":NaN}}', encoding="utf-8")
+    with pytest.raises(IdempotenceInputError):
+        check_idempotence(nonfinite, nonfinite)
+
+
+def test_ambiguous_resource_and_metadata_aliases_are_rejected() -> None:
+    with pytest.raises(IdempotenceInputError):
+        check_idempotence(
+            {"resource": {"id": "synthetic-a"}, "data": {"id": "synthetic-b"}},
+            {"resource": {"id": "synthetic-a"}},
+        )
+
+    ambiguous_event = {
+        "resource": {"id": "synthetic-a"},
+        "report": {
+            "redactions": [
+                {
+                    "path": "$.id",
+                    "action": "replace",
+                    "operation": "remove",
+                }
+            ]
+        },
+    }
+    with pytest.raises(IdempotenceInputError):
+        check_idempotence(ambiguous_event, ambiguous_event)
+
+
+def test_public_evidence_objects_reject_raw_values() -> None:
+    with pytest.raises(ValueError):
+        RedactionEvent(path="$.synthetic_private_name")
+    with pytest.raises(ValueError):
+        ShapeNode(path="$", kind="object", keys=("synthetic_private_name",))
+    with pytest.raises(ValueError):
+        IdempotenceDifference(
+            dimension="surrogate",
+            path="$.id",
+            before="synthetic-private-first-value",
+            after="synthetic-private-second-value",
+            classification="changed",
+        )
+
+    report = check_idempotence({"resource": {}}, {"resource": {}})
+    with pytest.raises(ValueError):
+        replace(
+            report.first_pass,
+            shape_fingerprint="sha256:synthetic-private-shape",
+        )

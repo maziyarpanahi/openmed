@@ -40,16 +40,27 @@ assert result.is_idempotent
 The result compares nested shape, aggregate counts, action counts and paths,
 surrogate fingerprints, and global or event-level policy fingerprints. A
 non-idempotent result exposes `non_idempotent_paths` and structured
-differences grouped by dimension.
+differences grouped by dimension. Scalar changes are detected even when neither
+pass includes redaction-event metadata.
+
+## Bounded inputs
+
+The checker rejects cyclic values, ambiguous wrapper or metadata aliases,
+duplicate JSON object keys, non-finite numbers, and unsupported scalar types.
+It also applies fixed limits to file size, nesting depth, container size, total
+nodes, text and key lengths, metadata sources, and redaction events. Rejections
+raise `IdempotenceInputError` with a closed error message that does not include
+input values or exceptions raised by custom containers.
 
 ## Privacy properties
 
 Reports include schema paths, scalar kinds, array lengths, counts, safe action
 names, and SHA-256 fingerprints only. Source values, replacement values, and
-unknown action or policy names are not copied into JSON, Markdown, `repr`, or
-exceptions. Surrogate fingerprints are equality evidence, not a claim of
-cryptographic anonymization. The checker accepts only in-memory or local JSON
-inputs and makes no mandatory network call.
+unknown schema keys, action names, or policy names are not copied into JSON,
+Markdown, `repr`, or exceptions. Unknown keys and identifiers are represented
+by SHA-256 fingerprints. Surrogate fingerprints are equality evidence, not a
+claim of cryptographic anonymization. The checker accepts only in-memory or
+local JSON inputs and makes no mandatory network call.
 
 Fixtures for FHIR-shaped resources and OMOP-shaped tables should remain
 synthetic and offline. The checker does not validate clinical semantics or

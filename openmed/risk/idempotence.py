@@ -17,11 +17,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Integral, Real
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, Protocol, TypeAlias, cast
 
 IDEMPOTENCE_SCHEMA_VERSION = 1
 
-IdempotenceInput: TypeAlias = Mapping[str, Any] | str | Path | Any
+
+class StructuredRedactionResult(Protocol):
+    """Structural input contract for object-backed redaction results."""
+
+    resource: Any
+    report: Any
+
+
+IdempotenceInput: TypeAlias = (
+    Mapping[str, Any] | Sequence[Any] | str | Path | StructuredRedactionResult
+)
 ChangeDimension: TypeAlias = Literal[
     "shape",
     "count",
@@ -33,6 +43,17 @@ ChangeClassification: TypeAlias = Literal["added", "removed", "changed"]
 
 _DIGEST_RE = re.compile(r"^(?:sha256|hmac-sha256):[0-9a-f]{64}$")
 _PATH_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z_-]{0,63}$")
+_MAX_FILE_BYTES = 16 * 1024 * 1024
+_MAX_TOTAL_NODES = 100_000
+_MAX_CONTAINER_ITEMS = 20_000
+_MAX_DEPTH = 64
+_MAX_TEXT_CHARS = 1_000_000
+_MAX_KEY_CHARS = 512
+_MAX_PATH_CHARS = 4_096
+_MAX_EVENTS = 4_096
+_MAX_METADATA_SOURCES = 256
+_MAX_COUNT = 2**63 - 1
+_MAX_INT_BITS = 4_096
 _SAFE_ACTIONS = frozenset(
     {
         "drop",
@@ -89,6 +110,7 @@ _COUNT_FIELDS = frozenset(
         "processed",
         "redacted",
         "redacted_count",
+        "redaction_events",
         "redacted_value_count",
         "redaction_count",
         "removed",
@@ -152,7 +174,51 @@ _DIRECT_COUNT_KEYS = _COUNT_FIELDS | {
     "redacted_values",
     "removed_fields",
 }
+_SAFE_SCHEMA_KEYS = frozenset(
+    {
+        "resourceType",
+        "entry",
+        "fullUrl",
+        "resource",
+        "id",
+        "meta",
+        "name",
+        "text",
+        "data",
+        "output",
+        "result",
+        "redacted",
+        "tables",
+        "person",
+        "person_id",
+        "gender_concept_id",
+        "visit_occurrence",
+        "visit_concept_id",
+        "component",
+        "value",
+        "payload",
+        "report",
+        "metadata",
+        "summary",
+        "counts",
+        "actions",
+        "redactions",
+        "path",
+        "action",
+        "surrogate",
+        "policy_fingerprint",
+        *_WRAPPER_KEYS,
+        *_COUNT_FIELDS,
+        *_EVENT_CONTAINERS,
+        *_SURROGATE_CONTAINERS,
+        *_METADATA_CONTAINERS,
+    }
+)
 _MISSING = object()
+
+
+class IdempotenceInputError(ValueError):
+    """Raised when structured redaction evidence cannot be checked safely."""
 
 
 @dataclass(frozen=True)
@@ -163,6 +229,29 @@ class ShapeNode:
     kind: str
     keys: tuple[str, ...] = ()
     length: int | None = None
+
+    def __post_init__(self) -> None:
+        if not _is_safe_path(self.path):
+            raise ValueError("shape path is invalid")
+        if self.kind not in {"object", "array", "string", "number", "boolean", "null"}:
+            raise ValueError("shape kind is invalid")
+        if not isinstance(self.keys, tuple) or any(
+            not _is_safe_key_value(key) for key in self.keys
+        ):
+            raise ValueError("shape keys are invalid")
+        if self.keys != tuple(sorted(set(self.keys))):
+            raise ValueError("shape keys must be sorted and unique")
+        if self.kind == "array":
+            if (
+                isinstance(self.length, bool)
+                or not isinstance(self.length, int)
+                or not 0 <= self.length <= _MAX_CONTAINER_ITEMS
+            ):
+                raise ValueError("array length is invalid")
+        elif self.length is not None:
+            raise ValueError("only array nodes may have a length")
+        if self.kind != "object" and self.keys:
+            raise ValueError("only object nodes may have keys")
 
     def to_dict(self) -> dict[str, Any]:
         """Return the node without exposing its scalar value."""
@@ -189,6 +278,18 @@ class RedactionEvent:
     surrogate_fingerprint: str | None = None
     policy_fingerprint: str | None = None
 
+    def __post_init__(self) -> None:
+        if not _is_safe_path(self.path, allow_span=True):
+            raise ValueError("redaction event path is invalid")
+        if self.action is not None and not _is_safe_action_value(self.action):
+            raise ValueError("redaction action is invalid")
+        for fingerprint in (
+            self.surrogate_fingerprint,
+            self.policy_fingerprint,
+        ):
+            if fingerprint is not None and _DIGEST_RE.fullmatch(fingerprint) is None:
+                raise ValueError("redaction fingerprint is invalid")
+
     def to_dict(self) -> dict[str, Any]:
         """Return safe event metadata suitable for an audit artifact."""
 
@@ -210,6 +311,29 @@ class RedactionPassSummary:
     counts: tuple[tuple[str, int], ...]
     events: tuple[RedactionEvent, ...]
     policy_fingerprint: str | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.shape, tuple) or len(self.shape) > _MAX_TOTAL_NODES:
+            raise ValueError("shape snapshot is invalid")
+        if any(not isinstance(node, ShapeNode) for node in self.shape):
+            raise TypeError("shape snapshot must contain ShapeNode values")
+        if _DIGEST_RE.fullmatch(self.shape_fingerprint) is None:
+            raise ValueError("shape fingerprint is invalid")
+        if self.shape_fingerprint != _shape_fingerprint(self.shape):
+            raise ValueError("shape fingerprint does not match the snapshot")
+        _validate_count_pairs(self.action_counts, action=True)
+        _validate_count_pairs(self.counts, action=False)
+        if not isinstance(self.events, tuple) or len(self.events) > _MAX_EVENTS:
+            raise ValueError("redaction events are invalid")
+        if any(not isinstance(event, RedactionEvent) for event in self.events):
+            raise TypeError("events must contain RedactionEvent values")
+        if self.events != tuple(sorted(set(self.events), key=_event_sort_key)):
+            raise ValueError("events must be sorted and unique")
+        if (
+            self.policy_fingerprint is not None
+            and _DIGEST_RE.fullmatch(self.policy_fingerprint) is None
+        ):
+            raise ValueError("policy fingerprint is invalid")
 
     @property
     def shape_node_count(self) -> int:
@@ -253,6 +377,31 @@ class IdempotenceDifference:
     after: Any
     classification: ChangeClassification
 
+    def __post_init__(self) -> None:
+        if self.dimension not in {
+            "shape",
+            "count",
+            "action",
+            "surrogate",
+            "policy_fingerprint",
+        }:
+            raise ValueError("difference dimension is invalid")
+        if self.classification not in {"added", "removed", "changed"}:
+            raise ValueError("difference classification is invalid")
+        if not _is_safe_difference_path(self.path, self.dimension):
+            raise ValueError("difference path is invalid")
+        _validate_difference_evidence(self.before, self.dimension)
+        _validate_difference_evidence(self.after, self.dimension)
+        expected = (
+            "added"
+            if self.before is None
+            else "removed"
+            if self.after is None
+            else "changed"
+        )
+        if self.classification != expected:
+            raise ValueError("difference classification is inconsistent")
+
     def to_dict(self) -> dict[str, Any]:
         """Return the difference without source or replacement values."""
 
@@ -272,6 +421,24 @@ class IdempotenceReport:
     first_pass: RedactionPassSummary
     second_pass: RedactionPassSummary
     differences: tuple[IdempotenceDifference, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.first_pass, RedactionPassSummary) or not isinstance(
+            self.second_pass, RedactionPassSummary
+        ):
+            raise TypeError("idempotence passes must be pass summaries")
+        if not isinstance(self.differences, tuple) or len(self.differences) > (
+            _MAX_TOTAL_NODES + _MAX_EVENTS * 3
+        ):
+            raise ValueError("idempotence differences are invalid")
+        if any(
+            not isinstance(difference, IdempotenceDifference)
+            for difference in self.differences
+        ):
+            raise TypeError("differences must contain IdempotenceDifference values")
+        expected = _sorted_unique_differences(self.differences)
+        if self.differences != expected:
+            raise ValueError("differences must be sorted and unique")
 
     @property
     def is_idempotent(self) -> bool:
@@ -409,12 +576,35 @@ def check_idempotence(
     values in the returned report.
     """
 
-    first = _snapshot(first_pass)
-    second = _snapshot(second_pass)
+    try:
+        return _check_idempotence(first_pass, second_pass)
+    except MemoryError:
+        raise
+    except IdempotenceInputError:
+        raise
+    except Exception:
+        raise IdempotenceInputError("structured redaction input is invalid") from None
+
+
+def _check_idempotence(
+    first_pass: IdempotenceInput,
+    second_pass: IdempotenceInput,
+) -> IdempotenceReport:
+    first_resource, first_metadata = _coerce_pass(first_pass)
+    second_resource, second_metadata = _coerce_pass(second_pass)
+    first = _snapshot(first_resource, first_metadata)
+    second = _snapshot(second_resource, second_metadata)
+    differences = list(_compare_snapshots(first, second))
+    known = {(item.dimension, item.path) for item in differences}
+    differences.extend(
+        item
+        for item in _compare_scalar_values(first_resource, second_resource)
+        if (item.dimension, item.path) not in known
+    )
     return IdempotenceReport(
         first_pass=first,
         second_pass=second,
-        differences=_compare_snapshots(first, second),
+        differences=_sorted_unique_differences(differences),
     )
 
 
@@ -436,8 +626,7 @@ def compare_structured_redaction(
     return check_idempotence(first_pass, second_pass)
 
 
-def _snapshot(value: IdempotenceInput) -> RedactionPassSummary:
-    resource, metadata = _coerce_pass(value)
+def _snapshot(resource: Any, metadata: Any) -> RedactionPassSummary:
     shape = _shape(resource)
     sources = _metadata_sources(metadata)
     policy_fingerprint = _extract_policy_fingerprint(sources)
@@ -471,8 +660,7 @@ def _coerce_pass(value: IdempotenceInput) -> tuple[Any, Any]:
         return _read_json_path(path)
 
     if isinstance(value, (list, tuple)):
-        _validate_tree(value)
-        return value, {}
+        return _copy_json_tree(value), {}
 
     if isinstance(value, Mapping):
         return _coerce_mapping(value)
@@ -482,8 +670,8 @@ def _coerce_pass(value: IdempotenceInput) -> tuple[Any, Any]:
         metadata = _attribute(value, ("report", "audit_report", "metadata"))
         if metadata is _MISSING:
             metadata = _call_to_dict(value)
-        _validate_tree(resource)
-        return resource, metadata if metadata is not _MISSING else {}
+        resource = _copy_json_tree(resource)
+        return resource, _normalize_metadata(metadata)
 
     payload = _call_to_dict(value)
     if isinstance(payload, Mapping):
@@ -494,17 +682,21 @@ def _coerce_pass(value: IdempotenceInput) -> tuple[Any, Any]:
 
 
 def _coerce_mapping(value: Mapping[Any, Any]) -> tuple[Any, Any]:
-    payload = dict(value)
+    payload = _copy_json_tree(value)
+    if not isinstance(payload, dict):
+        raise IdempotenceInputError("redaction pass must contain an object")
     metadata = payload
-    resource_key = next(
-        (
-            key
-            for key in ("resource", "data", "output", "redacted", "result")
-            if key in payload
-            and (len(payload) > 1 or key != "resource" or "resourceType" not in payload)
-        ),
-        None,
-    )
+    resource_keys = [
+        key
+        for key in ("resource", "data", "output", "redacted", "result")
+        if key in payload
+        and (len(payload) > 1 or key != "resource" or "resourceType" not in payload)
+    ]
+    if len(resource_keys) > 1:
+        raise IdempotenceInputError(
+            "redaction pass contains ambiguous resource aliases"
+        )
+    resource_key = resource_keys[0] if resource_keys else None
     if resource_key is not None:
         resource = payload[resource_key]
     elif any(key in payload for key in _WRAPPER_KEYS) and not _looks_like_resource(
@@ -517,17 +709,22 @@ def _coerce_mapping(value: Mapping[Any, Any]) -> tuple[Any, Any]:
     else:
         resource = payload
         metadata = {}
-    _validate_tree(resource)
     return resource, metadata
 
 
 def _read_json_path(path: Path) -> tuple[Any, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        raise ValueError("could not read structured redaction JSON") from None
+        payload = _load_json_file(path)
+    except IdempotenceInputError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        raise IdempotenceInputError(
+            "could not read structured redaction JSON"
+        ) from None
     if not isinstance(payload, (Mapping, list, tuple)):
-        raise ValueError("structured redaction JSON must contain an object or array")
+        raise IdempotenceInputError(
+            "structured redaction JSON must contain an object or array"
+        )
     return _coerce_pass(payload)
 
 
@@ -539,7 +736,7 @@ def _attribute(value: Any, names: Sequence[str]) -> Any:
     for name in names:
         try:
             candidate = getattr(value, name)
-        except Exception:
+        except AttributeError:
             continue
         if candidate is not None and not callable(candidate):
             return candidate
@@ -549,12 +746,12 @@ def _attribute(value: Any, names: Sequence[str]) -> Any:
 def _call_to_dict(value: Any) -> Any:
     try:
         method = getattr(value, "to_dict", None)
-        if callable(method):
-            result = method()
-            if isinstance(result, Mapping):
-                return result
-    except Exception:
+    except AttributeError:
         return _MISSING
+    if callable(method):
+        result = method()
+        if isinstance(result, Mapping):
+            return result
     return _MISSING
 
 
@@ -586,6 +783,183 @@ def _validate_tree(value: Any, *, seen: set[int] | None = None) -> None:
     if isinstance(value, float) and math.isfinite(value):
         return
     raise TypeError("structured redaction result must contain JSON-compatible values")
+
+
+def _normalize_metadata(value: Any) -> Mapping[str, Any]:
+    if value is _MISSING or value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        value = _call_to_dict(value)
+    if not isinstance(value, Mapping):
+        raise IdempotenceInputError("redaction report metadata must be a mapping")
+    normalized = _copy_json_tree(value)
+    if not isinstance(normalized, dict):
+        raise IdempotenceInputError("redaction report metadata must be a mapping")
+    return normalized
+
+
+def _load_json_file(path: Path) -> Any:
+    if len(str(path)) > _MAX_PATH_CHARS:
+        raise IdempotenceInputError(
+            "structured redaction path exceeds the length limit"
+        )
+    if not path.is_file() or path.stat().st_size > _MAX_FILE_BYTES:
+        raise IdempotenceInputError("structured redaction JSON is not a bounded file")
+    with path.open("r", encoding="utf-8") as handle:
+        source = handle.read(_MAX_FILE_BYTES + 1)
+    if len(source.encode("utf-8")) > _MAX_FILE_BYTES:
+        raise IdempotenceInputError("structured redaction JSON exceeds the size limit")
+    return json.loads(
+        source,
+        object_pairs_hook=_json_object,
+        parse_constant=_reject_json_constant,
+    )
+
+
+def _json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise IdempotenceInputError("structured redaction JSON has duplicate keys")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> Any:
+    raise IdempotenceInputError("structured redaction JSON contains a non-finite value")
+
+
+def _bounded_iterable(value: Any, *, limit: int, label: str) -> list[Any]:
+    try:
+        iterator = iter(value)
+    except MemoryError:
+        raise
+    except Exception:
+        raise IdempotenceInputError(f"{label} is invalid") from None
+    result: list[Any] = []
+    for _ in range(limit + 1):
+        try:
+            result.append(next(iterator))
+        except StopIteration:
+            return result
+        except MemoryError:
+            raise
+        except Exception:
+            raise IdempotenceInputError(f"{label} is invalid") from None
+    raise IdempotenceInputError(f"{label} exceeds the item limit")
+
+
+def _bounded_mapping_items(
+    value: Mapping[Any, Any],
+    *,
+    label: str,
+) -> list[tuple[Any, Any]]:
+    try:
+        raw_items = value.items()
+    except MemoryError:
+        raise
+    except Exception:
+        raise IdempotenceInputError(f"{label} is invalid") from None
+    items = _bounded_iterable(
+        raw_items,
+        limit=_MAX_CONTAINER_ITEMS,
+        label=label,
+    )
+    if not all(isinstance(item, tuple) and len(item) == 2 for item in items):
+        raise IdempotenceInputError(f"{label} is invalid")
+    return cast(list[tuple[Any, Any]], items)
+
+
+def _copy_json_tree(
+    value: Any,
+    *,
+    depth: int = 0,
+    budget: list[int] | None = None,
+    seen: set[int] | None = None,
+) -> Any:
+    if depth > _MAX_DEPTH:
+        raise IdempotenceInputError(
+            "structured redaction result exceeds the depth limit"
+        )
+    if budget is None:
+        budget = [_MAX_TOTAL_NODES]
+    if seen is None:
+        seen = set()
+    budget[0] -= 1
+    if budget[0] < 0:
+        raise IdempotenceInputError(
+            "structured redaction result exceeds the node limit"
+        )
+
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value.bit_length() > _MAX_INT_BITS:
+            raise IdempotenceInputError(
+                "structured redaction integer exceeds the size limit"
+            )
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise IdempotenceInputError(
+                "structured redaction result has a non-finite value"
+            )
+        return value
+    if isinstance(value, str):
+        if len(value) > _MAX_TEXT_CHARS:
+            raise IdempotenceInputError(
+                "structured redaction text exceeds the size limit"
+            )
+        return value
+
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in seen:
+            raise IdempotenceInputError("structured redaction result must be acyclic")
+        seen.add(marker)
+        result: dict[str, Any] = {}
+        for key, child in _bounded_mapping_items(value, label="structured object"):
+            if not isinstance(key, str) or len(key) > _MAX_KEY_CHARS:
+                raise IdempotenceInputError("structured object keys are invalid")
+            if key in result:
+                raise IdempotenceInputError("structured object keys must be unique")
+            result[key] = _copy_json_tree(
+                child,
+                depth=depth + 1,
+                budget=budget,
+                seen=seen,
+            )
+        seen.remove(marker)
+        return result
+
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    ):
+        marker = id(value)
+        if marker in seen:
+            raise IdempotenceInputError("structured redaction result must be acyclic")
+        seen.add(marker)
+        children = _bounded_iterable(
+            value,
+            limit=_MAX_CONTAINER_ITEMS,
+            label="structured array",
+        )
+        array_result = [
+            _copy_json_tree(
+                child,
+                depth=depth + 1,
+                budget=budget,
+                seen=seen,
+            )
+            for child in children
+        ]
+        seen.remove(marker)
+        return array_result
+
+    raise IdempotenceInputError(
+        "structured redaction result must contain JSON-compatible values"
+    )
 
 
 def _shape(value: Any) -> tuple[ShapeNode, ...]:
@@ -632,6 +1006,8 @@ def _metadata_sources(metadata: Any) -> tuple[Mapping[Any, Any], ...]:
     seen: set[int] = set()
     queue: list[Mapping[Any, Any]] = [root]
     while queue:
+        if len(sources) >= _MAX_METADATA_SOURCES:
+            raise IdempotenceInputError("redaction metadata exceeds the source limit")
         current = queue.pop(0)
         marker = id(current)
         if marker in seen:
@@ -654,15 +1030,15 @@ def _as_mapping(value: Any) -> Mapping[Any, Any] | None:
 
 def _extract_policy_fingerprint(sources: Sequence[Mapping[Any, Any]]) -> str | None:
     for source in sources:
-        for key in ("policy_fingerprint", "policy_hash"):
-            if key in source:
-                fingerprint = _fingerprint(source[key])
-                if fingerprint is not None:
-                    return fingerprint
+        value = _first_value(source, ("policy_fingerprint", "policy_hash"))
+        if value is not _MISSING:
+            fingerprint = _fingerprint(value)
+            if fingerprint is not None:
+                return fingerprint
     for source in sources:
-        for key in ("policy", "policy_name", "policy_profile"):
-            if key in source and source[key] is not None:
-                return _fingerprint(source[key])
+        value = _first_value(source, ("policy", "policy_name", "policy_profile"))
+        if value is not _MISSING and value is not None:
+            return _fingerprint(value)
     return None
 
 
@@ -677,6 +1053,8 @@ def _extract_counts(sources: Sequence[Mapping[Any, Any]]) -> dict[str, int]:
             key = str(raw_key).strip().lower()
             if key in _DIRECT_COUNT_KEYS and not isinstance(value, Mapping):
                 counts[_safe_count_key(key)] = _as_count(value)
+            if len(counts) > _MAX_CONTAINER_ITEMS:
+                raise IdempotenceInputError("redaction counts exceed the item limit")
     return counts
 
 
@@ -720,6 +1098,8 @@ def _extract_action_counts(sources: Sequence[Mapping[Any, Any]]) -> dict[str, in
             parsed = _numeric_action_mapping(actions)
             if parsed:
                 counts.update(parsed)
+        if len(counts) > _MAX_CONTAINER_ITEMS:
+            raise IdempotenceInputError("redaction action counts exceed the item limit")
     return counts
 
 
@@ -838,7 +1218,8 @@ def _events_from_path_mapping(
                 surrogate_fingerprint=fingerprint,
                 policy_fingerprint=global_policy,
             )
-        events.append(event)
+        if event is not None:
+            events.append(event)
 
 
 def _event_from_mapping(
@@ -898,6 +1279,8 @@ def _event_from_mapping(
 
 
 def _coalesce_events(events: Sequence[RedactionEvent]) -> tuple[RedactionEvent, ...]:
+    if len(events) > _MAX_EVENTS:
+        raise IdempotenceInputError("redaction events exceed the item limit")
     merged: list[RedactionEvent] = []
     for event in events:
         match_index = next(
@@ -949,6 +1332,37 @@ def _action_counts_from_events(events: Sequence[RedactionEvent]) -> dict[str, in
         if event.action is not None:
             counts[event.action] = counts.get(event.action, 0) + 1
     return counts
+
+
+def _compare_scalar_values(
+    first: Any,
+    second: Any,
+    path: tuple[str | int, ...] = (),
+) -> list[IdempotenceDifference]:
+    if isinstance(first, Mapping) and isinstance(second, Mapping):
+        differences: list[IdempotenceDifference] = []
+        for key in sorted(set(first).intersection(second), key=_safe_key):
+            differences.extend(
+                _compare_scalar_values(first[key], second[key], path + (key,))
+            )
+        return differences
+    if isinstance(first, list) and isinstance(second, list):
+        differences = []
+        for index, (left, right) in enumerate(zip(first, second)):
+            differences.extend(_compare_scalar_values(left, right, path + (index,)))
+        return differences
+    if isinstance(first, (Mapping, list)) or isinstance(second, (Mapping, list)):
+        return []
+    if _canonical_json(first) == _canonical_json(second):
+        return []
+    return [
+        _difference(
+            "surrogate",
+            _render_path(path),
+            "first_pass_value",
+            "second_pass_value",
+        )
+    ]
 
 
 def _compare_snapshots(
@@ -1033,43 +1447,48 @@ def _compare_events(
         left = first_by_path.get(path, ())
         right = second_by_path.get(path, ())
         if not left or not right:
-            before = [event.to_dict() for event in left] or None
-            after = [event.to_dict() for event in right] or None
-            differences.append(_difference("action", path, before, after))
+            before_events = [event.to_dict() for event in left] or None
+            after_events = [event.to_dict() for event in right] or None
+            differences.append(_difference("action", path, before_events, after_events))
             continue
         for index in range(max(len(left), len(right))):
-            before = left[index] if index < len(left) else None
-            after = right[index] if index < len(right) else None
-            if before is None or after is None:
+            before_event = left[index] if index < len(left) else None
+            after_event = right[index] if index < len(right) else None
+            if before_event is None or after_event is None:
                 differences.append(
                     _difference(
                         "action",
                         path,
-                        before.to_dict() if before else None,
-                        after.to_dict() if after else None,
+                        before_event.to_dict() if before_event else None,
+                        after_event.to_dict() if after_event else None,
                     )
                 )
                 continue
-            if before.action != after.action:
+            if before_event.action != after_event.action:
                 differences.append(
-                    _difference("action", path, before.action, after.action)
+                    _difference(
+                        "action",
+                        path,
+                        before_event.action,
+                        after_event.action,
+                    )
                 )
-            if before.surrogate_fingerprint != after.surrogate_fingerprint:
+            if before_event.surrogate_fingerprint != after_event.surrogate_fingerprint:
                 differences.append(
                     _difference(
                         "surrogate",
                         path,
-                        before.surrogate_fingerprint,
-                        after.surrogate_fingerprint,
+                        before_event.surrogate_fingerprint,
+                        after_event.surrogate_fingerprint,
                     )
                 )
-            if before.policy_fingerprint != after.policy_fingerprint:
+            if before_event.policy_fingerprint != after_event.policy_fingerprint:
                 differences.append(
                     _difference(
                         "policy_fingerprint",
                         path,
-                        before.policy_fingerprint,
-                        after.policy_fingerprint,
+                        before_event.policy_fingerprint,
+                        after_event.policy_fingerprint,
                     )
                 )
     return differences
@@ -1112,11 +1531,179 @@ def _dimension_order(dimension: ChangeDimension) -> int:
     }[dimension]
 
 
+def _difference_sort_key(
+    item: IdempotenceDifference,
+) -> tuple[int, str, str, str, str]:
+    return (
+        _dimension_order(item.dimension),
+        item.path,
+        item.classification,
+        _canonical_json(item.before),
+        _canonical_json(item.after),
+    )
+
+
+def _sorted_unique_differences(
+    values: Sequence[IdempotenceDifference],
+) -> tuple[IdempotenceDifference, ...]:
+    unique: dict[tuple[int, str, str, str, str], IdempotenceDifference] = {}
+    for value in values:
+        unique[_difference_sort_key(value)] = value
+    return tuple(unique[key] for key in sorted(unique))
+
+
+def _event_sort_key(event: RedactionEvent) -> tuple[str, str, str, str]:
+    return (
+        event.path,
+        event.action or "",
+        event.surrogate_fingerprint or "",
+        event.policy_fingerprint or "",
+    )
+
+
 def _first_value(value: Mapping[Any, Any], keys: Sequence[str]) -> Any:
-    for key in keys:
-        if key in value:
-            return value[key]
+    present = [key for key in keys if key in value]
+    if len(present) > 1:
+        raise IdempotenceInputError("redaction metadata contains ambiguous aliases")
+    if present:
+        return value[present[0]]
     return _MISSING
+
+
+def _is_safe_key_value(value: Any) -> bool:
+    return isinstance(value, str) and (
+        value in _SAFE_SCHEMA_KEYS
+        or re.fullmatch(r"key:[0-9a-f]{64}", value) is not None
+    )
+
+
+def _is_safe_action_value(value: Any) -> bool:
+    return isinstance(value, str) and (
+        value in _SAFE_ACTIONS
+        or re.fullmatch(r"action:[0-9a-f]{64}", value) is not None
+    )
+
+
+def _is_safe_count_value(value: Any) -> bool:
+    return isinstance(value, str) and (
+        value in _DIRECT_COUNT_KEYS
+        or re.fullmatch(r"count:[0-9a-f]{64}", value) is not None
+    )
+
+
+def _is_safe_path(value: Any, *, allow_span: bool = False) -> bool:
+    if not isinstance(value, str) or len(value) > _MAX_PATH_CHARS:
+        return False
+    if re.fullmatch(r"path:[0-9a-f]{64}", value) is not None:
+        return True
+    if allow_span and re.fullmatch(r"@span\[[0-9]+:[0-9]+\]", value) is not None:
+        return True
+    return value.startswith("$") and _render_path_value(value) == value
+
+
+def _is_safe_difference_path(value: Any, dimension: ChangeDimension) -> bool:
+    if dimension == "count" and isinstance(value, str) and value.startswith("counts."):
+        return _is_safe_count_value(value.removeprefix("counts."))
+    if (
+        dimension == "action"
+        and isinstance(value, str)
+        and value.startswith("actions.")
+    ):
+        return _is_safe_action_value(value.removeprefix("actions."))
+    return _is_safe_path(value, allow_span=True)
+
+
+def _validate_count_pairs(values: Any, *, action: bool) -> None:
+    if not isinstance(values, tuple) or len(values) > _MAX_CONTAINER_ITEMS:
+        raise ValueError("summary counts are invalid")
+    seen: set[str] = set()
+    for item in values:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise TypeError("summary counts must contain key/count pairs")
+        key, count = item
+        key_is_safe = (
+            _is_safe_action_value(key) if action else _is_safe_count_value(key)
+        )
+        if not key_is_safe or key in seen:
+            raise ValueError("summary count keys are invalid")
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+            or not 0 <= count <= _MAX_COUNT
+        ):
+            raise ValueError("summary count values are invalid")
+        seen.add(key)
+    if values != tuple(sorted(values)):
+        raise ValueError("summary counts must be sorted")
+
+
+def _validate_event_evidence(value: Any) -> None:
+    if not isinstance(value, Mapping) or set(value) != {
+        "path",
+        "action",
+        "surrogate_fingerprint",
+        "policy_fingerprint",
+    }:
+        raise ValueError("event difference evidence is invalid")
+    RedactionEvent(
+        path=value["path"],
+        action=value["action"],
+        surrogate_fingerprint=value["surrogate_fingerprint"],
+        policy_fingerprint=value["policy_fingerprint"],
+    )
+
+
+def _validate_difference_evidence(value: Any, dimension: ChangeDimension) -> None:
+    if value is None:
+        return
+    if dimension == "count":
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not 0 <= value <= _MAX_COUNT
+        ):
+            raise ValueError("count difference evidence is invalid")
+        return
+    if dimension == "shape":
+        if not isinstance(value, Mapping) or not {"path", "kind"} <= set(value):
+            raise ValueError("shape difference evidence is invalid")
+        if set(value) - {"path", "kind", "keys", "length"}:
+            raise ValueError("shape difference evidence is invalid")
+        raw_keys = value.get("keys", ())
+        if isinstance(raw_keys, list):
+            raw_keys = tuple(raw_keys)
+        ShapeNode(
+            path=value["path"],
+            kind=value["kind"],
+            keys=raw_keys,
+            length=value.get("length"),
+        )
+        return
+    if dimension == "action":
+        if isinstance(value, bool):
+            raise ValueError("action difference evidence is invalid")
+        if isinstance(value, int) and 0 <= value <= _MAX_COUNT:
+            return
+        if _is_safe_action_value(value):
+            return
+        if isinstance(value, list) and len(value) <= _MAX_EVENTS:
+            for event in value:
+                _validate_event_evidence(event)
+            return
+        raise ValueError("action difference evidence is invalid")
+    if (
+        dimension == "surrogate"
+        and isinstance(value, str)
+        and value
+        in {
+            "first_pass_value",
+            "second_pass_value",
+        }
+    ):
+        return
+    if isinstance(value, str) and _DIGEST_RE.fullmatch(value) is not None:
+        return
+    raise ValueError("fingerprint difference evidence is invalid")
 
 
 def _safe_action(value: Any) -> str:
@@ -1142,7 +1729,7 @@ def _safe_count_key(value: Any) -> str:
 
 def _safe_key(value: Any) -> str:
     candidate = str(value)
-    if _PATH_KEY_RE.fullmatch(candidate):
+    if _is_safe_key_value(candidate):
         return candidate
     return "key:" + _digest(candidate).removeprefix("sha256:")
 
@@ -1165,7 +1752,7 @@ def _render_path_value(value: Any) -> str:
         return "$"
     if candidate.startswith("$"):
         candidate = candidate[1:]
-    segments: list[str | int] = []
+    parsed_segments: list[str | int] = []
     position = 0
     try:
         while position < len(candidate):
@@ -1181,7 +1768,7 @@ def _render_path_value(value: Any) -> str:
                 index = candidate[position + 1 : closing]
                 if index != "*" and not index.isdigit():
                     raise ValueError
-                segments.append(int(index) if index != "*" else "*")
+                parsed_segments.append(int(index) if index != "*" else "*")
                 position = closing + 1
                 continue
             start = position
@@ -1190,12 +1777,12 @@ def _render_path_value(value: Any) -> str:
             token = candidate[start:position]
             if not token:
                 raise ValueError
-            segments.append(token)
+            parsed_segments.append(token)
     except ValueError:
         return "path:" + _digest(value).removeprefix("sha256:")
-    if not segments:
+    if not parsed_segments:
         return "path:" + _digest(value).removeprefix("sha256:")
-    return _render_path(tuple(segments))
+    return _render_path(tuple(parsed_segments))
 
 
 def _render_path(segments: Sequence[str | int]) -> str:
@@ -1269,14 +1856,19 @@ def _as_count(value: Any) -> int:
     if not _is_number(value):
         raise ValueError("redaction counts must be non-negative integers")
     if isinstance(value, Integral):
-        numeric = int(value)
-        if numeric < 0:
+        integer = int(value)
+        if integer < 0 or integer > _MAX_COUNT:
             raise ValueError("redaction counts must be non-negative integers")
-        return numeric
-    numeric = float(value)
-    if not math.isfinite(numeric) or not numeric.is_integer() or numeric < 0:
+        return integer
+    real = float(value)
+    if (
+        not math.isfinite(real)
+        or not real.is_integer()
+        or real < 0
+        or real > _MAX_COUNT
+    ):
         raise ValueError("redaction counts must be non-negative integers")
-    return int(numeric)
+    return int(real)
 
 
 def _markdown_cell(value: Any) -> str:
@@ -1292,6 +1884,7 @@ __all__ = [
     "IDEMPOTENCE_SCHEMA_VERSION",
     "IdempotenceDifference",
     "IdempotenceInput",
+    "IdempotenceInputError",
     "IdempotenceReport",
     "RedactionEvent",
     "RedactionIdempotenceReport",
