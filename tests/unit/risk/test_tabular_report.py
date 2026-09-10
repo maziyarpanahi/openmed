@@ -301,6 +301,11 @@ class _ExplodingFrame:
         raise RuntimeError("synthetic-sensitive-value")
 
 
+class _ExplodingComparison:
+    def __ne__(self, other: object) -> bool:
+        raise RuntimeError("synthetic-sensitive-value")
+
+
 def test_hostile_adapters_fail_without_echoing_values() -> None:
     with pytest.raises(ValueError, match="could not be read") as mapping_error:
         tabular_risk_report([_ExplodingMapping()])
@@ -309,3 +314,13 @@ def test_hostile_adapters_fail_without_echoing_values() -> None:
     with pytest.raises(TypeError, match="supported records") as frame_error:
         tabular_risk_report(_ExplodingFrame())
     assert "synthetic-sensitive-value" not in str(frame_error.value)
+
+
+def test_renderer_rejects_hostile_digest_without_echoing_values() -> None:
+    report = tabular_risk_report([{"age": 30}], quasi_identifiers=["age"])
+    unsafe = report.to_dict()
+    unsafe["schema_digest"] = _ExplodingComparison()
+
+    with pytest.raises(ValueError, match="schema digest is invalid") as error:
+        render_tabular_risk_json(unsafe)
+    assert "synthetic-sensitive-value" not in str(error.value)

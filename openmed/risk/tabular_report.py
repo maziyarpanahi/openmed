@@ -1317,6 +1317,8 @@ def _project_report_payload(
         {"kind": "openmed-tabular-schema", "columns": schema_columns}
     )
     supplied_schema_digest = raw.get("schema_digest")
+    if supplied_schema_digest is not None and type(supplied_schema_digest) is not str:
+        raise ValueError("tabular risk report schema digest is invalid")
     if supplied_schema_digest is not None and supplied_schema_digest != schema_digest:
         raise ValueError("tabular risk report schema digest is inconsistent")
     dataset_digest = raw.get("dataset_digest")
