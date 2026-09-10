@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>تشغيل محلي أولاً</b> &nbsp;·&nbsp; <b>33 لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 إدخالاً في البيان</b> &nbsp;·&nbsp; <b>33 لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

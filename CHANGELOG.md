@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline manifest-coherence regenerator and CI drift gate for the
+  runtime model registry, PII language defaults, governed README counts,
+  registry model cards, and generated model and benchmark documentation (#77).
+- Added exact OMOP CDM v5.4 `visit_occurrence`, `observation_period`, and
+  `note_nlp` exporters with deterministic local keys, bounded clinical dates,
+  source offsets, and assertion-derived NLP term fields (#2360).
+- Added exact OMOP CDM v5.4 `measurement` and `procedure_occurrence` row
+  exporters with shared Athena concept resolution, deterministic unmapped
+  fallback, and preservation of numeric lab values, units, and ranges (#275).
+- Added dependency-free US Core 9.0.0 conformance checks for exported
+  Condition, laboratory Observation, MedicationRequest, and
+  AllergyIntolerance resources, including base-R4-first validation,
+  must-support warnings, required-binding errors, canonical profile resolution,
+  and compact CC0 constraint metadata (#2366).
 - Completed the synthetic grounding/export conformance suite with fail-closed
   out-of-process HL7 FHIR R4 validation, an official-validator malformed
   resource negative control, expanded ACHILLES-style OMOP column/key/reference
@@ -17,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameter expectations, bounded exact shape arithmetic, deterministic JSON,
   clipping declarations, and value-free rejection of unknown or identifying
   fields (#3010).
+- Added a versioned no-PHI exception taxonomy for telemetry and audit records,
+  with owner-free approval metadata, bounded digest-only evidence, explicit UTC
+  expiry checks, deterministic serialization, and value-free validation
+  failures (#2528).
+
+### Security
+
+- Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
+  DOM-based search-suggestion XSS tracked as CVE-2026-73295.
 
 ## [2.3.0] - 2026-09-04
 
@@ -34,9 +57,21 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added closed, versioned federated aggregate metric envelopes with finite
+  clipping bounds, minimum-group suppression, coarse participant bands,
+  controlled privacy mechanisms, confidence intervals, deterministic JSON,
+  and value-free rejection of client-level or unknown fields (#3011).
+- Added dependency-free base FHIR R4 structural validation for eight exported
+  clinical resource types, including deterministic structured findings,
+  cardinality and primitive datatype checks, fixed required bindings, Bundle
+  aggregation, and a compact CC0-derived constraint table (#2364).
 - Added typed, 128-bit opaque correlation identifiers for agent runs and
   actions, with strict kind-aware parsing, deterministic metadata-only JSON,
   parent-action validation, and value-free failures (#2973).
+- Added strict, content-free agent artifact references with opaque identifiers,
+  a closed artifact-kind vocabulary, versioned schema IDs, digest and size
+  metadata, deterministic JSON, and value-free validation failures, including
+  oversized integers and deeply nested JSON (#2999).
 - Added a conservative, deterministic FHIR DiagnosticReport exporter with
   R4/R5 union allowlisting (32-field), explicit `unknown` status, type-gated
   scalars and Reference normalization, `effective[x]` mutual exclusivity,
@@ -656,6 +691,15 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   exposed as `openmed.core.labels.is_recognized_label`,
   `openmed.core.catalog_coherence.manifest_label_errors`, and a `Catalog
   coherence` workflow (#2246).
+- Rekeyed the committed model-registry state to schema v2: sparse
+  `family::tier::format` release-channel slots (the `baseline_key`
+  convention shared by `gates/baseline.json`, `gates/rollout_state.json`,
+  and the release ledger), created only by coordinate-matched RELEASABLE
+  promotions, with assigned per-slot SemVer that is validated as stored
+  state and never recomputed from repo-id version tokens. Ships a
+  fail-closed one-time v1 migration (`registry_ctl.py migrate`) that maps
+  pointers through committed baseline coordinate evidence and leaves the
+  file unchanged on any ambiguity (#1804).
 
 ### Changed
 

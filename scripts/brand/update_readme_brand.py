@@ -125,77 +125,77 @@ RESOURCE_LINKS = """<p>
 
 HERO_CLAIMS = {
     "README.md": (
-        "  <b>Local-first runtime</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} manifest entries</b> &nbsp;·&nbsp; "
         "<b>{model_backed} model-backed PII languages</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.ar.md": (
-        "  <b>تشغيل محلي أولاً</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} إدخالاً في البيان</b> &nbsp;·&nbsp; "
         "<b>{model_backed} لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.de.md": (
-        "  <b>Local-First-Laufzeit</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} Manifesteinträge</b> &nbsp;·&nbsp; "
         "<b>{model_backed} modellgestützte PII-Sprachen</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.es.md": (
-        "  <b>Ejecución local primero</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} entradas del manifiesto</b> &nbsp;·&nbsp; "
         "<b>{model_backed} idiomas PII respaldados por modelos</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.fa.md": (
-        "  <b>اجرای محلی‌محور</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} ورودی مانیفست</b> &nbsp;·&nbsp; "
         "<b>{model_backed} زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.fr.md": (
-        "  <b>Exécution locale en priorité</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} entrées de manifeste</b> &nbsp;·&nbsp; "
         "<b>{model_backed} langues PII prises en charge par modèle</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.hi.md": (
-        "  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} मैनिफ़ेस्ट प्रविष्टियाँ</b> &nbsp;·&nbsp; "
         "<b>{model_backed} मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.it.md": (
-        "  <b>Esecuzione locale prioritaria</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} voci del manifesto</b> &nbsp;·&nbsp; "
         "<b>{model_backed} lingue PII supportate da modelli</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.ja.md": (
-        "  <b>ローカルファーストのランタイム</b> &nbsp;·&nbsp; "
+        "  <b>マニフェスト登録 {manifest_entries:,} 件</b> &nbsp;·&nbsp; "
         "<b>モデル対応 PII 言語 {model_backed} 種</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.nl.md": (
-        "  <b>Lokale uitvoering voorop</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} manifestvermeldingen</b> &nbsp;·&nbsp; "
         "<b>{model_backed} modelondersteunde PII-talen</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.pt.md": (
-        "  <b>Execução local em primeiro lugar</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} entradas do manifesto</b> &nbsp;·&nbsp; "
         "<b>{model_backed} idiomas PII com suporte de modelos</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.sw.md": (
-        "  <b>Uendeshaji unaotanguliza matumizi ya ndani</b> &nbsp;·&nbsp; "
+        "  <b>Maingizo {manifest_entries:,} ya manifesti</b> &nbsp;·&nbsp; "
         "<b>Lugha {model_backed} za PII zinazotumia modeli</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.te.md": (
-        "  <b>స్థానిక అమలుకు ప్రాధాన్యం</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} మానిఫెస్ట్ నమోదులు</b> &nbsp;·&nbsp; "
         "<b>మోడల్ మద్దతు గల {model_backed} PII భాషలు</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.tr.md": (
-        "  <b>Yerel öncelikli çalışma</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} manifest kaydı</b> &nbsp;·&nbsp; "
         "<b>Model destekli {model_backed} PII dili</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
     "README.zh-CN.md": (
-        "  <b>本地优先运行</b> &nbsp;·&nbsp; "
+        "  <b>{manifest_entries:,} 条清单记录</b> &nbsp;·&nbsp; "
         "<b>{model_backed} 种模型支持的 PII 语言</b> &nbsp;·&nbsp; "
         "<b>Apache-2.0 SDK</b>"
     ),
@@ -1305,6 +1305,7 @@ def _claim_numbers() -> dict[str, int]:
     registry = json.loads(CLAIMS_PATH.read_text(encoding="utf-8"))
     claims = registry["claims"]
     pointers = {
+        "manifest_entries": "repository_model_snapshot",
         "supported": "supported_pii_languages",
         "model_backed": "model_backed_pii_languages",
     }

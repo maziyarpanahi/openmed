@@ -24,7 +24,7 @@ OpenMed の中核ローカルランタイムは、必要なモデル成果物が
 </p>
 
 <p>
-  <b>ローカルファーストのランタイム</b> &nbsp;·&nbsp; <b>モデル対応 PII 言語 33 種</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>マニフェスト登録 2,266 件</b> &nbsp;·&nbsp; <b>モデル対応 PII 言語 33 種</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

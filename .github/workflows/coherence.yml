@@ -4,16 +4,48 @@ on:
   pull_request:
     paths:
       - "models.jsonl"
+      - "gates/registry_state.json"
       - "openmed/core/labels.py"
       - "openmed/core/catalog_coherence.py"
+      - "openmed/core/language_pack_catalog.py"
+      - "openmed/core/manifest_diff.py"
+      - "openmed/core/model_registry.py"
+      - "openmed/core/pii_i18n.py"
+      - "openmed/core/registry_service.py"
+      - "scripts/brand/update_claims.py"
+      - "scripts/brand/update_readme_brand.py"
+      - "scripts/i18n/check_readme_drift.py"
+      - "scripts/manifest/regenerate_surfaces.py"
+      - "README*.md"
+      - "docs/brand/system/claims.yml"
+      - "docs/i18n/readme_section_hashes.json"
+      - "docs/model-cards/registry/**"
+      - "docs/model-registry.md"
+      - "docs/website/index.html"
       - "tests/unit/core/test_catalog_coherence.py"
       - ".github/workflows/coherence.yml"
   push:
     branches: [master]
     paths:
       - "models.jsonl"
+      - "gates/registry_state.json"
       - "openmed/core/labels.py"
       - "openmed/core/catalog_coherence.py"
+      - "openmed/core/language_pack_catalog.py"
+      - "openmed/core/manifest_diff.py"
+      - "openmed/core/model_registry.py"
+      - "openmed/core/pii_i18n.py"
+      - "openmed/core/registry_service.py"
+      - "scripts/brand/update_claims.py"
+      - "scripts/brand/update_readme_brand.py"
+      - "scripts/i18n/check_readme_drift.py"
+      - "scripts/manifest/regenerate_surfaces.py"
+      - "README*.md"
+      - "docs/brand/system/claims.yml"
+      - "docs/i18n/readme_section_hashes.json"
+      - "docs/model-cards/registry/**"
+      - "docs/model-registry.md"
+      - "docs/website/index.html"
       - "tests/unit/core/test_catalog_coherence.py"
       - ".github/workflows/coherence.yml"
   workflow_dispatch:
@@ -33,8 +65,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install package
+      - name: Install offline catalog runtime
         run: python -m pip install -e .
 
-      - name: Check manifest canonical_labels against the taxonomy
-        run: python -m openmed.core.catalog_coherence
+      - name: Regenerate manifest-derived surfaces
+        run: PYTHONPATH=. python scripts/manifest/regenerate_surfaces.py
+
+      - name: Fail on generated surface drift
+        run: git diff --exit-code

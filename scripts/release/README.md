@@ -64,3 +64,22 @@ not accept environment-variable overrides.
 5. Run both checks above and include the resulting measurements in the review.
 
 Do not raise a budget merely to make an unexplained regression pass.
+
+## Retraining recipe proposals
+
+`retrain_queue.py` consumes the committed aggregate-only input contract at
+`gates/retrain_trigger_inputs.json`. It writes the complete decision evidence
+and queued JSONL records separately, then updates `recipes/<family>.yaml` only
+for families whose weighted score reaches the configured threshold:
+
+```bash
+python scripts/release/retrain_queue.py \
+  --queue-output artifacts/retrain-trigger/retrain_queue.jsonl \
+  --evidence-output artifacts/retrain-trigger/decision_evidence.json \
+  --summary-output artifacts/retrain-trigger/dispatch_summary.json
+```
+
+The scheduled workflow uploads queue and decision evidence as workflow
+artifacts. It opens a configuration-only pull request when a recipe actually
+changes. The workflow never trains, converts, or publishes model artifacts;
+the normal downstream release gates remain mandatory before promotion.
