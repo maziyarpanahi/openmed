@@ -20,7 +20,10 @@ inventory.
 
 The `extract-msg` row is intentionally restricted: it is allowed only for the
 `email-msg-gpl` extra's documented out-of-process bridge, and remains excluded
-from the bundled and in-process runtime.
+from the bundled and in-process runtime. The exception requires the reviewed
+`GPL-3.0-only` expression. Project audits verify the dependency's actual extras
+in `pyproject.toml`; an inventory scope label cannot exempt a base dependency or
+a dependency also declared in another extra.
 
 | Dependency | Scope | License expression |
 | --- | --- | --- |

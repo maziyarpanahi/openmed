@@ -92,6 +92,58 @@ def test_quarantined_bridge_does_not_allow_an_unknown_license() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "expression",
+    ["AGPL-3.0-only", "Elastic-2.0", "GPL-3.0-only AND Elastic-2.0"],
+)
+def test_bridge_exception_requires_the_reviewed_license(expression: str) -> None:
+    records = inventory.audit_inventory(
+        [inventory.InventoryEntry("extract-msg", expression, scope="email-msg-gpl")]
+    )
+
+    assert [record.name for record in inventory.gate_failures(records)] == [
+        "extract-msg"
+    ]
+
+
+@pytest.mark.parametrize(
+    "declarations",
+    [
+        'dependencies = ["extract-msg"]\n',
+        '[project.optional-dependencies]\nother = ["extract-msg"]\n',
+        'dependencies = ["extract-msg"]\n'
+        '[project.optional-dependencies]\nemail-msg-gpl = ["extract-msg"]\n',
+    ],
+)
+def test_project_bridge_scope_cannot_be_forged_by_inventory(
+    tmp_path: Path, declarations: str
+) -> None:
+    path = write_markdown_inventory(
+        tmp_path,
+        "| `extract-msg` | email-msg-gpl | GPL-3.0-only |\n",
+    )
+    project = tmp_path / "pyproject.toml"
+    project.write_text("[project]\n" + declarations, encoding="utf-8")
+
+    with pytest.raises(inventory.InventoryError, match="unreviewed project scope"):
+        inventory.audit_project(path, project)
+    assert inventory.main(["--inventory", str(path), "--pyproject", str(project)]) == 1
+
+
+def test_project_bridge_exception_matches_the_actual_extra(tmp_path: Path) -> None:
+    path = write_markdown_inventory(
+        tmp_path,
+        "| `extract-msg` | email-msg-gpl | GPL-3.0-only |\n",
+    )
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        '[project]\n[project.optional-dependencies]\nemail-msg-gpl = ["extract-msg"]\n',
+        encoding="utf-8",
+    )
+
+    assert not inventory.gate_failures(inventory.audit_project(path, project))
+
+
 def test_missing_dependency_is_unknown_and_fails_closed() -> None:
     records = inventory.audit_inventory(
         [inventory.InventoryEntry("known-package", "MIT")],

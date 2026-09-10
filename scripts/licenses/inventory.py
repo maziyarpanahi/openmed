@@ -129,6 +129,7 @@ SENSITIVE_IDENTIFIER_RE = re.compile(
 QUARANTINED_BRIDGE_SCOPES = {
     "extract-msg": frozenset({"email-msg-gpl"}),
 }
+QUARANTINED_BRIDGE_LICENSES = {"extract-msg": "gpl-3.0-only"}
 
 
 @dataclass(frozen=True)
@@ -517,6 +518,12 @@ def parse_inventory(path: Path = DEFAULT_INVENTORY) -> tuple[InventoryEntry, ...
 def parse_project_dependencies(path: Path = DEFAULT_PYPROJECT) -> tuple[str, ...]:
     """Return non-development dependency names declared in a local pyproject."""
 
+    return tuple(sorted(_project_dependency_scopes(path)))
+
+
+def _project_dependency_scopes(path: Path) -> dict[str, frozenset[str]]:
+    """Retain actual install scopes so inventory claims cannot grant exceptions."""
+
     try:
         project_data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValueError):
@@ -526,13 +533,14 @@ def parse_project_dependencies(path: Path = DEFAULT_PYPROJECT) -> tuple[str, ...
     if not isinstance(project, Mapping):
         raise InventoryError("project metadata has no project table")
 
-    requirements: list[str] = []
+    scopes: dict[str, set[str]] = {}
     dependencies = project.get("dependencies", [])
     if not isinstance(dependencies, list):
         raise InventoryError("project dependencies must be a list")
     if not all(isinstance(requirement, str) for requirement in dependencies):
         raise InventoryError("project dependency declaration must be text")
-    requirements.extend(dependencies)
+    for requirement in dependencies:
+        scopes.setdefault(dependency_name(requirement), set()).add("default")
 
     optional = project.get("optional-dependencies", {})
     if not isinstance(optional, Mapping):
@@ -546,9 +554,12 @@ def parse_project_dependencies(path: Path = DEFAULT_PYPROJECT) -> tuple[str, ...
             raise InventoryError("optional dependency group must be a list")
         if not all(isinstance(requirement, str) for requirement in group_requirements):
             raise InventoryError("optional dependency declaration must be text")
-        requirements.extend(group_requirements)
+        for requirement in group_requirements:
+            scopes.setdefault(dependency_name(requirement), set()).add(
+                normalize_name(str(group))
+            )
 
-    return tuple(sorted({dependency_name(requirement) for requirement in requirements}))
+    return {name: frozenset(groups) for name, groups in sorted(scopes.items())}
 
 
 def audit_inventory(
@@ -585,17 +596,27 @@ def audit_project(
 ) -> tuple[InventoryRecord, ...]:
     """Audit the local inventory against all non-development project extras."""
 
-    return audit_inventory(
-        parse_inventory(inventory_path),
-        parse_project_dependencies(pyproject_path),
-    )
+    entries = parse_inventory(inventory_path)
+    project_scopes = _project_dependency_scopes(pyproject_path)
+    for entry in entries:
+        if (
+            is_quarantined_bridge(entry)
+            and entry.name in project_scopes
+            and project_scopes[entry.name] != QUARANTINED_BRIDGE_SCOPES[entry.name]
+        ):
+            raise InventoryError("quarantined bridge has an unreviewed project scope")
+    return audit_inventory(entries, project_scopes)
 
 
 def is_quarantined_bridge(entry: InventoryEntry) -> bool:
     """Return whether a restricted entry has an explicit bridge exception."""
 
     allowed_scopes = QUARANTINED_BRIDGE_SCOPES.get(entry.name, frozenset())
-    return entry.scope in allowed_scopes
+    return (
+        entry.scope in allowed_scopes
+        and entry.license_expression.strip().casefold()
+        == QUARANTINED_BRIDGE_LICENSES.get(entry.name)
+    )
 
 
 def gate_failures(records: Iterable[InventoryRecord]) -> tuple[InventoryRecord, ...]:
