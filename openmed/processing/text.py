@@ -9,6 +9,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from openmed.core.errors import InputError
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,12 +19,6 @@ MAX_PII_COMBINING_SEQUENCE = 64
 MAX_PII_FORMAT_SEQUENCE = 256
 MAX_PII_CONTROL_SEQUENCE = 256
 MAX_PII_CONTROL_CHARACTERS = 4096
-
-
-class InputError(ValueError):
-    """Base class for fail-closed errors caused by untrusted PII input."""
-
-    reason = "input_rejected"
 
 
 class InputTypeError(InputError):
@@ -71,37 +67,59 @@ def validate_pii_input(text: Any) -> str:
     if isinstance(text, memoryview):
         byte_length = text.nbytes
         if byte_length > MAX_PII_INPUT_BYTES:
-            raise InputSizeError("PII input exceeds the configured byte limit")
+            raise InputSizeError(
+                "PII input exceeds the configured byte limit. Reduce the request "
+                "or process it in bounded chunks before retrying."
+            )
         payload = bytes(text)
         try:
             value = payload.decode("utf-8", errors="strict")
         except UnicodeDecodeError:
-            raise InputEncodingError("PII byte input must be strict UTF-8") from None
+            raise InputEncodingError(
+                "PII byte input must be strict UTF-8. Decode or re-encode the "
+                "payload as strict UTF-8 before retrying."
+            ) from None
     elif isinstance(text, (bytes, bytearray)):
         if len(text) > MAX_PII_INPUT_BYTES:
-            raise InputSizeError("PII input exceeds the configured byte limit")
+            raise InputSizeError(
+                "PII input exceeds the configured byte limit. Reduce the request "
+                "or process it in bounded chunks before retrying."
+            )
         try:
             value = bytes(text).decode("utf-8", errors="strict")
         except UnicodeDecodeError:
-            raise InputEncodingError("PII byte input must be strict UTF-8") from None
+            raise InputEncodingError(
+                "PII byte input must be strict UTF-8. Decode or re-encode the "
+                "payload as strict UTF-8 before retrying."
+            ) from None
     elif isinstance(text, str):
         value = text
     else:
-        raise InputTypeError("PII input must be text or a bytes-like value")
+        raise InputTypeError(
+            "PII input must be text or a bytes-like value. Pass a str or strict "
+            "UTF-8 bytes-like value."
+        )
 
     # UTF-8 uses at least one byte per code point, so this avoids materializing
     # an encoded copy for obviously oversized ASCII input such as the 10 MiB
     # regression case.
     if len(value) > MAX_PII_INPUT_BYTES:
-        raise InputSizeError("PII input exceeds the configured byte limit")
+        raise InputSizeError(
+            "PII input exceeds the configured byte limit. Reduce the request or "
+            "process it in bounded chunks before retrying."
+        )
     try:
         byte_length = len(value.encode("utf-8", errors="strict"))
     except UnicodeEncodeError:
         raise InputEncodingError(
-            "PII text contains an invalid Unicode scalar"
+            "PII text contains an invalid Unicode scalar. Normalize or re-encode "
+            "the text as valid Unicode before retrying."
         ) from None
     if byte_length > MAX_PII_INPUT_BYTES:
-        raise InputSizeError("PII input exceeds the configured byte limit")
+        raise InputSizeError(
+            "PII input exceeds the configured byte limit. Reduce the request or "
+            "process it in bounded chunks before retrying."
+        )
 
     _validate_pii_unicode_complexity(value)
     return value
@@ -120,7 +138,8 @@ def _validate_pii_unicode_complexity(text: str) -> None:
             combining_run += 1
             if combining_run > MAX_PII_COMBINING_SEQUENCE:
                 raise InputComplexityError(
-                    "PII input contains an excessive combining-mark sequence"
+                    "PII input contains an excessive combining-mark sequence. "
+                    "Normalize or split the input before retrying."
                 )
         else:
             combining_run = 0
@@ -129,7 +148,8 @@ def _validate_pii_unicode_complexity(text: str) -> None:
             format_run += 1
             if format_run > MAX_PII_FORMAT_SEQUENCE:
                 raise InputComplexityError(
-                    "PII input contains an excessive format-control sequence"
+                    "PII input contains an excessive format-control sequence. "
+                    "Normalize or split the input before retrying."
                 )
         else:
             format_run = 0
@@ -142,7 +162,8 @@ def _validate_pii_unicode_complexity(text: str) -> None:
                 or control_run > MAX_PII_CONTROL_SEQUENCE
             ):
                 raise InputComplexityError(
-                    "PII input contains excessive control characters"
+                    "PII input contains excessive control characters. Remove the "
+                    "controls or split the input before retrying."
                 )
         else:
             control_run = 0
