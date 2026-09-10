@@ -15,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Literal, overload
 
 WAIVER_LEDGER_SCHEMA_VERSION: Final[int] = 1
 
@@ -110,6 +110,22 @@ def _coerce_state(value: WaiverState | str) -> WaiverState:
         return WaiverState(canonical)
     except ValueError as exc:
         raise WaiverLedgerError("state must be a supported waiver state") from exc
+
+
+@overload
+def _identifier(
+    value: Any, field_name: str, *, required: Literal[True] = True
+) -> str: ...
+
+
+@overload
+def _identifier(
+    value: Any, field_name: str, *, required: Literal[False]
+) -> str | None: ...
+
+
+@overload
+def _identifier(value: Any, field_name: str, *, required: bool) -> str | None: ...
 
 
 def _identifier(value: Any, field_name: str, *, required: bool = True) -> str | None:
