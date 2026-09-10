@@ -106,6 +106,24 @@ def test_selection_can_be_computed_from_purpose_schema_without_record_values() -
     assert result.explanation.available_field_count == 3
 
 
+def test_projection_fails_closed_when_schema_only_selection_lacks_required_field() -> (
+    None
+):
+    selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
+    result = selector.select(
+        purpose="cohort_review",
+        policy_profile="research_limited",
+    )
+
+    assert result.allowed is True
+    assert (
+        result.project(
+            {"age_band": "synthetic-age-band", "raw_sensitive": "SYNTHETIC-SECRET"}
+        )
+        == {}
+    )
+
+
 def test_selection_requires_no_network_call(monkeypatch: pytest.MonkeyPatch) -> None:
     import socket
 

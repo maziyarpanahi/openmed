@@ -13,7 +13,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Final, TypeAlias
+from typing import Any, Final, TypeAlias, cast
 
 MINIMUM_NECESSARY_SCHEMA_VERSION: Final = 1
 MAX_PURPOSE_MAPPINGS: Final = 256
@@ -347,7 +347,11 @@ class FieldSelection:
         return self.explanation.reason
 
     def project(self, record: Mapping[str, Any]) -> dict[str, Any]:
-        """Return only approved fields without iterating over source values."""
+        """Return only approved fields without iterating over source values.
+
+        If a required field is absent at projection time, fail closed instead
+        of returning a partial export.
+        """
 
         if not self.allowed:
             return {}
@@ -358,6 +362,8 @@ class FieldSelection:
             try:
                 projected[field_name] = record[field_name]
             except KeyError:
+                if field_name in self.explanation.required_fields:
+                    return {}
                 continue
             except Exception:  # noqa: BLE001 - mapping access is caller-controlled.
                 raise ValueError("record could not be projected safely") from None
@@ -517,7 +523,9 @@ class MinimumNecessarySelector:
     ) -> tuple[str | None, FieldPolicyProfile | None]:
         if type(policy_profile) is FieldPolicyProfile:
             return policy_profile.name, policy_profile
-        profile_name = _normalize_identifier(policy_profile, "policy profile")
+        profile_name = _normalize_identifier(
+            cast(str, policy_profile), "policy profile"
+        )
         return profile_name, self._policy_profiles.get(profile_name)
 
 
@@ -538,7 +546,7 @@ def _coerce_purpose_mapping(config: PurposeConfig) -> PurposeMapping:
             fields=values["fields"],
             required_fields=values.get("required_fields", ()),
         )
-    return PurposeMapping(fields=config)
+    return PurposeMapping(fields=cast(tuple[str, ...], config))
 
 
 def _coerce_policy_profile(
@@ -569,7 +577,10 @@ def _coerce_policy_profile(
             allowed_fields=allowed_fields,
             denied_fields=values.get("denied_fields", ()),
         )
-    return FieldPolicyProfile(name=name, allowed_fields=config)
+    return FieldPolicyProfile(
+        name=name,
+        allowed_fields=cast(tuple[str, ...], config),
+    )
 
 
 def _available_fields(available_fields: FieldInput) -> tuple[str, ...]:

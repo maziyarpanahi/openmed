@@ -52,7 +52,8 @@ export_row = selection.project(record)
 `selection.to_dict()` and `selection.to_json()` contain field names, counts,
 and a stable reason code, but never record or cell values. Keep the projected
 row under the caller's normal data-handling controls; the selection explanation
-is suitable for an audit trail because it is value-free.
+is suitable for an audit trail because it is value-free. Projection also fails
+closed to an empty mapping if a required field is absent from the source record.
 
 Unknown source keys are not copied into the explanation. Unknown purpose or
 profile declarations are denied before the selector inspects the record. Public
