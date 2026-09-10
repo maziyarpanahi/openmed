@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from openmed.risk import (
+    FAILURE_CATEGORIES,
     SURROGATE_AUDIT_FAILURE_CATEGORIES,
     SurrogateAuditInputError,
     SurrogateMapAuditReport,
@@ -54,6 +55,8 @@ def _clean_maps() -> dict[str, dict[str, object]]:
 
 
 def test_clean_audit_is_deterministic_and_counts_only() -> None:
+    assert FAILURE_CATEGORIES == SURROGATE_AUDIT_FAILURE_CATEGORIES
+
     first = audit_surrogate_maps(
         _clean_maps(),
         [{"parent_table": "parent_table", "child_table": "child_table"}],

@@ -25,6 +25,7 @@ __all__ = [
     "CARDINALITY_FAILURE",
     "COLLISION_FAILURE",
     "CROSS_TABLE_CONSISTENCY_FAILURE",
+    "FAILURE_CATEGORIES",
     "SURROGATE_AUDIT_FAILURE_CATEGORIES",
     "ORPHAN_FAILURE",
     "SurrogateAuditInputError",
@@ -54,6 +55,8 @@ SURROGATE_AUDIT_FAILURE_CATEGORIES: Final[tuple[str, ...]] = (
     ORPHAN_FAILURE,
     CROSS_TABLE_CONSISTENCY_FAILURE,
 )
+# Keep the original contributor-facing name as a compatibility alias.
+FAILURE_CATEGORIES: Final = SURROGATE_AUDIT_FAILURE_CATEGORIES
 
 _MISSING = object()
 _DEFAULT_MAP_NAME = "default"
