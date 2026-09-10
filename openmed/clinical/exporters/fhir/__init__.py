@@ -64,6 +64,14 @@ from .privacy import (
 from .profile_check import check_bundle
 from .provenance import to_audit_event, to_provenance
 from .references import deterministic_fullurl
+from .uscore import US_CORE_VERSION, ConformanceResult, check_us_core
+from .validate import (
+    BASE_R4_RESOURCE_TYPES,
+    ValidationFinding,
+    ValidationResult,
+    validate_bundle,
+    validate_resource,
+)
 
 __all__ = [
     "CONDITION_CLINICAL_SYSTEM",
@@ -115,4 +123,12 @@ __all__ = [
     "import_bundle",
     "import_fhir",
     "validate_exchange",
+    "BASE_R4_RESOURCE_TYPES",
+    "ValidationFinding",
+    "ValidationResult",
+    "validate_bundle",
+    "validate_resource",
+    "ConformanceResult",
+    "US_CORE_VERSION",
+    "check_us_core",
 ]

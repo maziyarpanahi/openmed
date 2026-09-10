@@ -24,7 +24,7 @@ OpenMed’in temel yerel çalışma zamanı, gerekli model yapıtları hazır ol
 </p>
 
 <p>
-  <b>Yerel öncelikli çalışma</b> &nbsp;·&nbsp; <b>Model destekli 33 PII dili</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifest kaydı</b> &nbsp;·&nbsp; <b>Model destekli 33 PII dili</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

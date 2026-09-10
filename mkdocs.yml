@@ -30,6 +30,7 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Artifact References: agent/artifact-references.md
       - Agent Event Correlation: agent/event-correlation.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
@@ -46,6 +47,8 @@ nav:
       - Async Python API: async-api.md
       - REST Service (MVP): rest-service.md
       - Self-hosted Redaction Service: service/self-hosted-redaction.md
+      - Inbound Placeholder Restoration: service/inbound-restoration.md
+      - Local Privacy Proxy: service/privacy-proxy.md
       - MCP Client Connections: mcp-clients.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
@@ -79,6 +82,7 @@ nav:
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
+      - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
@@ -134,8 +138,10 @@ nav:
       - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
+      - Federated Aggregate Metrics: training/federated-metrics.md
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
+      - Federated Update Metadata: training/federated-update-metadata.md
       - Preference Pair Schema: reference/preference-schema.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
@@ -287,6 +293,7 @@ nav:
       - Local Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
+      - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md

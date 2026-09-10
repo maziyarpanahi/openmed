@@ -24,7 +24,7 @@ OpenMed's core local runtime performs extraction and de-identification after req
 </p>
 
 <p>
-  <b>Local-first runtime</b> &nbsp;·&nbsp; <b>33 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifest entries</b> &nbsp;·&nbsp; <b>33 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

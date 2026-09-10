@@ -24,7 +24,7 @@ Il runtime locale principale di OpenMed esegue estrazione e de-identificazione d
 </p>
 
 <p>
-  <b>Esecuzione locale prioritaria</b> &nbsp;·&nbsp; <b>33 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 voci del manifesto</b> &nbsp;·&nbsp; <b>33 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

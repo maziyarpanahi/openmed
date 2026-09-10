@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>اجرای محلی‌محور</b> &nbsp;·&nbsp; <b>33 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 ورودی مانیفست</b> &nbsp;·&nbsp; <b>33 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>

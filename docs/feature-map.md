@@ -35,7 +35,7 @@ For the model families available by clinical specialty, use the
 
 | Area | What it covers | Where to look |
 | --- | --- | --- |
-| FHIR helpers | Deterministic R4 Bundles, stable `urn:uuid` references, `OperationOutcome`, `Provenance`, `AuditEvent`, CodeableConcept builders/checkers, SMART-on-FHIR bulk ingestion, and coding provenance. | `openmed/clinical/exporters/fhir/`, `openmed/clinical/exporters/codeable_concept.py`, `openmed/clinical/exporters/codeable_concept_check.py`, `openmed/service/smart_backend.py`, [FHIR Interop Helpers](./fhir-interop.md) |
+| FHIR helpers | Deterministic R4 Bundles, bundled base-R4 structural validation, local IG profile checks, stable `urn:uuid` references, `OperationOutcome`, `Provenance`, `AuditEvent`, CodeableConcept builders/checkers, SMART-on-FHIR bulk ingestion, and coding provenance. | `openmed/clinical/exporters/fhir/`, `openmed/clinical/exporters/codeable_concept.py`, `openmed/clinical/exporters/codeable_concept_check.py`, `openmed/service/smart_backend.py`, [FHIR Interop Helpers](./fhir-interop.md) |
 | OMOP and CDM loading | Deterministic note-to-CDM extraction and OMOP CDM loader foundations. | `openmed/interop/cdm_etl.py`, `openmed/interop/omop/cdm_loader.py` |
 | FHIR operations and bulk export | `$de-identify` resource/Bundle wrappers and FHIR Bulk NDJSON de-identification summaries. | `openmed/interop/fhir_operations.py`, `openmed/interop/fhir_bulk.py`, `examples/v17_multimodal_browser_interop.py` |
 | HL7 v2 and CDA/C-CDA | HL7 v2 segment/field redaction, CDA/C-CDA XML de-identification, and multimodal XML dispatch. | `openmed/interop/hl7v2.py`, `openmed/interop/cda.py`, [HL7 v2 De-identification](./hl7v2-deidentification.md) |
