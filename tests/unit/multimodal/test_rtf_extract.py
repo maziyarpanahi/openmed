@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from openmed.multimodal import ExtractedDocument, extract_rtf, redact_document
+from openmed.multimodal import (
+    ExtractedDocument,
+    extract_rtf,
+    redact_document,
+    write_redacted_rtf,
+)
 from openmed.multimodal.exceptions import UnsupportedDocumentError
 
 DISCHARGE_NOTE = (
@@ -158,6 +163,102 @@ def test_redact_document_dispatches_rtf(tmp_path: Path):
 
     assert isinstance(doc, ExtractedDocument)
     assert "Patient Jane Roe" in doc.text
+
+
+def test_write_redacted_rtf_preserves_markup_and_escapes_replacement(tmp_path: Path):
+    source = _write_rtf(tmp_path / "source.rtf", DISCHARGE_NOTE)
+    output = tmp_path / "redacted.rtf"
+    document = extract_rtf(source)
+    start = document.text.index("Jane Roe")
+
+    result = write_redacted_rtf(
+        source,
+        output,
+        [(start, start + len("Jane Roe"), "A{B}\\C é")],
+    )
+
+    assert result == output
+    assert extract_rtf(output).text.startswith("Patient A{B}\\C é\nMRN\tA123")
+    raw = output.read_text(encoding="latin-1")
+    assert "{\\fonttbl" in raw
+    assert "A\\{B\\}\\\\C \\u233?" in raw
+    assert "Chart Clerk" in raw
+
+
+def test_write_redacted_rtf_projects_across_formatting_groups(tmp_path: Path):
+    source = _write_rtf(
+        tmp_path / "formatted.rtf",
+        "{\\rtf1\\ansi Patient Jane {\\b Roe} MRN A123}",
+    )
+    output = tmp_path / "redacted.rtf"
+    document = extract_rtf(source)
+    start = document.text.index("Jane Roe")
+
+    write_redacted_rtf(source, output, [(start, start + 8, "[NAME]")])
+
+    assert extract_rtf(output).text == "Patient [NAME] MRN A123"
+    assert "{\\b " in output.read_text(encoding="latin-1")
+
+
+def test_write_redacted_rtf_preserves_partial_atomic_hex_run(tmp_path: Path):
+    source = _write_rtf(
+        tmp_path / "encoded.rtf",
+        r"{\rtf1\ansi Patient \'4a\'61\'6e\'65 Roe}",
+    )
+    output = tmp_path / "redacted.rtf"
+    document = extract_rtf(source)
+    start = document.text.index("Jane")
+
+    write_redacted_rtf(source, output, [(start, start + 4, "[NAME]")])
+
+    assert extract_rtf(output).text == "Patient [NAME] Roe"
+
+
+def test_rtf_handler_runs_detector_and_writes_redacted_copy(tmp_path: Path):
+    source = _write_rtf(tmp_path / "source.rtf", DISCHARGE_NOTE)
+    output = tmp_path / "redacted.rtf"
+    observed: list[tuple[str, str | None]] = []
+
+    def detector(text: str, *, lang: str | None = None):
+        observed.append((text, lang))
+        start = text.index("Jane Roe")
+        return [(start, start + 8, "NAME")]
+
+    document = redact_document(
+        source,
+        models=detector,
+        lang="en",
+        policy={"output_path": output},
+    )
+
+    assert observed == [(EXPECTED_TEXT, "en")]
+    assert extract_rtf(output).text.startswith("Patient [PERSON]")
+    assert document.metadata["detected_span_count"] == 1
+    assert document.metadata["redacted_rtf_path"] == str(output)
+
+
+def test_write_redacted_rtf_rejects_structural_ranges_and_source_alias(
+    tmp_path: Path,
+):
+    source = _write_rtf(tmp_path / "source.rtf", DISCHARGE_NOTE)
+    document = extract_rtf(source)
+    line_break = document.text.index("\n")
+
+    with pytest.raises(ValueError, match="structural text"):
+        write_redacted_rtf(
+            source,
+            tmp_path / "redacted.rtf",
+            [(line_break - 1, line_break + 1, "x")],
+        )
+    with pytest.raises(ValueError, match="must differ"):
+        write_redacted_rtf(source, source, [(0, 1, "x")])
+
+
+def test_rtf_write_helper_is_exported_once():
+    import openmed.multimodal as multimodal
+
+    assert multimodal.write_redacted_rtf is write_redacted_rtf
+    assert multimodal.__all__.count("write_redacted_rtf") == 1
 
 
 def test_rtf_without_header_raises(tmp_path: Path):

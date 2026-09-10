@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -50,6 +51,7 @@ DEFAULT_EXAMPLE_CAP = 5
 DEFAULT_CONTEXT_WINDOW = 24
 DEFAULT_DEDUPE_SIMILARITY = 0.92
 LABELING_QUEUE_SCHEMA_VERSION = "openmed.eval.labeling_queue.v1"
+RETRAINING_SLICE_SCHEMA_VERSION = "openmed.eval.retraining_slices.v1"
 PIPELINE_ATTRIBUTION_SCHEMA_VERSION = "openmed.eval.pipeline_attribution.v1"
 
 _RAW_TEXT_KEYS = frozenset(
@@ -71,6 +73,7 @@ _PHONE_RE = re.compile(r"\b(?:\+?\d[\d .()/-]{6,}\d)\b")
 _NUMBER_RE = re.compile(r"\b\d+(?:[./:-]\d+)*\b")
 _WORD_RE = re.compile(r"(?u)\b[^\W\d_][\w'.-]*\b")
 _TOKEN_RE = re.compile(r"<[A-Z0-9_:-]+>|[A-Za-z0-9_:-]+")
+_SLICE_IDENTIFIER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}\Z")
 
 
 @dataclass(frozen=True)
@@ -640,6 +643,158 @@ class LabelingQueueArtifact:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
         return output_path
+
+
+@dataclass(frozen=True)
+class RetrainingSlicePriority:
+    """Aggregate PHI-free priority for one label and language slice."""
+
+    rank: int
+    label: str
+    language: str
+    candidate_count: int
+    priority_score: float
+    mean_priority: float
+    mean_uncertainty: float
+    max_gate_impact: float
+    candidate_hashes: tuple[str, ...]
+    fixture_hashes: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the deterministic recipe-safe slice payload."""
+
+        return {
+            "candidate_count": self.candidate_count,
+            "candidate_hashes": list(self.candidate_hashes),
+            "fixture_hashes": list(self.fixture_hashes),
+            "label": self.label,
+            "language": self.language,
+            "max_gate_impact": round(self.max_gate_impact, 6),
+            "mean_priority": round(self.mean_priority, 6),
+            "mean_uncertainty": round(self.mean_uncertainty, 6),
+            "priority_score": round(self.priority_score, 6),
+            "rank": self.rank,
+        }
+
+
+@dataclass(frozen=True)
+class RetrainingSliceArtifact:
+    """Ranked aggregate slices for a retraining recipe update."""
+
+    source_queue_hash: str
+    slices: tuple[RetrainingSlicePriority, ...]
+    schema_version: str = RETRAINING_SLICE_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the deterministic PHI-free artifact payload."""
+
+        payload: dict[str, Any] = {
+            "schema_version": self.schema_version,
+            "slice_count": len(self.slices),
+            "slices": [slice_priority.to_dict() for slice_priority in self.slices],
+            "source_queue_hash": self.source_queue_hash,
+        }
+        payload["artifact_hash"] = stable_hash(payload)
+        return payload
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the ranked slices deterministically."""
+
+        return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write the ranked slices to *path*."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return output_path
+
+
+def rank_retraining_slices(
+    queue: LabelingQueueArtifact,
+    *,
+    max_slices: int | None = None,
+) -> RetrainingSliceArtifact:
+    """Aggregate a labeling queue into deterministic recipe-safe priorities.
+
+    Candidate context and caller-provided identifiers are never forwarded. The
+    output retains only canonical labels, language identifiers, numeric
+    aggregates, and fresh hashes of the source evidence.
+    """
+
+    if not isinstance(queue, LabelingQueueArtifact):
+        raise TypeError("queue must be a LabelingQueueArtifact")
+    if max_slices is not None and max_slices < 0:
+        raise ValueError("max_slices must be non-negative")
+
+    grouped: dict[tuple[str, str], list[LabelingQueueItem]] = {}
+    for item in queue.items:
+        if not _SLICE_IDENTIFIER_RE.fullmatch(item.language):
+            raise ValueError("queue item language must be a short identifier")
+        for name, value in (
+            ("priority", item.priority),
+            ("uncertainty", item.uncertainty),
+            ("gate_impact", item.gate_impact),
+        ):
+            if not math.isfinite(value) or value < 0.0:
+                raise ValueError(f"queue item {name} must be finite and non-negative")
+        grouped.setdefault((item.label, item.language), []).append(item)
+
+    summaries: list[dict[str, Any]] = []
+    for (label, language), items in sorted(grouped.items()):
+        priorities = [item.priority for item in items]
+        uncertainties = [item.uncertainty for item in items]
+        fixture_hashes = {
+            stable_hash({"fixture_evidence": item.provenance["fixture_hash"]})
+            for item in items
+            if item.provenance.get("fixture_hash") is not None
+        }
+        summaries.append(
+            {
+                "label": label,
+                "language": language,
+                "candidate_count": len(items),
+                "priority_score": sum(priorities),
+                "mean_priority": sum(priorities) / len(items),
+                "mean_uncertainty": sum(uncertainties) / len(items),
+                "max_gate_impact": max(item.gate_impact for item in items),
+                "candidate_hashes": tuple(
+                    sorted(
+                        stable_hash(
+                            {
+                                "label": item.label,
+                                "language": item.language,
+                                "span_evidence": item.span_hash,
+                            }
+                        )
+                        for item in items
+                    )
+                ),
+                "fixture_hashes": tuple(sorted(fixture_hashes)),
+            }
+        )
+
+    summaries.sort(
+        key=lambda summary: (
+            -summary["priority_score"],
+            -summary["max_gate_impact"],
+            -summary["candidate_count"],
+            summary["label"],
+            summary["language"],
+        )
+    )
+    if max_slices is not None:
+        summaries = summaries[:max_slices]
+
+    slices = tuple(
+        RetrainingSlicePriority(rank=index, **summary)
+        for index, summary in enumerate(summaries, start=1)
+    )
+    return RetrainingSliceArtifact(
+        source_queue_hash=stable_hash(queue.to_dict()),
+        slices=slices,
+    )
 
 
 @dataclass(frozen=True)
@@ -1995,6 +2150,7 @@ __all__ = [
     "FAITHFULNESS_DISCLAIMER",
     "LABELS",
     "LABELING_QUEUE_SCHEMA_VERSION",
+    "RETRAINING_SLICE_SCHEMA_VERSION",
     "PIPELINE_ATTRIBUTION_SCHEMA_VERSION",
     "MATRIX_LABELS",
     "MISSED",
@@ -2005,6 +2161,8 @@ __all__ = [
     "HardNegativeOverRedactionReport",
     "LabelingQueueArtifact",
     "LabelingQueueItem",
+    "RetrainingSliceArtifact",
+    "RetrainingSlicePriority",
     "PipelineAttributionReport",
     "PipelineErrorAttribution",
     "attribute_pipeline_errors",
@@ -2012,5 +2170,6 @@ __all__ = [
     "faithfulness_report",
     "hard_negative_over_redaction_report",
     "mine_gate_failure_labeling_queue",
+    "rank_retraining_slices",
     "merge_pipeline_attribution_reports",
 ]
