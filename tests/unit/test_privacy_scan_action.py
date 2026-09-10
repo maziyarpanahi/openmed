@@ -2,6 +2,8 @@ import json
 import socket
 from pathlib import Path
 
+import pytest
+
 from scripts.privacy_scan import main
 
 
@@ -64,12 +66,61 @@ def test_synthetic_fixture_allowlist_skips_only_the_selected_file(tmp_path, caps
     assert "synthetic-record-123" not in output.out + output.err
 
 
+def test_fixture_contents_cannot_expand_the_allowlist(tmp_path, capsys):
+    allowlisted = tmp_path / "synthetic.txt"
+    scanned = tmp_path / "trace.txt"
+    report = tmp_path / "report.json"
+    allowlisted.write_text("**\n", encoding="utf-8")
+    scanned.write_text("email: casey@example.test\n", encoding="utf-8")
+
+    status = main(
+        [
+            "--paths",
+            f"{allowlisted}\n{scanned}",
+            "--synthetic-fixture-allowlist",
+            str(allowlisted),
+            "--output",
+            str(report),
+        ]
+    )
+    capsys.readouterr()
+    payload = _read_report(report)
+
+    assert status == 1
+    assert payload["allowlisted_files"] == 1
+    assert payload["scanned_files"] == 1
+    assert payload["findings_by_rule"] == {"email": 1}
+
+
+def test_report_output_replaces_a_symlink_without_overwriting_its_target(
+    tmp_path, capsys
+):
+    source = tmp_path / "safe.txt"
+    source.write_text("synthetic fixture\n", encoding="utf-8")
+    target = tmp_path / "target.txt"
+    target_content = "email: casey@example.test\n"
+    target.write_text(target_content, encoding="utf-8")
+    report = tmp_path / "report.json"
+    try:
+        report.symlink_to(target)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+
+    assert main(["--paths", str(tmp_path), "--output", str(report)]) == 1
+    capsys.readouterr()
+
+    assert not report.is_symlink()
+    assert _read_report(report)["findings_by_rule"] == {"email": 1}
+    assert target.read_text(encoding="utf-8") == target_content
+
+
 def test_custom_policy_enables_only_requested_rules(tmp_path):
     source = tmp_path / "trace.txt"
     policy = tmp_path / "policy.json"
     report = tmp_path / "report.json"
+    synthetic_credential = "AKIA" + "ABCDEFGHIJKLMNOP"
     source.write_text(
-        "email: casey@example.test\nkey: AKIAABCDEFGHIJKLMNOP\n",
+        f"email: casey@example.test\nkey: {synthetic_credential}\n",
         encoding="utf-8",
     )
     policy.write_text(

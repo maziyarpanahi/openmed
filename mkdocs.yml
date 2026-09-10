@@ -199,6 +199,7 @@ nav:
       - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md
       - Transactional Trace Recovery: privacy/trace-recovery.md
+      - CI Privacy Scan: security/ci-privacy-scan.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md

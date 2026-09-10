@@ -84,7 +84,9 @@ synthetic-fixture-allowlist: |
   examples/trace-canaries/*.json
 ```
 
-For a larger list, prefix a JSON path-list file with `@`:
+For a larger list, prefix a JSON path-list file with `@`. The prefix is
+required: without it, a supplied file is allowlisted as a fixture and its
+contents are never interpreted as additional patterns.
 
 ```json
 ["tests/fixtures/synthetic/**", "examples/trace-canaries/*.json"]
@@ -100,12 +102,12 @@ scanned.
 
 ## Report and privacy behavior
 
-The JSON artifact contains the policy name, scanned-file counts, per-file
-finding counts, and counts grouped by rule. It never stores matched text,
-snippets, offsets, hashes of matched values, exception details, or fixture
-contents. Console annotations and failure messages likewise contain only
-counts and safe repository-relative paths. Configuration and read failures use
-stable error categories and do not echo paths or input values.
+The atomically written JSON artifact contains the policy name, scanned-file
+counts, per-file finding counts, and counts grouped by rule. It never stores
+matched text, snippets, offsets, hashes of matched values, exception details,
+or fixture contents. Console annotations and failure messages likewise contain
+only counts and safe repository-relative paths. Configuration and read failures
+use stable error categories and do not echo paths or input values.
 
 Run the scanner locally with an output path outside the repository if you do
 not want a report left in the worktree:

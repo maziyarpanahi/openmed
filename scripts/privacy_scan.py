@@ -17,10 +17,11 @@ import json
 import os
 import re
 import sys
+import tempfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, NoReturn, Sequence
 
 DEFAULT_OUTPUT = Path("privacy-scan-report.json")
 _SKIPPED_DIRECTORY_NAMES = frozenset(
@@ -327,13 +328,6 @@ def _split_lines(value: str) -> list[str]:
     ]
 
 
-def _looks_like_path_pattern(value: str) -> bool:
-    """Identify a likely path-list entry without inspecting its contents."""
-    if any(character in value for character in ("@", "=", ":")):
-        return False
-    return "/" in value or "\\" in value or "*" in value or value.count(".")
-
-
 def _read_allowlist_file(path: Path) -> list[str]:
     """Read a JSON or newline-delimited path allowlist."""
     try:
@@ -366,9 +360,9 @@ def _read_allowlist_file(path: Path) -> list[str]:
 def load_allowlist(value: str | Path | None = None) -> tuple[str, ...]:
     """Load newline-delimited synthetic fixture paths or glob patterns.
 
-    Prefix a path with ``@`` to explicitly load a path-list file.  An existing
-    JSON/list-looking file is also accepted for convenience; a normal fixture
-    path remains a direct pattern unless its contents look like path entries.
+    Prefix a path with ``@`` to explicitly load a path-list file. Without that
+    prefix, every value is treated only as a path or glob pattern so fixture
+    contents can never expand the allowlist.
     """
     configured = str(value or "").strip()
     if not configured:
@@ -377,21 +371,7 @@ def load_allowlist(value: str | Path | None = None) -> tuple[str, ...]:
     if configured.startswith("@"):
         return tuple(_read_allowlist_file(Path(configured[1:])))
 
-    entries = _split_lines(configured)
-    if len(entries) == 1:
-        candidate = Path(entries[0])
-        if candidate.is_file():
-            if candidate.suffix.casefold() == ".json":
-                return tuple(_read_allowlist_file(candidate))
-            try:
-                candidate_entries = _read_allowlist_file(candidate)
-            except PrivacyScanError:
-                candidate_entries = []
-            if candidate_entries and all(
-                _looks_like_path_pattern(entry) for entry in candidate_entries
-            ):
-                return tuple(candidate_entries)
-    return tuple(entries)
+    return tuple(_split_lines(configured))
 
 
 def _flatten_input_values(values: str | Path | Iterable[str | Path]) -> list[str]:
@@ -568,7 +548,10 @@ def scan_paths(
     configured_policy = load_policy(policy)
     allowlist = load_allowlist(synthetic_fixture_allowlist)
     files = _expand_paths(path_values, root_path)
-    excluded = {Path(path).resolve() for path in _flatten_input_values(excluded_paths)}
+    excluded = {
+        Path(os.path.abspath(os.fspath(path)))
+        for path in _flatten_input_values(excluded_paths)
+    }
 
     file_summaries: list[FileSummary] = []
     findings_by_rule: Counter[str] = Counter()
@@ -626,16 +609,36 @@ def _result_payload(result: ScanResult) -> dict[str, object]:
 
 
 def _write_json(path: Path, payload: Mapping[str, object]) -> None:
-    """Write deterministic JSON, translating all filesystem errors safely."""
+    """Atomically write deterministic JSON without following the output path."""
+    temporary_path: Path | None = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-    except OSError as exc:
-        del exc
+        content = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle.fileno(), 0o600)
+            else:
+                os.chmod(handle.name, 0o600)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
+    except (OSError, TypeError, ValueError):
         raise PrivacyScanError("report_unwritable") from None
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
 
 
 def _write_error_report(path: Path, category: str) -> None:
@@ -680,7 +683,7 @@ def _emit_annotations(result: ScanResult) -> None:
 class _SafeArgumentParser(argparse.ArgumentParser):
     """Do not let argparse echo arbitrary argument values on failure."""
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         del message
         raise PrivacyScanError("invalid_arguments")
 
