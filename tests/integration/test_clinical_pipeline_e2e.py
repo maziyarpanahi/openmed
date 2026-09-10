@@ -26,10 +26,9 @@ Guarantees asserted here:
 * **Golden expectations** - assertion axes, grounding codes, and FHIR resource
   shapes are compared against a committed synthetic JSON fixture.
 
-The grounding -> FHIR leg is driven through the individual linkers because a
-public top-level ``openmed.ground()`` orchestrator is *not merged yet*; see
-:func:`test_public_ground_orchestrator_is_future_work` for the documented
-``xfail`` that guards that gap rather than faking it.
+The grounding -> FHIR leg is driven through the individual linkers to pin each
+stage's hand-off, while :func:`test_public_ground_orchestrator_is_available`
+guards the public top-level ``openmed.ground()`` facade.
 
 Advisory only: the synthetic clinical output modelled here is a regression
 fixture, not a medical device, and must not drive clinical decisions.
@@ -657,22 +656,13 @@ class TestNoPHILeakageDownstream:
 
 
 # --------------------------------------------------------------------------- #
-# Documented gap: public grounding orchestrator is future work (no fakes).
+# Public grounding orchestrator.
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.integration
-@pytest.mark.xfail(
-    reason=(
-        "OM-804 documented gap: a public top-level openmed.ground() orchestrator "
-        "is not merged yet. This suite drives the individual grounding linkers "
-        "directly; when ground() lands, replace this xfail with a direct "
-        "orchestrator hand-off assertion."
-    ),
-    strict=True,
-)
-def test_public_ground_orchestrator_is_future_work():
-    """Guard the documented grounding->FHIR orchestrator gap (must stay xfail)."""
+def test_public_ground_orchestrator_is_available():
+    """Guard the public grounding facade used by downstream pipeline callers."""
     assert hasattr(openmed, "ground")
 
 
