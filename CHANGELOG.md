@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameter expectations, bounded exact shape arithmetic, deterministic JSON,
   clipping declarations, and value-free rejection of unknown or identifying
   fields (#3010).
+- Added a versioned no-PHI exception taxonomy for telemetry and audit records,
+  with owner-free approval metadata, bounded digest-only evidence, explicit UTC
+  expiry checks, deterministic serialization, and value-free validation
+  failures (#2528).
 
 ### Security
 
