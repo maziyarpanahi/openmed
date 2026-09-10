@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic local pre-push privacy scanner that checks every new
+  commit blob for direct identifiers, secrets, and sensitive structured fields;
+  emits value-free reports; supports narrowly versioned synthetic-fixture
+  allowlists; and installs atomically while preserving existing hooks (#2298).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

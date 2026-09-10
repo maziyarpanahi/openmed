@@ -11,6 +11,7 @@ stored in a finding or included in an exception, report, or JSON payload.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import ipaddress
 import json
 import re
@@ -20,7 +21,7 @@ from collections import Counter
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Sequence, TextIO
+from typing import Callable, Iterable, Mapping, NoReturn, Sequence, TextIO
 
 ALLOWLIST_VERSION = 1
 SCANNER_VERSION = "1"
@@ -185,8 +186,9 @@ def _is_placeholder(value: str) -> bool:
     normalized = value.strip().casefold()
     if not normalized:
         return True
-    if (normalized.startswith("<") and normalized.endswith(">")) or (
-        normalized.startswith("[") and normalized.endswith("]")
+    if re.fullmatch(
+        r"(?:<|\[)(?:masked|none|null|placeholder|redacted|synthetic)(?:>|\])",
+        normalized,
     ):
         return True
     if normalized in {
@@ -298,8 +300,8 @@ def load_allowlist(path: str | Path | None = None) -> PrivacyAllowlist:
 
     try:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise PrivacyScanError("privacy allowlist could not be loaded") from exc
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise PrivacyScanError("privacy allowlist could not be loaded") from None
 
     if not isinstance(payload, Mapping):
         raise PrivacyScanError("privacy allowlist must be an object")
@@ -318,17 +320,23 @@ def load_allowlist(path: str | Path | None = None) -> PrivacyAllowlist:
         category = entry.get("category")
         pattern = entry.get("pattern")
         reason = entry.get("reason")
-        if not all(
-            isinstance(value, str) and value.strip()
-            for value in (path_glob, category, pattern, reason)
+        if (
+            not isinstance(path_glob, str)
+            or not path_glob.strip()
+            or not isinstance(category, str)
+            or not category.strip()
+            or not isinstance(pattern, str)
+            or not pattern.strip()
+            or not isinstance(reason, str)
+            or not reason.strip()
         ):
             raise PrivacyScanError(f"privacy allowlist entry {index} is incomplete")
         try:
             compiled = _compile(pattern)
-        except re.error as exc:
+        except re.error:
             raise PrivacyScanError(
                 f"privacy allowlist entry {index} has invalid pattern"
-            ) from exc
+            ) from None
         extension.append(
             AllowlistRule(path_glob.strip(), category.strip(), compiled, reason.strip())
         )
@@ -446,7 +454,10 @@ def _display_path(path: Path, repo_root: Path | None) -> str:
         try:
             candidate = path.resolve().relative_to(root)
         except ValueError:
-            candidate = path
+            digest = hashlib.sha256(
+                path.as_posix().encode("utf-8", errors="replace")
+            ).hexdigest()
+            return f"<external:{digest[:16]}>"
     return candidate.as_posix()
 
 
@@ -548,6 +559,10 @@ def _scan_commit_blobs(
     skipped: set[str] = set()
     for head_sha, path in sorted(set(heads_and_paths)):
         try:
+            object_size = _git_object_size(repo_root, head_sha, path)
+            if object_size > max_bytes:
+                findings.append(Finding(path, "file_too_large", 0))
+                continue
             data = _git_output(repo_root, ["show", f"{head_sha}:{path}"])
         except PrivacyScanError:
             findings.append(Finding(path, "unreadable_file", 0))
@@ -579,11 +594,22 @@ def _git_output(repo_root: Path, args: Sequence[str]) -> bytes:
             check=False,
             capture_output=True,
         )
-    except OSError as exc:
-        raise PrivacyScanError("local git command could not be started") from exc
+    except OSError:
+        raise PrivacyScanError("local git command could not be started") from None
     if completed.returncode != 0:
         raise PrivacyScanError("local git candidate selection failed")
     return completed.stdout
+
+
+def _git_object_size(repo_root: Path, commit: str, path: str) -> int:
+    output = _git_output(repo_root, ["cat-file", "-s", f"{commit}:{path}"])
+    try:
+        size = int(output.strip())
+    except ValueError:
+        raise PrivacyScanError("local git object size is invalid") from None
+    if size < 0:
+        raise PrivacyScanError("local git object size is invalid")
+    return size
 
 
 def changed_paths(
@@ -610,6 +636,10 @@ def changed_paths(
             "--",
         ],
     )
+    return _parse_name_status(output)
+
+
+def _parse_name_status(output: bytes) -> tuple[str, ...]:
     parts = output.split(b"\x00")
     paths: set[str] = set()
     index = 0
@@ -621,6 +651,45 @@ def changed_paths(
             continue
         paths.add(raw_path.decode("utf-8", errors="surrogateescape"))
     return tuple(sorted(paths))
+
+
+def _pushed_commits(repo_root: Path, base_sha: str, head_sha: str) -> tuple[str, ...]:
+    if _is_zero_object_id(base_sha) or not base_sha:
+        args = ["rev-list", "--reverse", head_sha]
+    else:
+        args = ["rev-list", "--reverse", f"{base_sha}..{head_sha}"]
+    output = _git_output(repo_root, args)
+    return tuple(line.decode("ascii") for line in output.splitlines() if line.strip())
+
+
+def _changed_paths_in_commit(repo_root: Path, commit: str) -> tuple[str, ...]:
+    output = _git_output(
+        repo_root,
+        [
+            "diff-tree",
+            "--root",
+            "-m",
+            "--no-commit-id",
+            "--name-status",
+            "--diff-filter=AM",
+            "--no-renames",
+            "-r",
+            "-z",
+            commit,
+            "--",
+        ],
+    )
+    return _parse_name_status(output)
+
+
+def _commit_blob_candidates(
+    repo_root: Path, base_sha: str, head_sha: str
+) -> tuple[tuple[str, str], ...]:
+    candidates: set[tuple[str, str]] = set()
+    for commit in _pushed_commits(repo_root, base_sha, head_sha):
+        for path in _changed_paths_in_commit(repo_root, commit):
+            candidates.add((commit, path))
+    return tuple(sorted(candidates))
 
 
 def parse_pre_push_updates(stream: Iterable[str]) -> tuple[PushUpdate, ...]:
@@ -663,8 +732,9 @@ def scan_pushed_updates(
     for update in sorted(updates, key=lambda item: (item.local_ref, item.local_sha)):
         if _is_zero_object_id(update.local_sha):
             continue
-        for path in changed_paths(root, update.remote_sha, update.local_sha):
-            heads_and_paths.append((update.local_sha, path))
+        heads_and_paths.extend(
+            _commit_blob_candidates(root, update.remote_sha, update.local_sha)
+        )
     return _scan_commit_blobs(
         root,
         heads_and_paths,
@@ -689,8 +759,7 @@ def scan_commit_ranges(
         base, separator, head = value.partition("..")
         if not separator or not base or not head or ".." in head:
             raise PrivacyScanError("commit range is malformed")
-        for path in changed_paths(root, base, head):
-            heads_and_paths.append((head, path))
+        heads_and_paths.extend(_commit_blob_candidates(root, base, head))
     return _scan_commit_blobs(
         root,
         heads_and_paths,
@@ -736,10 +805,18 @@ def _json_report(result: ScanResult) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+class _SafeArgumentParser(argparse.ArgumentParser):
+    """Translate parser failures without echoing arbitrary argument values."""
+
+    def error(self, message: str) -> NoReturn:
+        del message
+        raise PrivacyScanError("privacy scanner arguments are invalid")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the local scanner command-line parser."""
 
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = _SafeArgumentParser(description=__doc__)
     parser.add_argument(
         "--repo",
         type=Path,
@@ -785,12 +862,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, *, stdin: TextIO | None = None) -> int:
     """Run an explicit-path, range, or Git pre-push privacy scan."""
 
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    if args.max_bytes <= 0:
-        parser.error("--max-bytes must be positive")
-    root = args.repo.resolve()
     try:
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        if args.max_bytes <= 0:
+            parser.error("--max-bytes must be positive")
+        root = args.repo.resolve()
         active_allowlist = load_allowlist(args.allowlist)
         if args.paths:
             result = scan_paths(

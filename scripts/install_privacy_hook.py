@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
-import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from textwrap import dedent
 
@@ -31,8 +31,8 @@ def _git_hooks_path(repo_root: Path) -> Path:
             capture_output=True,
             text=True,
         )
-    except OSError as exc:
-        raise RuntimeError("git is unavailable") from exc
+    except OSError:
+        raise RuntimeError("git is unavailable") from None
     if completed.returncode != 0:
         raise RuntimeError("repository hooks directory could not be resolved")
     value = completed.stdout.strip()
@@ -87,24 +87,64 @@ def install_hook(
     hook_path = hooks_dir / HOOK_NAME
     original_path = hooks_dir / ORIGINAL_HOOK_NAME
 
+    if hook_path.is_symlink() or original_path.is_symlink():
+        raise RuntimeError("a pre-push hook path is a symbolic link")
+
+    preserve_existing = False
     if hook_path.exists():
         try:
             existing = hook_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            raise RuntimeError("existing pre-push hook could not be read") from exc
+        except (OSError, UnicodeError):
+            raise RuntimeError("existing pre-push hook could not be read") from None
         if HOOK_MARKER not in existing:
             if original_path.exists():
                 raise RuntimeError("a preserved pre-push hook already exists")
-            shutil.move(str(hook_path), str(original_path))
+            preserve_existing = True
 
-    temporary_path = hooks_dir / f".{HOOK_NAME}.openmed-tmp"
-    temporary_path.write_text(
-        _hook_script(python_executable or sys.executable),
-        encoding="utf-8",
-        newline="\n",
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{HOOK_NAME}.openmed-",
+        dir=hooks_dir,
     )
-    os.chmod(temporary_path, 0o755)
-    os.replace(temporary_path, hook_path)
+    temporary_path = Path(temporary_name)
+    preserved = False
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(_hook_script(python_executable or sys.executable))
+            stream.flush()
+            os.fsync(stream.fileno())
+            if hasattr(os, "fchmod"):
+                os.fchmod(stream.fileno(), 0o755)
+        if not hasattr(os, "fchmod"):
+            os.chmod(temporary_path, 0o755)
+
+        if preserve_existing:
+            os.replace(hook_path, original_path)
+            preserved = True
+        try:
+            os.replace(temporary_path, hook_path)
+        except OSError:
+            if preserved:
+                try:
+                    os.replace(original_path, hook_path)
+                except OSError:
+                    raise RuntimeError(
+                        "privacy hook installation failed and rollback was incomplete"
+                    ) from None
+            raise RuntimeError("privacy hook could not be installed") from None
+    except (OSError, UnicodeError):
+        if preserved:
+            try:
+                os.replace(original_path, hook_path)
+            except OSError:
+                raise RuntimeError(
+                    "privacy hook installation failed and rollback was incomplete"
+                ) from None
+        raise RuntimeError("privacy hook could not be installed") from None
+    finally:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     return hook_path
 
 

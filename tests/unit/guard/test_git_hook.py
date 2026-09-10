@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from io import StringIO
 from pathlib import Path
 
 import pytest
 
+import scripts.install_privacy_hook as hook_installer
 from openmed.guard.git_hook import (
     ALLOWLIST_VERSION,
     Finding,
@@ -38,6 +40,7 @@ def _git(repo: Path, *args: str) -> str:
 
 def _init_repo(repo: Path) -> None:
     _git(repo, "init", "--quiet")
+    _git(repo, "config", "commit.gpgsign", "false")
     _git(repo, "config", "user.name", "Synthetic Test")
     _git(repo, "config", "user.email", "guard" + "@" + "example.test")
 
@@ -182,6 +185,40 @@ def test_pre_push_updates_scan_the_pushed_range(tmp_path: Path) -> None:
     assert range_result.files == {"note.txt": {"email": 1}}
 
 
+def test_range_scan_catches_sensitive_content_removed_before_head(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    note = tmp_path / "note.txt"
+    note.write_text("safe\n", encoding="utf-8")
+    _git(tmp_path, "add", "note.txt")
+    _git(tmp_path, "commit", "--quiet", "--message", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+
+    mail_value = "person" + "@" + "clinic.local"
+    note.write_text(mail_value + "\n", encoding="utf-8")
+    _git(tmp_path, "add", "note.txt")
+    _git(tmp_path, "commit", "--quiet", "--message", "sensitive intermediate")
+    note.write_text("safe again\n", encoding="utf-8")
+    _git(tmp_path, "add", "note.txt")
+    _git(tmp_path, "commit", "--quiet", "--message", "safe head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    result = scan_commit_ranges(tmp_path, [f"{base}..{head}"])
+
+    assert result.passed is False
+    assert result.files == {"note.txt": {"email": 1}}
+
+
+def test_bracketed_sensitive_values_are_not_implicit_placeholders() -> None:
+    findings = scan_text(
+        '{"patient_name": "[Ada Lovelace]"}',
+        path="tests/fixtures/note.json",
+    )
+
+    assert {finding.category for finding in findings} == {"name"}
+
+
 def test_new_branch_pre_push_update_uses_empty_tree(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     (tmp_path / "note.txt").write_text("safe\n", encoding="utf-8")
@@ -196,6 +233,44 @@ def test_new_branch_pre_push_update_uses_empty_tree(tmp_path: Path) -> None:
 
     assert result.passed
     assert result.scanned_files == ("note.txt",)
+
+
+def test_new_branch_scan_includes_sensitive_intermediate_commit(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    note = tmp_path / "note.txt"
+    mail_value = "person" + "@" + "clinic.local"
+    note.write_text(mail_value + "\n", encoding="utf-8")
+    _git(tmp_path, "add", "note.txt")
+    _git(tmp_path, "commit", "--quiet", "--message", "sensitive first commit")
+    note.write_text("safe\n", encoding="utf-8")
+    _git(tmp_path, "add", "note.txt")
+    _git(tmp_path, "commit", "--quiet", "--message", "safe head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    updates = parse_pre_push_updates(
+        [f"refs/heads/topic {head} refs/heads/topic {'0' * 40}\n"]
+    )
+    result = scan_pushed_updates(tmp_path, updates)
+
+    assert result.passed is False
+    assert result.files == {"note.txt": {"email": 1}}
+
+
+def test_commit_scan_rejects_oversized_blob(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    note = tmp_path / "note.txt"
+    note.write_text("too large\n", encoding="utf-8")
+    _git(tmp_path, "add", "note.txt")
+    _git(tmp_path, "commit", "--quiet", "--message", "oversized")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    result = scan_commit_ranges(tmp_path, [f"{'0' * 40}..{head}"], max_bytes=4)
+
+    assert result.passed is False
+    assert result.files == {"note.txt": {"file_too_large": 1}}
+    assert result.scanned_files == ()
 
 
 def test_pre_push_input_rejects_malformed_records() -> None:
@@ -221,6 +296,18 @@ def test_cli_returns_nonzero_and_keeps_report_value_free(
     assert "email" in captured.err
 
 
+def test_cli_argument_errors_do_not_echo_values(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sensitive_value = "person" + "@" + "clinic.local"
+
+    exit_code = main(["--max-bytes", sensitive_value], stdin=StringIO())
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert sensitive_value not in captured.out + captured.err
+
+
 def test_installer_preserves_existing_hook(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     hooks = tmp_path / ".git" / "hooks"
@@ -235,7 +322,56 @@ def test_installer_preserves_existing_hook(tmp_path: Path) -> None:
     assert (hooks / "pre-push.openmed-original").read_text(encoding="utf-8") == (
         "#!/bin/sh\nexit 7\n"
     )
-    assert installed.stat().st_mode & 0o111
+    if os.name != "nt":
+        assert installed.stat().st_mode & 0o111
+
+
+def test_installer_restores_existing_hook_when_replacement_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_repo(tmp_path)
+    hooks = tmp_path / ".git" / "hooks"
+    existing = hooks / "pre-push"
+    original_contents = "#!/bin/sh\nexit 7\n"
+    existing.write_text(original_contents, encoding="utf-8")
+    real_replace = os.replace
+
+    def fail_install(source: str | Path, destination: str | Path) -> None:
+        source_path = Path(source)
+        destination_path = Path(destination)
+        if source_path.name.startswith(".pre-push.openmed-") and (
+            destination_path == existing
+        ):
+            raise OSError("synthetic replacement failure")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(hook_installer.os, "replace", fail_install)
+
+    with pytest.raises(RuntimeError, match="could not be installed"):
+        install_hook(tmp_path)
+
+    assert existing.read_text(encoding="utf-8") == original_contents
+    assert not (hooks / "pre-push.openmed-original").exists()
+    assert not tuple(hooks.glob(".pre-push.openmed-*"))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink behavior is platform-specific")
+def test_installer_rejects_symlink_hook_without_touching_target(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    hooks = tmp_path / ".git" / "hooks"
+    target = tmp_path / "outside-hook"
+    target.write_text("outside\n", encoding="utf-8")
+    (hooks / "pre-push").symlink_to(target)
+
+    with pytest.raises(RuntimeError, match="symbolic link"):
+        install_hook(tmp_path)
+
+    assert target.read_text(encoding="utf-8") == "outside\n"
+    assert (hooks / "pre-push").is_symlink()
+    assert not tuple(hooks.glob(".pre-push.openmed-*"))
 
 
 def test_value_free_finding_has_no_value_field() -> None:

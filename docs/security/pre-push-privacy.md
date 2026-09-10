@@ -15,17 +15,22 @@ from the repository root:
 
 The installer preserves an existing `pre-push` hook as
 `pre-push.openmed-original` and runs it only after the privacy scan passes.
-Running the installer again is safe. Set `OPENMED_PYTHON` when the hook should
-use a different local interpreter.
+The replacement is written to a private temporary file and installed
+atomically; if replacement fails, the prior hook is restored. Hook-path
+symbolic links are rejected instead of followed. Running the installer again
+is safe. Set `OPENMED_PYTHON` when the hook should use a different local
+interpreter.
 
 ## What is scanned
 
 Git supplies the hook with the local and remote object IDs for each ref update.
 The scanner resolves those objects with local Git commands and selects only
-added (`A`) and modified (`M`) paths in each pushed range, then scans the blob
-at the pushed head commit. Deleted files, unchanged files, unrelated
-repository history, and unstaged working-tree changes are not scanned. No
-network call is required by the scanner or the installed hook.
+added (`A`) and modified (`M`) paths from every commit introduced by each
+pushed range. It scans each corresponding committed blob, including a value
+introduced in an intermediate commit and removed before the pushed head.
+Deleted files, unchanged files, commits already reachable from a remote ref,
+and unstaged working-tree changes are not scanned. No network call is required
+by the scanner or the installed hook.
 
 UTF-8 text candidates are checked for high-confidence categories:
 
