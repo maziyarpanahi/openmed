@@ -22,6 +22,13 @@ License: Apache-2.0
 Usage: Planned structured-data profiling and quasi-identifier discovery for
 tabular anonymization workflows.
 
+Name: KServe V2 inference protocol
+Source: https://github.com/kserve/open-inference-protocol
+License: Apache-2.0
+Usage: OpenMed ships a minimal, locally namespaced protobuf subset for the
+standard ModelInfer request and response wire fields. It provides a client-only
+Triton/KServe integration and does not bundle an inference server.
+
 Name: medspaCy ConText
 Source: https://github.com/medspacy/medspacy
 License: Apache-2.0
