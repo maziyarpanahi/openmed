@@ -183,6 +183,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve the lowercase image name
+        id: image-name
+        shell: bash
+        run: |
+          # GHCR rejects references whose repository name carries uppercase
+          # characters, which any fork of a capitalised owner would produce.
+          owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV"
+          echo "image_name=ghcr.io/${owner_repo}" >> "$GITHUB_OUTPUT"
+
       - name: Compute image tags
         id: tags
         shell: bash
@@ -229,7 +239,7 @@ jobs:
         id: attest-image
         uses: actions/attest@v4
         with:
-          subject-name: ${{ env.IMAGE_NAME }}
+          subject-name: ${{ steps.image-name.outputs.image_name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
           create-storage-record: false

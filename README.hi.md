@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>34 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 मैनिफ़ेस्ट प्रविष्टियाँ</b> &nbsp;·&nbsp; <b>33 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -124,7 +124,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
 ]
 ```
 
@@ -167,11 +167,11 @@ dependencyResolutionManagement {
 }
 ```
 
-फिर immutable OpenMed `v2.0.0` release उपयोग करें:
+फिर immutable OpenMed `v2.3.0` release उपयोग करें:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.3.0")
 }
 ```
 
@@ -529,7 +529,7 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (35 समर्थित रूट; 34 मॉडल-समर्थित)
+## बहुभाषी PII (36 समर्थित रूट; 33 मॉडल-समर्थित)
 
 निष्कर्षण और डी-आइडेंटिफिकेशन **35 समर्थित PII भाषा codes** में उपलब्ध हैं:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
@@ -662,7 +662,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [बैच processing](https://openmed.life/docs/batch-processing) |
 | [Configuration profiles](https://openmed.life/docs/profiles) | [REST सेवा](docs/rest-service.md) | [MLX बैकएंड](docs/mlx-backend.md) |
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.0.0 release notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [उदाहरण](docs/examples.md) |
+| [OpenMed 2.3.0 release notes](docs/release/v2.3.0.md) | [OpenMed 2.2.0 release notes](docs/release/v2.2.0.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
 | [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [एक्सटेंशन प्लगइन SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |
@@ -687,7 +687,7 @@ OpenMed का संरक्षक एक रोएँदार फ़ार�
 Bug reports, feature requests और PR—सभी योगदानों का स्वागत है। पहले [योगदान गाइड](CONTRIBUTING.md) और हमारा [Code of Conduct](CODE_OF_CONDUCT.md) पढ़ें।
 
 - [Issue खोलें](https://github.com/maziyarpanahi/openmed/issues)
-- [योगदान गाइड](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [सुरक्षा नीति](SECURITY.md)
+- [योगदान गाइड](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [मेंटेनर्स](MAINTAINERS.md) · [सुरक्षा नीति](SECURITY.md)
 - **अनुवादों का स्वागत है**: ऊपर language switcher में linked अन्य भाषाओं की README पूरी करने में मदद करें।
 
 ---
@@ -731,7 +731,7 @@ OpenMed SDK का स्रोत [Apache-2.0 License](LICENSE) के अं�
 
 यदि OpenMed आपके लिए उपयोगी है, तो एक star दूसरों को इसे खोजने में मदद करता है।
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

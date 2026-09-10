@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import type {
   OpenMedDeidentifyResult,
   OpenMedSpan,
+  RawTokenClassificationEntity,
+  RawTokenClassificationPipeline,
+  RawTransformersRuntime,
+  TokenClassificationEntity,
   TokenClassificationPipeline,
   TransformersRuntime,
 } from "../../js/openmedkit-web/src/index";
@@ -84,7 +91,7 @@ test("local model loading is offline-only by default", async () => {
     { runtime },
   )) as TokenClassificationPipeline;
 
-  assert.equal(loaded, fixturePipeline);
+  assert.deepEqual(await loaded(goldenText), fixturePipeline(goldenText));
   assert.equal(runtime.env?.allowRemoteModels, true);
   assert.equal(runtime.env?.allowLocalModels, false);
 });
@@ -107,12 +114,328 @@ test("OpenMed ONNX loading selects the root INT8 artifact", async () => {
     { runtime },
   )) as TokenClassificationPipeline;
 
-  assert.equal(loaded, fixturePipeline);
+  assert.deepEqual(await loaded(goldenText), fixturePipeline(goldenText));
+});
+
+test("default model is a public -onnx-android repo loaded through loadOnnxModel", async () => {
+  const api = await loadApi();
+  assert.equal(
+    api.DEFAULT_MODEL_ID,
+    "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android",
+  );
+
+  let seenOptions: Record<string, unknown> | undefined;
+  const runtime: RawTransformersRuntime = {
+    pipeline: async (task, model, options) => {
+      assert.equal(task, "token-classification");
+      assert.equal(model, api.DEFAULT_MODEL_ID);
+      seenOptions = options;
+      return transformersJsFixturePipeline;
+    },
+  };
+
+  const result = (await api.deidentify(goldenText, {
+    loaderOptions: { runtime },
+  })) as OpenMedDeidentifyResult;
+
+  assert.equal(seenOptions?.subfolder, "");
+  assert.equal(seenOptions?.model_file_name, "model_int8");
+  assert.equal(seenOptions?.quantized, false);
+  assert.equal(result.deidentifiedText, goldenRedactedText);
+  assert.equal(result.spans[0]?.metadata.model, api.DEFAULT_MODEL_ID);
+});
+
+test("extractPii keeps O tokens so offset alignment sees the full sequence", async () => {
+  const api = await loadApi();
+  let seenOptions: Record<string, unknown> | undefined;
+  const pipeline: TokenClassificationPipeline = (_text, options) => {
+    seenOptions = options;
+    return [];
+  };
+
+  await api.extractPii(goldenText, { pipeline });
+
+  assert.equal(seenOptions?.aggregation_strategy, "none");
+  assert.deepEqual(seenOptions?.ignore_labels, []);
+});
+
+test("offset-less Transformers.js output is aligned to character offsets", async () => {
+  const api = await loadApi();
+  const result = (await api.deidentify(goldenText, {
+    pipeline: transformersJsFixturePipeline,
+  })) as OpenMedDeidentifyResult;
+
+  assert.equal(result.deidentifiedText, goldenRedactedText);
+  assert.deepEqual(
+    result.spans.map((span) => [span.start, span.end, span.canonical_label]),
+    [
+      [8, 20, "PERSON"],
+      [26, 36, "DATE_OF_BIRTH"],
+      [44, 61, "EMAIL"],
+    ],
+  );
+  assert.deepEqual(
+    result.spans.map((span) => span.evidence.token_count),
+    [4, 5, 5],
+  );
+});
+
+test("word-initial tokens are not matched inside earlier words when O tokens were dropped", async () => {
+  const api = await loadApi();
+  const text = "Consent obtained by phone. dcarter@email.com is the mother.";
+  // Transformers.js default ignore_labels=["O"] drops every O token, so the
+  // first email piece "d" arrives with a large index gap after [CLS].
+  const output = transformersJsTokens([
+    [6, "d", "B-email"],
+    [7, "##carter", "I-email"],
+    [8, "@", "I-email"],
+    [9, "email", "I-email"],
+    [10, ".", "I-email"],
+    [11, "com", "I-email"],
+  ]);
+
+  const spans = (await api.extractPii(text, {
+    pipeline: () => output,
+  })) as OpenMedSpan[];
+
+  assert.deepEqual(
+    spans.map((span) => [span.start, span.end, span.canonical_label]),
+    [[27, 44, "EMAIL"]],
+  );
+});
+
+test("SentencePiece and byte-level markers, case, and accents align to the source text", async () => {
+  const api = await loadApi();
+  const text = "Patient Nguyễn Văn An was seen.";
+
+  const sentencePiece = transformersJsTokens([
+    [1, "▁Patient", "O"],
+    [2, "▁Nguyễn", "B-PERSON"],
+    [3, "▁Văn", "I-PERSON"],
+    [4, "▁An", "I-PERSON"],
+    [5, "▁was", "O"],
+    [6, "▁seen", "O"],
+    [7, ".", "O"],
+  ]);
+  const byteLevelLowercased = transformersJsTokens([
+    [1, "patient", "O"],
+    [2, "Ġnguyen", "B-PERSON"],
+    [3, "Ġvan", "I-PERSON"],
+    [4, "Ġan", "I-PERSON"],
+    [5, "Ġwas", "O"],
+    [6, "Ġseen", "O"],
+    [7, ".", "O"],
+  ]);
+
+  for (const output of [sentencePiece, byteLevelLowercased]) {
+    const spans = (await api.extractPii(text, {
+      pipeline: () => output,
+    })) as OpenMedSpan[];
+    assert.deepEqual(
+      spans.map((span) => [span.start, span.end, span.canonical_label]),
+      [[8, 21, "PERSON"]],
+    );
+    assert.equal(text.slice(8, 21), "Nguyễn Văn An");
+  }
+});
+
+test("alignTokenOffsets keeps supplied offsets, drops special tokens, and fills the rest", async () => {
+  const api = await loadApi();
+  const text = "Email alice@example.org today.";
+  const aligned = api.alignTokenOffsets(text, [
+    { entity: "O", index: 0, word: "[CLS]" },
+    { entity: "O", index: 1, word: "email", start: 0, end: 5 },
+    { entity: "B-EMAIL", index: 2, word: "alice" },
+    { entity: "I-EMAIL", index: 3, word: "@" },
+    { entity: "I-EMAIL", index: 4, word: "example" },
+    { entity: "I-EMAIL", index: 5, word: "." },
+    { entity: "I-EMAIL", index: 6, word: "org" },
+    { entity: "O", index: 7, word: "today" },
+    { entity: "O", index: 8, word: "." },
+    { entity: "O", index: 9, word: "[SEP]" },
+  ]) as TokenClassificationEntity[];
+
+  assert.deepEqual(
+    aligned.map((token) => [token.word, token.start, token.end]),
+    [
+      ["email", 0, 5],
+      ["alice", 6, 11],
+      ["@", 11, 12],
+      ["example", 12, 19],
+      [".", 19, 20],
+      ["org", 20, 23],
+      ["today", 24, 29],
+      [".", 29, 30],
+    ],
+  );
+});
+
+test("alignment preserves decomposed accents and supplementary Unicode letters", async () => {
+  const api = await loadApi();
+  for (const [name, word] of [["Jose\u0301", "jose"], ["𐐀", "𐐨"]]) {
+    const text = `Name ${name}`;
+    const result = await api.deidentify(text, {
+      pipeline: () => transformersJsTokens([
+        [1, "name", "O"],
+        [2, word!, "B-PERSON"],
+      ]),
+    });
+    assert.equal(result.deidentifiedText, "Name [PERSON]");
+    assert.deepEqual(result.spans.map((span) => [span.start, span.end]), [
+      [5, text.length],
+    ]);
+  }
+});
+
+test("unalignable classified tokens fail without exposing source text", async () => {
+  const api = await loadApi();
+  for (const word of ["[UNK]", "not-in-source"]) {
+    await assert.rejects(
+      api.deidentify("Name Synthetic", {
+        pipeline: () => transformersJsTokens([
+          [1, "name", "O"],
+          [2, word, "B-PERSON"],
+        ]),
+      }),
+      { message: "Token offset alignment failed; provide source offsets." },
+    );
+  }
+});
+
+test("model loaders return aligned offsets for flat and nested runtime output", async () => {
+  const api = await loadApi();
+  const rawTokens = transformersJsTokens([[1, "alice", "B-PERSON"]]);
+  for (const nested of [false, true]) {
+    const runtime: RawTransformersRuntime = {
+      pipeline: () => () => nested ? [rawTokens] : rawTokens,
+    };
+    const loaded = await api.loadTokenClassificationPipeline("/models/local", { runtime });
+    const output = await loaded("Alice");
+    const expected = [{ ...rawTokens[0], start: 0, end: 5 }];
+    assert.deepEqual(output, nested ? [expected] : expected);
+  }
+});
+
+test("v2.2 numeric-offset public types remain compatible with raw runtime inputs", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "openmed-types-"));
+  try {
+    const sourcePath = join(directory, "compatibility.ts");
+    const importPath = JSON.stringify(join(packageDir, "dist", "index.js").replaceAll("\\", "/"));
+    await writeFile(sourcePath, `
+import {
+  alignTokenOffsets, extractPii, flattenTokenClassificationOutput,
+  loadTokenClassificationPipeline,
+} from ${importPath};
+import type {
+  TokenClassificationEntity, TokenClassificationPipeline, TransformersRuntime,
+  RawTokenClassificationEntity, RawTokenClassificationPipeline, RawTransformersRuntime,
+} from ${importPath};
+
+function numericOffsets(entity: TokenClassificationEntity): number {
+  return entity.end - entity.start;
+}
+const aligned: TokenClassificationPipeline = () => [{ start: 0, end: 5 }];
+const legacyRuntime: TransformersRuntime = { pipeline: () => aligned };
+const loaded: TokenClassificationPipeline = await loadTokenClassificationPipeline(
+  "/models/local", { runtime: legacyRuntime },
+);
+flattenTokenClassificationOutput(await loaded("Alice")).map(numericOffsets);
+const legacyPipeline = await legacyRuntime.pipeline("token-classification", "/models/local");
+flattenTokenClassificationOutput(await legacyPipeline("Alice")).map(numericOffsets);
+
+const rawTokens: RawTokenClassificationEntity[] = [{ word: "alice", entity: "B-PERSON" }];
+const raw: RawTokenClassificationPipeline = () => rawTokens;
+const runtime: RawTransformersRuntime = { pipeline: () => raw };
+alignTokenOffsets("Alice", rawTokens).map(numericOffsets);
+await extractPii("Alice", { pipeline: raw });
+await extractPii("Alice", { loaderOptions: { runtime } });
+const normalized: TokenClassificationPipeline = await loadTokenClassificationPipeline(
+  "/models/local", { runtime },
+);
+flattenTokenClassificationOutput(await normalized("Alice")).map(numericOffsets);
+`);
+    await promisify(execFile)(process.execPath, [
+      join(packageDir, "node_modules", "typescript", "bin", "tsc"),
+      "--noEmit", "--strict", "--skipLibCheck", "--target", "ES2022",
+      "--module", "ESNext", "--moduleResolution", "Bundler",
+      "--types", "node", "--typeRoots", join(packageDir, "node_modules", "@types"),
+      sourcePath,
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("aligned model loading preserves runtime metadata, disposal, and bound calls", async () => {
+  const api = await loadApi();
+  let disposed = false;
+  const pipeline = Object.assign(
+    () => transformersJsTokens([[1, "alice", "B-PERSON"]]),
+    {
+      model: { id: "synthetic" },
+      async dispose() {
+        assert.equal(this, pipeline);
+        disposed = true;
+      },
+    },
+  );
+  const loaded = await api.loadTokenClassificationPipeline("/models/local", {
+    runtime: { pipeline: () => pipeline },
+  });
+  assert.equal(loaded.model, pipeline.model);
+  const output = await loaded.bind(null)("Alice");
+  assert.equal(output[0].start, 0);
+  assert.equal(output[0].end, 5);
+  await loaded.dispose();
+  assert.equal(disposed, true);
 });
 
 async function loadApi() {
   return import(distUrl);
 }
+
+const goldenText =
+  "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.";
+const goldenRedactedText =
+  "Patient [PERSON], DOB [DATE_OF_BIRTH], email [EMAIL].";
+
+function transformersJsTokens(
+  rows: Array<[number, string, string]>,
+): RawTokenClassificationEntity[] {
+  return rows.map(([index, word, entity]) => ({
+    entity,
+    score: 0.9,
+    index,
+    word,
+  }));
+}
+
+// Shape emitted by the Transformers.js token-classification pipeline with
+// aggregation_strategy "none": lowercased WordPiece words, no start/end.
+const transformersJsFixturePipeline: RawTokenClassificationPipeline = () =>
+  transformersJsTokens([
+    [1, "patient", "O"],
+    [2, "alice", "B-NAME"],
+    [3, "ng", "I-NAME"],
+    [4, "##uy", "I-NAME"],
+    [5, "##en", "I-NAME"],
+    [6, ",", "O"],
+    [7, "do", "O"],
+    [8, "##b", "O"],
+    [9, "1979", "B-DATE_OF_BIRTH"],
+    [10, "-", "I-DATE_OF_BIRTH"],
+    [11, "04", "I-DATE_OF_BIRTH"],
+    [12, "-", "I-DATE_OF_BIRTH"],
+    [13, "12", "I-DATE_OF_BIRTH"],
+    [14, ",", "O"],
+    [15, "email", "O"],
+    [16, "alice", "B-EMAIL"],
+    [17, "@", "I-EMAIL"],
+    [18, "example", "I-EMAIL"],
+    [19, ".", "I-EMAIL"],
+    [20, "org", "I-EMAIL"],
+    [21, ".", "O"],
+  ]);
 
 const fixturePipeline: TokenClassificationPipeline = (text) => {
   const aliceStart = text.indexOf("Alice");

@@ -110,6 +110,31 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("classifier.", "classifier."),
 ]
 
+_MODERNBERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
+    ("model.layers.", "model.encoder.layers."),
+    ("model.embeddings.tok_embeddings.", "model.embeddings.word_embeddings."),
+    (".attn.Wqkv.", ".attention.qkv_proj."),
+    (".attn.Wo.", ".attention.out_proj."),
+    (".mlp.Wi.", ".mlp.wi_proj."),
+    (".mlp.Wo.", ".mlp.wo_proj."),
+]
+
+_LONGFORMER_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
+    ("longformer.encoder.layer.", "longformer.encoder.layers."),
+    ("longformer.embeddings.LayerNorm.", "longformer.embeddings.norm."),
+    (".attention.self.query_global.", ".attention.query_global_proj."),
+    (".attention.self.key_global.", ".attention.key_global_proj."),
+    (".attention.self.value_global.", ".attention.value_global_proj."),
+    (".attention.self.query.", ".attention.query_proj."),
+    (".attention.self.key.", ".attention.key_proj."),
+    (".attention.self.value.", ".attention.value_proj."),
+    (".attention.output.dense.", ".attention.out_proj."),
+    (".attention.output.LayerNorm.", ".ln1."),
+    (".intermediate.dense.", ".linear1."),
+    (".output.dense.", ".linear2."),
+    (".output.LayerNorm.", ".ln2."),
+]
+
 _OPF_MODEL_TYPES = {
     "openai-privacy-filter",
     "privacy-filter",
@@ -317,6 +342,15 @@ def _infer_source_model_type(key: str, model_type: str | None) -> str:
         return "roberta"
     if key.startswith("electra."):
         return "electra"
+    if key.startswith("model."):
+        if (
+            ".layers." in key
+            or key.startswith("model.embeddings.")
+            or key.startswith("model.final_norm.")
+        ):
+            return "modernbert"
+    if key.startswith("longformer."):
+        return "longformer"
     return "bert"
 
 
@@ -325,7 +359,11 @@ def remap_key(key: str, model_type: str | None = None) -> str:
     source_model_type = _infer_source_model_type(key, model_type)
     resolved_model_type = resolve_model_type(source_model_type)
 
-    if resolved_model_type == "deberta-v2":
+    if source_model_type in {"modernbert", "modern-bert"}:
+        replacements = _MODERNBERT_KEY_REPLACEMENTS
+    elif source_model_type == "longformer":
+        replacements = _LONGFORMER_KEY_REPLACEMENTS
+    elif resolved_model_type == "deberta-v2":
         replacements = _DEBERTA_V2_KEY_REPLACEMENTS
     elif source_model_type == "distilbert":
         replacements = _DISTILBERT_KEY_REPLACEMENTS
@@ -427,10 +465,14 @@ def save_mlx_model(
         logger.info("Quantizing to %d bits ...", quantize_bits)
         model = build_model(config)
         model.load_weights(list(mlx_weights.items()))
-        quantize_kwargs = {"bits": quantize_bits}
-        if quantize_group_size is not None:
-            quantize_kwargs["group_size"] = quantize_group_size
-        nn.quantize(model, **quantize_kwargs)
+        if quantize_group_size is None:
+            nn.quantize(model, bits=quantize_bits)
+        else:
+            nn.quantize(
+                model,
+                group_size=quantize_group_size,
+                bits=quantize_bits,
+            )
         mlx_weights = dict(tree_flatten(model.parameters()))
         config_to_save["_mlx_quantization"] = {
             "bits": quantize_bits,
