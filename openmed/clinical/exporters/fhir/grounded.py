@@ -9,6 +9,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from ....core.labels import is_recognized_label, normalize_label
 from ...context import (
     AFFIRMED,
     CERTAIN,
@@ -75,6 +76,7 @@ _RESOURCE_BY_SYSTEM = {
 
 _DEFAULT_DOCUMENT_ID = "openmed-document"
 _UNLABELED = "UNLABELED"
+_UNMAPPED_LABEL_HASH_PREFIX = "UNMAPPED_LABEL_SHA256_"
 
 
 @dataclass(frozen=True)
@@ -490,7 +492,12 @@ def _resource_type(
 
 def _normalized_label(grounded: GroundedSpan) -> str:
     label = grounded.canonical_label
-    return label.strip().upper() if label is not None else _UNLABELED
+    if label is None:
+        return _UNLABELED
+    if is_recognized_label(label):
+        return normalize_label(label)
+    digest = hashlib.sha256(label.strip().casefold().encode("utf-8")).hexdigest()
+    return f"{_UNMAPPED_LABEL_HASH_PREFIX}{digest[:16]}"
 
 
 def _normalize_resource_type(resource: str) -> str:

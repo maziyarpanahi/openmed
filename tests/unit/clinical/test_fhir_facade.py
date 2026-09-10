@@ -100,6 +100,17 @@ def test_unmapped_canonical_label_is_skipped_and_counted() -> None:
     }
 
 
+def test_unrecognized_label_is_hashed_in_phi_free_summary() -> None:
+    span = _span("Patient Alice", start=0, system="SNOMED", code="S-1")
+
+    bundle = to_fhir((span,), doc_id="synthetic-private-label")
+
+    unmapped_labels = bundle.summary.to_dict()["unmapped_by_label"]
+    assert "PATIENT ALICE" not in unmapped_labels
+    assert len(unmapped_labels) == 1
+    assert next(iter(unmapped_labels)).startswith("UNMAPPED_LABEL_SHA256_")
+
+
 def test_facade_output_is_byte_stable_and_honors_bundle_type() -> None:
     first = to_fhir(
         _mixed_spans(),
