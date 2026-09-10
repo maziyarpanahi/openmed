@@ -20,7 +20,7 @@ bind it with a hash, or emit an aggregate count instead.
 ## Example
 
 ```python
-from openmed.compliance.report_lint import ReportFieldSpec, lint_report
+from openmed.compliance import ReportFieldSpec, lint_report
 
 schema = {
     "report_hash": ReportFieldSpec("hash", required=True),
