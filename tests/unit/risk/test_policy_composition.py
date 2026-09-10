@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
+from typing import Any
 
 import pytest
 
@@ -14,8 +17,25 @@ from openmed.risk import (
     PolicyScope,
     PrivacyPolicy,
     compose_policies,
-    policy_fingerprint,
+    composition_policy_fingerprint,
 )
+
+
+class _ExplodingMapping(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise RuntimeError("synthetic-sensitive-exception")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("synthetic-sensitive-exception")
+
+    def __len__(self) -> int:
+        return 1
+
+
+class _EndlessPolicies:
+    def __iter__(self) -> Iterator[Mapping[str, str]]:
+        while True:
+            yield {"scope": "field", "decision": "deny", "selector": "field"}
 
 
 def test_deny_overrides_overlapping_scopes_and_records_inheritance() -> None:
@@ -103,8 +123,11 @@ def test_scope_precedence_is_explicit_for_same_decision() -> None:
     assert default_result == reversed_result
     assert default_result.trace.precedence == DEFAULT_SCOPE_PRECEDENCE
     assert default_result.trace.selected_policy_fingerprint == field_policy.fingerprint
-    assert transport_first.trace.selected_policy_fingerprint == policy_fingerprint(
-        PrivacyPolicy.for_transport("local", "allow", policy_id="transport")
+    assert (
+        transport_first.trace.selected_policy_fingerprint
+        == composition_policy_fingerprint(
+            PrivacyPolicy.for_transport("local", "allow", policy_id="transport")
+        )
     )
     assert transport_first.trace.conflict_category is ConflictCategory.PRECEDENCE
 
@@ -233,3 +256,87 @@ def test_invalid_policy_values_raise_without_echoing_input(
         PrivacyPolicy(scope=scope, decision="unsupported", selector=selector)
 
     assert selector not in str(error.value)
+
+
+def test_policy_and_context_mappings_are_closed_and_unambiguous() -> None:
+    invalid_policies: tuple[Mapping[str, Any], ...] = (
+        {
+            "scope": "field",
+            "decision": "deny",
+            "selector": "synthetic-field",
+            "note": "synthetic-sensitive-value",
+        },
+        {
+            "scope": "field",
+            "decision": "deny",
+            "effect": "deny",
+            "selector": "synthetic-field",
+        },
+        {
+            "scope": "resource",
+            "decision": "deny",
+            "selector": "records",
+            "field": "synthetic-sensitive-value",
+        },
+        _ExplodingMapping(),
+    )
+
+    for policy in invalid_policies:
+        with pytest.raises(ValueError) as exc_info:
+            compose_policies([policy], field="synthetic-field")
+        error = str(exc_info.value)
+        assert "synthetic-sensitive-value" not in error
+        assert "synthetic-sensitive-exception" not in error
+
+    with pytest.raises(ValueError) as exc_info:
+        compose_policies(
+            [],
+            context={
+                "field": "synthetic-field",
+                "raw": "synthetic-sensitive-value",
+            },
+        )
+    assert "synthetic-sensitive-value" not in str(exc_info.value)
+
+
+def test_policy_inputs_are_bounded_and_duplicate_rules_are_rejected() -> None:
+    with pytest.raises(ValueError, match="invalid"):
+        compose_policies(_EndlessPolicies())
+
+    policy = PrivacyPolicy.for_field("field", "deny")
+    with pytest.raises(ValueError, match="invalid"):
+        compose_policies([policy, policy])
+
+    with pytest.raises(ValueError, match="length limit"):
+        PrivacyPolicy.for_field("x" * 513, "deny")
+    with pytest.raises(ValueError, match="supported range"):
+        PrivacyPolicy.for_field("field", "deny", priority=2**31)
+
+
+def test_metadata_is_finite_bounded_acyclic_and_normalization_safe() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        PrivacyPolicy.for_field("field", "deny", metadata={"score": float("inf")})
+
+    cyclic: dict[str, Any] = {}
+    cyclic["self"] = cyclic
+    with pytest.raises(ValueError, match="cycle"):
+        PrivacyPolicy.for_field("field", "deny", metadata=cyclic)
+
+    with pytest.raises(ValueError, match="collide"):
+        PrivacyPolicy.for_field(
+            "field",
+            "deny",
+            metadata={"\u00e9": 1, "e\u0301": 2},
+        )
+
+
+def test_public_decision_records_enforce_value_free_invariants() -> None:
+    result = compose_policies([PrivacyPolicy.for_field("field", "deny")], field="field")
+    entry = result.trace.entries[0]
+
+    with pytest.raises(ValueError, match="fingerprint"):
+        replace(result.trace, context_fingerprint="synthetic-sensitive-value")
+    with pytest.raises(ValueError, match="selection flags"):
+        replace(entry, selected=True, shadowed=True)
+    with pytest.raises(ValueError, match="does not match"):
+        replace(result, decision=PolicyDecision.ALLOW)

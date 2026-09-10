@@ -7,7 +7,7 @@ from pathlib import Path
 
 from openmed.core.language_pack_catalog import DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
 from openmed.core.manifest_diff import build_registry_surfaces, registry_surface_errors
-from openmed.core.model_registry import OPENMED_MODELS
+from openmed.core.model_registry import OPENMED_MODELS, load_manifest_rows
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.registry_service import manifest_pii_languages
 
@@ -42,12 +42,37 @@ def test_registry_cards_have_unique_pointer_metadata() -> None:
         descriptions.add(fields["description"])
 
 
+def test_generated_catalog_tables_cover_every_manifest_row() -> None:
+    snapshot = build_registry_surfaces()
+    rows = load_manifest_rows()
+    model_table = snapshot.catalog_doc.split("<!-- BEGIN MANIFEST MODEL TABLE -->", 1)[
+        1
+    ].split("<!-- END MANIFEST MODEL TABLE -->", 1)[0]
+    benchmark_table = snapshot.catalog_doc.split(
+        "<!-- BEGIN MANIFEST BENCHMARK TABLE -->", 1
+    )[1].split("<!-- END MANIFEST BENCHMARK TABLE -->", 1)[0]
+    expected_benchmarks = sum(
+        1
+        for row in rows
+        if isinstance(row.get("benchmark"), dict)
+        and any(value is not None for value in row["benchmark"].values())
+    )
+
+    assert sum(line.startswith("| `") for line in model_table.splitlines()) == len(rows)
+    assert (
+        sum(line.startswith("| `") for line in benchmark_table.splitlines())
+        == expected_benchmarks
+    )
+    assert f"{len(rows):,} manifest entries" in snapshot.readme
+
+
 def test_runtime_registry_and_i18n_surfaces_include_committed_state() -> None:
     latest = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
 
-    assert OPENMED_MODELS["pii_latest"].model_id == latest
-    assert OPENMED_MODELS["pii_last_green"].model_id == latest
-    assert OPENMED_MODELS["pii_latest"].semantic_version == "1.0.0"
+    assert OPENMED_MODELS["pii_small_mlx_fp_latest"].model_id == latest
+    assert OPENMED_MODELS["pii_small_mlx_fp_last_green"].model_id == latest
+    # Pointer aliases carry the slot's assigned registry version.
+    assert OPENMED_MODELS["pii_small_mlx_fp_latest"].semantic_version == "1.0.0"
     assert SUPPORTED_LANGUAGES == (
         manifest_pii_languages() | set(DEFAULT_MODEL_PLACEHOLDER_LANGUAGES)
     )

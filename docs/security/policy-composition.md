@@ -36,6 +36,12 @@ The default decision is `deny` when no rule matches. Callers may choose an
 explicit default with `default_decision="allow"` when their surrounding policy
 requires it.
 
+Policy and context mappings are closed to the documented fields and reject
+ambiguous aliases. A composition is limited to 4,096 unique rules, resource
+paths to 64 components, and selectors and IDs to 512 characters. Metadata is
+limited to 4,096 items per container and 16 nested levels; non-finite numbers,
+cycles, and Unicode-normalized key collisions are rejected before evaluation.
+
 ## Value-free traces
 
 `compose_policies(...)` returns a `PolicyDecisionResult` with a
@@ -45,6 +51,16 @@ SHA-256 fingerprints for the policy set, context, selectors, and matching
 rules. It does not serialize selectors, resource paths, transport names,
 policy IDs, metadata, or other policy values. `to_dict()` and `to_json()` are
 safe forms for reports and logs.
+
+Use `composition_policy_fingerprint(...)` from `openmed.risk` when a stable
+fingerprint for one composition rule is needed. The shorter
+`policy_fingerprint(...)` spelling remains available from the dedicated
+`openmed.risk.policy_composition` module.
+
+Public trace records validate fingerprint shapes, deterministic ordering,
+selection state, conflict categories, and agreement between the effective
+decision and its trace. Invalid custom containers produce generic errors that
+do not reproduce caller-controlled exception text.
 
 The stable conflict categories are:
 

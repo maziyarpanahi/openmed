@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -20,6 +22,36 @@ from types import MappingProxyType
 from typing import Any, cast
 
 POLICY_COMPOSITION_SCHEMA_VERSION = 1
+
+_FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
+_MAX_POLICIES = 4096
+_MAX_PATH_PARTS = 64
+_MAX_METADATA_ITEMS = 4096
+_MAX_METADATA_DEPTH = 16
+_MAX_COMPONENT_CHARS = 512
+_MAX_METADATA_TEXT_CHARS = 16_384
+_MAX_METADATA_INT_BITS = 4096
+_MAX_PRIORITY = 2**31 - 1
+_POLICY_MAPPING_KEYS = frozenset(
+    {
+        "scope",
+        "decision",
+        "effect",
+        "action",
+        "selector",
+        "target",
+        "field",
+        "resource",
+        "transport",
+        "path",
+        "policy_id",
+        "name",
+        "priority",
+        "inherit",
+        "metadata",
+    }
+)
+_CONTEXT_MAPPING_KEYS = frozenset({"resource", "field", "transport"})
 
 
 class PolicyScope(str, Enum):
@@ -59,10 +91,78 @@ DEFAULT_SCOPE_PRECEDENCE: tuple[PolicyScope, ...] = (
 )
 
 
+def _bounded_iterable(value: Iterable[Any], *, limit: int, label: str) -> list[Any]:
+    try:
+        iterator = iter(value)
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError(f"{label} is invalid") from None
+    result: list[Any] = []
+    for _ in range(limit + 1):
+        try:
+            result.append(next(iterator))
+        except StopIteration:
+            return result
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError(f"{label} is invalid") from None
+    raise ValueError(f"{label} exceeds the item limit")
+
+
+def _bounded_mapping_items(
+    value: Mapping[Any, Any], *, limit: int = _MAX_METADATA_ITEMS
+) -> list[tuple[Any, Any]]:
+    try:
+        raw_items = value.items()
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("policy mapping is invalid") from None
+    items = _bounded_iterable(raw_items, limit=limit, label="policy mapping")
+    if not all(isinstance(item, tuple) and len(item) == 2 for item in items):
+        raise ValueError("policy mapping is invalid")
+    return cast(list[tuple[Any, Any]], items)
+
+
+def _copy_mapping(
+    value: Mapping[Any, Any], *, allowed: frozenset[str], label: str
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, item in _bounded_mapping_items(value, limit=len(allowed)):
+        if not isinstance(key, str) or key not in allowed:
+            raise ValueError(f"{label} contains unsupported fields")
+        if key in result:
+            raise ValueError(f"{label} contains duplicate fields")
+        result[key] = item
+    return result
+
+
+def _one_alias(value: Mapping[str, Any], *keys: str, required: bool = False) -> Any:
+    present = [key for key in keys if key in value]
+    if len(present) > 1:
+        raise ValueError("policy mapping contains ambiguous aliases")
+    if present:
+        return value[present[0]]
+    if required:
+        raise ValueError("policy mapping is missing a required field")
+    return None
+
+
+def _validate_fingerprint(value: Any, *, optional: bool = False) -> None:
+    if optional and value is None:
+        return
+    if not isinstance(value, str) or _FINGERPRINT_RE.fullmatch(value) is None:
+        raise ValueError("policy fingerprint is invalid")
+
+
 def _coerce_scope(value: PolicyScope | str) -> PolicyScope:
     if isinstance(value, PolicyScope):
         return value
     if isinstance(value, str):
+        if len(value) > _MAX_COMPONENT_CHARS:
+            raise ValueError("scope exceeds the length limit")
         candidate = value.strip().lower()
         for scope in PolicyScope:
             if candidate == scope.value:
@@ -74,6 +174,8 @@ def _coerce_decision(value: PolicyDecision | str) -> PolicyDecision:
     if isinstance(value, PolicyDecision):
         return value
     if isinstance(value, str):
+        if len(value) > _MAX_COMPONENT_CHARS:
+            raise ValueError("decision exceeds the length limit")
         candidate = value.strip().lower()
         for decision in PolicyDecision:
             if candidate == decision.value:
@@ -84,21 +186,25 @@ def _coerce_decision(value: PolicyDecision | str) -> PolicyDecision:
 def _normalise_component(value: str, name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{name} must be a string")
+    if len(value) > _MAX_COMPONENT_CHARS:
+        raise ValueError(f"{name} exceeds the length limit")
     normalised = unicodedata.normalize("NFC", value.strip())
-    if not normalised:
+    if not normalised or len(normalised) > _MAX_COMPONENT_CHARS:
         raise ValueError(f"{name} must be non-empty")
     return normalised
 
 
 def _normalise_path(value: str | Sequence[str], name: str) -> tuple[str, ...]:
     if isinstance(value, str):
+        if len(value) > _MAX_COMPONENT_CHARS * _MAX_PATH_PARTS:
+            raise ValueError(f"{name} exceeds the length limit")
         parts = value.split("/")
     elif isinstance(value, Sequence):
-        parts = list(value)
+        parts = _bounded_iterable(value, limit=_MAX_PATH_PARTS, label=name)
     else:
         raise TypeError(f"{name} must be a path string or sequence")
 
-    if not parts:
+    if not parts or len(parts) > _MAX_PATH_PARTS:
         raise ValueError(f"{name} must be non-empty")
     normalised = tuple(_normalise_component(part, f"{name} segment") for part in parts)
     if any(part == "" for part in normalised):
@@ -113,27 +219,77 @@ def _normalise_metadata(value: Mapping[str, Any]) -> Mapping[str, Any]:
         raise TypeError("metadata must be a mapping")
     # Validate once at construction time so fingerprinting cannot fail during
     # evaluation and no fallback stringification can leak a sensitive value.
-    canonical = _canonical_value(dict(value))
+    canonical = _canonical_value(value)
+    _dump_canonical(canonical)
     return cast(Mapping[str, Any], _freeze_value(canonical))
 
 
-def _canonical_value(value: Any) -> Any:
+def _canonical_value(
+    value: Any, *, depth: int = 0, seen: set[int] | None = None
+) -> Any:
+    if depth > _MAX_METADATA_DEPTH:
+        raise ValueError("policy metadata exceeds the nesting limit")
     if isinstance(value, Enum):
-        return _canonical_value(value.value)
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return unicodedata.normalize("NFC", value) if isinstance(value, str) else value
+        return _canonical_value(value.value, depth=depth + 1, seen=seen)
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value.bit_length() > _MAX_METADATA_INT_BITS:
+            raise ValueError("policy metadata integer exceeds the size limit")
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("policy metadata numbers must be finite")
+        return value
+    if isinstance(value, str):
+        if len(value) > _MAX_METADATA_TEXT_CHARS:
+            raise ValueError("policy metadata text exceeds the length limit")
+        return unicodedata.normalize("NFC", value)
+    if seen is None:
+        seen = set()
     if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in seen:
+            raise ValueError("policy metadata contains a cycle")
+        seen.add(marker)
         items: dict[str, Any] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TypeError("metadata keys must be strings")
-            items[unicodedata.normalize("NFC", key)] = _canonical_value(item)
-        return {key: items[key] for key in sorted(items)}
+        try:
+            for key, item in _bounded_mapping_items(value):
+                if not isinstance(key, str):
+                    raise TypeError("metadata keys must be strings")
+                if len(key) > _MAX_COMPONENT_CHARS:
+                    raise ValueError("metadata key exceeds the length limit")
+                normalised_key = unicodedata.normalize("NFC", key)
+                if normalised_key in items:
+                    raise ValueError("metadata keys collide after normalization")
+                items[normalised_key] = _canonical_value(
+                    item, depth=depth + 1, seen=seen
+                )
+            return {key: items[key] for key in sorted(items)}
+        finally:
+            seen.remove(marker)
     if isinstance(value, (list, tuple)):
-        return [_canonical_value(item) for item in value]
+        marker = id(value)
+        if marker in seen:
+            raise ValueError("policy metadata contains a cycle")
+        seen.add(marker)
+        try:
+            return [
+                _canonical_value(item, depth=depth + 1, seen=seen)
+                for item in _bounded_iterable(
+                    value, limit=_MAX_METADATA_ITEMS, label="policy metadata"
+                )
+            ]
+        finally:
+            seen.remove(marker)
     if isinstance(value, (set, frozenset)):
-        values = [_canonical_value(item) for item in value]
-        return sorted(values, key=lambda item: _canonical_json(item))
+        values = [
+            _canonical_value(item, depth=depth + 1, seen=seen)
+            for item in _bounded_iterable(
+                value, limit=_MAX_METADATA_ITEMS, label="policy metadata"
+            )
+        ]
+        return sorted(values, key=_dump_canonical)
     raise TypeError("metadata must contain JSON-compatible values")
 
 
@@ -151,15 +307,21 @@ def _freeze_value(value: Any) -> Any:
 
 def _canonical_json(value: Any) -> str:
     try:
-        return json.dumps(
-            _canonical_value(value),
-            ensure_ascii=True,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-    except (TypeError, ValueError) as exc:
-        raise TypeError("policy values must be JSON-compatible") from exc
+        return _dump_canonical(_canonical_value(value))
+    except MemoryError:
+        raise
+    except (TypeError, ValueError):
+        raise TypeError("policy values must be JSON-compatible") from None
+
+
+def _dump_canonical(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=True,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 def _fingerprint(value: Any) -> str:
@@ -236,14 +398,18 @@ class PrivacyPolicy:
         policy_id = _normalise_component(self.policy_id, "policy_id")
         if isinstance(self.priority, bool) or not isinstance(self.priority, int):
             raise TypeError("priority must be an integer")
+        if abs(self.priority) > _MAX_PRIORITY:
+            raise ValueError("priority exceeds the supported range")
         if not isinstance(self.inherit, bool):
             raise TypeError("inherit must be a boolean")
+        inherit = self.inherit if scope is PolicyScope.RESOURCE else False
         metadata = _normalise_metadata(self.metadata)
 
         object.__setattr__(self, "scope", scope)
         object.__setattr__(self, "decision", decision)
         object.__setattr__(self, "selector", selector)
         object.__setattr__(self, "policy_id", policy_id)
+        object.__setattr__(self, "inherit", inherit)
         object.__setattr__(self, "metadata", metadata)
         object.__setattr__(self, "effect", decision)
         object.__setattr__(self, "target", selector)
@@ -444,6 +610,33 @@ class PolicyTraceEntry:
     selected: bool
     shadowed: bool
 
+    def __post_init__(self) -> None:
+        """Reject trace entries that are unsafe or internally inconsistent."""
+
+        _validate_fingerprint(self.policy_fingerprint)
+        _validate_fingerprint(self.selector_fingerprint)
+        if not isinstance(self.scope, PolicyScope):
+            raise TypeError("trace entry scope must be a PolicyScope")
+        if not isinstance(self.decision, PolicyDecision):
+            raise TypeError("trace entry decision must be a PolicyDecision")
+        if type(self.inherited) is not bool:
+            raise TypeError("trace entry inherited must be a boolean")
+        if type(self.selected) is not bool or type(self.shadowed) is not bool:
+            raise TypeError("trace entry selection flags must be booleans")
+        if self.selected is self.shadowed:
+            raise ValueError("trace entry selection flags are inconsistent")
+        if (
+            type(self.specificity) is not int
+            or not 0 <= self.specificity <= _MAX_PATH_PARTS * 3 + 1
+        ):
+            raise ValueError("trace entry specificity must be non-negative")
+        if type(self.priority) is not int or abs(self.priority) > _MAX_PRIORITY:
+            raise ValueError("trace entry priority is invalid")
+        if type(
+            self.precedence_rank
+        ) is not int or not 1 <= self.precedence_rank <= len(PolicyScope):
+            raise ValueError("trace entry precedence rank is invalid")
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible trace entry."""
 
@@ -461,6 +654,36 @@ class PolicyTraceEntry:
         }
 
 
+def _trace_entry_sort_key(entry: PolicyTraceEntry) -> tuple[int, int, int, str]:
+    return (
+        -entry.precedence_rank,
+        -entry.specificity,
+        -entry.priority,
+        entry.policy_fingerprint,
+    )
+
+
+def _conflict_category_for_entries(
+    entries: Sequence[PolicyTraceEntry],
+) -> ConflictCategory:
+    denies = [entry for entry in entries if entry.decision is PolicyDecision.DENY]
+    allows = [entry for entry in entries if entry.decision is PolicyDecision.ALLOW]
+    if denies and allows:
+        return ConflictCategory.DENY_OVERRIDES
+    if len(denies) > 1:
+        return ConflictCategory.MULTIPLE_DENIES
+    if len(allows) > 1:
+        return ConflictCategory.PRECEDENCE
+    selected = next(entry for entry in entries if entry.selected)
+    if selected.inherited:
+        return (
+            ConflictCategory.INHERITED_DENY
+            if selected.decision is PolicyDecision.DENY
+            else ConflictCategory.INHERITED_ALLOW
+        )
+    return ConflictCategory.NONE
+
+
 @dataclass(frozen=True, repr=False)
 class PolicyDecisionTrace:
     """Stable, value-free explanation of one composed decision."""
@@ -474,6 +697,74 @@ class PolicyDecisionTrace:
     defaulted: bool
     precedence: tuple[PolicyScope, ...]
     entries: tuple[PolicyTraceEntry, ...]
+
+    def __post_init__(self) -> None:
+        """Enforce deterministic, value-free trace invariants."""
+
+        if not isinstance(self.decision, PolicyDecision):
+            raise TypeError("trace decision must be a PolicyDecision")
+        if not isinstance(self.conflict_category, ConflictCategory):
+            raise TypeError("trace conflict category must be a ConflictCategory")
+        _validate_fingerprint(self.context_fingerprint)
+        _validate_fingerprint(self.policy_set_fingerprint)
+        _validate_fingerprint(self.selected_policy_fingerprint, optional=True)
+        if type(self.defaulted) is not bool:
+            raise TypeError("trace defaulted must be a boolean")
+        if (
+            type(self.precedence) is not tuple
+            or len(self.precedence) != len(PolicyScope)
+            or not all(isinstance(scope, PolicyScope) for scope in self.precedence)
+            or set(self.precedence) != set(PolicyScope)
+        ):
+            raise ValueError("trace precedence is invalid")
+        if type(self.entries) is not tuple:
+            raise TypeError("trace entries must be PolicyTraceEntry records")
+        if len(self.entries) > _MAX_POLICIES:
+            raise ValueError("trace exceeds the entry limit")
+        if not all(isinstance(entry, PolicyTraceEntry) for entry in self.entries):
+            raise TypeError("trace entries must be PolicyTraceEntry records")
+        if type(self.policy_fingerprints) is not tuple:
+            raise TypeError("trace policy fingerprints must be a tuple")
+        if len(self.policy_fingerprints) > _MAX_POLICIES:
+            raise ValueError("trace exceeds the fingerprint limit")
+        for fingerprint in self.policy_fingerprints:
+            _validate_fingerprint(fingerprint)
+        entry_fingerprints = tuple(entry.policy_fingerprint for entry in self.entries)
+        if self.policy_fingerprints != entry_fingerprints or len(
+            set(entry_fingerprints)
+        ) != len(entry_fingerprints):
+            raise ValueError("trace policy fingerprints are inconsistent")
+        if list(self.entries) != sorted(self.entries, key=_trace_entry_sort_key):
+            raise ValueError("trace entries are not deterministically ordered")
+        scope_ranks = {
+            scope: len(self.precedence) - index
+            for index, scope in enumerate(self.precedence)
+        }
+        if any(
+            entry.precedence_rank != scope_ranks[entry.scope] for entry in self.entries
+        ):
+            raise ValueError("trace precedence ranks are inconsistent")
+
+        selected = [entry for entry in self.entries if entry.selected]
+        if self.defaulted:
+            if self.entries or selected or self.selected_policy_fingerprint is not None:
+                raise ValueError("defaulted trace contains selected policies")
+            expected_category = ConflictCategory.DEFAULT
+        else:
+            if len(selected) != 1:
+                raise ValueError("trace must contain exactly one selected policy")
+            if self.selected_policy_fingerprint != selected[0].policy_fingerprint:
+                raise ValueError("trace selected policy fingerprint is inconsistent")
+            if self.decision is not selected[0].decision:
+                raise ValueError("trace decision does not match selected policy")
+            if (
+                any(entry.decision is PolicyDecision.DENY for entry in self.entries)
+                and self.decision is not PolicyDecision.DENY
+            ):
+                raise ValueError("trace does not apply deny-overrides")
+            expected_category = _conflict_category_for_entries(self.entries)
+        if self.conflict_category is not expected_category:
+            raise ValueError("trace conflict category is inconsistent")
 
     def to_dict(self) -> dict[str, Any]:
         """Return the trace as a value-free JSON-compatible mapping."""
@@ -511,6 +802,16 @@ class PolicyDecisionResult:
 
     decision: PolicyDecision
     trace: PolicyDecisionTrace
+
+    def __post_init__(self) -> None:
+        """Require the effective decision and trace to agree."""
+
+        if not isinstance(self.decision, PolicyDecision):
+            raise TypeError("result decision must be a PolicyDecision")
+        if not isinstance(self.trace, PolicyDecisionTrace):
+            raise TypeError("result trace must be a PolicyDecisionTrace")
+        if self.decision is not self.trace.decision:
+            raise ValueError("result decision does not match its trace")
 
     @property
     def effective_decision(self) -> PolicyDecision:
@@ -573,18 +874,29 @@ class PolicySet:
                 cast(PrivacyPolicy | Mapping[str, Any], self.policies),
             )
         else:
-            try:
-                policy_values = tuple(
-                    cast(Iterable[PrivacyPolicy | Mapping[str, Any]], self.policies)
+            policy_values = tuple(
+                cast(
+                    list[PrivacyPolicy | Mapping[str, Any]],
+                    _bounded_iterable(
+                        cast(Iterable[Any], self.policies),
+                        limit=_MAX_POLICIES,
+                        label="policies",
+                    ),
                 )
-            except TypeError as exc:
-                raise TypeError("policies must be an iterable") from exc
+            )
         policies = tuple(_coerce_policy(value) for value in policy_values)
+        fingerprints = [policy.fingerprint for policy in policies]
+        if len(fingerprints) != len(set(fingerprints)):
+            raise ValueError("policies must not contain duplicate rules")
         default_decision = _coerce_decision(self.default_decision)
-        try:
-            precedence = tuple(_coerce_scope(value) for value in self.precedence)
-        except TypeError as exc:
-            raise TypeError("precedence must be an iterable of scopes") from exc
+        precedence = tuple(
+            _coerce_scope(value)
+            for value in _bounded_iterable(
+                self.precedence,
+                limit=len(PolicyScope),
+                label="precedence",
+            )
+        )
         if set(precedence) != set(PolicyScope) or len(precedence) != len(PolicyScope):
             raise ValueError("precedence must contain each policy scope exactly once")
         object.__setattr__(self, "policies", policies)
@@ -746,28 +1058,34 @@ def _coerce_policy(value: PrivacyPolicy | Mapping[str, Any]) -> PrivacyPolicy:
     if not isinstance(value, Mapping):
         raise TypeError("each policy must be a PrivacyPolicy or mapping")
 
-    scope = value.get("scope")
+    policy = _copy_mapping(value, allowed=_POLICY_MAPPING_KEYS, label="policy mapping")
+    scope = policy.get("scope")
     if scope is None:
         raise ValueError("policy scope is required")
     scope_value = _coerce_scope(scope)
-    decision = value.get("decision")
-    if decision is None:
-        decision = value.get("effect", value.get("action"))
-    selector = value.get("selector")
-    if selector is None:
-        selector = value.get("target", value.get(scope_value.value))
-    if selector is None and scope_value is PolicyScope.RESOURCE:
-        selector = value.get("path")
+    decision = _one_alias(policy, "decision", "effect", "action", required=True)
+    selector_keys = ["selector", "target", scope_value.value]
+    if scope_value is PolicyScope.RESOURCE:
+        selector_keys.append("path")
+    all_selector_keys = {"selector", "target", "field", "resource", "transport", "path"}
+    if (set(policy) & all_selector_keys) - set(selector_keys):
+        raise ValueError("policy mapping contains an invalid selector alias")
+    selector = _one_alias(policy, *selector_keys, required=True)
     if decision is None or selector is None:
         raise ValueError("policy decision and selector are required")
+    policy_id = _one_alias(policy, "policy_id", "name")
+    if policy_id is None:
+        policy_id = "policy"
+    if scope_value is not PolicyScope.RESOURCE and "inherit" in policy:
+        raise ValueError("inherit is only valid for resource policies")
     return PrivacyPolicy(
         scope=scope_value,
         decision=decision,
         selector=selector,
-        policy_id=value.get("policy_id", value.get("name", "policy")),
-        priority=value.get("priority", 0),
-        inherit=value.get("inherit", True),
-        metadata=value.get("metadata", {}),
+        policy_id=policy_id,
+        priority=policy.get("priority", 0),
+        inherit=policy.get("inherit", scope_value is PolicyScope.RESOURCE),
+        metadata=policy.get("metadata", {}),
     )
 
 
@@ -779,10 +1097,13 @@ def _coerce_context(
     if isinstance(context, PolicyContext):
         return context
     if isinstance(context, Mapping):
+        context_value = _copy_mapping(
+            context, allowed=_CONTEXT_MAPPING_KEYS, label="policy context"
+        )
         return PolicyContext(
-            resource=context.get("resource"),
-            field=context.get("field"),
-            transport=context.get("transport"),
+            resource=context_value.get("resource"),
+            field=context_value.get("field"),
+            transport=context_value.get("transport"),
         )
     raise TypeError("context must be a PolicyContext or mapping")
 
@@ -842,7 +1163,7 @@ def _match_policy(
     return (inherited, specificity) if matched else None
 
 
-def compose_policies(
+def _compose_policies(
     policies: Iterable[PrivacyPolicy | Mapping[str, Any]] | PolicySet = (),
     *,
     context: PolicyContext | Mapping[str, Any] | None = None,
@@ -883,6 +1204,34 @@ def compose_policies(
     return policy_set.evaluate(evaluation_context)
 
 
+def compose_policies(
+    policies: Iterable[PrivacyPolicy | Mapping[str, Any]] | PolicySet = (),
+    *,
+    context: PolicyContext | Mapping[str, Any] | None = None,
+    resource: str | Sequence[str] | None = None,
+    field: str | None = None,
+    transport: str | None = None,
+    default_decision: PolicyDecision | str = PolicyDecision.DENY,
+    precedence: Sequence[PolicyScope | str] = DEFAULT_SCOPE_PRECEDENCE,
+) -> PolicyDecisionResult:
+    """Compose policies into a deterministic, value-free decision trace."""
+
+    try:
+        return _compose_policies(
+            policies,
+            context=context,
+            resource=resource,
+            field=field,
+            transport=transport,
+            default_decision=default_decision,
+            precedence=precedence,
+        )
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("policy composition inputs are invalid") from None
+
+
 def evaluate_policy(
     policies: Iterable[PrivacyPolicy | Mapping[str, Any]] | PolicySet = (),
     **kwargs: Any,
@@ -895,7 +1244,12 @@ def evaluate_policy(
 def policy_fingerprint(policy: PrivacyPolicy | Mapping[str, Any]) -> str:
     """Return the stable fingerprint of one policy rule."""
 
-    return _coerce_policy(policy).fingerprint
+    try:
+        return _coerce_policy(policy).fingerprint
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("policy is invalid") from None
 
 
 # Small aliases keep the vocabulary convenient for callers that use
