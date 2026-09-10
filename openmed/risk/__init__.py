@@ -126,22 +126,6 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
-from .policy_migration import (
-    ChangeClassification,
-    MigrationClassification,
-    PolicyChange,
-    PolicyMigrationAcknowledgementRequired,
-    PolicyMigrationApprovalRequired,
-    PolicyMigrationError,
-    PolicyMigrationReport,
-    acknowledgement_token_for,
-    check_policy_migration,
-    compare_policies,
-    compare_policy_versions,
-    enforce_policy_migration,
-    policy_migration_report,
-    validate_policy_migration,
-)
 from .l_diversity import (
     DiversityClass,
     LDiversityChecker,
@@ -180,6 +164,26 @@ from .membership_inference import (
 )
 from .membership_inference import (
     run_membership_inference_self_test as _run_table_membership_inference_self_test,
+)
+from .policy_migration import (
+    MAX_POLICY_MIGRATION_DEPTH,
+    MAX_POLICY_MIGRATION_ITEMS,
+    MAX_POLICY_MIGRATION_JSON_BYTES,
+    MAX_POLICY_MIGRATION_STRING_CHARS,
+    ChangeClassification,
+    MigrationClassification,
+    PolicyChange,
+    PolicyMigrationAcknowledgementRequired,
+    PolicyMigrationApprovalRequired,
+    PolicyMigrationError,
+    PolicyMigrationReport,
+    acknowledgement_token_for,
+    check_policy_migration,
+    compare_policies,
+    compare_policy_versions,
+    enforce_policy_migration,
+    policy_migration_report,
+    validate_policy_migration,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .qi_profiler import (
@@ -422,6 +426,10 @@ __all__ = [
     "write_release_assessment_dashboard",
     "write_risk_dashboard",
     "ChangeClassification",
+    "MAX_POLICY_MIGRATION_DEPTH",
+    "MAX_POLICY_MIGRATION_ITEMS",
+    "MAX_POLICY_MIGRATION_JSON_BYTES",
+    "MAX_POLICY_MIGRATION_STRING_CHARS",
     "MigrationClassification",
     "PolicyChange",
     "PolicyMigrationAcknowledgementRequired",

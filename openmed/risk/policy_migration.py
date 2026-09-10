@@ -17,21 +17,88 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import itertools
 import json
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Final
 
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.core.redaction_strength import ACTION_STRENGTH_ORDER, action_strength
 
+MAX_POLICY_MIGRATION_DEPTH: Final = 32
+MAX_POLICY_MIGRATION_ITEMS: Final = 10_000
+MAX_POLICY_MIGRATION_JSON_BYTES: Final = 1_048_576
+MAX_POLICY_MIGRATION_STRING_CHARS: Final = 65_536
+
+_MAX_POLICY_MIGRATION_INTEGER: Final = (1 << 63) - 1
+_DIGEST_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
+_TOKEN_RE: Final = re.compile(r"^openmed-ack:[0-9a-f]{64}$")
+_HASHED_PATH_RE: Final = re.compile(r"^<sha256:[0-9a-f]{12}>$")
+_CHANGE_KINDS: Final = frozenset(
+    {"action", "boolean", "collection", "metadata", "numeric", "structural"}
+)
+_CHANGE_REASON_RULES: Final = {
+    "boolean protection setting became stronger": ("boolean", "stricter"),
+    "boolean protection setting became weaker": ("boolean", "incompatible"),
+    "boolean protection setting is unchanged": ("boolean", "compatible"),
+    "boolean protection setting changed type": ("boolean", "incompatible"),
+    "boolean protection setting changed without a known safe direction": (
+        "boolean",
+        "incompatible",
+    ),
+    "effective redaction action is unchanged": ("action", "compatible"),
+    "non-behavioural policy metadata changed": ("metadata", "compatible"),
+    "numeric protection threshold became stronger": ("numeric", "stricter"),
+    "numeric protection threshold became weaker": ("numeric", "incompatible"),
+    "numeric protection threshold changed type": ("numeric", "incompatible"),
+    "numeric protection threshold is unchanged": ("numeric", "compatible"),
+    "numeric protection threshold was added or removed": (
+        "numeric",
+        "incompatible",
+    ),
+    "numeric protection setting changed without a known safe direction": (
+        "numeric",
+        "incompatible",
+    ),
+    "policy behaviour changed without a compatible protection mapping": (
+        "structural",
+        "incompatible",
+    ),
+    "policy schema version changed": ("structural", "incompatible"),
+    "protected collection changed in both directions": (
+        "collection",
+        "incompatible",
+    ),
+    "protected collection gained coverage": ("collection", "stricter"),
+    "protected collection lost coverage": ("collection", "incompatible"),
+    "protection cascade order changed": ("collection", "incompatible"),
+    "protection collection changed type": ("collection", "incompatible"),
+    "protection collection order is compatible": ("collection", "compatible"),
+    "protection collection changed without a known safe direction": (
+        "collection",
+        "incompatible",
+    ),
+    "protection setting was added or removed": ("structural", "incompatible"),
+    "redaction action became stronger": ("action", "stricter"),
+    "redaction action became weaker": ("action", "incompatible"),
+    "redaction action is missing or unsupported": ("action", "incompatible"),
+}
+_CHANGE_REASONS: Final = frozenset(_CHANGE_REASON_RULES)
+
 __all__ = [
     "ChangeClassification",
     "MigrationClassification",
+    "MAX_POLICY_MIGRATION_DEPTH",
+    "MAX_POLICY_MIGRATION_ITEMS",
+    "MAX_POLICY_MIGRATION_JSON_BYTES",
+    "MAX_POLICY_MIGRATION_STRING_CHARS",
     "PolicyChange",
     "PolicyMigrationAcknowledgementRequired",
     "PolicyMigrationApprovalRequired",
@@ -97,6 +164,55 @@ class PolicyChange:
     reason: str = ""
     weakens_protection: bool = False
 
+    def __post_init__(self) -> None:
+        if type(self.path) is not tuple or not _is_safe_report_path(self.path):
+            raise PolicyMigrationError("policy change path is invalid")
+        if type(self.kind) is not str or self.kind not in _CHANGE_KINDS:
+            raise PolicyMigrationError("policy change kind is invalid")
+        if type(self.classification) is not MigrationClassification:
+            raise PolicyMigrationError("policy change classification is invalid")
+        if (
+            type(self.before_present) is not bool
+            or type(self.after_present) is not bool
+        ):
+            raise PolicyMigrationError("policy change presence flags are invalid")
+        if type(self.weakens_protection) is not bool:
+            raise PolicyMigrationError("policy change weakening flag is invalid")
+        if self.weakens_protection != (
+            self.classification is MigrationClassification.INCOMPATIBLE
+        ):
+            raise PolicyMigrationError("policy change weakening state is inconsistent")
+        if type(self.reason) is not str or self.reason not in _CHANGE_REASONS:
+            raise PolicyMigrationError("policy change reason is invalid")
+        if _CHANGE_REASON_RULES[self.reason] != (
+            self.kind,
+            self.classification.value,
+        ):
+            raise PolicyMigrationError("policy change reason is inconsistent")
+
+        before = _normalize_report_value(
+            self.before,
+            present=self.before_present,
+            kind=self.kind,
+        )
+        after = _normalize_report_value(
+            self.after,
+            present=self.after_present,
+            kind=self.kind,
+        )
+        _validate_presence_digest(
+            present=self.before_present,
+            digest=self.before_digest,
+            field_name="before",
+        )
+        _validate_presence_digest(
+            present=self.after_present,
+            digest=self.after_digest,
+            field_name="after",
+        )
+        object.__setattr__(self, "before", before)
+        object.__setattr__(self, "after", after)
+
     @property
     def path_key(self) -> str:
         """Return the safe dotted path used in reports and review output."""
@@ -137,8 +253,8 @@ class PolicyChange:
             "classification": self.classification.value,
             "before_present": self.before_present,
             "after_present": self.after_present,
-            "before": self.before,
-            "after": self.after,
+            "before": _report_value_to_dict(self.before),
+            "after": _report_value_to_dict(self.after),
             "before_digest": self.before_digest,
             "after_digest": self.after_digest,
             "reason": self.reason,
@@ -164,8 +280,52 @@ class PolicyMigrationReport:
     acknowledgement_token: str | None = None
 
     def __post_init__(self) -> None:
+        if type(self.before_digest) is not str or not _DIGEST_RE.fullmatch(
+            self.before_digest
+        ):
+            raise PolicyMigrationError("before_digest is invalid")
+        if type(self.after_digest) is not str or not _DIGEST_RE.fullmatch(
+            self.after_digest
+        ):
+            raise PolicyMigrationError("after_digest is invalid")
+        if type(self.classification) is not MigrationClassification:
+            raise PolicyMigrationError("migration classification is invalid")
+        if type(self.acknowledged) is not bool:
+            raise PolicyMigrationError("migration acknowledgement state is invalid")
+        if type(self.changes) not in {list, tuple} or any(
+            type(change) is not PolicyChange for change in self.changes
+        ):
+            raise PolicyMigrationError("migration changes are invalid")
+
         ordered = tuple(sorted(self.changes, key=_change_sort_key))
         object.__setattr__(self, "changes", ordered)
+        if self.classification is not _overall_classification(ordered):
+            raise PolicyMigrationError("migration classification is inconsistent")
+        if not ordered and self.before_digest != self.after_digest:
+            raise PolicyMigrationError("unchanged migration digests are inconsistent")
+        if ordered and self.before_digest == self.after_digest:
+            raise PolicyMigrationError("changed migration digests are inconsistent")
+
+        needs_acknowledgement = any(change.weakens_protection for change in ordered)
+        expected_token = (
+            _acknowledgement_token(
+                self.before_digest,
+                self.after_digest,
+                ordered,
+            )
+            if needs_acknowledgement
+            else None
+        )
+        if self.acknowledgement_token != expected_token:
+            raise PolicyMigrationError("migration acknowledgement token is invalid")
+        if self.acknowledgement_token is not None and not _TOKEN_RE.fullmatch(
+            self.acknowledgement_token
+        ):
+            raise PolicyMigrationError("migration acknowledgement token is invalid")
+        if self.acknowledged and not needs_acknowledgement:
+            raise PolicyMigrationError(
+                "migration acknowledgement state is inconsistent"
+            )
 
     @property
     def requires_acknowledgement(self) -> bool:
@@ -246,9 +406,12 @@ class PolicyMigrationReport:
 
         return self.acknowledgement_token
 
-    def with_acknowledgement(self) -> "PolicyMigrationReport":
-        """Return a copy marked acknowledged without changing the diff."""
+    def with_acknowledgement(self, token: str) -> "PolicyMigrationReport":
+        """Return an acknowledged copy only when the token matches this report."""
 
+        expected = self.acknowledgement_token
+        if expected is None or not _token_matches(token, expected):
+            raise PolicyMigrationAcknowledgementRequired(self)
         return replace(self, acknowledged=True)
 
     def to_dict(self) -> dict[str, Any]:
@@ -270,6 +433,8 @@ class PolicyMigrationReport:
     def to_json(self, *, indent: int | None = None) -> str:
         """Serialize the report as deterministic JSON."""
 
+        if indent is not None and (type(indent) is not int or not 0 <= indent <= 8):
+            raise PolicyMigrationError("report JSON indentation is invalid")
         return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
 
     def to_markdown(self) -> str:
@@ -379,7 +544,7 @@ def check_policy_migration(
 def acknowledgement_token_for(report: PolicyMigrationReport) -> str | None:
     """Return the safe, report-bound token required for an incompatible diff."""
 
-    if not isinstance(report, PolicyMigrationReport):
+    if type(report) is not PolicyMigrationReport:
         raise TypeError("report must be a PolicyMigrationReport")
     return report.acknowledgement_token
 
@@ -482,6 +647,7 @@ _PROTECTION_COLLECTION_KEYS = frozenset(
         "sensitive_labels",
     }
 )
+_SCHEMA_VERSION_KEYS = frozenset({"schema_version", "version"})
 _METADATA_KEYS = frozenset(
     {
         "comment",
@@ -489,10 +655,8 @@ _METADATA_KEYS = frozenset(
         "display_name",
         "metadata",
         "name",
-        "schema_version",
         "source",
         "title",
-        "version",
     }
 )
 _PROTECTION_CONTEXT_KEYS = frozenset(
@@ -509,6 +673,7 @@ _PROTECTION_CONTEXT_KEYS = frozenset(
         "protected",
         "protection",
         "protections",
+        "recall_floors",
         "redact",
         "redaction",
         "redactions",
@@ -528,31 +693,96 @@ _SAFE_PATH_KEYS = (
     | _STRONGER_HIGHER_KEYS
     | _STRONGER_LOWER_KEYS
     | _PROTECTION_COLLECTION_KEYS
+    | _SCHEMA_VERSION_KEYS
     | _METADATA_KEYS
     | _PROTECTION_CONTEXT_KEYS
 )
 _MISSING = object()
 
 
+def _is_safe_report_path(path: tuple[str, ...]) -> bool:
+    if len(path) > MAX_POLICY_MIGRATION_DEPTH:
+        return False
+    return all(
+        type(segment) is str
+        and (
+            segment in CANONICAL_LABELS
+            or segment.lower() in _SAFE_PATH_KEYS
+            or _HASHED_PATH_RE.fullmatch(segment) is not None
+        )
+        for segment in path
+    )
+
+
+def _normalize_report_value(value: Any, *, present: bool, kind: str) -> Any:
+    if not present:
+        if value is not None:
+            raise PolicyMigrationError("absent policy change value is invalid")
+        return None
+    if value is None or (type(value) is str and value == "<redacted>"):
+        return value
+    if kind == "action" and type(value) is str and value in ACTION_STRENGTH_ORDER:
+        return value
+    if kind == "boolean" and type(value) is bool:
+        return value
+    if kind == "numeric" and type(value) in {int, float}:
+        if type(value) is int and abs(value) > _MAX_POLICY_MIGRATION_INTEGER:
+            raise PolicyMigrationError("policy change numeric value is invalid")
+        if type(value) is float and not math.isfinite(value):
+            raise PolicyMigrationError("policy change numeric value is invalid")
+        return value
+    if type(value) is dict and set(value) in ({"count"}, {"key_count"}):
+        count = next(iter(value.values()))
+        if type(count) is not int or not 0 <= count <= MAX_POLICY_MIGRATION_ITEMS:
+            raise PolicyMigrationError("policy change aggregate value is invalid")
+        return MappingProxyType(dict(value))
+    raise PolicyMigrationError("policy change value is invalid")
+
+
+def _report_value_to_dict(value: Any) -> Any:
+    return dict(value) if isinstance(value, MappingProxyType) else value
+
+
+def _validate_presence_digest(
+    *,
+    present: bool,
+    digest: str | None,
+    field_name: str,
+) -> None:
+    if present:
+        if type(digest) is not str or not _DIGEST_RE.fullmatch(digest):
+            raise PolicyMigrationError(f"{field_name} digest is invalid")
+    elif digest is not None:
+        raise PolicyMigrationError(f"absent {field_name} digest is invalid")
+
+
 def _load_policy_input(
     value: PolicyProfile | Mapping[str, Any] | str | Path,
 ) -> dict[str, Any]:
-    if isinstance(value, PolicyProfile):
+    payload: Any
+    if type(value) is PolicyProfile:
         payload = value.to_dict()
     elif isinstance(value, Mapping):
         payload = value
     elif isinstance(value, Path):
         payload = _read_policy_path(value)
-    elif isinstance(value, str):
+    elif type(value) is str:
+        try:
+            input_size = len(value.encode("utf-8"))
+        except UnicodeError:
+            raise PolicyMigrationError("policy input is invalid") from None
+        if input_size > MAX_POLICY_MIGRATION_JSON_BYTES:
+            raise PolicyMigrationError("policy input exceeds the supported size limit")
         stripped = value.strip()
         if stripped.startswith(("{", "[")):
-            try:
-                payload = json.loads(stripped)
-            except json.JSONDecodeError:
-                raise PolicyMigrationError("policy JSON could not be parsed") from None
+            payload = _parse_policy_json(stripped)
         else:
             candidate = Path(value)
-            if candidate.is_file():
+            try:
+                is_file = candidate.is_file()
+            except (OSError, ValueError):
+                is_file = False
+            if is_file:
                 payload = _read_policy_path(candidate)
             else:
                 try:
@@ -570,39 +800,122 @@ def _load_policy_input(
         raise PolicyMigrationError("policy document must contain an object")
     try:
         normalized = _normalize_json_value(payload)
-    except (TypeError, ValueError):
+        if (
+            len(_canonical_json(normalized).encode("utf-8"))
+            > MAX_POLICY_MIGRATION_JSON_BYTES
+        ):
+            raise ValueError("normalized policy exceeds the supported size limit")
+    except Exception:  # noqa: BLE001 - mappings are caller-controlled protocols.
         raise PolicyMigrationError(
             "policy document contains an unsupported value"
         ) from None
-    if not isinstance(normalized, dict):
+    if type(normalized) is not dict:
         raise PolicyMigrationError("policy document must contain an object")
     return normalized
 
 
 def _read_policy_path(path: Path) -> Any:
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError):
+        with path.open("rb") as handle:
+            payload = handle.read(MAX_POLICY_MIGRATION_JSON_BYTES + 1)
+    except OSError:
         raise PolicyMigrationError("policy JSON could not be read") from None
+    if len(payload) > MAX_POLICY_MIGRATION_JSON_BYTES:
+        raise PolicyMigrationError("policy input exceeds the supported size limit")
+    return _parse_policy_json(payload)
 
 
-def _normalize_json_value(value: Any) -> Any:
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate policy JSON field")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> None:
+    raise ValueError("non-finite policy JSON number")
+
+
+def _parse_policy_json(value: str | bytes) -> Any:
+    try:
+        return json.loads(
+            value,
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise PolicyMigrationError("policy JSON could not be parsed") from None
+
+
+def _normalize_json_value(
+    value: Any,
+    *,
+    depth: int = 0,
+    item_budget: list[int] | None = None,
+    text_budget: list[int] | None = None,
+) -> Any:
+    if item_budget is None:
+        item_budget = [MAX_POLICY_MIGRATION_ITEMS]
+    if text_budget is None:
+        text_budget = [MAX_POLICY_MIGRATION_JSON_BYTES]
+    if depth > MAX_POLICY_MIGRATION_DEPTH or item_budget[0] <= 0:
+        raise ValueError("policy document exceeds the supported complexity limit")
+    item_budget[0] -= 1
+
     if isinstance(value, Mapping):
+        items = list(itertools.islice(value.items(), item_budget[0] + 1))
+        if len(items) > item_budget[0]:
+            raise ValueError("policy document exceeds the supported item limit")
         normalized: dict[str, Any] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
+        for key, item in items:
+            if type(key) is not str:
                 raise TypeError("policy keys must be strings")
-            normalized[key] = _normalize_json_value(item)
+            if len(key) > MAX_POLICY_MIGRATION_STRING_CHARS:
+                raise ValueError("policy key exceeds the supported length limit")
+            text_budget[0] -= len(key.encode("utf-8"))
+            if text_budget[0] < 0:
+                raise ValueError("policy text exceeds the supported size limit")
+            if key in normalized:
+                raise ValueError("policy keys must be unique")
+            normalized[key] = _normalize_json_value(
+                item,
+                depth=depth + 1,
+                item_budget=item_budget,
+                text_budget=text_budget,
+            )
         return {key: normalized[key] for key in sorted(normalized)}
-    if isinstance(value, (list, tuple)):
-        return [_normalize_json_value(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        normalized_items = [_normalize_json_value(item) for item in value]
+    if type(value) in {list, tuple, set, frozenset}:
+        items = list(itertools.islice(value, item_budget[0] + 1))
+        if len(items) > item_budget[0]:
+            raise ValueError("policy document exceeds the supported item limit")
+        normalized_items = [
+            _normalize_json_value(
+                item,
+                depth=depth + 1,
+                item_budget=item_budget,
+                text_budget=text_budget,
+            )
+            for item in items
+        ]
+        if type(value) in {list, tuple}:
+            return normalized_items
         return sorted(normalized_items, key=_canonical_json)
-    if value is None or isinstance(value, (str, bool, int)):
+    if value is None or type(value) is bool:
         return value
-    if isinstance(value, float):
+    if type(value) is str:
+        if len(value) > MAX_POLICY_MIGRATION_STRING_CHARS:
+            raise ValueError("policy string exceeds the supported length limit")
+        text_budget[0] -= len(value.encode("utf-8"))
+        if text_budget[0] < 0:
+            raise ValueError("policy text exceeds the supported size limit")
+        return value
+    if type(value) is int:
+        if abs(value) > _MAX_POLICY_MIGRATION_INTEGER:
+            raise ValueError("policy integer exceeds the supported range")
+        return value
+    if type(value) is float:
         if not math.isfinite(value):
             raise ValueError("policy numbers must be finite")
         return value
@@ -673,6 +986,14 @@ def _classify_change(
 ) -> tuple[str, MigrationClassification, bool, str]:
     before_present = before is not _MISSING
     after_present = after is not _MISSING
+    key = _leaf_key(path)
+    if key in _SCHEMA_VERSION_KEYS:
+        return (
+            "structural",
+            MigrationClassification.INCOMPATIBLE,
+            True,
+            "policy schema version changed",
+        )
     action_path = _is_action_path(path)
     if action_path and (
         _looks_like_action(before)
@@ -688,7 +1009,6 @@ def _classify_change(
             after_payload,
         )
 
-    key = _leaf_key(path)
     if isinstance(before, bool) or isinstance(after, bool):
         orientation = _boolean_orientation(path)
         if orientation:
@@ -814,8 +1134,17 @@ def _classify_boolean_change(
     after: Any,
     orientation: int,
 ) -> tuple[str, MigrationClassification, bool, str]:
-    before_bool = False if before is _MISSING else bool(before)
-    after_bool = False if after is _MISSING else bool(after)
+    if (before is not _MISSING and type(before) is not bool) or (
+        after is not _MISSING and type(after) is not bool
+    ):
+        return (
+            "boolean",
+            MigrationClassification.INCOMPATIBLE,
+            True,
+            "boolean protection setting changed type",
+        )
+    before_bool = False if before is _MISSING else before
+    after_bool = False if after is _MISSING else after
     if before_bool == after_bool:
         return (
             "boolean",
@@ -851,26 +1180,28 @@ def _classify_numeric_change(
             True,
             "numeric protection threshold was added or removed",
         )
-    try:
-        before_number = float(before)
-        after_number = float(after)
-    except (TypeError, ValueError):
+    if type(before) not in {int, float} or type(after) not in {int, float}:
         return (
             "numeric",
             MigrationClassification.INCOMPATIBLE,
             True,
             "numeric protection threshold changed type",
         )
-    if after_number == before_number:
+    if type(before) is not type(after):
+        return (
+            "numeric",
+            MigrationClassification.INCOMPATIBLE,
+            True,
+            "numeric protection threshold changed type",
+        )
+    if after == before:
         return (
             "numeric",
             MigrationClassification.COMPATIBLE,
             False,
             "numeric protection threshold is unchanged",
         )
-    stronger = (
-        after_number > before_number if direction > 0 else after_number < before_number
-    )
+    stronger = after > before if direction > 0 else after < before
     if stronger:
         return (
             "numeric",
@@ -995,11 +1326,16 @@ def _boolean_orientation(path: tuple[str, ...]) -> int:
 
 def _numeric_direction(path: tuple[str, ...]) -> int:
     key = _leaf_key(path)
+    if "recall_floors" in (segment.lower() for segment in path) or (
+        "recall" in key
+        and ("floor" in key or key.startswith(("min_", "minimum_", "target_")))
+    ):
+        return 1
+    if "threshold" in key or "confidence" in key:
+        return -1
     if key in _STRONGER_HIGHER_KEYS or key.startswith(("min_", "minimum_", "target_")):
         return 1
     if key in _STRONGER_LOWER_KEYS or key.startswith(("max_", "upper_")):
-        return -1
-    if "threshold" in key or "confidence" in key:
         return -1
     return 0
 
@@ -1048,6 +1384,7 @@ def _safe_value(path: tuple[str, ...], value: Any, kind: str) -> Any:
         return value
     if (
         kind == "numeric"
+        and _numeric_direction(path)
         and isinstance(value, (int, float))
         and not isinstance(value, bool)
     ):
@@ -1074,7 +1411,13 @@ def _safe_path(path: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _canonical_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def _digest(value: Any) -> str:
@@ -1094,7 +1437,12 @@ def _acknowledgement_token(
 
 
 def _token_matches(token: str, expected: str) -> bool:
-    if not isinstance(token, str) or not token:
+    if (
+        type(token) is not str
+        or type(expected) is not str
+        or _TOKEN_RE.fullmatch(token) is None
+        or _TOKEN_RE.fullmatch(expected) is None
+    ):
         return False
     return hmac.compare_digest(token, expected)
 

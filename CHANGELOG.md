@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, deterministic, offline policy-migration checker with
+  fail-closed schema and protection-type changes, privacy-safe reports, and a
+  report-bound human acknowledgement gate for weakening changes (#2407).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

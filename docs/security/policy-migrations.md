@@ -19,6 +19,12 @@ or counts for arbitrary values. They never copy policy payloads into reports,
 Markdown, JSON, or exceptions. Do not add source documents, patient text, or
 cleartext identifiers to policy fixtures.
 
+Inputs are bounded to 1 MiB of JSON, 10,000 normalized items, 32 nesting
+levels, and 65,536 characters per string. JSON objects must use unique keys,
+numbers must be finite and within the supported integer range, and boolean or
+numeric protection settings must retain their exact JSON type. Changes to
+`schema_version` or `version` fail closed as incompatible migrations.
+
 ## Review and acknowledgement
 
 Inspect a migration before enforcing it:
@@ -47,6 +53,10 @@ approved = check_policy_migration(
     acknowledgement_token=review.acknowledgement_token,
 )
 assert approved.approved
+
+# The report helper applies the same token check.
+assert review.acknowledgement_token is not None
+assert review.with_acknowledgement(review.acknowledgement_token).approved
 ```
 
 `check_policy_migration` raises
