@@ -8,9 +8,11 @@ addition within each context.
 
 The ledger does not inspect or store source rows. Its accepted spend records
 contain only a safe context identifier, epsilon, delta, and sequence number.
-Over-budget requests raise `PrivacyBudgetExceeded` before a spend is appended.
-The decision carries numeric projected and remaining budgets, so an integration
-can fail closed without putting a request payload in an exception.
+Over-budget requests raise `PrivacyBudgetLedgerExceeded` before a spend is
+appended. The decision carries numeric projected and remaining budgets, so an
+integration can fail closed without putting a request payload in an exception.
+The ledger-specific ceiling type is `ReleaseContextPrivacyBudget`; the existing
+`openmed.risk.PrivacyBudget` differential-privacy accountant remains unchanged.
 
 ## Local usage
 
@@ -38,6 +40,19 @@ if decision.allowed:
 
 Callers should keep the check-and-release boundary close together. The ledger
 does not itself emit an aggregate, persist files, or contact a service.
+
+Checking and charging are protected by one local lock, so concurrent callers
+cannot individually pass a stale check and collectively exceed the context
+ceiling. `check` remains advisory; `record_release` is the atomic gate.
+
+## Boundaries
+
+A ledger supports at most 512 contexts and 10,000 accepted spends. Contexts
+use a closed, 64-character ASCII identifier grammar. Epsilon is finite,
+non-negative, and at most 1,000,000; delta is finite and in `[0, 1)`. Numeric
+strings, booleans, duplicate aliases, unknown budget fields, unbounded custom
+mappings, and non-finite values are rejected without including caller values
+in errors. Configured budgets are exposed only through immutable snapshots.
 
 ## Evidence contract
 
