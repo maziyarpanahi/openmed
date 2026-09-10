@@ -3,11 +3,96 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 from pathlib import Path
 
 from openmed.eval.generalization import cross_corpus_report
 
 from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit
+
+
+def add_cost_command(subparsers: argparse._SubParsersAction) -> None:
+    """Register ``openmed benchmark cost``."""
+
+    parser = subparsers.add_parser(
+        "cost",
+        help="Compare measured local throughput with cited cloud prices.",
+    )
+    parser.add_argument(
+        "--perf",
+        type=Path,
+        required=True,
+        help="Local PerfReport JSON with chars_per_document metadata.",
+    )
+    parser.add_argument(
+        "--prices",
+        type=Path,
+        required=True,
+        help="Versioned, cited cloud-price JSON table.",
+    )
+    parser.add_argument(
+        "--hardware",
+        type=Path,
+        default=None,
+        help=(
+            "Optional hardware-cost JSON. When omitted, use the "
+            "hardware_cost_model object in the perf report."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Directory for cost-vs-cloud.json and cost-vs-cloud.md.",
+    )
+    parser.set_defaults(handler=handle_cost)
+
+
+def handle_cost(args: argparse.Namespace) -> int:
+    """Build and write a cited cost-vs-cloud report."""
+
+    from openmed.eval.cost import (
+        cost_vs_cloud_report,
+        load_cloud_prices,
+        load_cost_input,
+    )
+
+    try:
+        perf = load_cost_input(args.perf, name="perf report")
+        prices = load_cloud_prices(args.prices)
+        if args.hardware is not None:
+            hardware = load_cost_input(args.hardware, name="hardware cost model")
+        else:
+            embedded_hardware = perf.get("hardware_cost_model")
+            if not isinstance(embedded_hardware, Mapping):
+                raise ValueError(
+                    "perf report must contain hardware_cost_model when "
+                    "--hardware is omitted"
+                )
+            hardware = dict(embedded_hardware)
+        report = cost_vs_cloud_report(perf, prices, hardware)
+        json_path = report.write_json(args.output_dir / "cost-vs-cloud.json")
+        markdown_path = report.write_markdown(args.output_dir / "cost-vs-cloud.md")
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"Cost benchmark failed: {exc}",
+            code="cost_benchmark_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    written = {"json": str(json_path), "markdown": str(markdown_path)}
+    return emit(
+        args,
+        {
+            "input_fingerprint": report.input_fingerprint,
+            "written": written,
+        },
+        human=(
+            "Cost benchmark reports written:\n"
+            f"  JSON: {json_path}\n"
+            f"  Markdown: {markdown_path}"
+        ),
+    )
 
 
 def add_generalization_command(subparsers: argparse._SubParsersAction) -> None:
@@ -136,6 +221,8 @@ def _parse_suite_args(values: list[str]) -> list[str]:
 
 
 __all__ = [
+    "add_cost_command",
     "add_generalization_command",
+    "handle_cost",
     "handle_generalization",
 ]
