@@ -200,6 +200,7 @@ class LongitudinalEvidence:
     start: int | None = None
     end: int | None = None
     section: str | None = None
+    trajectory_hashes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -605,12 +606,10 @@ def longitudinal_attack_fingerprint(
         if len(note_indexes) >= 2:
             fingerprint.append(("stable_surrogate", value_hash))
 
-    age_notes = {item.note_index for item in evidence if item.category == "age"}
-    if len(age_notes) >= 2:
-        for value_hash in sorted(
-            {item.value_hash for item in evidence if item.category == "age"}
-        ):
-            fingerprint.append(("age_trajectory", value_hash))
+    for category in ("age", "date"):
+        trajectory_hash = _coherent_trajectory_hash(evidence, category)
+        if trajectory_hash is not None:
+            fingerprint.append((f"{category}_trajectory", trajectory_hash))
 
     rare_hashes = sorted(
         {item.value_hash for item in evidence if item.category == "rare_condition"}
@@ -730,6 +729,11 @@ def _longitudinal_evidence(
                 start=qi.start,
                 end=qi.end,
                 section=qi.section,
+                trajectory_hashes=_trajectory_hashes(
+                    hmac_key,
+                    qi.category,
+                    qi.normalized_value,
+                ),
             )
         )
     evidence.extend(_stable_surrogate_evidence(record, note_hash, hmac_key))
@@ -855,6 +859,68 @@ def _reused_value_count(
         if item.category == category:
             note_indexes.setdefault(item.value_hash, set()).add(item.note_index)
     return sum(1 for indexes in note_indexes.values() if len(indexes) >= 2)
+
+
+def _coherent_trajectory_hash(
+    evidence: tuple[LongitudinalEvidence, ...],
+    category: str,
+) -> str | None:
+    notes_by_hash: dict[str, set[int]] = {}
+    for item in evidence:
+        if item.category != category:
+            continue
+        for trajectory_hash in item.trajectory_hashes:
+            notes_by_hash.setdefault(trajectory_hash, set()).add(item.note_index)
+    reused_hashes = sorted(
+        trajectory_hash
+        for trajectory_hash, note_indexes in notes_by_hash.items()
+        if len(note_indexes) >= 2
+    )
+    if not reused_hashes:
+        return None
+
+    return _fingerprint_hash(reused_hashes)
+
+
+def _trajectory_hashes(
+    hmac_key: bytes | str,
+    category: str,
+    normalized_value: str,
+) -> tuple[str, ...]:
+    tokens: tuple[str, ...] = ()
+    if category == "age":
+        if normalized_value.isdigit():
+            age = int(normalized_value)
+            tokens = (f"age:{max(0, age - 1)}", f"age:{age}")
+    elif category == "date":
+        parsed = _parse_trajectory_date(normalized_value)
+        if parsed is not None:
+            quarter = parsed.year * 4 + (parsed.month - 1) // 3
+            tokens = (f"date-quarter:{quarter - 1}", f"date-quarter:{quarter}")
+    return tuple(
+        _hmac_digest(hmac_key, f"trajectory:{token}") for token in sorted(set(tokens))
+    )
+
+
+def _parse_trajectory_date(normalized_value: str) -> date | None:
+
+    for date_format in (
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%m/%d/%Y",
+        "%m-%d-%Y",
+        "%m/%d/%y",
+        "%m-%d-%y",
+        "%B %d, %Y",
+        "%B %d %Y",
+        "%b %d, %Y",
+        "%b %d %Y",
+    ):
+        try:
+            return datetime.strptime(normalized_value, date_format).date()
+        except ValueError:
+            continue
+    return None
 
 
 def _fingerprint_hash(values: Sequence[str]) -> str:
