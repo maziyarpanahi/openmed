@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 💬 Questions and community support
+    url: https://github.com/maziyarpanahi/openmed/discussions
+    about: Ask usage questions and discuss ideas with the OpenMed community.
   - name: 🔒 Report a security vulnerability (private)
     url: https://github.com/maziyarpanahi/openmed/security/advisories/new
     about: Redaction bypass, PHI/PII leakage, or any security issue — report it privately here. NEVER open a public issue for a security problem.

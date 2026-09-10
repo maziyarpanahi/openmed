@@ -662,8 +662,10 @@ def test_models_pull_exits_nonzero_when_refetched_file_remains_corrupt(
     captured = capsys.readouterr()
     assert result == 1
     assert calls == [False, True]
-    assert "model.bin" in captured.err
-    assert "forced re-fetch" in captured.err
+    assert captured.err == (
+        "Model integrity verification failed after a forced re-fetch.\n"
+    )
+    assert "model.bin" not in captured.err
 
 
 def test_prefetch_model_retries_transient_failures_with_backoff(

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 MODULE_PATH = Path(__file__).parents[3] / "scripts" / "licenses" / "sbom.py"
+ROOT = MODULE_PATH.parents[2]
 MODULE_SPEC = importlib.util.spec_from_file_location(
     "openmed_license_sbom", MODULE_PATH
 )
@@ -136,3 +137,241 @@ def test_cli_writes_without_network_and_does_not_log_output_path(
     assert sbom.render_sbom(sbom.build_sbom(pyproject, lockfile, "deadbeef")) == (
         output.read_text(encoding="utf-8")
     )
+
+
+def test_current_manifests_generate_the_base_runtime_closure() -> None:
+    document = sbom.build_sbom(
+        ROOT / "pyproject.toml",
+        ROOT / "uv.lock",
+        source_revision="deadbeef",
+    )
+
+    component_names = {component["name"] for component in document["components"]}
+    assert component_names == {"faker", "jieba", "pysbd", "pyyaml", "tzdata"}
+    root_ref = document["metadata"]["component"]["bom-ref"]
+    root_dependencies = next(
+        entry for entry in document["dependencies"] if entry["ref"] == root_ref
+    )
+    assert [
+        ref.split("/")[-1].split("@")[0] for ref in root_dependencies["dependsOn"]
+    ] == [
+        "faker",
+        "jieba",
+        "pysbd",
+        "pyyaml",
+    ]
+    properties = {
+        item["name"]: item["value"] for item in document["metadata"]["properties"]
+    }
+    assert "openmed:version-source-sha256" in properties
+    rendered = sbom.render_sbom(document)
+    assert "https://" not in rendered
+    assert str(ROOT) not in rendered
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["((MIT)", "MIT OR", "MIT Apache-2.0", "Synthetic-Private-License"],
+)
+def test_invalid_or_unreviewed_license_syntax_becomes_noassertion(
+    expression: str,
+) -> None:
+    assert sbom._license_value(expression) == [
+        {"license": {"name": sbom.UNKNOWN_LICENSE}}
+    ]
+
+
+def test_valid_compound_spdx_expression_is_preserved() -> None:
+    assert sbom._license_value("MIT OR Apache-2.0") == [
+        {"expression": "MIT OR Apache-2.0"}
+    ]
+
+
+def test_manifest_reads_are_bounded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    monkeypatch.setattr(sbom, "MAX_PYPROJECT_BYTES", 8)
+
+    with pytest.raises(sbom.SbomError, match="supported size limit"):
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+
+def test_invalid_artifact_hash_fails_without_echoing_source_values(
+    tmp_path: Path,
+) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    marker = "synthetic-private-artifact"
+    contents = lockfile.read_text(encoding="utf-8").replace(
+        "sha256:" + "a" * 64,
+        marker,
+    )
+    lockfile.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(sbom.SbomError) as error:
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+    assert marker not in str(error.value)
+
+
+def test_duplicate_package_identity_fails_closed(tmp_path: Path) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    with lockfile.open("a", encoding="utf-8") as handle:
+        handle.write(
+            """
+[[package]]
+name = "alpha"
+version = "1.0.0"
+source = { registry = "https://example.invalid/duplicate" }
+"""
+        )
+
+    with pytest.raises(sbom.SbomError, match="duplicate package identity"):
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+
+def test_package_record_repr_hides_raw_manifest_data() -> None:
+    marker = "https://example.invalid/synthetic-private-source"
+    record = sbom.PackageRecord(
+        name="synthetic-package",
+        normalized_name="synthetic-package",
+        version="1.0.0",
+        source_kind="registry",
+        data={"source": {"registry": marker}},
+    )
+
+    assert marker not in repr(record)
+
+
+def test_dynamic_version_requires_a_bounded_local_source(tmp_path: Path) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8").replace(
+            'version = "1.2.3"',
+            'dynamic = ["version"]',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(sbom.SbomError, match="dynamic project version"):
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+
+def test_dynamic_version_is_read_from_a_literal_assignment(tmp_path: Path) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8").replace(
+            'version = "1.2.3"',
+            'dynamic = ["version"]',
+        ),
+        encoding="utf-8",
+    )
+    about = tmp_path / "openmed" / "__about__.py"
+    about.parent.mkdir()
+    about.write_text(
+        '# __version__ = "9.9.9"\n__version__: str = "1.2.3"\n',
+        encoding="utf-8",
+    )
+
+    document = sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+    assert document["metadata"]["component"]["version"] == "1.2.3"
+
+
+def test_ambiguous_source_kinds_fail_closed(tmp_path: Path) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    contents = lockfile.read_text(encoding="utf-8").replace(
+        'source = { registry = "https://example.invalid/synthetic-package" }',
+        'source = { registry = "https://example.invalid", directory = "/private" }',
+    )
+    lockfile.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(sbom.SbomError, match="multiple source kinds"):
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+
+def test_invalid_source_record_fails_closed(tmp_path: Path) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    contents = lockfile.read_text(encoding="utf-8").replace(
+        'source = { registry = "https://example.invalid/synthetic-package" }',
+        'source = "synthetic-private-source"',
+    )
+    lockfile.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(sbom.SbomError) as error:
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+    assert "synthetic-private" not in str(error.value)
+
+
+def test_dependency_and_package_counts_are_bounded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    monkeypatch.setattr(sbom, "MAX_DEPENDENCIES_PER_RECORD", 1)
+    with pytest.raises(sbom.SbomError, match="dependencies exceed"):
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+    monkeypatch.setattr(sbom, "MAX_DEPENDENCIES_PER_RECORD", 10)
+    monkeypatch.setattr(sbom, "MAX_PACKAGE_RECORDS", 2)
+    with pytest.raises(sbom.SbomError, match="too many package records"):
+        sbom.build_sbom(pyproject, lockfile, source_revision="deadbeef")
+
+
+def test_invalid_revision_failure_does_not_echo_the_value(tmp_path: Path) -> None:
+    pyproject, lockfile = _write_manifests(tmp_path)
+    marker = "synthetic-private-revision"
+    with pytest.raises(sbom.SbomError) as error:
+        sbom.build_sbom(pyproject, lockfile, source_revision=marker)
+    assert marker not in str(error.value)
+
+
+def test_failed_atomic_replace_preserves_existing_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "evidence.json"
+    output.write_text("existing\n", encoding="utf-8")
+
+    def fail_replace(source: object, destination: object) -> None:
+        raise OSError("synthetic-private-path")
+
+    monkeypatch.setattr(sbom.os, "replace", fail_replace)
+    with pytest.raises(sbom.SbomError) as error:
+        sbom.write_sbom(output, {"bomFormat": "CycloneDX"})
+
+    assert "synthetic-private" not in str(error.value)
+    assert output.read_text(encoding="utf-8") == "existing\n"
+    assert list(tmp_path.glob(".openmed-sbom-*")) == []
+
+
+def test_non_finite_output_is_rejected_without_creating_a_file(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "evidence.json"
+
+    with pytest.raises(sbom.SbomError, match="unable to write"):
+        sbom.write_sbom(output, {"value": float("nan")})
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".openmed-sbom-*")) == []
+
+
+def test_git_revision_timeout_is_value_free(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_run(*args: object, **kwargs: object) -> None:
+        raise sbom.subprocess.TimeoutExpired("synthetic-private-command", 1)
+
+    monkeypatch.setattr(sbom.subprocess, "run", fail_run)
+    with pytest.raises(sbom.SbomError) as error:
+        sbom._revision_from_git(tmp_path)
+    assert "synthetic-private" not in str(error.value)
+
+
+def test_malformed_requirement_fails_without_echoing_the_value() -> None:
+    marker = "synthetic-package private-value"
+    with pytest.raises(sbom.SbomError) as error:
+        sbom._parse_dependency_name(marker)
+    assert marker not in str(error.value)
