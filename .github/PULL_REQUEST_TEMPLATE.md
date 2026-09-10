@@ -39,7 +39,7 @@ Brief description of what this PR does.
 - [ ] OR I have added new dependencies and they are justified because: ____
 
 ## Checklist
-- [ ] I have read the contributing guidelines
+- [ ] I have read the [contributing guide](https://github.com/maziyarpanahi/openmed/blob/master/CONTRIBUTING.md), [Code of Conduct](https://github.com/maziyarpanahi/openmed/blob/master/CODE_OF_CONDUCT.md), and [maintainer guide](https://github.com/maziyarpanahi/openmed/blob/master/MAINTAINERS.md)
 - [ ] My commits have clear, descriptive messages
 - [ ] I have squashed/organized my commits appropriately
 
