@@ -37,22 +37,43 @@ def _rect_fill(rect: tuple[float, float, float, float]) -> bytes:
     return f"0 0 0 rg\n{x} {y} {w} {h} re\nf\n".encode("ascii")
 
 
-def build_pdf(content_stream: bytes) -> bytes:
-    """Assemble a minimal one-page PDF around ``content_stream``."""
+def build_pdf_pages(
+    content_streams: list[bytes],
+    *,
+    page_sizes: list[tuple[float, float]] | None = None,
+) -> bytes:
+    """Assemble a minimal synthetic PDF around one or more content streams."""
+    if not content_streams:
+        raise ValueError("At least one content stream is required")
+    sizes = page_sizes or [(612.0, 792.0)] * len(content_streams)
+    if len(sizes) != len(content_streams):
+        raise ValueError("page_sizes must match content_streams")
+
+    page_ids = tuple(range(3, 3 + len(content_streams)))
+    font_id = 3 + len(content_streams)
+    first_stream_id = font_id + 1
+    kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
-        ),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length "
-        + str(len(content_stream)).encode("ascii")
-        + b" >>\nstream\n"
-        + content_stream
-        + b"endstream",
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode("ascii"),
     ]
+    for index, (width, height) in enumerate(sizes):
+        objects.append(
+            (
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width:g} "
+                f"{height:g}] /Resources << /Font << /F1 {font_id} 0 R >> >> "
+                f"/Contents {first_stream_id + index} 0 R >>"
+            ).encode("ascii")
+        )
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    for content_stream in content_streams:
+        objects.append(
+            b"<< /Length "
+            + str(len(content_stream)).encode("ascii")
+            + b" >>\nstream\n"
+            + content_stream
+            + b"endstream"
+        )
 
     payload = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = [0]
@@ -72,6 +93,11 @@ def build_pdf(content_stream: bytes) -> bytes:
         f"startxref\n{xref_offset}\n%%EOF\n".encode("ascii")
     )
     return bytes(payload)
+
+
+def build_pdf(content_stream: bytes) -> bytes:
+    """Assemble a minimal one-page PDF around ``content_stream``."""
+    return build_pdf_pages([content_stream])
 
 
 def original_pdf_bytes() -> bytes:
@@ -97,9 +123,90 @@ def leaky_redaction_pdf_bytes() -> bytes:
     )
 
 
+def moved_leak_pdf_bytes() -> bytes:
+    """Leaky redaction whose source name was moved below the requested box."""
+    return build_pdf(
+        _rect_fill(_REDACTION_RECT)
+        + _text_block(
+            [
+                (72.0, 720.0, _SCRUBBED_LINE),
+                (72.0, 700.0, _SECOND_LINE),
+                (72.0, 680.0, "John Doe"),
+            ]
+        )
+    )
+
+
+def separated_moved_leak_pdf_bytes() -> bytes:
+    """Leaky redaction with selected words separated in the output layer."""
+    return build_pdf(
+        _rect_fill(_REDACTION_RECT)
+        + _text_block(
+            [
+                (72.0, 720.0, _SCRUBBED_LINE),
+                (72.0, 700.0, _SECOND_LINE),
+                (72.0, 680.0, "John SYNTHETIC Doe"),
+            ]
+        )
+    )
+
+
+def duplicate_token_original_pdf_bytes() -> bytes:
+    """Source with one selected name and one unrelated repeated first name."""
+    return build_pdf(
+        _text_block(
+            [
+                (72.0, 720.0, _NAME_LINE),
+                (72.0, 700.0, _SECOND_LINE),
+                (72.0, 680.0, "Clinician John Smith"),
+            ]
+        )
+    )
+
+
+def duplicate_token_clean_redaction_pdf_bytes() -> bytes:
+    """Correct redaction preserving an unrelated identical source word."""
+    return build_pdf(
+        _rect_fill(_REDACTION_RECT)
+        + _text_block(
+            [
+                (72.0, 720.0, _SCRUBBED_LINE),
+                (72.0, 700.0, _SECOND_LINE),
+                (72.0, 680.0, "Clinician John Smith"),
+            ]
+        )
+    )
+
+
+def shifted_non_phi_pdf_bytes() -> bytes:
+    """Same redaction but with a non-PHI line shifted as a fidelity regression."""
+    return build_pdf(
+        _rect_fill(_REDACTION_RECT)
+        + _text_block([(72.0, 720.0, _SCRUBBED_LINE), (180.0, 700.0, _SECOND_LINE)])
+    )
+
+
+def multipage_pdf_bytes() -> bytes:
+    """Two-page source with different page sizes and synthetic text only."""
+    return build_pdf_pages(
+        [
+            _text_block([(72.0, 720.0, _NAME_LINE), (72.0, 700.0, _SECOND_LINE)]),
+            _text_block([(48.0, 540.0, "Follow up notes remain stable")]),
+        ],
+        page_sizes=[(612.0, 792.0), (420.0, 595.0)],
+    )
+
+
 __all__ = [
     "build_pdf",
+    "build_pdf_pages",
     "clean_redaction_pdf_bytes",
+    "duplicate_token_clean_redaction_pdf_bytes",
+    "duplicate_token_original_pdf_bytes",
     "leaky_redaction_pdf_bytes",
+    "moved_leak_pdf_bytes",
+    "multipage_pdf_bytes",
     "original_pdf_bytes",
+    "separated_moved_leak_pdf_bytes",
+    "shifted_non_phi_pdf_bytes",
 ]

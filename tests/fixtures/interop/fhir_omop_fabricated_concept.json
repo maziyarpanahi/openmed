@@ -1,0 +1,31 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-negative-001"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-negative-001",
+        "subject": {
+          "reference": "Patient/patient-negative-001"
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://example.test/synthetic",
+              "code": "NOT-A-CONCEPT",
+              "display": "Synthetic fabricated concept"
+            }
+          ]
+        },
+        "concept_id": 999999999
+      }
+    }
+  ]
+}

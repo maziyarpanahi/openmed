@@ -12,13 +12,27 @@ from openmed.clinical.grounding import (
     DEFAULT_CACHE_ENV,
     SnapshotCache,
     SnapshotIntegrityError,
+    SnapshotManifest,
     VersionedVocabularyLoader,
     VocabConcept,
     VocabularyIndex,
+    VocabularySnapshotManifest,
     default_cache_dir,
     load_snapshot,
 )
 from openmed.core.offline import OfflineModeError
+
+
+def test_public_snapshot_manifest_name_keeps_the_v21_cache_contract() -> None:
+    from openmed.clinical.grounding.snapshot_cache import (
+        SnapshotManifest as CacheSnapshotManifest,
+    )
+    from openmed.clinical.grounding.vocab import (
+        SnapshotManifest as VocabSnapshotManifest,
+    )
+
+    assert SnapshotManifest is CacheSnapshotManifest
+    assert VocabularySnapshotManifest is VocabSnapshotManifest
 
 
 def _index(*, delta: bool = False) -> VocabularyIndex:

@@ -1,0 +1,109 @@
+{
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "multi_mention_metformin",
+      "mentions": [
+        {
+          "ingredient": "Metformin",
+          "system": "RXNORM",
+          "code": "860975",
+          "coref_entity_id": "metformin-chain",
+          "dose": "500 MG",
+          "route": "PO",
+          "status": "started",
+          "effective_time": "2026-01-01",
+          "offset": [10, 19],
+          "section": "plan"
+        },
+        {
+          "ingredient": "metformin",
+          "system": "RXNORM",
+          "code": "860975",
+          "dose": "500 mg",
+          "route": "oral",
+          "status": "continued",
+          "effective_time": "2026-01-08",
+          "offset": [72, 81],
+          "section": "medications"
+        },
+        {
+          "ingredient": "the medication",
+          "coref_entity_id": "metformin-chain",
+          "dose": "1000 mg",
+          "route": "oral",
+          "status": "changed",
+          "effective_time": "2026-01-15",
+          "offset": [141, 155],
+          "section": "plan"
+        },
+        {
+          "ingredient": "metformin",
+          "system": "RXNORM",
+          "code": "860975",
+          "dose": "1000 mg",
+          "route": "oral",
+          "status": "held",
+          "effective_time": "2026-01-20",
+          "offset": [214, 223],
+          "section": "assessment"
+        },
+        {
+          "ingredient": "metformin",
+          "system": "RXNORM",
+          "code": "860975",
+          "dose": "1000 mg",
+          "route": "oral",
+          "status": "discontinued",
+          "effective_time": "2026-02-01",
+          "offset": [278, 287],
+          "section": "plan"
+        }
+      ],
+      "expected": {
+        "ingredient": "metformin",
+        "system": "RXNORM",
+        "code": "860975",
+        "current_status": "stopped",
+        "current_dose": "1000 mg",
+        "current_route": "oral",
+        "history_statuses": [
+          "started",
+          "continued",
+          "changed",
+          "held",
+          "stopped"
+        ],
+        "source_offsets": [
+          [10, 19],
+          [72, 81],
+          [141, 155],
+          [214, 223],
+          [278, 287]
+        ]
+      }
+    },
+    {
+      "id": "second_drug",
+      "mentions": [
+        {
+          "text": "lisinopril",
+          "ingredient": "lisinopril",
+          "dose": "10 MG",
+          "route": "oral",
+          "status": "continue",
+          "effective_time": "2026-01-04",
+          "offset": [35, 45]
+        }
+      ],
+      "expected": {
+        "ingredient": "lisinopril",
+        "current_status": "continued",
+        "current_dose": "10 mg",
+        "current_route": "oral",
+        "history_statuses": ["continued"],
+        "source_offsets": [[35, 45]]
+      }
+    }
+  ]
+}
