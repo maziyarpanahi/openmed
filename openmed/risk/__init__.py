@@ -126,29 +126,6 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
-from .policy_simulation import (
-    ACTION_CHANGE_VALUES,
-    BLOCKING_CHANGE_VALUES,
-    COUNT_CHANGE_VALUES,
-    GATE_OUTCOME_VALUES,
-    POLICY_SIMULATION_ARTIFACT,
-    POLICY_SIMULATION_MATRIX_SCHEMA_VERSION,
-    POLICY_SIMULATION_SCHEMA_VERSION,
-    PolicyScenario,
-    PolicySimulationError,
-    PolicySimulationMatrix,
-    PolicySimulationPolicy,
-    PolicySimulationReport,
-    PolicySimulationRow,
-    PolicySimulationScenario,
-    PolicySimulationSchemaError,
-    PolicyVersion,
-    build_policy_simulation_matrix,
-    render_policy_matrix,
-    render_policy_simulation_matrix,
-    run_policy_simulation,
-    simulate_policy_matrix,
-)
 from .l_diversity import (
     DiversityClass,
     LDiversityChecker,
@@ -187,6 +164,29 @@ from .membership_inference import (
 )
 from .membership_inference import (
     run_membership_inference_self_test as _run_table_membership_inference_self_test,
+)
+from .policy_simulation import (
+    ACTION_CHANGE_VALUES,
+    BLOCKING_CHANGE_VALUES,
+    COUNT_CHANGE_VALUES,
+    GATE_OUTCOME_VALUES,
+    POLICY_SIMULATION_ARTIFACT,
+    POLICY_SIMULATION_MATRIX_SCHEMA_VERSION,
+    POLICY_SIMULATION_SCHEMA_VERSION,
+    PolicyScenario,
+    PolicySimulationError,
+    PolicySimulationMatrix,
+    PolicySimulationPolicy,
+    PolicySimulationReport,
+    PolicySimulationRow,
+    PolicySimulationScenario,
+    PolicySimulationSchemaError,
+    PolicyVersion,
+    build_policy_simulation_matrix,
+    render_policy_matrix,
+    render_policy_simulation_matrix,
+    run_policy_simulation,
+    simulate_policy_matrix,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .qi_profiler import (
