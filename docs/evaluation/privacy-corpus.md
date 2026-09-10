@@ -24,7 +24,7 @@ Cases contain no `text` or arbitrary metadata fields. Use
 `make_privacy_case()` when a local synthetic fixture needs to be registered:
 
 ```python
-from openmed.eval.privacy_corpus import (
+from openmed.eval import (
     PrivacyFindingExpectation,
     PrivacyPolicyProfile,
     build_privacy_corpus_manifest,
@@ -58,6 +58,11 @@ The fixture is used only while `make_privacy_case()` computes its content hash.
 The returned case and manifest retain the hash and length, never the source
 text. Hashing is canonical: mapping key order does not affect the result, and
 changing fixture content changes the hash.
+Fixture structures are limited to 64 nested containers, and cycles, ambiguous
+`fixture` plus `text` inputs, mismatched caller-supplied lengths, unsafe
+identifiers, and oversized integer metadata are rejected with value-free
+errors. The same invariants apply when constructing the public dataclasses
+directly.
 
 ## Validation and offline loading
 
@@ -65,6 +70,10 @@ changing fixture content changes the hash.
 synthetic registry. `load_privacy_corpus_manifest()` returns the same registry
 without a path, or loads a local JSON manifest when given a path. Neither path
 performs a network request.
+
+Persisted manifests are limited to 1 MiB. Writes use a flushed temporary file
+and atomic replacement so a failed publication does not truncate an existing
+manifest. Filesystem failures are reported without echoing the supplied path.
 
 Use `validate_privacy_corpus_manifest()` before consuming a manifest. It
 checks schema and synthetic-only declarations, unique identifiers, SHA-256
@@ -74,7 +83,7 @@ only identifiers, categories, severities, and counts, so it is suitable for
 logs and reports.
 
 ```python
-from openmed.eval.privacy_corpus import (
+from openmed.eval import (
     default_privacy_corpus_manifest,
     validate_privacy_corpus_manifest,
 )

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import openmed.eval.privacy_corpus as privacy_corpus
 from openmed.eval.privacy_corpus import (
     PRIVACY_CORPUS_SCHEMA_VERSION,
     PrivacyCase,
@@ -176,3 +177,168 @@ def test_non_finite_fixture_values_fail_without_echoing_input() -> None:
         )
 
     assert sensitive_sentinel not in str(error.value)
+
+
+def test_direct_dataclass_construction_enforces_safe_invariants() -> None:
+    with pytest.raises(ValueError, match="safe identifier"):
+        PrivacyFindingExpectation(
+            finding_id="RAW VALUE",
+            severity="critical",
+            expected_count=0,
+        )
+    with pytest.raises(ValueError, match="supported"):
+        PrivacyFindingExpectation(
+            finding_id="finding",
+            severity="bogus",
+            expected_count=0,
+        )
+    with pytest.raises(ValueError, match="bounded"):
+        PrivacyFindingExpectation(
+            finding_id="finding",
+            severity="critical",
+            expected_count=-1,
+        )
+    with pytest.raises(ValueError, match="synthetic_only"):
+        PrivacyCase(
+            case_id="case",
+            category="direct_identifier",
+            policy_profile_id="strict_redaction",
+            fixture_hash="sha256:" + "0" * 64,
+            fixture_length=1,
+            severity="critical",
+            expected_findings=(_case().expected_findings[0],),
+            synthetic_only=False,
+        )
+
+
+def test_policy_profile_rejects_conflicting_leakage_aliases() -> None:
+    with pytest.raises(ValueError, match="critical leakage expectations conflict"):
+        PrivacyPolicyProfile.from_mapping(
+            {
+                "profile_id": "strict",
+                "required_categories": ["direct_identifier"],
+                "required_severities": ["critical"],
+                "expected_critical_leakage": 0,
+                "critical_leakage_expected": 1,
+            }
+        )
+
+
+def test_direct_case_construction_normalizes_findings_and_tags() -> None:
+    case = PrivacyCase(
+        case_id="case",
+        category="direct_identifier",
+        policy_profile_id="strict_redaction",
+        fixture_hash="sha256:" + "0" * 64,
+        fixture_length=1,
+        severity="critical",
+        expected_findings=(
+            PrivacyFindingExpectation("z_finding", "critical", 0),
+            PrivacyFindingExpectation("a_finding", "critical", 1),
+        ),
+        tags=("z_tag", "a_tag", "a_tag"),
+    )
+
+    assert [finding.finding_id for finding in case.expected_findings] == [
+        "a_finding",
+        "z_finding",
+    ]
+    assert case.tags == ("a_tag", "z_tag")
+
+
+def test_cyclic_and_overdeep_fixtures_fail_with_bounded_safe_errors() -> None:
+    cyclic: list[object] = []
+    cyclic.append(cyclic)
+    nested: object = "synthetic-value-must-not-be-echoed"
+    for _ in range(65):
+        nested = [nested]
+
+    for fixture in (cyclic, nested):
+        with pytest.raises(ValueError) as error:
+            compute_privacy_fixture_hash(fixture)
+        assert "synthetic-value-must-not-be-echoed" not in str(error.value)
+        assert len(str(error.value)) < 100
+
+
+def test_case_rejects_ambiguous_fixture_fields_without_retaining_either() -> None:
+    payload = {
+        "case_id": "case",
+        "category": "direct_identifier",
+        "policy_profile_id": "strict_redaction",
+        "severity": "critical",
+        "expected_findings": [
+            {
+                "finding_id": "critical_leakage",
+                "severity": "critical",
+                "expected_count": 0,
+            }
+        ],
+        "fixture": "synthetic-first-value",
+        "text": "synthetic-second-value",
+    }
+
+    with pytest.raises(ValueError, match="both fixture and text") as error:
+        PrivacyCase.from_mapping(payload, allow_fixture=True)
+
+    assert "synthetic-first-value" not in str(error.value)
+    assert "synthetic-second-value" not in str(error.value)
+
+
+def test_case_rejects_fixture_length_that_does_not_match_content() -> None:
+    with pytest.raises(ValueError, match="fixture_length does not match"):
+        make_privacy_case(
+            "case",
+            "synthetic-fixture",
+            category="direct_identifier",
+            policy_profile_id="strict_redaction",
+            severity="critical",
+            expected_findings=(_case().expected_findings[0],),
+            fixture_length=1,
+        )
+
+
+def test_identifiers_and_integer_metadata_are_bounded() -> None:
+    with pytest.raises(ValueError, match="safe identifier"):
+        PrivacyFindingExpectation("a" * 129, "critical", 0)
+    with pytest.raises(ValueError, match="bounded"):
+        PrivacyFindingExpectation("finding", "critical", 2**63)
+
+
+class _ExplodingFixture(dict[str, object]):
+    def items(self):  # type: ignore[no-untyped-def]
+        raise RuntimeError("synthetic-value-must-not-be-echoed")
+
+
+def test_hostile_fixture_mapping_error_is_sanitized() -> None:
+    with pytest.raises(ValueError, match="finite JSON") as error:
+        compute_privacy_fixture_hash(_ExplodingFixture())
+
+    assert "synthetic-value-must-not-be-echoed" not in str(error.value)
+
+
+def test_manifest_write_is_atomic_on_publish_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "privacy-corpus.json"
+    output.write_text("existing", encoding="utf-8")
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise OSError("synthetic-sensitive-path")
+
+    monkeypatch.setattr(privacy_corpus.os, "replace", fail_replace)
+    with pytest.raises(ValueError, match="could not be written") as error:
+        write_privacy_corpus_manifest(output)
+
+    assert "synthetic-sensitive-path" not in str(error.value)
+    assert output.read_text(encoding="utf-8") == "existing"
+    assert list(tmp_path.iterdir()) == [output]
+
+
+def test_manifest_load_refuses_oversized_input_without_parsing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "oversized.json"
+    path.write_bytes(b" " * 1_048_577)
+
+    with pytest.raises(ValueError, match="unavailable or invalid"):
+        load_privacy_corpus_manifest(path)

@@ -31,6 +31,23 @@ harnesses. It exposes four named rows: `Tiny`, `Base`, `Large`, and
 The `Large` and `Accurate-XLarge` RAM values are represented as 4096 MB and
 8192 MB in code.
 
+## Edge SBC Profiles
+
+The Raspberry Pi and Jetson benchmark maps deployment profiles onto the same
+canonical tier RAM ceilings and adds a separate installed-environment limit.
+The committed synthetic results are ARM64 proxy smoke measurements; their
+embedded machine metadata is authoritative and they are not presented as runs
+on the named boards.
+
+| Edge profile | Target | Canonical tier | Install maximum | Peak RSS maximum | Archived synthetic proxy (install / peak RSS) |
+|---|---|---|---:|---:|---:|
+| `raspberry-pi-5` | Raspberry Pi 5 8GB | Base | 300 MiB | 900 MiB | 228.089 / 143.094 MiB |
+| `jetson-nano` | NVIDIA Jetson Nano 4GB | Tiny | 300 MiB | 350 MiB | 228.089 / 143.859 MiB |
+
+See [Raspberry Pi and Jetson Edge Benchmark](runtimes/edge-sbc.md) for the
+minimal `edge-sbc` extra, result provenance, exact reproduction commands, and
+the fail-closed footprint gate.
+
 ## Notes
 
 - **Tier ≠ tier word across families** ("Large" = 434M for token-class NER but

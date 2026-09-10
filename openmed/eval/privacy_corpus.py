@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +27,11 @@ PRIVACY_SEVERITIES = ("info", "low", "medium", "high", "critical")
 PRIVACY_SEVERITY_RANK = {
     severity: rank for rank, severity in enumerate(PRIVACY_SEVERITIES)
 }
+
+_MAX_CANONICAL_DEPTH = 64
+_MAX_MANIFEST_BYTES = 1_048_576
+_MAX_SAFE_INTEGER = 2**63 - 1
+_MAX_TOKEN_LENGTH = 128
 
 _HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 _TOKEN_PATTERN = re.compile(r"[a-z0-9][a-z0-9._-]*")
@@ -72,6 +79,19 @@ class PrivacyFindingExpectation:
     expected_count: int
     critical_leakage: bool = False
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "finding_id", _required_token(self.finding_id, "finding_id")
+        )
+        object.__setattr__(self, "severity", _required_severity(self.severity))
+        object.__setattr__(
+            self,
+            "expected_count",
+            _non_negative_int(self.expected_count, "expected_count"),
+        )
+        if not isinstance(self.critical_leakage, bool):
+            raise ValueError("critical_leakage must be boolean")
+
     def to_dict(self) -> dict[str, Any]:
         """Return the raw-text-free JSON representation."""
 
@@ -115,6 +135,29 @@ class PrivacyPolicyProfile:
     required_severities: tuple[str, ...]
     expected_critical_leakage: int = 0
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "profile_id", _required_token(self.profile_id, "profile_id")
+        )
+        object.__setattr__(
+            self,
+            "required_categories",
+            _required_tokens(self.required_categories, "required_categories"),
+        )
+        object.__setattr__(
+            self,
+            "required_severities",
+            _required_severities(self.required_severities, "required_severities"),
+        )
+        object.__setattr__(
+            self,
+            "expected_critical_leakage",
+            _non_negative_int(
+                self.expected_critical_leakage,
+                "expected_critical_leakage",
+            ),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Return the raw-text-free JSON representation."""
 
@@ -137,10 +180,18 @@ class PrivacyPolicyProfile:
         required_severities = _required_severities(
             value.get("required_severities"), "required_severities"
         )
-        expected_critical_leakage = value.get(
-            "expected_critical_leakage",
-            value.get("critical_leakage_expected", 0),
-        )
+        expected_critical_leakage = value.get("expected_critical_leakage")
+        legacy_critical_leakage = value.get("critical_leakage_expected")
+        if (
+            expected_critical_leakage is not None
+            and legacy_critical_leakage is not None
+            and expected_critical_leakage != legacy_critical_leakage
+        ):
+            raise ValueError("critical leakage expectations conflict")
+        if expected_critical_leakage is None:
+            expected_critical_leakage = (
+                0 if legacy_critical_leakage is None else legacy_critical_leakage
+            )
         return cls(
             profile_id=profile_id,
             required_categories=required_categories,
@@ -168,6 +219,40 @@ class PrivacyCase:
     expected_findings: tuple[PrivacyFindingExpectation, ...]
     tags: tuple[str, ...] = ()
     synthetic_only: bool = True
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "case_id", _required_token(self.case_id, "case_id"))
+        object.__setattr__(self, "category", _required_token(self.category, "category"))
+        object.__setattr__(
+            self,
+            "policy_profile_id",
+            _required_token(self.policy_profile_id, "policy_profile_id"),
+        )
+        object.__setattr__(
+            self, "fixture_hash", _required_hash(self.fixture_hash, "fixture_hash")
+        )
+        object.__setattr__(
+            self,
+            "fixture_length",
+            _non_negative_int(self.fixture_length, "fixture_length"),
+        )
+        object.__setattr__(self, "severity", _required_severity(self.severity))
+        if self.synthetic_only is not True:
+            raise ValueError("privacy cases must declare synthetic_only=true")
+        expected_findings = tuple(
+            sorted(
+                (_coerce_finding(finding) for finding in self.expected_findings),
+                key=lambda finding: finding.finding_id,
+            )
+        )
+        if not expected_findings:
+            raise ValueError("expected_findings must not be empty")
+        if len({finding.finding_id for finding in expected_findings}) != len(
+            expected_findings
+        ):
+            raise ValueError("expected finding identifiers must be unique")
+        object.__setattr__(self, "expected_findings", expected_findings)
+        object.__setattr__(self, "tags", _optional_tokens(self.tags, "tags"))
 
     def to_dict(self) -> dict[str, Any]:
         """Return a representation that cannot contain fixture source text."""
@@ -246,10 +331,13 @@ class PrivacyCase:
                 raise ValueError("fixture_hash does not match the local fixture")
 
         fixture_length = value.get("fixture_length")
-        if fixture_length is None:
-            if raw_fixture is None:
-                raise ValueError("fixture_length is required with fixture_hash")
-            fixture_length = _fixture_length(raw_fixture)
+        if raw_fixture is not None:
+            computed_length = _fixture_length(raw_fixture)
+            if fixture_length is not None and fixture_length != computed_length:
+                raise ValueError("fixture_length does not match the local fixture")
+            fixture_length = computed_length
+        elif fixture_length is None:
+            raise ValueError("fixture_length is required with fixture_hash")
         fixture_length = _non_negative_int(fixture_length, "fixture_length")
 
         tags = _optional_tokens(value.get("tags", ()), "tags")
@@ -355,6 +443,45 @@ class PrivacyCorpusManifest:
     manifest_hash: str
     schema_version: str = PRIVACY_CORPUS_SCHEMA_VERSION
     synthetic_only: bool = True
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "manifest_id", _required_token(self.manifest_id, "manifest_id")
+        )
+        object.__setattr__(
+            self,
+            "required_categories",
+            _required_tokens(self.required_categories, "required_categories"),
+        )
+        object.__setattr__(
+            self, "manifest_hash", _required_hash(self.manifest_hash, "manifest_hash")
+        )
+        if self.schema_version != PRIVACY_CORPUS_SCHEMA_VERSION:
+            raise ValueError("unsupported privacy corpus schema")
+        if self.synthetic_only is not True:
+            raise ValueError(
+                "privacy corpus manifests must declare synthetic_only=true"
+            )
+        if not all(isinstance(case, PrivacyCase) for case in self.cases):
+            raise TypeError("cases must contain PrivacyCase instances")
+        if not all(
+            isinstance(profile, PrivacyPolicyProfile)
+            for profile in self.policy_profiles
+        ):
+            raise TypeError("policy_profiles must contain profile instances")
+        object.__setattr__(
+            self, "cases", tuple(sorted(self.cases, key=lambda case: case.case_id))
+        )
+        object.__setattr__(
+            self,
+            "policy_profiles",
+            tuple(
+                sorted(
+                    self.policy_profiles,
+                    key=lambda profile: profile.profile_id,
+                )
+            ),
+        )
 
     def case(self, case_id: str) -> PrivacyCase:
         """Return a case by identifier."""
@@ -496,7 +623,9 @@ def compute_privacy_fixture_hash(fixture: Any) -> str:
             return _hash_bytes(fixture)
         normalized = _canonical_fixture_value(fixture)
         return _hash_json(normalized)
-    except (TypeError, ValueError, OverflowError):
+    except MemoryError:
+        raise
+    except Exception:
         raise ValueError("fixture must contain finite JSON-compatible values") from None
 
 
@@ -557,14 +686,40 @@ def write_privacy_corpus_manifest(
 ) -> Path:
     """Write a validated deterministic manifest and return its local path."""
 
-    output_path = Path(path)
     payload = (manifest or default_privacy_corpus_manifest()).to_dict()
     validate_privacy_corpus_manifest(payload)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    encoded = (
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if len(encoded) > _MAX_MANIFEST_BYTES:
+        raise ValueError("privacy corpus manifest exceeds the size limit")
+
+    temporary_path: Path | None = None
+    try:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, output_path)
+        temporary_path = None
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("privacy corpus manifest could not be written") from None
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
     return output_path
 
 
@@ -586,8 +741,16 @@ def load_privacy_corpus_manifest(
     if path is None:
         return default_privacy_corpus_manifest()
     try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        input_path = Path(path)
+        if input_path.stat().st_size > _MAX_MANIFEST_BYTES:
+            raise ValueError
+        encoded = input_path.read_bytes()
+        if len(encoded) > _MAX_MANIFEST_BYTES:
+            raise ValueError
+        payload = json.loads(encoded.decode("utf-8"))
+    except MemoryError:
+        raise
+    except Exception:
         raise ValueError("privacy corpus manifest is unavailable or invalid") from None
     if not isinstance(payload, Mapping):
         raise ValueError("privacy corpus manifest must be a JSON object")
@@ -793,6 +956,8 @@ def _coverage_report(manifest: PrivacyCorpusManifest) -> PrivacyCoverageReport:
 
 
 def _raw_fixture_from_mapping(value: Mapping[str, Any]) -> Any | None:
+    if "fixture" in value and "text" in value:
+        raise ValueError("case must not contain both fixture and text")
     if "fixture" in value:
         return value["fixture"]
     if "text" in value:
@@ -813,16 +978,12 @@ def _fixture_length(fixture: Any) -> int:
         raise ValueError("fixture must contain finite JSON-compatible values") from None
 
 
-def _canonical_fixture_value(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        normalized: dict[str, Any] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise ValueError("fixture mapping keys must be strings")
-            normalized[key] = _canonical_fixture_value(item)
-        return normalized
-    if isinstance(value, (list, tuple)):
-        return [_canonical_fixture_value(item) for item in value]
+def _canonical_fixture_value(
+    value: Any,
+    *,
+    _active_containers: set[int] | None = None,
+    _depth: int = 0,
+) -> Any:
     if isinstance(value, bytes):
         return {
             "byte_length": len(value),
@@ -835,7 +996,38 @@ def _canonical_fixture_value(value: Any) -> Any:
         if value != value or value in (float("inf"), float("-inf")):
             raise ValueError("fixture contains a non-finite number")
         return value
-    raise TypeError("fixture value is not JSON-compatible")
+    if not isinstance(value, (Mapping, list, tuple)):
+        raise TypeError("fixture value is not JSON-compatible")
+    if _depth >= _MAX_CANONICAL_DEPTH:
+        raise ValueError("fixture exceeds the maximum supported nesting depth")
+
+    active_containers = set() if _active_containers is None else _active_containers
+    identity = id(value)
+    if identity in active_containers:
+        raise ValueError("fixture must not contain cycles")
+    active_containers.add(identity)
+    try:
+        if isinstance(value, Mapping):
+            normalized: dict[str, Any] = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise ValueError("fixture mapping keys must be strings")
+                normalized[key] = _canonical_fixture_value(
+                    item,
+                    _active_containers=active_containers,
+                    _depth=_depth + 1,
+                )
+            return normalized
+        return [
+            _canonical_fixture_value(
+                item,
+                _active_containers=active_containers,
+                _depth=_depth + 1,
+            )
+            for item in value
+        ]
+    finally:
+        active_containers.remove(identity)
 
 
 def _canonical_json(value: Any) -> str:
@@ -859,7 +1051,11 @@ def _hash_bytes(value: bytes) -> str:
 
 
 def _required_token(value: Any, field: str) -> str:
-    if not isinstance(value, str) or not _TOKEN_PATTERN.fullmatch(value):
+    if (
+        not isinstance(value, str)
+        or len(value) > _MAX_TOKEN_LENGTH
+        or not _TOKEN_PATTERN.fullmatch(value)
+    ):
         raise ValueError(f"{field} must be a lowercase safe identifier")
     return value
 
@@ -906,8 +1102,13 @@ def _required_hash(value: Any, field: str) -> str:
 
 
 def _non_negative_int(value: Any, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{field} must be a non-negative integer")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > _MAX_SAFE_INTEGER
+    ):
+        raise ValueError(f"{field} must be a bounded non-negative integer")
     return value
 
 
@@ -937,7 +1138,6 @@ def _default_case(
     seed: str,
     findings: tuple[PrivacyFindingExpectation, ...],
     *,
-    fixture_length: int,
     tags: tuple[str, ...] = (),
 ) -> PrivacyCase:
     return make_privacy_case(
@@ -947,7 +1147,6 @@ def _default_case(
         policy_profile_id=profile_id,
         severity=severity,
         expected_findings=findings,
-        fixture_length=fixture_length,
         tags=tags,
     )
 
@@ -989,7 +1188,6 @@ DEFAULT_PRIVACY_CASES = (
             ),
             _NO_CRITICAL_LEAKAGE,
         ),
-        fixture_length=64,
         tags=("boundary", "critical_leakage_zero"),
     ),
     _default_case(
@@ -1011,7 +1209,6 @@ DEFAULT_PRIVACY_CASES = (
                 critical_leakage=True,
             ),
         ),
-        fixture_length=72,
         tags=("cross_field", "critical_leakage_zero"),
     ),
     _default_case(
@@ -1028,7 +1225,6 @@ DEFAULT_PRIVACY_CASES = (
             ),
             _NO_CRITICAL_LEAKAGE,
         ),
-        fixture_length=48,
         tags=("safe_harbor", "critical_leakage_zero"),
     ),
     _default_case(
@@ -1050,7 +1246,33 @@ DEFAULT_PRIVACY_CASES = (
                 critical_leakage=True,
             ),
         ),
-        fixture_length=40,
         tags=("negative", "critical_leakage_zero"),
     ),
 )
+
+__all__ = [
+    "DEFAULT_PRIVACY_CASES",
+    "DEFAULT_PRIVACY_POLICY_PROFILES",
+    "PRIVACY_CORPUS_MANIFEST_ID",
+    "PRIVACY_CORPUS_SCHEMA_VERSION",
+    "PRIVACY_SEVERITIES",
+    "ExpectedFinding",
+    "PolicyProfile",
+    "PrivacyCase",
+    "PrivacyCorpusCase",
+    "PrivacyCorpusManifest",
+    "PrivacyCoverageReport",
+    "PrivacyFindingExpectation",
+    "PrivacyPolicyProfile",
+    "build_privacy_corpus_manifest",
+    "compute_fixture_hash",
+    "compute_manifest_hash",
+    "compute_privacy_corpus_manifest_hash",
+    "compute_privacy_fixture_hash",
+    "default_privacy_corpus_manifest",
+    "load_privacy_corpus_manifest",
+    "make_privacy_case",
+    "privacy_corpus_coverage",
+    "validate_privacy_corpus_manifest",
+    "write_privacy_corpus_manifest",
+]
