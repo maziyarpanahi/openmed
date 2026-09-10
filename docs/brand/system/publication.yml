@@ -366,6 +366,7 @@ classification:
     - development.md
     - contributing/reproducible-dependencies.md
     - security/exception-taxonomy.md
+    - security/budget-migrations.md
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
