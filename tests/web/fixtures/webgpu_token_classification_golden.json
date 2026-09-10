@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "reference_runtime": "python-float32",
+  "note": "Synthetic patient Avery Quinn visited Example Clinic.",
+  "tokens": {
+    "input_ids": [101, 2023, 2024, 102],
+    "attention_mask": [1, 1, 1, 1],
+    "batch_size": 1,
+    "sequence_length": 4
+  },
+  "classification_head": {
+    "hidden_size": 2,
+    "label_count": 3,
+    "weights": [1, 0, -1, 0, 1, -1],
+    "bias": [0, 0, 0]
+  },
+  "hidden_states": [3, 0, 0, 3, -1, -2, 2, 0],
+  "reference_logits": [3, 0, -3, 0, 3, -3, -1, -2, 3, 2, 0, -2],
+  "id2label": {
+    "0": "O",
+    "1": "B-PERSON",
+    "2": "I-PERSON"
+  },
+  "reference_token_spans": [
+    {
+      "batch_index": 0,
+      "label": "PERSON",
+      "start_token": 1,
+      "end_token": 3
+    }
+  ],
+  "critical_labels": ["PERSON"],
+  "logit_tolerance": 0.000001,
+  "max_recall_delta": 0
+}

@@ -29,6 +29,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
         "SMARTBackendIngestionSummary"
     ),
+    ("post", "/ground"): "Ground",
     ("get", "/health"): "Health",
     ("post", "/jobs"): "CreateJob",
     ("get", "/jobs/{job_id}"): "GetJob",
@@ -37,6 +38,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/models/unload"): "UnloadModels",
     ("post", "/omop/load"): "LoadOMOP",
     ("post", "/pii/deidentify"): "Deidentify",
+    ("post", "/pii/deidentify/stream"): "DeidentifyStream",
     ("post", "/pii/extract"): "ExtractPII",
     ("post", "/pii/extract/stream"): "ExtractPIIStream",
     ("post", "/privacy-gateway/complete"): "PrivacyGateway",
@@ -49,10 +51,12 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
+    "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",
     "OmopLoadRequest": "OMOPLoadRequest",
     "PIIDeidentifyRequest": "PIIDeidentifyRequest",
+    "PIIDeidentifyStreamRequest": "PIIDeidentifyStreamRequest",
     "PIIExtractRequest": "PIIExtractRequest",
     "PIIExtractStreamRequest": "PIIExtractStreamRequest",
     "PrivacyGatewayRequest": "PrivacyGatewayRequest",
