@@ -649,20 +649,22 @@ def evaluate_exception_budget(
             expiry_counts[_EXPIRY_UNBOUNDED] += count
             continue
 
+        expiry = exception.expires_on
+        if expiry is None:
+            unbounded_count += count
+            expiry_counts[_EXPIRY_UNBOUNDED] += count
+            continue
+
         if evaluation_date is None:
             expiry_counts[_EXPIRY_BOUNDED] += count
-        elif exception.expires_on < evaluation_date:
+        elif expiry < evaluation_date:
             expiry_counts[_EXPIRY_EXPIRED] += count
             expired_count += count
         else:
             expiry_counts[_EXPIRY_ACTIVE] += count
 
-        if (
-            selected_budget.max_expiry_days is not None
-            and evaluation_date is not None
-            and exception.expires_on is not None
-        ):
-            expiry_distance = (exception.expires_on - evaluation_date).days
+        if selected_budget.max_expiry_days is not None and evaluation_date is not None:
+            expiry_distance = (expiry - evaluation_date).days
             if expiry_distance > selected_budget.max_expiry_days and (
                 max_expiry_distance is None or expiry_distance > max_expiry_distance
             ):
