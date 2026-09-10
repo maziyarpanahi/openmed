@@ -17,6 +17,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from openmed.core.audit import stable_hash
@@ -28,6 +29,7 @@ EVIDENCE_REPLAY_MANIFEST_KIND = "openmed.risk.evidence_replay"
 """Stable domain label used when hashing replay artifacts."""
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_ACTION_DIGEST_RE = re.compile(r"^action:[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+@-]{0,127}$")
 _MISMATCH_ORDER = ("schema", "environment", "policy", "result")
 _MISMATCH_CATEGORIES = frozenset(_MISMATCH_ORDER)
@@ -68,6 +70,41 @@ _ALLOWED_ENVIRONMENT_FIELDS = frozenset(
 _ALLOWED_EXPECTED_FIELDS = frozenset(
     {"decision_counts", "result_fingerprint", "synthetic_input_count"}
 )
+_SAFE_ACTIONS = frozenset(
+    {
+        "allow",
+        "deny",
+        "drop",
+        "generalize",
+        "hash",
+        "keep",
+        "mask",
+        "pseudonymize",
+        "quarantine",
+        "redact",
+        "remove",
+        "replace",
+        "review",
+        "shift",
+        "suppress",
+        "tokenize",
+    }
+)
+_MISMATCH_FIELDS = {
+    "schema": frozenset({"schema_version"}),
+    "environment": frozenset({"environment_fingerprint"}),
+    "policy": frozenset({"policy_fingerprint"}),
+    "result": frozenset(
+        {"decision_counts", "result_fingerprint", "synthetic_input_count"}
+    ),
+}
+_MAX_FILE_BYTES = 16 * 1024 * 1024
+_MAX_RULES = 4_096
+_MAX_INPUTS = 100_000
+_MAX_COUNTS_PER_INPUT = 4_096
+_MAX_TOTAL_COUNT_ENTRIES = 1_000_000
+_MAX_COUNT = 2**63 - 1
+_MAX_MISMATCHES = 16
 
 
 class EvidenceReplayError(ValueError):
@@ -86,9 +123,9 @@ class UnsafeReplayInputError(EvidenceReplayError):
 class ReplayMismatch:
     """One privacy-safe replay mismatch.
 
-    ``expected`` and ``actual`` are restricted to validated identifiers,
-    digests, counts, booleans, and numbers.  Raw input values are never
-    retained by a mismatch or interpolated into its error text.
+    ``expected`` and ``actual`` are restricted by the category/field pair to
+    schema counts, digests, or aggregate action counts. Raw input values are
+    never retained by a mismatch or interpolated into its error text.
     """
 
     category: str
@@ -97,20 +134,55 @@ class ReplayMismatch:
     actual: Any = None
 
     def __post_init__(self) -> None:
-        if self.category not in _MISMATCH_CATEGORIES:
+        if (
+            not isinstance(self.category, str)
+            or self.category not in _MISMATCH_CATEGORIES
+        ):
             raise ValueError("unsupported replay mismatch category")
-        if not isinstance(self.field, str) or not _IDENTIFIER_RE.fullmatch(self.field):
-            raise ValueError("replay mismatch field must be a safe identifier")
-        object.__setattr__(self, "expected", _normalise_report_value(self.expected))
-        object.__setattr__(self, "actual", _normalise_report_value(self.actual))
+        if (
+            not isinstance(self.field, str)
+            or self.field not in _MISMATCH_FIELDS[self.category]
+        ):
+            raise ValueError("unsupported replay mismatch field")
+        expected: Any
+        actual: Any
+        if self.field.endswith("fingerprint"):
+            expected = _digest(self.expected, "expected mismatch fingerprint")
+            actual = _digest(self.actual, "actual mismatch fingerprint")
+        elif self.field == "decision_counts":
+            expected = MappingProxyType(
+                _normalise_count_mapping(
+                    self.expected,
+                    "expected mismatch counts",
+                    action_keys=True,
+                )
+            )
+            actual = MappingProxyType(
+                _normalise_count_mapping(
+                    self.actual,
+                    "actual mismatch counts",
+                    action_keys=True,
+                )
+            )
+        else:
+            expected = _non_negative_int(self.expected, "expected mismatch count")
+            actual = _non_negative_int(self.actual, "actual mismatch count")
+        object.__setattr__(self, "expected", expected)
+        object.__setattr__(self, "actual", actual)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, JSON-safe mismatch payload."""
 
         return {
-            "actual": self.actual,
+            "actual": (
+                dict(self.actual) if isinstance(self.actual, Mapping) else self.actual
+            ),
             "category": self.category,
-            "expected": self.expected,
+            "expected": (
+                dict(self.expected)
+                if isinstance(self.expected, Mapping)
+                else self.expected
+            ),
             "field": self.field,
         }
 
@@ -125,7 +197,7 @@ class EvidenceReplayReport:
     """
 
     manifest_fingerprint: str
-    manifest_schema_version: int | str
+    manifest_schema_version: int
     verifier_schema_version: int
     expected_policy_fingerprint: str
     actual_policy_fingerprint: str
@@ -181,19 +253,37 @@ class EvidenceReplayReport:
             "actual_result_fingerprint",
             _digest(self.actual_result_fingerprint, "actual_result_fingerprint"),
         )
-        if not isinstance(self.verifier_schema_version, int) or isinstance(
-            self.verifier_schema_version, bool
-        ):
-            raise ValueError("verifier_schema_version must be an integer")
+        object.__setattr__(
+            self,
+            "manifest_schema_version",
+            _non_negative_int(
+                self.manifest_schema_version,
+                "manifest_schema_version",
+            ),
+        )
+        if self.verifier_schema_version != EVIDENCE_REPLAY_SCHEMA_VERSION:
+            raise ValueError("verifier_schema_version is invalid")
         object.__setattr__(
             self,
             "expected_decision_counts",
-            _normalise_count_mapping(self.expected_decision_counts, "expected counts"),
+            MappingProxyType(
+                _normalise_count_mapping(
+                    self.expected_decision_counts,
+                    "expected counts",
+                    action_keys=True,
+                )
+            ),
         )
         object.__setattr__(
             self,
             "actual_decision_counts",
-            _normalise_count_mapping(self.actual_decision_counts, "actual counts"),
+            MappingProxyType(
+                _normalise_count_mapping(
+                    self.actual_decision_counts,
+                    "actual counts",
+                    action_keys=True,
+                )
+            ),
         )
         object.__setattr__(
             self,
@@ -211,7 +301,22 @@ class EvidenceReplayReport:
                 "actual_synthetic_input_count",
             ),
         )
-        object.__setattr__(self, "mismatches", tuple(self.mismatches))
+        try:
+            mismatches = tuple(self.mismatches)
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError("replay mismatches are invalid") from None
+        if len(mismatches) > _MAX_MISMATCHES or any(
+            not isinstance(item, ReplayMismatch) for item in mismatches
+        ):
+            raise ValueError("replay mismatches are invalid")
+        mismatch_keys = [
+            (_MISMATCH_ORDER.index(item.category), item.field) for item in mismatches
+        ]
+        if mismatch_keys != sorted(set(mismatch_keys)):
+            raise ValueError("replay mismatches are not canonical")
+        object.__setattr__(self, "mismatches", mismatches)
 
     @property
     def matched(self) -> bool:
@@ -311,8 +416,15 @@ class EvidenceReplayReport:
 def compute_policy_fingerprint(policy: Mapping[str, Any]) -> str:
     """Return a stable digest for a validated count-based policy."""
 
-    normalized = _normalise_policy(policy)
-    return normalized["fingerprint"]
+    try:
+        normalized = _normalise_policy(policy)
+        return normalized["fingerprint"]
+    except (EvidenceReplayError, MemoryError):
+        raise
+    except Exception:
+        raise EvidenceReplayError(
+            "evidence replay input could not be processed"
+        ) from None
 
 
 def compute_environment_fingerprint(
@@ -325,11 +437,38 @@ def compute_environment_fingerprint(
     non-payload metadata and are never copied into a replay report.
     """
 
-    normalized = _normalise_environment(environment)
-    return normalized["fingerprint"]
+    try:
+        normalized = _normalise_environment(environment)
+        return normalized["fingerprint"]
+    except (EvidenceReplayError, MemoryError):
+        raise
+    except Exception:
+        raise EvidenceReplayError(
+            "evidence replay input could not be processed"
+        ) from None
 
 
 def compute_result_fingerprint(
+    decision_counts: Mapping[str, int],
+    *,
+    synthetic_input_count: int | None = None,
+) -> str:
+    """Return a stable digest for bounded aggregate policy decisions."""
+
+    try:
+        return _compute_result_fingerprint(
+            decision_counts,
+            synthetic_input_count=synthetic_input_count,
+        )
+    except (EvidenceReplayError, MemoryError):
+        raise
+    except Exception:
+        raise EvidenceReplayError(
+            "evidence replay input could not be processed"
+        ) from None
+
+
+def _compute_result_fingerprint(
     decision_counts: Mapping[str, int],
     *,
     synthetic_input_count: int | None = None,
@@ -340,7 +479,11 @@ def compute_result_fingerprint(
     records without retaining their identifiers or payloads.
     """
 
-    counts = _normalise_count_mapping(decision_counts, "decision counts")
+    counts = _normalise_count_mapping(
+        decision_counts,
+        "decision counts",
+        action_keys=True,
+    )
     payload: dict[str, Any] = {
         "decision_counts": counts,
         "kind": f"{EVIDENCE_REPLAY_MANIFEST_KIND}.result",
@@ -354,6 +497,30 @@ def compute_result_fingerprint(
 
 
 def build_evidence_manifest(
+    *,
+    policy: Mapping[str, Any],
+    synthetic_inputs: Sequence[Mapping[str, Any]],
+    environment: Mapping[str, Any] | str,
+    manifest_id: str = "synthetic-policy-replay",
+) -> dict[str, Any]:
+    """Build a bounded counts-only manifest with privacy-safe failures."""
+
+    try:
+        return _build_evidence_manifest(
+            policy=policy,
+            synthetic_inputs=synthetic_inputs,
+            environment=environment,
+            manifest_id=manifest_id,
+        )
+    except (EvidenceReplayError, MemoryError):
+        raise
+    except Exception:
+        raise EvidenceReplayError(
+            "evidence replay input could not be processed"
+        ) from None
+
+
+def _build_evidence_manifest(
     *,
     policy: Mapping[str, Any],
     synthetic_inputs: Sequence[Mapping[str, Any]],
@@ -402,21 +569,89 @@ def load_evidence_manifest(
     """
 
     if isinstance(manifest, Mapping):
-        return dict(manifest)
+        try:
+            return dict(manifest)
+        except MemoryError:
+            raise
+        except Exception:
+            raise EvidenceReplaySchemaError(
+                "could not read evidence replay manifest"
+            ) from None
     if not isinstance(manifest, (str, Path)):
         raise EvidenceReplaySchemaError("evidence replay manifest must be an object")
     try:
-        payload = json.loads(Path(manifest).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        with Path(manifest).open("rb") as handle:
+            raw = handle.read(_MAX_FILE_BYTES + 1)
+        if len(raw) > _MAX_FILE_BYTES:
+            raise EvidenceReplaySchemaError("evidence replay manifest is too large")
+        payload = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_json_object,
+            parse_constant=_reject_json_constant,
+            parse_float=_parse_json_float,
+        )
+    except EvidenceReplayError:
+        raise
+    except (OSError, TypeError, UnicodeError, ValueError, RecursionError):
         raise EvidenceReplaySchemaError(
             "could not read evidence replay manifest"
-        ) from exc
+        ) from None
     if not isinstance(payload, Mapping):
         raise EvidenceReplaySchemaError("evidence replay manifest must be an object")
     return dict(payload)
 
 
+def _json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise EvidenceReplaySchemaError(
+                "evidence replay manifest contains duplicate fields"
+            )
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> None:
+    raise EvidenceReplaySchemaError(
+        "evidence replay manifest contains a non-finite number"
+    )
+
+
+def _parse_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise EvidenceReplaySchemaError(
+            "evidence replay manifest contains a non-finite number"
+        )
+    return parsed
+
+
 def replay_evidence(
+    manifest: Mapping[str, Any] | str | Path,
+    *,
+    policy: Mapping[str, Any] | None = None,
+    environment: Mapping[str, Any] | str | None = None,
+    synthetic_inputs: Sequence[Mapping[str, Any]] | None = None,
+) -> EvidenceReplayReport:
+    """Replay a counts-only manifest with closed, privacy-safe failures."""
+
+    try:
+        return _replay_evidence(
+            manifest,
+            policy=policy,
+            environment=environment,
+            synthetic_inputs=synthetic_inputs,
+        )
+    except (EvidenceReplayError, MemoryError):
+        raise
+    except Exception:
+        raise EvidenceReplayError(
+            "evidence replay input could not be processed"
+        ) from None
+
+
+def _replay_evidence(
     manifest: Mapping[str, Any] | str | Path,
     *,
     policy: Mapping[str, Any] | None = None,
@@ -553,11 +788,10 @@ def _normalise_manifest(payload: Mapping[str, Any]) -> dict[str, Any]:
     _require_fields(payload, _ALLOWED_MANIFEST_FIELDS, "manifest")
     if "schema_version" not in payload:
         raise EvidenceReplaySchemaError("manifest is missing schema_version")
-    schema_version = payload["schema_version"]
-    if isinstance(schema_version, str):
-        schema_version = _identifier(schema_version, "manifest schema version")
-    elif not isinstance(schema_version, int) or isinstance(schema_version, bool):
-        raise EvidenceReplaySchemaError("manifest schema_version is invalid")
+    schema_version = _non_negative_int(
+        payload["schema_version"],
+        "manifest schema_version",
+    )
     manifest_id = _identifier(
         payload.get("manifest_id", "evidence-replay"), "manifest_id"
     )
@@ -581,14 +815,16 @@ def _normalise_policy(value: Any) -> dict[str, Any]:
     _require_fields(value, _ALLOWED_POLICY_FIELDS, "policy")
     policy_id = _identifier(value.get("id"), "policy id")
     policy_version = _identifier(value.get("version"), "policy version")
-    default_action = _identifier(value.get("default_action"), "default action")
+    default_action = _action(value.get("default_action"), "default action")
     raw_rules = value.get("rules")
     if not isinstance(raw_rules, Mapping):
         raise EvidenceReplaySchemaError("policy rules must be an object")
     rules: dict[str, str] = {}
-    for category, action in raw_rules.items():
+    for index, (category, action) in enumerate(raw_rules.items()):
+        if index >= _MAX_RULES:
+            raise EvidenceReplaySchemaError("policy rules exceed the entry limit")
         category_name = _identifier(category, "policy category")
-        rules[category_name] = _identifier(action, "policy action")
+        rules[category_name] = _action(action, "policy action")
     normalized: dict[str, Any] = {
         "default_action": default_action,
         "id": policy_id,
@@ -622,8 +858,8 @@ def _normalise_environment(value: Any) -> dict[str, Any]:
             raise EvidenceReplaySchemaError("environment contains unsupported metadata")
         if isinstance(item, bool):
             metadata[key] = item
-        elif isinstance(item, int) and not isinstance(item, bool) and item >= 0:
-            metadata[key] = item
+        elif isinstance(item, int) and not isinstance(item, bool):
+            metadata[key] = _non_negative_int(item, f"environment {key}")
         elif isinstance(item, str):
             if key.endswith("digest") or key == "lock_digest":
                 metadata[key] = _digest(item, f"environment {key}")
@@ -655,20 +891,26 @@ def _normalise_synthetic_inputs(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
         raise UnsafeReplayInputError("synthetic_inputs must be a list of count objects")
     normalized: list[dict[str, Any]] = []
-    for item in value:
+    total_count_entries = 0
+    for index, item in enumerate(value):
+        if index >= _MAX_INPUTS:
+            raise UnsafeReplayInputError("synthetic_inputs exceeds the entry limit")
         if not isinstance(item, Mapping):
             raise UnsafeReplayInputError("synthetic input must contain category counts")
         if set(item) != {"category_counts"}:
             raise UnsafeReplayInputError(
                 "synthetic inputs may contain only category_counts"
             )
-        normalized.append(
-            {
-                "category_counts": _normalise_count_mapping(
-                    item["category_counts"], "category counts"
-                )
-            }
+        category_counts = _normalise_count_mapping(
+            item["category_counts"],
+            "category counts",
         )
+        total_count_entries += len(category_counts)
+        if total_count_entries > _MAX_TOTAL_COUNT_ENTRIES:
+            raise UnsafeReplayInputError(
+                "synthetic_inputs exceeds the total count-entry limit"
+            )
+        normalized.append({"category_counts": category_counts})
     return normalized
 
 
@@ -676,7 +918,11 @@ def _normalise_expected(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise EvidenceReplaySchemaError("expected must be an object")
     _require_fields(value, _ALLOWED_EXPECTED_FIELDS, "expected")
-    counts = _normalise_count_mapping(value.get("decision_counts"), "expected counts")
+    counts = _normalise_count_mapping(
+        value.get("decision_counts"),
+        "expected counts",
+        action_keys=True,
+    )
     result_fingerprint = _digest(
         value.get("result_fingerprint"),
         "expected result fingerprint",
@@ -692,17 +938,39 @@ def _normalise_expected(value: Any) -> dict[str, Any]:
     }
 
 
-def _normalise_count_mapping(value: Any, field_name: str) -> dict[str, int]:
+def _normalise_count_mapping(
+    value: Any,
+    field_name: str,
+    *,
+    action_keys: bool = False,
+) -> dict[str, int]:
     if not isinstance(value, Mapping):
         raise UnsafeReplayInputError(f"{field_name} must be an object")
     counts: dict[str, int] = {}
-    for key, count in value.items():
-        name = _identifier(key, f"{field_name} key")
-        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-            raise UnsafeReplayInputError(
-                f"{field_name} values must be non-negative integers"
+    try:
+        for index, (key, count) in enumerate(value.items()):
+            if index >= _MAX_COUNTS_PER_INPUT:
+                raise UnsafeReplayInputError(f"{field_name} exceeds the entry limit")
+            name = (
+                _action(key, f"{field_name} key")
+                if action_keys
+                else _identifier(key, f"{field_name} key")
             )
-        counts[name] = count
+            if name in counts:
+                raise UnsafeReplayInputError(f"{field_name} keys are ambiguous")
+            if (
+                not isinstance(count, int)
+                or isinstance(count, bool)
+                or not 0 <= count <= _MAX_COUNT
+            ):
+                raise UnsafeReplayInputError(
+                    f"{field_name} values must be non-negative integers"
+                )
+            counts[name] = count
+    except (EvidenceReplayError, MemoryError):
+        raise
+    except Exception:
+        raise UnsafeReplayInputError(f"{field_name} could not be read") from None
     return dict(sorted(counts.items()))
 
 
@@ -717,6 +985,8 @@ def _replay_decision_counts(
         category_counts = item["category_counts"]
         for category, count in category_counts.items():
             action = rules.get(category, default_action)
+            if counts[action] > _MAX_COUNT - count:
+                raise UnsafeReplayInputError("replayed action count exceeds the limit")
             counts[action] += count
     return dict(sorted((action, count) for action, count in counts.items() if count))
 
@@ -735,29 +1005,6 @@ def _manifest_hash_payload(normalized: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalise_report_value(value: Any) -> Any:
-    if value is None or isinstance(value, bool):
-        return value
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError("replay report values must be finite")
-        return value
-    if isinstance(value, str):
-        if _DIGEST_RE.fullmatch(value) or _IDENTIFIER_RE.fullmatch(value):
-            return value
-        raise ValueError("replay report values must be safe identifiers or digests")
-    if isinstance(value, Mapping):
-        return {
-            _identifier(key, "replay report key"): _normalise_report_value(item)
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        }
-    if isinstance(value, (list, tuple)):
-        return [_normalise_report_value(item) for item in value]
-    raise ValueError("replay report values are not JSON-safe")
-
-
 def _require_fields(
     value: Mapping[Any, Any], allowed: set[str] | frozenset[str], context: str
 ) -> None:
@@ -771,6 +1018,19 @@ def _identifier(value: Any, field_name: str) -> str:
     return value
 
 
+def _action(value: Any, field_name: str) -> str:
+    identifier = _identifier(value, field_name)
+    if identifier in _SAFE_ACTIONS or _ACTION_DIGEST_RE.fullmatch(identifier):
+        return identifier
+    digest = stable_hash(
+        {
+            "action": identifier,
+            "kind": f"{EVIDENCE_REPLAY_MANIFEST_KIND}.action",
+        }
+    )
+    return f"action:{digest.removeprefix('sha256:')}"
+
+
 def _digest(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not _DIGEST_RE.fullmatch(value):
         raise EvidenceReplaySchemaError(f"{field_name} must be a sha256 digest")
@@ -778,7 +1038,11 @@ def _digest(value: Any, field_name: str) -> str:
 
 
 def _non_negative_int(value: Any, field_name: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 0 <= value <= _MAX_COUNT
+    ):
         raise EvidenceReplaySchemaError(f"{field_name} must be a non-negative integer")
     return value
 

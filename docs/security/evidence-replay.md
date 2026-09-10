@@ -39,7 +39,9 @@ The helper records a policy fingerprint, environment fingerprint, expected
 action counts, and a result fingerprint. Each `synthetic_inputs` item may
 contain only `category_counts`, with non-negative integer values. Category and
 action names are validated identifiers; arbitrary strings and payload-bearing
-fields are rejected.
+fields are rejected. Common policy actions retain their names; unknown action
+identifiers are replaced by deterministic `action:<sha256>` values before they
+can enter a report.
 
 For an environment that is represented by a separately generated lock digest,
 pass a value such as `sha256:<64 lowercase hex characters>` instead of a
@@ -83,6 +85,15 @@ Malformed manifests and payload-bearing input shapes fail closed with
 privacy-safe exceptions. Exception messages do not include input values or
 file contents. Callers should retain the source manifest under their existing
 access controls and publish only the aggregate replay report.
+
+## Bounded input handling
+
+Manifest files, policy rules, synthetic inputs, per-input category maps, total
+count entries, and integer counts have fixed limits. JSON manifests reject
+duplicate object fields, non-finite numbers, excessive file sizes, and invalid
+schema-version types. Hostile custom mappings and sequences are converted to a
+closed `EvidenceReplayError` without preserving their exception text or file
+path context.
 
 ## Security boundary
 
