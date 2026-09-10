@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from itertools import repeat
 from pathlib import Path
+
+import pytest
 
 from openmed.risk import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
+    EvidenceBundleCheck,
     check_evidence_bundle,
     verify_evidence_bundle,
 )
@@ -169,11 +173,29 @@ def test_mapping_input_requires_an_explicit_local_root(tmp_path: Path) -> None:
     assert rooted_result.passed is True
 
 
+def test_path_to_digest_file_mapping_is_supported(tmp_path: Path) -> None:
+    root, manifest = _write_bundle(tmp_path)
+    raw_entries = manifest["files"]
+    assert isinstance(raw_entries, list)
+    manifest["files"] = {
+        entry["path"]: entry["sha256"]
+        for entry in raw_entries
+        if isinstance(entry, dict)
+    }
+
+    result = check_evidence_bundle(manifest, root=root)
+
+    assert result.passed is True
+    assert result.checked_file_count == 3
+
+
 def test_relative_path_escape_is_rejected_as_an_unsafe_path(
     tmp_path: Path,
 ) -> None:
     root, manifest = _write_bundle(tmp_path)
-    entries = list(manifest["files"])
+    raw_entries = manifest["files"]
+    assert isinstance(raw_entries, list)
+    entries = list(raw_entries)
     entries[0] = {
         "path": "../outside.json",
         "section": "metrics",
@@ -185,3 +207,70 @@ def test_relative_path_escape_is_rejected_as_an_unsafe_path(
     result = check_evidence_bundle(root)
 
     assert result.failures == ("unsafe_path",)
+
+
+def test_unexpected_mapping_failure_is_sanitized(tmp_path: Path) -> None:
+    root, manifest = _write_bundle(tmp_path)
+
+    class FailingManifest(dict[str, object]):
+        def get(self, key: str, default: object = None) -> object:
+            raise RuntimeError("synthetic patient value")
+
+    result = check_evidence_bundle(FailingManifest(manifest), root=root)
+
+    assert result.failures == ("invalid_manifest",)
+    assert "synthetic patient value" not in str(result)
+
+
+def test_required_sections_are_bounded(tmp_path: Path) -> None:
+    root, manifest = _write_bundle(tmp_path)
+
+    result = check_evidence_bundle(
+        manifest,
+        root=root,
+        required_sections=repeat("summary"),
+    )
+
+    assert result.failures == ("invalid_manifest",)
+
+
+def test_unknown_provenance_metadata_cannot_pass(tmp_path: Path) -> None:
+    root, manifest = _write_bundle(tmp_path)
+    raw_provenance = manifest["provenance"]
+    assert isinstance(raw_provenance, dict)
+    provenance = dict(raw_provenance)
+    provenance["patient_name"] = "synthetic patient value"
+    manifest["provenance"] = provenance
+
+    result = check_evidence_bundle(manifest, root=root)
+
+    assert result.failures == ("incomplete_provenance",)
+    assert "synthetic patient value" not in json.dumps(result.to_dict())
+
+
+def test_ambiguous_file_digest_fields_are_rejected(tmp_path: Path) -> None:
+    root, manifest = _write_bundle(tmp_path)
+    raw_entries = manifest["files"]
+    assert isinstance(raw_entries, list)
+    entries = list(raw_entries)
+    raw_first = entries[0]
+    assert isinstance(raw_first, dict)
+    first = dict(raw_first)
+    first["hash"] = first["sha256"]
+    entries[0] = first
+    manifest["files"] = entries
+
+    result = check_evidence_bundle(manifest, root=root)
+
+    assert result.failures == ("invalid_manifest",)
+
+
+def test_public_result_rejects_contradictory_or_unknown_fields() -> None:
+    with pytest.raises(ValueError, match="fields are invalid"):
+        EvidenceBundleCheck(passed=True, failures=("missing_file",))
+    with pytest.raises(ValueError, match="fields are invalid"):
+        EvidenceBundleCheck(
+            passed=False,
+            failures=("synthetic patient value",),
+            failure_counts=(("synthetic patient value", 1),),
+        )

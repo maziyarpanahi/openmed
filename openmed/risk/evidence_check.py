@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path, PurePosixPath
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 
 EVIDENCE_BUNDLE_SCHEMA_VERSION = "openmed.evidence_bundle.v1"
 MANIFEST_FILENAME = "manifest.json"
@@ -35,6 +35,39 @@ _TIMESTAMP_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
     r"(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$"
 )
+_MAX_MANIFEST_BYTES = 1024 * 1024
+_MAX_MANIFEST_FIELDS = 16
+_MAX_REQUIRED_SECTIONS = 128
+_MAX_FILE_ENTRIES = 4096
+_MAX_FILE_ENTRY_FIELDS = 4
+_MAX_PROVENANCE_FIELDS = 10
+_ALLOWED_MANIFEST_FIELDS = frozenset(
+    {
+        "files",
+        "manifest_hash",
+        "policy",
+        "policy_fingerprint",
+        "provenance",
+        "required_sections",
+        "schema_version",
+    }
+)
+_ALLOWED_FILE_ENTRY_FIELDS = frozenset({"hash", "path", "section", "sha256"})
+_ALLOWED_PROVENANCE_FIELDS = frozenset(
+    {
+        "created_at",
+        "generated_at",
+        "generator",
+        "generator_version",
+        "input_fingerprint",
+        "policy_fingerprint",
+        "source_fingerprint",
+        "source_hash",
+        "timestamp",
+        "tool",
+    }
+)
+_ALLOWED_POLICY_FIELDS = frozenset({"fingerprint", "policy_fingerprint"})
 
 
 class EvidenceFailureCategory(str, Enum):
@@ -71,6 +104,39 @@ class EvidenceBundleCheck:
     failures: tuple[str, ...] = ()
     checked_file_count: int = 0
     failure_counts: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        failures = self.failures
+        if type(failures) is not tuple or any(
+            type(category) is not str for category in failures
+        ):
+            raise ValueError("evidence bundle check fields are invalid")
+        expected_order = tuple(
+            category for category in _CATEGORY_ORDER if category in failures
+        )
+        if (
+            type(self.passed) is not bool
+            or type(self.checked_file_count) is not int
+            or self.checked_file_count < 0
+            or len(set(failures)) != len(failures)
+            or failures != expected_order
+            or self.passed != (not failures)
+        ):
+            raise ValueError("evidence bundle check fields are invalid")
+
+        if type(self.failure_counts) is not tuple or len(self.failure_counts) != len(
+            failures
+        ):
+            raise ValueError("evidence bundle check fields are invalid")
+        for entry, category in zip(self.failure_counts, failures):
+            if (
+                type(entry) is not tuple
+                or len(entry) != 2
+                or entry[0] != category
+                or type(entry[1]) is not int
+                or entry[1] <= 0
+            ):
+                raise ValueError("evidence bundle check fields are invalid")
 
     @property
     def valid(self) -> bool:
@@ -132,7 +198,7 @@ class _InvalidManifest(Exception):
     """Internal marker; its message must never reach a caller."""
 
 
-def check_evidence_bundle(
+def _check_evidence_bundle(
     bundle: EvidenceBundleInput,
     *,
     root: str | Path | None = None,
@@ -181,7 +247,11 @@ def check_evidence_bundle(
     if manifest is None or bundle_root is None:
         return _build_result(counts)
 
-    if not _is_mapping_with_string_keys(manifest):
+    if not _mapping_has_only_keys(
+        manifest,
+        allowed=_ALLOWED_MANIFEST_FIELDS,
+        limit=_MAX_MANIFEST_FIELDS,
+    ):
         add(EvidenceFailureCategory.INVALID_MANIFEST)
         return _build_result(counts)
 
@@ -236,6 +306,32 @@ def check_evidence_bundle(
             add(EvidenceFailureCategory.HASH_MISMATCH)
 
     return _build_result(counts, checked_file_count=checked_file_count)
+
+
+def check_evidence_bundle(
+    bundle: EvidenceBundleInput,
+    *,
+    root: str | Path | None = None,
+    expected_policy_fingerprint: str | None = None,
+    required_sections: Iterable[str] | None = None,
+    expected_schema_version: str = EVIDENCE_BUNDLE_SCHEMA_VERSION,
+    manifest_name: str = MANIFEST_FILENAME,
+) -> EvidenceBundleCheck:
+    """Check a local evidence bundle without exposing invalid input values."""
+
+    try:
+        return _check_evidence_bundle(
+            bundle,
+            root=root,
+            expected_policy_fingerprint=expected_policy_fingerprint,
+            required_sections=required_sections,
+            expected_schema_version=expected_schema_version,
+            manifest_name=manifest_name,
+        )
+    except MemoryError:
+        raise
+    except Exception:
+        return _build_result({EvidenceFailureCategory.INVALID_MANIFEST.value: 1})
 
 
 def verify_evidence_bundle(
@@ -302,7 +398,14 @@ def _load_manifest(
         if not bundle_root.is_dir() or not manifest_path.is_file():
             on_failure()
             return None, None
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        with manifest_path.open("rb") as handle:
+            encoded = handle.read(_MAX_MANIFEST_BYTES + 1)
+        if len(encoded) > _MAX_MANIFEST_BYTES:
+            raise _InvalidManifest
+        payload = json.loads(
+            encoded.decode("utf-8"),
+            object_pairs_hook=_unique_json_object,
+        )
     except (
         OSError,
         TypeError,
@@ -320,6 +423,15 @@ def _load_manifest(
     return payload, bundle_root
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _InvalidManifest
+        result[key] = value
+    return result
+
+
 def _manifest_name(value: str) -> str:
     if not isinstance(value, str) or not value or "\\" in value:
         raise _InvalidManifest
@@ -331,8 +443,41 @@ def _manifest_name(value: str) -> str:
     return value
 
 
-def _is_mapping_with_string_keys(value: Mapping[str, Any]) -> bool:
-    return all(type(key) is str for key in value)
+def _bounded_tuple(value: Iterable[Any], *, limit: int) -> tuple[Any, ...]:
+    try:
+        iterator = iter(value)
+        items: list[Any] = []
+        for _ in range(limit + 1):
+            try:
+                items.append(next(iterator))
+            except StopIteration:
+                break
+    except MemoryError:
+        raise
+    except Exception:
+        raise _InvalidManifest from None
+    if len(items) > limit:
+        raise _InvalidManifest
+    return tuple(items)
+
+
+def _mapping_keys(value: Mapping[Any, Any], *, limit: int) -> tuple[str, ...]:
+    keys = _bounded_tuple(value.keys(), limit=limit)
+    if any(type(key) is not str for key in keys):
+        raise _InvalidManifest
+    return keys
+
+
+def _mapping_has_only_keys(
+    value: Mapping[Any, Any],
+    *,
+    allowed: frozenset[str],
+    limit: int,
+) -> bool:
+    try:
+        return set(_mapping_keys(value, limit=limit)) <= allowed
+    except _InvalidManifest:
+        return False
 
 
 def _check_manifest_hash(
@@ -345,14 +490,18 @@ def _check_manifest_hash(
     if not _is_digest(supplied):
         add(EvidenceFailureCategory.INVALID_MANIFEST)
         return
-    payload = dict(manifest)
+    supplied_digest = cast(str, supplied)
+    payload = {
+        key: manifest[key]
+        for key in _mapping_keys(manifest, limit=_MAX_MANIFEST_FIELDS)
+    }
     payload.pop("manifest_hash", None)
     try:
         expected = _hash_json(payload)
     except (TypeError, ValueError):
         add(EvidenceFailureCategory.INVALID_MANIFEST)
         return
-    if not hmac.compare_digest(supplied, expected):
+    if not hmac.compare_digest(supplied_digest, expected):
         add(EvidenceFailureCategory.HASH_MISMATCH)
 
 
@@ -361,24 +510,44 @@ def _check_policy_fingerprint(
     expected_policy_fingerprint: str | None,
     add: Any,
 ) -> None:
+    has_direct_policy = "policy_fingerprint" in manifest
+    has_nested_policy = "policy" in manifest
+    if has_direct_policy and has_nested_policy:
+        add(EvidenceFailureCategory.INVALID_MANIFEST)
+        return
+
     actual = manifest.get("policy_fingerprint")
-    if actual is None and isinstance(manifest.get("policy"), Mapping):
-        policy = manifest["policy"]
+    if has_nested_policy:
+        policy = manifest.get("policy")
+        if not isinstance(policy, Mapping) or not _mapping_has_only_keys(
+            policy,
+            allowed=_ALLOWED_POLICY_FIELDS,
+            limit=len(_ALLOWED_POLICY_FIELDS),
+        ):
+            add(EvidenceFailureCategory.INVALID_MANIFEST)
+            return
+        policy_keys = set(_mapping_keys(policy, limit=len(_ALLOWED_POLICY_FIELDS)))
+        if len(policy_keys) != 1:
+            add(EvidenceFailureCategory.INVALID_MANIFEST)
+            return
         actual = policy.get("fingerprint", policy.get("policy_fingerprint"))
     if not _is_digest(actual):
         add(EvidenceFailureCategory.POLICY_MISMATCH)
         return
-    if expected_policy_fingerprint is not None and (
-        not _is_digest(expected_policy_fingerprint)
-        or not hmac.compare_digest(actual, expected_policy_fingerprint)
-    ):
-        add(EvidenceFailureCategory.POLICY_MISMATCH)
+    actual_digest = cast(str, actual)
+    if expected_policy_fingerprint is not None:
+        if not _is_digest(expected_policy_fingerprint) or not hmac.compare_digest(
+            actual_digest,
+            expected_policy_fingerprint,
+        ):
+            add(EvidenceFailureCategory.POLICY_MISMATCH)
 
     provenance = manifest.get("provenance")
     if isinstance(provenance, Mapping) and "policy_fingerprint" in provenance:
         provenance_policy = provenance.get("policy_fingerprint")
         if not _is_digest(provenance_policy) or not hmac.compare_digest(
-            actual, provenance_policy
+            actual_digest,
+            cast(str, provenance_policy),
         ):
             add(EvidenceFailureCategory.POLICY_MISMATCH)
 
@@ -386,7 +555,7 @@ def _check_policy_fingerprint(
 def _normalise_required_sections(value: Any) -> tuple[str, ...]:
     if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
         raise _InvalidManifest
-    sections = tuple(value)
+    sections = _bounded_tuple(value, limit=_MAX_REQUIRED_SECTIONS)
     if not sections or any(not _is_identifier(item) for item in sections):
         raise _InvalidManifest
     if len(set(sections)) != len(sections):
@@ -396,28 +565,33 @@ def _normalise_required_sections(value: Any) -> tuple[str, ...]:
 
 def _normalise_file_entries(value: Any) -> tuple[_FileEntry, ...]:
     if isinstance(value, Mapping):
-        if any(type(key) is not str for key in value):
-            raise _InvalidManifest
-        raw_entries: list[tuple[Any, Any]] = sorted(
-            value.items(), key=lambda item: item[0]
-        )
+        keys = sorted(_mapping_keys(value, limit=_MAX_FILE_ENTRIES))
         entries: list[_FileEntry] = []
-        for raw_path, descriptor in raw_entries:
-            if not isinstance(raw_path, str):
-                raise _InvalidManifest
+        for raw_path in keys:
+            descriptor = value[raw_path]
             if isinstance(descriptor, str):
                 descriptor = {
+                    "path": raw_path,
                     "sha256": descriptor,
                     "section": _section_from_path(raw_path),
                 }
             elif isinstance(descriptor, Mapping):
-                descriptor = dict(descriptor)
+                descriptor_keys = _mapping_keys(
+                    descriptor,
+                    limit=_MAX_FILE_ENTRY_FIELDS,
+                )
+                descriptor = {key: descriptor[key] for key in descriptor_keys}
+                if "path" in descriptor and descriptor["path"] != raw_path:
+                    raise _InvalidManifest
                 descriptor.setdefault("path", raw_path)
             else:
                 raise _InvalidManifest
             entries.append(_file_entry_from_mapping(descriptor))
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        entries = [_file_entry_from_mapping(item) for item in value]
+        entries = [
+            _file_entry_from_mapping(item)
+            for item in _bounded_tuple(value, limit=_MAX_FILE_ENTRIES)
+        ]
     else:
         raise _InvalidManifest
 
@@ -427,7 +601,13 @@ def _normalise_file_entries(value: Any) -> tuple[_FileEntry, ...]:
 
 
 def _file_entry_from_mapping(value: Any) -> _FileEntry:
-    if not isinstance(value, Mapping):
+    if not isinstance(value, Mapping) or not _mapping_has_only_keys(
+        value,
+        allowed=_ALLOWED_FILE_ENTRY_FIELDS,
+        limit=_MAX_FILE_ENTRY_FIELDS,
+    ):
+        raise _InvalidManifest
+    if "sha256" in value and "hash" in value:
         raise _InvalidManifest
     path = value.get("path")
     digest = value.get("sha256", value.get("hash"))
@@ -441,9 +621,9 @@ def _file_entry_from_mapping(value: Any) -> _FileEntry:
     ):
         raise _InvalidManifest
     return _FileEntry(
-        path=_normalise_relative_path(path),
-        digest=digest,
-        section=section,
+        path=_normalise_relative_path(cast(str, path)),
+        digest=cast(str, digest),
+        section=cast(str, section),
     )
 
 
@@ -470,7 +650,23 @@ def _section_from_path(value: str) -> str:
 
 
 def _provenance_is_complete(value: Any) -> bool:
-    if not isinstance(value, Mapping):
+    if not isinstance(value, Mapping) or not _mapping_has_only_keys(
+        value,
+        allowed=_ALLOWED_PROVENANCE_FIELDS,
+        limit=_MAX_PROVENANCE_FIELDS,
+    ):
+        return False
+    keys = set(_mapping_keys(value, limit=_MAX_PROVENANCE_FIELDS))
+    source_keys = keys & {
+        "source_fingerprint",
+        "source_hash",
+        "input_fingerprint",
+    }
+    generator_keys = keys & {"generator", "tool", "generator_version"}
+    timestamp_keys = keys & {"created_at", "generated_at", "timestamp"}
+    if not (
+        len(source_keys) == 1 and len(generator_keys) == 1 and len(timestamp_keys) == 1
+    ):
         return False
     source_fingerprint = _first_present(
         value,
@@ -494,11 +690,11 @@ def _first_present(value: Mapping[str, Any], keys: Sequence[str]) -> Any:
 
 
 def _is_identifier(value: Any) -> bool:
-    return isinstance(value, str) and bool(_IDENTIFIER_RE.fullmatch(value))
+    return type(value) is str and bool(_IDENTIFIER_RE.fullmatch(value))
 
 
 def _is_digest(value: Any) -> bool:
-    return isinstance(value, str) and bool(_DIGEST_RE.fullmatch(value))
+    return type(value) is str and bool(_DIGEST_RE.fullmatch(value))
 
 
 def _resolve_evidence_path(root: Path, relative_path: str) -> Path:

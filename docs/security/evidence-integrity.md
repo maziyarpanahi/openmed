@@ -12,8 +12,11 @@ A bundle is a directory containing `manifest.json` and the files referenced by
 its `files` entries. Paths must be relative POSIX paths inside the bundle, and
 each entry names a section and a canonical `sha256:<64 lowercase hex>` digest.
 The default required sections are `summary`, `metrics`, and `provenance`.
-Manifests may also include `manifest_hash`, a canonical SHA-256 digest over the
-manifest with that field omitted.
+Manifests are limited to 1 MiB, 128 required sections, and 4,096 file entries.
+Manifest, file-entry, policy, and provenance mappings use closed key sets so
+free-text or identifying metadata cannot pass unnoticed. Manifests may also
+include `manifest_hash`, a canonical SHA-256 digest over the manifest with
+that field omitted.
 
 ```json
 {
