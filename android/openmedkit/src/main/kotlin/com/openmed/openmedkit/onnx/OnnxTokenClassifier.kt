@@ -406,7 +406,7 @@ private data class RuntimeComponents(
     val session: TokenClassificationSession,
 )
 
-private class OnnxRuntimeTokenClassificationSession(
+internal class OnnxRuntimeTokenClassificationSession(
     private val environment: OrtEnvironment,
     private val session: OrtSession,
 ) : TokenClassificationSession {

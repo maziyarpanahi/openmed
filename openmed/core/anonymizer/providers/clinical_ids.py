@@ -19,6 +19,7 @@ deterministic:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Bangladesh NID structural formats with 10, 13, or 17 digits
   - ABDM identifiers: 14-digit ABHA numbers, ABHA addresses,
     PAN-shaped tax identifiers, and synthetic HPR/HFR registry identifiers
   - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
@@ -699,6 +700,89 @@ class AadhaarProvider(BaseProvider):
 
     def aadhaar(self) -> str:
         return generate_aadhaar(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Bangladesh National ID (10, 13, or 17 digits; structural validation only)
+# ---------------------------------------------------------------------------
+def generate_bangladesh_nid(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structural Bangladesh NID, preserving a valid source length."""
+
+    from openmed.core.pii_i18n import (
+        normalize_bengali_assamese_digits,
+        validate_bangladesh_nid,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+
+    if original is not None and validate_bangladesh_nid(original):
+        normalized = normalize_bengali_assamese_digits(original).strip()
+
+    length = len(normalized) if normalized else source.choice((10, 13, 17))
+    candidate = ""
+
+    for _ in range(20):
+        candidate = str(source.randint(1, 9)) + "".join(
+            str(source.randint(0, 9)) for _ in range(length - 1)
+        )
+        if candidate != normalized:
+            return candidate
+
+    return candidate
+
+
+class BangladeshNIDProvider(BaseProvider):
+    """Generate structural Bangladesh National ID surrogates."""
+
+    def bangladesh_nid(self, original: str | None = None) -> str:
+        return generate_bangladesh_nid(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Iranian National ID (10 digits with a mod-11 checksum)
+# ---------------------------------------------------------------------------
+def generate_iran_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid Iranian national ID distinct from ``original``."""
+
+    from openmed.core.pii_i18n import (
+        normalize_arabic_indic_digits,
+        validate_iran_national_id,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+    if original is not None and validate_iran_national_id(original):
+        normalized = normalize_arabic_indic_digits(original).strip()
+
+    candidate = ""
+    for _ in range(100):
+        body = [source.randint(0, 9) for _ in range(9)]
+        total = sum(
+            digit * weight for digit, weight in zip(body, range(10, 1, -1), strict=True)
+        )
+        remainder = total % 11
+        check_digit = remainder if remainder < 2 else 11 - remainder
+        candidate = "".join(str(digit) for digit in (*body, check_digit))
+        if candidate != normalized and validate_iran_national_id(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Iranian national ID")
+
+
+class IranNationalIDProvider(BaseProvider):
+    """Generate checksum-valid Iranian national ID surrogates."""
+
+    def iran_national_id(self, original: str | None = None) -> str:
+        return generate_iran_national_id(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -3901,6 +3985,7 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BangladeshNIDProvider",
     "BelgianRRNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
@@ -3920,6 +4005,7 @@ __all__ = [
     "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
     "IndonesianNIKProvider",
+    "IranNationalIDProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "KENYA_MFL_SYNTHETIC_MAX",
@@ -3958,6 +4044,7 @@ __all__ = [
     "generate_australian_tfn",
     "generate_aadhaar",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bc_phn",
     "generate_bic",
     "generate_belgian_rrn",
@@ -3991,6 +4078,7 @@ __all__ = [
     "generate_ontario_health_card",
     "generate_rwanda_id",
     "generate_indonesian_nik",
+    "generate_iran_national_id",
     "generate_indian_ration_card",
     "generate_vehicle_registration",
     "generate_voter_id_epic",

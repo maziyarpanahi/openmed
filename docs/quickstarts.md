@@ -12,6 +12,10 @@ Pick the track that matches how you'll use OpenMed:
 | **App developer** | Call de-identification from a service or agent | [App developer](#app-developer) |
 | **Data engineer** | Redact files, directories, and datasets at scale | [Data engineer](#data-engineer) |
 
+To generate the matching config, offline defaults, README, and starter script
+instead of assembling them by hand, use the
+[`openmed init` project scaffold](cli/openmed-init.md).
+
 !!! warning "Not a medical device"
     OpenMed is a research and engineering toolkit for text de-identification and
     named-entity recognition. It is **not** a medical device and does not provide
