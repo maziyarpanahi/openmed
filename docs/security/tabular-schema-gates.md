@@ -42,6 +42,12 @@ An incoming schema can be a sequence of `SchemaField` objects, a mapping of
 column names to field definitions, or a JSON-compatible mapping with
 `columns`/`fields` and an optional `version`/`schema_version`.
 
+Contract and field-definition mappings are closed to the documented keys and
+reject ambiguous aliases. Schemas are limited to 4,096 fields, and names,
+identifiers, versions, types, and roles are limited to 512 characters. These
+bounds apply before matching and keep the gate suitable for streaming release
+checks.
+
 ## Compare and gate
 
 ```python
@@ -57,8 +63,9 @@ enforce_schema_contract(contract, incoming_schema)
 
 The report classifies added, removed, renamed, type-changed, nullability-
 changed, and role-changed columns. Its serialized form contains only the
-contract version, status booleans, and integer counts. It does not contain
-column names, field identifiers, row values, or sample data. A
+report schema version, status booleans, and integer counts. The caller's
+contract version is compared but is not copied into the report. The report
+does not contain column names, field identifiers, row values, or sample data. A
 `SchemaDriftError` also contains counts only, and exposes the report through
 its `report` attribute for CI handling.
 
@@ -80,7 +87,8 @@ additional CI policy.
 
 Without a stable `field_id`, a name change is conservatively classified as an
 added column plus a removed column. The matcher never guesses that two
-different names represent the same logical field.
+different names represent the same logical field. Likewise, fields with the
+same name but conflicting stable IDs are classified as removed and added.
 
 Keep the full contract, including its column names, inside the application's
 protected configuration boundary. Publish only the counts-only report as CI

@@ -28,6 +28,8 @@ __all__ = [
 ]
 
 _REPORT_SCHEMA_VERSION = 1
+_MAX_FIELDS = 4096
+_MAX_TEXT_CHARS = 512
 _PROTECTED_ROLES = frozenset({"direct_identifier", "quasi_identifier", "sensitive"})
 _SAFE_ROLES = frozenset({"non_sensitive", "excluded"})
 _ROLE_ALIASES = {
@@ -75,6 +77,98 @@ _TYPE_ALIASES = {
     "timestamp": "datetime",
 }
 _MISSING = object()
+_CONTRACT_KEYS = frozenset({"version", "schema_version", "columns", "fields"})
+_FIELD_KEYS = frozenset(
+    {
+        "name",
+        "column",
+        "dtype",
+        "type",
+        "data_type",
+        "nullable",
+        "nullability",
+        "role",
+        "field_id",
+        "column_id",
+        "id",
+    }
+)
+
+
+def _bounded_text(value: str, *, field: str) -> str:
+    if len(value) > _MAX_TEXT_CHARS:
+        raise ValueError(f"{field} exceeds the length limit")
+    return value
+
+
+def _bounded_items(value: Mapping[Any, Any]) -> list[tuple[Any, Any]]:
+    try:
+        iterator = iter(value.items())
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("schema mapping is invalid") from None
+    items: list[tuple[Any, Any]] = []
+    for _ in range(_MAX_FIELDS + 1):
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return items
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError("schema mapping is invalid") from None
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise ValueError("schema mapping is invalid")
+        items.append(item)
+    raise ValueError("schema exceeds the field limit")
+
+
+def _bounded_sequence(value: Sequence[Any]) -> list[Any]:
+    try:
+        iterator = iter(value)
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("schema field sequence is invalid") from None
+    items: list[Any] = []
+    for _ in range(_MAX_FIELDS + 1):
+        try:
+            items.append(next(iterator))
+        except StopIteration:
+            return items
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError("schema field sequence is invalid") from None
+    raise ValueError("schema exceeds the field limit")
+
+
+def _copy_mapping(
+    value: Mapping[Any, Any], *, allowed: frozenset[str] | None = None
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, item in _bounded_items(value):
+        if not isinstance(key, str):
+            raise ValueError("schema mapping keys must be strings")
+        _bounded_text(key, field="schema mapping key")
+        if key in result:
+            raise ValueError("schema mapping keys must be unique")
+        if allowed is not None and key not in allowed:
+            raise ValueError("schema mapping contains unsupported fields")
+        result[key] = item
+    return result
+
+
+def _one_present(mapping: Mapping[str, Any], *keys: str, required: bool = False) -> Any:
+    present = [key for key in keys if key in mapping]
+    if len(present) > 1:
+        raise ValueError("schema mapping contains ambiguous aliases")
+    if present:
+        return mapping[present[0]]
+    if required:
+        raise ValueError("schema mapping is missing a required field")
+    return _MISSING
 
 
 def _normalize_version(value: Any) -> str:
@@ -84,13 +178,13 @@ def _normalize_version(value: Any) -> str:
         return str(value)
     if not isinstance(value, str) or not value.strip():
         raise TypeError("schema contract version must be a non-empty string or integer")
-    return value.strip()
+    return _bounded_text(value.strip(), field="schema contract version")
 
 
 def _normalize_column_name(value: Any) -> str:
     if not isinstance(value, str) or not value or "\x00" in value:
         raise ValueError("schema field names must be non-empty strings")
-    return value
+    return _bounded_text(value, field="schema field name")
 
 
 def _normalize_field_id(value: Any) -> str | None:
@@ -98,7 +192,7 @@ def _normalize_field_id(value: Any) -> str | None:
         return None
     if not isinstance(value, str) or not value or "\x00" in value:
         raise ValueError("schema field identifiers must be non-empty strings")
-    return value
+    return _bounded_text(value, field="schema field identifier")
 
 
 def _normalize_dtype(value: Any) -> str:
@@ -106,14 +200,16 @@ def _normalize_dtype(value: Any) -> str:
         value = value.__name__
     if not isinstance(value, str) or not value.strip():
         raise TypeError("schema field types must be non-empty strings or types")
-    normalized = value.strip().lower().replace(" ", "")
+    normalized = _bounded_text(value.strip(), field="schema field type")
+    normalized = normalized.lower().replace(" ", "")
     return _TYPE_ALIASES.get(normalized, normalized)
 
 
 def _normalize_role(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise TypeError("schema field roles must be non-empty strings")
-    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    normalized = _bounded_text(value.strip(), field="schema field role")
+    normalized = normalized.lower().replace("-", "_").replace(" ", "_")
     return _ROLE_ALIASES.get(normalized, normalized)
 
 
@@ -121,13 +217,6 @@ def _validate_nullable(value: Any) -> bool:
     if type(value) is not bool:
         raise TypeError("schema field nullability must be a boolean")
     return value
-
-
-def _first_present(mapping: Mapping[str, Any], *keys: str) -> Any:
-    for key in keys:
-        if key in mapping:
-            return mapping[key]
-    return _MISSING
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,19 +263,20 @@ def _coerce_field(
     if isinstance(value, SchemaField):
         return value
     if isinstance(value, Mapping):
-        name = _first_present(value, "name", "column")
+        field = _copy_mapping(value, allowed=_FIELD_KEYS)
+        name = _one_present(field, "name", "column")
         if name is _MISSING:
             name = name_hint
         if name is _MISSING or name is None:
             raise ValueError(f"schema field at offset {offset} is missing a name")
-        dtype = _first_present(value, "dtype", "type", "data_type")
+        dtype = _one_present(field, "dtype", "type", "data_type")
         if dtype is _MISSING:
             raise ValueError(f"schema field at offset {offset} is missing a type")
-        nullable = _first_present(value, "nullable", "nullability")
+        nullable = _one_present(field, "nullable", "nullability")
         if nullable is _MISSING:
             nullable = False
-        role = value.get("role", "unknown")
-        field_id = _first_present(value, "field_id", "column_id", "id")
+        role = field.get("role", "unknown")
+        field_id = _one_present(field, "field_id", "column_id", "id")
         if field_id is _MISSING:
             field_id = None
         return SchemaField(
@@ -205,11 +295,12 @@ def _coerce_fields(value: Any) -> tuple[SchemaField, ...]:
     if isinstance(value, Mapping):
         fields = tuple(
             _coerce_field(item, offset=index, name_hint=name)
-            for index, (name, item) in enumerate(value.items())
+            for index, (name, item) in enumerate(_bounded_items(value))
         )
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         fields = tuple(
-            _coerce_field(item, offset=index) for index, item in enumerate(value)
+            _coerce_field(item, offset=index)
+            for index, item in enumerate(_bounded_sequence(value))
         )
     else:
         raise TypeError("schema columns must be a mapping or sequence")
@@ -252,12 +343,9 @@ class SchemaContract:
 
         if not isinstance(value, Mapping):
             raise TypeError("schema contract must be a mapping")
-        version = _first_present(value, "version", "schema_version")
-        if version is _MISSING:
-            raise ValueError("schema contract must declare a version")
-        columns = _first_present(value, "columns", "fields")
-        if columns is _MISSING:
-            raise ValueError("schema contract must declare columns")
+        contract = _copy_mapping(value, allowed=_CONTRACT_KEYS)
+        version = _one_present(contract, "version", "schema_version", required=True)
+        columns = _one_present(contract, "columns", "fields", required=True)
         return cls(version, _coerce_fields(columns))
 
     def to_dict(self) -> dict[str, Any]:
@@ -281,16 +369,19 @@ def _coerce_incoming(
     value: SchemaContract | Mapping[str, Any] | Sequence[Any],
 ) -> tuple[tuple[SchemaField, ...], str | None]:
     if isinstance(value, SchemaContract):
-        return value.columns, value.version
+        return value.columns, str(value.version)
     if isinstance(value, Mapping):
-        version = _first_present(value, "version", "schema_version")
-        columns = _first_present(value, "columns", "fields")
+        incoming = _copy_mapping(value)
+        version = _one_present(incoming, "version", "schema_version")
+        columns = _one_present(incoming, "columns", "fields")
         if columns is not _MISSING:
+            if not set(incoming) <= _CONTRACT_KEYS:
+                raise ValueError("schema envelope contains unsupported fields")
             incoming_version = (
                 None if version is _MISSING else _normalize_version(version)
             )
             return _coerce_fields(columns), incoming_version
-        return _coerce_fields(value), None
+        return _coerce_fields(incoming), None
     return _coerce_fields(value), None
 
 
@@ -324,6 +415,8 @@ def _match_fields(
     for name in sorted(set(expected_by_name) & set(incoming_by_name)):
         expected_field = expected_by_name[name]
         incoming_field = incoming_by_name[name]
+        if expected_field.field_id is not None or incoming_field.field_id is not None:
+            continue
         matches.append((expected_field, incoming_field))
         expected_remaining.remove(expected_field)
         incoming_remaining.remove(incoming_field)
@@ -358,7 +451,6 @@ def _field_has_structural_drift(before: SchemaField, after: SchemaField) -> bool
 class SchemaDriftReport:
     """Counts-only result of comparing an incoming schema to a contract."""
 
-    contract_version: str
     version_match: bool
     added: int
     removed: int
@@ -371,11 +463,6 @@ class SchemaDriftReport:
     release_blocked: bool
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "contract_version",
-            _normalize_version(self.contract_version),
-        )
         if type(self.version_match) is not bool:
             raise TypeError("schema report version_match must be a boolean")
         if type(self.release_blocked) is not bool:
@@ -393,6 +480,17 @@ class SchemaDriftReport:
             value = getattr(self, name)
             if type(value) is not int or value < 0:
                 raise ValueError("schema report counts must be non-negative integers")
+        if self.unsafe_role_drift > self.added + self.removed + self.role_changed:
+            raise ValueError("schema report role-drift counts are inconsistent")
+        if self.unsafe_schema_drift > (
+            self.renamed + self.type_changed + self.nullability_changed
+        ):
+            raise ValueError("schema report structural-drift counts are inconsistent")
+        expected_blocked = bool(
+            not self.version_match or self.unsafe_role_drift or self.unsafe_schema_drift
+        )
+        if self.release_blocked is not expected_blocked:
+            raise ValueError("schema report release decision is inconsistent")
 
     @property
     def has_drift(self) -> bool:
@@ -440,7 +538,6 @@ class SchemaDriftReport:
 
         return {
             "report_schema_version": _REPORT_SCHEMA_VERSION,
-            "contract_version": self.contract_version,
             "version_match": self.version_match,
             "release_blocked": self.release_blocked,
             "counts": self.counts,
@@ -480,7 +577,7 @@ class SchemaDriftError(ValueError):
         )
 
 
-def compare_schema_drift(
+def _compare_schema_drift(
     contract: SchemaContract | Mapping[str, Any],
     incoming: SchemaContract | Mapping[str, Any] | Sequence[Any],
 ) -> SchemaDriftReport:
@@ -533,7 +630,6 @@ def compare_schema_drift(
         not version_match or unsafe_role_drift or unsafe_schema_drift
     )
     return SchemaDriftReport(
-        contract_version=expected_contract.version,
         version_match=version_match,
         added=added,
         removed=removed,
@@ -545,6 +641,27 @@ def compare_schema_drift(
         unsafe_schema_drift=unsafe_schema_drift,
         release_blocked=release_blocked,
     )
+
+
+def compare_schema_drift(
+    contract: SchemaContract | Mapping[str, Any],
+    incoming: SchemaContract | Mapping[str, Any] | Sequence[Any],
+) -> SchemaDriftReport:
+    """Compare an incoming schema to a versioned contract.
+
+    The returned report never contains column names or input values. A release
+    is blocked for a version mismatch, a role transition involving a protected
+    or unknown role, a protected-column add/remove, or structural drift on a
+    protected or unknown column. Drift limited to ``non_sensitive`` and
+    ``excluded`` columns is reported but does not block this privacy gate.
+    """
+
+    try:
+        return _compare_schema_drift(contract, incoming)
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("schema inputs are invalid") from None
 
 
 def enforce_schema_contract(
