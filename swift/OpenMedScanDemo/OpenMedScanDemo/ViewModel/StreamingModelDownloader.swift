@@ -37,7 +37,15 @@ public actor StreamingModelDownloader {
         let directory = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID, revision: revision)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        if (try? OpenMedModelStore.mlxModelCacheState(repoID: repoID, revision: revision)) == .ready {
+        if repoID == OpenMedMaple.repositoryID {
+            if OpenMedMaple.isModelDirectoryReady(directory) {
+                progress("ready", 0, 0, 0)
+                return directory
+            }
+        } else if (try? OpenMedModelStore.mlxModelCacheState(
+            repoID: repoID,
+            revision: revision
+        )) == .ready {
             progress("ready", 0, 0, 0)
             return directory
         }
@@ -45,26 +53,33 @@ public actor StreamingModelDownloader {
         // 1. Fetch the manifest (may not exist on legacy repos).
         let manifestPath = "openmed-mlx.json"
         let manifestURL = directory.appending(path: manifestPath)
-        let manifestExists = try await downloadFileIfMissing(
-            repoID: repoID,
-            revision: revision,
-            relativePath: manifestPath,
-            destination: manifestURL,
-            requiredStatusCodes: nil,    // tolerate 404
-            progress: { _, _, _, _ in }
-        )
-
+        let manifest: MLXManifest?
+        if repoID == OpenMedMaple.repositoryID {
+            manifest = nil
+        } else {
+            let manifestExists = try await downloadFileIfMissing(
+                repoID: repoID,
+                revision: revision,
+                relativePath: manifestPath,
+                destination: manifestURL,
+                requiredStatusCodes: nil,  // tolerate 404
+                progress: { _, _, _, _ in }
+            )
+            manifest = try await decodeManifestIfPresent(
+                repoID: repoID,
+                revision: revision,
+                manifestURL: manifestURL,
+                manifestExists: manifestExists
+            )
+        }
         var aggregate: Int64 = sizeOf(manifestURL)
-        let manifest = try await decodeManifestIfPresent(
-            repoID: repoID,
-            revision: revision,
-            manifestURL: manifestURL,
-            manifestExists: manifestExists
-        )
 
         // 2. Either manifest-driven or legacy layout.
         let filesToDownload: [(path: String, optional: Bool)] = {
-            if let manifest {
+            if repoID == OpenMedMaple.repositoryID {
+                return OpenMedMaple.requiredModelFiles.map { ($0, false) }
+                    + OpenMedMaple.optionalTokenizerFiles.map { ($0, true) }
+            } else if let manifest {
                 var list: [(String, Bool)] = []
                 list.append((manifest.configPath, false))
                 if let labelMap = manifest.labelMapPath { list.append((labelMap, true)) }
@@ -80,19 +95,19 @@ public actor StreamingModelDownloader {
                 // Legacy fallback: download config.json, id2label.json (optional),
                 // weights, then try a handful of common tokenizer files.
                 return [
-                    ("config.json",                    false),
-                    ("id2label.json",                  true),
-                    ("weights.safetensors",            true),
-                    ("weights.npz",                    true),
-                    ("tokenizer.json",                 true),
-                    ("tokenizer_config.json",          true),
-                    ("special_tokens_map.json",        true),
-                    ("vocab.txt",                      true),
-                    ("vocab.json",                     true),
-                    ("merges.txt",                     true),
-                    ("spm.model",                      true),
-                    ("sentencepiece.bpe.model",        true),
-                    ("added_tokens.json",              true),
+                    ("config.json", false),
+                    ("id2label.json", true),
+                    ("weights.safetensors", true),
+                    ("weights.npz", true),
+                    ("tokenizer.json", true),
+                    ("tokenizer_config.json", true),
+                    ("special_tokens_map.json", true),
+                    ("vocab.txt", true),
+                    ("vocab.json", true),
+                    ("merges.txt", true),
+                    ("spm.model", true),
+                    ("sentencepiece.bpe.model", true),
+                    ("added_tokens.json", true),
                 ]
             }
         }()
@@ -108,6 +123,7 @@ public actor StreamingModelDownloader {
                 progress(path, existing, existing, aggregate)
                 continue
             }
+            let completedBytes = aggregate
             let wroteSomething = try await downloadFileIfMissing(
                 repoID: repoID,
                 revision: revision,
@@ -115,11 +131,11 @@ public actor StreamingModelDownloader {
                 destination: destination,
                 requiredStatusCodes: optional ? nil : Set(200..<300),
                 progress: { file, bytes, total, _ in
-                    progress(file, bytes, total, aggregate + bytes)
+                    progress(file, bytes, total, completedBytes + bytes)
                 }
             )
             if wroteSomething {
-                aggregate += sizeOf(destination)
+                aggregate = completedBytes + sizeOf(destination)
             } else if !optional {
                 throw DownloaderError.missingFile(path)
             }
@@ -148,7 +164,10 @@ public actor StreamingModelDownloader {
         requiredStatusCodes: Set<Int>?,
         progress: @escaping ProgressHandler
     ) async throws -> Bool {
-        if FileManager.default.fileExists(atPath: destination.path) { return true }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            if sizeOf(destination) > 0 { return true }
+            try FileManager.default.removeItem(at: destination)
+        }
 
         let url = try buildHubURL(repoID: repoID, revision: revision, relativePath: relativePath)
         let delegate = ProgressDelegate(file: relativePath, progress: progress)
@@ -222,13 +241,15 @@ public actor StreamingModelDownloader {
             s.split(separator: "/")
                 .map {
                     String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-                    ?? String($0)
+                        ?? String($0)
                 }
                 .joined(separator: "/")
         }
-        guard let url = URL(
-            string: "https://huggingface.co/\(encode(repoID))/resolve/\(encode(revision))/\(encode(relativePath))?download=1"
-        ) else {
+        guard
+            let url = URL(
+                string: "https://huggingface.co/\(encode(repoID))/resolve/\(encode(revision))/\(encode(relativePath))?download=1"
+            )
+        else {
             throw DownloaderError.invalidURL(repoID, relativePath)
         }
         return url
@@ -271,17 +292,21 @@ private final class ProgressDelegate: NSObject, URLSessionDownloadDelegate, @unc
         self.progress = progress
     }
 
-    func urlSession(_ session: URLSession,
-                    downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
         // The async-download API above handles the final move; nothing to do here.
     }
 
-    func urlSession(_ session: URLSession,
-                    downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
         let expected: Int64? = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
         progress(file, totalBytesWritten, expected, totalBytesWritten)
     }

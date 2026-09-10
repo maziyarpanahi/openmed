@@ -55,6 +55,9 @@ def test_run_perf_benchmark_reports_throughput_latency_resources_and_size(
 
     payload = report.to_dict()
     assert payload["docs_per_second"] == pytest.approx(2 / 0.03)
+    assert payload["metadata"]["chars_per_document"] == pytest.approx(
+        sum(len(document.text) for document in docs) / len(docs)
+    )
     assert payload["latency"]["p50_ms"] == pytest.approx(10.0)
     assert payload["latency"]["p95_ms"] == pytest.approx(20.0)
     assert payload["resources"]["peak_rss_bytes"] == 120 * MIB
