@@ -349,6 +349,13 @@ func TestEndpointMethodsAndPaths(t *testing.T) {
 			_, err := c.Deidentify(context.Background(), openmed.PIIDeidentifyRequest{Text: "note"})
 			return err
 		}},
+		{"DeidentifyStream", http.MethodPost, "/pii/deidentify/stream", func(c *openmed.Client) error {
+			stream, err := c.DeidentifyStream(context.Background(), openmed.PIIDeidentifyStreamRequest{Text: "note"})
+			if err != nil {
+				return err
+			}
+			return stream.Close()
+		}},
 		{"PrivacyGateway", http.MethodPost, "/privacy-gateway/complete", func(c *openmed.Client) error {
 			_, err := c.PrivacyGateway(context.Background(), openmed.PrivacyGatewayRequest{Text: "note"})
 			return err
@@ -404,7 +411,7 @@ func TestEndpointMethodsAndPaths(t *testing.T) {
 					t.Fatalf("request = %s %s, want %s %s", r.Method, r.URL.EscapedPath(), test.method, test.path)
 				}
 				contentType := "application/json"
-				if test.path == "/pii/extract/stream" {
+				if test.path == "/pii/extract/stream" || test.path == "/pii/deidentify/stream" {
 					contentType = "application/x-ndjson"
 				}
 				w.Header().Set("Content-Type", contentType)
@@ -732,6 +739,59 @@ func TestDeidentify(t *testing.T) {
 	}
 	if resp.Mapping["[PATIENT]"] != "Maria Garcia" {
 		t.Fatalf("mapping missing entry: %+v", resp.Mapping)
+	}
+}
+
+func TestDeidentifyStream(t *testing.T) {
+	const ndjson = "{\"type\":\"chunk\",\"index\":0,\"redacted_text\":\"Patient [NAME]\"}\n{\"type\":\"final\",\"audit\":{\"span_count\":1},\"spans\":[],\"mapping\":{\"[NAME]\":\"Maria Garcia\"}}\n"
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/pii/deidentify/stream" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if accept := r.Header.Get("Accept"); accept != "application/x-ndjson" {
+			t.Fatalf("Accept = %q, want application/x-ndjson", accept)
+		}
+		var req openmed.PIIDeidentifyStreamRequest
+		decodeBody(t, r, &req)
+		if req.ChunkSize != 512 {
+			t.Fatalf("ChunkSize = %d, want 512", req.ChunkSize)
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, ndjson)
+	})
+
+	stream, err := client.DeidentifyStream(
+		context.Background(),
+		openmed.PIIDeidentifyStreamRequest{
+			Text:        "Patient Maria Garcia",
+			Method:      openmed.MethodMask,
+			KeepMapping: true,
+			ChunkSize:   512,
+		},
+	)
+	if err != nil {
+		t.Fatalf("DeidentifyStream: %v", err)
+	}
+	defer stream.Close()
+
+	if !stream.Next() {
+		t.Fatalf("first Next = false: %v", stream.Err())
+	}
+	if event := stream.Event(); event.Type != "chunk" || event.RedactedText != "Patient [NAME]" {
+		t.Fatalf("unexpected chunk event: %+v", event)
+	}
+	if !stream.Next() {
+		t.Fatalf("final Next = false: %v", stream.Err())
+	}
+	final := stream.Event()
+	if final.Type != "final" || final.Mapping["[NAME]"] != "Maria Garcia" {
+		t.Fatalf("unexpected final event: %+v", final)
+	}
+	if stream.Next() {
+		t.Fatal("unexpected third stream event")
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error: %v", err)
 	}
 }
 
