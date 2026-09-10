@@ -40,6 +40,9 @@ issue, and without including real patient data.
 - [Pan-African Malabo Convention baseline](compliance/africa-malabo-baseline.md)
   maps Article 14(1) sensitive-data categories to conservative, non-`keep`
   canonical-label actions while preserving national-law precedence.
+- [Structured privacy access-review expiry gate](compliance/access-review-expiry.md)
+  provides a deterministic, local-only check for review validity, policy
+  fingerprint, and required decision categories.
 
 ## Deployment Templates
 

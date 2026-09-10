@@ -428,9 +428,14 @@ def _resolve_clock(
 ) -> datetime:
     if as_of is not None and now is not None:
         raise AccessReviewValidationError("provide one supplied clock as as_of or now")
-    if as_of is None and now is None:
+    clock: datetime | str
+    if as_of is not None:
+        clock = as_of
+    elif now is not None:
+        clock = now
+    else:
         raise AccessReviewValidationError("a supplied clock is required")
-    return _timestamp(as_of if as_of is not None else now, field_name="as_of")
+    return _timestamp(clock, field_name="as_of")
 
 
 def _evaluate_access_review(
