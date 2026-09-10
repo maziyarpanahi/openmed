@@ -9,7 +9,8 @@ summary, not a copy of the trace store and not a compliance certification.
 The fixed artifact schema contains only:
 
 - `scanner_version`: a bounded scanner identifier;
-- `policy_hash`: a SHA-256 reference to the policy used by the scanner;
+- `policy_hash`: a canonical lowercase SHA-256 reference to the policy used by
+  the scanner;
 - `file_fingerprints`: sorted SHA-256 content fingerprints, never paths or
   file names;
 - `category_counts`: sorted category-to-count pairs; and
@@ -46,6 +47,12 @@ artifact.write_markdown("evidence/trace-audit.md")
 Neither rendering includes timestamps, host details, paths, source values,
 replacement mappings, prompts, or tool outputs, so repeated runs over the same
 summary produce byte-stable output.
+
+The validated category-count mapping is immutable. File fingerprinting rejects
+symbolic links and non-regular files and verifies that the file did not change
+while it was read. JSON and Markdown writers use private temporary files and
+atomic replacement, reject symbolic-link destinations, and produce `0600`
+artifacts on POSIX systems.
 
 ## Operational boundaries
 

@@ -11,17 +11,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
+import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 SCHEMA_VERSION = 1
 ARTIFACT_NAME = "trace_privacy_audit"
 _HASH_PREFIX = "sha256:"
 _SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
-_SAFE_HASH_RE = re.compile(r"^sha256:[A-Za-z0-9_-]{1,128}$")
+_SAFE_HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _FINGERPRINT_KEYS = ("fingerprint", "file_fingerprint", "hash")
 
 
@@ -44,9 +48,14 @@ def hash_policy(policy: str | bytes) -> str:
     stored in the returned artifact.
     """
 
-    if isinstance(policy, str):
-        policy = policy.encode("utf-8")
-    return hash_bytes(policy)
+    try:
+        if isinstance(policy, str):
+            policy = str.encode(policy, "utf-8")
+        return hash_bytes(policy)
+    except TraceAuditError:
+        raise
+    except Exception:
+        raise TraceAuditError("audit policy must be text or bytes") from None
 
 
 def fingerprint_file(path: str | Path) -> str:
@@ -57,13 +66,43 @@ def fingerprint_file(path: str | Path) -> str:
     not enter logs or error reports.
     """
 
+    descriptor = -1
     try:
+        candidate = Path(path)
+        path_stat = candidate.stat(follow_symlinks=False)
+        if not stat.S_ISREG(path_stat.st_mode):
+            raise TraceAuditError("unable to fingerprint trace file")
+        flags = os.O_RDONLY
+        flags |= getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(candidate, flags)
+        initial_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(initial_stat.st_mode) or not os.path.samestat(
+            path_stat, initial_stat
+        ):
+            raise TraceAuditError("unable to fingerprint trace file")
+
         digest = hashlib.sha256()
-        with Path(path).open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        final_stat = os.fstat(descriptor)
+        if (
+            not os.path.samestat(initial_stat, final_stat)
+            or initial_stat.st_size != final_stat.st_size
+            or initial_stat.st_mtime_ns != final_stat.st_mtime_ns
+            or initial_stat.st_ctime_ns != final_stat.st_ctime_ns
+        ):
+            raise TraceAuditError("unable to fingerprint trace file")
+    except TraceAuditError:
+        raise
     except Exception:
         raise TraceAuditError("unable to fingerprint trace file") from None
+    finally:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     return f"{_HASH_PREFIX}{digest.hexdigest()}"
 
 
@@ -74,7 +113,7 @@ def count_categories(categories: Iterable[str]) -> dict[str, int]:
         categories = (categories,)
     try:
         values = tuple(categories)
-    except (TypeError, ValueError):
+    except Exception:
         raise TraceAuditError("category labels must be iterable") from None
 
     counts: dict[str, int] = {}
@@ -127,7 +166,7 @@ class TraceAuditArtifact:
         object.__setattr__(
             self,
             "category_counts",
-            _coerce_category_counts(self.category_counts),
+            MappingProxyType(_coerce_category_counts(self.category_counts)),
         )
         object.__setattr__(
             self,
@@ -177,22 +216,22 @@ class TraceAuditArtifact:
     def from_dict(cls, payload: Mapping[str, Any]) -> "TraceAuditArtifact":
         """Build an artifact from its allowlisted serialized fields.
 
-        Unknown fields are ignored rather than copied. This permits a scanner
-        summary to carry internal details at its boundary without allowing
-        those details into the audit artifact.
+        Serialized artifacts must carry the expected artifact and schema
+        discriminators. Unknown fields are ignored rather than copied; scanner
+        summaries without those discriminators use :meth:`from_scan_summary`.
         """
 
         if not isinstance(payload, Mapping):
             raise TraceAuditError("trace audit JSON must contain an object")
-        if payload.get("artifact", ARTIFACT_NAME) != ARTIFACT_NAME:
+        if _mapping_get(payload, "artifact") != ARTIFACT_NAME:
             raise TraceAuditError("invalid trace audit artifact type")
         return cls(
-            scanner_version=payload.get("scanner_version"),
-            policy_hash=payload.get("policy_hash"),
-            file_fingerprints=payload.get("file_fingerprints", ()),
-            category_counts=payload.get("category_counts", {}),
-            disposition=payload.get("disposition"),
-            schema_version=payload.get("schema_version", SCHEMA_VERSION),
+            scanner_version=_mapping_get(payload, "scanner_version"),
+            policy_hash=_mapping_get(payload, "policy_hash"),
+            file_fingerprints=_mapping_get(payload, "file_fingerprints", ()),
+            category_counts=_mapping_get(payload, "category_counts", {}),
+            disposition=_mapping_get(payload, "disposition"),
+            schema_version=_mapping_get(payload, "schema_version"),
         )
 
     @classmethod
@@ -218,15 +257,11 @@ class TraceAuditArtifact:
     def write_json(self, path: str | Path, *, indent: int | None = 2) -> Path:
         """Write deterministic JSON to a local path and return that path."""
 
-        try:
-            output_path = Path(path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
-        except TraceAuditError:
-            raise
-        except Exception:
-            raise TraceAuditError("unable to write trace audit artifact") from None
-        return output_path
+        return _write_text_atomic(
+            path,
+            self.to_json(indent=indent) + "\n",
+            error_message="unable to write trace audit artifact",
+        )
 
     def to_markdown(self) -> str:
         """Serialize the artifact as deterministic, counts-only Markdown."""
@@ -276,13 +311,11 @@ class TraceAuditArtifact:
     def write_markdown(self, path: str | Path) -> Path:
         """Write deterministic Markdown to a local path and return that path."""
 
-        try:
-            output_path = Path(path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(self.to_markdown(), encoding="utf-8")
-        except Exception:
-            raise TraceAuditError("unable to write trace audit Markdown") from None
-        return output_path
+        return _write_text_atomic(
+            path,
+            self.to_markdown(),
+            error_message="unable to write trace audit Markdown",
+        )
 
     @classmethod
     def from_scan_summary(
@@ -299,17 +332,21 @@ class TraceAuditArtifact:
             raise TraceAuditError("trace scan summary must contain an object")
         return cls(
             scanner_version=(
-                summary.get("scanner_version")
+                _mapping_get(summary, "scanner_version")
                 if scanner_version is None
                 else scanner_version
             ),
             policy_hash=(
-                policy_hash if policy_hash is not None else summary.get("policy_hash")
+                policy_hash
+                if policy_hash is not None
+                else _mapping_get(summary, "policy_hash")
             ),
-            file_fingerprints=summary.get("file_fingerprints", ()),
-            category_counts=summary.get("category_counts", {}),
+            file_fingerprints=_mapping_get(summary, "file_fingerprints", ()),
+            category_counts=_mapping_get(summary, "category_counts", {}),
             disposition=(
-                summary.get("disposition") if disposition is None else disposition
+                _mapping_get(summary, "disposition")
+                if disposition is None
+                else disposition
             ),
         )
 
@@ -357,7 +394,7 @@ def build_trace_audit(
     return TraceAuditArtifact(
         scanner_version=scanner_version,
         policy_hash=policy_hash,
-        file_fingerprints=fingerprints,
+        file_fingerprints=tuple(fingerprints),
         category_counts={} if category_counts is None else category_counts,
         disposition=disposition,
     )
@@ -382,15 +419,34 @@ def render_trace_audit_markdown(artifact: TraceAuditArtifact) -> str:
 
 
 def _safe_token(value: object, field_name: str) -> str:
-    if not isinstance(value, str) or not _SAFE_TOKEN_RE.fullmatch(value):
+    if not isinstance(value, str):
         raise TraceAuditError(f"{field_name} must be a safe identifier")
-    return value
+    try:
+        normalized = str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        raise TraceAuditError(f"{field_name} must be a safe identifier") from None
+    if not _SAFE_TOKEN_RE.fullmatch(normalized):
+        raise TraceAuditError(f"{field_name} must be a safe identifier")
+    return normalized
 
 
 def _safe_hash(value: object, field_name: str) -> str:
-    if not isinstance(value, str) or not _SAFE_HASH_RE.fullmatch(value):
+    if not isinstance(value, str):
         raise TraceAuditError(f"{field_name} must be a SHA-256 reference")
-    return value
+    try:
+        normalized = str.encode(value, "utf-8").decode("utf-8")
+    except Exception:
+        raise TraceAuditError(f"{field_name} must be a SHA-256 reference") from None
+    if not _SAFE_HASH_RE.fullmatch(normalized):
+        raise TraceAuditError(f"{field_name} must be a SHA-256 reference")
+    return normalized
+
+
+def _mapping_get(mapping: Mapping[str, Any], key: str, default: Any = None) -> Any:
+    try:
+        return mapping.get(key, default)
+    except Exception:
+        raise TraceAuditError("trace audit mapping could not be read") from None
 
 
 def _coerce_fingerprint(value: object) -> str:
@@ -399,9 +455,14 @@ def _coerce_fingerprint(value: object) -> str:
     if isinstance(value, Path):
         return fingerprint_file(value)
     if isinstance(value, Mapping):
-        for key in _FINGERPRINT_KEYS:
-            if key in value:
-                return _coerce_fingerprint(value[key])
+        try:
+            for key in _FINGERPRINT_KEYS:
+                if key in value:
+                    return _coerce_fingerprint(value[key])
+        except TraceAuditError:
+            raise
+        except Exception:
+            raise TraceAuditError("file fingerprint entry is invalid") from None
         raise TraceAuditError("file fingerprint entry is missing a fingerprint")
     return _safe_hash(value, "file fingerprint")
 
@@ -410,19 +471,26 @@ def _coerce_fingerprints(value: object) -> tuple[str, ...]:
     if value is None:
         return ()
     if isinstance(value, Mapping):
-        if any(key in value for key in _FINGERPRINT_KEYS):
-            values: Iterable[object] = (value,)
-        else:
-            values = value.values()
+        try:
+            if any(key in value for key in _FINGERPRINT_KEYS):
+                values: Iterable[object] = (value,)
+            else:
+                values = tuple(value.values())
+        except Exception:
+            raise TraceAuditError("file fingerprints must be iterable") from None
     elif isinstance(value, (str, bytes, Path)):
         values = (value,)
     else:
         try:
             values = tuple(value)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except Exception:
             raise TraceAuditError("file fingerprints must be iterable") from None
-    fingerprints = tuple(sorted(_coerce_fingerprint(item) for item in values))
-    return fingerprints
+    try:
+        return tuple(sorted(_coerce_fingerprint(item) for item in values))
+    except TraceAuditError:
+        raise
+    except Exception:
+        raise TraceAuditError("file fingerprints are invalid") from None
 
 
 def _coerce_category_counts(value: object) -> dict[str, int]:
@@ -431,7 +499,11 @@ def _coerce_category_counts(value: object) -> dict[str, int]:
     if not isinstance(value, Mapping):
         raise TraceAuditError("category counts must be a mapping")
     counts: dict[str, int] = {}
-    for category, count in value.items():
+    try:
+        items = tuple(value.items())
+    except Exception:
+        raise TraceAuditError("category counts could not be read") from None
+    for category, count in items:
         label = _safe_token(category, "category")
         if type(count) is not int or count < 0:
             raise TraceAuditError("category counts must be non-negative integers")
@@ -446,7 +518,7 @@ def _fingerprints_for_paths(
         paths = (paths,)
     try:
         values = tuple(paths)
-    except (TypeError, ValueError):
+    except Exception:
         raise TraceAuditError("trace files must be iterable") from None
     fingerprints: list[str] = []
     for path in values:
@@ -458,6 +530,60 @@ def _fingerprints_for_paths(
 
 def _markdown_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("`", "\\`")
+
+
+def _write_text_atomic(
+    path: str | Path,
+    text: str,
+    *,
+    error_message: str,
+) -> Path:
+    output_path: Path | None = None
+    temporary_path: Path | None = None
+    descriptor: int | None = None
+    try:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        parent = output_path.parent.resolve(strict=True)
+        target = parent / output_path.name
+        if target.is_symlink():
+            raise TraceAuditError(error_message)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".openmed-trace-audit-",
+            dir=parent,
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            descriptor = None
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+            if hasattr(os, "fchmod"):
+                os.fchmod(stream.fileno(), 0o600)
+        if not hasattr(os, "fchmod"):
+            os.chmod(temporary_path, 0o600)
+        if target.is_symlink():
+            raise TraceAuditError(error_message)
+        os.replace(temporary_path, target)
+        temporary_path = None
+    except TraceAuditError:
+        raise
+    except Exception:
+        raise TraceAuditError(error_message) from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    if output_path is None:
+        raise TraceAuditError(error_message)
+    return output_path
 
 
 TraceAudit = TraceAuditArtifact
