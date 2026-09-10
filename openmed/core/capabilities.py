@@ -2,7 +2,8 @@
 
 OpenMed ships many optional integrations behind ``pip install openmed[...]``
 extras (``mlx``, ``coreml``, ``onnx``, ``gliner``, ``spacy``, ``presidio``,
-``hf``, ``multimodal``, ``service``, ``mcp``, ...). Historically each seam
+``hf``, ``multimodal``, ``service``, ``triton``, ``mcp``, ...). Historically
+each seam
 guarded its optional imports differently: some raised a bare :class:`ImportError`
 with an ad-hoc message, others raised one of several ``MissingDependencyError``
 variants, and there was no single, importless way to probe which backends are
@@ -40,8 +41,10 @@ import warnings
 from dataclasses import dataclass
 from typing import Final, NoReturn
 
+from .errors import MissingExtraError
 
-class MissingOptionalDependencyError(ImportError):
+
+class MissingOptionalDependencyError(MissingExtraError):
     """Raised when a requested optional capability needs an unavailable package.
 
     This is the canonical, shared "missing extra" error for the whole package.
@@ -59,8 +62,14 @@ class MissingOptionalDependencyError(ImportError):
     ) -> None:
         instruction = install_hint(package, extra)
         super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
+            f"{feature} requires optional dependency '{package}'. {instruction}",
+            package=package,
+            feature=feature,
+            extra=extra,
         )
+        # Keep these assignments local as well as inherited. The static public
+        # API compatibility extractor records constructor-owned attributes and
+        # older releases exposed all three on this concrete class.
         self.package = package
         self.feature = feature
         self.extra = extra
@@ -188,6 +197,13 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
         modules=("fastapi", "uvicorn"),
         description="FastAPI REST service surface",
         install="fastapi",
+    ),
+    "triton": BackendSpec(
+        name="triton",
+        extra="triton",
+        modules=("grpc", "httpx", "numpy", "transformers", "google"),
+        description="KServe V2 HTTP/gRPC remote inference clients",
+        install="grpcio",
     ),
     "mcp": BackendSpec(
         name="mcp",
