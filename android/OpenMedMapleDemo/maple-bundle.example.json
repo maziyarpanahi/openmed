@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "source_model": "deepgrove/maple-preview",
+  "source_revision": "ac1ddd79d2b5cb4406f5d2bebdf95406ce505a07",
+  "architecture": "MapleForCausalLM",
+  "quantization": "qmoe-4bit-blockwise-128",
+  "runtime": "onnxruntime-mobile",
+  "tokenizer_path": "tokenizer.json",
+  "graphs": {
+    "prefill_path": "model.onnx",
+    "decode_path": "model.onnx",
+    "input_ids_name": "input_ids",
+    "attention_mask_name": "attention_mask",
+    "position_ids_name": "position_ids",
+    "logits_name": "logits"
+  },
+  "cache": {
+    "past_input_prefix": "past_key_values.",
+    "present_output_prefix": "present."
+  },
+  "generation": {
+    "eos_token_ids": [151645],
+    "max_context_tokens": 4096,
+    "max_input_tokens": 3072
+  },
+  "files": [
+    {
+      "path": "model.onnx",
+      "size_bytes": 0,
+      "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+    },
+    {
+      "path": "model.onnx.data",
+      "size_bytes": 0,
+      "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+    },
+    {
+      "path": "tokenizer.json",
+      "size_bytes": 0,
+      "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size_bytes": 0,
+      "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+    }
+  ]
+}
