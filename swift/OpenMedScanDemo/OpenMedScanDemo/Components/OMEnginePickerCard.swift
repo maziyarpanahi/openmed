@@ -41,7 +41,7 @@ public struct OMEnginePickerCard: View {
             Text("Choose a redaction model")
                 .font(.om.heading(19, weight: .semibold))
                 .foregroundStyle(Color.omInk)
-            Text("Three local PII models: clinical, Nemotron, and multilingual 8-bit.")
+            Text("Four local choices, including Maple's 2-bit generative redactor.")
                 .font(.om.body(13))
                 .foregroundStyle(Color.omFgMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -212,14 +212,17 @@ public struct OMEnginePickerCard: View {
 extension ScanFlowViewModel.PIIEngine {
     var shortTitle: String {
         switch self {
-        case .openMed:       return "OpenMed PII LiteClinical"
+        case .maple: return "Maple Preview 2-bit"
+        case .openMed: return "OpenMed PII LiteClinical"
         case .privacyFilter: return "OpenAI Nemotron Privacy Filter"
-        case .multilingual:  return "OpenMed Multilingual Privacy Filter"
+        case .multilingual: return "OpenMed Multilingual Privacy Filter"
         }
     }
 
     var blurb: String {
         switch self {
+        case .maple:
+            return "20B-A1B sparse Maple model for de-identification, extraction, relations, and chat."
         case .openMed:
             return "66M-param DistilBERT trained for clinical PII. Fast, balanced precision/recall."
         case .privacyFilter:
@@ -231,6 +234,8 @@ extension ScanFlowViewModel.PIIEngine {
 
     var compactBlurb: String {
         switch self {
+        case .maple:
+            return "Generative redaction + reasoning."
         case .openMed:
             return "Clinical PII, fastest default."
         case .privacyFilter:
@@ -242,25 +247,28 @@ extension ScanFlowViewModel.PIIEngine {
 
     var eyebrowTitle: String {
         switch self {
-        case .openMed:       return "OPENMED"
+        case .maple: return "MAPLE"
+        case .openMed: return "OPENMED"
         case .privacyFilter: return "NEMOTRON"
-        case .multilingual:  return "MULTI"
+        case .multilingual: return "MULTI"
         }
     }
 
     var modelBadge: String {
         switch self {
-        case .openMed:       return "Clinical"
+        case .maple: return "2-bit"
+        case .openMed: return "Clinical"
         case .privacyFilter: return "8-bit"
-        case .multilingual:  return "8-bit"
+        case .multilingual: return "8-bit"
         }
     }
 
     var toggleTitle: String {
         switch self {
-        case .openMed:       return "OpenMed"
+        case .maple: return "Maple"
+        case .openMed: return "OpenMed"
         case .privacyFilter: return "Nemotron"
-        case .multilingual:  return "Multilingual"
+        case .multilingual: return "Multilingual"
         }
     }
 

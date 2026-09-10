@@ -17,11 +17,38 @@ from .condition import (
     CONDITION_VER_STATUS_SYSTEM,
     to_condition,
 )
+from .diagnostic_report import (
+    DIAGNOSTIC_REPORT_FIELDS_R4R5,
+    DIAGNOSTIC_REPORT_STATUS_UNKNOWN,
+    DIAGNOSTIC_REPORT_STATUSES,
+    to_diagnostic_report,
+)
+from .exchange import (
+    FHIRClinicalExchangeWorkbench,
+    FHIRExchange,
+    FHIRExchangeError,
+    FHIRExchangeWorkbench,
+    FHIRValidationError,
+    build_clinical_document,
+    build_fhir_document,
+    build_ipa_example,
+    build_ipa_patient_access,
+    build_ips_patient_summary,
+    build_patient_summary,
+    deidentify_bundle,
+    deidentify_fhir,
+    export_bundle,
+    export_fhir,
+    import_bundle,
+    import_fhir,
+    validate_exchange,
+)
 from .grounded import (
     COREFERENCE_EVIDENCE_EXTENSION_URL,
     FHIR_RESOURCE_TYPES,
     to_fhir,
 )
+from .observation import to_observation
 from .operation_outcome import (
     OperationOutcomeIssue,
     from_validation_result,
@@ -46,17 +73,30 @@ from .reference_types import (
     validate_reference_types,
 )
 from .references import deterministic_fullurl
+from .uscore import US_CORE_VERSION, ConformanceResult, check_us_core
+from .validate import (
+    BASE_R4_RESOURCE_TYPES,
+    ValidationFinding,
+    ValidationResult,
+    validate_bundle,
+    validate_resource,
+)
 
 __all__ = [
     "CONDITION_CLINICAL_SYSTEM",
     "CONDITION_VER_STATUS_SYSTEM",
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
+    "DIAGNOSTIC_REPORT_FIELDS_R4R5",
+    "DIAGNOSTIC_REPORT_STATUS_UNKNOWN",
+    "DIAGNOSTIC_REPORT_STATUSES",
     "FHIR_RESOURCE_TYPES",
     "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_ONLY_DISCLAIMER",
     "POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL",
     "to_condition",
+    "to_diagnostic_report",
+    "to_observation",
     "to_codeable_concept",
     "to_fhir",
     "postcoordinated_codeable_concept",
@@ -81,4 +121,30 @@ __all__ = [
     "validate_fhir_reference_types",
     "validate_reference_targets",
     "validate_reference_types",
+    "FHIRClinicalExchangeWorkbench",
+    "FHIRExchange",
+    "FHIRExchangeError",
+    "FHIRExchangeWorkbench",
+    "FHIRValidationError",
+    "build_clinical_document",
+    "build_fhir_document",
+    "build_ipa_example",
+    "build_ipa_patient_access",
+    "build_ips_patient_summary",
+    "build_patient_summary",
+    "deidentify_fhir",
+    "deidentify_bundle",
+    "export_bundle",
+    "export_fhir",
+    "import_bundle",
+    "import_fhir",
+    "validate_exchange",
+    "BASE_R4_RESOURCE_TYPES",
+    "ValidationFinding",
+    "ValidationResult",
+    "validate_bundle",
+    "validate_resource",
+    "ConformanceResult",
+    "US_CORE_VERSION",
+    "check_us_core",
 ]
