@@ -10,18 +10,26 @@ returned snapshot if it needs external collection.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import math
 import threading
-from collections.abc import Mapping
+from collections.abc import Mapping, Sized
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 from numbers import Real
-from typing import Any
+from typing import Any, Final
 
-SCHEMA_VERSION = 1
-OTHER_DIMENSION_VALUE = "other"
-UNKNOWN_EXCEPTION_CATEGORY = "unknown"
+SCHEMA_VERSION: Final = 1
+OTHER_DIMENSION_VALUE: Final = "other"
+UNKNOWN_EXCEPTION_CATEGORY: Final = "unknown"
+MAX_COUNTER_VALUE: Final = (1 << 63) - 1
+MAX_ENTITY_COUNT: Final = 10_000_000
+MAX_LATENCY_SECONDS: Final = 604_800.0
+MAX_AGGREGATE_LATENCY_SECONDS: Final = 1_000_000_000_000_000.0
+MAX_RESULT_STAGE_DURATIONS: Final = 64
+MAX_SNAPSHOT_SAMPLES: Final = 40_000
 
 DEFAULT_LATENCY_BUCKETS_SECONDS: tuple[float, ...] = (
     0.005,
@@ -38,7 +46,7 @@ DEFAULT_LATENCY_BUCKETS_SECONDS: tuple[float, ...] = (
     30.0,
     60.0,
 )
-MAX_LATENCY_BUCKETS = 32
+MAX_LATENCY_BUCKETS: Final = 32
 
 
 class CounterName(str, Enum):
@@ -139,6 +147,34 @@ class UnapprovedTelemetryKeyError(TelemetrySchemaError):
     """Raised when a caller supplies a field outside the safe allowlist."""
 
 
+def _snapshot_mapping(
+    value: Mapping[object, object],
+    *,
+    field_name: str,
+    max_items: int,
+) -> dict[str, object]:
+    """Copy a bounded mapping while sanitizing protocol failures."""
+
+    try:
+        items = list(itertools.islice(value.items(), max_items + 1))
+    except Exception:  # noqa: BLE001 - mappings are caller-controlled protocols.
+        raise TelemetrySchemaError(f"{field_name} could not be read") from None
+    if len(items) > max_items:
+        raise UnapprovedTelemetryKeyError(f"{field_name} contains unapproved fields")
+
+    result: dict[str, object] = {}
+    for item in items:
+        if type(item) not in {list, tuple} or len(item) != 2:
+            raise TelemetrySchemaError(f"{field_name} contains an invalid entry")
+        key, item_value = item
+        if type(key) is not str or key in result:
+            raise UnapprovedTelemetryKeyError(
+                f"{field_name} contains unapproved fields"
+            )
+        result[key] = item_value
+    return result
+
+
 def sanitize_exception_category(value: object) -> str:
     """Return a bounded category without reading an exception message.
 
@@ -152,7 +188,9 @@ def sanitize_exception_category(value: object) -> str:
     if value is None:
         return UNKNOWN_EXCEPTION_CATEGORY
 
-    if isinstance(value, str):
+    if type(value) is str:
+        if len(value) > 64:
+            return UNKNOWN_EXCEPTION_CATEGORY
         candidate = value.strip().lower()
         if candidate in _DIMENSION_VALUES[DimensionName.EXCEPTION_CATEGORY.value]:
             return candidate
@@ -196,6 +234,14 @@ class CounterSample:
     value: int
     dimensions: tuple[tuple[str, str], ...] = ()
 
+    def __post_init__(self) -> None:
+        if type(self.name) is not CounterName:
+            raise TelemetrySchemaError("counter sample name is not approved")
+        value = _coerce_positive_int(self.value, "counter sample value")
+        dimensions = _validate_dimension_tuple(self.dimensions)
+        object.__setattr__(self, "value", value)
+        object.__setattr__(self, "dimensions", dimensions)
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable counter sample."""
 
@@ -216,6 +262,24 @@ class LatencySample:
     buckets: tuple[tuple[str, int], ...]
     dimensions: tuple[tuple[str, str], ...] = ()
 
+    def __post_init__(self) -> None:
+        if type(self.name) is not str or self.name != PIPELINE_LATENCY_NAME:
+            raise TelemetrySchemaError("latency sample name is not approved")
+        count = _coerce_positive_int(self.count, "latency sample count")
+        sum_seconds = _coerce_bounded_float(
+            self.sum_seconds,
+            "latency sample sum",
+            maximum=MAX_AGGREGATE_LATENCY_SECONDS,
+        )
+        if sum_seconds > count * MAX_LATENCY_SECONDS:
+            raise TelemetrySchemaError("latency sample sum is inconsistent")
+        dimensions = _validate_dimension_tuple(self.dimensions)
+        buckets = _validate_bucket_tuple(self.buckets, count=count)
+        object.__setattr__(self, "count", count)
+        object.__setattr__(self, "sum_seconds", sum_seconds)
+        object.__setattr__(self, "buckets", buckets)
+        object.__setattr__(self, "dimensions", dimensions)
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable latency sample."""
 
@@ -235,6 +299,30 @@ class TelemetrySnapshot:
     schema_version: int
     counters: tuple[CounterSample, ...]
     latencies: tuple[LatencySample, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != SCHEMA_VERSION
+        ):
+            raise TelemetrySchemaError("telemetry snapshot schema is unsupported")
+        if type(self.counters) is not tuple or type(self.latencies) is not tuple:
+            raise TelemetrySchemaError("telemetry snapshot samples must be tuples")
+        if len(self.counters) + len(self.latencies) > MAX_SNAPSHOT_SAMPLES:
+            raise TelemetrySchemaError("telemetry snapshot exceeds the safe limit")
+        if any(type(sample) is not CounterSample for sample in self.counters):
+            raise TelemetrySchemaError("telemetry snapshot counters are invalid")
+        if any(type(sample) is not LatencySample for sample in self.latencies):
+            raise TelemetrySchemaError("telemetry snapshot latencies are invalid")
+
+        counter_keys = tuple(
+            (sample.name.value, sample.dimensions) for sample in self.counters
+        )
+        latency_keys = tuple(sample.dimensions for sample in self.latencies)
+        if counter_keys != tuple(sorted(set(counter_keys))):
+            raise TelemetrySchemaError("telemetry snapshot counters are not canonical")
+        if latency_keys != tuple(sorted(set(latency_keys))):
+            raise TelemetrySchemaError("telemetry snapshot latencies are not canonical")
 
     def to_dict(self) -> dict[str, Any]:
         """Return the snapshot without timestamps or source text."""
@@ -262,7 +350,7 @@ class _LatencyAggregate:
     """Mutable internal histogram state guarded by the exporter lock."""
 
     count: int
-    sum_seconds: float
+    sum_seconds: Decimal
     bucket_counts: list[int]
 
 
@@ -306,8 +394,10 @@ class NoPHITelemetryExporter:
         safe_amount = _coerce_positive_int(amount, "counter amount")
         safe_dimensions = _normalize_dimensions(dimensions)
         with self._lock:
-            key = (counter_name, safe_dimensions)
-            self._counters[key] = self._counters.get(key, 0) + safe_amount
+            self._record_batch_locked(
+                counter_updates=((counter_name, safe_dimensions, safe_amount),),
+                latency_updates=(),
+            )
 
     def observe_latency_seconds(
         self,
@@ -320,20 +410,10 @@ class NoPHITelemetryExporter:
         observed = _coerce_duration(seconds, "latency")
         safe_dimensions = _normalize_dimensions(dimensions)
         with self._lock:
-            aggregate = self._latencies.get(safe_dimensions)
-            if aggregate is None:
-                aggregate = _LatencyAggregate(
-                    count=0,
-                    sum_seconds=0.0,
-                    bucket_counts=[0] * (len(self._latency_buckets) + 1),
-                )
-                self._latencies[safe_dimensions] = aggregate
-            aggregate.count += 1
-            aggregate.sum_seconds += observed
-            for index, boundary in enumerate(self._latency_buckets):
-                if observed <= boundary:
-                    aggregate.bucket_counts[index] += 1
-            aggregate.bucket_counts[-1] += 1
+            self._record_batch_locked(
+                counter_updates=(),
+                latency_updates=((observed, safe_dimensions),),
+            )
 
     def observe_latency_ms(
         self,
@@ -343,7 +423,7 @@ class NoPHITelemetryExporter:
     ) -> None:
         """Record one finite, non-negative pipeline latency in milliseconds."""
 
-        observed = _coerce_duration(milliseconds, "latency") / 1000.0
+        observed = _coerce_duration_ms(milliseconds, "latency")
         self.observe_latency_seconds(observed, dimensions=dimensions)
 
     def record_pipeline(
@@ -367,6 +447,10 @@ class NoPHITelemetryExporter:
 
         if latency_ms is not None and latency_seconds is not None:
             raise TelemetrySchemaError("telemetry latency has multiple units")
+        if exception is not None and exception_category is not None:
+            raise TelemetrySchemaError(
+                "telemetry exception category has multiple sources"
+            )
 
         safe_status = _normalize_dimension(DimensionName.STATUS.value, status)
         safe_stage = _normalize_dimension(DimensionName.STAGE.value, stage)
@@ -383,29 +467,41 @@ class NoPHITelemetryExporter:
 
         safe_entity_count = 0
         if entity_count is not None:
-            safe_entity_count = _coerce_non_negative_int(entity_count, "entity count")
+            safe_entity_count = _coerce_non_negative_int(
+                entity_count,
+                "entity count",
+                maximum=MAX_ENTITY_COUNT,
+            )
 
         if latency_ms is not None:
-            safe_latency_seconds = _coerce_duration(latency_ms, "latency") / 1000.0
+            safe_latency_seconds = _coerce_duration_ms(latency_ms, "latency")
         elif latency_seconds is not None:
             safe_latency_seconds = _coerce_duration(latency_seconds, "latency")
         else:
             safe_latency_seconds = None
 
+        safe_dimensions = _normalize_dimensions(dimensions)
+        counter_updates = [(CounterName.PIPELINE_RUNS, safe_dimensions, 1)]
+        if safe_status in _FAILURE_STATUSES:
+            counter_updates.append((CounterName.PIPELINE_FAILURES, safe_dimensions, 1))
+        if safe_status == "rejected":
+            counter_updates.append(
+                (CounterName.PIPELINE_REJECTIONS, safe_dimensions, 1)
+            )
+        if safe_entity_count:
+            counter_updates.append(
+                (CounterName.PIPELINE_ENTITIES, safe_dimensions, safe_entity_count)
+            )
+        latency_updates = (
+            ()
+            if safe_latency_seconds is None
+            else ((safe_latency_seconds, safe_dimensions),)
+        )
         with self._lock:
-            self._increment_locked(CounterName.PIPELINE_RUNS, dimensions)
-            if safe_status in _FAILURE_STATUSES:
-                self._increment_locked(CounterName.PIPELINE_FAILURES, dimensions)
-            if safe_status == "rejected":
-                self._increment_locked(CounterName.PIPELINE_REJECTIONS, dimensions)
-            if safe_entity_count:
-                self._increment_locked(
-                    CounterName.PIPELINE_ENTITIES,
-                    dimensions,
-                    amount=safe_entity_count,
-                )
-            if safe_latency_seconds is not None:
-                self._observe_latency_locked(safe_latency_seconds, dimensions)
+            self._record_batch_locked(
+                counter_updates=tuple(counter_updates),
+                latency_updates=latency_updates,
+            )
 
     def record_pipeline_result(
         self,
@@ -422,41 +518,89 @@ class NoPHITelemetryExporter:
         logged, or serialized.
         """
 
-        durations = getattr(result, "stage_durations_ms", {})
-        safe_durations: list[tuple[object, float]] = []
-        if isinstance(durations, Mapping):
-            for stage, duration in durations.items():
-                try:
-                    safe_duration = _coerce_duration(duration, "stage latency")
-                except TelemetrySchemaError:
-                    continue
-                safe_durations.append((stage, safe_duration))
-
         try:
-            entity_count = len(getattr(result, "spans", ()))
-        except (TypeError, AttributeError):
-            entity_count = 0
+            durations = getattr(result, "stage_durations_ms", {})
+            spans = getattr(result, "spans", ())
+        except Exception:  # noqa: BLE001 - result attributes are caller-controlled.
+            raise TelemetrySchemaError("pipeline result could not be read") from None
+        if not isinstance(durations, Mapping):
+            raise TelemetrySchemaError("pipeline result durations must be a mapping")
+        if isinstance(spans, (str, bytes, bytearray, Mapping)) or not isinstance(
+            spans, Sized
+        ):
+            raise TelemetrySchemaError("pipeline result spans must be a sequence")
 
-        total_seconds = sum(duration for _, duration in safe_durations)
-        self.record_pipeline(
-            status=status,
-            method=method,
-            latency_seconds=total_seconds if safe_durations else None,
-            entity_count=entity_count,
-            exception=exception,
+        duration_items = _snapshot_mapping(
+            durations,
+            field_name="pipeline result durations",
+            max_items=MAX_RESULT_STAGE_DURATIONS,
+        )
+        safe_durations = tuple(
+            (
+                _normalize_dimension(DimensionName.STAGE.value, stage),
+                _coerce_duration_ms(duration, "stage latency"),
+            )
+            for stage, duration in duration_items.items()
+        )
+        try:
+            entity_count = len(spans)
+        except Exception:  # noqa: BLE001 - span containers are caller-controlled.
+            raise TelemetrySchemaError(
+                "pipeline result spans could not be read"
+            ) from None
+        safe_entity_count = _coerce_non_negative_int(
+            entity_count,
+            "entity count",
+            maximum=MAX_ENTITY_COUNT,
         )
 
-        for stage, duration in safe_durations:
-            self.observe_latency_seconds(
-                duration,
-                dimensions={
+        safe_status = _normalize_dimension(DimensionName.STATUS.value, status)
+        safe_method = _normalize_dimension(DimensionName.METHOD.value, method)
+        safe_exception = sanitize_exception_category(exception)
+
+        def dimensions_for(stage: str) -> tuple[tuple[str, str], ...]:
+            return _normalize_dimensions(
+                {
                     DimensionName.STAGE.value: stage,
-                    DimensionName.STATUS.value: status,
-                    DimensionName.METHOD.value: method,
-                    DimensionName.EXCEPTION_CATEGORY.value: sanitize_exception_category(
-                        exception
-                    ),
-                },
+                    DimensionName.STATUS.value: safe_status,
+                    DimensionName.METHOD.value: safe_method,
+                    DimensionName.EXCEPTION_CATEGORY.value: safe_exception,
+                }
+            )
+
+        pipeline_dimensions = dimensions_for("pipeline")
+        counter_updates = [(CounterName.PIPELINE_RUNS, pipeline_dimensions, 1)]
+        if safe_status in _FAILURE_STATUSES:
+            counter_updates.append(
+                (CounterName.PIPELINE_FAILURES, pipeline_dimensions, 1)
+            )
+        if safe_status == "rejected":
+            counter_updates.append(
+                (CounterName.PIPELINE_REJECTIONS, pipeline_dimensions, 1)
+            )
+        if safe_entity_count:
+            counter_updates.append(
+                (
+                    CounterName.PIPELINE_ENTITIES,
+                    pipeline_dimensions,
+                    safe_entity_count,
+                )
+            )
+
+        latency_updates = [
+            (duration, dimensions_for(stage)) for stage, duration in safe_durations
+        ]
+        if safe_durations:
+            total_seconds = _coerce_duration(
+                math.fsum(duration for _, duration in safe_durations),
+                "pipeline latency",
+            )
+            latency_updates.append((total_seconds, pipeline_dimensions))
+
+        with self._lock:
+            self._record_batch_locked(
+                counter_updates=tuple(counter_updates),
+                latency_updates=tuple(latency_updates),
             )
 
     def record(self, event: Mapping[str, object]) -> None:
@@ -471,39 +615,65 @@ class NoPHITelemetryExporter:
 
         if not isinstance(event, Mapping):
             raise TelemetrySchemaError("telemetry event must be a mapping")
-        if any(not isinstance(key, str) or key not in _EVENT_KEYS for key in event):
+        values = _snapshot_mapping(
+            event,
+            field_name="telemetry event",
+            max_items=len(_EVENT_KEYS),
+        )
+        if set(values) - _EVENT_KEYS:
             raise UnapprovedTelemetryKeyError(
                 "telemetry event contains unapproved fields"
             )
 
-        counter = _coalesced_event_value(event, "counter", "name")
-        amount = _coalesced_event_value(event, "amount", "value", default=1)
-        latency_ms = event.get("latency_ms")
-        latency_seconds = event.get("latency_seconds")
+        counter = _coalesced_event_value(values, "counter", "name")
+        amount = _coalesced_event_value(values, "amount", "value", default=1)
+        latency_ms = values.get("latency_ms")
+        latency_seconds = values.get("latency_seconds")
         if latency_ms is not None and latency_seconds is not None:
             raise TelemetrySchemaError("telemetry latency has multiple units")
 
-        dimensions = _event_dimensions(event)
+        dimensions = _normalize_dimensions(_event_dimensions(values))
         if counter is None and latency_ms is None and latency_seconds is None:
             raise TelemetrySchemaError("telemetry event has no approved measurement")
+        if counter is None and ({"amount", "value"} & set(values)):
+            raise TelemetrySchemaError("telemetry amount requires a counter")
+
+        counter_updates: list[tuple[CounterName, tuple[tuple[str, str], ...], int]] = []
+        latency_updates: list[tuple[float, tuple[tuple[str, str], ...]]] = []
 
         if counter is not None:
-            self.increment(counter, amount=amount, dimensions=dimensions)
+            counter_updates.append(
+                (
+                    _coerce_counter_name(counter),
+                    dimensions,
+                    _coerce_positive_int(amount, "counter amount"),
+                )
+            )
         if latency_ms is not None:
-            self.observe_latency_ms(latency_ms, dimensions=dimensions)
+            latency_updates.append(
+                (_coerce_duration_ms(latency_ms, "latency"), dimensions)
+            )
         if latency_seconds is not None:
-            self.observe_latency_seconds(latency_seconds, dimensions=dimensions)
+            latency_updates.append(
+                (_coerce_duration(latency_seconds, "latency"), dimensions)
+            )
 
-        if "entity_count" in event:
+        if "entity_count" in values:
             entity_count = _coerce_non_negative_int(
-                event["entity_count"], "entity count"
+                values["entity_count"],
+                "entity count",
+                maximum=MAX_ENTITY_COUNT,
             )
             if entity_count:
-                self.increment(
-                    CounterName.PIPELINE_ENTITIES,
-                    amount=entity_count,
-                    dimensions=dimensions,
+                counter_updates.append(
+                    (CounterName.PIPELINE_ENTITIES, dimensions, entity_count)
                 )
+
+        with self._lock:
+            self._record_batch_locked(
+                counter_updates=tuple(counter_updates),
+                latency_updates=tuple(latency_updates),
+            )
 
     record_event = record
 
@@ -535,7 +705,7 @@ class NoPHITelemetryExporter:
                     LatencySample(
                         name=PIPELINE_LATENCY_NAME,
                         count=aggregate.count,
-                        sum_seconds=aggregate.sum_seconds,
+                        sum_seconds=float(aggregate.sum_seconds),
                         buckets=bucket_values,
                         dimensions=dimensions,
                     )
@@ -602,54 +772,87 @@ class NoPHITelemetryExporter:
 
         return "\n".join(lines) + ("\n" if lines else "")
 
-    def _increment_locked(
+    def _record_batch_locked(
         self,
-        counter: CounterName,
-        dimensions: Mapping[str, object],
         *,
-        amount: int = 1,
+        counter_updates: tuple[
+            tuple[CounterName, tuple[tuple[str, str], ...], int], ...
+        ],
+        latency_updates: tuple[tuple[float, tuple[tuple[str, str], ...]], ...],
     ) -> None:
-        safe_dimensions = _normalize_dimensions(dimensions)
-        key = (counter, safe_dimensions)
-        self._counters[key] = self._counters.get(key, 0) + amount
+        """Validate and apply one all-or-nothing telemetry update batch."""
 
-    def _observe_latency_locked(
-        self,
-        seconds: float,
-        dimensions: Mapping[str, object],
-    ) -> None:
-        safe_dimensions = _normalize_dimensions(dimensions)
-        aggregate = self._latencies.get(safe_dimensions)
-        if aggregate is None:
-            aggregate = _LatencyAggregate(
-                count=0,
-                sum_seconds=0.0,
-                bucket_counts=[0] * (len(self._latency_buckets) + 1),
+        counter_deltas: dict[tuple[CounterName, tuple[tuple[str, str], ...]], int] = {}
+        for counter, dimensions, amount in counter_updates:
+            key = (counter, dimensions)
+            delta = counter_deltas.get(key, 0) + amount
+            if delta > MAX_COUNTER_VALUE:
+                raise TelemetrySchemaError("telemetry counter exceeds the safe limit")
+            counter_deltas[key] = delta
+
+        latency_groups: dict[tuple[tuple[str, str], ...], list[float]] = {}
+        for observed, dimensions in latency_updates:
+            latency_groups.setdefault(dimensions, []).append(observed)
+
+        for key, delta in counter_deltas.items():
+            if self._counters.get(key, 0) > MAX_COUNTER_VALUE - delta:
+                raise TelemetrySchemaError("telemetry counter exceeds the safe limit")
+        projected_latency_sums: dict[tuple[tuple[str, str], ...], Decimal] = {}
+        for dimensions, observations in latency_groups.items():
+            aggregate = self._latencies.get(dimensions)
+            current_count = 0 if aggregate is None else aggregate.count
+            if current_count > MAX_COUNTER_VALUE - len(observations):
+                raise TelemetrySchemaError(
+                    "telemetry latency count exceeds the safe limit"
+                )
+            current_sum = Decimal(0) if aggregate is None else aggregate.sum_seconds
+            projected_sum = current_sum + sum(
+                (Decimal(str(value)) for value in observations),
+                start=Decimal(0),
             )
-            self._latencies[safe_dimensions] = aggregate
-        aggregate.count += 1
-        aggregate.sum_seconds += seconds
-        for index, boundary in enumerate(self._latency_buckets):
-            if seconds <= boundary:
-                aggregate.bucket_counts[index] += 1
-        aggregate.bucket_counts[-1] += 1
+            if projected_sum > Decimal(str(MAX_AGGREGATE_LATENCY_SECONDS)):
+                raise TelemetrySchemaError(
+                    "telemetry latency sum exceeds the safe limit"
+                )
+            projected_latency_sums[dimensions] = projected_sum
+
+        for key, delta in counter_deltas.items():
+            self._counters[key] = self._counters.get(key, 0) + delta
+        for dimensions, observations in latency_groups.items():
+            aggregate = self._latencies.get(dimensions)
+            if aggregate is None:
+                aggregate = _LatencyAggregate(
+                    count=0,
+                    sum_seconds=Decimal(0),
+                    bucket_counts=[0] * (len(self._latency_buckets) + 1),
+                )
+                self._latencies[dimensions] = aggregate
+            aggregate.count += len(observations)
+            aggregate.sum_seconds = projected_latency_sums[dimensions]
+            for observed in observations:
+                for index, boundary in enumerate(self._latency_buckets):
+                    if observed <= boundary:
+                        aggregate.bucket_counts[index] += 1
+                aggregate.bucket_counts[-1] += 1
 
 
 def _coerce_latency_buckets(
     buckets: tuple[float, ...] | None,
 ) -> tuple[float, ...]:
     selected = DEFAULT_LATENCY_BUCKETS_SECONDS if buckets is None else buckets
-    if not isinstance(selected, tuple) or not selected:
+    if type(selected) is not tuple or not selected:
         raise TelemetrySchemaError("latency buckets must be a non-empty tuple")
     if len(selected) > MAX_LATENCY_BUCKETS:
         raise TelemetrySchemaError("latency buckets exceed the safe limit")
 
     normalized: list[float] = []
     for bucket in selected:
-        if isinstance(bucket, bool) or not isinstance(bucket, Real):
-            raise TelemetrySchemaError("latency buckets must be finite numbers")
-        value = float(bucket)
-        if not math.isfinite(value) or value <= 0:
+        value = _coerce_bounded_float(
+            bucket,
+            "latency bucket",
+            maximum=MAX_LATENCY_SECONDS,
+        )
+        if value <= 0:
             raise TelemetrySchemaError("latency buckets must be finite and positive")
         normalized.append(value)
     if normalized != sorted(set(normalized)):
@@ -658,9 +861,9 @@ def _coerce_latency_buckets(
 
 
 def _coerce_counter_name(value: object) -> CounterName:
-    if isinstance(value, CounterName):
+    if type(value) is CounterName:
         return value
-    if isinstance(value, str):
+    if type(value) is str:
         try:
             return CounterName(value)
         except ValueError:
@@ -668,32 +871,72 @@ def _coerce_counter_name(value: object) -> CounterName:
     raise TelemetrySchemaError("telemetry counter is not approved")
 
 
-def _coerce_positive_int(value: object, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+def _coerce_positive_int(
+    value: object,
+    field_name: str,
+    *,
+    maximum: int = MAX_COUNTER_VALUE,
+) -> int:
+    if type(value) is not int or not (0 < value <= maximum):
         raise TelemetrySchemaError(f"{field_name} must be a positive integer")
     return value
 
 
-def _coerce_non_negative_int(value: object, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+def _coerce_non_negative_int(
+    value: object,
+    field_name: str,
+    *,
+    maximum: int = MAX_COUNTER_VALUE,
+) -> int:
+    if type(value) is not int or not (0 <= value <= maximum):
         raise TelemetrySchemaError(f"{field_name} must be a non-negative integer")
     return value
 
 
 def _coerce_duration(value: object, field_name: str) -> float:
+    return _coerce_bounded_float(
+        value,
+        field_name,
+        maximum=MAX_LATENCY_SECONDS,
+    )
+
+
+def _coerce_duration_ms(value: object, field_name: str) -> float:
+    milliseconds = _coerce_bounded_float(
+        value,
+        field_name,
+        maximum=MAX_LATENCY_SECONDS * 1000.0,
+    )
+    return milliseconds / 1000.0
+
+
+def _coerce_bounded_float(
+    value: object,
+    field_name: str,
+    *,
+    maximum: float,
+) -> float:
     if isinstance(value, bool) or not isinstance(value, Real):
         raise TelemetrySchemaError(f"{field_name} must be a finite number")
-    observed = float(value)
-    if not math.isfinite(observed) or observed < 0:
-        raise TelemetrySchemaError(f"{field_name} must be finite and non-negative")
+    try:
+        observed = float(value)
+    except Exception:  # noqa: BLE001 - numeric protocols are caller-controlled.
+        raise TelemetrySchemaError(f"{field_name} must be a finite number") from None
+    if not math.isfinite(observed) or not (0 <= observed <= maximum):
+        raise TelemetrySchemaError(
+            f"{field_name} must be finite, non-negative, and bounded"
+        )
     return observed
 
 
 def _normalize_dimension(name: str, value: object) -> str:
     allowed = _DIMENSION_VALUES[name]
     if isinstance(value, Enum):
-        value = value.value
-    if not isinstance(value, str):
+        try:
+            value = value.value
+        except Exception:  # noqa: BLE001 - enums may be caller-controlled.
+            return OTHER_DIMENSION_VALUE
+    if type(value) is not str or len(value) > 64:
         return OTHER_DIMENSION_VALUE
     candidate = value.strip().lower()
     return candidate if candidate in allowed else OTHER_DIMENSION_VALUE
@@ -706,9 +949,12 @@ def _normalize_dimensions(
         return ()
     if not isinstance(dimensions, Mapping):
         raise TelemetrySchemaError("telemetry dimensions must be a mapping")
-    if any(
-        not isinstance(name, str) or name not in _DIMENSION_NAMES for name in dimensions
-    ):
+    values = _snapshot_mapping(
+        dimensions,
+        field_name="telemetry dimensions",
+        max_items=len(_DIMENSION_NAMES),
+    )
+    if set(values) - _DIMENSION_NAMES:
         raise UnapprovedTelemetryKeyError(
             "telemetry dimensions contain unapproved fields"
         )
@@ -718,9 +964,80 @@ def _normalize_dimensions(
                 name,
                 _normalize_dimension(name, value),
             )
-            for name, value in dimensions.items()
+            for name, value in values.items()
         )
     )
+
+
+def _validate_dimension_tuple(
+    dimensions: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    if type(dimensions) is not tuple or len(dimensions) > len(_DIMENSION_NAMES):
+        raise TelemetrySchemaError("sample dimensions are invalid")
+    normalized: list[tuple[str, str]] = []
+    for item in dimensions:
+        if type(item) is not tuple or len(item) != 2:
+            raise TelemetrySchemaError("sample dimensions are invalid")
+        name, value = item
+        if (
+            type(name) is not str
+            or name not in _DIMENSION_NAMES
+            or type(value) is not str
+            or len(value) > 64
+            or value not in _DIMENSION_VALUES[name]
+        ):
+            raise TelemetrySchemaError("sample dimensions are invalid")
+        normalized.append((name, value))
+    result = tuple(normalized)
+    if result != tuple(sorted(set(result))):
+        raise TelemetrySchemaError("sample dimensions are not canonical")
+    return result
+
+
+def _validate_bucket_tuple(
+    buckets: tuple[tuple[str, int], ...],
+    *,
+    count: int,
+) -> tuple[tuple[str, int], ...]:
+    if type(buckets) is not tuple or not (1 < len(buckets) <= MAX_LATENCY_BUCKETS + 1):
+        raise TelemetrySchemaError("latency sample buckets are invalid")
+
+    normalized: list[tuple[str, int]] = []
+    boundaries: list[float] = []
+    previous_count = -1
+    for index, item in enumerate(buckets):
+        if type(item) is not tuple or len(item) != 2:
+            raise TelemetrySchemaError("latency sample buckets are invalid")
+        boundary, bucket_count = item
+        if type(boundary) is not str or len(boundary) > 32:
+            raise TelemetrySchemaError("latency sample buckets are invalid")
+        safe_count = _coerce_non_negative_int(
+            bucket_count,
+            "latency bucket count",
+            maximum=count,
+        )
+        if safe_count < previous_count:
+            raise TelemetrySchemaError("latency sample buckets are inconsistent")
+        previous_count = safe_count
+
+        if index == len(buckets) - 1:
+            if boundary != "+Inf" or safe_count != count:
+                raise TelemetrySchemaError("latency sample buckets are inconsistent")
+        else:
+            try:
+                numeric_boundary = float(boundary)
+            except (TypeError, ValueError):
+                raise TelemetrySchemaError(
+                    "latency sample buckets are invalid"
+                ) from None
+            if not math.isfinite(numeric_boundary) or numeric_boundary <= 0:
+                raise TelemetrySchemaError("latency sample buckets are invalid")
+            boundaries.append(numeric_boundary)
+        normalized.append((boundary, safe_count))
+
+    if boundaries != sorted(set(boundaries)):
+        raise TelemetrySchemaError("latency sample buckets are not canonical")
+    return tuple(normalized)
 
 
 def _coalesced_event_value(
@@ -746,7 +1063,11 @@ def _event_dimensions(event: Mapping[str, object]) -> dict[str, object]:
     if raw_dimensions is None:
         dimensions: dict[str, object] = {}
     elif isinstance(raw_dimensions, Mapping):
-        dimensions = dict(raw_dimensions)
+        dimensions = _snapshot_mapping(
+            raw_dimensions,
+            field_name="telemetry dimensions",
+            max_items=len(_DIMENSION_NAMES),
+        )
     else:
         raise TelemetrySchemaError("telemetry dimensions must be a mapping")
 
@@ -760,6 +1081,8 @@ def _event_dimensions(event: Mapping[str, object]) -> dict[str, object]:
                 raise TelemetrySchemaError("telemetry event contains duplicate fields")
             dimensions[name] = event[name]
 
+    if "exception" in event and "exception_category" in event:
+        raise TelemetrySchemaError("telemetry event contains duplicate fields")
     if "exception" in event or "exception_category" in event:
         if DimensionName.EXCEPTION_CATEGORY.value in dimensions:
             raise TelemetrySchemaError("telemetry event contains duplicate fields")
@@ -796,6 +1119,13 @@ __all__ = [
     "DimensionName",
     "EXCEPTION_CATEGORY_VALUES",
     "LatencySample",
+    "MAX_AGGREGATE_LATENCY_SECONDS",
+    "MAX_COUNTER_VALUE",
+    "MAX_ENTITY_COUNT",
+    "MAX_LATENCY_BUCKETS",
+    "MAX_LATENCY_SECONDS",
+    "MAX_RESULT_STAGE_DURATIONS",
+    "MAX_SNAPSHOT_SAMPLES",
     "METHOD_VALUES",
     "NoPHITelemetryExporter",
     "OTHER_DIMENSION_VALUE",

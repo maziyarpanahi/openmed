@@ -14,7 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_DIR = ROOT / "js" / "openmedkit-flutter"
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 def test_openmedkit_flutter_ffi_package(tmp_path: Path) -> None:
+    if os.environ.get("OPENMED_RUN_FLUTTER_INTEGRATION") != "1":
+        pytest.skip("Set OPENMED_RUN_FLUTTER_INTEGRATION=1 for Flutter checks")
     flutter = shutil.which("flutter")
     cmake = shutil.which("cmake")
     if flutter is None or cmake is None:

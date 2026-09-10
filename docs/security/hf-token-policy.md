@@ -1,60 +1,68 @@
-# HF Write Token Policy
+# Manual Hugging Face Model Publication Policy
 
-OpenMed model publication uses a dedicated `HF_WRITE_TOKEN` secret for CI runs that write converted artifacts to the
-OpenMed organization. This token is separate from runtime read tokens and package publishing credentials.
+OpenMed does not convert or publish model artifacts from GitHub Actions. The
+repository must not store a Hugging Face write token in GitHub Actions secrets,
+and no workflow may receive `HF_WRITE_TOKEN`. Model releases are explicit local
+operations performed on hardware selected and controlled by a maintainer.
 
-## Scope
+This policy is separate from package publishing credentials and runtime read
+tokens.
 
-- Create a fine-grained token with org-write access limited to the OpenMed organization.
-- Do not grant admin, billing, or account-management permissions.
-- Do not reuse a personal development token, read token, or package publishing token.
-- Treat exposure as org-wide write access to OpenMed model repositories.
+## Execution Boundary
 
-## Storage
+- Build, convert, evaluate, and gate the candidate on a maintainer-controlled
+  machine with sufficient storage, memory, and accelerator support.
+- Review the exact source model, target model repository, artifact directory,
+  format, gate evidence, and intended repository visibility before publishing.
+- Publish only through an explicit local command initiated for that candidate.
+- Do not add a cron trigger, hosted conversion job, hosted publish job, or CI
+  environment carrying a Hugging Face write token.
+- Keep package releases and model releases independent.
+- Never treat model publication as authorization to create, modify, or change
+  the visibility of a Hugging Face Space.
 
-- Store the value as the `HF_WRITE_TOKEN` secret in the `hf-publish` GitHub Actions protected environment.
-- Keep the secret out of repository-level Actions secrets unless a workflow cannot be environment-bound.
-- Require environment protection before jobs can read the secret.
-- Only repository administrators who can manage environment secrets may replace or delete it. The saved value cannot be
-  read back after it is stored.
+## Token Scope And Storage
 
-## CI Use
+- Use a fine-grained token with org-write access limited to the OpenMed model
+  repositories required for the release.
+- Do not grant admin, billing, account-management, or Space-management
+  permissions.
+- Load the token from a local secret manager only for the explicit local
+  command, then remove it from the process environment.
+- Never store the token in repository files, shell history, logs, workflow
+  secrets, workflow artifacts, or release evidence.
+- Do not reuse a personal development token, read token, or package publishing
+  token.
 
-The manual `convert-models.yml` workflow exposes the secret only to the
-protected `publish-hf` job. The scheduled `nightly-release.yml` workflow binds
-its single release job to the same protected environment and checks both the
-write token and release-gate signing key before checkout, conversion, or
-publication. The manual publish guard uses a step-level environment binding:
+Treat exposure as org-wide write access to OpenMed model repositories.
 
-```yaml
-environment:
-  name: hf-publish
-steps:
-  - name: Require HF write token before publish
-    env:
-      HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
-```
+## Manual Release Sequence
 
-The publish job must check that `HF_WRITE_TOKEN` is set before running any upload command. Logs may mention the secret
-name but must never print the value.
+1. Validate the reviewed queue or candidate configuration without publishing.
+2. Build the artifact and run the applicable release gates locally.
+3. Inspect the artifact inventory, hashes, generated model card, target model
+   repository, and visibility decision.
+4. Set `HF_WRITE_TOKEN` from the local secret manager and run the explicit
+   local publish command.
+5. Verify the uploaded revision and perform the synthetic smoke test.
+6. Unset the token and retain only PHI-free hashes, offsets, and gate evidence.
 
-## Rotation
+Local tools must fail closed when the token or required evidence is missing.
+They must not log token values or change repository visibility as a side effect
+of uploading files.
 
-- Rotate the token every 90 days, or immediately after maintainer turnover, suspicious workflow activity, or accidental
-  disclosure.
-- Create the replacement token first, update the `hf-publish` environment secret, then run a manual publish credential
-  check before deleting the old token.
-- Record the rotation date and operator in the release notes or private operations log without copying the token value.
+## Rotation And Revocation
 
-## Revocation And Blast Radius
+- Rotate a publication token every 90 days, or immediately after maintainer
+  turnover, suspicious activity, or accidental disclosure.
+- Create and verify the replacement before revoking the old token.
+- Record the rotation date and operator in a private operations log without
+  copying the token value.
 
-If `HF_WRITE_TOKEN` is exposed:
+If a token is exposed:
 
-1. Revoke the token from the token provider immediately.
-2. Delete or replace the `hf-publish` environment secret.
-3. Disable queued or running publish workflows until the replacement secret is in place.
-4. Audit model repositories in the OpenMed organization for unexpected commits, files, tags, or metadata changes.
-5. Re-run the last known-good publish workflow after the audit if any artifact needs restoration.
-
-The blast radius is org-wide write access to OpenMed model repositories. The token must not have package publishing,
-repository administration, billing, or account ownership permissions.
+1. Revoke the token immediately.
+2. Stop any local publication process using it.
+3. Audit OpenMed model repositories for unexpected commits, files, tags, or
+   metadata changes.
+4. Restore affected artifacts from reviewed, hash-verified local evidence.

@@ -38,6 +38,18 @@ generic message that does not echo the rejected key or value. Prompts, entity
 text, request bodies, model identifiers, and arbitrary exception messages are
 not accepted as telemetry fields.
 
+Event mappings and pipeline-result stage timings are copied through bounded,
+closed schemas before any counter changes. A rejected event therefore cannot
+leave a partial update. Counter values use a signed 64-bit ceiling, entity
+counts are capped at 10 million per call, pipeline-result timing maps at 64
+stages, and individual latency observations at seven days. Public snapshot
+types validate metric names, dimensions, bucket consistency, and canonical
+ordering before serialization.
+
+`record_pipeline_result()` interprets its documented `stage_durations_ms`
+attribute as milliseconds and converts both stage and aggregate observations
+to seconds. It reads no other result attributes beyond the length of `spans`.
+
 ## Exception handling
 
 Pass an exception instance or class through `exception=`. Categories are

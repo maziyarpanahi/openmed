@@ -8,9 +8,16 @@ from dataclasses import dataclass
 import pytest
 
 from openmed.core.no_phi_telemetry import (
+    MAX_COUNTER_VALUE,
+    MAX_ENTITY_COUNT,
+    MAX_LATENCY_SECONDS,
+    MAX_RESULT_STAGE_DURATIONS,
     CounterName,
+    CounterSample,
+    LatencySample,
     NoPHITelemetryExporter,
     TelemetrySchemaError,
+    TelemetrySnapshot,
     UnapprovedTelemetryKeyError,
     sanitize_exception_category,
 )
@@ -196,3 +203,170 @@ def test_invalid_typed_inputs_fail_without_exporting_values(operation) -> None:
 
     assert exporter.export()["counters"] == []
     assert exporter.export()["latencies"] == []
+
+
+def test_pipeline_result_converts_stage_milliseconds_to_seconds() -> None:
+    @dataclass
+    class SyntheticResult:
+        spans: tuple[object, ...]
+        stage_durations_ms: dict[str, float]
+
+    exporter = NoPHITelemetryExporter()
+    exporter.record_pipeline_result(
+        SyntheticResult(spans=(), stage_durations_ms={"emit": 250.0})
+    )
+
+    latencies = {
+        item["dimensions"]["stage"]: item for item in exporter.export()["latencies"]
+    }
+    assert latencies["emit"]["sum_seconds"] == pytest.approx(0.25)
+    assert latencies["pipeline"]["sum_seconds"] == pytest.approx(0.25)
+
+
+def test_mapping_event_validation_is_atomic() -> None:
+    exporter = NoPHITelemetryExporter()
+
+    with pytest.raises(TelemetrySchemaError):
+        exporter.record(
+            {
+                "counter": CounterName.PIPELINE_RUNS.value,
+                "entity_count": "SYNTHETIC-SECRET",
+            }
+        )
+
+    assert exporter.export() == {
+        "schema_version": 1,
+        "counters": [],
+        "latencies": [],
+    }
+
+
+def test_hostile_mapping_and_result_failures_are_value_free() -> None:
+    class HostileMapping(dict[str, object]):
+        def items(self):  # type: ignore[no-untyped-def]
+            raise RuntimeError("SYNTHETIC-SECRET")
+
+    exporter = NoPHITelemetryExporter()
+    with pytest.raises(TelemetrySchemaError, match="could not be read") as event_error:
+        exporter.record(HostileMapping())
+    assert "SYNTHETIC-SECRET" not in str(event_error.value)
+
+    with pytest.raises(TelemetrySchemaError, match="could not be read") as dims_error:
+        exporter.increment(
+            CounterName.PIPELINE_RUNS,
+            dimensions=HostileMapping(),
+        )
+    assert "SYNTHETIC-SECRET" not in str(dims_error.value)
+
+    class HostileResult:
+        @property
+        def stage_durations_ms(self):  # type: ignore[no-untyped-def]
+            raise RuntimeError("SYNTHETIC-SECRET")
+
+    with pytest.raises(TelemetrySchemaError, match="could not be read") as result_error:
+        exporter.record_pipeline_result(HostileResult())
+    assert "SYNTHETIC-SECRET" not in str(result_error.value)
+    assert exporter.export()["counters"] == []
+
+
+def test_pipeline_result_stage_and_entity_inputs_are_bounded() -> None:
+    @dataclass
+    class SyntheticResult:
+        spans: object
+        stage_durations_ms: dict[str, float]
+
+    exporter = NoPHITelemetryExporter()
+    too_many_stages = {
+        f"stage_{index}": 1.0 for index in range(MAX_RESULT_STAGE_DURATIONS + 1)
+    }
+    with pytest.raises(UnapprovedTelemetryKeyError):
+        exporter.record_pipeline_result(
+            SyntheticResult(spans=(), stage_durations_ms=too_many_stages)
+        )
+
+    class TooManySpans:
+        def __len__(self) -> int:
+            return MAX_ENTITY_COUNT + 1
+
+    with pytest.raises(TelemetrySchemaError, match="entity count"):
+        exporter.record_pipeline_result(
+            SyntheticResult(spans=TooManySpans(), stage_durations_ms={})
+        )
+    with pytest.raises(TelemetrySchemaError, match="spans must be a sequence"):
+        exporter.record_pipeline_result(
+            SyntheticResult(
+                spans="SYNTHETIC-SECRET",
+                stage_durations_ms={},
+            )
+        )
+    assert exporter.export()["counters"] == []
+
+
+def test_counter_and_latency_totals_are_bounded_without_partial_updates() -> None:
+    exporter = NoPHITelemetryExporter()
+    exporter.increment(CounterName.PIPELINE_RUNS, amount=MAX_COUNTER_VALUE)
+
+    with pytest.raises(TelemetrySchemaError, match="safe limit"):
+        exporter.increment(CounterName.PIPELINE_RUNS)
+    assert (
+        _sample(exporter.export(), CounterName.PIPELINE_RUNS.value)["value"]
+        == MAX_COUNTER_VALUE
+    )
+
+    with pytest.raises(TelemetrySchemaError, match="bounded"):
+        exporter.observe_latency_seconds(MAX_LATENCY_SECONDS + 1)
+    assert exporter.export()["latencies"] == []
+
+
+def test_public_snapshot_types_reject_arbitrary_names_labels_and_outcomes() -> None:
+    with pytest.raises(
+        TelemetrySchemaError, match="name is not approved"
+    ) as name_error:
+        CounterSample("SYNTHETIC-SECRET", 1)  # type: ignore[arg-type]
+    assert "SYNTHETIC-SECRET" not in str(name_error.value)
+
+    with pytest.raises(TelemetrySchemaError, match="dimensions are invalid"):
+        CounterSample(
+            CounterName.PIPELINE_RUNS,
+            1,
+            (("SYNTHETIC-SECRET", "SYNTHETIC-SECRET"),),
+        )
+    with pytest.raises(TelemetrySchemaError, match="name is not approved"):
+        LatencySample(
+            name="SYNTHETIC-SECRET",
+            count=1,
+            sum_seconds=0.1,
+            buckets=(("1.0", 1), ("+Inf", 1)),
+        )
+    with pytest.raises(TelemetrySchemaError, match="schema is unsupported"):
+        TelemetrySnapshot(schema_version=2, counters=(), latencies=())
+
+
+def test_latency_sum_is_deterministic_across_observation_order() -> None:
+    first = NoPHITelemetryExporter()
+    second = NoPHITelemetryExporter()
+    for value in (0.1, 0.2, 0.3):
+        first.observe_latency_seconds(value, dimensions={"stage": "emit"})
+    for value in (0.3, 0.2, 0.1):
+        second.observe_latency_seconds(value, dimensions={"stage": "emit"})
+
+    assert first.export_json() == second.export_json()
+
+
+def test_duplicate_exception_sources_are_rejected_before_mutation() -> None:
+    exporter = NoPHITelemetryExporter()
+
+    with pytest.raises(TelemetrySchemaError, match="multiple sources"):
+        exporter.record_pipeline(
+            exception=ValueError("SYNTHETIC-SECRET"),
+            exception_category="validation",
+        )
+    with pytest.raises(TelemetrySchemaError, match="duplicate fields"):
+        exporter.record(
+            {
+                "counter": CounterName.PIPELINE_RUNS.value,
+                "exception": ValueError("SYNTHETIC-SECRET"),
+                "exception_category": "validation",
+            }
+        )
+    assert exporter.export()["counters"] == []

@@ -1,6 +1,7 @@
 import SwiftUI
+
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 public struct InputScreen: View {
@@ -70,11 +71,11 @@ public struct InputScreen: View {
         OMCard(padding: OM.Space.s4) {
             HStack(alignment: .top, spacing: OM.Space.s3) {
                 VStack(alignment: .leading, spacing: OM.Space.s2) {
-                    Text("CLINICAL EXTRACTOR").omEyebrow()
-                    Text("GLiNER Relex Base")
+                    Text("CLINICAL COPILOT").omEyebrow()
+                    Text("Maple Preview · 2-bit")
                         .font(.om.heading(17, weight: .semibold))
                         .foregroundStyle(Color.omInk)
-                    Text("Zero-shot NER for condition, medication, and care-plan labels you define.")
+                    Text("One local sparse model for redaction, entities, relations, reasoning, and chat.")
                         .font(.om.body(12))
                         .foregroundStyle(Color.omFgMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -91,7 +92,7 @@ public struct InputScreen: View {
 
     @ViewBuilder
     private var clinicalStateRow: some View {
-        let entry = downloads.entries[.glinerRelex]
+        let entry = downloads.entries[.maplePreview]
         let state = entry?.state ?? .missing
         switch state {
         case .ready:
@@ -118,7 +119,7 @@ public struct InputScreen: View {
                         .font(.om.mono(9))
                         .foregroundStyle(Color.omFgSubtle)
                 }
-                Button("Cancel") { downloads.cancel(.glinerRelex) }
+                Button("Cancel") { downloads.cancel(.maplePreview) }
                     .buttonStyle(.omGhost(.ink))
             }
             .padding(.top, 4)
@@ -128,18 +129,18 @@ public struct InputScreen: View {
                     .font(.om.body(11))
                     .foregroundStyle(Color.omSignal)
                     .lineLimit(2)
-                Button("Retry") { downloads.prepare(.glinerRelex) }
+                Button("Retry") { downloads.prepare(.maplePreview) }
                     .buttonStyle(.omSecondary(.sm))
             }
             .padding(.top, 4)
         default:
             Button {
-                downloads.prepare(.glinerRelex)
+                downloads.prepare(.maplePreview)
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.system(size: 11))
-                    Text("Download · \(ScanModelID.glinerRelex.estimatedSizeLabel.replacingOccurrences(of: "~", with: ""))")
+                    Text("Download · \(ScanModelID.maplePreview.estimatedSizeLabel.replacingOccurrences(of: "~", with: ""))")
                 }
             }
             .buttonStyle(.omSecondary(.sm))
@@ -180,10 +181,10 @@ public struct InputScreen: View {
                 HStack {
                     Button("Paste from clipboard") {
                         #if canImport(UIKit)
-                        if let string = UIPasteboard.general.string {
-                            pasteBuffer = string
-                            HapticsCenter.selection()
-                        }
+                            if let string = UIPasteboard.general.string {
+                                pasteBuffer = string
+                                HapticsCenter.selection()
+                            }
                         #endif
                     }
                     .buttonStyle(.omGhost)
@@ -268,19 +269,19 @@ public struct InputScreen: View {
     @ViewBuilder
     private var sampleThumbnail: some View {
         #if canImport(UIKit)
-        if let image = UIImage(named: selectedSampleLanguage.assetName) {
-            Image(uiImage: image)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 86, height: 118)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: OM.Radius.sm, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: OM.Radius.sm, style: .continuous)
-                        .strokeBorder(Color.omBorderStrong, lineWidth: OM.Stroke.hairline)
-                )
-        }
+            if let image = UIImage(named: selectedSampleLanguage.assetName) {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 86, height: 118)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: OM.Radius.sm, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: OM.Radius.sm, style: .continuous)
+                            .strokeBorder(Color.omBorderStrong, lineWidth: OM.Stroke.hairline)
+                    )
+            }
         #endif
     }
 
