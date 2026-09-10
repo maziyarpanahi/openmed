@@ -18,7 +18,9 @@ entities = result.to_dataframe()
 
 The method imports pandas lazily, so importing `openmed` or
 `openmed.core.pii` does not import pandas. If pandas is not installed, calling
-`to_dataframe()` raises an actionable `ImportError` with the install command.
+`to_dataframe()` raises an actionable `MissingExtraError` with code
+`missing_extra` and the install command. It remains an `ImportError` for
+backward compatibility. See [Structured public errors](errors.md).
 
 The returned DataFrame has one row per detected entity and always uses this
 column order:
