@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic, local key-custody metadata validator for synthetic
+  signing and surrogate workflows, with lifecycle transition checks,
+  purpose/algorithm compatibility, digest-only reports, and fail-closed
+  rejection of bytes, secret-like, or unknown fields (#2648).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

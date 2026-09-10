@@ -223,3 +223,11 @@ def test_overlapping_purposes_inside_one_record_are_rejected():
     assert any(
         violation.code == "overlapping_purpose" for violation in result.violations
     )
+
+
+def test_core_package_reexports_validator_api():
+    import openmed.core as core
+
+    assert core.KeyCustodyMetadata is KeyCustodyMetadata
+    assert core.validate_key_custody_metadata is validate_key_custody_metadata
+    assert core.KeyCustodyValidator().validate(_metadata()).valid
