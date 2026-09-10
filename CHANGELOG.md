@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with owner-free approval metadata, bounded digest-only evidence, explicit UTC
   expiry checks, deterministic serialization, and value-free validation
   failures (#2528).
+- Added a bounded, deterministic audit-envelope parser with redacted payload
+  metadata, canonical fingerprints, strict schema and signature validation,
+  and value-free diagnostics (#2594).
 
 ### Security
 
