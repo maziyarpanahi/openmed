@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, counts-only audit-artifact retention planner with explicit
+  disposition rules, deletion evidence, remaining-set verification, strict
+  input fields, and fail-closed future timestamps (#2409).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

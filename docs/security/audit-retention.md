@@ -11,6 +11,12 @@ after its age boundary from the planned retained set; a `retain` rule provides
 an indefinite hold. Missing dispositions fail closed rather than silently
 using an implicit default.
 
+Artifact records use a strict field allowlist. Unknown fields, duplicate
+aliases, duplicate artifact identifiers, normalized-name collisions, future
+creation timestamps, and unbounded counts fail closed. A pass accepts at most
+10,000 artifacts; each artifact accepts at most 1,024 counters; policies accept
+at most 256 disposition rules; and serialized reports are limited to 8 MiB.
+
 ```python
 from datetime import datetime, timedelta, timezone
 
@@ -64,9 +70,10 @@ the caller's remaining counts-only records and detects omission, insertion,
 reordering-independent mutation, or retention of an expired artifact.
 
 The evaluation timestamp is explicit so the same inputs and policy produce the
-same report. Use synthetic offline fixtures in tests and do not place source
-text, patient identifiers, encounter identifiers, or paths in audit-artifact
-records.
+same report. Artifacts dated after that timestamp are rejected rather than
+retained indefinitely. Use synthetic offline fixtures in tests and do not place
+source text, patient identifiers, encounter identifiers, or paths in
+audit-artifact records.
 
 This evidence supports local retention verification. It is not a compliance
 certification, a legal determination, or a clinical decision.

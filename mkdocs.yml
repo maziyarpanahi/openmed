@@ -199,6 +199,7 @@ nav:
       - In-place Trace Redaction: guides/in-place-redaction.md
       - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
+      - Audit-artifact Retention: security/audit-retention.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
