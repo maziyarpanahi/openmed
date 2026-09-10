@@ -8,6 +8,8 @@ import pytest
 
 from openmed.core.audit import AuditReport, hash_text
 from openmed.core.audit_key_rotation import (
+    MAX_AUDIT_HMAC_KEY_BYTES,
+    MIN_AUDIT_HMAC_KEY_BYTES,
     AuditKeyRotationError,
     AuditKeyRotationSigner,
     AuditKeyRotationVerifier,
@@ -16,8 +18,8 @@ from openmed.core.audit_key_rotation import (
 )
 
 _KEYS = {
-    "audit-2025": b"synthetic-old-signing-key",
-    "audit-2026": b"synthetic-new-signing-key",
+    "audit-2025": b"synthetic-old-signing-key-material",
+    "audit-2026": b"synthetic-new-signing-key-material",
 }
 
 
@@ -93,6 +95,23 @@ def test_signing_is_deterministic_and_key_id_can_be_overridden_for_rotation():
     assert first.signature.key_id == "audit-2026"
 
 
+def test_new_signatures_bind_key_id_even_when_provider_keys_match():
+    shared_key = b"same-synthetic-key-material-value!" * 2
+    provider = {"audit-primary": shared_key, "audit-alias": shared_key}
+    signed = AuditKeyRotationSigner("audit-primary", provider).sign(_report())
+
+    assert signed.signature is not None
+    signed.signature.key_id = "audit-alias"
+
+    assert not AuditKeyRotationVerifier(provider).verify(signed)
+
+
+def test_verifier_accepts_legacy_direct_audit_report_signature():
+    legacy = _report().sign(_KEYS["audit-2025"], key_id="audit-2025")
+
+    assert AuditKeyRotationVerifier(_KEYS).verify(legacy)
+
+
 def test_provider_failures_never_echo_key_material():
     def provider(_key_id: str) -> bytes:
         raise RuntimeError("synthetic-new-signing-key")
@@ -118,3 +137,49 @@ def test_helper_signer_uses_caller_owned_provider():
 
     assert AuditKeyRotationVerifier(_KEYS).verify(signed)
     assert json.loads(signed.to_json())["signature"]["key_id"] == "audit-2026"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        b"x" * (MIN_AUDIT_HMAC_KEY_BYTES - 1),
+        b"x" * (MAX_AUDIT_HMAC_KEY_BYTES + 1),
+        "x" * (MIN_AUDIT_HMAC_KEY_BYTES - 1),
+        bytearray(b"x" * MIN_AUDIT_HMAC_KEY_BYTES),
+    ],
+)
+def test_signer_rejects_weak_oversized_or_mutable_key_material(key: object):
+    with pytest.raises(AuditKeyRotationError, match="key material") as error:
+        AuditKeyRotationSigner(
+            "audit-2026",
+            lambda _key_id: key,  # type: ignore[return-value]
+        ).sign(_report())
+
+    assert repr(key) not in str(error.value)
+
+
+def test_verifier_rejects_unbound_mapping_fields_before_provider_lookup():
+    signed = AuditKeyRotationSigner("audit-2026", _KEYS).sign(_report())
+    requested: list[str] = []
+
+    def provider(key_id: str) -> bytes:
+        requested.append(key_id)
+        return _KEYS[key_id]
+
+    payload = signed.to_dict()
+    payload["unbound_detail"] = "synthetic-private-value"
+    assert not AuditKeyRotationVerifier(provider).verify(payload)
+
+    payload = signed.to_dict()
+    signature = payload["signature"]
+    assert isinstance(signature, dict)
+    signature["key_material"] = "synthetic-private-value"
+    assert not AuditKeyRotationVerifier(provider).verify(payload)
+    assert requested == []
+
+
+def test_verifier_returns_false_for_invalid_runtime_input():
+    verifier = AuditKeyRotationVerifier(_KEYS)
+
+    assert not verifier.verify(None)  # type: ignore[arg-type]
+    assert not verifier.verify([])  # type: ignore[arg-type]

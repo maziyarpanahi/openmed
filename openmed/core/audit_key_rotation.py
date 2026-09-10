@@ -12,6 +12,9 @@ report or included in an exception raised by this module.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import itertools
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -20,7 +23,29 @@ from typing import Any, Final, Protocol, TypeAlias
 from .audit import AuditReport
 
 AUDIT_SIGNATURE_ALGORITHM: Final = "HMAC-SHA256"
+MIN_AUDIT_HMAC_KEY_BYTES: Final = 32
+MAX_AUDIT_HMAC_KEY_BYTES: Final = 4_096
 _KEY_ID_RE: Final = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+_KEY_DERIVATION_CONTEXT: Final = b"openmed.audit-key-rotation.v1\x00"
+_AUDIT_REPORT_FIELDS: Final = frozenset(
+    {
+        "policy",
+        "resolved_profile",
+        "detectors",
+        "safety_sweep",
+        "spans",
+        "thresholds",
+        "residual_risk",
+        "openmed_version",
+        "manifest_hash",
+        "document_length",
+        "input_hash",
+        "deidentified_text_hash",
+        "grounding",
+        "repro_hash",
+        "signature",
+    }
+)
 
 KeyMaterial: TypeAlias = bytes | str
 
@@ -40,7 +65,7 @@ class AuditKeyRotationError(ValueError):
 
 
 def _require_key_id(value: Any) -> str:
-    if not isinstance(value, str) or not _KEY_ID_RE.fullmatch(value):
+    if type(value) is not str or not _KEY_ID_RE.fullmatch(value):
         raise AuditKeyRotationError(
             "key_id must be a safe, non-secret metadata identifier"
         )
@@ -52,7 +77,7 @@ def _validate_provider(provider: Any) -> None:
         raise TypeError("key_provider must be callable or a key-id mapping")
 
 
-def _resolve_key(provider: KeyProvider, key_id: str) -> KeyMaterial:
+def _resolve_key(provider: KeyProvider, key_id: str) -> bytes:
     try:
         value = provider[key_id] if isinstance(provider, Mapping) else provider(key_id)
     except KeyError:
@@ -66,20 +91,68 @@ def _resolve_key(provider: KeyProvider, key_id: str) -> KeyMaterial:
             "key provider failed to resolve the requested key_id"
         ) from None
 
-    if not isinstance(value, (bytes, str)) or not value:
+    try:
+        if type(value) is bytes:
+            key = value
+        elif type(value) is str:
+            key = value.encode("utf-8")
+        else:
+            raise TypeError
+    except Exception:
         raise AuditKeyRotationError(
             "key provider returned empty or unsupported key material"
+        ) from None
+    if not MIN_AUDIT_HMAC_KEY_BYTES <= len(key) <= MAX_AUDIT_HMAC_KEY_BYTES:
+        raise AuditKeyRotationError(
+            "key provider returned key material outside the supported size range"
         )
-    return value
+    return key
+
+
+def _report_key(key: bytes, key_id: str) -> bytes:
+    """Derive a per-ID HMAC key so new signatures bind their key metadata."""
+
+    return hmac.new(
+        key,
+        _KEY_DERIVATION_CONTEXT + key_id.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+
+
+def _snapshot_report_mapping(report: Mapping[str, Any]) -> dict[str, Any]:
+    try:
+        items = list(itertools.islice(report.items(), len(_AUDIT_REPORT_FIELDS) + 1))
+    except Exception:
+        raise AuditKeyRotationError(
+            "audit report mapping could not be parsed"
+        ) from None
+    if len(items) > len(_AUDIT_REPORT_FIELDS):
+        raise AuditKeyRotationError("audit report mapping could not be parsed")
+
+    snapshot: dict[str, Any] = {}
+    for item in items:
+        if type(item) not in {list, tuple} or len(item) != 2:
+            raise AuditKeyRotationError("audit report mapping could not be parsed")
+        key, value = item
+        if type(key) is not str or key in snapshot:
+            raise AuditKeyRotationError("audit report mapping could not be parsed")
+        snapshot[key] = value
+    if set(snapshot) - _AUDIT_REPORT_FIELDS:
+        raise AuditKeyRotationError("audit report mapping could not be parsed")
+    return snapshot
 
 
 def _coerce_report(report: AuditReport | Mapping[str, Any]) -> AuditReport:
-    if isinstance(report, AuditReport):
+    if type(report) is AuditReport:
         return report
     if not isinstance(report, Mapping):
         raise TypeError("audit_report must be an AuditReport or mapping")
     try:
-        return AuditReport.from_dict(report)
+        snapshot = _snapshot_report_mapping(report)
+        parsed = AuditReport.from_dict(snapshot)
+        if parsed.to_dict() != snapshot:
+            raise ValueError
+        return parsed
     except Exception:
         # Parsed report failures must not echo untrusted report fields.
         raise AuditKeyRotationError(
@@ -117,13 +190,16 @@ class AuditKeyRotationSigner:
             TypeError: If ``report`` is not an :class:`AuditReport`.
         """
 
-        if not isinstance(report, AuditReport):
+        if type(report) is not AuditReport:
             raise TypeError("audit_report must be an AuditReport")
         effective_key_id = self.key_id if key_id is None else _require_key_id(key_id)
         key = _resolve_key(self.key_provider, effective_key_id)
         try:
-            return report.sign(key, key_id=effective_key_id)
-        except (TypeError, ValueError):
+            return report.sign(
+                _report_key(key, effective_key_id),
+                key_id=effective_key_id,
+            )
+        except Exception:
             raise AuditKeyRotationError("audit report could not be signed") from None
 
 
@@ -157,7 +233,7 @@ class AuditKeyRotationVerifier:
 
         try:
             audit_report = _coerce_report(report)
-        except AuditKeyRotationError:
+        except (AuditKeyRotationError, TypeError):
             return False
         signature = audit_report.signature
         if signature is None or signature.algorithm != AUDIT_SIGNATURE_ALGORITHM:
@@ -165,11 +241,15 @@ class AuditKeyRotationVerifier:
         try:
             key_id = _require_key_id(signature.key_id)
             key = _resolve_key(self.key_provider, key_id)
-            return audit_report.verify(
-                key,
-                original_text=original_text,
-                deidentified_text=deidentified_text,
-            )
+            bindings = {
+                "original_text": original_text,
+                "deidentified_text": deidentified_text,
+            }
+            if audit_report.verify(_report_key(key, key_id), **bindings):
+                return True
+            # Reports signed directly by AuditReport before this adapter existed
+            # used the provider key without the per-ID derivation.
+            return audit_report.verify(key, **bindings)
         except Exception:
             # Verification is intentionally fail-closed.  In particular, do
             # not surface caller-provider errors that could contain key data.
@@ -209,6 +289,8 @@ def verify_audit_report(
 
 __all__ = [
     "AUDIT_SIGNATURE_ALGORITHM",
+    "MAX_AUDIT_HMAC_KEY_BYTES",
+    "MIN_AUDIT_HMAC_KEY_BYTES",
     "AuditKeyProvider",
     "AuditKeyRotationError",
     "AuditKeyRotationSigner",

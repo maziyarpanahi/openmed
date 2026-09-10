@@ -8,6 +8,8 @@ with a retained previous key.
 Key custody remains outside OpenMed. The caller supplies a callback or mapping
 that resolves a key ID to key material. OpenMed does not create, persist, log,
 serialize, or rotate that material, and this feature makes no network calls.
+Resolved HMAC-SHA256 keys must encode to 32 through 4,096 bytes; mutable key
+containers and weaker or oversized values fail before signing or verification.
 
 ## Sign with the active key
 
@@ -37,9 +39,10 @@ signed_report = signer.sign(report, key_id="audit-2027")
 ```
 
 `AuditKeyRotationSigner` returns the same `AuditReport` after calling its
-existing deterministic `sign` operation. The serialized signature contains the
-algorithm, key ID, and authentication value; it never contains the resolved
-key.
+existing deterministic `sign` operation. Before signing, it derives a
+domain-separated per-ID HMAC key so the signature also binds the selected key
+ID. The serialized signature contains the algorithm, key ID, and
+authentication value; it never contains the resolved or derived key.
 
 ## Verify current and retained keys
 
@@ -67,6 +70,16 @@ returns `False` without copying provider exception text into the report or an
 OpenMed log. Optional `original_text` and `deidentified_text` bindings are
 hashed in memory by `AuditReport.verify`; they are not serialized by the
 rotation layer.
+
+For compatibility, the verifier also accepts reports signed directly with
+`AuditReport.sign` before the rotation adapter existed. Those legacy signatures
+did not cryptographically bind `key_id`; keep a unique legacy key per ID and
+use the rotation signer for all new reports.
+
+When verification receives a report mapping rather than an `AuditReport`, the
+mapping must match the canonical serialized report exactly. Unknown top-level
+or signature fields are rejected before the key provider is called so
+unverified data cannot be carried beside an otherwise valid signature.
 
 ## Rotation boundary
 

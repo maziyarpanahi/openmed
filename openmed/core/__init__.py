@@ -10,6 +10,8 @@ from .audit_chain import (
     verify_chain,
 )
 from .audit_key_rotation import (
+    MAX_AUDIT_HMAC_KEY_BYTES,
+    MIN_AUDIT_HMAC_KEY_BYTES,
     AuditKeyProvider,
     AuditKeyRotationError,
     AuditKeyRotationSigner,
@@ -209,6 +211,8 @@ __all__ = [
     "AuditKeyRotationVerifier",
     "AuditReportSigner",
     "AuditReportVerifier",
+    "MAX_AUDIT_HMAC_KEY_BYTES",
+    "MIN_AUDIT_HMAC_KEY_BYTES",
     "sign_audit_report",
     "verify_audit_report",
     "redaction_preview",
