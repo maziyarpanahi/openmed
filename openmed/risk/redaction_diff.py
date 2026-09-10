@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import re
+import stat
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Integral, Real
@@ -29,6 +30,11 @@ RedactionSummaryInput = Mapping[str, Any] | str | Path
 
 _ACTIONS = frozenset(ACTION_VALUES)
 _FINGERPRINT_RE = re.compile(r"^(?:sha256|hmac-sha256):[0-9a-f]{64}$")
+_HASHED_KEY_RE = re.compile(r"^(?:action|category|count):sha256:[0-9a-f]{64}$")
+_MAX_JSON_BYTES = 1024 * 1024
+_MAX_CONTAINER_ITEMS = 4096
+_MAX_NESTING_DEPTH = 16
+_MAX_TEXT_CHARS = 16_384
 _SAFE_COUNT_KEYS = frozenset(
     {
         "added",
@@ -59,6 +65,7 @@ _SAFE_COUNT_KEYS = frozenset(
         "span_count",
         "spans",
         "total",
+        "total_count",
         "total_rows",
         "total_spans",
         "unchanged",
@@ -106,6 +113,90 @@ _CATEGORY_COUNT_FIELDS = (
     "span_count",
     "total",
 )
+_POLICY_KEYS = (
+    "policy_fingerprint",
+    "policy_hash",
+    "policy",
+    "policy_name",
+    "policy_profile",
+)
+_METADATA_KEYS = frozenset({"policy_fingerprint", "policy_hash"})
+_SUMMARY_KEYS = frozenset(
+    _ACTION_ALIASES
+    + _CATEGORY_ALIASES
+    + _NESTED_SUMMARY_KEYS
+    + _COUNT_SECTION_KEYS
+    + _COUNT_ALIASES
+    + _POLICY_KEYS
+    + ("metadata",)
+)
+_CATEGORY_RECORD_KEYS = frozenset(
+    ("category", "label") + _CATEGORY_COUNT_FIELDS + _ACTION_ALIASES + tuple(_ACTIONS)
+)
+
+
+class _InvalidSummary(ValueError):
+    """Internal marker for a safely worded invalid-summary failure."""
+
+
+class _InvalidSummaryType(TypeError):
+    """Internal marker for a safely worded invalid-summary type failure."""
+
+
+def _is_count(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _classify_change(before: int, after: int) -> ChangeClassification:
+    if before == 0:
+        return "added"
+    if after == 0:
+        return "removed"
+    return "increased" if after > before else "decreased"
+
+
+def _is_safe_change_key(value: Any) -> bool:
+    return isinstance(value, str) and (
+        value in _ACTIONS
+        or value in CANONICAL_LABELS
+        or value in _SAFE_COUNT_KEYS
+        or _HASHED_KEY_RE.fullmatch(value) is not None
+    )
+
+
+def _bounded_text(value: str) -> str:
+    if len(value) > _MAX_TEXT_CHARS:
+        raise _InvalidSummary("redaction summary exceeds text limits")
+    return value
+
+
+def _validate_fingerprint(value: str | None) -> None:
+    if value is not None and (
+        not isinstance(value, str) or _FINGERPRINT_RE.fullmatch(value) is None
+    ):
+        raise ValueError("policy fingerprint is invalid")
+
+
+def _validate_change_dimension(
+    changes: tuple[CountChange, ...], dimension: Literal["action", "category", "count"]
+) -> None:
+    if type(changes) is not tuple or not all(
+        isinstance(change, CountChange) for change in changes
+    ):
+        raise ValueError("redaction changes must be a tuple of CountChange records")
+    keys = [change.key for change in changes]
+    if keys != sorted(set(keys)):
+        raise ValueError("redaction changes must have unique sorted keys")
+    known_keys: frozenset[str]
+    if dimension == "action":
+        known_keys = _ACTIONS
+    elif dimension == "category":
+        known_keys = frozenset(CANONICAL_LABELS)
+    else:
+        known_keys = _SAFE_COUNT_KEYS
+    prefix = f"{dimension}:sha256:"
+    if any(key not in known_keys and not key.startswith(prefix) for key in keys):
+        raise ValueError("redaction change key has the wrong dimension")
 
 
 @dataclass(frozen=True)
@@ -117,6 +208,21 @@ class CountChange:
     after: int
     delta: int
     classification: ChangeClassification
+
+    def __post_init__(self) -> None:
+        """Reject records that could carry values or contradict their counts."""
+
+        if not _is_safe_change_key(self.key):
+            raise ValueError("change key is not an aggregate identifier")
+        if not _is_count(self.before) or not _is_count(self.after):
+            raise ValueError("change counts must be non-negative integers")
+        if self.before == self.after:
+            raise ValueError("change counts must differ")
+        expected_delta = self.after - self.before
+        if type(self.delta) is not int or self.delta != expected_delta:
+            raise ValueError("change delta does not match its counts")
+        if self.classification != _classify_change(self.before, self.after):
+            raise ValueError("change classification does not match its counts")
 
     @property
     def change_type(self) -> ChangeClassification:
@@ -152,6 +258,15 @@ class RedactionDiff:
     action_changes: tuple[CountChange, ...]
     category_changes: tuple[CountChange, ...]
     count_changes: tuple[CountChange, ...]
+
+    def __post_init__(self) -> None:
+        """Enforce deterministic, value-free result invariants."""
+
+        _validate_fingerprint(self.before_policy_fingerprint)
+        _validate_fingerprint(self.after_policy_fingerprint)
+        _validate_change_dimension(self.action_changes, "action")
+        _validate_change_dimension(self.category_changes, "category")
+        _validate_change_dimension(self.count_changes, "count")
 
     @property
     def base_policy_fingerprint(self) -> str | None:
@@ -272,27 +387,36 @@ def diff_redaction_summaries(
     explicitly.
     """
 
-    before_payload = _coerce_summary(before)
-    after_payload = _coerce_summary(after)
-    before_counts = _extract_counts(before_payload)
-    after_counts = _extract_counts(after_payload)
+    try:
+        before_payload = _coerce_summary(before)
+        after_payload = _coerce_summary(after)
+        before_counts = _extract_counts(before_payload)
+        after_counts = _extract_counts(after_payload)
 
-    return RedactionDiff(
-        before_policy_fingerprint=_summary_policy_fingerprint(before_payload),
-        after_policy_fingerprint=_summary_policy_fingerprint(after_payload),
-        action_changes=_count_changes(
-            before_counts.actions,
-            after_counts.actions,
-        ),
-        category_changes=_count_changes(
-            before_counts.categories,
-            after_counts.categories,
-        ),
-        count_changes=_count_changes(
-            before_counts.counts,
-            after_counts.counts,
-        ),
-    )
+        return RedactionDiff(
+            before_policy_fingerprint=_summary_policy_fingerprint(before_payload),
+            after_policy_fingerprint=_summary_policy_fingerprint(after_payload),
+            action_changes=_count_changes(
+                before_counts.actions,
+                after_counts.actions,
+            ),
+            category_changes=_count_changes(
+                before_counts.categories,
+                after_counts.categories,
+            ),
+            count_changes=_count_changes(
+                before_counts.counts,
+                after_counts.counts,
+            ),
+        )
+    except MemoryError:
+        raise
+    except _InvalidSummaryType as exc:
+        raise TypeError(str(exc)) from None
+    except _InvalidSummary as exc:
+        raise ValueError(str(exc)) from None
+    except Exception:
+        raise ValueError("redaction summaries are invalid") from None
 
 
 def diff_redaction_results(
@@ -316,7 +440,12 @@ def diff_redaction_reports(
 def fingerprint_policy(policy: Any) -> str | None:
     """Return a stable policy fingerprint without contacting external services."""
 
-    return _policy_fingerprint(policy)
+    try:
+        return _policy_fingerprint(policy)
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("policy is invalid") from None
 
 
 def policy_fingerprint(policy: Any) -> str | None:
@@ -360,16 +489,19 @@ class _SummaryCounts:
 
 def _coerce_summary(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
-        return dict(value)
+        payload = _copy_mapping(value)
+        _validate_summary_source(payload, allow_nested=True)
+        return payload
 
     if isinstance(value, Path):
         return _read_summary_path(value)
 
     if isinstance(value, str):
+        _bounded_text(value)
         try:
             path = Path(value)
         except (OSError, ValueError):
-            raise TypeError(
+            raise _InvalidSummaryType(
                 "redaction summary must be a mapping, local JSON path, or "
                 "object exposing to_dict()"
             ) from None
@@ -380,11 +512,13 @@ def _coerce_summary(value: Any) -> dict[str, Any]:
         try:
             payload = to_dict()
         except Exception:
-            raise TypeError("could not read redaction summary") from None
+            raise _InvalidSummaryType("could not read redaction summary") from None
         if isinstance(payload, Mapping):
-            return dict(payload)
+            result = _copy_mapping(payload)
+            _validate_summary_source(result, allow_nested=True)
+            return result
 
-    raise TypeError(
+    raise _InvalidSummaryType(
         "redaction summary must be a mapping, local JSON path, or object "
         "exposing to_dict()"
     )
@@ -392,19 +526,113 @@ def _coerce_summary(value: Any) -> dict[str, Any]:
 
 def _read_summary_path(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        file_stat = path.stat()
+        if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_size > _MAX_JSON_BYTES:
+            raise _InvalidSummary("redaction summary JSON exceeds file limits")
+        with path.open("rb") as stream:
+            raw = stream.read(_MAX_JSON_BYTES + 1)
+        if len(raw) > _MAX_JSON_BYTES:
+            raise _InvalidSummary("redaction summary JSON exceeds file limits")
+        payload = json.loads(
+            raw.decode("utf-8"), object_pairs_hook=_json_object_no_duplicates
+        )
+    except _InvalidSummary:
+        raise
     except (OSError, UnicodeError, json.JSONDecodeError):
-        raise ValueError("could not read redaction summary JSON") from None
+        raise _InvalidSummary("could not read redaction summary JSON") from None
     if not isinstance(payload, Mapping):
-        raise ValueError("redaction summary JSON must contain an object")
-    return dict(payload)
+        raise _InvalidSummary("redaction summary JSON must contain an object")
+    result = _copy_mapping(payload)
+    _validate_summary_source(result, allow_nested=True)
+    return result
+
+
+def _json_object_no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    if len(pairs) > _MAX_CONTAINER_ITEMS:
+        raise _InvalidSummary("redaction summary exceeds container limits")
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _InvalidSummary("redaction summary JSON contains duplicate keys")
+        result[key] = value
+    return result
+
+
+def _bounded_items(value: Mapping[Any, Any]) -> list[tuple[Any, Any]]:
+    result: list[tuple[Any, Any]] = []
+    iterator = iter(value.items())
+    for _ in range(_MAX_CONTAINER_ITEMS + 1):
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return result
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise _InvalidSummary("redaction summary mapping is invalid")
+        result.append(item)
+    raise _InvalidSummary("redaction summary exceeds container limits")
+
+
+def _bounded_sequence(value: Sequence[Any]) -> list[Any]:
+    result: list[Any] = []
+    iterator = iter(value)
+    for _ in range(_MAX_CONTAINER_ITEMS + 1):
+        try:
+            result.append(next(iterator))
+        except StopIteration:
+            return result
+    raise _InvalidSummary("redaction summary exceeds container limits")
+
+
+def _copy_mapping(value: Mapping[Any, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, item in _bounded_items(value):
+        if not isinstance(key, str):
+            raise _InvalidSummary("redaction summary keys must be strings")
+        if key in result:
+            raise _InvalidSummary("redaction summary contains duplicate keys")
+        result[key] = item
+    return result
+
+
+def _validate_summary_source(source: Mapping[str, Any], *, allow_nested: bool) -> None:
+    items = _bounded_items(source)
+    keys = {key for key, _ in items if isinstance(key, str)}
+    if len(keys) != len(items) or not keys <= _SUMMARY_KEYS:
+        raise _InvalidSummary("redaction summary contains unsupported fields")
+
+    nested = [key for key in _NESTED_SUMMARY_KEYS if key in keys]
+    if nested and not allow_nested:
+        raise _InvalidSummary("nested redaction summaries are not supported")
+    if len(nested) > 1:
+        raise _InvalidSummary("redaction summary contains ambiguous sections")
+    if nested:
+        nested_value = source[nested[0]]
+        if not isinstance(nested_value, Mapping):
+            raise _InvalidSummary("nested redaction summary must be an object")
+        _validate_summary_source(nested_value, allow_nested=False)
+
+    metadata = source.get("metadata")
+    if metadata is not None:
+        if not isinstance(metadata, Mapping):
+            raise _InvalidSummary("redaction summary metadata must be an object")
+        metadata_items = _bounded_items(metadata)
+        metadata_keys = {key for key, _ in metadata_items if isinstance(key, str)}
+        if (
+            len(metadata_keys) != len(metadata_items)
+            or not metadata_keys <= _METADATA_KEYS
+        ):
+            raise _InvalidSummary(
+                "redaction summary metadata contains unsupported fields"
+            )
 
 
 def _summary_sources(payload: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     sources: list[Mapping[str, Any]] = [payload]
     for key in _NESTED_SUMMARY_KEYS:
-        value = payload.get(key)
-        if isinstance(value, Mapping):
+        if key in payload:
+            value = payload[key]
+            if not isinstance(value, Mapping):
+                raise _InvalidSummary("nested redaction summary must be an object")
             sources.append(value)
     return tuple(sources)
 
@@ -413,7 +641,7 @@ def _extract_counts(payload: Mapping[str, Any]) -> _SummaryCounts:
     sources = _summary_sources(payload)
     categories, derived_actions = _category_counts(sources)
     actions = _action_counts(sources)
-    if not actions:
+    if actions is None:
         actions = derived_actions
     return _SummaryCounts(
         actions=actions,
@@ -422,72 +650,86 @@ def _extract_counts(payload: Mapping[str, Any]) -> _SummaryCounts:
     )
 
 
-def _action_counts(sources: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+def _single_alias_value(
+    sources: Sequence[Mapping[str, Any]], aliases: Sequence[str]
+) -> Any:
+    matches: list[Any] = []
     for source in sources:
-        for key in _ACTION_ALIASES:
-            parsed = _parse_numeric_mapping(source.get(key), dimension="action")
-            if parsed:
-                return parsed
-
+        for key in aliases:
+            if key in source:
+                matches.append(source[key])
         for section_key in _COUNT_SECTION_KEYS:
-            section = source.get(section_key)
-            if not isinstance(section, Mapping):
+            if section_key not in source:
                 continue
-            for key in _ACTION_ALIASES:
-                parsed = _parse_numeric_mapping(
-                    section.get(key),
-                    dimension="action",
-                )
-                if parsed:
-                    return parsed
-    return {}
+            section = source[section_key]
+            if not isinstance(section, Mapping):
+                raise _InvalidSummary("redaction count section must be an object")
+            for key in aliases:
+                if key in section:
+                    matches.append(section[key])
+    if len(matches) > 1:
+        raise _InvalidSummary("redaction summary contains ambiguous aggregate sections")
+    return matches[0] if matches else _MISSING
+
+
+_MISSING = object()
+
+
+def _action_counts(
+    sources: Sequence[Mapping[str, Any]],
+) -> dict[str, int] | None:
+    value = _single_alias_value(sources, _ACTION_ALIASES)
+    if value is _MISSING:
+        return None
+    if not isinstance(value, Mapping):
+        raise _InvalidSummary("redaction action counts must be an object")
+    return _parse_numeric_mapping(value, dimension="action")
 
 
 def _category_counts(
     sources: Sequence[Mapping[str, Any]],
 ) -> tuple[dict[str, int], dict[str, int]]:
-    for source in sources:
-        for key in _CATEGORY_ALIASES:
-            parsed = _parse_category_value(source.get(key))
-            if parsed[0] or parsed[1]:
-                return parsed
-
-        for section_key in _COUNT_SECTION_KEYS:
-            section = source.get(section_key)
-            if not isinstance(section, Mapping):
-                continue
-            for key in _CATEGORY_ALIASES:
-                parsed = _parse_category_value(section.get(key))
-                if parsed[0] or parsed[1]:
-                    return parsed
-    return {}, {}
+    value = _single_alias_value(sources, _CATEGORY_ALIASES)
+    if value is _MISSING:
+        return {}, {}
+    return _parse_category_value(value)
 
 
 def _count_summary(sources: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    sections: list[Mapping[str, Any]] = []
+    direct: dict[str, int] = {}
     for source in sources:
         for section_key in _COUNT_SECTION_KEYS:
-            section = source.get(section_key)
-            if isinstance(section, Mapping):
-                parsed = _parse_count_section(section)
-                if parsed:
-                    return parsed
-
-        parsed: dict[str, int] = {}
+            if section_key not in source:
+                continue
+            section = source[section_key]
+            if not isinstance(section, Mapping):
+                raise _InvalidSummary("redaction count section must be an object")
+            sections.append(section)
         for key in _COUNT_ALIASES:
             if key in source:
-                parsed[_safe_count_key(key)] = _as_count(source[key])
-        if parsed:
-            return parsed
-    return {}
+                if key in direct:
+                    raise _InvalidSummary("redaction summary contains ambiguous counts")
+                direct[_safe_count_key(key)] = _as_count(source[key])
+    if len(sections) > 1 or sections and direct:
+        raise _InvalidSummary("redaction summary contains ambiguous count sections")
+    if sections:
+        return _parse_count_section(sections[0])
+    return direct
 
 
-def _parse_count_section(value: Mapping[str, Any]) -> dict[str, int]:
+def _parse_count_section(value: Mapping[str, Any], *, depth: int = 0) -> dict[str, int]:
+    if depth > _MAX_NESTING_DEPTH:
+        raise _InvalidSummary("redaction summary exceeds nesting limits")
     result: dict[str, int] = {}
-    for raw_key, raw_value in value.items():
+    for raw_key, raw_value in _bounded_items(value):
+        if raw_key in _ACTION_ALIASES or raw_key in _CATEGORY_ALIASES:
+            continue
         if isinstance(raw_value, Mapping):
-            nested = _parse_count_section(raw_value)
+            nested = _parse_count_section(raw_value, depth=depth + 1)
             for key, count in nested.items():
-                result[_safe_count_key(f"{raw_key}.{key}")] = count
+                compound = {"parent": _stable_value(raw_key), "child": key}
+                result[_hashed_key("count", compound)] = count
             continue
         result[_safe_count_key(raw_key)] = _as_count(raw_value)
     return result
@@ -495,10 +737,10 @@ def _parse_count_section(value: Mapping[str, Any]) -> dict[str, int]:
 
 def _parse_numeric_mapping(value: Any, *, dimension: Literal["action", "category"]):
     if not isinstance(value, Mapping):
-        return {}
+        raise _InvalidSummary("redaction aggregate counts must be an object")
 
     result: dict[str, int] = {}
-    for raw_key, raw_value in value.items():
+    for raw_key, raw_value in _bounded_items(value):
         if (
             isinstance(raw_value, Mapping)
             or isinstance(
@@ -507,7 +749,7 @@ def _parse_numeric_mapping(value: Any, *, dimension: Literal["action", "category
             )
             and not isinstance(raw_value, (str, bytes))
         ):
-            continue
+            raise _InvalidSummary("redaction aggregate counts must be integers")
         count = _as_count(raw_value)
         key = (
             _safe_action_key(raw_key)
@@ -522,7 +764,7 @@ def _parse_category_value(value: Any) -> tuple[dict[str, int], dict[str, int]]:
     if isinstance(value, Mapping):
         category_counts: dict[str, int] = {}
         action_counts: dict[str, int] = {}
-        for raw_category, raw_value in value.items():
+        for raw_category, raw_value in _bounded_items(value):
             category_key = _safe_category_key(raw_category)
             if not isinstance(raw_value, Mapping):
                 category_counts[category_key] = category_counts.get(
@@ -530,28 +772,7 @@ def _parse_category_value(value: Any) -> tuple[dict[str, int], dict[str, int]]:
                 ) + _as_count(raw_value)
                 continue
 
-            category_count = _record_count(raw_value)
-            nested_actions = _record_action_counts(raw_value)
-            if category_count is None and nested_actions:
-                category_count = sum(nested_actions.values())
-            if category_count is not None:
-                category_counts[category_key] = (
-                    category_counts.get(category_key, 0) + category_count
-                )
-            for action, count in nested_actions.items():
-                action_counts[action] = action_counts.get(action, 0) + count
-        return category_counts, action_counts
-
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        category_counts = {}
-        action_counts: dict[str, int] = {}
-        for record in value:
-            if not isinstance(record, Mapping):
-                continue
-            raw_category = record.get("category", record.get("label"))
-            if raw_category is None:
-                continue
-            category_key = _safe_category_key(raw_category)
+            record = _copy_record(raw_value, keyed=True)
             category_count = _record_count(record)
             nested_actions = _record_action_counts(record)
             if category_count is None and nested_actions:
@@ -564,7 +785,51 @@ def _parse_category_value(value: Any) -> tuple[dict[str, int], dict[str, int]]:
                 action_counts[action] = action_counts.get(action, 0) + count
         return category_counts, action_counts
 
-    return {}, {}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        sequence_category_counts: dict[str, int] = {}
+        sequence_action_counts: dict[str, int] = {}
+        for raw_record in _bounded_sequence(value):
+            if not isinstance(raw_record, Mapping):
+                raise _InvalidSummary("redaction category records must be objects")
+            record = _copy_record(raw_record, keyed=False)
+            raw_category = (
+                record["category"] if "category" in record else record["label"]
+            )
+            category_key = _safe_category_key(raw_category)
+            category_count = _record_count(record)
+            nested_actions = _record_action_counts(record)
+            if category_count is None and nested_actions:
+                category_count = sum(nested_actions.values())
+            if category_count is not None:
+                sequence_category_counts[category_key] = (
+                    sequence_category_counts.get(category_key, 0) + category_count
+                )
+            for action, count in nested_actions.items():
+                sequence_action_counts[action] = (
+                    sequence_action_counts.get(action, 0) + count
+                )
+        return sequence_category_counts, sequence_action_counts
+
+    raise _InvalidSummary("redaction category counts must be an object or array")
+
+
+def _copy_record(value: Mapping[Any, Any], *, keyed: bool) -> dict[str, Any]:
+    record = _copy_mapping(value)
+    keys = set(record)
+    if not keys <= _CATEGORY_RECORD_KEYS:
+        raise _InvalidSummary("redaction category record contains unsupported fields")
+    identity_keys = keys & {"category", "label"}
+    if keyed and identity_keys or not keyed and len(identity_keys) != 1:
+        raise _InvalidSummary("redaction category record has ambiguous identity")
+    if len(keys & set(_CATEGORY_COUNT_FIELDS)) > 1:
+        raise _InvalidSummary("redaction category record has ambiguous counts")
+    action_aliases = keys & set(_ACTION_ALIASES)
+    direct_actions = keys & _ACTIONS
+    if len(action_aliases) > 1 or action_aliases and direct_actions:
+        raise _InvalidSummary("redaction category record has ambiguous actions")
+    if not keys & (set(_CATEGORY_COUNT_FIELDS) | set(_ACTION_ALIASES) | _ACTIONS):
+        raise _InvalidSummary("redaction category record has no aggregate counts")
+    return record
 
 
 def _record_count(record: Mapping[str, Any]) -> int | None:
@@ -576,9 +841,8 @@ def _record_count(record: Mapping[str, Any]) -> int | None:
 
 def _record_action_counts(record: Mapping[str, Any]) -> dict[str, int]:
     for key in _ACTION_ALIASES:
-        parsed = _parse_numeric_mapping(record.get(key), dimension="action")
-        if parsed:
-            return parsed
+        if key in record:
+            return _parse_numeric_mapping(record[key], dimension="action")
 
     direct: dict[str, int] = {}
     for raw_key, raw_value in record.items():
@@ -589,24 +853,26 @@ def _record_action_counts(record: Mapping[str, Any]) -> dict[str, int]:
 
 def _as_count(value: Any) -> int:
     if isinstance(value, bool):
-        raise ValueError("redaction summary counts must be non-negative integers")
+        raise _InvalidSummary("redaction summary counts must be non-negative integers")
     if isinstance(value, Integral):
         count = int(value)
     elif isinstance(value, Real) and math.isfinite(float(value)):
         numeric = float(value)
         if not numeric.is_integer():
-            raise ValueError("redaction summary counts must be non-negative integers")
+            raise _InvalidSummary(
+                "redaction summary counts must be non-negative integers"
+            )
         count = int(numeric)
     else:
-        raise ValueError("redaction summary counts must be non-negative integers")
+        raise _InvalidSummary("redaction summary counts must be non-negative integers")
     if count < 0:
-        raise ValueError("redaction summary counts must be non-negative integers")
+        raise _InvalidSummary("redaction summary counts must be non-negative integers")
     return count
 
 
 def _safe_action_key(value: Any) -> str:
     if isinstance(value, str):
-        action = value.strip()
+        action = _bounded_text(value).strip()
         if action in _ACTIONS:
             return action
         return _hashed_key("action", action)
@@ -615,7 +881,7 @@ def _safe_action_key(value: Any) -> str:
 
 def _safe_category_key(value: Any) -> str:
     if isinstance(value, str):
-        category = value.strip()
+        category = _bounded_text(value).strip()
         try:
             canonical = normalize_label(category)
         except (TypeError, ValueError):
@@ -631,16 +897,23 @@ def _safe_category_key(value: Any) -> str:
 
 
 def _safe_count_key(value: Any) -> str:
-    text = str(value).strip().lower()
-    if text in _SAFE_COUNT_KEYS:
-        return text
-    return _hashed_key("count", text)
+    if isinstance(value, str):
+        text = _bounded_text(value).strip().lower()
+        if text in _SAFE_COUNT_KEYS:
+            return text
+        return _hashed_key("count", text)
+    return _hashed_key("count", _stable_value(value))
 
 
 def _hashed_key(namespace: str, value: Any) -> str:
     encoded = _canonical_json(value).encode("utf-8")
     digest = hashlib.sha256(encoded).hexdigest()
     return f"{namespace}:sha256:{digest}"
+
+
+def _policy_hash(value: Any) -> str:
+    encoded = _canonical_json(value).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _count_changes(
@@ -654,14 +927,7 @@ def _count_changes(
         if before_count == after_count:
             continue
         delta = after_count - before_count
-        if before_count == 0:
-            classification: ChangeClassification = "added"
-        elif after_count == 0:
-            classification = "removed"
-        elif delta > 0:
-            classification = "increased"
-        else:
-            classification = "decreased"
+        classification = _classify_change(before_count, after_count)
         changes.append(
             CountChange(
                 key=key,
@@ -676,27 +942,32 @@ def _count_changes(
 
 def _summary_policy_fingerprint(payload: Mapping[str, Any]) -> str | None:
     sources = _summary_sources(payload)
+    matches: list[tuple[str, Any]] = []
     for source in sources:
         for key in ("policy_fingerprint", "policy_hash"):
             if key in source:
-                result = _policy_fingerprint(source[key])
-                if result is not None:
-                    return result
+                matches.append(("fingerprint", source[key]))
 
         metadata = source.get("metadata")
         if isinstance(metadata, Mapping):
             for key in ("policy_fingerprint", "policy_hash"):
                 if key in metadata:
-                    result = _policy_fingerprint(metadata[key])
-                    if result is not None:
-                        return result
+                    matches.append(("fingerprint", metadata[key]))
 
         for key in ("policy", "policy_name", "policy_profile"):
-            if key in source and source[key] is not None:
-                result = _policy_fingerprint(source[key])
-                if result is not None:
-                    return result
-    return None
+            if key in source:
+                matches.append(("policy", source[key]))
+    if len(matches) > 1:
+        raise _InvalidSummary("redaction summary contains ambiguous policy metadata")
+    if not matches or matches[0][1] is None:
+        return None
+    kind, value = matches[0]
+    if kind == "fingerprint":
+        result = _normalize_fingerprint(value)
+        if result is None:
+            raise _InvalidSummary("redaction summary policy fingerprint is invalid")
+        return result
+    return _policy_fingerprint(value)
 
 
 def _policy_fingerprint(value: Any) -> str | None:
@@ -709,7 +980,7 @@ def _policy_fingerprint(value: Any) -> str | None:
         return _profile_fingerprint(load_policy(value))
 
     if isinstance(value, str):
-        candidate = value.strip()
+        candidate = _bounded_text(value).strip()
         if not candidate:
             return None
         normalized = _normalize_fingerprint(candidate)
@@ -718,43 +989,53 @@ def _policy_fingerprint(value: Any) -> str | None:
         try:
             return _profile_fingerprint(load_policy(candidate))
         except (TypeError, ValueError, OSError):
-            return _hashed_key("policy", candidate)
+            return _policy_hash(candidate)
 
     if isinstance(value, Mapping):
-        for key in ("policy_fingerprint", "policy_hash", "fingerprint"):
-            if key in value:
-                normalized = _normalize_fingerprint(value[key])
-                if normalized is not None:
-                    return normalized
-        name = value.get("name", value.get("policy_name"))
+        policy = _copy_mapping(value)
+        fingerprint_keys = set(policy) & {
+            "policy_fingerprint",
+            "policy_hash",
+            "fingerprint",
+        }
+        if len(fingerprint_keys) > 1:
+            raise _InvalidSummary("policy contains ambiguous fingerprints")
+        if fingerprint_keys:
+            normalized = _normalize_fingerprint(policy[next(iter(fingerprint_keys))])
+            if normalized is None:
+                raise _InvalidSummary("policy fingerprint is invalid")
+            return normalized
+        name_keys = set(policy) & {"name", "policy_name"}
+        if len(name_keys) > 1:
+            raise _InvalidSummary("policy contains ambiguous names")
+        name = policy[next(iter(name_keys))] if name_keys else None
         if isinstance(name, str):
             try:
                 profile = load_policy(name)
             except (TypeError, ValueError, OSError):
                 profile = None
-            if profile is not None and set(value) <= {
-                "name",
-                "policy_name",
-            }:
+            if profile is not None and set(policy) <= {"name", "policy_name"}:
                 return _profile_fingerprint(profile)
-        return _hashed_key("policy", _stable_value(value))
+        return _policy_hash(policy)
 
-    fingerprint = getattr(value, "fingerprint", None)
-    if isinstance(fingerprint, str):
+    fingerprint = getattr(value, "fingerprint", _MISSING)
+    if fingerprint is not _MISSING:
         normalized = _normalize_fingerprint(fingerprint)
-        if normalized is not None:
-            return normalized
+        if normalized is None:
+            raise _InvalidSummary("policy fingerprint is invalid")
+        return normalized
 
     to_dict = getattr(value, "to_dict", None)
     if callable(to_dict):
         try:
             payload = to_dict()
         except Exception:
-            payload = None
-        if isinstance(payload, Mapping):
-            return _hashed_key("policy", _stable_value(payload))
+            raise _InvalidSummary("could not read policy") from None
+        if not isinstance(payload, Mapping):
+            raise _InvalidSummary("policy representation must be an object")
+        return _policy_hash(payload)
 
-    return _hashed_key("policy", _stable_value(value))
+    raise _InvalidSummary("policy type is unsupported")
 
 
 def _profile_fingerprint(profile: PolicyProfile) -> str:
@@ -771,18 +1052,55 @@ def _normalize_fingerprint(value: Any) -> str | None:
     return None
 
 
-def _stable_value(value: Any) -> Any:
-    if value is None or isinstance(value, (bool, int, str)):
+def _stable_value(value: Any, *, depth: int = 0, seen: set[int] | None = None) -> Any:
+    if depth > _MAX_NESTING_DEPTH:
+        raise _InvalidSummary("redaction summary exceeds nesting limits")
+    if value is None or isinstance(value, (bool, int)):
         return value
+    if isinstance(value, str):
+        return _bounded_text(value)
     if isinstance(value, float):
         return value if math.isfinite(value) else None
+    if seen is None:
+        seen = set()
     if isinstance(value, Mapping):
-        return {
-            str(key): _stable_value(item)
-            for key, item in sorted(value.items(), key=lambda item: str(item[0]))
-        }
+        marker = id(value)
+        if marker in seen:
+            raise _InvalidSummary("redaction summary contains a cycle")
+        seen.add(marker)
+        try:
+            result: dict[str, Any] = {}
+            for key, item in _bounded_items(value):
+                stable_key = _stable_value(key, depth=depth + 1, seen=seen)
+                key_text = (
+                    key
+                    if isinstance(key, str)
+                    else json.dumps(
+                        stable_key,
+                        allow_nan=False,
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    )
+                )
+                if key_text in result:
+                    raise _InvalidSummary("redaction summary has ambiguous keys")
+                result[key_text] = _stable_value(item, depth=depth + 1, seen=seen)
+            return {key: result[key] for key in sorted(result)}
+        finally:
+            seen.remove(marker)
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return [_stable_value(item) for item in value]
+        marker = id(value)
+        if marker in seen:
+            raise _InvalidSummary("redaction summary contains a cycle")
+        seen.add(marker)
+        try:
+            return [
+                _stable_value(item, depth=depth + 1, seen=seen)
+                for item in _bounded_sequence(value)
+            ]
+        finally:
+            seen.remove(marker)
     return {"type": type(value).__name__}
 
 
