@@ -105,8 +105,6 @@ def test_only_the_matching_typed_parser_accepts_each_kind(row: int) -> None:
 
 
 def test_unknown_and_noncanonical_kinds_fail_closed() -> None:
-    tool = "tool:org.example/redact"
-
     unknown = _parse_error(ToolId, "unknown:org.example/redact")
     assert unknown.code == "unknown_kind"
 
@@ -114,10 +112,9 @@ def test_unknown_and_noncanonical_kinds_fail_closed() -> None:
         error = _parse_error(ToolId, value)
         assert error.code == "invalid_identifier"
 
-    with pytest.raises(GovernanceIdError):
-        ToolId.parse(tool.replace("tool", "run_", 1))
-    with pytest.raises(GovernanceIdError):
-        ToolId.parse(tool.replace("tool", "act_", 1))
+    for value in ("run_" + "0" * 32, "act_" + "0" * 32):
+        with pytest.raises(GovernanceIdError):
+            ToolId.parse(value)
 
 
 def test_typed_objects_are_not_implicitly_accepted_as_strings() -> None:
