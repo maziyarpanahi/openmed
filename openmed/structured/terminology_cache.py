@@ -29,6 +29,7 @@ DEFAULT_SOURCE: Final = "user-supplied"
 _MISSING = object()
 _SHA256_PREFIX = "sha256:"
 _SHA256_HEX_LENGTH = 64
+_MAX_CANONICAL_DEPTH = 64
 
 
 class TerminologyCacheError(ValueError):
@@ -76,7 +77,13 @@ def _source_identifier(value: object) -> str:
     return _identifier(value, "source")
 
 
-def _canonicalize(value: object, *, field_name: str = "response") -> Any:
+def _canonicalize(
+    value: object,
+    *,
+    field_name: str = "response",
+    _active_containers: set[int] | None = None,
+    _depth: int = 0,
+) -> Any:
     """Return a JSON-compatible, deterministic copy without exposing values."""
 
     if value is None or isinstance(value, (str, bool, int)):
@@ -87,23 +94,51 @@ def _canonicalize(value: object, *, field_name: str = "response") -> Any:
                 f"{field_name} must not contain non-finite numbers"
             )
         return value
-    if isinstance(value, Mapping):
-        normalized: dict[str, Any] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TerminologyCacheError(
-                    f"{field_name} mappings must use string keys"
+    if not isinstance(value, (Mapping, list, tuple, set, frozenset)):
+        raise TerminologyCacheError(f"{field_name} must be JSON-compatible")
+    if _depth >= _MAX_CANONICAL_DEPTH:
+        raise TerminologyCacheError(
+            f"{field_name} exceeds the maximum supported nesting depth"
+        )
+
+    active_containers = set() if _active_containers is None else _active_containers
+    identity = id(value)
+    if identity in active_containers:
+        raise TerminologyCacheError(f"{field_name} must not contain cycles")
+    active_containers.add(identity)
+    try:
+        if isinstance(value, Mapping):
+            normalized: dict[str, Any] = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise TerminologyCacheError(
+                        f"{field_name} mappings must use string keys"
+                    )
+                normalized[key] = _canonicalize(
+                    item,
+                    field_name=field_name,
+                    _active_containers=active_containers,
+                    _depth=_depth + 1,
                 )
-            normalized[key] = _canonicalize(item, field_name=field_name)
-        return {key: normalized[key] for key in sorted(normalized)}
-    if isinstance(value, (list, tuple)):
-        return [_canonicalize(item, field_name=field_name) for item in value]
-    if isinstance(value, (set, frozenset)):
+            return {key: normalized[key] for key in sorted(normalized)}
         normalized_items = [
-            _canonicalize(item, field_name=field_name) for item in value
+            _canonicalize(
+                item,
+                field_name=field_name,
+                _active_containers=active_containers,
+                _depth=_depth + 1,
+            )
+            for item in value
         ]
-        return sorted(normalized_items, key=_canonical_json)
-    raise TerminologyCacheError(f"{field_name} must be JSON-compatible")
+        if isinstance(value, (set, frozenset)):
+            return sorted(normalized_items, key=_canonical_json)
+        return normalized_items
+    except TerminologyCacheError:
+        raise
+    except Exception:
+        raise TerminologyCacheError(f"{field_name} must be JSON-compatible") from None
+    finally:
+        active_containers.remove(identity)
 
 
 def _canonical_json(value: Any) -> str:
@@ -137,6 +172,23 @@ def _normalized_response(response: object) -> Any:
 def _digest(payload: Any, *, domain: str) -> str:
     encoded = _canonical_json({"domain": domain, "payload": payload}).encode("utf-8")
     return _SHA256_PREFIX + hashlib.sha256(encoded).hexdigest()
+
+
+def _provenance_fingerprint(
+    *,
+    key: "TerminologyCacheKey",
+    source: str,
+    response_fingerprint: str,
+) -> str:
+    return _digest(
+        {
+            "key": key.to_dict(),
+            "response_fingerprint": response_fingerprint,
+            "source": source,
+            "schema_version": PROVENANCE_SCHEMA_VERSION,
+        },
+        domain="terminology-provenance-v1",
+    )
 
 
 def _validate_digest(value: object, field_name: str) -> str:
@@ -227,14 +279,10 @@ def compute_terminology_fingerprint(
     key = TerminologyCacheKey(vocabulary=vocabulary, release=release)
     source_id = _source_identifier(source)
     response_fingerprint = terminology_response_fingerprint(response)
-    return _digest(
-        {
-            "key": key.to_dict(),
-            "response_fingerprint": response_fingerprint,
-            "source": source_id,
-            "schema_version": PROVENANCE_SCHEMA_VERSION,
-        },
-        domain="terminology-provenance-v1",
+    return _provenance_fingerprint(
+        key=key,
+        source=source_id,
+        response_fingerprint=response_fingerprint,
     )
 
 
@@ -260,10 +308,21 @@ class TerminologyProvenance:
                 "provenance key must be a terminology cache key"
             )
         object.__setattr__(self, "source", _source_identifier(self.source))
-        _validate_digest(self.response_fingerprint, "response_fingerprint")
-        _validate_digest(self.fingerprint, "fingerprint")
+        response_fingerprint = _validate_digest(
+            self.response_fingerprint, "response_fingerprint"
+        )
+        fingerprint = _validate_digest(self.fingerprint, "fingerprint")
         if self.schema_version != PROVENANCE_SCHEMA_VERSION:
             raise TerminologyCacheError("unsupported terminology provenance schema")
+        expected_fingerprint = _provenance_fingerprint(
+            key=self.key,
+            source=self.source,
+            response_fingerprint=response_fingerprint,
+        )
+        if fingerprint != expected_fingerprint:
+            raise TerminologyProvenanceError(
+                "terminology provenance fingerprint does not match its metadata"
+            )
 
     @classmethod
     def from_response(
@@ -279,14 +338,10 @@ class TerminologyProvenance:
         key = TerminologyCacheKey(vocabulary=vocabulary, release=release)
         source_id = _source_identifier(source)
         response_fingerprint = terminology_response_fingerprint(response)
-        fingerprint = _digest(
-            {
-                "key": key.to_dict(),
-                "response_fingerprint": response_fingerprint,
-                "source": source_id,
-                "schema_version": PROVENANCE_SCHEMA_VERSION,
-            },
-            domain="terminology-provenance-v1",
+        fingerprint = _provenance_fingerprint(
+            key=key,
+            source=source_id,
+            response_fingerprint=response_fingerprint,
         )
         return cls(
             key=key,
@@ -490,7 +545,18 @@ class TerminologyCache:
                     raise TerminologyCacheError(
                         "cache entries must be terminology entries"
                     )
-                self._entries[entry.key] = entry
+                self._insert(entry)
+
+    def _insert(self, entry: TerminologyCacheEntry) -> TerminologyCacheEntry:
+        existing = self._entries.get(entry.key)
+        if existing is not None:
+            if existing != entry:
+                raise TerminologyProvenanceError(
+                    "terminology cache key is already pinned to different provenance"
+                )
+            return existing
+        self._entries[entry.key] = entry
+        return entry
 
     def put(
         self,
@@ -518,8 +584,7 @@ class TerminologyCache:
             response=response,
             source=source,
         )
-        self._entries[key] = entry
-        return entry
+        return self._insert(entry)
 
     store = put
     set = put

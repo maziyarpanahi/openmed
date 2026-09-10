@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an immutable, provenance-aware local terminology cache keyed by exact
+  vocabulary releases, with deterministic response fingerprints, stale-release
+  refusal, response-free reports, and bounded value-free validation (#2400).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

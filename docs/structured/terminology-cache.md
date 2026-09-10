@@ -12,7 +12,7 @@ entry. The returned entry carries the source and SHA-256 fingerprints needed to
 audit which response was used:
 
 ```python
-from openmed.structured.terminology_cache import TerminologyCache
+from openmed.structured import TerminologyCache
 
 cache = TerminologyCache()
 entry = cache.put(
@@ -33,7 +33,14 @@ assert cached.provenance.fingerprint.startswith("sha256:")
 Responses are copied and canonicalized before storage. Mapping key order does
 not change the response fingerprint, and callers receive a detached copy from
 `entry.response`. Responses must be JSON-compatible and must not contain
-non-finite numbers.
+non-finite numbers. Cycles and structures nested beyond 64 containers are
+rejected with value-free errors.
+
+An exact vocabulary and release key is immutable while it remains cached.
+Repeating `put()` with identical response and source provenance is idempotent;
+trying to replace that key with different content or a different source raises
+`TerminologyProvenanceError`. Call `invalidate()` before an intentional
+replacement so the provenance transition is explicit.
 
 ## Refuse stale releases
 
