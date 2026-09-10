@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,7 +27,20 @@ FHIRBundleInput: TypeAlias = Mapping[str, Any] | str | bytes | bytearray | Path
 PathSpec: TypeAlias = str | Sequence[str]
 
 _MISSING = object()
-_PATH_TOKEN_RE = re.compile(r"[^.\[\]]+|\[[^\]]*\]")
+_PATH_TOKEN_RE = re.compile(r"\*\*|\*|_?[a-z][A-Za-z0-9]{0,127}|\[(?:\*|[0-9]+)\]")
+_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_FHIR_ID_RE = re.compile(r"[A-Za-z0-9.-]{1,64}\Z")
+_FHIR_JSON_KEY_RE = re.compile(r"_?[a-z][A-Za-z0-9]{0,127}\Z")
+_FHIR_RESOURCE_TYPE_RE = re.compile(r"[A-Z][A-Za-z0-9]{0,63}\Z")
+_MAX_BUNDLE_BYTES = 16 * 1024 * 1024
+_MAX_JSON_DEPTH = 64
+_MAX_JSON_NODES = 1_000_000
+_MAX_PATH_PATTERNS = 1_024
+_MAX_PATH_TOKENS = 64
+_CHANGE_TYPES = frozenset(
+    {"added", "changed", "removed", "resource_type_changed", "type_changed"}
+)
+_JSON_TYPES = frozenset({"array", "boolean", "null", "number", "object", "string"})
 
 
 class FHIRR5FidelityError(ValueError):
@@ -45,6 +59,19 @@ class ResourceIdentifier:
     resource_type: str | None = None
     id_hash: str | None = None
     full_url_hash: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "resource_type",
+            _validated_resource_type(self.resource_type),
+        )
+        object.__setattr__(self, "id_hash", _validated_digest(self.id_hash, "id_hash"))
+        object.__setattr__(
+            self,
+            "full_url_hash",
+            _validated_digest(self.full_url_hash, "full_url_hash"),
+        )
 
     @property
     def resource_id_hash(self) -> str | None:
@@ -97,6 +124,39 @@ class FHIRR5Difference:
     after_resource: ResourceIdentifier = field(default_factory=ResourceIdentifier)
     before_resource_type: str | None = None
     after_resource_type: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "path", _validated_report_path(self.path))
+        if self.change_type not in _CHANGE_TYPES:
+            raise ValueError("change_type is unsupported")
+        for name, value in (
+            ("before_type", self.before_type),
+            ("after_type", self.after_type),
+        ):
+            if value is not None and value not in _JSON_TYPES:
+                raise ValueError(f"{name} is unsupported")
+        object.__setattr__(
+            self,
+            "before_hash",
+            _validated_digest(self.before_hash, "before_hash"),
+        )
+        object.__setattr__(
+            self,
+            "after_hash",
+            _validated_digest(self.after_hash, "after_hash"),
+        )
+        if not isinstance(self.before_resource, ResourceIdentifier) or not isinstance(
+            self.after_resource, ResourceIdentifier
+        ):
+            raise TypeError("resource metadata must use ResourceIdentifier")
+        before_resource_type = _validated_resource_type(self.before_resource_type)
+        after_resource_type = _validated_resource_type(self.after_resource_type)
+        if before_resource_type not in {None, self.before_resource.resource_type}:
+            raise ValueError("before_resource_type conflicts with resource metadata")
+        if after_resource_type not in {None, self.after_resource.resource_type}:
+            raise ValueError("after_resource_type conflicts with resource metadata")
+        object.__setattr__(self, "before_resource_type", before_resource_type)
+        object.__setattr__(self, "after_resource_type", after_resource_type)
 
     @property
     def kind(self) -> str:
@@ -191,6 +251,39 @@ class FHIRR5FidelityDiff:
     unordered_paths: tuple[str, ...] = ()
     before_digest: str = ""
     after_digest: str = ""
+
+    def __post_init__(self) -> None:
+        try:
+            changes = tuple(self.changes)
+            ignored = tuple(
+                _format_path(pattern)
+                for pattern in _normalize_patterns(self.ignored_paths)
+            )
+            unordered = tuple(
+                _format_path(pattern)
+                for pattern in _normalize_patterns(self.unordered_paths)
+            )
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError("FHIR R5 fidelity report metadata is invalid") from None
+        if not all(isinstance(change, FHIRR5Difference) for change in changes):
+            raise TypeError("changes must contain FHIRR5Difference instances")
+        object.__setattr__(
+            self, "changes", tuple(sorted(changes, key=_difference_sort_key))
+        )
+        object.__setattr__(self, "ignored_paths", ignored)
+        object.__setattr__(self, "unordered_paths", unordered)
+        object.__setattr__(
+            self,
+            "before_digest",
+            _validated_digest(self.before_digest, "before_digest", allow_empty=True),
+        )
+        object.__setattr__(
+            self,
+            "after_digest",
+            _validated_digest(self.after_digest, "after_digest", allow_empty=True),
+        )
 
     @property
     def equivalent(self) -> bool:
@@ -356,6 +449,38 @@ def diff_fhir_r5_bundles(
         FHIRR5FidelityError: If either input is unreadable or is not a Bundle.
     """
 
+    try:
+        return _diff_fhir_r5_bundles(
+            before,
+            after,
+            ignored_paths=ignored_paths,
+            ignore_paths=ignore_paths,
+            allowed_paths=allowed_paths,
+            allowed_differences=allowed_differences,
+            serialization_differences=serialization_differences,
+            allowed_serialization_differences=allowed_serialization_differences,
+            unordered_paths=unordered_paths,
+        )
+    except MemoryError:
+        raise
+    except Exception:
+        raise FHIRR5FidelityError(
+            "FHIR R5 bundles could not be compared safely"
+        ) from None
+
+
+def _diff_fhir_r5_bundles(
+    before: FHIRBundleInput,
+    after: FHIRBundleInput,
+    *,
+    ignored_paths: Iterable[PathSpec],
+    ignore_paths: Iterable[PathSpec] | None,
+    allowed_paths: Iterable[PathSpec],
+    allowed_differences: Iterable[PathSpec],
+    serialization_differences: Iterable[PathSpec],
+    allowed_serialization_differences: Iterable[PathSpec],
+    unordered_paths: Iterable[PathSpec],
+) -> FHIRR5FidelityDiff:
     before_bundle = _load_bundle(before)
     after_bundle = _load_bundle(after)
     ignored = _normalize_patterns(
@@ -437,14 +562,37 @@ def _load_bundle(value: FHIRBundleInput) -> dict[str, Any]:
     if not isinstance(entries, list):
         raise FHIRR5FidelityError("FHIR R5 bundle entry must be an array")
     for entry in entries:
-        if not isinstance(entry, dict) or not isinstance(entry.get("resource"), dict):
-            raise FHIRR5FidelityError(
-                "FHIR R5 bundle entries must contain resource objects"
-            )
+        if not isinstance(entry, dict):
+            raise FHIRR5FidelityError("FHIR R5 bundle entries must be objects")
+        full_url = entry.get("fullUrl")
+        if full_url is not None and (
+            not isinstance(full_url, str) or len(full_url) > 8_192
+        ):
+            raise FHIRR5FidelityError("FHIR R5 bundle fullUrl is invalid")
+        resource = entry.get("resource", _MISSING)
+        if resource is not _MISSING and not isinstance(resource, dict):
+            raise FHIRR5FidelityError("FHIR R5 bundle entry resource must be an object")
+        if isinstance(resource, dict):
+            _validate_resource_metadata(resource)
     return materialized
 
 
+def _validate_resource_metadata(resource: Mapping[str, Any]) -> None:
+    resource_type = resource.get("resourceType")
+    if not isinstance(resource_type, str) or not _FHIR_RESOURCE_TYPE_RE.fullmatch(
+        resource_type
+    ):
+        raise FHIRR5FidelityError("FHIR resourceType is invalid")
+    resource_id = resource.get("id", _MISSING)
+    if resource_id is not _MISSING and (
+        not isinstance(resource_id, str) or not _FHIR_ID_RE.fullmatch(resource_id)
+    ):
+        raise FHIRR5FidelityError("FHIR resource id is invalid")
+
+
 def _parse_json_text(value: str | bytes) -> Any:
+    if len(value) > _MAX_BUNDLE_BYTES:
+        raise FHIRR5FidelityError("FHIR R5 bundle JSON exceeds the size limit")
     try:
         return json.loads(value)
     except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
@@ -453,7 +601,11 @@ def _parse_json_text(value: str | bytes) -> Any:
 
 def _read_json_path(path: Path) -> Any:
     try:
-        return _parse_json_text(path.read_bytes())
+        if not path.is_file():
+            raise OSError
+        with path.open("rb") as handle:
+            payload = handle.read(_MAX_BUNDLE_BYTES + 1)
+        return _parse_json_text(payload)
     except (OSError, FHIRR5FidelityError):
         raise FHIRR5FidelityError("FHIR R5 bundle JSON could not be read") from None
 
@@ -468,22 +620,55 @@ def _call_to_dict(value: Any) -> Any:
         raise FHIRR5FidelityError("FHIR R5 bundle could not be converted") from None
 
 
-def _materialize_json(value: Any) -> Any:
+def _materialize_json(
+    value: Any,
+    *,
+    _active: set[int] | None = None,
+    _depth: int = 0,
+    _nodes: list[int] | None = None,
+) -> Any:
+    if _depth > _MAX_JSON_DEPTH:
+        raise ValueError("FHIR JSON nesting exceeds the supported depth")
+    nodes = [0] if _nodes is None else _nodes
+    nodes[0] += 1
+    if nodes[0] > _MAX_JSON_NODES:
+        raise ValueError("FHIR JSON exceeds the supported node count")
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
         if value != value or value in {float("inf"), float("-inf")}:
             raise ValueError("non-finite number")
         return value
-    if isinstance(value, Mapping):
-        result: dict[str, Any] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TypeError("JSON object keys must be strings")
-            result[key] = _materialize_json(item)
-        return result
-    if isinstance(value, (list, tuple)):
-        return [_materialize_json(item) for item in value]
+    if isinstance(value, (Mapping, list, tuple)):
+        active = set() if _active is None else _active
+        marker = id(value)
+        if marker in active:
+            raise ValueError("FHIR JSON contains a cyclic value")
+        active.add(marker)
+        try:
+            if isinstance(value, Mapping):
+                result: dict[str, Any] = {}
+                for key, item in value.items():
+                    if not isinstance(key, str) or not _FHIR_JSON_KEY_RE.fullmatch(key):
+                        raise TypeError("FHIR JSON object key is invalid")
+                    result[key] = _materialize_json(
+                        item,
+                        _active=active,
+                        _depth=_depth + 1,
+                        _nodes=nodes,
+                    )
+                return result
+            return [
+                _materialize_json(
+                    item,
+                    _active=active,
+                    _depth=_depth + 1,
+                    _nodes=nodes,
+                )
+                for item in value
+            ]
+        finally:
+            active.remove(marker)
     raise TypeError("unsupported JSON value")
 
 
@@ -491,7 +676,7 @@ def _materialize_json(value: Any) -> Any:
 class _BundleEntry:
     index: int
     value: Mapping[str, Any]
-    resource: Mapping[str, Any]
+    resource: Mapping[str, Any] | None
 
 
 def _bundle_entries(bundle: Mapping[str, Any]) -> tuple[_BundleEntry, ...]:
@@ -499,7 +684,11 @@ def _bundle_entries(bundle: Mapping[str, Any]) -> tuple[_BundleEntry, ...]:
         _BundleEntry(
             index=index,
             value=entry,
-            resource=entry["resource"],
+            resource=(
+                entry.get("resource")
+                if isinstance(entry.get("resource"), Mapping)
+                else None
+            ),
         )
         for index, entry in enumerate(bundle.get("entry", []))
     )
@@ -516,14 +705,15 @@ def _diff_bundle_entries(
     for ordinal, (before_entry, after_entry) in enumerate(pairs):
         entry_path = ("entry", f"[{ordinal}]")
         if before_entry is None:
+            assert after_entry is not None
             after_resource = _resource_identifier(
                 after_entry.resource,
                 full_url=after_entry.value.get("fullUrl"),
             )
             _diff_value(
                 _MISSING,
-                after_entry.resource,
-                (*entry_path, "resource"),
+                after_entry.value,
+                entry_path,
                 ResourceIdentifier(),
                 after_resource,
                 ignored,
@@ -537,9 +727,9 @@ def _diff_bundle_entries(
                 full_url=before_entry.value.get("fullUrl"),
             )
             _diff_value(
-                before_entry.resource,
+                before_entry.value,
                 _MISSING,
-                (*entry_path, "resource"),
+                entry_path,
                 before_resource,
                 ResourceIdentifier(),
                 ignored,
@@ -569,16 +759,19 @@ def _diff_bundle_entries(
                 unordered,
                 changes,
             )
-        _diff_value(
-            before_entry.resource,
-            after_entry.resource,
-            (*entry_path, "resource"),
-            before_resource,
-            after_resource,
-            ignored,
-            unordered,
-            changes,
-        )
+        if before_entry.resource is not None or after_entry.resource is not None:
+            _diff_value(
+                before_entry.resource
+                if before_entry.resource is not None
+                else _MISSING,
+                after_entry.resource if after_entry.resource is not None else _MISSING,
+                (*entry_path, "resource"),
+                before_resource,
+                after_resource,
+                ignored,
+                unordered,
+                changes,
+            )
 
 
 def _pair_entries(
@@ -637,15 +830,35 @@ def _entries_by_key(
         key = _entry_key(entry, field_name)
         if key is not None:
             result.setdefault(key, []).append(entry)
+    for matches in result.values():
+        matches.sort(key=_entry_match_sort_key)
     return result
 
 
 def _entry_key(entry: _BundleEntry, field_name: str) -> str | None:
     if field_name == "fullUrl":
         value = entry.value.get("fullUrl")
-    else:
-        value = entry.resource.get("id")
-    return value if isinstance(value, str) and value else None
+        return value if isinstance(value, str) and value else None
+    if entry.resource is None:
+        return None
+    resource_id = entry.resource.get("id")
+    resource_type = entry.resource.get("resourceType")
+    if not isinstance(resource_id, str) or not isinstance(resource_type, str):
+        return None
+    return f"{resource_type}\x1f{resource_id}"
+
+
+def _entry_match_sort_key(entry: _BundleEntry) -> tuple[str, ...]:
+    resource = entry.resource or {}
+    meta = resource.get("meta")
+    version_id = meta.get("versionId") if isinstance(meta, Mapping) else None
+    return (
+        _digest(resource.get("resourceType")),
+        _digest(resource.get("id")),
+        _digest(version_id),
+        _digest(entry.value.get("fullUrl")),
+        _digest(entry.value),
+    )
 
 
 def _entry_pair_sort_key(
@@ -655,11 +868,13 @@ def _entry_pair_sort_key(
     entry = after_entry or before_entry
     assert entry is not None
     full_url = entry.value.get("fullUrl")
-    resource_id = entry.resource.get("id")
-    resource_type = entry.resource.get("resourceType")
+    resource_id = entry.resource.get("id") if entry.resource is not None else None
+    resource_type = (
+        entry.resource.get("resourceType") if entry.resource is not None else None
+    )
     stable_value = full_url if isinstance(full_url, str) else resource_id
     if stable_value is None:
-        stable_value = _digest(entry.resource)
+        stable_value = _digest(entry.value)
     return (
         0 if isinstance(full_url, str) else 1 if isinstance(resource_id, str) else 2,
         _digest(stable_value),
@@ -669,10 +884,14 @@ def _entry_pair_sort_key(
 
 
 def _resource_identifier(
-    resource: Mapping[str, Any],
+    resource: Mapping[str, Any] | None,
     *,
     full_url: Any = None,
 ) -> ResourceIdentifier:
+    if resource is None:
+        return ResourceIdentifier(
+            full_url_hash=_digest(full_url) if full_url is not None else None
+        )
     resource_type = resource.get("resourceType")
     return ResourceIdentifier(
         resource_type=resource_type if isinstance(resource_type, str) else None,
@@ -837,7 +1056,11 @@ def _record_difference(
 def _normalize_patterns(specs: Iterable[PathSpec]) -> tuple[tuple[str, ...], ...]:
     if isinstance(specs, (str, Path)):
         specs = (str(specs),)
-    patterns = {_normalize_path(spec) for spec in specs}
+    patterns: set[tuple[str, ...]] = set()
+    for index, spec in enumerate(specs):
+        if index >= _MAX_PATH_PATTERNS:
+            raise ValueError("too many path specifications")
+        patterns.add(_normalize_path(spec))
     return tuple(sorted(patterns, key=_format_path))
 
 
@@ -851,7 +1074,10 @@ def _combine_path_specs(
         if isinstance(group, (str, Path)):
             combined.append(str(group))
         else:
-            combined.extend(group)
+            for spec in group:
+                if len(combined) >= _MAX_PATH_PATTERNS:
+                    raise ValueError("too many path specifications")
+                combined.append(spec)
     return tuple(combined)
 
 
@@ -865,26 +1091,44 @@ def _normalize_path(spec: PathSpec) -> tuple[str, ...]:
                 if part
             )
         else:
-            tokens = tuple(
-                _normalize_path_token(match.group(0))
-                for match in _PATH_TOKEN_RE.finditer(text.lstrip("$."))
-            )
+            if text.startswith("$."):
+                text = text[2:]
+            elif text.startswith("$"):
+                text = text[1:]
+            if text.startswith("Bundle."):
+                text = text[len("Bundle.") :]
+            matches = tuple(_PATH_TOKEN_RE.finditer(text))
+            tokens = tuple(_normalize_path_token(match.group(0)) for match in matches)
+            if _format_path(tokens) != text:
+                raise ValueError("path specification syntax is invalid")
     else:
-        tokens = tuple(_normalize_path_token(str(part)) for part in spec)
+        tokens = tuple(
+            _normalize_path_token(part) for part in spec if isinstance(part, str)
+        )
+        if len(tokens) != len(spec):
+            raise ValueError("path specification tokens must be strings")
     if tokens and tokens[0].lower() == "bundle":
         tokens = tokens[1:]
-    if not tokens:
+    if not tokens or len(tokens) > _MAX_PATH_TOKENS:
         raise ValueError("path specification must not be empty")
     return tokens
 
 
 def _normalize_path_token(token: str) -> str:
     token = token.strip()
+    if token == "Bundle":
+        return token
+    if token in {"*", "**", "[*]"}:
+        return token
     if token.startswith("[") and token.endswith("]"):
         inside = token[1:-1]
-        return "[*]" if inside in {"", "*"} else f"[{inside}]"
+        if not inside.isdigit():
+            raise ValueError("path array index is invalid")
+        return f"[{int(inside)}]"
     if token.isdigit():
         return f"[{token}]"
+    if not _FHIR_JSON_KEY_RE.fullmatch(token):
+        raise ValueError("path element name is invalid")
     return token
 
 
@@ -953,12 +1197,21 @@ def _pattern_covers_path(pattern: Sequence[str], path: Sequence[str]) -> bool:
 
 
 def _pattern_matches_exact(pattern: Sequence[str], path: Sequence[str]) -> bool:
-    if len(pattern) != len(path):
-        return False
-    return all(
-        pattern_token in {"*", "[*]"} or pattern_token == path_token
-        for pattern_token, path_token in zip(pattern, path, strict=False)
-    )
+    def match(pattern_index: int, path_index: int) -> bool:
+        if pattern_index == len(pattern):
+            return path_index == len(path)
+        token = pattern[pattern_index]
+        if token == "**":
+            return match(pattern_index + 1, path_index) or (
+                path_index < len(path) and match(pattern_index, path_index + 1)
+            )
+        if path_index == len(path):
+            return False
+        if token not in {"*", "[*]"} and token != path[path_index]:
+            return False
+        return match(pattern_index + 1, path_index + 1)
+
+    return match(0, 0)
 
 
 def _is_array(value: Any) -> bool:
@@ -966,15 +1219,20 @@ def _is_array(value: Any) -> bool:
 
 
 def _sequence_multiset_equal(before: Sequence[Any], after: Sequence[Any]) -> bool:
-    remaining = list(after)
-    for value in before:
-        for index, candidate in enumerate(remaining):
-            if _semantic_equal(value, candidate):
-                del remaining[index]
-                break
-        else:
-            return False
-    return not remaining
+    return Counter(_semantic_key(value) for value in before) == Counter(
+        _semantic_key(value) for value in after
+    )
+
+
+def _semantic_key(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return (
+            "object",
+            tuple((key, _semantic_key(value[key])) for key in sorted(value)),
+        )
+    if _is_array(value):
+        return ("array", tuple(_semantic_key(item) for item in value))
+    return (_json_type(value), value)
 
 
 def _semantic_equal(before: Any, after: Any) -> bool:
@@ -1008,6 +1266,46 @@ def _json_type(value: Any) -> str | None:
     if _is_array(value):
         return "array"
     return "unsupported"
+
+
+def _validated_resource_type(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _FHIR_RESOURCE_TYPE_RE.fullmatch(value):
+        raise ValueError("resource_type must be a safe FHIR type name")
+    return value
+
+
+def _validated_digest(
+    value: Any,
+    name: str,
+    *,
+    allow_empty: bool = False,
+) -> str | None:
+    if value is None:
+        return None
+    if allow_empty and value == "":
+        return ""
+    if not isinstance(value, str) or not _DIGEST_RE.fullmatch(value):
+        raise ValueError(f"{name} must be a SHA-256 digest")
+    return value
+
+
+def _validated_report_path(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("path must be a FHIR JSON path")
+    try:
+        tokens = _normalize_path(value)
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("path must be a FHIR JSON path") from None
+    if any(token in {"*", "**", "[*]"} for token in tokens):
+        raise ValueError("report paths cannot contain wildcards")
+    normalized = _format_path(tokens)
+    if normalized != value:
+        raise ValueError("path must use canonical FHIR JSON path syntax")
+    return normalized
 
 
 def _digest(value: Any) -> str:

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, deterministic FHIR R5 Bundle round-trip fidelity diff with
+  stable entry matching, explicit serializer-difference declarations, and
+  value-free reports containing structural paths, types, and SHA-256 digests
+  (#2401).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
