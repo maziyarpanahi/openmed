@@ -14,6 +14,7 @@ but are never copied into the report or an exception message.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import re
@@ -23,6 +24,21 @@ from typing import Any, Final, TypeAlias
 
 REDACTION_CONTRACT_SCHEMA_VERSION: Final = 1
 REDACTED_VALUE: Final = "[REDACTED]"
+MAX_REDACTION_RULES: Final = 256
+MAX_PRESERVE_PATHS: Final = 256
+MAX_IDENTIFIER_KEYS: Final = 32
+MAX_PATH_SEGMENTS: Final = 64
+MAX_PATH_LENGTH: Final = 4_096
+MAX_KEY_LENGTH: Final = 256
+MAX_CONTAINER_ITEMS: Final = 10_000
+MAX_RESOURCE_DEPTH: Final = 64
+MAX_RESOURCE_NODES: Final = 100_000
+MAX_REDACTION_MATCHES: Final = 10_000
+MAX_STRING_CHARS: Final = 1_000_000
+MAX_TOTAL_STRING_CHARS: Final = 10_000_000
+MAX_REPLACEMENT_STRING_CHARS: Final = 65_536
+MAX_JSON_INTEGER: Final = (1 << 63) - 1
+MIN_JSON_INTEGER: Final = -(1 << 63)
 
 ACTION_KEEP: Final = "keep"
 ACTION_REPLACE: Final = "replace"
@@ -54,6 +70,8 @@ _ACTION_ALIASES: Final = {
     "set_null": ACTION_NULL,
 }
 _SIMPLE_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_RULE_OPTION_KEYS: Final = frozenset({"action", "preserve_null", "replacement"})
 _MISSING = object()
 _REMOVE = object()
 
@@ -64,6 +82,50 @@ class RedactionContractError(ValueError):
 
 class RedactionInputError(TypeError):
     """The resource is not an acyclic JSON-compatible value."""
+
+
+def _bounded_items(
+    value: Mapping[Any, Any], *, field_name: str, max_items: int
+) -> list[tuple[Any, Any]]:
+    try:
+        items = list(itertools.islice(value.items(), max_items + 1))
+    except Exception:  # noqa: BLE001 - mappings are caller-controlled protocols.
+        raise RedactionContractError(f"{field_name} could not be read") from None
+    if len(items) > max_items:
+        raise RedactionContractError(f"{field_name} exceeds the supported item limit")
+    result: list[tuple[Any, Any]] = []
+    for item in items:
+        if type(item) not in {list, tuple} or len(item) != 2:
+            raise RedactionContractError(f"{field_name} contains an invalid entry")
+        result.append((item[0], item[1]))
+    return result
+
+
+def _bounded_values(value: Any, *, field_name: str, max_items: int) -> list[Any]:
+    if isinstance(value, (str, bytes)):
+        raise RedactionContractError(f"{field_name} must be a sequence")
+    try:
+        iterator = iter(value)
+    except Exception:  # noqa: BLE001 - iterables are caller-controlled protocols.
+        raise RedactionContractError(f"{field_name} must be a sequence") from None
+    try:
+        items = list(itertools.islice(iterator, max_items + 1))
+    except Exception:  # noqa: BLE001 - iterables are caller-controlled protocols.
+        raise RedactionContractError(f"{field_name} could not be read") from None
+    if len(items) > max_items:
+        raise RedactionContractError(f"{field_name} exceeds the supported item limit")
+    return items
+
+
+def _validate_key(value: Any, *, field_name: str = "path segment") -> str:
+    if (
+        type(value) is not str
+        or not value
+        or len(value) > MAX_KEY_LENGTH
+        or not value.isprintable()
+    ):
+        raise RedactionContractError(f"{field_name} must be a safe bounded string")
+    return value
 
 
 @dataclass(frozen=True)
@@ -93,7 +155,15 @@ class RedactionPath:
     segments: tuple[PathSegment, ...]
 
     def __init__(self, value: PathLike) -> None:
-        object.__setattr__(self, "segments", _parse_path(value))
+        segments = _parse_path(value)
+        object.__setattr__(self, "segments", segments)
+        wildcard_growth = sum(
+            len(f"[{MAX_CONTAINER_ITEMS - 1}]") - len("[*]")
+            for segment in segments
+            if isinstance(segment, ArrayWildcard)
+        )
+        if len(self.render()) + wildcard_growth > MAX_PATH_LENGTH:
+            raise RedactionContractError("path exceeds the supported length limit")
 
     @classmethod
     def parse(cls, value: PathLike) -> "RedactionPath":
@@ -156,37 +226,61 @@ class RedactionRule:
         object.__setattr__(self, "path", RedactionPath(self.path))
         action = _normalize_action(self.action)
         object.__setattr__(self, "action", action)
-        if self.preserve_null is not None and not isinstance(self.preserve_null, bool):
+        if self.preserve_null is not None and type(self.preserve_null) is not bool:
             raise RedactionContractError("preserve_null must be a boolean or null")
 
         replacement = self.replacement
         if replacement is _MISSING and action in {ACTION_MASK, ACTION_REPLACE}:
             replacement = REDACTED_VALUE
+        elif replacement is not _MISSING and action not in {
+            ACTION_MASK,
+            ACTION_REPLACE,
+        }:
+            raise RedactionContractError(
+                "replacement is supported only for mask and replace actions"
+            )
         if replacement is not _MISSING:
-            _validate_scalar(replacement, allow_none=True)
+            _validate_scalar(
+                replacement,
+                allow_none=True,
+                max_string_chars=MAX_REPLACEMENT_STRING_CHARS,
+            )
             object.__setattr__(self, "replacement", replacement)
 
     @classmethod
     def from_mapping(cls, path: PathLike, spec: Any) -> "RedactionRule":
         """Build a rule from a compact mapping-style policy value.
 
-        A mapping value with an ``action`` key is interpreted as rule options.
-        A scalar value is shorthand for ``action="replace"`` with that value
-        as the replacement.
+        A mapping value with an ``action`` key is interpreted as closed rule
+        options. A supported action string is a compact action shorthand.
+        Replacement values must use the explicit mapping form.
         """
 
         if isinstance(spec, Mapping):
-            if "action" not in spec:
+            items = _bounded_items(
+                spec,
+                field_name="rule options",
+                max_items=len(_RULE_OPTION_KEYS),
+            )
+            options: dict[str, Any] = {}
+            for key, option_value in items:
+                if (
+                    type(key) is not str
+                    or key not in _RULE_OPTION_KEYS
+                    or key in options
+                ):
+                    raise RedactionContractError(
+                        "rule options contain unsupported fields"
+                    )
+                options[key] = option_value
+            if "action" not in options:
                 raise RedactionContractError("a rule mapping must declare action")
-            options = {
-                key: spec[key]
-                for key in ("action", "replacement", "preserve_null")
-                if key in spec
-            }
             return cls(path, **options)
-        if isinstance(spec, str) and _normalize_action_or_none(spec) is not None:
+        if type(spec) is str and _normalize_action_or_none(spec) is not None:
             return cls(path, action=spec)
-        return cls(path, action=ACTION_REPLACE, replacement=spec)
+        raise RedactionContractError(
+            "rule values must be an action string or closed option mapping"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize policy metadata without serializing a replacement value."""
@@ -213,50 +307,57 @@ class RedactionContract:
     strict_paths: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.preserve_null, bool):
+        if type(self.preserve_null) is not bool:
             raise RedactionContractError("preserve_null must be a boolean")
-        if not isinstance(self.preserve_resource_identifiers, bool):
+        if type(self.preserve_resource_identifiers) is not bool:
             raise RedactionContractError(
                 "preserve_resource_identifiers must be a boolean"
             )
-        if not isinstance(self.strict_paths, bool):
+        if type(self.strict_paths) is not bool:
             raise RedactionContractError("strict_paths must be a boolean")
 
         if isinstance(self.rules, Mapping):
             normalized_rules = tuple(
                 RedactionRule.from_mapping(path, spec)
-                for path, spec in self.rules.items()
+                for path, spec in _bounded_items(
+                    self.rules,
+                    field_name="rules",
+                    max_items=MAX_REDACTION_RULES,
+                )
             )
         else:
-            try:
-                normalized_rules = tuple(self.rules)
-            except TypeError:
-                raise RedactionContractError(
-                    "rules must be a sequence or mapping"
-                ) from None
-            if any(not isinstance(rule, RedactionRule) for rule in normalized_rules):
+            normalized_rules = tuple(
+                _bounded_values(
+                    self.rules,
+                    field_name="rules",
+                    max_items=MAX_REDACTION_RULES,
+                )
+            )
+            if any(type(rule) is not RedactionRule for rule in normalized_rules):
                 raise RedactionContractError("rules must contain RedactionRule values")
 
-        if isinstance(self.identifier_keys, (str, bytes)):
-            raise RedactionContractError("identifier_keys must be a sequence")
-        try:
-            identifiers = tuple(self.identifier_keys)
-        except TypeError:
-            raise RedactionContractError("identifier_keys must be a sequence") from None
-        if any(not isinstance(key, str) or not key for key in identifiers):
-            raise RedactionContractError("identifier_keys must be non-empty strings")
+        identifiers = tuple(
+            _validate_key(key, field_name="identifier key")
+            for key in _bounded_values(
+                self.identifier_keys,
+                field_name="identifier_keys",
+                max_items=MAX_IDENTIFIER_KEYS,
+            )
+        )
         if len(set(identifiers)) != len(identifiers):
             raise RedactionContractError("identifier_keys must be unique")
 
-        if isinstance(self.preserve_paths, (str, bytes)):
-            raise RedactionContractError("preserve_paths must be a sequence")
-        try:
-            preserved = tuple(RedactionPath(path) for path in self.preserve_paths)
-        except TypeError:
-            raise RedactionContractError("preserve_paths must be a sequence") from None
+        preserved = tuple(
+            RedactionPath(path)
+            for path in _bounded_values(
+                self.preserve_paths,
+                field_name="preserve_paths",
+                max_items=MAX_PRESERVE_PATHS,
+            )
+        )
         for left_index, left in enumerate(normalized_rules):
-            if left.path.is_root and left.action == ACTION_REMOVE:
-                raise RedactionContractError("the resource root cannot be removed")
+            if left.path.is_root and left.action != ACTION_KEEP:
+                raise RedactionContractError("the resource root cannot be transformed")
             if (
                 self.preserve_resource_identifiers
                 and left.path.segments
@@ -304,7 +405,11 @@ class RedactionContract:
 
         rules = tuple(
             RedactionRule(path, action=action, replacement=replacement)
-            for path in paths
+            for path in _bounded_values(
+                paths,
+                field_name="paths",
+                max_items=MAX_REDACTION_RULES,
+            )
         )
         return cls(rules=rules, **kwargs)
 
@@ -346,6 +451,71 @@ class RedactionReport:
     output_digest: str
     applied_paths: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != REDACTION_CONTRACT_SCHEMA_VERSION
+        ):
+            raise RedactionContractError("report schema version is unsupported")
+        count_limits = {
+            "rule_count": MAX_REDACTION_RULES,
+            "matched_rule_count": MAX_REDACTION_MATCHES,
+            "changed_value_count": MAX_REDACTION_MATCHES,
+            "null_preserved_count": MAX_REDACTION_MATCHES,
+            "nullified_value_count": MAX_REDACTION_MATCHES,
+            "removed_field_count": MAX_REDACTION_MATCHES,
+            "array_count": MAX_RESOURCE_NODES,
+            "resource_identifier_count": MAX_RESOURCE_NODES,
+            "resource_identifiers_preserved": MAX_RESOURCE_NODES,
+        }
+        for name, maximum in count_limits.items():
+            value = getattr(self, name)
+            if type(value) is not int or not (0 <= value <= maximum):
+                raise RedactionContractError(
+                    "report counts are outside supported bounds"
+                )
+        if type(self.array_lengths_preserved) is not bool:
+            raise RedactionContractError("report array status must be a boolean")
+        if not self.array_lengths_preserved:
+            raise RedactionContractError("report array preservation is inconsistent")
+        if self.changed_value_count > self.matched_rule_count:
+            raise RedactionContractError("report change counts are inconsistent")
+        if self.null_preserved_count > self.matched_rule_count:
+            raise RedactionContractError("report null counts are inconsistent")
+        if self.nullified_value_count > self.changed_value_count:
+            raise RedactionContractError("report nullification counts are inconsistent")
+        if self.removed_field_count > self.changed_value_count:
+            raise RedactionContractError("report removal counts are inconsistent")
+        if self.resource_identifiers_preserved > self.resource_identifier_count:
+            raise RedactionContractError("report identifier counts are inconsistent")
+        if (
+            type(self.source_digest) is not str
+            or not _DIGEST_RE.fullmatch(self.source_digest)
+            or type(self.output_digest) is not str
+            or not _DIGEST_RE.fullmatch(self.output_digest)
+        ):
+            raise RedactionContractError("report digests are invalid")
+        if type(self.applied_paths) is not tuple:
+            raise RedactionContractError("report paths must be a tuple")
+        if len(self.applied_paths) > self.matched_rule_count:
+            raise RedactionContractError("report paths exceed matched values")
+        if len(self.applied_paths) != self.matched_rule_count:
+            raise RedactionContractError("report paths do not match selected values")
+        if self.applied_paths != tuple(sorted(set(self.applied_paths))):
+            raise RedactionContractError("report paths are not canonical")
+        if any(not _is_canonical_concrete_path(path) for path in self.applied_paths):
+            raise RedactionContractError("report paths are invalid")
+        if self.changed_value_count + self.null_preserved_count > (
+            self.matched_rule_count
+        ):
+            raise RedactionContractError(
+                "report selected-value counts are inconsistent"
+            )
+        if self.nullified_value_count + self.removed_field_count > (
+            self.changed_value_count
+        ):
+            raise RedactionContractError("report changed-value counts are inconsistent")
+
     @property
     def redacted_value_count(self) -> int:
         """Return the number of selected scalar values that changed."""
@@ -380,6 +550,10 @@ class RedactionResult:
 
     resource: Any = field(repr=False)
     report: RedactionReport
+
+    def __post_init__(self) -> None:
+        if type(self.report) is not RedactionReport:
+            raise RedactionContractError("result report is invalid")
 
     @property
     def data(self) -> Any:
@@ -434,16 +608,21 @@ def redact_resource(
     """
 
     resolved = _coerce_contract(contract)
-    _validate_json_value(resource, seen=set())
+    normalized_resource = _snapshot_json_value(
+        resource,
+        seen=set(),
+        budget=_ResourceBudget(),
+        depth=0,
+    )
     strict_paths = resolved.strict_paths if strict is None else strict
-    if not isinstance(strict_paths, bool):
+    if type(strict_paths) is not bool:
         raise RedactionContractError("strict must be a boolean or null")
 
     targets: dict[tuple[str | int, ...], RedactionRule] = {}
     for rule in resolved.rules:
         before_count = len(targets)
         _collect_matches(
-            resource,
+            normalized_resource,
             rule.path.segments,
             0,
             (),
@@ -455,14 +634,14 @@ def redact_resource(
 
     stats = _Stats()
     transformed = _transform(
-        resource,
+        normalized_resource,
         (),
         targets=targets,
         contract=resolved,
         stats=stats,
     )
     identifier_before = _identifier_digests(
-        resource,
+        normalized_resource,
         identifier_keys=resolved.identifier_keys,
     )
     identifier_after = _identifier_digests(
@@ -474,6 +653,8 @@ def redact_resource(
         for path, digest in identifier_before.items()
         if identifier_after.get(path) == digest
     )
+    if resolved.preserve_resource_identifiers and identifier_before != identifier_after:
+        raise RedactionContractError("resource identifier preservation failed")
     report = RedactionReport(
         schema_version=REDACTION_CONTRACT_SCHEMA_VERSION,
         rule_count=len(resolved.rules),
@@ -482,11 +663,13 @@ def redact_resource(
         null_preserved_count=stats.null_preserved_count,
         nullified_value_count=stats.nullified_value_count,
         removed_field_count=stats.removed_field_count,
-        array_count=_array_count(resource),
-        array_lengths_preserved=_array_lengths(resource) == _array_lengths(transformed),
+        array_count=_array_count(normalized_resource),
+        array_lengths_preserved=(
+            _array_lengths(normalized_resource) == _array_lengths(transformed)
+        ),
         resource_identifier_count=len(identifier_before),
         resource_identifiers_preserved=identifier_preserved,
-        source_digest=_digest(resource),
+        source_digest=_digest(normalized_resource),
         output_digest=_digest(transformed),
         applied_paths=tuple(sorted(stats.applied_paths)),
     )
@@ -516,7 +699,7 @@ def compile_redaction_contract(
 def _coerce_contract(
     contract: RedactionContract | Mapping[PathLike, Any] | Sequence[RedactionRule],
 ) -> RedactionContract:
-    if isinstance(contract, RedactionContract):
+    if type(contract) is RedactionContract:
         return contract
     if isinstance(contract, Mapping):
         return RedactionContract.from_mapping(contract)
@@ -535,7 +718,7 @@ def _normalize_action(action: Any) -> str:
 
 
 def _normalize_action_or_none(action: Any) -> str | None:
-    if not isinstance(action, str):
+    if type(action) is not str or len(action) > 64:
         return None
     normalized = action.strip().lower()
     normalized = _ACTION_ALIASES.get(normalized, normalized)
@@ -543,36 +726,34 @@ def _normalize_action_or_none(action: Any) -> str | None:
 
 
 def _parse_path(value: PathLike) -> tuple[PathSegment, ...]:
-    if isinstance(value, RedactionPath):
+    if type(value) is RedactionPath:
         return value.segments
-    if isinstance(value, str):
+    if type(value) is str:
         return _parse_string_path(value)
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         segments: list[PathSegment] = []
-        for segment in value:
-            if isinstance(segment, ArrayWildcard):
-                segments.append(segment)
-            elif isinstance(segment, bool):
-                raise RedactionContractError(
-                    "path indexes must be non-negative integers"
-                )
-            elif isinstance(segment, int):
-                if segment < 0:
+        for segment in _bounded_values(
+            value,
+            field_name="path segments",
+            max_items=MAX_PATH_SEGMENTS,
+        ):
+            if type(segment) is ArrayWildcard:
+                segments.append(ARRAY_WILDCARD)
+            elif type(segment) is int:
+                if not (0 <= segment < MAX_CONTAINER_ITEMS):
                     raise RedactionContractError(
-                        "path indexes must be non-negative integers"
+                        "path indexes must be bounded non-negative integers"
                     )
                 segments.append(segment)
-            elif isinstance(segment, str):
-                if segment in {"", ".", "/"}:
-                    raise RedactionContractError("path segments must be non-empty")
-                if segment in {"[]", "[*]"}:
+            elif type(segment) is str:
+                if segment == "[*]":
                     segments.append(ARRAY_WILDCARD)
                 elif segment == "*":
                     raise RedactionContractError(
                         "bare wildcard paths are ambiguous; use [*] for arrays"
                     )
                 else:
-                    segments.append(segment)
+                    segments.append(_validate_key(segment))
             else:
                 raise RedactionContractError("path segments must be strings or indexes")
         return tuple(segments)
@@ -580,11 +761,15 @@ def _parse_path(value: PathLike) -> tuple[PathSegment, ...]:
 
 
 def _parse_string_path(value: str) -> tuple[PathSegment, ...]:
+    if len(value) > MAX_PATH_LENGTH:
+        raise RedactionContractError("path exceeds the supported length limit")
     text = value.strip()
     if text in {"", "$"}:
         return ()
     if text.startswith("$.") or text.startswith("$/"):
         text = text[2:]
+    elif text.startswith("$["):
+        text = text[1:]
     elif text.startswith("$"):
         raise RedactionContractError("root paths must use $ followed by a separator")
 
@@ -605,7 +790,9 @@ def _parse_string_path(value: str) -> tuple[PathSegment, ...]:
             raise RedactionContractError(
                 "bare wildcard paths are ambiguous; use [*] for arrays"
             )
-        segments.append(key)
+        segments.append(_validate_key(key))
+        if len(segments) > MAX_PATH_SEGMENTS:
+            raise RedactionContractError("path exceeds the supported segment limit")
         expect_segment = False
 
     while index < len(text):
@@ -616,25 +803,40 @@ def _parse_string_path(value: str) -> tuple[PathSegment, ...]:
             index += 1
             continue
         if character == "[":
-            flush_token()
-            closing = text.find("]", index + 1)
+            if token:
+                flush_token()
+            elif expect_segment and segments:
+                raise RedactionContractError("path contains an empty segment")
+            closing = _find_closing_bracket(text, index)
             if closing < 0:
                 raise RedactionContractError("path contains an unclosed bracket")
             contents = text[index + 1 : closing].strip()
-            if contents in {"", "*"}:
+            if contents == "*":
                 segments.append(ARRAY_WILDCARD)
             elif contents.isdigit():
-                segments.append(int(contents))
-            elif len(contents) >= 2 and contents[0] == contents[-1] in {"'", '"'}:
-                key = contents[1:-1]
-                if not key:
-                    raise RedactionContractError("path segments must be non-empty")
-                segments.append(key)
+                if len(contents) > 10:
+                    raise RedactionContractError(
+                        "path index exceeds the supported limit"
+                    )
+                array_index = int(contents)
+                if array_index >= MAX_CONTAINER_ITEMS:
+                    raise RedactionContractError(
+                        "path index exceeds the supported limit"
+                    )
+                segments.append(array_index)
+            elif len(contents) >= 2 and contents[0] == contents[-1] == '"':
+                try:
+                    key = json.loads(contents)
+                except (TypeError, ValueError):
+                    raise RedactionContractError("quoted path key is invalid") from None
+                segments.append(_validate_key(key))
             else:
                 raise RedactionContractError("brackets must contain an index or [*]")
+            if len(segments) > MAX_PATH_SEGMENTS:
+                raise RedactionContractError("path exceeds the supported segment limit")
             expect_segment = False
             index = closing + 1
-            if index < len(text) and text[index] not in ".[/":
+            if index < len(text) and text[index] not in ".[/[":
                 raise RedactionContractError(
                     "path requires a separator after a bracket"
                 )
@@ -649,13 +851,51 @@ def _parse_string_path(value: str) -> tuple[PathSegment, ...]:
     return tuple(segments)
 
 
+def _find_closing_bracket(value: str, opening: int) -> int:
+    quoted = False
+    escaped = False
+    for index in range(opening + 1, len(value)):
+        character = value[index]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character == "]":
+            return index
+    return -1
+
+
+def _is_canonical_concrete_path(value: Any) -> bool:
+    if (
+        type(value) is not str
+        or not value
+        or len(value) > MAX_PATH_LENGTH
+        or not value.isprintable()
+    ):
+        return False
+    try:
+        path = RedactionPath(value)
+    except RedactionContractError:
+        return False
+    return (
+        not any(isinstance(segment, ArrayWildcard) for segment in path.segments)
+        and str(path) == value
+    )
+
+
 def _paths_overlap(
     left: Sequence[PathSegment],
     right: Sequence[PathSegment],
 ) -> bool:
-    if len(left) != len(right):
-        return False
-    return all(_segments_overlap(a, b) for a, b in zip(left, right))
+    shared_length = min(len(left), len(right))
+    return all(
+        _segments_overlap(left[index], right[index]) for index in range(shared_length)
+    )
 
 
 def _segments_overlap(left: PathSegment, right: PathSegment) -> bool:
@@ -668,48 +908,142 @@ def _segments_overlap(left: PathSegment, right: PathSegment) -> bool:
     return left == right
 
 
-def _validate_scalar(value: Any, *, allow_none: bool) -> None:
+def _validate_scalar(
+    value: Any,
+    *,
+    allow_none: bool,
+    max_string_chars: int = MAX_STRING_CHARS,
+) -> None:
     if value is None:
         if allow_none:
             return
         raise RedactionContractError("scalar value cannot be null")
-    if isinstance(value, bool) or isinstance(value, str) or isinstance(value, int):
+    if type(value) is bool:
         return
-    if isinstance(value, float) and math.isfinite(value):
+    if type(value) is str:
+        if len(value) > max_string_chars:
+            raise RedactionContractError("scalar string exceeds the supported limit")
+        return
+    if type(value) is int:
+        if MIN_JSON_INTEGER <= value <= MAX_JSON_INTEGER:
+            return
+        raise RedactionContractError("integer scalar exceeds the supported limit")
+    if type(value) is float and math.isfinite(value):
         return
     raise RedactionContractError("replacement values must be finite JSON scalars")
 
 
-def _validate_json_value(value: Any, *, seen: set[int]) -> None:
-    if value is None or isinstance(value, (bool, str, int)):
-        return
-    if isinstance(value, float):
+@dataclass
+class _ResourceBudget:
+    nodes: int = 0
+    string_chars: int = 0
+
+
+def _snapshot_json_value(
+    value: Any,
+    *,
+    seen: set[int],
+    budget: _ResourceBudget,
+    depth: int,
+) -> Any:
+    if depth > MAX_RESOURCE_DEPTH:
+        raise RedactionInputError("resource exceeds the supported nesting limit")
+    budget.nodes += 1
+    if budget.nodes > MAX_RESOURCE_NODES:
+        raise RedactionInputError("resource exceeds the supported node limit")
+
+    if value is None or type(value) is bool:
+        return value
+    if type(value) is str:
+        _add_string_to_budget(value, budget=budget)
+        return value
+    if type(value) is int:
+        if not MIN_JSON_INTEGER <= value <= MAX_JSON_INTEGER:
+            raise RedactionInputError("resource contains an out-of-range integer")
+        return value
+    if type(value) is float:
         if not math.isfinite(value):
             raise RedactionInputError("resource contains a non-finite number")
-        return
+        return value
     if isinstance(value, Mapping):
         identity = id(value)
         if identity in seen:
             raise RedactionInputError("resource must be an acyclic JSON value")
         seen.add(identity)
-        for key, child in value.items():
-            if not isinstance(key, str):
-                raise RedactionInputError("resource object keys must be strings")
-            _validate_json_value(child, seen=seen)
-        seen.remove(identity)
-        return
-    if isinstance(value, list):
+        try:
+            items = _bounded_resource_items(value)
+            result: dict[str, Any] = {}
+            for key, child in items:
+                _validate_resource_key(key)
+                if key in result:
+                    raise RedactionInputError("resource object keys must be unique")
+                _add_string_to_budget(key, budget=budget)
+                result[key] = _snapshot_json_value(
+                    child,
+                    seen=seen,
+                    budget=budget,
+                    depth=depth + 1,
+                )
+            return result
+        finally:
+            seen.remove(identity)
+    if type(value) is list:
         identity = id(value)
         if identity in seen:
             raise RedactionInputError("resource must be an acyclic JSON value")
         seen.add(identity)
-        for child in value:
-            _validate_json_value(child, seen=seen)
-        seen.remove(identity)
-        return
+        try:
+            if len(value) > MAX_CONTAINER_ITEMS:
+                raise RedactionInputError(
+                    "resource array exceeds the supported item limit"
+                )
+            return [
+                _snapshot_json_value(
+                    child,
+                    seen=seen,
+                    budget=budget,
+                    depth=depth + 1,
+                )
+                for child in value
+            ]
+        finally:
+            seen.remove(identity)
     raise RedactionInputError(
         "resource must contain only JSON-compatible mappings, lists, and scalars"
     )
+
+
+def _bounded_resource_items(value: Mapping[Any, Any]) -> list[tuple[Any, Any]]:
+    try:
+        items = list(itertools.islice(value.items(), MAX_CONTAINER_ITEMS + 1))
+    except Exception:  # noqa: BLE001 - mappings are caller-controlled protocols.
+        raise RedactionInputError("resource object could not be read") from None
+    if len(items) > MAX_CONTAINER_ITEMS:
+        raise RedactionInputError("resource object exceeds the supported item limit")
+    result: list[tuple[Any, Any]] = []
+    for item in items:
+        if type(item) not in {list, tuple} or len(item) != 2:
+            raise RedactionInputError("resource object contains an invalid entry")
+        result.append((item[0], item[1]))
+    return result
+
+
+def _validate_resource_key(value: Any) -> None:
+    if (
+        type(value) is not str
+        or not value
+        or len(value) > MAX_KEY_LENGTH
+        or not value.isprintable()
+    ):
+        raise RedactionInputError("resource object keys must be safe bounded strings")
+
+
+def _add_string_to_budget(value: str, *, budget: _ResourceBudget) -> None:
+    if len(value) > MAX_STRING_CHARS:
+        raise RedactionInputError("resource contains an oversized string")
+    budget.string_chars += len(value)
+    if budget.string_chars > MAX_TOTAL_STRING_CHARS:
+        raise RedactionInputError("resource exceeds the supported string budget")
 
 
 def _collect_matches(
@@ -723,6 +1057,8 @@ def _collect_matches(
     if position == len(segments):
         if concrete_path in targets:
             raise RedactionContractError("multiple rules select one scalar path")
+        if len(targets) >= MAX_REDACTION_MATCHES:
+            raise RedactionContractError("redaction matches exceed the supported limit")
         targets[concrete_path] = rule
         return
 

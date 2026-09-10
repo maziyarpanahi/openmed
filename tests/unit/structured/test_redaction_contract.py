@@ -3,19 +3,49 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
+from typing import Any
 
 import pytest
 
 from openmed.structured import (
     ACTION_HASH,
+    ACTION_KEEP,
     ACTION_NULL,
     ACTION_REMOVE,
     ACTION_REPLACE,
     RedactionContract,
     RedactionContractError,
+    RedactionInputError,
+    RedactionReport,
+    RedactionResult,
     RedactionRule,
     redact_resource,
 )
+from openmed.structured.redaction_contract import (
+    MAX_CONTAINER_ITEMS,
+    MAX_PATH_SEGMENTS,
+    MAX_REDACTION_MATCHES,
+    MAX_REDACTION_RULES,
+    MAX_REPLACEMENT_STRING_CHARS,
+    MAX_RESOURCE_DEPTH,
+    MAX_STRING_CHARS,
+)
+
+
+class _ExplodingMapping(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise RuntimeError("synthetic-secret-from-getitem")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("synthetic-secret-from-iterator")
+
+    def __len__(self) -> int:
+        return 1
+
+    def items(self) -> Any:
+        raise RuntimeError("synthetic-secret-from-items")
 
 
 def _synthetic_bundle() -> dict[str, object]:
@@ -181,3 +211,189 @@ def test_compact_mapping_and_exact_index_paths_are_supported():
         "[SECOND_ONLY]"
     )
     assert result.report.applied_paths == ("entry[1].resource.name[0].text",)
+
+
+def test_ancestor_rules_and_preserved_paths_cannot_overlap():
+    with pytest.raises(RedactionContractError):
+        RedactionContract(
+            rules=(
+                RedactionRule("entry[*].resource", action=ACTION_REPLACE),
+                RedactionRule(
+                    "entry[0].resource.name[0].text",
+                    action=ACTION_REPLACE,
+                ),
+            )
+        )
+
+    with pytest.raises(RedactionContractError):
+        RedactionContract(
+            rules=(RedactionRule("entry[*].resource.name", action=ACTION_REPLACE),),
+            preserve_paths=("entry[0].resource",),
+        )
+
+
+@pytest.mark.parametrize(
+    "action",
+    [ACTION_HASH, ACTION_NULL, ACTION_REMOVE, ACTION_REPLACE],
+)
+def test_resource_root_cannot_be_transformed(action: str):
+    with pytest.raises(RedactionContractError):
+        RedactionContract(rules=(RedactionRule("$", action=action),))
+
+
+def test_only_explicit_array_wildcards_are_accepted():
+    with pytest.raises(RedactionContractError):
+        RedactionRule("entry[].resource.name", action=ACTION_REPLACE)
+
+    rule = RedactionRule("entry[*].resource.name", action=ACTION_KEEP)
+    assert str(rule.path) == "entry[*].resource.name"
+
+
+def test_mapping_policies_are_closed_and_do_not_echo_values():
+    with pytest.raises(RedactionContractError) as unknown_option:
+        RedactionContract.from_mapping(
+            {
+                "field": {
+                    "action": ACTION_REPLACE,
+                    "unsupported": "synthetic-secret-option",
+                }
+            }
+        )
+    assert "synthetic-secret-option" not in str(unknown_option.value)
+
+    with pytest.raises(RedactionContractError):
+        RedactionContract.from_mapping({"field": "synthetic-replacement"})
+
+    with pytest.raises(RedactionContractError):
+        RedactionContract.from_mapping(
+            {"field": {"action": ACTION_HASH, "replacement": "not-allowed"}}
+        )
+
+
+def test_contract_and_path_limits_fail_closed():
+    with pytest.raises(RedactionContractError):
+        RedactionContract(
+            rules=tuple(
+                RedactionRule(f"field{index}")
+                for index in range(MAX_REDACTION_RULES + 1)
+            )
+        )
+
+    with pytest.raises(RedactionContractError):
+        RedactionRule(tuple("field" for _ in range(MAX_PATH_SEGMENTS + 1)))
+
+
+def test_resource_limits_are_enforced_before_transformation():
+    with pytest.raises(RedactionInputError):
+        redact_resource(
+            [None] * (MAX_CONTAINER_ITEMS + 1),
+            RedactionContract(),
+        )
+
+    nested: object = "synthetic-leaf"
+    for _ in range(MAX_RESOURCE_DEPTH + 1):
+        nested = {"child": nested}
+    with pytest.raises(RedactionInputError):
+        redact_resource(nested, RedactionContract())
+
+    with pytest.raises(RedactionInputError):
+        redact_resource(
+            {"field": "x" * (MAX_STRING_CHARS + 1)},
+            RedactionContract(),
+        )
+
+    with pytest.raises(RedactionInputError):
+        redact_resource({"field": 1 << 64}, RedactionContract())
+
+
+def test_match_limit_is_enforced_for_nested_wildcards():
+    group_size = 101
+    value_count = MAX_REDACTION_MATCHES // group_size + 1
+    source = {
+        "groups": [
+            {"values": ["synthetic-value"] * value_count} for _ in range(group_size)
+        ]
+    }
+    contract = RedactionContract.from_paths(
+        ["groups[*].values[*]"],
+        action=ACTION_REPLACE,
+    )
+
+    with pytest.raises(RedactionContractError):
+        redact_resource(source, contract)
+
+
+def test_hostile_mappings_fail_without_leaking_exception_values():
+    with pytest.raises(RedactionContractError) as contract_error:
+        RedactionContract(rules=_ExplodingMapping())
+    assert "synthetic-secret" not in str(contract_error.value)
+
+    with pytest.raises(RedactionInputError) as input_error:
+        redact_resource(_ExplodingMapping(), RedactionContract())
+    assert "synthetic-secret" not in str(input_error.value)
+
+
+def test_input_is_deeply_copied_and_list_subclasses_are_rejected():
+    source = {"nested": {"field": "synthetic-original"}}
+    result = redact_resource(source, RedactionContract())
+    result.resource["nested"]["field"] = "synthetic-mutated"
+    assert source["nested"]["field"] == "synthetic-original"
+
+    class _ListSubclass(list[Any]):
+        pass
+
+    with pytest.raises(RedactionInputError):
+        redact_resource(_ListSubclass(["synthetic-value"]), RedactionContract())
+
+
+def test_quoted_concrete_paths_round_trip_in_reports():
+    result = redact_resource(
+        {"synthetic]field": "synthetic-value"},
+        RedactionContract.from_paths(
+            [("synthetic]field",)],
+            action=ACTION_REPLACE,
+        ),
+    )
+
+    assert result.resource == {"synthetic]field": "[REDACTED]"}
+    assert result.report.applied_paths == ('$["synthetic]field"]',)
+
+
+def test_public_reports_reject_inconsistent_or_noncanonical_metadata():
+    report = redact_resource(
+        {"field": "synthetic-value"},
+        RedactionContract.from_paths(["field"]),
+    ).report
+
+    with pytest.raises(RedactionContractError):
+        replace(report, source_digest="not-a-digest")
+    with pytest.raises(RedactionContractError):
+        replace(report, matched_rule_count=2)
+    with pytest.raises(RedactionContractError):
+        replace(report, applied_paths=("$.field",))
+    with pytest.raises(RedactionContractError):
+        replace(report, array_lengths_preserved=False)
+
+    with pytest.raises(RedactionContractError):
+        RedactionResult(resource={}, report=object())  # type: ignore[arg-type]
+
+    assert type(report) is RedactionReport
+
+
+def test_invalid_scalar_and_strict_inputs_are_bounded_and_value_free():
+    with pytest.raises(RedactionContractError):
+        RedactionRule(
+            "field",
+            action=ACTION_REPLACE,
+            replacement="x" * (MAX_REPLACEMENT_STRING_CHARS + 1),
+        )
+
+    with pytest.raises(RedactionContractError):
+        redact_resource({"field": "synthetic-value"}, RedactionContract(), strict=1)
+
+    with pytest.raises(RedactionInputError) as key_error:
+        redact_resource(
+            {"synthetic\nsecret": "synthetic-value"},
+            RedactionContract(),
+        )
+    assert "synthetic" not in str(key_error.value)

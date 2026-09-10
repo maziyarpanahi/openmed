@@ -47,6 +47,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve the lowercase image name
+        shell: bash
+        run: |
+          # GHCR rejects references whose repository name carries uppercase
+          # characters, which any fork of a capitalised owner would produce.
+          owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:

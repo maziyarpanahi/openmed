@@ -4,15 +4,15 @@ const port = Number(process.env.OPENMED_PREVIEW_PORT ?? "4173");
 const baseURL = process.env.OPENMED_PREVIEW_URL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
-  testDir: ".",
-  testMatch: ["**/*.spec.ts"],
+  testDir: "..",
+  testMatch: ["brand/**/*.spec.ts", "privacy-playground.spec.ts"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 3 : undefined,
   timeout: 45_000,
   snapshotPathTemplate:
-    "{testDir}/snapshots/{platform}/{projectName}/{arg}{ext}",
+    "{testDir}/brand/snapshots/{platform}/{projectName}/{arg}{ext}",
   expect: {
     timeout: 7_500,
     toHaveScreenshot: {
