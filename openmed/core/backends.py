@@ -230,12 +230,46 @@ class OnnxBackend:
         return OnnxTokenClassificationPipeline(model)
 
 
+class RemoteInferenceBackend:
+    """Backend using a user-operated KServe V2 or Triton endpoint."""
+
+    def __init__(self, config: Any = None) -> None:
+        self._config = config
+
+    def is_available(self) -> bool:
+        from openmed.service.backends.remote_inference import (
+            remote_inference_dependencies_available,
+        )
+
+        return remote_inference_dependencies_available(self._config)
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Callable:
+        from openmed.service.backends.remote_inference import (
+            create_remote_inference_pipeline,
+        )
+
+        return create_remote_inference_pipeline(
+            model_name,
+            config=self._config,
+            task=task,
+            aggregation_strategy=aggregation_strategy,
+            **kwargs,
+        )
+
+
 # -- Backend registry and auto-detection ------------------------------------
 
 _BACKENDS: Dict[str, type] = {
     "hf": HuggingFaceBackend,
     "mlx": MLXBackend,
     "onnx": OnnxBackend,
+    "remote": RemoteInferenceBackend,
 }
 
 
@@ -246,7 +280,8 @@ def get_backend(
     """Return the requested backend, or auto-detect the best available one.
 
     Args:
-        name: ``"hf"``, ``"mlx"``, ``"onnx"``, or ``None`` for auto-detect.
+        name: ``"hf"``, ``"mlx"``, ``"onnx"``, ``"remote"``, or ``None``
+            for auto-detect.
         config: OpenMedConfig to pass to the backend.
 
     Auto-detection order:
@@ -270,6 +305,11 @@ def get_backend(
                     "Backend 'onnx' is not available. Install the CPU runtime "
                     "with: pip install 'openmed[onnx-runtime]'. The low_resource "
                     "profile does not fall back to a Torch backend."
+                )
+            if name == "remote":
+                raise RuntimeError(
+                    "Backend 'remote' is not available. Install its client-only "
+                    "dependencies with: pip install 'openmed[triton]'."
                 )
             raise RuntimeError(
                 f"Backend {name!r} is not available. Install its dependencies first."

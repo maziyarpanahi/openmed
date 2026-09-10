@@ -78,10 +78,11 @@ from openmed.interop.llamaindex import (
 redaction_config = LlamaIndexRedactionConfig(
     numeric_metadata_allowlist=("page_number",),
 )
+redaction_transform = create_redaction_transform(config=redaction_config)
 
 pipeline = IngestionPipeline(
     transformations=[
-        create_redaction_transform(config=redaction_config),
+        redaction_transform,
         SentenceSplitter(chunk_size=512, chunk_overlap=32),
         embed_model,
     ],
@@ -89,6 +90,21 @@ pipeline = IngestionPipeline(
 )
 redacted_nodes = pipeline.run(documents=documents, store_doc_text=False)
 ```
+
+The transform keeps LlamaIndex's list-of-nodes contract. After each invocation,
+`transform.audit_metadata` exposes a deterministic, counts-only summary:
+
+```python
+audit = redaction_transform.audit_metadata
+```
+
+The summary contains node, changed-value, entity-category, and identifier
+pseudonymization counts only. It never contains source identifiers, offsets,
+input text, replacement values, or arbitrary deidentifier metadata. The
+summary describes that invocation; it is not added to node metadata or sent to
+the embedding model. Category counts are copied into immutable validated state.
+Optional detector entity metadata is bounded to 10,000 observations per
+redacted value; malformed metadata is ignored and cannot make redaction fail.
 
 The transform also copies nodes before changing their text and string metadata.
 For storage safety, it replaces node and relationship ids with deterministic

@@ -1,0 +1,110 @@
+name: Retrain recipe trigger
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      input_path:
+        description: Committed aggregate-only retrain trigger input.
+        required: false
+        default: gates/retrain_trigger_inputs.json
+
+concurrency:
+  group: retrain-recipe-trigger
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  propose-recipes:
+    runs-on: ubuntu-latest
+    env:
+      TRIGGER_INPUT: ${{ inputs.input_path || 'gates/retrain_trigger_inputs.json' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          version: "0.11.28"
+
+      - name: Install the offline scorer
+        run: uv sync --frozen
+
+      - name: Score aggregate signals and prepare recipe proposals
+        env:
+          TRIGGER_ARTIFACT_DIR: ${{ runner.temp }}/retrain-trigger
+        run: |
+          mkdir -p "$TRIGGER_ARTIFACT_DIR"
+          uv run --frozen python scripts/release/retrain_queue.py \
+            --input "$TRIGGER_INPUT" \
+            --queue-output "$TRIGGER_ARTIFACT_DIR/retrain_queue.jsonl" \
+            --evidence-output "$TRIGGER_ARTIFACT_DIR/decision_evidence.json" \
+            --summary-output "$TRIGGER_ARTIFACT_DIR/dispatch_summary.json" \
+            --recipes-dir recipes
+
+      - name: Read fail-closed dispatch summary
+        id: dispatch
+        env:
+          TRIGGER_ARTIFACT_DIR: ${{ runner.temp }}/retrain-trigger
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["TRIGGER_ARTIFACT_DIR"])
+          summary = json.loads((root / "dispatch_summary.json").read_text())
+          required = {"queue_count", "changed_recipe_count", "evidence_hash"}
+          if not required.issubset(summary):
+              raise SystemExit("dispatch summary is incomplete")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"queue_count={int(summary['queue_count'])}\n")
+              out.write(
+                  f"changed_recipe_count={int(summary['changed_recipe_count'])}\n"
+              )
+              out.write(f"evidence_hash={summary['evidence_hash']}\n")
+          PY
+
+      - name: Upload aggregate trigger evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: retrain-trigger-evidence
+          if-no-files-found: error
+          path: ${{ runner.temp }}/retrain-trigger
+
+      - name: Open recipe configuration PR
+        if: >-
+          steps.dispatch.outputs.queue_count != '0' &&
+          steps.dispatch.outputs.changed_recipe_count != '0'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: feature/retrain-recipe-proposals
+          base: master
+          commit-message: Update retraining recipe proposals
+          title: Update retraining recipe proposals
+          body: |
+            Updates aggregate-only retraining recipe configuration.
+
+            Trigger evidence: `${{ steps.dispatch.outputs.evidence_hash }}`
+
+            This workflow does not train, convert, or publish model artifacts.
+            Every resulting candidate must still pass the downstream model
+            release gates before promotion.
+          labels: |
+            roadmap-v2
+            feature
+            P1
+          add-paths: |
+            recipes/*.yaml
+          delete-branch: true
