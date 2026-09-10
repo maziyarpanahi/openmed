@@ -1,0 +1,131 @@
+input AnalyzeInput {
+  text: String!
+  modelName: String! = "disease_detection_superclinical"
+  confidenceThreshold: Float = 0
+  groupEntities: Boolean! = false
+  aggregationStrategy: String = "simple"
+  sentenceDetection: Boolean! = true
+  sentenceLanguage: String! = "en"
+  sentenceClean: Boolean! = false
+  useFastTokenizer: Boolean! = true
+  keepAlive: JSON = null
+}
+
+type AnalyzePayload {
+  text: String!
+  entities: [Entity!]!
+  spans: [OpenMedSpan!]!
+  modelName: String!
+  timestamp: String!
+  processingTime: Float
+  metadata: JSON!
+}
+
+input DeidentifyInput {
+  text: String!
+  method: String! = "mask"
+  modelName: String! = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+  confidenceThreshold: Float! = 0.7
+  keepYear: Boolean! = false
+  shiftDates: Boolean = null
+  dateShiftDays: Int = null
+  keepMapping: Boolean! = false
+  policy: String = null
+  useSmartMerging: Boolean! = true
+  useSafetySweep: Boolean! = true
+  lang: String! = "en"
+  normalizeAccents: Boolean = null
+  keepAlive: JSON = null
+}
+
+type DeidentifyPayload {
+  originalText: String!
+  deidentifiedText: String!
+  entities: [Entity!]!
+  spans: [OpenMedSpan!]!
+  method: String!
+  timestamp: String!
+  numEntitiesRedacted: Int!
+  metadata: JSON!
+  mapping: JSON
+  policy: PolicyProfile
+  risk: RiskFacets!
+}
+
+type Entity {
+  text: String!
+  label: String!
+  confidence: Float!
+  start: Int
+  end: Int
+  metadata: JSON!
+}
+
+type EntityType {
+  label: String!
+  policyLabel: String!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
+"""
+scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
+
+type OpenMedSpan {
+  label: String!
+  start: Int
+  end: Int
+  text: String
+  schemaVersion: Int
+  docId: String
+  textHash: String
+  entityType: String
+  canonicalLabel: String
+  policyLabel: String
+  regulatoryTags: [String!]!
+  score: Float
+  detector: String
+  evidence: JSON!
+  action: String
+  replacement: String
+  reversibleId: String
+  section: String
+  metadata: JSON!
+}
+
+type PolicyAction {
+  label: String!
+  action: String!
+}
+
+type PolicyProfile {
+  name: String!
+  schemaVersion: Int!
+  posture: String!
+  thresholdProfile: String!
+  defaultAction: String!
+  defaultActionBias: String!
+  arbitrationMode: String!
+  strictNoLeak: Boolean!
+  safetySweepMandatory: Boolean!
+  keepMapping: Boolean!
+  reversibleId: Boolean!
+  forcedCascadeTiers: [String!]!
+  actions: [PolicyAction!]!
+  policyLabelActions: [PolicyAction!]!
+  metadata: JSON!
+}
+
+type Query {
+  analyze(input: AnalyzeInput!): AnalyzePayload!
+  deidentify(input: DeidentifyInput!): DeidentifyPayload!
+  entityTypes: [EntityType!]!
+}
+
+type RiskFacets {
+  leakageRate: Float!
+  reidentificationRate: Float!
+  minimumK: Int!
+  singletonRecordCount: Int!
+  quasiIdentifierCount: Int!
+}
