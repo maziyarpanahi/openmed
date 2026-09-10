@@ -115,7 +115,7 @@ def test_pipeline_can_use_cascade_router_for_detection_stages():
 def test_pipeline_reports_complete_stage_and_shared_cascade_durations(monkeypatch):
     ticks = iter(index / 1000 for index in range(100))
     monkeypatch.setattr(
-        "openmed.core.pipeline.perf_counter",
+        "openmed.utils.profiling.time.perf_counter",
         lambda: next(ticks),
     )
     router = CascadeRouter(
