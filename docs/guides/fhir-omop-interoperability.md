@@ -82,22 +82,29 @@ packages, or call remote terminology servers.
 
 ## Check US Core locally
 
-Download the US Core package through your normal FHIR package workflow and
-keep it outside the repository. Add the appropriate US Core canonical URL to
-each exported resource's `meta.profile`, populate every required US Core field,
-then run the same checker:
+For OpenMed's four supported export profiles, use the bundled US Core 9.0.0
+subset directly. It runs base R4 validation first and requires no package
+download:
 
 ```python
-from openmed.clinical.exporters.fhir import check_bundle
+from openmed.clinical.exporters.fhir import check_us_core
 
-us_core_outcome = check_bundle(
-    bundle,
-    "/opt/fhir/packages/hl7.fhir.us.core",
-)
+results = [check_us_core(entry["resource"]) for entry in bundle["entry"]]
+errors = [finding for result in results for finding in result.errors]
 ```
 
-Use the US Core version required by the receiving system. A base-R4-valid
-resource is not automatically US Core conformant. See
+The compact checker covers US Core Condition problems/health concerns and
+encounter diagnoses, laboratory Observation, MedicationRequest, and
+AllergyIntolerance. Missing must-support fields produce warnings; required
+cardinality and bundled administrative binding violations produce errors. It
+does not bundle or claim validation of external clinical terminology value
+sets.
+
+For another US Core version or profile, download the implementation-guide
+package through your normal FHIR package workflow, keep it outside the
+repository, declare its canonical URL in `meta.profile`, and use
+`check_bundle()`. A base-R4-valid resource is not automatically US Core
+conformant. See
 [WHO SMART Guidelines Profile Checks](../fhir-smart-guidelines.md) for package
 layout, supported constraints, post-de-identification comparison, and safe
 `OperationOutcome` handling.

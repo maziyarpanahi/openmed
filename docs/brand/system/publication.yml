@@ -105,6 +105,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent/artifact-references.md
     - agent/event-correlation.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
@@ -121,6 +122,8 @@ classification:
     - async-api.md
     - rest-service.md
     - service/self-hosted-redaction.md
+    - service/inbound-restoration.md
+    - service/privacy-proxy.md
     - mcp-clients.md
     - security/mcp-threat-model.md
     - rest-recipes.md
@@ -154,6 +157,7 @@ classification:
     - models/bundled-offline.md
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
+    - models/rollback-compatibility.md
     - model-registry.md
     - ner-families.md
     - model-manifest.md
@@ -210,6 +214,7 @@ classification:
     - reference/chat-schema.md
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
+    - training/federated-metrics.md
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
@@ -361,6 +366,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/exception-taxonomy.md
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
@@ -406,8 +412,8 @@ classification:
     - integrations-llamaindex.md
     - i18n/glossary.md
     - leaderboard/index.md
-    - model-cards/registry/pii-last-green.md
-    - model-cards/registry/pii-latest.md
+    - model-cards/registry/pii-small-mlx-fp-last-green.md
+    - model-cards/registry/pii-small-mlx-fp-latest.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md

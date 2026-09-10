@@ -137,3 +137,15 @@ by `repo_id`:
 
 Rows whose `repo_id` has no measurement are written byte-identically to the
 output. Rows with measurements are schema-validated after merging.
+
+## Regenerate committed surfaces
+
+After changing the committed manifest, regenerate the runtime-registry checks,
+governed README counts, registry cards, and MkDocs catalog tables:
+
+```bash
+python scripts/manifest/regenerate_surfaces.py
+```
+
+This step reads only local committed inputs. Remote Hugging Face discovery is
+limited to the explicit refresh command above.
