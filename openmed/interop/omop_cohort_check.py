@@ -12,9 +12,12 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from numbers import Integral
+from types import MappingProxyType
 from typing import Any, Final, TypeAlias
 
 from .omop.cdm_loader import OmopCdmTables
@@ -23,6 +26,11 @@ TableRows: TypeAlias = Mapping[str, Iterable[Mapping[str, Any]]]
 
 _MISSING: Final = object()
 _INVALID: Final = object()
+_MAX_CANONICAL_DEPTH: Final = 64
+_MIN_BIGINT: Final = -(2**63)
+_MAX_BIGINT: Final = 2**63 - 1
+_FINGERPRINT_PATTERN: Final = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_SOURCE_HASH_PATTERN: Final = re.compile(r"[0-9a-f]{64}\Z")
 
 _TABLE_ORDER: Final[tuple[str, ...]] = (
     "concept",
@@ -86,6 +94,49 @@ _CONCEPT_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
 }
 
 _ALLOWED_STANDARD_CONCEPTS: Final[frozenset[str]] = frozenset({"", "C", "N", "S"})
+_VIOLATION_REASONS: Final[frozenset[str]] = frozenset(
+    {
+        "ambiguous_event",
+        "conflicting_vocabulary_mapping",
+        "duplicate_primary_key",
+        "invalid_primary_key",
+        "invalid_provenance",
+        "invalid_reference",
+        "invalid_standard_concept",
+        "missing_primary_key",
+        "missing_provenance",
+        "missing_reference",
+        "nonstandard_concept_reference",
+        "nonstandard_target_concept",
+        "person_visit_mismatch",
+        "provenance_mismatch",
+        "unreachable_event",
+        "vocabulary_mismatch",
+    }
+)
+_VIOLATION_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        *_PRIMARY_KEYS.values(),
+        *_DOMAIN_TABLES.values(),
+        *_SOURCE_CONCEPT_COLUMNS.values(),
+        *(column for columns in _CONCEPT_COLUMNS.values() for column in columns),
+        "note_id",
+        "note_nlp_event_id",
+        "note_nlp_id",
+        "person_id",
+        "source_code",
+        "source_note_hash",
+        "source_vocabulary_id",
+        "standard_concept",
+        "target_concept_id",
+        "target_vocabulary_id",
+        "visit_occurrence_id",
+    }
+)
+
+
+class _CohortInputError(ValueError):
+    """Internal marker for deliberately sanitized input errors."""
 
 
 @dataclass(frozen=True)
@@ -97,6 +148,39 @@ class OmopCohortViolation:
     reason: str
     count: int
     row_fingerprints: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.table, str) or self.table not in _TABLE_ORDER:
+            raise ValueError("violation table is unsupported")
+        if self.column is not None and (
+            not isinstance(self.column, str) or self.column not in _VIOLATION_COLUMNS
+        ):
+            raise ValueError("violation column is unsupported")
+        if not isinstance(self.reason, str) or self.reason not in _VIOLATION_REASONS:
+            raise ValueError("violation reason is unsupported")
+        if (
+            isinstance(self.count, bool)
+            or not isinstance(self.count, int)
+            or self.count <= 0
+            or self.count > _MAX_BIGINT
+        ):
+            raise ValueError("violation count must be a positive bounded integer")
+        try:
+            fingerprints = tuple(sorted(set(self.row_fingerprints)))
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError(
+                "row_fingerprints must contain SHA-256 fingerprints"
+            ) from None
+        if not fingerprints or any(
+            not isinstance(value, str) or not _FINGERPRINT_PATTERN.fullmatch(value)
+            for value in fingerprints
+        ):
+            raise ValueError("row_fingerprints must contain SHA-256 fingerprints")
+        if len(fingerprints) > self.count:
+            raise ValueError("row_fingerprints cannot exceed the violation count")
+        object.__setattr__(self, "row_fingerprints", fingerprints)
 
     @property
     def fingerprints(self) -> tuple[str, ...]:
@@ -124,6 +208,42 @@ class OmopCohortValidationReport:
 
     row_counts: Mapping[str, int]
     violations: tuple[OmopCohortViolation, ...]
+
+    def __post_init__(self) -> None:
+        counts: dict[str, int] = {}
+        try:
+            items = tuple(self.row_counts.items())
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError("row_counts must be a table count mapping") from None
+        for table, count in items:
+            if not isinstance(table, str) or table not in _TABLE_ORDER:
+                raise ValueError("row_counts contains an unsupported table")
+            if (
+                isinstance(count, bool)
+                or not isinstance(count, int)
+                or count < 0
+                or count > _MAX_BIGINT
+            ):
+                raise ValueError(
+                    "row_counts must contain bounded non-negative integers"
+                )
+            counts[table] = count
+        object.__setattr__(
+            self,
+            "row_counts",
+            MappingProxyType({name: counts.get(name, 0) for name in _TABLE_ORDER}),
+        )
+        try:
+            violations = tuple(self.violations)
+        except MemoryError:
+            raise
+        except Exception:
+            raise ValueError("violations must be an iterable of violations") from None
+        if not all(isinstance(item, OmopCohortViolation) for item in violations):
+            raise TypeError("violations must contain OmopCohortViolation instances")
+        object.__setattr__(self, "violations", violations)
 
     @property
     def violation_count(self) -> int:
@@ -159,7 +279,7 @@ class OmopCohortValidationReport:
     def by_table(self) -> Mapping[str, int]:
         """Return deterministic failure counts grouped by table."""
 
-        counts = Counter()
+        counts: Counter[str] = Counter()
         for item in self.violations:
             counts[item.table] += item.count
         return dict(sorted(counts.items()))
@@ -168,7 +288,7 @@ class OmopCohortValidationReport:
     def by_reason(self) -> Mapping[str, int]:
         """Return deterministic failure counts grouped by reason."""
 
-        counts = Counter()
+        counts: Counter[str] = Counter()
         for item in self.violations:
             counts[item.reason] += item.count
         return dict(sorted(counts.items()))
@@ -189,6 +309,8 @@ class OmopCohortExportValidationError(ValueError):
     """Raised by the assertion helper with only aggregate diagnostics."""
 
     def __init__(self, report: OmopCohortValidationReport) -> None:
+        if not isinstance(report, OmopCohortValidationReport):
+            raise TypeError("report must be an OmopCohortValidationReport")
         self.report = report
         super().__init__(
             "OMOP cohort export validation failed with "
@@ -241,26 +363,35 @@ class _FailureCollector:
 
 
 def omop_row_fingerprint(table: str, row: Mapping[str, Any]) -> str:
-    """Return a deterministic, non-reversible fingerprint for one OMOP row.
+    """Return a deterministic content fingerprint for one OMOP row.
 
     The table name is included so identical rows in different tables do not
     share a diagnostic fingerprint.  The input is serialized only to compute
     the digest; it is never returned or embedded in an exception.
     """
 
-    payload = {
-        "schema": "openmed.omop.cohort-check.v1",
-        "table": table,
-        "row": _canonicalize(row),
-    }
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    try:
+        if not isinstance(table, str) or table not in _TABLE_ORDER:
+            raise ValueError("OMOP row table is unsupported")
+        if not isinstance(row, Mapping):
+            raise TypeError("OMOP row must be a mapping")
+        payload = {
+            "schema": "openmed.omop.cohort-check.v1",
+            "table": table,
+            "row": _canonicalize(row),
+        }
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    except MemoryError:
+        raise
+    except Exception:
+        raise ValueError("OMOP row cannot be fingerprinted safely") from None
 
 
 def validate_omop_cohort_export(
@@ -279,6 +410,19 @@ def validate_omop_cohort_export(
     aggregate counts and row fingerprints do.
     """
 
+    try:
+        return _validate_omop_cohort_export(export)
+    except MemoryError:
+        raise
+    except _CohortInputError as exc:
+        raise ValueError(str(exc)) from None
+    except Exception:
+        raise ValueError("cohort export could not be validated safely") from None
+
+
+def _validate_omop_cohort_export(
+    export: OmopCdmTables | TableRows | Mapping[str, Any],
+) -> OmopCohortValidationReport:
     tables = _normalise_tables(export)
     row_counts = {name: len(tables[name]) for name in _TABLE_ORDER}
     collector = _FailureCollector()
@@ -327,31 +471,40 @@ def _normalise_tables(
         nested = export.get("tables")
         source = nested if isinstance(nested, Mapping) else export
     else:
-        raise TypeError("cohort export must be an OMOP table mapping")
+        raise _CohortInputError("cohort export must be an OMOP table mapping")
 
     normalised: dict[str, tuple[dict[str, Any], ...]] = {}
     known_tables = set(_TABLE_ORDER)
     for raw_name, raw_rows in source.items():
-        name = str(raw_name).lower()
+        if not isinstance(raw_name, str):
+            raise _CohortInputError("cohort export table names must be strings")
+        name = raw_name.lower()
         if name not in known_tables:
-            raise ValueError("cohort export contains an unsupported table")
+            raise _CohortInputError("cohort export contains an unsupported table")
         if raw_rows is None:
             rows: Iterable[Any] = ()
         elif isinstance(raw_rows, (str, bytes, bytearray)):
-            raise ValueError("cohort export table rows must be mappings")
+            raise _CohortInputError("cohort export table rows must be mappings")
         else:
             try:
                 rows = iter(raw_rows)
-            except TypeError as exc:
-                raise ValueError("cohort export table rows must be iterable") from exc
+            except MemoryError:
+                raise
+            except Exception:
+                raise _CohortInputError(
+                    "cohort export table rows must be iterable"
+                ) from None
 
         materialised: list[dict[str, Any]] = []
         for row in rows:
             if not isinstance(row, Mapping):
-                raise ValueError("cohort export table rows must be mappings")
-            materialised.append(dict(row))
+                raise _CohortInputError("cohort export table rows must be mappings")
+            copied = dict(row)
+            if not all(isinstance(column, str) for column in copied):
+                raise _CohortInputError("cohort export column names must be strings")
+            materialised.append(copied)
         if name in normalised:
-            raise ValueError("cohort export contains duplicate table names")
+            raise _CohortInputError("cohort export contains duplicate table names")
         normalised[name] = tuple(materialised)
 
     return {name: normalised.get(name, ()) for name in _TABLE_ORDER}
@@ -366,16 +519,26 @@ def _build_primary_indexes(
     }
     for table in _TABLE_ORDER:
         primary_key = _PRIMARY_KEYS[table]
+        candidates: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
         for row in tables[table]:
             value = _identifier(row.get(primary_key, _MISSING))
-            if value is _MISSING:
+            if value is _MISSING or value is None:
                 collector.add(table, row, "missing_primary_key", primary_key)
-            elif value is _INVALID:
+            elif value is _INVALID or not isinstance(value, int):
                 collector.add(table, row, "invalid_primary_key", primary_key)
-            elif value in indexes[table]:
-                collector.add(table, row, "duplicate_primary_key", primary_key)
             else:
-                indexes[table][value] = row
+                candidates[value].append(row)
+        for value, rows in candidates.items():
+            if len(rows) == 1:
+                indexes[table][value] = rows[0]
+                continue
+            for duplicate_row in rows:
+                collector.add(
+                    table,
+                    duplicate_row,
+                    "duplicate_primary_key",
+                    primary_key,
+                )
     return indexes
 
 
@@ -461,26 +624,24 @@ def _validate_relationships(
                     required=True,
                 )
     for table, column in _DOMAIN_TABLES.items():
-        if _field_enabled(tables[table], column):
-            _check_reference(
-                tables[table],
-                indexes["concept"],
-                table,
-                column,
-                collector,
-                required=True,
-            )
+        _check_reference(
+            tables[table],
+            indexes["concept"],
+            table,
+            column,
+            collector,
+            required=True,
+        )
 
     for table, source_column in _SOURCE_CONCEPT_COLUMNS.items():
-        if _field_enabled(tables[table], source_column):
-            _check_reference(
-                tables[table],
-                indexes["concept"],
-                table,
-                source_column,
-                collector,
-                required=True,
-            )
+        _check_reference(
+            tables[table],
+            indexes["concept"],
+            table,
+            source_column,
+            collector,
+            required=True,
+        )
 
     _validate_person_visit_consistency(tables, indexes, collector)
 
@@ -501,11 +662,7 @@ def _validate_person_visit_consistency(
         for row in tables[table]:
             visit_id = _identifier(row.get("visit_occurrence_id", _MISSING))
             person_id = _identifier(row.get("person_id", _MISSING))
-            if visit_id in (_MISSING, _INVALID, None) or person_id in (
-                _MISSING,
-                _INVALID,
-                None,
-            ):
+            if not isinstance(visit_id, int) or not isinstance(person_id, int):
                 continue
             visit = indexes["visit_occurrence"].get(visit_id)
             if visit is None:
@@ -535,7 +692,7 @@ def _validate_vocabulary(
     for table, concept_column in _DOMAIN_TABLES.items():
         for row in tables[table]:
             concept_id = _identifier(row.get(concept_column, _MISSING))
-            if concept_id in (_MISSING, _INVALID, None):
+            if not isinstance(concept_id, int):
                 continue
             concept = indexes["concept"].get(concept_id)
             if concept is None:
@@ -624,7 +781,7 @@ def _validate_provenance(
     for row in tables["note"]:
         if _field_enabled(tables["note"], "source_note_hash"):
             source_hash = _text_value(row.get("source_note_hash", _MISSING))
-            if not source_hash:
+            if not _valid_source_hash(source_hash):
                 collector.add("note", row, "invalid_provenance", "source_note_hash")
 
     for table in domain_tables:
@@ -641,6 +798,8 @@ def _validate_provenance(
             for field in fields_enabled:
                 if field not in row or _is_empty(row.get(field)):
                     collector.add(table, row, "missing_provenance", field)
+            if source_hash and not _valid_source_hash(source_hash):
+                collector.add(table, row, "invalid_provenance", "source_note_hash")
 
             note = note_indexes.get(note_id) if isinstance(note_id, int) else None
             note_nlp = (
@@ -680,22 +839,34 @@ def _validate_provenance(
 
     for row in tables["note_nlp"]:
         event_id = _identifier(row.get("note_nlp_event_id", _MISSING))
-        if event_id in (_MISSING, _INVALID, None):
+        if not isinstance(event_id, int):
             continue
         linked = event_rows.get(event_id, ())
         if not linked:
             collector.add("note_nlp", row, "unreachable_event", "note_nlp_event_id")
             continue
         note_nlp_id = _identifier(row.get("note_nlp_id", _MISSING))
-        if not any(
-            _identifier(domain_row.get("note_nlp_id", _MISSING)) == note_nlp_id
+        matching_rows = [
+            domain_row
             for _, domain_row in linked
-        ):
+            if _identifier(domain_row.get("note_nlp_id", _MISSING)) == note_nlp_id
+        ]
+        if not matching_rows:
             collector.add("note_nlp", row, "provenance_mismatch", "note_nlp_event_id")
+        elif len(matching_rows) > 1:
+            collector.add("note_nlp", row, "ambiguous_event", "note_nlp_event_id")
 
     for row in tables["source_to_concept_map"]:
         note_nlp_id = _identifier(row.get("note_nlp_id", _MISSING))
         source_hash = _text_value(row.get("source_note_hash", _MISSING))
+        if source_hash and not _valid_source_hash(source_hash):
+            collector.add(
+                "source_to_concept_map",
+                row,
+                "invalid_provenance",
+                "source_note_hash",
+            )
+            continue
         if not isinstance(note_nlp_id, int) or not source_hash:
             continue
         note_nlp = note_nlp_indexes.get(note_nlp_id)
@@ -743,20 +914,23 @@ def _field_enabled(rows: Iterable[Mapping[str, Any]], field: str) -> bool:
 def _identifier(value: Any) -> int | object | None:
     if value is _MISSING:
         return _MISSING
-    if value is None or value == "":
+    if value is None:
         return None
     if isinstance(value, bool):
         return _INVALID
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value.strip())
-        except (TypeError, ValueError):
-            return _INVALID
-    try:
+    if isinstance(value, Integral):
         converted = int(value)
-    except (TypeError, ValueError, OverflowError):
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            converted = int(stripped)
+        except ValueError:
+            return _INVALID
+    else:
+        return _INVALID
+    if converted < _MIN_BIGINT or converted > _MAX_BIGINT:
         return _INVALID
     return converted
 
@@ -769,6 +943,10 @@ def _text_value(value: Any) -> str:
     return str(value).strip()
 
 
+def _valid_source_hash(value: str) -> bool:
+    return bool(_SOURCE_HASH_PATTERN.fullmatch(value))
+
+
 def _is_empty(value: Any) -> bool:
     return (
         value is _MISSING
@@ -777,27 +955,61 @@ def _is_empty(value: Any) -> bool:
     )
 
 
-def _canonicalize(value: Any) -> Any:
+def _canonicalize(
+    value: Any,
+    *,
+    _active: set[int] | None = None,
+    _depth: int = 0,
+) -> Any:
+    if _depth > _MAX_CANONICAL_DEPTH:
+        raise ValueError("OMOP row nesting exceeds the supported depth")
     if value is None or isinstance(value, (str, bool, int)):
         return value
     if isinstance(value, float):
         if math.isfinite(value):
             return value
         return {"type": "float", "value": str(value)}
-    if isinstance(value, Mapping):
-        return {
-            str(key): _canonicalize(item)
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        }
-    if isinstance(value, (list, tuple)):
-        return [_canonicalize(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        values = [_canonicalize(item) for item in value]
-        return sorted(values, key=lambda item: json.dumps(item, sort_keys=True))
+    if isinstance(value, (Mapping, list, tuple, set, frozenset)):
+        active = set() if _active is None else _active
+        marker = id(value)
+        if marker in active:
+            raise ValueError("OMOP row contains a cyclic value")
+        active.add(marker)
+        try:
+            if isinstance(value, Mapping):
+                items = [
+                    [
+                        _canonicalize(key, _active=active, _depth=_depth + 1),
+                        _canonicalize(item, _active=active, _depth=_depth + 1),
+                    ]
+                    for key, item in value.items()
+                ]
+                return {
+                    "type": "mapping",
+                    "items": sorted(items, key=_canonical_sort_key),
+                }
+            values = [
+                _canonicalize(item, _active=active, _depth=_depth + 1) for item in value
+            ]
+            if isinstance(value, (set, frozenset)):
+                values.sort(key=_canonical_sort_key)
+            return values
+        finally:
+            active.remove(marker)
     return {
         "type": f"{type(value).__module__}.{type(value).__qualname__}",
         "value": str(value),
     }
+
+
+def _canonical_sort_key(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
 
 
 OmopCohortCheckReport = OmopCohortValidationReport
