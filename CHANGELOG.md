@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a fail-closed local dataset-upload privacy guard with block and
+  redact-to-staging modes, privacy-safe reports, and private atomic staging
+  files (#2297).
 - Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
   DOM-based search-suggestion XSS tracked as CVE-2026-73295.
 
