@@ -440,6 +440,13 @@ DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = MappingProxyType(
             scripts=("Arabic", "Ethiopic", "Hebrew"),
             high_resource_languages=("ar",),
         ),
+        "iranian": LanguageFamily(
+            family_id="iranian",
+            display_name="Iranian",
+            languages=("fa",),
+            scripts=("Arabic",),
+            notes="Persian belongs to the Iranian branch of Indo-Iranian.",
+        ),
         "slavic": LanguageFamily(
             family_id="slavic",
             display_name="Slavic",
