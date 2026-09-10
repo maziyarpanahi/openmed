@@ -126,19 +126,6 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
-from .policy_impact import (
-    CURRENT_POLICY_IMPACT_SCHEMA_VERSION,
-    PolicyImpact,
-    PolicyImpactChange,
-    PolicyImpactDigest,
-    PolicyResource,
-    PolicyVersion,
-    TypedResource,
-    compare_policy_versions,
-    evaluate_policy_impact,
-    policy_impact_digest,
-    simulate_policy_impact,
-)
 from .l_diversity import (
     DiversityClass,
     LDiversityChecker,
@@ -177,6 +164,19 @@ from .membership_inference import (
 )
 from .membership_inference import (
     run_membership_inference_self_test as _run_table_membership_inference_self_test,
+)
+from .policy_impact import (
+    CURRENT_POLICY_IMPACT_SCHEMA_VERSION,
+    PolicyImpact,
+    PolicyImpactChange,
+    PolicyImpactDigest,
+    PolicyResource,
+    PolicyVersion,
+    TypedResource,
+    compare_policy_versions,
+    evaluate_policy_impact,
+    policy_impact_digest,
+    simulate_policy_impact,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .qi_profiler import (

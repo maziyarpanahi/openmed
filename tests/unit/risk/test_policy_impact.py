@@ -151,6 +151,33 @@ def test_policy_version_normalizes_compact_resource_rules_and_waiver_reasons() -
     assert "synthetic review note" not in impact.to_json()
 
 
+def test_bundled_policy_profiles_apply_runtime_gates_to_typed_resources() -> None:
+    impact = evaluate_policy_impact(
+        "hipaa_expert_review_assist",
+        "strict_no_leak",
+        {"PERSON": 2},
+    )
+
+    assert impact.gate_deltas[0].resource_type == "PERSON"
+    assert impact.gate_deltas[0].from_value == ()
+    assert impact.gate_deltas[0].to_value == (
+        "safety_sweep_mandatory",
+        "strict_no_leak",
+    )
+    assert impact.gate_deltas[0].count == 2
+
+
+def test_policy_actions_use_the_supported_action_vocabulary() -> None:
+    with pytest.raises(ValueError) as exc_info:
+        evaluate_policy_impact(
+            {"name": "baseline", "actions": {"clinical_note": "unsupported"}},
+            {"name": "candidate"},
+            {"clinical_note": 1},
+        )
+
+    assert "unsupported" not in str(exc_info.value)
+
+
 def test_equivalent_versions_produce_an_empty_stable_digest() -> None:
     policy = {"name": "stable", "default_action": "mask"}
 

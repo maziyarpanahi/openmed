@@ -22,12 +22,17 @@ from typing import Any, TypeAlias
 
 from openmed.core.audit import stable_hash
 from openmed.core.policy import PolicyName, PolicyProfile, load_policy
-from openmed.core.schemas.span import ACTION_KEEP
+from openmed.core.schemas.span import ACTION_KEEP, ACTION_VALUES
 
 CURRENT_POLICY_IMPACT_SCHEMA_VERSION = 1
 
 _SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _RESOURCE_TYPE_KEYS = ("resource_type", "type", "kind", "label")
+_PROFILE_GATE_FIELDS = (
+    ("strict_no_leak", "strict_no_leak"),
+    ("safety_sweep_mandatory", "safety_sweep_mandatory"),
+    ("reversible_id", "reversible_id"),
+)
 
 GateValue: TypeAlias = bool | str | tuple[str, ...]
 
@@ -148,9 +153,9 @@ class PolicyVersion:
         resource_actions, resource_gates, resource_waivers = _resource_policy_fields(
             value.get("resources")
         )
-        actions = resource_actions
-        gates = resource_gates
-        waivers = resource_waivers
+        actions: Mapping[str, Any] = resource_actions
+        gates: Mapping[str, Any] = resource_gates
+        waivers: Any = resource_waivers
 
         if "actions" in value and value.get("actions") is not None:
             actions = _mapping(value.get("actions"), field_name="actions")
@@ -440,13 +445,13 @@ def _resolve_policy(
     if isinstance(value, PolicyProfile):
         return PolicyVersion(
             name=value.name,
-            actions=value.actions,
-            gates={
-                "strict_no_leak": value.strict_no_leak,
-                "safety_sweep_mandatory": value.safety_sweep_mandatory,
-                "reversible_id": value.reversible_id,
-            },
+            actions={**value.policy_label_actions, **value.actions},
             default_action=value.default_action,
+            default_gate=tuple(
+                gate_name
+                for field_name, gate_name in _PROFILE_GATE_FIELDS
+                if getattr(value, field_name)
+            ),
         )
     if isinstance(value, Mapping):
         return PolicyVersion.from_mapping(value)
@@ -594,7 +599,10 @@ def _normalize_waiver_map(value: Any) -> dict[str, bool]:
 
 
 def _normalize_action(value: Any, *, field_name: str) -> str:
-    return _safe_token(value, field_name=field_name)
+    action = _safe_token(value, field_name=field_name)
+    if action not in ACTION_VALUES:
+        raise ValueError(f"{field_name} must be a supported policy action")
+    return action
 
 
 def _normalize_gate(value: Any, *, field_name: str) -> GateValue:
