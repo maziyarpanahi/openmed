@@ -37,6 +37,9 @@ SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
 SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE"
+SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR = "OPENMED_SERVICE_BATCH_HIGH_WATERMARK"
+SERVICE_BATCH_LOW_WATERMARK_ENV_VAR = "OPENMED_SERVICE_BATCH_LOW_WATERMARK"
+SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"
 SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
 SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
@@ -72,6 +75,9 @@ SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR = (
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
 DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE = 256
+DEFAULT_SERVICE_BATCH_HIGH_WATERMARK = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+DEFAULT_SERVICE_BATCH_LOW_WATERMARK = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK // 2
+DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS = 1000.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
 DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
@@ -127,6 +133,9 @@ class ServiceBatchingConfig:
     max_batch_size: int = DEFAULT_SERVICE_BATCH_MAX_SIZE
     max_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
     max_queue_size: int = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+    high_watermark: int = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK
+    low_watermark: int = DEFAULT_SERVICE_BATCH_LOW_WATERMARK
+    max_queue_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS
 
 
 @dataclass(frozen=True)
@@ -347,6 +356,73 @@ def parse_service_batch_max_queue_size(raw_value: Optional[str]) -> int:
     return parsed
 
 
+def parse_service_batch_high_watermark(
+    raw_value: Optional[str],
+    *,
+    default: int = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK,
+) -> int:
+    """Parse the aggregate outstanding-request high watermark."""
+    if raw_value is None or not raw_value.strip():
+        return int(default)
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed <= 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR} must be greater than 0"
+        )
+    return parsed
+
+
+def parse_service_batch_low_watermark(
+    raw_value: Optional[str],
+    *,
+    high_watermark: int,
+) -> int:
+    """Parse the depth below which hysteretic shedding stops."""
+    if raw_value is None or not raw_value.strip():
+        return max(0, int(high_watermark) // 2)
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_LOW_WATERMARK_ENV_VAR} must be a non-negative integer"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_LOW_WATERMARK_ENV_VAR} must be greater than or equal to 0"
+        )
+    if parsed >= high_watermark:
+        raise ValueError(
+            f"{SERVICE_BATCH_LOW_WATERMARK_ENV_VAR} must be less than "
+            f"{SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR}"
+        )
+    return parsed
+
+
+def parse_service_batch_max_queue_wait_ms(raw_value: Optional[str]) -> float:
+    """Parse the maximum time a request may wait before batch dispatch."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR} must be a non-negative number"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR} must be greater than or equal to 0"
+        )
+    return parsed
+
+
 def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     """Parse the configured graceful-shutdown drain window in seconds."""
     if raw_value is None or not raw_value.strip():
@@ -493,6 +569,13 @@ def parse_service_throttle_config() -> ServiceThrottleConfig:
 
 def parse_service_batching_config() -> ServiceBatchingConfig:
     """Read dynamic-batching settings from the current process environment."""
+    max_queue_size = parse_service_batch_max_queue_size(
+        os.getenv(SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR)
+    )
+    high_watermark = parse_service_batch_high_watermark(
+        os.getenv(SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR),
+        default=max_queue_size,
+    )
     return ServiceBatchingConfig(
         enabled=parse_service_batching_enabled(
             os.getenv(SERVICE_BATCHING_ENABLED_ENV_VAR)
@@ -503,8 +586,14 @@ def parse_service_batching_config() -> ServiceBatchingConfig:
         max_wait_ms=parse_service_batch_max_wait_ms(
             os.getenv(SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR)
         ),
-        max_queue_size=parse_service_batch_max_queue_size(
-            os.getenv(SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR)
+        max_queue_size=max_queue_size,
+        high_watermark=high_watermark,
+        low_watermark=parse_service_batch_low_watermark(
+            os.getenv(SERVICE_BATCH_LOW_WATERMARK_ENV_VAR),
+            high_watermark=high_watermark,
+        ),
+        max_queue_wait_ms=parse_service_batch_max_queue_wait_ms(
+            os.getenv(SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR)
         ),
     )
 

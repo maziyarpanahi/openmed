@@ -159,6 +159,47 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
     class FakeStringType:
         pass
 
+    class RuntimeSeries:
+        pass
+
+    def fake_pandas_udf(return_type):
+        assert isinstance(return_type, FakeStringType)
+
+        def decorate(function):
+            captured_annotations.update(function.__annotations__)
+            return function
+
+        return decorate
+
+    def fake_import_module(name: str):
+        assert name == "pandas"
+        return SimpleNamespace(Series=RuntimeSeries)
+
+    monkeypatch.setattr(
+        spark_udf,
+        "_load_pandas_udf",
+        lambda: (fake_pandas_udf, FakeStringType),
+    )
+    monkeypatch.setattr(
+        spark_udf,
+        "_import_module",
+        fake_import_module,
+    )
+
+    udf = spark_udf.make_deidentify_udf()
+
+    assert callable(udf)
+    series_annotation = captured_annotations["texts"]
+    assert series_annotation is captured_annotations["return"]
+    assert series_annotation is RuntimeSeries
+
+
+def test_make_deidentify_udf_accepts_installed_pandas_series_annotation(monkeypatch):
+    captured_annotations: dict[str, object] = {}
+
+    class FakeStringType:
+        pass
+
     def fake_pandas_udf(return_type):
         assert isinstance(return_type, FakeStringType)
 
@@ -173,14 +214,16 @@ def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypa
         "_load_pandas_udf",
         lambda: (fake_pandas_udf, FakeStringType),
     )
+    monkeypatch.setattr(
+        spark_udf,
+        "_import_module",
+        lambda name: pd if name == "pandas" else None,
+    )
 
     udf = spark_udf.make_deidentify_udf()
 
     assert callable(udf)
-    series_annotation = captured_annotations["texts"]
-    assert series_annotation is captured_annotations["return"]
-    assert getattr(series_annotation, "__module__", None) == "pandas.core.series"
-    assert getattr(series_annotation, "__qualname__", None) == "Series"
+    assert captured_annotations == {"texts": pd.Series, "return": pd.Series}
 
 
 def test_make_deidentify_udf_constructs_real_pandas_udf_when_installed():
