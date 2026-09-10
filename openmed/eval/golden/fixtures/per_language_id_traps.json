@@ -1,0 +1,428 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "fixtures": [
+    {
+      "id": "golden-per-language-id-trap-en",
+      "language": "en",
+      "text": "Synthetic record: valid SSN 123-45-6789, invalid SSN 000-00-0000 for test patient.",
+      "gold_spans": [
+        {
+          "start": 28,
+          "end": 39,
+          "label": "SSN",
+          "text": "123-45-6789",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "ssn"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "en_US",
+        "hard_negatives": [
+          {
+            "start": 53,
+            "end": 64,
+            "text": "000-00-0000",
+            "identifier_type": "ssn",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetic record: valid SSN [SSN], invalid SSN 000-00-0000 for test patient."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-fr",
+      "language": "fr",
+      "text": "Dossier synthétique: NIR valide 242108708540372, NIR invalide 242108708540373 pour patient fictif.",
+      "gold_spans": [
+        {
+          "start": 32,
+          "end": 47,
+          "label": "ID_NUM",
+          "text": "242108708540372",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "nir"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "fr_FR",
+        "hard_negatives": [
+          {
+            "start": 62,
+            "end": 77,
+            "text": "242108708540373",
+            "identifier_type": "nir",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Dossier synthétique: NIR valide [ID_NUM], NIR invalide 242108708540373 pour patient fictif."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-de",
+      "language": "de",
+      "text": "Synthetische Akte: Steuer-ID 38449725069 gültig, 12345678901 ungültig für Testperson.",
+      "gold_spans": [
+        {
+          "start": 29,
+          "end": 40,
+          "label": "ID_NUM",
+          "text": "38449725069",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "steuer_id"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "de_DE",
+        "hard_negatives": [
+          {
+            "start": 49,
+            "end": 60,
+            "text": "12345678901",
+            "identifier_type": "steuer_id",
+            "reason": "fails_structure"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetische Akte: Steuer-ID [ID_NUM] gültig, 12345678901 ungültig für Testperson."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-it",
+      "language": "it",
+      "text": "Cartella sintetica: codice fiscale MNCPNL59L71E221W valido, MNCPNL59L71E2210 invalido per paziente fittizio.",
+      "gold_spans": [
+        {
+          "start": 35,
+          "end": 51,
+          "label": "ID_NUM",
+          "text": "MNCPNL59L71E221W",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "codice_fiscale"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "it_IT",
+        "hard_negatives": [
+          {
+            "start": 60,
+            "end": 76,
+            "text": "MNCPNL59L71E2210",
+            "identifier_type": "codice_fiscale",
+            "reason": "fails_structure"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Cartella sintetica: codice fiscale [ID_NUM] valido, MNCPNL59L71E2210 invalido per paziente fittizio."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-es",
+      "language": "es",
+      "text": "Nota sintética: DNI 12345678Z válido, DNI 12345678X inválido para paciente ficticio.",
+      "gold_spans": [
+        {
+          "start": 20,
+          "end": 29,
+          "label": "ID_NUM",
+          "text": "12345678Z",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "dni"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "es_ES",
+        "hard_negatives": [
+          {
+            "start": 42,
+            "end": 51,
+            "text": "12345678X",
+            "identifier_type": "dni",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Nota sintética: DNI [ID_NUM] válido, DNI 12345678X inválido para paciente ficticio."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-nl",
+      "language": "nl",
+      "text": "Synthetisch dossier: BSN 456378923 geldig, BSN 456378924 ongeldig voor testpatiënt.",
+      "gold_spans": [
+        {
+          "start": 25,
+          "end": 34,
+          "label": "ID_NUM",
+          "text": "456378923",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "bsn"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "nl_NL",
+        "hard_negatives": [
+          {
+            "start": 47,
+            "end": 56,
+            "text": "456378924",
+            "identifier_type": "bsn",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetisch dossier: BSN [ID_NUM] geldig, BSN 456378924 ongeldig voor testpatiënt."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-hi",
+      "language": "hi",
+      "text": "सिंथेटिक नोट: आधार 659676687472 मान्य, आधार 659676687473 अमान्य परीक्षण रोगी के लिए।",
+      "gold_spans": [
+        {
+          "start": 19,
+          "end": 31,
+          "label": "ID_NUM",
+          "text": "659676687472",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "hi_IN",
+        "hard_negatives": [
+          {
+            "start": 44,
+            "end": 56,
+            "text": "659676687473",
+            "identifier_type": "aadhaar",
+            "reason": "fails_verhoeff"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "सिंथेटिक नोट: आधार [ID_NUM] मान्य, आधार 659676687473 अमान्य परीक्षण रोगी के लिए।"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-te",
+      "language": "te",
+      "text": "కృత్రిమ గమనిక: ఆధార్ 691256223921 చెల్లుబాటు, ఆధార్ 691256223922 చెల్లని పరీక్ష రోగి కోసం.",
+      "gold_spans": [
+        {
+          "start": 21,
+          "end": 33,
+          "label": "ID_NUM",
+          "text": "691256223921",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "en_IN",
+        "hard_negatives": [
+          {
+            "start": 52,
+            "end": 64,
+            "text": "691256223922",
+            "identifier_type": "aadhaar",
+            "reason": "fails_verhoeff"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "కృత్రిమ గమనిక: ఆధార్ [ID_NUM] చెల్లుబాటు, ఆధార్ 691256223922 చెల్లని పరీక్ష రోగి కోసం."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-pt",
+      "language": "pt",
+      "text": "Nota sintética: CPF 456.378.921-64 válido, CPF 456.378.921-65 inválido para paciente fictício.",
+      "gold_spans": [
+        {
+          "start": 20,
+          "end": 34,
+          "label": "ID_NUM",
+          "text": "456.378.921-64",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "cpf"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "pt_BR",
+        "hard_negatives": [
+          {
+            "start": 47,
+            "end": 61,
+            "text": "456.378.921-65",
+            "identifier_type": "cpf",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Nota sintética: CPF [ID_NUM] válido, CPF 456.378.921-65 inválido para paciente fictício."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-ar",
+      "language": "ar",
+      "text": "ملاحظة اصطناعية: رقم قومي 29801011234567 صالح، رقم قومي 29813011234567 غير صالح للمريض التجريبي.",
+      "gold_spans": [
+        {
+          "start": 26,
+          "end": 40,
+          "label": "ID_NUM",
+          "text": "29801011234567",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "egyptian_national_id"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "ar_EG",
+        "hard_negatives": [
+          {
+            "start": 56,
+            "end": 70,
+            "text": "29813011234567",
+            "identifier_type": "egyptian_national_id",
+            "reason": "fails_structure"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "ملاحظة اصطناعية: رقم قومي [ID_NUM] صالح، رقم قومي 29813011234567 غير صالح للمريض التجريبي."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-ja",
+      "language": "ja",
+      "text": "合成メモ: マイナンバー 1234 5678 9012 有効、1234/5678/9012 無効（形式不正）テスト患者。",
+      "gold_spans": [
+        {
+          "start": 13,
+          "end": 27,
+          "label": "ID_NUM",
+          "text": "1234 5678 9012",
+          "metadata": {
+            "checksum_status": "not_validated",
+            "identifier_type": "my_number"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "ja_JP",
+        "hard_negatives": [
+          {
+            "start": 31,
+            "end": 45,
+            "text": "1234/5678/9012",
+            "identifier_type": "my_number",
+            "reason": "format_mismatch"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "合成メモ: マイナンバー [ID_NUM] 有効、1234/5678/9012 無効（形式不正）テスト患者。"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-tr",
+      "language": "tr",
+      "text": "Sentetik not: TCKN 13198785260 geçerli, TCKN 13198785261 geçersiz test hastası için.",
+      "gold_spans": [
+        {
+          "start": 19,
+          "end": 30,
+          "label": "ID_NUM",
+          "text": "13198785260",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "tckn"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "tr_TR",
+        "hard_negatives": [
+          {
+            "start": 45,
+            "end": 56,
+            "text": "13198785261",
+            "identifier_type": "tckn",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Sentetik not: TCKN [ID_NUM] geçerli, TCKN 13198785261 geçersiz test hastası için."
+        }
+      }
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden"
+}

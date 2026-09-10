@@ -14,7 +14,19 @@ let package = Package(
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        )
+        ),
+        .library(
+            name: "OpenMedExtensionSupport",
+            targets: ["OpenMedExtensionSupport"]
+        ),
+        .library(
+            name: "OpenMedShareExtension",
+            targets: ["OpenMedShareExtension"]
+        ),
+        .library(
+            name: "OpenMedActionExtension",
+            targets: ["OpenMedActionExtension"]
+        ),
     ],
     dependencies: [
         .package(
@@ -60,10 +72,35 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .target(
+            name: "OpenMedExtensionSupport",
+            dependencies: ["OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/OpenMedExtensionSupport"
+        ),
+        .target(
+            name: "OpenMedShareExtension",
+            dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/ShareExtension"
+        ),
+        .target(
+            name: "OpenMedActionExtension",
+            dependencies: ["OpenMedExtensionSupport"],
+            path: "swift/OpenMedKit/Sources/ActionExtension"
+        ),
         .testTarget(
             name: "OpenMedKitTests",
             dependencies: ["OpenMedKit"],
             path: "swift/OpenMedKit/Tests/OpenMedKitTests"
+        ),
+        .testTarget(
+            name: "ExtensionTests",
+            dependencies: [
+                "OpenMedKit",
+                "OpenMedExtensionSupport",
+                "OpenMedShareExtension",
+                "OpenMedActionExtension",
+            ],
+            path: "swift/OpenMedKit/Tests/ExtensionTests"
         ),
     ]
 )
