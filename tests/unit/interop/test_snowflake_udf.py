@@ -67,7 +67,10 @@ def test_register_udf_forwards_handler_and_name(monkeypatch):
     assert registered["packages"] == ["openmed", "pandas"]
     assert registered["imports"] == ["@stage/helper.py"]
     assert isinstance(registered["return_type"], FakeStringType)
-    assert isinstance(registered["input_types"][0], FakeStringType)  # type: ignore[index]
+    input_types = registered["input_types"]
+    assert isinstance(input_types, list)
+    assert len(input_types) == 1
+    assert isinstance(input_types[0], FakeStringType)
 
 
 def test_generate_create_function_sql_contains_python_handler_and_package():

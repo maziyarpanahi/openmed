@@ -10,7 +10,10 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from importlib import import_module as _import_module
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from openmed.core.pii import DeidentificationMethod
 
 DEFAULT_HANDLER = "openmed.interop.snowflake_udf.deidentify_udf"
 DEFAULT_NAME = "OPENMED_DEIDENTIFY"
@@ -41,7 +44,11 @@ def deidentify_udf(
 
     from openmed import deidentify
 
-    result = deidentify(text, method=method, policy=policy)
+    result: Any = deidentify(
+        text,
+        method=cast("DeidentificationMethod", method),
+        policy=policy,
+    )
     if isinstance(result, str):
         return result
     try:
