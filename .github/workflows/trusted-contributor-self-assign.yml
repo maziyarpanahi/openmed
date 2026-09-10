@@ -1,0 +1,31 @@
+name: Trusted contributor self-assignment
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  self-assign:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.issue.state == 'open' &&
+      github.event.comment.user.type != 'Bot' &&
+      github.event.comment.body == '/assign'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify contributor and assign issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/trusted_self_assign.py
