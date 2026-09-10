@@ -225,15 +225,7 @@ def _scrub_trace(path: str | os.PathLike[str]) -> SessionScrubResult:
     """
 
     trace_path = _coerce_trace_path(path)
-    try:
-        if trace_path.is_symlink() or not trace_path.is_file():
-            raise SessionTraceError("trace_not_found")
-        original_stat = trace_path.stat()
-        original_bytes = trace_path.read_bytes()
-    except SessionTraceError:
-        raise
-    except (OSError, ValueError, TypeError) as exc:
-        raise SessionTraceError("trace_not_found") from exc
+    original_bytes, original_stat = _read_trace(trace_path)
 
     try:
         text = original_bytes.decode("utf-8")
@@ -271,12 +263,7 @@ def _scrub_trace(path: str | os.PathLike[str]) -> SessionScrubResult:
     except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
         raise SessionTraceError("validation_failed") from exc
 
-    try:
-        current_stat = trace_path.stat()
-    except OSError as exc:
-        raise SessionTraceError("trace_not_found") from exc
-    if not _same_file_snapshot(original_stat, current_stat):
-        raise SessionTraceError("concurrent_change")
+    _assert_trace_unchanged(trace_path, original_stat)
 
     try:
         _atomic_replace(trace_path, scrubbed_bytes, original_stat)
@@ -364,6 +351,71 @@ def _coerce_trace_path(path: str | os.PathLike[str]) -> Path:
     if not str(trace_path):
         raise SessionTraceError("invalid_path")
     return trace_path
+
+
+def _read_trace(path: Path) -> tuple[bytes, os.stat_result]:
+    """Read a single-link regular file through its validated descriptor."""
+
+    descriptor: int | None = None
+    verification_descriptor: int | None = None
+    try:
+        before_open = path.lstat()
+        _validate_trace_file(before_open, "trace_not_found")
+        descriptor = os.open(os.fspath(path), _trace_open_flags())
+        opened = os.fstat(descriptor)
+        after_open = path.lstat()
+        verification_descriptor = os.open(os.fspath(path), _trace_open_flags())
+        verified = os.fstat(verification_descriptor)
+        _validate_trace_file(opened, "concurrent_change")
+        _validate_trace_file(after_open, "concurrent_change")
+        _validate_trace_file(verified, "concurrent_change")
+        if (
+            not _same_file_snapshot(before_open, after_open)
+            or not _same_file_snapshot(opened, verified)
+            or _portable_snapshot(before_open) != _portable_snapshot(opened)
+        ):
+            raise SessionTraceError("concurrent_change")
+        os.close(verification_descriptor)
+        verification_descriptor = None
+
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = None
+            payload = source.read()
+            after_read = os.fstat(source.fileno())
+        _validate_trace_file(after_read, "concurrent_change")
+        if not _same_file_snapshot(opened, after_read):
+            raise SessionTraceError("concurrent_change")
+        _assert_trace_unchanged(path, after_read)
+        return payload, after_read
+    except SessionTraceError:
+        raise
+    except (OSError, TypeError, ValueError):
+        raise SessionTraceError("trace_not_found") from None
+    finally:
+        if verification_descriptor is not None:
+            try:
+                os.close(verification_descriptor)
+            except OSError:
+                pass
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def _validate_trace_file(metadata: os.stat_result, error_code: str) -> None:
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        raise SessionTraceError(error_code)
+
+
+def _trace_open_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
 
 
 def _parse_trace(text: str, suffix: str) -> tuple[Any, str]:
@@ -493,6 +545,8 @@ def _category_for_key(key: str) -> str | None:
     normalized = re.sub(r"[^a-z0-9]+", "_", key.casefold()).strip("_")
     if not normalized:
         return None
+    if normalized in {"parent_span_id", "span_id", "trace_id"}:
+        return None
     tokens = set(normalized.split("_"))
     for category, candidates in _SENSITIVE_KEY_GROUPS:
         for candidate in candidates:
@@ -607,11 +661,49 @@ def _suffix_for_format(format_name: str) -> str:
 
 def _same_file_snapshot(before: os.stat_result, after: os.stat_result) -> bool:
     return (
-        before.st_dev == after.st_dev
-        and before.st_ino == after.st_ino
-        and before.st_size == after.st_size
-        and before.st_mtime_ns == after.st_mtime_ns
+        stat.S_ISREG(before.st_mode)
+        and stat.S_ISREG(after.st_mode)
+        and os.path.samestat(before, after)
+        and _portable_snapshot(before) == _portable_snapshot(after)
     )
+
+
+def _portable_snapshot(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _assert_trace_unchanged(path: Path, expected: os.stat_result) -> None:
+    descriptor: int | None = None
+    try:
+        before_open = path.lstat()
+        _validate_trace_file(before_open, "concurrent_change")
+        descriptor = os.open(os.fspath(path), _trace_open_flags())
+        opened = os.fstat(descriptor)
+        after_open = path.lstat()
+        _validate_trace_file(opened, "concurrent_change")
+        _validate_trace_file(after_open, "concurrent_change")
+        if (
+            not _same_file_snapshot(before_open, after_open)
+            or not _same_file_snapshot(expected, opened)
+            or _portable_snapshot(after_open) != _portable_snapshot(opened)
+        ):
+            raise SessionTraceError("concurrent_change")
+    except SessionTraceError:
+        raise
+    except (OSError, TypeError, ValueError):
+        raise SessionTraceError("concurrent_change") from None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def _atomic_replace(
@@ -630,8 +722,12 @@ def _atomic_replace(
         with os.fdopen(fd, "wb") as temporary:
             temporary.write(payload)
             temporary.flush()
-            os.chmod(temporary_name, mode)
+            if hasattr(os, "fchmod"):
+                os.fchmod(temporary.fileno(), mode)
+            else:
+                os.chmod(temporary_name, mode)
             os.fsync(temporary.fileno())
+        _assert_trace_unchanged(path, original_stat)
         os.replace(temporary_name, path)
         temporary_name = None
         _fsync_directory(path.parent)

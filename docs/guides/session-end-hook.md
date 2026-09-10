@@ -50,8 +50,11 @@ hosts should avoid placing raw sensitive content in traces in the first place.
 
 Invoke the hook once the host has closed the completed trace file. The host
 must provide exactly one path and should treat any non-zero exit code as a
-failed cleanup. A host can use the quiet exit status, or request `--json` for
-counts-only evidence. The hook does not remove or inspect unrelated files.
+failed cleanup. The path must identify a regular file with exactly one hard
+link; symbolic links and multiply linked files are rejected so replacement
+cannot leave the original trace reachable through another path. A host can use
+the quiet exit status, or request `--json` for counts-only evidence. The hook
+does not remove or inspect unrelated files.
 
 Example synthetic trace:
 

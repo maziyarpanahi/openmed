@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -57,6 +59,7 @@ def test_scrub_trace_is_deterministic_structural_and_value_free(
     assert result.format == "json"
     assert result.redaction_count >= 3
     assert scrubbed.keys() == source.keys()
+    assert scrubbed["trace_id"] == source["trace_id"]
     assert scrubbed["spans"][0]["attributes"][0]["value"] == {
         "stringValue": "[REDACTED:EMAIL]"
     }
@@ -157,3 +160,70 @@ def test_jsonl_path_preserves_record_and_value_shapes(tmp_path: Path) -> None:
     assert len(records) == 2
     assert records[0] == {"event": "start", "sequence": 1}
     assert records[1] == {"email": "[REDACTED:EMAIL]"}
+
+
+def test_symlink_and_hard_link_inputs_are_rejected(tmp_path: Path) -> None:
+    target = tmp_path / "target.json"
+    original = json.dumps({"email": "synthetic.person@example.test"})
+    target.write_text(original, encoding="utf-8")
+
+    symlink = tmp_path / "symlink.json"
+    try:
+        symlink.symlink_to(target)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+    with pytest.raises(SessionTraceError) as symlink_error:
+        scrub_trace(symlink)
+    assert symlink_error.value.code == "trace_not_found"
+
+    hard_link = tmp_path / "hard-link.json"
+    os.link(target, hard_link)
+    with pytest.raises(SessionTraceError) as hard_link_error:
+        scrub_trace(target)
+    assert hard_link_error.value.code == "trace_not_found"
+    assert target.read_text(encoding="utf-8") == original
+    assert hard_link.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes are required")
+def test_replacement_preserves_source_mode(tmp_path: Path) -> None:
+    trace_path = tmp_path / "trace.json"
+    trace_path.write_text(
+        json.dumps({"email": "synthetic.person@example.test"}),
+        encoding="utf-8",
+    )
+    trace_path.chmod(0o640)
+
+    scrub_trace(trace_path)
+
+    assert stat.S_IMODE(trace_path.stat().st_mode) == 0o640
+
+
+def test_change_during_temporary_write_is_not_overwritten(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trace_path = tmp_path / "trace.json"
+    trace_path.write_text(
+        json.dumps({"email": "synthetic.person@example.test"}),
+        encoding="utf-8",
+    )
+    concurrent = json.dumps({"event": "concurrent-writer"})
+    real_fsync = os.fsync
+    mutated = False
+
+    def mutate_before_replace(descriptor: int) -> None:
+        nonlocal mutated
+        real_fsync(descriptor)
+        if not mutated:
+            mutated = True
+            trace_path.write_text(concurrent, encoding="utf-8")
+
+    monkeypatch.setattr("openmed.guard.session_hook.os.fsync", mutate_before_replace)
+
+    with pytest.raises(SessionTraceError) as exc_info:
+        scrub_trace(trace_path)
+
+    assert exc_info.value.code == "concurrent_change"
+    assert trace_path.read_text(encoding="utf-8") == concurrent
+    assert not list(tmp_path.glob(".openmed-session-scrub-*.tmp"))
