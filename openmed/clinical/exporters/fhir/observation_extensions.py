@@ -317,8 +317,8 @@ def check_observation_extensions(
 
     raw_extensions = observation.get("extension")
     if raw_extensions is None:
-        return findings
-    if not isinstance(raw_extensions, list):
+        raw_extensions = []
+    elif not isinstance(raw_extensions, list):
         findings.append(
             _finding(
                 "extension-not-array",

@@ -175,6 +175,24 @@ def test_custom_rule_checks_the_runtime_shape_of_the_allowlisted_value():
     ]
 
 
+def test_required_allowlisted_extension_is_checked_when_extension_is_absent():
+    custom_url = "https://synthetic.example/fhir/StructureDefinition/required"
+
+    findings = check_observation_extensions(
+        {"resourceType": "Observation"},
+        allowed_extensions={
+            custom_url: {
+                "value_types": ["valueBoolean"],
+                "min_occurs": 1,
+            }
+        },
+    )
+
+    assert [finding["finding_code"] for finding in findings] == [
+        "extension-cardinality"
+    ]
+
+
 def test_checker_does_not_mutate_the_observation_and_outcome_is_fhir_shaped():
     resource = _observation([_unknown_state()])
     snapshot = deepcopy(resource)

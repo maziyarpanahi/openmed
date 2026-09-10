@@ -48,6 +48,7 @@ from .grounded import (
     FHIR_RESOURCE_TYPES,
     to_fhir,
 )
+from .observation import to_observation
 from .observation_extensions import (
     DEFAULT_OBSERVATION_EXTENSION_RULES,
     FHIR_R4,
@@ -60,7 +61,6 @@ from .observation_extensions import (
     check_observation_extensions,
     validate_observation_extensions,
 )
-from .observation import to_observation
 from .operation_outcome import (
     OperationOutcomeIssue,
     from_validation_result,
