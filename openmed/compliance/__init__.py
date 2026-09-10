@@ -78,23 +78,6 @@ from .iso27701 import (
     load_control_evidence_schema,
     render_control_evidence_markdown,
 )
-from .privacy_gate import (
-    PRIVACY_GATE_REPORT_TYPE,
-    PRIVACY_GATE_SCHEMA_VERSION,
-    GateResult,
-    GateState,
-    GateStatus,
-    PrivacyGateAggregator,
-    PrivacyGateDecisionRecord,
-    PrivacyGateResult,
-    PrivacyGateState,
-    PrivacyReleaseGateRecord,
-    ReleaseDecision,
-    aggregate_privacy_gate_results,
-    aggregate_privacy_gates,
-    build_privacy_release_gate,
-    render_privacy_release_gate,
-)
 from .part11 import (
     PART11_EVENT_TYPE,
     PART11_FORMAT,
@@ -111,6 +94,23 @@ from .part11 import (
     hash_state,
     readiness_checklist,
     verify_part11_audit_trail,
+)
+from .privacy_gate import (
+    PRIVACY_GATE_REPORT_TYPE,
+    PRIVACY_GATE_SCHEMA_VERSION,
+    GateResult,
+    GateState,
+    GateStatus,
+    PrivacyGateAggregator,
+    PrivacyGateDecisionRecord,
+    PrivacyGateResult,
+    PrivacyGateState,
+    PrivacyReleaseGateRecord,
+    ReleaseDecision,
+    aggregate_privacy_gate_results,
+    aggregate_privacy_gates,
+    build_privacy_release_gate,
+    render_privacy_release_gate,
 )
 from .release_evidence import build_release_expert_review_evidence
 from .safe_harbor import (
