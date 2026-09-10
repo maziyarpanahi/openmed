@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>تشغيل محلي أولاً</b> &nbsp;·&nbsp; <b>34 لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 إدخالاً في البيان</b> &nbsp;·&nbsp; <b>33 لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -118,7 +118,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
 ]
 ```
 
@@ -329,7 +329,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII متعدد اللغات (35 مسارًا مدعومًا؛ 34 مدعومًا بالنماذج)
+## PII متعدد اللغات (36 مسارًا مدعومًا؛ 33 مدعومًا بالنماذج)
 
 الاستخراج وإزالة الهوية في `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و`tr`، **فهرس نماذج PII المسجّل** إجمالاً.
 
@@ -470,7 +470,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 </div>
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

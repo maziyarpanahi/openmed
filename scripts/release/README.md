@@ -33,10 +33,16 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 3,282,557 bytes. Its maximum is 3,610,813
+The committed wheel baseline is 4,076,360 bytes. Its maximum is 4,483,996
 bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
+
+The v2.2 baseline is the byte-identical result of two clean Metadata 2.4 builds
+after auditing 62,667 added and 786 removed source lines across 169 Python
+files in the v2.1-to-v2.2 range. The payload inspection found source,
+synthetic metadata, and the committed model manifest rather than an unexpected
+binary or restricted vocabulary asset.
 
 The JSON size report records the wheel size plus total site-packages bytes for
 `openmed`, `openmed[zh]`, and `openmed[indic]`. Each language profile includes
@@ -58,3 +64,22 @@ not accept environment-variable overrides.
 5. Run both checks above and include the resulting measurements in the review.
 
 Do not raise a budget merely to make an unexplained regression pass.
+
+## Retraining recipe proposals
+
+`retrain_queue.py` consumes the committed aggregate-only input contract at
+`gates/retrain_trigger_inputs.json`. It writes the complete decision evidence
+and queued JSONL records separately, then updates `recipes/<family>.yaml` only
+for families whose weighted score reaches the configured threshold:
+
+```bash
+python scripts/release/retrain_queue.py \
+  --queue-output artifacts/retrain-trigger/retrain_queue.jsonl \
+  --evidence-output artifacts/retrain-trigger/decision_evidence.json \
+  --summary-output artifacts/retrain-trigger/dispatch_summary.json
+```
+
+The scheduled workflow uploads queue and decision evidence as workflow
+artifacts. It opens a configuration-only pull request when a recipe actually
+changes. The workflow never trains, converts, or publishes model artifacts;
+the normal downstream release gates remain mandatory before promotion.
