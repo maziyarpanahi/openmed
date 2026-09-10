@@ -25,7 +25,7 @@ export interface OrtCapabilityGlobalScope {
   SharedArrayBuffer?: typeof SharedArrayBuffer;
   crossOriginIsolated?: boolean;
   navigator?: {
-    gpu?: unknown;
+    gpu?: WebGpuNavigatorProbe | null | unknown;
     hardwareConcurrency?: number;
   };
 }
@@ -33,6 +33,28 @@ export interface OrtCapabilityGlobalScope {
 export interface CapabilityDetectionOptions {
   globalScope?: OrtCapabilityGlobalScope;
   overrides?: Partial<OrtWebCapabilityProfile>;
+}
+
+export interface WebGpuAdapterProbe {
+  requestDevice?: () => Promise<unknown> | unknown;
+}
+
+export interface WebGpuNavigatorProbe {
+  requestAdapter(
+    options?: { powerPreference?: "low-power" | "high-performance" },
+  ): Promise<WebGpuAdapterProbe | null> | WebGpuAdapterProbe | null;
+}
+
+export interface OrtWebCapabilityProbeOptions
+  extends CapabilityDetectionOptions {
+  powerPreference?: "low-power" | "high-performance";
+  probeAdapter?: boolean;
+}
+
+export interface OrtWebCapabilityProbeResult {
+  profile: OrtWebCapabilityProfile;
+  adapterAvailable: boolean;
+  reason: string;
 }
 
 const MAX_WASM_THREADS = 4;
@@ -57,7 +79,7 @@ export function detectOrtWebCapabilities(
     Math.floor(navigatorLike?.hardwareConcurrency ?? 1),
   );
   const detected: OrtWebCapabilityProfile = {
-    webgpu: navigatorLike?.gpu !== undefined,
+    webgpu: navigatorLike?.gpu !== undefined && navigatorLike.gpu !== null,
     wasm: wasm !== undefined,
     wasmSimd: detectWasmSimd(wasm),
     sharedArrayBuffer: scope.SharedArrayBuffer !== undefined,
@@ -69,6 +91,64 @@ export function detectOrtWebCapabilities(
     ...detected,
     ...(options.overrides ?? {}),
   };
+}
+
+export async function probeOrtWebCapabilities(
+  options: OrtWebCapabilityProbeOptions = {},
+): Promise<OrtWebCapabilityProbeResult> {
+  const profile = detectOrtWebCapabilities(options);
+  if (!profile.webgpu) {
+    return {
+      profile,
+      adapterAvailable: false,
+      reason: "navigator.gpu is unavailable",
+    };
+  }
+
+  if (options.overrides?.webgpu !== undefined || options.probeAdapter === false) {
+    return {
+      profile,
+      adapterAvailable: profile.webgpu,
+      reason: "WebGPU capability was supplied explicitly",
+    };
+  }
+
+  const scope = options.globalScope ?? globalThis;
+  const navigatorLike = scope.navigator as
+    | { gpu?: WebGpuNavigatorProbe | null | unknown }
+    | undefined;
+  const gpu = navigatorLike?.gpu;
+  if (!isWebGpuNavigatorProbe(gpu)) {
+    return {
+      profile: { ...profile, webgpu: false },
+      adapterAvailable: false,
+      reason: "navigator.gpu does not expose requestAdapter",
+    };
+  }
+
+  try {
+    const adapter = await gpu.requestAdapter({
+      powerPreference: options.powerPreference ?? "high-performance",
+    });
+    if (adapter === null) {
+      return {
+        profile: { ...profile, webgpu: false },
+        adapterAvailable: false,
+        reason: "navigator.gpu returned no compatible adapter",
+      };
+    }
+    return {
+      profile,
+      adapterAvailable: true,
+      reason: "navigator.gpu returned a compatible adapter",
+    };
+  } catch {
+    return {
+      profile: { ...profile, webgpu: false },
+      adapterAvailable: false,
+      reason: "navigator.gpu adapter probing failed",
+    };
+  }
 }
 
 export function selectOrtWebBackend(
@@ -139,4 +219,13 @@ function detectWasmSimd(
   } catch {
     return false;
   }
+}
+
+function isWebGpuNavigatorProbe(value: unknown): value is WebGpuNavigatorProbe {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "requestAdapter" in value &&
+    typeof value.requestAdapter === "function"
+  );
 }
