@@ -53,6 +53,7 @@ def test_success_is_deterministic_and_writes_counts_only_evidence(
     assert str(artifact_path) not in serialized
     assert fingerprint not in serialized
     assert not artifact_path.exists()
+    assert list(tmp_path.glob(".openmed-deletion-*")) == []
 
 
 def test_fingerprint_mismatch_rejects_the_whole_request(tmp_path: Path) -> None:
@@ -131,6 +132,28 @@ def test_evidence_path_cannot_overwrite_a_verified_artifact(tmp_path: Path) -> N
     assert artifact_path.read_bytes() == b"SYNTHETIC_MAPPING"
 
 
+def test_rejection_evidence_cannot_overwrite_a_requested_artifact(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first.bin"
+    second = tmp_path / "second.bin"
+    first_fingerprint = _write_artifact(first, b"SYNTHETIC_FIRST")
+    _write_artifact(second, b"SYNTHETIC_SECOND")
+
+    with pytest.raises(AmbiguousPathError):
+        delete_verified_artifacts(
+            tmp_path,
+            [
+                (first, first_fingerprint),
+                (second, hashlib.sha256(b"SYNTHETIC_WRONG").hexdigest()),
+            ],
+            evidence_path=first,
+        )
+
+    assert first.read_bytes() == b"SYNTHETIC_FIRST"
+    assert second.read_bytes() == b"SYNTHETIC_SECOND"
+
+
 def test_partial_deletion_rolls_back_all_staged_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -174,22 +197,21 @@ def test_stage_failure_restores_the_file_that_was_already_moved(
     second = tmp_path / "second.bin"
     first_fingerprint = _write_artifact(first, b"SYNTHETIC_FIRST")
     second_fingerprint = _write_artifact(second, b"SYNTHETIC_SECOND")
-    real_link = deletion_verify.os.link
-    link_calls = 0
+    real_copy = deletion_verify._copy_descriptor_to_path
+    copy_calls = 0
 
-    def fail_on_second_link(
-        source: str | bytes | Path,
-        destination: str | bytes | Path,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        nonlocal link_calls
-        link_calls += 1
-        if link_calls == 2:
+    def fail_on_second_copy(descriptor: int, target: Path, mode: int) -> None:
+        nonlocal copy_calls
+        copy_calls += 1
+        if copy_calls == 2:
             raise OSError("synthetic staging failure")
-        real_link(source, destination, *args, **kwargs)
+        real_copy(descriptor, target, mode)
 
-    monkeypatch.setattr(deletion_verify.os, "link", fail_on_second_link)
+    monkeypatch.setattr(
+        deletion_verify,
+        "_copy_descriptor_to_path",
+        fail_on_second_copy,
+    )
 
     with pytest.raises(DeletionTransactionError):
         delete_verified_artifacts(
@@ -199,3 +221,138 @@ def test_stage_failure_restores_the_file_that_was_already_moved(
 
     assert first.read_bytes() == b"SYNTHETIC_FIRST"
     assert second.read_bytes() == b"SYNTHETIC_SECOND"
+
+
+def test_commit_cleanup_failure_restores_already_unlinked_backups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = tmp_path / "first.bin"
+    second = tmp_path / "second.bin"
+    first_fingerprint = _write_artifact(first, b"SYNTHETIC_FIRST")
+    second_fingerprint = _write_artifact(second, b"SYNTHETIC_SECOND")
+    evidence_path = tmp_path / "rollback.json"
+    real_unlink = deletion_verify.os.unlink
+    backup_unlinks = 0
+
+    def fail_on_second_backup_unlink(path: str | bytes | Path, *args: object) -> None:
+        nonlocal backup_unlinks
+        if Path(path).parent.name == "backup":
+            backup_unlinks += 1
+            if backup_unlinks == 2:
+                raise OSError("synthetic cleanup failure")
+        real_unlink(path, *args)
+
+    monkeypatch.setattr(deletion_verify.os, "unlink", fail_on_second_backup_unlink)
+
+    with pytest.raises(DeletionTransactionError):
+        delete_verified_artifacts(
+            tmp_path,
+            [(first, first_fingerprint), (second, second_fingerprint)],
+            evidence_path=evidence_path,
+        )
+
+    assert first.read_bytes() == b"SYNTHETIC_FIRST"
+    assert second.read_bytes() == b"SYNTHETIC_SECOND"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert evidence["status"] == "rolled_back"
+    assert evidence["rolled_back_count"] == 2
+
+
+def test_staged_payload_corruption_rolls_back_from_independent_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    fingerprint = _write_artifact(artifact, b"SYNTHETIC_ORIGINAL")
+    real_verify = deletion_verify._verify_staged_before_commit
+
+    def corrupt_then_verify(staged: list[object]) -> None:
+        staged_item = staged[0]
+        staged_item.payload.write_bytes(b"SYNTHETIC_CORRUPTED")
+        real_verify(staged)
+
+    monkeypatch.setattr(
+        deletion_verify,
+        "_verify_staged_before_commit",
+        corrupt_then_verify,
+    )
+
+    with pytest.raises(DeletionTransactionError):
+        delete_verified_artifacts(tmp_path, [(artifact, fingerprint)])
+
+    assert artifact.read_bytes() == b"SYNTHETIC_ORIGINAL"
+
+
+def test_artifact_count_is_bounded_before_any_file_is_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = tmp_path / "first.bin"
+    second = tmp_path / "second.bin"
+    first_fingerprint = _write_artifact(first, b"SYNTHETIC_FIRST")
+    second_fingerprint = _write_artifact(second, b"SYNTHETIC_SECOND")
+    monkeypatch.setattr(deletion_verify, "MAX_ARTIFACTS", 1)
+
+    with pytest.raises(deletion_verify.InvalidDeletionRequest):
+        delete_verified_artifacts(
+            tmp_path,
+            [(first, first_fingerprint), (second, second_fingerprint)],
+        )
+
+    assert first.read_bytes() == b"SYNTHETIC_FIRST"
+    assert second.read_bytes() == b"SYNTHETIC_SECOND"
+
+
+def test_hostile_path_and_iterable_errors_are_value_free(tmp_path: Path) -> None:
+    marker = "synthetic-sensitive-path"
+
+    class HostilePath:
+        def __fspath__(self) -> str:
+            raise RuntimeError(marker)
+
+    class HostileArtifacts:
+        def __iter__(self):
+            raise RuntimeError(marker)
+
+    for root, artifacts in (
+        (HostilePath(), []),
+        (tmp_path, HostileArtifacts()),
+    ):
+        with pytest.raises(deletion_verify.InvalidDeletionRequest) as error:
+            delete_verified_artifacts(root, artifacts)
+        assert marker not in str(error.value)
+
+
+def test_evidence_publish_failure_after_cleanup_restores_from_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    fingerprint = _write_artifact(artifact, b"SYNTHETIC_ORIGINAL")
+    evidence_path = tmp_path / "evidence.json"
+    real_replace = deletion_verify.os.replace
+    failed_publish = False
+
+    def fail_first_evidence_publish(
+        source: str | bytes | Path,
+        destination: str | bytes | Path,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        nonlocal failed_publish
+        if Path(destination) == evidence_path and not failed_publish:
+            failed_publish = True
+            raise OSError("synthetic evidence failure")
+        real_replace(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(deletion_verify.os, "replace", fail_first_evidence_publish)
+
+    with pytest.raises(deletion_verify.EvidenceWriteError):
+        delete_verified_artifacts(
+            tmp_path,
+            [(artifact, fingerprint)],
+            evidence_path=evidence_path,
+        )
+
+    assert artifact.read_bytes() == b"SYNTHETIC_ORIGINAL"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert evidence["status"] == "rolled_back"
+    assert evidence["rolled_back_count"] == 1
+    assert list(tmp_path.glob(".openmed-deletion-*")) == []

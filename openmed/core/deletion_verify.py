@@ -23,13 +23,15 @@ import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import Any, Final, Literal, TypeAlias
 
 _FINGERPRINT_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$", re.IGNORECASE)
 _FINGERPRINT_PREFIX = "sha256:"
 _EVIDENCE_SCHEMA_VERSION = 1
 _EVIDENCE_STATUSES = frozenset({"completed", "rejected", "rolled_back"})
 _READ_CHUNK_SIZE = 1024 * 1024
+MAX_ARTIFACTS: Final = 128
+MAX_PATH_LENGTH: Final = 4_096
 
 PathLike: TypeAlias = str | os.PathLike[str]
 EvidenceStatus: TypeAlias = Literal["completed", "rejected", "rolled_back"]
@@ -111,16 +113,19 @@ class EvidenceWriteError(DeletionVerificationError):
 
 def _coerce_path(value: Any, *, allow_dot: bool) -> Path:
     try:
-        path = Path(value)
-    except (OSError, TypeError, ValueError):
+        raw_path = os.fspath(value)
+    except Exception:
         raise InvalidDeletionRequest from None
+    if type(raw_path) is not str or len(raw_path) > MAX_PATH_LENGTH:
+        raise InvalidDeletionRequest
+    path = Path(raw_path)
     if not allow_dot and path == Path("."):
         raise InvalidDeletionRequest
     return path
 
 
 def _normalize_fingerprint(value: Any) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise InvalidDeletionRequest
     match = _FINGERPRINT_RE.fullmatch(value.strip())
     if match is None:
@@ -209,8 +214,7 @@ class DeletionEvidence:
 class _PreparedArtifact:
     path: Path = field(repr=False)
     fingerprint: str = field(repr=False)
-    device: int
-    inode: int
+    state: os.stat_result = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +222,9 @@ class _StagedArtifact:
     original: Path = field(repr=False)
     payload: Path = field(repr=False)
     backup: Path = field(repr=False)
+    fingerprint: str = field(repr=False)
+    mode: int
+    recovery_descriptor: int | None = field(default=None, repr=False)
 
 
 def _same_file_state(first: os.stat_result, second: os.stat_result) -> bool:
@@ -227,6 +234,16 @@ def _same_file_state(first: os.stat_result, second: os.stat_result) -> bool:
         and first.st_size == second.st_size
         and first.st_mtime_ns == second.st_mtime_ns
         and first.st_ctime_ns == second.st_ctime_ns
+        and first.st_nlink == second.st_nlink
+    )
+
+
+def _same_identity_and_content(first: os.stat_result, second: os.stat_result) -> bool:
+    return (
+        first.st_dev == second.st_dev
+        and first.st_ino == second.st_ino
+        and first.st_size == second.st_size
+        and first.st_mtime_ns == second.st_mtime_ns
         and first.st_nlink == second.st_nlink
     )
 
@@ -304,32 +321,40 @@ def _open_for_hash(path: Path) -> int:
     raise AssertionError("unreachable")
 
 
+def _hash_descriptor(descriptor: int, expected_state: os.stat_result) -> str:
+    try:
+        opened_state = os.fstat(descriptor)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+    except OSError:
+        _safe_os_error(ArtifactAccessError)
+    if not stat.S_ISREG(opened_state.st_mode) or not _same_file_state(
+        expected_state, opened_state
+    ):
+        _safe_os_error(DeletionTransactionError)
+
+    digest = hashlib.sha256()
+    while True:
+        try:
+            chunk = os.read(descriptor, _READ_CHUNK_SIZE)
+        except OSError:
+            _safe_os_error(ArtifactAccessError)
+        if not chunk:
+            break
+        digest.update(chunk)
+
+    try:
+        final_state = os.fstat(descriptor)
+    except OSError:
+        _safe_os_error(ArtifactAccessError)
+    if not _same_file_state(opened_state, final_state):
+        _safe_os_error(DeletionTransactionError)
+    return f"{_FINGERPRINT_PREFIX}{digest.hexdigest()}"
+
+
 def _hash_open_file(path: Path, expected_state: os.stat_result) -> str:
     descriptor = _open_for_hash(path)
     try:
-        opened_state = os.fstat(descriptor)
-        if not stat.S_ISREG(opened_state.st_mode) or not _same_file_state(
-            expected_state, opened_state
-        ):
-            _safe_os_error(DeletionTransactionError)
-
-        digest = hashlib.sha256()
-        while True:
-            try:
-                chunk = os.read(descriptor, _READ_CHUNK_SIZE)
-            except OSError:
-                _safe_os_error(ArtifactAccessError)
-            if not chunk:
-                break
-            digest.update(chunk)
-
-        try:
-            final_state = os.fstat(descriptor)
-        except OSError:
-            _safe_os_error(ArtifactAccessError)
-        if not _same_file_state(opened_state, final_state):
-            _safe_os_error(DeletionTransactionError)
-        return f"{_FINGERPRINT_PREFIX}{digest.hexdigest()}"
+        return _hash_descriptor(descriptor, expected_state)
     finally:
         try:
             os.close(descriptor)
@@ -364,11 +389,11 @@ def fingerprint_file(path: PathLike) -> str:
 def _coerce_artifact_item(item: Any) -> DeletionArtifact:
     if isinstance(item, DeletionArtifact):
         return item
-    if isinstance(item, Mapping):
+    if type(item) is dict:
         if set(item) != {"path", "fingerprint"}:
             raise InvalidDeletionRequest
         return DeletionArtifact(item["path"], item["fingerprint"])
-    if isinstance(item, (tuple, list)) and len(item) == 2:
+    if type(item) in {tuple, list} and len(item) == 2:
         return DeletionArtifact(item[0], item[1])
     raise InvalidDeletionRequest
 
@@ -376,7 +401,9 @@ def _coerce_artifact_item(item: Any) -> DeletionArtifact:
 def _coerce_artifacts(artifacts: Any) -> list[DeletionArtifact]:
     if isinstance(artifacts, DeletionArtifact):
         return [artifacts]
-    if isinstance(artifacts, Mapping):
+    if type(artifacts) is dict:
+        if len(artifacts) > MAX_ARTIFACTS:
+            raise InvalidDeletionRequest
         if set(artifacts) == {"path", "fingerprint"}:
             return [_coerce_artifact_item(artifacts)]
         try:
@@ -390,13 +417,15 @@ def _coerce_artifacts(artifacts: Any) -> list[DeletionArtifact]:
         raise InvalidDeletionRequest
     try:
         iterator = iter(artifacts)
-    except TypeError:
+    except Exception:
         raise InvalidDeletionRequest from None
     result: list[DeletionArtifact] = []
     try:
         for item in iterator:
+            if len(result) >= MAX_ARTIFACTS:
+                raise InvalidDeletionRequest
             result.append(_coerce_artifact_item(item))
-    except (InvalidDeletionRequest, ValueError, TypeError):
+    except Exception:
         raise InvalidDeletionRequest from None
     return result
 
@@ -422,8 +451,7 @@ def _prepare_artifact(root: Path, artifact: DeletionArtifact) -> _PreparedArtifa
     return _PreparedArtifact(
         path=candidate,
         fingerprint=artifact.fingerprint,
-        device=file_stat.st_dev,
-        inode=file_stat.st_ino,
+        state=file_stat,
     )
 
 
@@ -444,7 +472,7 @@ def _prepare_all(
             _safe_os_error(AmbiguousPathError)
         seen_paths.add(candidate)
         item = _prepare_artifact(root, artifact)
-        identity = (item.device, item.inode)
+        identity = (item.state.st_dev, item.state.st_ino)
         if identity in seen_objects:
             _safe_os_error(AmbiguousPathError)
         seen_objects.add(identity)
@@ -480,6 +508,40 @@ def _check_evidence_collision(
         _safe_os_error(AmbiguousPathError)
 
 
+def _check_requested_evidence_collision(
+    root: Path,
+    target: Path | None,
+    artifacts: Iterable[DeletionArtifact],
+) -> None:
+    if target is None:
+        return
+    try:
+        target_resolved = target.resolve(strict=False)
+        target_state = os.lstat(target)
+    except FileNotFoundError:
+        target_state = None
+    except (OSError, RuntimeError):
+        _safe_os_error(EvidenceWriteError)
+
+    for artifact in artifacts:
+        candidate = _resolve_candidate(root, artifact.path)
+        if candidate == target_resolved:
+            _safe_os_error(AmbiguousPathError)
+        if target_state is None:
+            continue
+        try:
+            candidate_state = os.lstat(candidate)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            _safe_os_error(ArtifactAccessError)
+        if (candidate_state.st_dev, candidate_state.st_ino) == (
+            target_state.st_dev,
+            target_state.st_ino,
+        ):
+            _safe_os_error(AmbiguousPathError)
+
+
 def _write_evidence_atomic(target: Path, evidence: DeletionEvidence) -> None:
     temporary: Path | None = None
     try:
@@ -492,6 +554,8 @@ def _write_evidence_atomic(target: Path, evidence: DeletionEvidence) -> None:
         ) as handle:
             temporary = Path(handle.name)
             handle.write(evidence.to_json())
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(temporary, target)
     except (OSError, TypeError, ValueError):
         if temporary is not None:
@@ -514,6 +578,8 @@ def _prepare_evidence_temporary(target: Path, evidence: DeletionEvidence) -> Pat
         ) as handle:
             temporary = Path(handle.name)
             handle.write(evidence.to_json())
+            handle.flush()
+            os.fsync(handle.fileno())
     except (OSError, TypeError, ValueError):
         if temporary is not None:
             try:
@@ -566,6 +632,39 @@ def _make_transaction_dirs(root: Path) -> tuple[Path, Path]:
     return payload, backup
 
 
+def _copy_descriptor_to_path(descriptor: int, target: Path, mode: int) -> None:
+    output_descriptor: int | None = None
+    try:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        output_descriptor = os.open(
+            target,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+        while True:
+            chunk = os.read(descriptor, _READ_CHUNK_SIZE)
+            if not chunk:
+                break
+            offset = 0
+            while offset < len(chunk):
+                written = os.write(output_descriptor, chunk[offset:])
+                if written <= 0:
+                    _safe_os_error(DeletionTransactionError)
+                offset += written
+        os.chmod(target, mode)
+        os.fsync(output_descriptor)
+    except DeletionVerificationError:
+        raise
+    except OSError:
+        _safe_os_error(DeletionTransactionError)
+    finally:
+        if output_descriptor is not None:
+            try:
+                os.close(output_descriptor)
+            except OSError:
+                pass
+
+
 def _stage_all(
     prepared: list[_PreparedArtifact],
     payload: Path,
@@ -581,60 +680,188 @@ def _stage_all(
             _safe_os_error(ArtifactNotFoundError)
         except OSError:
             _safe_os_error(ArtifactAccessError)
-        if (
-            not stat.S_ISREG(current.st_mode)
-            or current.st_dev != item.device
-            or current.st_ino != item.inode
-            or current.st_nlink != 1
+        if not stat.S_ISREG(current.st_mode) or not _same_file_state(
+            item.state, current
         ):
             _safe_os_error(DeletionTransactionError)
         try:
             os.replace(item.path, payload_path)
-            staged.append(
-                _StagedArtifact(
-                    original=item.path,
-                    payload=payload_path,
-                    backup=backup_path,
-                )
+            staged_item = _StagedArtifact(
+                original=item.path,
+                payload=payload_path,
+                backup=backup_path,
+                fingerprint=item.fingerprint,
+                mode=stat.S_IMODE(current.st_mode),
             )
+            staged.append(staged_item)
             try:
                 staged_state = os.lstat(payload_path)
             except OSError:
                 _safe_os_error(DeletionTransactionError)
-            if _hash_open_file(payload_path, staged_state) != item.fingerprint:
-                _safe_os_error(FingerprintMismatchError)
-            os.link(payload_path, backup_path, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(staged_state.st_mode)
+                or staged_state.st_nlink != 1
+                or not _same_identity_and_content(current, staged_state)
+            ):
+                _safe_os_error(DeletionTransactionError)
+
+            payload_descriptor = _open_for_hash(payload_path)
+            try:
+                if (
+                    _hash_descriptor(payload_descriptor, staged_state)
+                    != item.fingerprint
+                ):
+                    _safe_os_error(FingerprintMismatchError)
+                _copy_descriptor_to_path(
+                    payload_descriptor,
+                    backup_path,
+                    staged_item.mode,
+                )
+            finally:
+                try:
+                    os.close(payload_descriptor)
+                except OSError:
+                    pass
+
+            backup_state = os.lstat(backup_path)
+            recovery_descriptor = _open_for_hash(backup_path)
+            object.__setattr__(
+                staged_item,
+                "recovery_descriptor",
+                recovery_descriptor,
+            )
+            if (
+                backup_state.st_nlink != 1
+                or _hash_descriptor(recovery_descriptor, backup_state)
+                != item.fingerprint
+            ):
+                _safe_os_error(DeletionTransactionError)
         except OSError:
             _safe_os_error(DeletionTransactionError)
+
+
+def _path_state(path: Path) -> os.stat_result | None:
+    try:
+        return os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        _safe_os_error(DeletionTransactionError)
+    raise AssertionError("unreachable")
+
+
+def _path_matches_fingerprint(path: Path, fingerprint: str) -> bool:
+    state = _path_state(path)
+    if state is None or not stat.S_ISREG(state.st_mode) or state.st_nlink != 1:
+        return False
+    return _hash_open_file(path, state) == fingerprint
+
+
+def _verify_staged_before_commit(staged: list[_StagedArtifact]) -> None:
+    for item in staged:
+        payload_state = _path_state(item.payload)
+        backup_state = _path_state(item.backup)
+        descriptor = item.recovery_descriptor
+        if (
+            payload_state is None
+            or backup_state is None
+            or descriptor is None
+            or payload_state.st_nlink != 1
+            or backup_state.st_nlink != 1
+            or (payload_state.st_dev, payload_state.st_ino)
+            == (backup_state.st_dev, backup_state.st_ino)
+            or _hash_open_file(item.payload, payload_state) != item.fingerprint
+            or _hash_descriptor(descriptor, backup_state) != item.fingerprint
+        ):
+            _safe_os_error(DeletionTransactionError)
+
+
+def _restore_from_descriptor(item: _StagedArtifact) -> None:
+    descriptor = item.recovery_descriptor
+    if descriptor is None:
+        _safe_os_error(DeletionTransactionError)
+
+    temporary: Path | None = None
+    try:
+        descriptor_state = os.fstat(descriptor)
+        if _hash_descriptor(descriptor, descriptor_state) != item.fingerprint:
+            _safe_os_error(DeletionTransactionError)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=item.original.parent,
+            prefix=".openmed-deletion-restore-",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            while True:
+                chunk = os.read(descriptor, _READ_CHUNK_SIZE)
+                if not chunk:
+                    break
+                handle.write(chunk)
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.chmod(temporary, item.mode)
+        restored_state = os.lstat(temporary)
+        if _hash_open_file(temporary, restored_state) != item.fingerprint:
+            _safe_os_error(DeletionTransactionError)
+        os.replace(temporary, item.original)
+        temporary = None
+    except DeletionVerificationError:
+        raise
+    except OSError:
+        _safe_os_error(DeletionTransactionError)
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _restore_staged(staged: list[_StagedArtifact]) -> int:
     restored = 0
     try:
         for item in reversed(staged):
-            try:
-                existing = os.lstat(item.original)
-            except FileNotFoundError:
-                existing = None
-            except OSError:
-                _safe_os_error(DeletionTransactionError)
-            if existing is not None:
+            if _path_state(item.original) is not None:
                 _safe_os_error(DeletionTransactionError)
 
-            source = item.backup if item.backup.exists() else item.payload
-            if not source.exists():
-                _safe_os_error(DeletionTransactionError)
-            os.replace(source, item.original)
-            restored += 1
-            if item.payload.exists():
+            if _path_matches_fingerprint(item.payload, item.fingerprint):
+                os.replace(item.payload, item.original)
+            elif _path_matches_fingerprint(item.backup, item.fingerprint):
+                os.replace(item.backup, item.original)
+            else:
+                _restore_from_descriptor(item)
+
+            if _path_state(item.payload) is not None:
                 _remove_path(item.payload)
-            if item.backup.exists():
+            if _path_state(item.backup) is not None:
                 _remove_path(item.backup)
+            restored_state = _path_state(item.original)
+            if (
+                restored_state is None
+                or restored_state.st_nlink != 1
+                or _hash_open_file(item.original, restored_state) != item.fingerprint
+            ):
+                _safe_os_error(DeletionTransactionError)
+            restored += 1
     except DeletionVerificationError:
         raise
     except OSError:
         _safe_os_error(DeletionTransactionError)
     return restored
+
+
+def _close_recovery_descriptors(staged: list[_StagedArtifact]) -> None:
+    for item in staged:
+        descriptor = item.recovery_descriptor
+        if descriptor is None:
+            continue
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        object.__setattr__(item, "recovery_descriptor", None)
 
 
 def _cleanup_transaction(
@@ -663,6 +890,8 @@ def _rollback_transaction(
         _remove_directory(payload.parent)
     except DeletionVerificationError:
         raise DeletionTransactionError from None
+    finally:
+        _close_recovery_descriptors(staged)
     if restored != len(staged):
         _safe_os_error(DeletionTransactionError)
     return restored
@@ -701,7 +930,7 @@ def delete_verified_artifacts(
     *,
     evidence_path: PathLike | None = None,
 ) -> DeletionEvidence:
-    """Verify and delete explicit regular files under ``root`` atomically.
+    """Verify and delete files under ``root`` with process-local rollback.
 
     Args:
         root: Existing directory that bounds all artifact paths.
@@ -722,6 +951,7 @@ def delete_verified_artifacts(
     root_path = _resolve_root(root)
     requested = _coerce_artifacts(artifacts)
     evidence_target = _evidence_target(evidence_path)
+    _check_requested_evidence_collision(root_path, evidence_target, requested)
 
     prepared: list[_PreparedArtifact] = []
     try:
@@ -764,14 +994,16 @@ def delete_verified_artifacts(
     staged: list[_StagedArtifact] = []
     try:
         _stage_all(prepared, payload, backup, staged)
+        _verify_staged_before_commit(staged)
         _delete_payloads(staged)
+        _cleanup_transaction(staged, payload, backup)
         if evidence_temporary is not None and evidence_target is not None:
             try:
                 os.replace(evidence_temporary, evidence_target)
             except OSError:
                 _safe_os_error(EvidenceWriteError)
             evidence_temporary = None
-        _cleanup_transaction(staged, payload, backup)
+        _close_recovery_descriptors(staged)
     except DeletionVerificationError:
         if evidence_temporary is not None:
             try:

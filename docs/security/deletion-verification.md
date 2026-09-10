@@ -31,11 +31,19 @@ The helper accepts a bare 64-character SHA-256 digest or the canonical
 the file identity is checked again immediately before it is staged.
 
 All requested files are verified before any file is moved. The operation then
-uses a private same-filesystem quarantine and recovery link so an error during
-staging or deletion restores the verified paths. The input paths must be
-inside `root`, must not contain `.` or `..` aliases, and must not be symlinks,
-directories, or hard links. These restrictions intentionally fail closed when
-the requested object is ambiguous.
+uses a private same-filesystem quarantine, an independent recovery copy, and a
+retained read-only recovery descriptor. An error during staging, deletion,
+recovery cleanup, or evidence publication restores and re-verifies every
+original path. A request is limited to 128 files to bound open descriptors,
+and the filesystem must have enough temporary capacity for one recovery copy
+of each artifact.
+
+Input paths must be inside `root`, must not contain `.` or `..` aliases, and
+must not be symlinks, directories, or hard links. These restrictions
+intentionally fail closed when the requested object is ambiguous. Callers
+must also prevent concurrent writers from renaming or mutating the governed
+directory tree during the transaction; the identity and fingerprint checks
+detect observed changes but are not a substitute for exclusive ownership.
 
 ## Evidence and privacy
 
@@ -51,5 +59,12 @@ the returned `DeletionArtifact` records in memory and do not log them.
 
 The evidence file is written atomically. A failed preflight writes a
 `rejected` count record when an evidence path was supplied. A transaction that
-has to restore staged files writes `rolled_back` evidence. A successful empty
-request is a deterministic completed no-op.
+has to restore staged files writes `rolled_back` evidence. Completed evidence
+is published only after all artifact and recovery paths have been removed. A
+successful empty request is a deterministic completed no-op.
+
+Rollback covers failures observed by the running process. It is not a
+journaled filesystem transaction and cannot guarantee recovery after process,
+kernel, storage-device, or power failure. Deletion also removes directory
+entries; it is not a claim of physical secure erasure on flash or copy-on-write
+storage.

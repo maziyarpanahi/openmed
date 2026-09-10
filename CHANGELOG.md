@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added bounded local deletion verification for fingerprinted sensitive
+  artifacts, with symlink, alias, and hard-link refusal, independent recovery
+  copies, commit-stage rollback, and counts-only evidence (#2418).
+
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
