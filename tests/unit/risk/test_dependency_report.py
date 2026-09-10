@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import socket
 from pathlib import Path
@@ -15,6 +16,9 @@ from openmed.risk import (
     parse_advisory_snapshot,
     write_dependency_risk_report,
 )
+
+dependency_report_module = importlib.import_module("openmed.risk.dependency_report")
+ROOT = Path(__file__).parents[3]
 
 _LOCKFILE = """
 version = 1
@@ -199,3 +203,112 @@ def test_malformed_input_errors_do_not_echo_payload_values() -> None:
         )
 
     assert secret_detail not in str(exc_info.value)
+
+
+def test_current_lockfile_is_bounded_sorted_and_omits_the_editable_root() -> None:
+    dependencies = dependency_report_module.parse_lockfile(ROOT / "uv.lock")
+
+    pairs = [(dependency.name, dependency.version) for dependency in dependencies]
+    assert pairs == sorted(set(pairs))
+    assert pairs
+    assert all(name != "openmed" for name, _version in pairs)
+
+
+def test_non_finite_severity_is_unknown_and_nonstandard_json_is_rejected() -> None:
+    report = dependency_risk_report(
+        {
+            "advisories": [
+                {
+                    "package": "demo-package",
+                    "severity": float("nan"),
+                }
+            ]
+        },
+        {"packages": [{"name": "demo-package", "version": "1.0.0"}]},
+    )
+    assert report["packages"][0]["risk_category"] == "unknown"
+
+    with pytest.raises(ValueError, match="not valid JSON"):
+        parse_advisory_snapshot(
+            '{"advisories":[{"package":"demo-package","severity":NaN}]}'
+        )
+
+
+def test_advisory_identity_is_hashed_and_not_retained() -> None:
+    marker = "CVE-SYNTHETIC-PRIVATE-1"
+    finding = parse_advisory_snapshot(
+        {"advisories": [{"package": "demo-package", "id": marker}]}
+    )[0]
+
+    assert marker not in repr(finding)
+    assert marker not in finding.advisory_fingerprint
+    assert len(finding.advisory_fingerprint or "") == 64
+
+
+def test_input_and_collection_limits_fail_with_value_free_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "synthetic-sensitive-advisory"
+    monkeypatch.setattr(dependency_report_module, "MAX_ADVISORY_BYTES", 8)
+    with pytest.raises(ValueError) as error:
+        parse_advisory_snapshot('{"advisories":"' + marker + '"}')
+    assert marker not in str(error.value)
+
+    monkeypatch.setattr(dependency_report_module, "MAX_ADVISORY_BYTES", 1_024)
+    monkeypatch.setattr(dependency_report_module, "MAX_ADVISORIES_PER_PACKAGE", 1)
+    with pytest.raises(ValueError, match="supported item limit"):
+        parse_advisory_snapshot(
+            {
+                "packages": [
+                    {
+                        "name": "demo-package",
+                        "advisories": [
+                            {"severity": "low"},
+                            {"severity": "high"},
+                        ],
+                    }
+                ]
+            }
+        )
+
+
+def test_invalid_indent_and_oversized_output_are_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="indent"):
+        dependency_risk_report_json(_SNAPSHOT, _LOCKFILE, indent=100)
+
+    output = tmp_path / "report.json"
+    monkeypatch.setattr(dependency_report_module, "MAX_OUTPUT_BYTES", 8)
+    with pytest.raises(ValueError, match="supported size limit"):
+        write_dependency_risk_report(_SNAPSHOT, _LOCKFILE, output)
+    assert not output.exists()
+
+
+def test_failed_atomic_replace_preserves_existing_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "report.json"
+    output.write_text("existing\n", encoding="utf-8")
+
+    def fail_replace(source: object, destination: object) -> None:
+        raise OSError("synthetic-sensitive-path")
+
+    monkeypatch.setattr(dependency_report_module.os, "replace", fail_replace)
+    with pytest.raises(ValueError) as error:
+        write_dependency_risk_report(_SNAPSHOT, _LOCKFILE, output)
+
+    assert "synthetic-sensitive" not in str(error.value)
+    assert output.read_text(encoding="utf-8") == "existing\n"
+    assert list(tmp_path.glob(".openmed-dependency-risk-*")) == []
+
+
+def test_hostile_mapping_subclasses_are_not_traversed() -> None:
+    class HostileMapping(dict[str, object]):
+        def __iter__(self):
+            raise AssertionError("hostile mapping was traversed")
+
+    with pytest.raises(ValueError, match="path, text, or parsed mapping"):
+        parse_advisory_snapshot(HostileMapping())

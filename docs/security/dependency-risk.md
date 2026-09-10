@@ -26,10 +26,13 @@ report = dependency_risk_report(
 )
 ```
 
-The advisory snapshot may be a parsed mapping, JSON text, or a local JSON
-path. The lockfile may be a parsed mapping, TOML text, or a local TOML path.
-The parser understands pip-audit's `dependencies` shape, OSV's `results`
-shape, and a compact `packages`/`advisories` shape.
+The advisory snapshot may be a plain parsed mapping, JSON text, or a local JSON
+path. The lockfile may be a plain parsed mapping, TOML text, or a local TOML
+path. The parser understands pip-audit's `dependencies` shape, a compact
+`packages`/`advisories` shape, and enriched `results` entries that carry both
+package identity and advisory data. A standard OSV batch response does not
+repeat query package identities, so callers must join those identities into
+the snapshot before generating this report.
 
 ## Correlation and categories
 
@@ -61,9 +64,12 @@ An advisory that has no recognized severity is conservatively classified as
 The serialized report contains package names, locked versions, normalized risk
 categories, and aggregate counts. It intentionally omits advisory IDs,
 descriptions, URLs, fixed-version lists, paths, and all other source fields.
-Malformed-input errors use generic messages and do not echo payload values.
-Use `dependency_risk_report_json` or `write_dependency_risk_report` for
-deterministic JSON serialization.
+Advisory IDs are reduced to internal SHA-256 correlation fingerprints and are
+never serialized. Files, record counts, advisory fan-out, nested severity data,
+indentation, and output size are bounded. Malformed-input errors use generic
+messages and do not echo payload values. Use `dependency_risk_report_json` or
+`write_dependency_risk_report` for deterministic JSON serialization; file
+output is replaced atomically only after the complete report is rendered.
 
 The result has this shape:
 
