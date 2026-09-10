@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import json
+from collections.abc import Iterator, Mapping
+from typing import Any
 
 import pytest
 
@@ -13,6 +16,8 @@ from openmed.risk import (
     render_tabular_risk_markdown,
     tabular_risk_report,
 )
+
+tabular_report_module = importlib.import_module("openmed.risk.tabular_report")
 
 
 def _synthetic_rows() -> list[dict[str, object]]:
@@ -183,4 +188,124 @@ def test_inferred_quasi_identifiers_exclude_identifier_like_columns() -> None:
         "count": 1,
         "inferred": True,
     }
-    assert "synthetic-patient-a" not in json.dumps(report, sort_keys=True)
+    assert "synthetic-patient-a" not in report.to_json()
+
+
+def test_threshold_and_suppression_mappings_are_closed() -> None:
+    rows = [{"age": 30}, {"age": 30}]
+
+    with pytest.raises(ValueError, match="unknown fields") as error:
+        tabular_risk_report(
+            rows,
+            quasi_identifiers=["age"],
+            thresholds={"minimum_k": 2, "secret-value": "synthetic-sensitive"},
+        )
+    assert "synthetic-sensitive" not in str(error.value)
+
+    with pytest.raises(ValueError, match="duplicate aliases"):
+        tabular_risk_report(
+            rows,
+            quasi_identifiers=["age"],
+            thresholds={"minimum_k": 2, "target_k": 2},
+        )
+
+    with pytest.raises(ValueError, match="unknown fields"):
+        tabular_risk_report(rows, suppression={"count": 0, "typo": 1})
+    with pytest.raises(ValueError, match="duplicate aliases"):
+        tabular_risk_report(rows, suppression={"count": 0, "suppressed_count": 0})
+
+
+def test_bounded_rows_cells_and_scalar_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tabular_report_module, "MAX_TABULAR_RISK_ROWS", 2)
+    with pytest.raises(ValueError, match="item limit"):
+        tabular_risk_report([{"age": 1}, {"age": 2}, {"age": 3}])
+
+    monkeypatch.setattr(tabular_report_module, "MAX_TABULAR_RISK_ROWS", 10_000)
+    monkeypatch.setattr(tabular_report_module, "MAX_TABULAR_RISK_TOTAL_CELLS", 1)
+    with pytest.raises(ValueError, match="cell limit"):
+        tabular_risk_report([{"age": 1, "region": "north"}])
+
+    monkeypatch.setattr(tabular_report_module, "MAX_TABULAR_RISK_TOTAL_CELLS", 100)
+    monkeypatch.setattr(tabular_report_module, "MAX_TABULAR_RISK_CELL_STRING_CHARS", 4)
+    with pytest.raises(ValueError, match="oversized string"):
+        tabular_risk_report([{"age": "12345"}])
+
+    with pytest.raises(ValueError, match="out-of-range integer"):
+        tabular_risk_report([{"age": 1 << 64}])
+
+
+def test_column_and_suppression_declarations_reject_duplicates() -> None:
+    rows = [{"age": 30}, {"age": 30}]
+
+    with pytest.raises(ValueError, match="safe column identifiers"):
+        tabular_risk_report([{"unsafe column": "synthetic-sensitive"}])
+    with pytest.raises(ValueError, match="schema columns must be unique"):
+        tabular_risk_report(rows, schema=["age", "age"])
+    with pytest.raises(ValueError, match="quasi_identifiers must be unique"):
+        tabular_risk_report(rows, quasi_identifiers=["age", "age"])
+    with pytest.raises(ValueError, match="generalization columns must be unique"):
+        tabular_risk_report(rows, generalization=["age", "age"])
+    with pytest.raises(ValueError, match="indices must be unique"):
+        tabular_risk_report(rows, suppressed_rows=[0, 0])
+
+
+def test_report_is_deeply_immutable_and_recomputes_renderer_status() -> None:
+    report = tabular_risk_report(
+        [{"age": 20}, {"age": 21}],
+        quasi_identifiers=["age"],
+        thresholds={"minimum_k": 2, "max_singleton_rate": 0.0},
+    )
+
+    detached_status = report["status"]
+    detached_status["outcome"] = "pass"
+    assert report["status"]["outcome"] == "review"
+    with pytest.raises(TypeError):
+        report["status"] = {"outcome": "pass"}  # type: ignore[index]
+    with pytest.raises(TypeError):
+        json.dumps(report)
+
+    unsafe = report.to_dict()
+    unsafe["status"] = {"meets_thresholds": True, "outcome": "pass"}
+    unsafe["risk"] = {"max_reidentification_risk": 0.0}
+    rendered = json.loads(render_tabular_risk_json(unsafe))
+    assert rendered["status"]["outcome"] == "review"
+    assert rendered["status"]["meets_thresholds"] is False
+    assert rendered["risk"]["max_reidentification_risk"] == 1.0
+
+
+def test_renderer_rejects_unbounded_format_controls() -> None:
+    report = tabular_risk_report([{"age": 30}], quasi_identifiers=["age"])
+
+    with pytest.raises(ValueError, match="indentation"):
+        render_tabular_risk_json(report, indent=100)
+    with pytest.raises(ValueError, match="title"):
+        render_tabular_risk_markdown(report, title="# unsafe\nsynthetic-sensitive")
+
+
+class _ExplodingMapping(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise RuntimeError("synthetic-sensitive-value")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("synthetic-sensitive-value")
+
+    def __len__(self) -> int:
+        raise RuntimeError("synthetic-sensitive-value")
+
+    def items(self) -> Any:
+        raise RuntimeError("synthetic-sensitive-value")
+
+
+class _ExplodingFrame:
+    def to_dict(self, orient: str) -> Any:
+        raise RuntimeError("synthetic-sensitive-value")
+
+
+def test_hostile_adapters_fail_without_echoing_values() -> None:
+    with pytest.raises(ValueError, match="could not be read") as mapping_error:
+        tabular_risk_report([_ExplodingMapping()])
+    assert "synthetic-sensitive-value" not in str(mapping_error.value)
+
+    with pytest.raises(TypeError, match="supported records") as frame_error:
+        tabular_risk_report(_ExplodingFrame())
+    assert "synthetic-sensitive-value" not in str(frame_error.value)

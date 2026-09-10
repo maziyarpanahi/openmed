@@ -15,11 +15,12 @@ artifact contains aggregate counts and a digest of those fingerprints.
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 import math
 import re
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -28,6 +29,10 @@ from typing import Any, Final
 from openmed.core.audit import stable_hash
 
 __all__ = [
+    "MAX_TABULAR_RISK_CELL_STRING_CHARS",
+    "MAX_TABULAR_RISK_COLUMNS",
+    "MAX_TABULAR_RISK_ROWS",
+    "MAX_TABULAR_RISK_TOTAL_CELLS",
     "TabularRiskReport",
     "TabularRiskThresholds",
     "build_tabular_risk_report",
@@ -39,7 +44,14 @@ __all__ = [
 ]
 
 _SCHEMA_VERSION: Final = 1
+MAX_TABULAR_RISK_CELL_STRING_CHARS: Final = 65_536
+MAX_TABULAR_RISK_COLUMNS: Final = 512
+MAX_TABULAR_RISK_ROWS: Final = 10_000
+MAX_TABULAR_RISK_TOTAL_CELLS: Final = 1_000_000
+_MAX_TABULAR_RISK_INTEGER: Final = (1 << 63) - 1
 _DIGEST_PATTERN: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
+_SAFE_COLUMN_PATTERN: Final = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$")
+_SAFE_TITLE_PATTERN: Final = re.compile(r"^[A-Za-z][A-Za-z0-9 _-]{0,79}$")
 _DIRECT_IDENTIFIER_NAME_PARTS: Final = frozenset(
     {
         "address",
@@ -65,6 +77,98 @@ _CAVEAT_LOCAL: Final = (
 _INFERRED_QI_CAVEAT: Final = (
     "Quasi-identifiers were inferred from schema names; review the selection before release.",
 )
+_EMPTY_REPORT_CAVEAT: Final = (
+    "No rows or schema columns were supplied; risk metrics are empty."
+)
+_THRESHOLD_ALIASES: Final = {
+    "minimum_k": ("minimum_k", "target_k", "k"),
+    "max_singleton_rate": ("max_singleton_rate", "maximum_singleton_rate"),
+    "max_reidentification_risk": (
+        "max_reidentification_risk",
+        "maximum_reidentification_risk",
+        "max_risk",
+    ),
+    "max_suppression_rate": (
+        "max_suppression_rate",
+        "maximum_suppression_rate",
+    ),
+    "min_generalization_coverage": (
+        "min_generalization_coverage",
+        "minimum_generalization_coverage",
+    ),
+}
+_THRESHOLD_FIELDS: Final = frozenset(
+    name for aliases in _THRESHOLD_ALIASES.values() for name in aliases
+)
+_SUPPRESSION_ALIASES: Final = {
+    "indices": ("row_indices", "indices", "rows"),
+    "count": ("count", "suppressed_count"),
+}
+_SUPPRESSION_FIELDS: Final = frozenset(
+    name for aliases in _SUPPRESSION_ALIASES.values() for name in aliases
+)
+
+
+def _snapshot_mapping(
+    value: Mapping[Any, Any],
+    *,
+    field_name: str,
+    max_items: int,
+) -> dict[str, Any]:
+    try:
+        items = list(itertools.islice(value.items(), max_items + 1))
+    except Exception:  # noqa: BLE001 - mappings are caller-controlled protocols.
+        raise ValueError(f"{field_name} could not be read") from None
+    if len(items) > max_items:
+        raise ValueError(f"{field_name} exceeds the supported item limit")
+
+    result: dict[str, Any] = {}
+    for item in items:
+        if type(item) not in {list, tuple} or len(item) != 2:
+            raise ValueError(f"{field_name} contains an invalid entry")
+        key, field_value = item
+        if type(key) is not str:
+            raise ValueError(f"{field_name} keys must be strings")
+        if key in result:
+            raise ValueError(f"{field_name} keys must be unique")
+        result[key] = field_value
+    return result
+
+
+def _safe_column_name(value: Any, *, field_name: str) -> str:
+    if type(value) is not str or _SAFE_COLUMN_PATTERN.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must contain safe column identifiers")
+    return value
+
+
+def _normalize_cell_value(value: Any) -> Any:
+    if value is None or type(value) is bool:
+        return value
+    if type(value) is int:
+        if abs(value) > _MAX_TABULAR_RISK_INTEGER:
+            raise ValueError("rows contain an out-of-range integer value")
+        return value
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise ValueError("rows contain a non-finite numeric value")
+        return value
+    if type(value) is str:
+        if len(value) > MAX_TABULAR_RISK_CELL_STRING_CHARS:
+            raise ValueError("rows contain an oversized string value")
+        return value
+    if type(value) in {date, datetime, time}:
+        try:
+            value.isoformat()
+        except Exception:  # noqa: BLE001 - tzinfo callbacks may be caller-controlled.
+            raise ValueError("rows contain an invalid temporal value") from None
+        return value
+    if type(value) is Decimal:
+        if not value.is_finite():
+            raise ValueError("rows contain a non-finite decimal value")
+        if len(value.as_tuple().digits) > MAX_TABULAR_RISK_CELL_STRING_CHARS:
+            raise ValueError("rows contain an oversized decimal value")
+        return value
+    raise TypeError("rows contain an unsupported scalar value")
 
 
 @dataclass(frozen=True)
@@ -83,8 +187,11 @@ class TabularRiskThresholds:
     min_generalization_coverage: float = 0.0
 
     def __post_init__(self) -> None:
-        if type(self.minimum_k) is not int or self.minimum_k < 1:
-            raise ValueError("minimum_k must be an integer >= 1")
+        if (
+            type(self.minimum_k) is not int
+            or not 1 <= self.minimum_k <= MAX_TABULAR_RISK_ROWS
+        ):
+            raise ValueError("minimum_k must be a bounded integer >= 1")
         for name in (
             "max_singleton_rate",
             "max_reidentification_risk",
@@ -92,11 +199,15 @@ class TabularRiskThresholds:
             "min_generalization_coverage",
         ):
             value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if type(value) not in {int, float}:
                 raise ValueError(f"{name} must be a number between 0 and 1")
-            if not math.isfinite(float(value)) or not 0 <= float(value) <= 1:
+            try:
+                normalized = float(value)
+            except (OverflowError, ValueError):
+                raise ValueError(f"{name} must be a number between 0 and 1") from None
+            if not math.isfinite(normalized) or not 0 <= normalized <= 1:
                 raise ValueError(f"{name} must be a number between 0 and 1")
-            object.__setattr__(self, name, float(value))
+            object.__setattr__(self, name, normalized)
 
     @property
     def minimum_anonymity(self) -> int:
@@ -148,16 +259,23 @@ class TabularRiskThresholds:
 
         if value is None:
             return cls()
-        if isinstance(value, cls):
+        if type(value) is cls:
             return value
         if not isinstance(value, Mapping):
             raise TypeError("thresholds must be a mapping or TabularRiskThresholds")
+        values = _snapshot_mapping(
+            value,
+            field_name="thresholds",
+            max_items=len(_THRESHOLD_FIELDS),
+        )
+        if set(values) - _THRESHOLD_FIELDS:
+            raise ValueError("thresholds contain unknown fields")
 
         def pick(*names: str, default: Any) -> Any:
-            for name in names:
-                if name in value:
-                    return value[name]
-            return default
+            matches = [name for name in names if name in values]
+            if len(matches) > 1:
+                raise ValueError("thresholds must not use duplicate aliases")
+            return default if not matches else values[matches[0]]
 
         return cls(
             minimum_k=pick("minimum_k", "target_k", "k", default=2),
@@ -185,22 +303,33 @@ class TabularRiskThresholds:
         )
 
 
-class TabularRiskReport(dict[str, Any]):
-    """Immutable-by-convention aggregate report with serialization helpers.
+class TabularRiskReport(Mapping[str, Any]):
+    """Immutable aggregate report with privacy-safe serialization helpers."""
 
-    The class subclasses ``dict`` so existing structured-export code can pass
-    the result to ``json.dumps`` or inspect stable top-level fields.  The
-    nested payload is built exclusively from allow-listed aggregate values.
-    Call :meth:`to_dict` when an independent copy is needed.
-    """
+    __slots__ = ("_payload",)
+    _payload: dict[str, Any]
 
     def __init__(self, payload: Mapping[str, Any]) -> None:
-        super().__init__(copy.deepcopy(dict(payload)))
+        object.__setattr__(
+            self, "_payload", copy.deepcopy(_project_report_payload(payload))
+        )
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError("TabularRiskReport is immutable")
+
+    def __getitem__(self, key: str) -> Any:
+        return copy.deepcopy(self._payload[key])
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._payload)
+
+    def __len__(self) -> int:
+        return len(self._payload)
 
     def to_dict(self) -> dict[str, Any]:
         """Return an independent JSON-safe copy of the report."""
 
-        return copy.deepcopy(dict(self))
+        return copy.deepcopy(self._payload)
 
     def to_json(self, *, indent: int | None = 2) -> str:
         """Serialize the report deterministically as JSON."""
@@ -369,7 +498,7 @@ def tabular_risk_report(
     generalization_coverage = _rate(generalized_qi_count, len(qi_columns))
     suppression_rate = _rate(suppressed_count, source_row_count)
 
-    status = {
+    status: dict[str, Any] = {
         "meets_minimum_k": bool(analyzed_row_count)
         and minimum_k >= threshold_values.minimum_k,
         "meets_max_singleton_rate": singleton_rate
@@ -482,6 +611,8 @@ def render_tabular_risk_json(
     """
 
     payload = _safe_report_payload(report)
+    if indent is not None and (type(indent) is not int or not 0 <= indent <= 8):
+        raise ValueError("tabular risk JSON indentation is invalid")
     return json.dumps(
         payload,
         ensure_ascii=True,
@@ -499,6 +630,8 @@ def render_tabular_risk_markdown(
     """Render aggregate risk evidence as deterministic Markdown."""
 
     payload = _safe_report_payload(report)
+    if type(title) is not str or _SAFE_TITLE_PATTERN.fullmatch(title) is None:
+        raise ValueError("tabular risk report title is invalid")
     rows = payload["row_counts"]
     schema = payload["schema"]
     qi = payload["quasi_identifiers"]
@@ -640,50 +773,50 @@ def _materialize_rows(records: Any) -> list[dict[str, Any]]:
     if records is None:
         return []
 
-    to_dicts = getattr(records, "to_dicts", None)
-    if callable(to_dicts):
-        records = to_dicts()
-    else:
-        to_dict = getattr(records, "to_dict", None)
-        if callable(to_dict) and not isinstance(records, Mapping):
-            try:
+    if not isinstance(records, Mapping) and type(records) not in {list, tuple}:
+        try:
+            to_dicts = getattr(records, "to_dicts", None)
+            if callable(to_dicts):
+                records = to_dicts()
+            else:
+                to_dict = getattr(records, "to_dict", None)
+                if not callable(to_dict):
+                    raise TypeError
                 records = to_dict("records")
-            except TypeError as error:
-                raise TypeError(
-                    "DataFrame-like records must support to_dict('records')"
-                ) from error
+        except Exception:  # noqa: BLE001 - adapters are caller-controlled.
+            raise TypeError(
+                "DataFrame-like rows must expose a supported records conversion"
+            ) from None
 
     if isinstance(records, Mapping):
-        container = next(
-            (
-                records[name]
-                for name in ("records", "rows", "items")
-                if name in records and _is_row_sequence(records[name])
-            ),
-            None,
-        )
-        records = container if container is not None else [records]
+        records = [records]
 
-    if not _is_row_sequence(records):
+    if type(records) not in {list, tuple}:
         raise TypeError("rows must be a sequence of row mappings")
+    if len(records) > MAX_TABULAR_RISK_ROWS:
+        raise ValueError("rows exceed the supported item limit")
 
     materialized: list[dict[str, Any]] = []
+    total_cells = 0
     for row in records:
-        fields: dict[str, Any] = {}
-        for field in row:
-            if type(field) is not str or not field:
-                raise TypeError("row column names must be non-empty strings")
-            fields[field] = row[field]
+        if not isinstance(row, Mapping):
+            raise TypeError("rows must contain row mappings")
+        raw_fields = _snapshot_mapping(
+            row,
+            field_name="row",
+            max_items=MAX_TABULAR_RISK_COLUMNS,
+        )
+        total_cells += len(raw_fields)
+        if total_cells > MAX_TABULAR_RISK_TOTAL_CELLS:
+            raise ValueError("rows exceed the supported cell limit")
+        fields = {
+            _safe_column_name(field, field_name="row column names"): (
+                _normalize_cell_value(value)
+            )
+            for field, value in raw_fields.items()
+        }
         materialized.append(fields)
     return materialized
-
-
-def _is_row_sequence(value: Any) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes, bytearray))
-        and all(isinstance(row, Mapping) for row in value)
-    )
 
 
 def _build_schema(
@@ -695,25 +828,31 @@ def _build_schema(
     if schema is None:
         supplied_columns: set[str] = set()
     elif isinstance(schema, Mapping):
+        schema_values = _snapshot_mapping(
+            schema,
+            field_name="schema",
+            max_items=MAX_TABULAR_RISK_COLUMNS,
+        )
         supplied_columns = set()
-        for field, descriptor in schema.items():
-            if type(field) is not str or not field:
-                raise TypeError("schema column names must be non-empty strings")
+        for field, descriptor in schema_values.items():
+            field = _safe_column_name(field, field_name="schema column names")
             supplied_columns.add(field)
             supplied_kinds[field] = _safe_kind_from_descriptor(descriptor)
-    elif isinstance(schema, Sequence) and not isinstance(
-        schema,
-        (str, bytes, bytearray),
-    ):
+    elif type(schema) in {list, tuple}:
+        if len(schema) > MAX_TABULAR_RISK_COLUMNS:
+            raise ValueError("schema exceeds the supported column limit")
         supplied_columns = set()
         for field in schema:
-            if type(field) is not str or not field:
-                raise TypeError("schema columns must be non-empty strings")
+            field = _safe_column_name(field, field_name="schema columns")
+            if field in supplied_columns:
+                raise ValueError("schema columns must be unique")
             supplied_columns.add(field)
     else:
         raise TypeError("schema must be a column mapping or sequence of names")
 
     columns = tuple(sorted(row_columns | supplied_columns))
+    if len(columns) > MAX_TABULAR_RISK_COLUMNS:
+        raise ValueError("combined schema exceeds the supported column limit")
     return columns, supplied_kinds
 
 
@@ -749,7 +888,7 @@ def _schema_payload(
 
 
 def _safe_kind_from_descriptor(value: Any) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         return "unknown"
     normalized = value.strip().lower()
     if normalized in _SAFE_KINDS:
@@ -804,16 +943,17 @@ def _normalize_quasi_identifiers(
             if not _looks_like_direct_identifier(column)
         )
         return inferred, True
-    if isinstance(quasi_identifiers, (str, bytes, bytearray)):
+    if type(quasi_identifiers) not in {list, tuple}:
         raise TypeError("quasi_identifiers must be a sequence of column names")
-    if not isinstance(quasi_identifiers, Sequence):
-        raise TypeError("quasi_identifiers must be a sequence of column names")
+    if len(quasi_identifiers) > MAX_TABULAR_RISK_COLUMNS:
+        raise ValueError("quasi_identifiers exceed the supported column limit")
     columns: list[str] = []
     for column in quasi_identifiers:
-        if type(column) is not str or not column.strip():
-            raise ValueError("quasi_identifiers must contain non-empty column names")
-        columns.append(column.strip())
-    return tuple(sorted(dict.fromkeys(columns))), False
+        column = _safe_column_name(column, field_name="quasi_identifiers")
+        if column in columns:
+            raise ValueError("quasi_identifiers must be unique")
+        columns.append(column)
+    return tuple(sorted(columns)), False
 
 
 def _looks_like_direct_identifier(column: str) -> bool:
@@ -843,23 +983,29 @@ def _normalize_generalization(
     if value is None:
         return {}
     if isinstance(value, Mapping):
+        values = _snapshot_mapping(
+            value,
+            field_name="generalization",
+            max_items=MAX_TABULAR_RISK_COLUMNS,
+        )
         columns: dict[str, bool] = {}
-        for column, level in value.items():
-            if type(column) is not str or not column.strip():
-                raise ValueError("generalization columns must be non-empty strings")
+        for column, level in values.items():
+            column = _safe_column_name(column, field_name="generalization columns")
             if level is not False and level is not None:
-                columns[column.strip()] = True
+                columns[column] = True
         return columns
-    if isinstance(value, str):
-        if not value.strip():
-            raise ValueError("generalization columns must be non-empty strings")
-        return {value.strip(): True}
-    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+    if type(value) is str:
+        column = _safe_column_name(value, field_name="generalization columns")
+        return {column: True}
+    if type(value) in {list, tuple}:
+        if len(value) > MAX_TABULAR_RISK_COLUMNS:
+            raise ValueError("generalization exceeds the supported column limit")
         columns = {}
         for column in value:
-            if type(column) is not str or not column.strip():
-                raise ValueError("generalization columns must be non-empty strings")
-            columns[column.strip()] = True
+            column = _safe_column_name(column, field_name="generalization columns")
+            if column in columns:
+                raise ValueError("generalization columns must be unique")
+            columns[column] = True
         return columns
     raise TypeError("generalization must be a mapping or sequence of columns")
 
@@ -877,24 +1023,24 @@ def _normalize_suppression(
     count_only = 0
 
     if isinstance(declaration, Mapping):
-        raw_indices = next(
-            (
-                declaration[name]
-                for name in ("row_indices", "indices", "rows")
-                if name in declaration
-            ),
-            None,
+        values = _snapshot_mapping(
+            declaration,
+            field_name="suppression",
+            max_items=len(_SUPPRESSION_FIELDS),
         )
+        if set(values) - _SUPPRESSION_FIELDS:
+            raise ValueError("suppression contains unknown fields")
+
+        def pick(group: str) -> Any:
+            matches = [name for name in _SUPPRESSION_ALIASES[group] if name in values]
+            if len(matches) > 1:
+                raise ValueError("suppression must not use duplicate aliases")
+            return None if not matches else values[matches[0]]
+
+        raw_indices = pick("indices")
         if raw_indices is not None:
             indices.update(_validate_suppression_indices(raw_indices, row_count))
-        raw_count = next(
-            (
-                declaration[name]
-                for name in ("count", "suppressed_count")
-                if name in declaration
-            ),
-            None,
-        )
+        raw_count = pick("count")
         count_only = _validate_suppression_count(raw_count)
     elif declaration is not None:
         if type(declaration) is int:
@@ -903,8 +1049,8 @@ def _normalize_suppression(
             indices.update(_validate_suppression_indices(declaration, row_count))
 
     count_only += _validate_suppression_count(suppression_count)
-    if len(indices) + count_only > row_count + count_only:
-        raise ValueError("suppressed row count exceeds source row count")
+    if row_count + count_only > MAX_TABULAR_RISK_ROWS:
+        raise ValueError("source row count exceeds the supported item limit")
     return _SuppressionInfo(
         indices=frozenset(indices),
         source_row_count=row_count + count_only,
@@ -913,12 +1059,16 @@ def _normalize_suppression(
 
 
 def _validate_suppression_indices(value: Any, row_count: int) -> set[int]:
-    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
+    if type(value) not in {list, tuple}:
         raise TypeError("suppressed row indices must be a sequence of integers")
+    if len(value) > row_count:
+        raise ValueError("suppressed row indices exceed the supplied rows")
     indices: set[int] = set()
     for index in value:
         if type(index) is not int or index < 0 or index >= row_count:
             raise ValueError("suppressed row indices are outside the supplied rows")
+        if index in indices:
+            raise ValueError("suppressed row indices must be unique")
         indices.add(index)
     return indices
 
@@ -926,8 +1076,8 @@ def _validate_suppression_indices(value: Any, row_count: int) -> set[int]:
 def _validate_suppression_count(value: Any) -> int:
     if value is None:
         return 0
-    if type(value) is not int or value < 0:
-        raise ValueError("suppressed row count must be a non-negative integer")
+    if type(value) is not int or not 0 <= value <= MAX_TABULAR_RISK_ROWS:
+        raise ValueError("suppressed row count must be a bounded integer")
     return value
 
 
@@ -959,9 +1109,15 @@ def _value_fingerprint(value: Any) -> str:
     if value is None:
         canonical: Any = None
     elif kind == "datetime":
-        canonical = value.isoformat()
+        try:
+            canonical = value.isoformat()
+        except Exception:  # noqa: BLE001 - tzinfo callbacks may be caller-controlled.
+            raise ValueError("rows contain an invalid temporal value") from None
     elif kind == "date":
-        canonical = value.isoformat()
+        try:
+            canonical = value.isoformat()
+        except Exception:  # noqa: BLE001 - callbacks may be caller-controlled.
+            raise ValueError("rows contain an invalid temporal value") from None
     elif kind == "decimal":
         canonical = str(value)
     elif kind == "float":
@@ -995,219 +1151,284 @@ def _percentile(values: Sequence[float], quantile: float) -> float:
 def _safe_report_payload(
     report: Mapping[str, Any] | TabularRiskReport,
 ) -> dict[str, Any]:
-    if isinstance(report, TabularRiskReport):
+    if type(report) is TabularRiskReport:
+        return report.to_dict()
+    return TabularRiskReport(report).to_dict()
+
+
+def _project_report_payload(
+    report: Mapping[str, Any] | TabularRiskReport,
+) -> dict[str, Any]:
+    if type(report) is TabularRiskReport:
         raw = report.to_dict()
     elif isinstance(report, Mapping):
-        raw = dict(report)
+        raw = _snapshot_mapping(
+            report,
+            field_name="tabular risk report",
+            max_items=32,
+        )
     else:
-        to_dict = getattr(report, "to_dict", None)
-        if not callable(to_dict):
-            raise TypeError("report must be a mapping or expose to_dict()")
-        raw = to_dict()
-        if not isinstance(raw, Mapping):
-            raise TypeError("report.to_dict() must return a mapping")
-        raw = dict(raw)
+        raise TypeError("report must be a mapping or TabularRiskReport")
 
-    # The builder is the only producer of this shape.  The explicit projection
-    # keeps renderers aggregate-only even when a caller attaches extra fields.
-    row_counts = _safe_mapping(raw.get("row_counts"))
-    schema = _safe_mapping(raw.get("schema"))
-    qi = _safe_mapping(raw.get("quasi_identifiers"))
-    classes = _safe_mapping(raw.get("equivalence_classes"))
-    risk = _safe_mapping(raw.get("risk"))
-    generalization = _safe_mapping(raw.get("generalization"))
-    suppression = _safe_mapping(raw.get("suppression"))
-    thresholds = _safe_mapping(raw.get("thresholds"))
-    status = _safe_mapping(raw.get("status"))
+    # Derive every display metric and decision from bounded aggregate inputs.
+    # Unknown top-level fields remain discarded so renderers cannot become a
+    # raw-row serialization path.
+    row_counts = _safe_mapping(
+        raw.get("row_counts"), field_name="report row counts", max_items=4
+    )
+    schema = _safe_mapping(raw.get("schema"), field_name="report schema", max_items=2)
+    qi = _safe_mapping(
+        raw.get("quasi_identifiers"),
+        field_name="report quasi-identifiers",
+        max_items=3,
+    )
+    classes = _safe_mapping(
+        raw.get("equivalence_classes"),
+        field_name="report equivalence classes",
+        max_items=7,
+    )
+    generalization = _safe_mapping(
+        raw.get("generalization"),
+        field_name="report generalization",
+        max_items=4,
+    )
+    threshold_mapping = _safe_mapping(
+        raw.get("thresholds"),
+        field_name="report thresholds",
+        max_items=len(_THRESHOLD_FIELDS),
+    )
+
+    source_row_count = _safe_nonnegative_int(
+        row_counts.get("source"), maximum=MAX_TABULAR_RISK_ROWS
+    )
+    analyzed_row_count = _safe_nonnegative_int(
+        row_counts.get("analyzed"), maximum=MAX_TABULAR_RISK_ROWS
+    )
+    suppressed_row_count = _safe_nonnegative_int(
+        row_counts.get("suppressed"), maximum=MAX_TABULAR_RISK_ROWS
+    )
+    if source_row_count != analyzed_row_count + suppressed_row_count:
+        raise ValueError("tabular risk report row counts are inconsistent")
 
     schema_columns: list[dict[str, Any]] = []
     raw_columns = schema.get("columns", [])
-    if isinstance(raw_columns, Sequence) and not isinstance(raw_columns, (str, bytes)):
-        for item in raw_columns:
-            column = _safe_mapping(item)
-            name = column.get("name")
-            if not isinstance(name, str):
-                continue
-            schema_columns.append(
-                {
-                    "name": name,
-                    "kind": _safe_kind_for_output(column.get("kind")),
-                    "nullable": bool(column.get("nullable", False)),
-                    "missing_count": _safe_nonnegative_int(column.get("missing_count")),
-                    "distinct_count": _safe_nonnegative_int(
-                        column.get("distinct_count")
-                    ),
-                }
-            )
+    if type(raw_columns) not in {list, tuple}:
+        raise ValueError("tabular risk report schema columns are invalid")
+    if len(raw_columns) > MAX_TABULAR_RISK_COLUMNS:
+        raise ValueError("tabular risk report schema exceeds the column limit")
+    seen_schema_columns: set[str] = set()
+    for item in raw_columns:
+        column = _safe_mapping(item, field_name="report schema column", max_items=5)
+        name = _safe_column_name(column.get("name"), field_name="report schema columns")
+        if name in seen_schema_columns:
+            raise ValueError("tabular risk report schema columns must be unique")
+        seen_schema_columns.add(name)
+        nullable = column.get("nullable", False)
+        schema_columns.append(
+            {
+                "name": name,
+                "kind": _safe_kind_for_output(column.get("kind")),
+                "nullable": nullable if type(nullable) is bool else False,
+                "missing_count": _safe_nonnegative_int(
+                    column.get("missing_count"), maximum=source_row_count
+                ),
+                "distinct_count": _safe_nonnegative_int(
+                    column.get("distinct_count"), maximum=source_row_count
+                ),
+            }
+        )
+    schema_columns.sort(key=lambda item: item["name"])
 
     size_distribution: list[dict[str, int]] = []
     raw_distribution = classes.get("size_distribution", [])
-    if isinstance(raw_distribution, Sequence) and not isinstance(
-        raw_distribution,
-        (str, bytes),
-    ):
-        for item in raw_distribution:
-            entry = _safe_mapping(item)
-            size = _safe_nonnegative_int(entry.get("size"))
-            count = _safe_nonnegative_int(entry.get("class_count"))
-            size_distribution.append({"size": size, "class_count": count})
+    if type(raw_distribution) not in {list, tuple}:
+        raise ValueError("tabular risk report class distribution is invalid")
+    if len(raw_distribution) > MAX_TABULAR_RISK_ROWS:
+        raise ValueError("tabular risk report class distribution is too large")
+    seen_sizes: set[int] = set()
+    for item in raw_distribution:
+        entry = _safe_mapping(
+            item, field_name="report class distribution entry", max_items=2
+        )
+        size = _safe_positive_int(entry.get("size"), maximum=MAX_TABULAR_RISK_ROWS)
+        count = _safe_positive_int(
+            entry.get("class_count"), maximum=MAX_TABULAR_RISK_ROWS
+        )
+        if size in seen_sizes:
+            raise ValueError("tabular risk report class sizes must be unique")
+        seen_sizes.add(size)
+        size_distribution.append({"size": size, "class_count": count})
+    size_distribution.sort(key=lambda item: item["size"])
 
-    safe_caveats = [
-        value
-        for value in raw.get("caveats", [])
-        if isinstance(value, str) and value in (*_CAVEAT_LOCAL, *_INFERRED_QI_CAVEAT)
+    derived_row_count = sum(
+        item["size"] * item["class_count"] for item in size_distribution
+    )
+    if derived_row_count != analyzed_row_count:
+        raise ValueError("tabular risk report class distribution is inconsistent")
+    class_count = sum(item["class_count"] for item in size_distribution)
+    minimum_k = min((item["size"] for item in size_distribution), default=0)
+    singleton_class_count = sum(
+        item["class_count"] for item in size_distribution if item["size"] == 1
+    )
+    singleton_rate = _rate(singleton_class_count, analyzed_row_count)
+    risk_values = [
+        1.0 / item["size"]
+        for item in size_distribution
+        for _ in range(item["size"] * item["class_count"])
     ]
-    schema_digest = raw.get("schema_digest")
+    max_risk = max(risk_values, default=0.0)
+    mean_risk = sum(risk_values) / len(risk_values) if risk_values else 0.0
+    p95_risk = _percentile(risk_values, 0.95)
+
+    qi_columns = _safe_string_list(
+        qi.get("columns"), field_name="report quasi-identifiers"
+    )
+    generalized_columns = _safe_string_list(
+        generalization.get("declared_columns"),
+        field_name="report generalized columns",
+    )
+    schema_names = {column["name"] for column in schema_columns}
+    if set(qi_columns) - schema_names:
+        raise ValueError("tabular risk report has unknown quasi-identifiers")
+    if set(generalized_columns) - schema_names:
+        raise ValueError("tabular risk report has unknown generalized columns")
+    generalization_coverage = _rate(
+        len(set(generalized_columns) & set(qi_columns)), len(qi_columns)
+    )
+    suppression_rate = _rate(suppressed_row_count, source_row_count)
+    threshold_values = TabularRiskThresholds.from_value(threshold_mapping)
+
+    status: dict[str, Any] = {
+        "meets_minimum_k": bool(analyzed_row_count)
+        and minimum_k >= threshold_values.minimum_k,
+        "meets_max_singleton_rate": singleton_rate
+        <= threshold_values.max_singleton_rate,
+        "meets_max_reidentification_risk": max_risk
+        <= threshold_values.max_reidentification_risk,
+        "meets_max_suppression_rate": suppression_rate
+        <= threshold_values.max_suppression_rate,
+        "meets_min_generalization_coverage": generalization_coverage
+        >= threshold_values.min_generalization_coverage,
+    }
+    status["meets_thresholds"] = all(status.values())
+    status["outcome"] = "pass" if status["meets_thresholds"] else "review"
+
+    schema_digest = stable_hash(
+        {"kind": "openmed-tabular-schema", "columns": schema_columns}
+    )
+    supplied_schema_digest = raw.get("schema_digest")
+    if supplied_schema_digest is not None and supplied_schema_digest != schema_digest:
+        raise ValueError("tabular risk report schema digest is inconsistent")
     dataset_digest = raw.get("dataset_digest")
-    if not isinstance(schema_digest, str) or not _DIGEST_PATTERN.fullmatch(
-        schema_digest
-    ):
-        schema_digest = "sha256:" + "0" * 64
-    if not isinstance(dataset_digest, str) or not _DIGEST_PATTERN.fullmatch(
-        dataset_digest
-    ):
+    if type(dataset_digest) is not str or not _DIGEST_PATTERN.fullmatch(dataset_digest):
         dataset_digest = "sha256:" + "0" * 64
 
+    inferred_qi = qi.get("inferred", False)
+    inferred_qi = inferred_qi if type(inferred_qi) is bool else False
+    safe_caveats = list(_CAVEAT_LOCAL)
+    if inferred_qi:
+        safe_caveats.extend(_INFERRED_QI_CAVEAT)
+    if source_row_count == 0 and not schema_columns:
+        safe_caveats.append(_EMPTY_REPORT_CAVEAT)
+
     return {
-        "schema_version": _safe_nonnegative_int(raw.get("schema_version")),
+        "schema_version": _SCHEMA_VERSION,
         "artifact": "tabular_reidentification_risk_report",
         "detail_level": "aggregate_phi_safe",
-        "row_count": _safe_nonnegative_int(raw.get("row_count")),
-        "source_row_count": _safe_nonnegative_int(raw.get("source_row_count")),
-        "suppressed_row_count": _safe_nonnegative_int(raw.get("suppressed_row_count")),
+        "row_count": analyzed_row_count,
+        "source_row_count": source_row_count,
+        "suppressed_row_count": suppressed_row_count,
         "row_counts": {
-            "source": _safe_nonnegative_int(row_counts.get("source")),
-            "analyzed": _safe_nonnegative_int(row_counts.get("analyzed")),
-            "suppressed": _safe_nonnegative_int(row_counts.get("suppressed")),
-            "suppression_rate": _safe_unit_float(row_counts.get("suppression_rate")),
+            "source": source_row_count,
+            "analyzed": analyzed_row_count,
+            "suppressed": suppressed_row_count,
+            "suppression_rate": suppression_rate,
         },
         "schema": {
-            "column_count": _safe_nonnegative_int(schema.get("column_count")),
+            "column_count": len(schema_columns),
             "columns": schema_columns,
         },
         "quasi_identifiers": {
-            "columns": _safe_string_list(qi.get("columns")),
-            "count": _safe_nonnegative_int(qi.get("count")),
-            "inferred": bool(qi.get("inferred", False)),
+            "columns": qi_columns,
+            "count": len(qi_columns),
+            "inferred": inferred_qi,
         },
         "equivalence_classes": {
-            "count": _safe_nonnegative_int(classes.get("count")),
-            "minimum_k": _safe_nonnegative_int(classes.get("minimum_k")),
-            "mean_size": _safe_nonnegative_float(classes.get("mean_size")),
+            "count": class_count,
+            "minimum_k": minimum_k,
+            "mean_size": analyzed_row_count / class_count if class_count else 0.0,
             "size_distribution": size_distribution,
-            "singleton_class_count": _safe_nonnegative_int(
-                classes.get("singleton_class_count")
-            ),
-            "singleton_row_count": _safe_nonnegative_int(
-                classes.get("singleton_row_count")
-            ),
-            "singleton_rate": _safe_unit_float(classes.get("singleton_rate")),
+            "singleton_class_count": singleton_class_count,
+            "singleton_row_count": singleton_class_count,
+            "singleton_rate": singleton_rate,
         },
         "risk": {
             "attacker_model": "exact_match_on_declared_quasi_identifiers",
-            "max_reidentification_risk": _safe_unit_float(
-                risk.get("max_reidentification_risk")
-            ),
-            "mean_reidentification_risk": _safe_unit_float(
-                risk.get("mean_reidentification_risk")
-            ),
-            "p95_reidentification_risk": _safe_unit_float(
-                risk.get("p95_reidentification_risk")
-            ),
+            "max_reidentification_risk": max_risk,
+            "mean_reidentification_risk": mean_risk,
+            "p95_reidentification_risk": p95_risk,
             "population_risk_estimated": False,
         },
         "generalization": {
-            "declared_columns": _safe_string_list(
-                generalization.get("declared_columns")
-            ),
-            "declared_count": _safe_nonnegative_int(
-                generalization.get("declared_count")
-            ),
-            "quasi_identifier_count": _safe_nonnegative_int(
-                generalization.get("quasi_identifier_count")
-            ),
-            "quasi_identifier_coverage": _safe_unit_float(
-                generalization.get("quasi_identifier_coverage")
-            ),
+            "declared_columns": generalized_columns,
+            "declared_count": len(generalized_columns),
+            "quasi_identifier_count": len(qi_columns),
+            "quasi_identifier_coverage": generalization_coverage,
         },
         "suppression": {
-            "declared_count": _safe_nonnegative_int(suppression.get("declared_count")),
-            "source_row_count": _safe_nonnegative_int(
-                suppression.get("source_row_count")
-            ),
-            "analyzed_row_count": _safe_nonnegative_int(
-                suppression.get("analyzed_row_count")
-            ),
-            "rate": _safe_unit_float(suppression.get("rate")),
+            "declared_count": suppressed_row_count,
+            "source_row_count": source_row_count,
+            "analyzed_row_count": analyzed_row_count,
+            "rate": suppression_rate,
         },
-        "thresholds": {
-            "minimum_k": _safe_nonnegative_int(thresholds.get("minimum_k")),
-            "max_singleton_rate": _safe_unit_float(
-                thresholds.get("max_singleton_rate")
-            ),
-            "max_reidentification_risk": _safe_unit_float(
-                thresholds.get("max_reidentification_risk")
-            ),
-            "max_suppression_rate": _safe_unit_float(
-                thresholds.get("max_suppression_rate")
-            ),
-            "min_generalization_coverage": _safe_unit_float(
-                thresholds.get("min_generalization_coverage")
-            ),
-        },
-        "status": {
-            "meets_minimum_k": bool(status.get("meets_minimum_k", False)),
-            "meets_max_singleton_rate": bool(
-                status.get("meets_max_singleton_rate", False)
-            ),
-            "meets_max_reidentification_risk": bool(
-                status.get("meets_max_reidentification_risk", False)
-            ),
-            "meets_max_suppression_rate": bool(
-                status.get("meets_max_suppression_rate", False)
-            ),
-            "meets_min_generalization_coverage": bool(
-                status.get("meets_min_generalization_coverage", False)
-            ),
-            "meets_thresholds": bool(status.get("meets_thresholds", False)),
-            "outcome": "pass" if status.get("outcome") == "pass" else "review",
-        },
+        "thresholds": threshold_values.to_dict(),
+        "status": status,
         "schema_digest": schema_digest,
         "dataset_digest": dataset_digest,
         "caveats": safe_caveats,
     }
 
 
-def _safe_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
+def _safe_mapping(value: Any, *, field_name: str, max_items: int) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field_name} must be a mapping")
+    return _snapshot_mapping(value, field_name=field_name, max_items=max_items)
 
 
-def _safe_string_list(value: Any) -> list[str]:
-    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
+def _safe_string_list(value: Any, *, field_name: str) -> list[str]:
+    if value is None:
         return []
-    return sorted({item for item in value if isinstance(item, str)})
+    if type(value) not in {list, tuple}:
+        raise ValueError(f"{field_name} must be a sequence")
+    if len(value) > MAX_TABULAR_RISK_COLUMNS:
+        raise ValueError(f"{field_name} exceeds the column limit")
+    result: list[str] = []
+    for item in value:
+        column = _safe_column_name(item, field_name=field_name)
+        if column in result:
+            raise ValueError(f"{field_name} must be unique")
+        result.append(column)
+    return sorted(result)
 
 
-def _safe_nonnegative_int(value: Any) -> int:
-    return value if type(value) is int and value >= 0 else 0
+def _safe_nonnegative_int(value: Any, *, maximum: int) -> int:
+    if type(value) is not int or not 0 <= value <= maximum:
+        raise ValueError("tabular risk report contains an invalid count")
+    return value
 
 
-def _safe_nonnegative_float(value: Any) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return 0.0
-    value = float(value)
-    return value if math.isfinite(value) and value >= 0 else 0.0
-
-
-def _safe_unit_float(value: Any) -> float:
-    value = _safe_nonnegative_float(value)
-    return min(value, 1.0)
+def _safe_positive_int(value: Any, *, maximum: int) -> int:
+    if type(value) is not int or not 1 <= value <= maximum:
+        raise ValueError("tabular risk report contains an invalid class count")
+    return value
 
 
 def _safe_kind_for_output(value: Any) -> str:
     return (
         value
-        if isinstance(value, str) and value in _SAFE_KINDS | {"mixed", "unknown"}
+        if type(value) is str and value in _SAFE_KINDS | {"mixed", "unknown"}
         else "unknown"
     )
 

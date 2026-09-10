@@ -46,6 +46,26 @@ json_text = report.to_json()
 markdown_text = report.to_markdown()
 ```
 
+`TabularRiskReport` is immutable, including values returned from nested
+lookups. Use `to_dict()` when a mutable independent copy is required and
+`to_json()` rather than passing the report object directly to `json.dumps()`.
+
+## Input boundaries
+
+The local computation accepts at most 10,000 rows, 512 columns, 1,000,000
+cells, and 65,536 characters in one string or decimal scalar. Integer values
+must fit in a signed 64-bit range. Column identifiers use a closed ASCII
+identifier grammar, and schema, quasi-identifier, generalization, threshold,
+and suppression declarations reject duplicate aliases or unknown fields.
+These boundaries apply before fingerprinting so hostile adapters cannot create
+unbounded work or retain source values through an error path.
+
+The JSON and Markdown renderers project only the documented aggregate fields.
+They recompute equivalence-class metrics and every threshold outcome from the
+bounded class-size distribution rather than trusting caller-supplied status or
+risk fields. Report mappings with inconsistent row counts, class aggregates,
+or schema digests fail closed.
+
 Generalization metadata is a caller declaration. This report does not prove
 that a transformation was applied, nor does it infer a safe threshold for a
 particular population. Suppression counts likewise describe the export
