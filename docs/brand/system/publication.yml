@@ -277,6 +277,7 @@ classification:
     - guides/in-place-redaction.md
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
+    - security/audit-retention.md
     - security/key-management.md
     - integrations-langchain.md
     - integrations/langchain.md
@@ -372,6 +373,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/license-inventory.md
     - security/exception-taxonomy.md
     - security/export-naming.md
     - security/disclosure-policy.md
@@ -387,6 +389,7 @@ classification:
     - security/supply-chain.md
     - security/path-portability.md
     - supply-chain/vulnerability-scanning.md
+    - security/dependency-risk.md
     - security/sbom.md
     - supply-chain/provenance.md
     - supply-chain/sbom.md
