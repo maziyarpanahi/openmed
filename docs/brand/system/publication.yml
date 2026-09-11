@@ -273,7 +273,6 @@ classification:
     - security/secret-detection.md
     - guides/in-place-redaction.md
     - privacy/trace-recovery.md
-    - security/ci-privacy-scan.md
     - security/tamper-evident-audit-log.md
     - security/key-management.md
     - integrations-langchain.md
