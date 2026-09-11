@@ -214,6 +214,22 @@ from .scan import (
     TableRoleScan,
 )
 from .scan import scan_table as scan_column_roles
+from .schema_policy import (
+    ACTION_DATE_SHIFT,
+    ACTION_DEIDENTIFY,
+    SCHEMA_POLICY_VERSION,
+    SUPPORTED_SCHEMA_ACTIONS,
+    FieldRule,
+    SchemaPolicy,
+    SchemaPolicyError,
+    SchemaPolicyLintFinding,
+    apply_omop_file,
+    apply_schema_policy,
+    lint_schema_policy,
+    list_schema_policies,
+    load_schema_policy,
+    validate_schema_policy,
+)
 from .schema_snapshot import (
     COMPATIBILITY_RULES_VERSION,
     SCHEMA_SNAPSHOT_FORMAT_VERSION,
@@ -259,6 +275,8 @@ from .tables import (
 SUPPORTED_MODELS = SUPPORTED_TABLE_MODELS
 
 __all__ = [
+    "ACTION_DATE_SHIFT",
+    "ACTION_DEIDENTIFY",
     "COHORT_ADVISORY",
     "ACTION_DROP",
     "ACTION_GENERALIZE",
@@ -285,6 +303,7 @@ __all__ = [
     "ENGINE_AUTO",
     "ENGINE_PYTHON",
     "FLOWSHEET_ADVISORY",
+    "FieldRule",
     "KEY_VALUE_ADVISORY",
     "HIERARCHY_SCHEMA_VERSION",
     "PHENOTYPE_SCHEMA_VERSION",
@@ -383,10 +402,15 @@ __all__ = [
     "RelationalSchemaError",
     "RoleOverrideError",
     "SCHEMA_SNAPSHOT_FORMAT_VERSION",
+    "SCHEMA_POLICY_VERSION",
     "SchemaChange",
     "SchemaCompatibilityReport",
     "SchemaField",
     "SchemaSnapshot",
+    "SchemaPolicy",
+    "SchemaPolicyError",
+    "SchemaPolicyLintFinding",
+    "SUPPORTED_SCHEMA_ACTIONS",
     "SUPPORTED_STREAMING_SUFFIXES",
     "SUPPORTED_SYNTHETIC_OUTPUT_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
@@ -414,6 +438,8 @@ __all__ = [
     "TimeSeriesPoint",
     "anonymize_table",
     "apply_redaction",
+    "apply_omop_file",
+    "apply_schema_policy",
     "assert_cross_modal_consistency",
     "build_enforcement_hierarchies",
     "build_schema_snapshot",
@@ -465,8 +491,12 @@ __all__ = [
     "to_enforce_kanon_hierarchy",
     "verify_cross_modal_consistency",
     "is_schema_compatible",
+    "lint_schema_policy",
+    "list_schema_policies",
+    "load_schema_policy",
     "resolve_phenotype",
     "write_auto_policy",
     "write_table",
     "structured_privacy_fixture",
+    "validate_schema_policy",
 ]
