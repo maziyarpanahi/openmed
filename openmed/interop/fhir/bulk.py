@@ -13,6 +13,7 @@ here so the network boundary cannot bypass the same safety checks.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -23,6 +24,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
 from typing import Any, TextIO
+
+from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS
+from openmed.structured.schema_policy import (
+    PolicyInput,
+    SchemaPolicy,
+    SchemaPolicyError,
+    apply_schema_policy,
+    load_schema_policy,
+)
 
 from ..fhir_operations import Deidentifier, de_identify_resource
 
@@ -522,6 +532,10 @@ class BulkGatewayConfig:
     policy: str = _DEFAULT_POLICY
     method: str = _DEFAULT_METHOD
     max_buffered_resources: int = DEFAULT_MAX_BUFFERED_RESOURCES
+    schema_policy: PolicyInput | None = None
+    subject_key: str | bytes | None = field(default=None, repr=False)
+    date_shift_secret: str | bytes | None = field(default=None, repr=False)
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS
 
     @property
     def input_path(self) -> Path:
@@ -554,6 +568,8 @@ class BulkGatewayConfig:
             raise ValueError("policy must not be blank")
         if not str(self.method).strip():
             raise ValueError("method must not be blank")
+        if self.schema_policy is not None:
+            _resolve_fhir_schema_policy(self.schema_policy)
 
 
 class BulkDataGateway:
@@ -607,6 +623,7 @@ class BulkDataGateway:
                 input_sha256 = _sha256_file(source)
                 record = checkpoint.completed.get(_relative_key(relative))
                 if _checkpoint_matches(record, input_sha256, destination):
+                    assert record is not None
                     summaries.append(
                         _summary_from_record(
                             record["summary"],
@@ -627,6 +644,10 @@ class BulkDataGateway:
                         policy=self.config.policy,
                         method=self.config.method,
                         deidentifier=self.deidentifier,
+                        schema_policy=self.config.schema_policy,
+                        subject_key=self.config.subject_key,
+                        date_shift_secret=self.config.date_shift_secret,
+                        date_shift_max_days=self.config.date_shift_max_days,
                         supported_resource_types=self.supported_resource_types,
                         max_buffered_resources=self.config.max_buffered_resources,
                         cancel_event=cancel_event,
@@ -682,6 +703,10 @@ def deidentify_ndjson(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: PolicyInput | None = None,
+    subject_key: str | bytes | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
     supported_resource_types: Iterable[str] | None = None,
     max_buffered_resources: int = DEFAULT_MAX_BUFFERED_RESOURCES,
     cancel_event: Event | None = None,
@@ -706,6 +731,10 @@ def deidentify_ndjson(
                 policy=policy,
                 method=method,
                 deidentifier=deidentifier,
+                schema_policy=schema_policy,
+                subject_key=subject_key,
+                date_shift_secret=date_shift_secret,
+                date_shift_max_days=date_shift_max_days,
                 supported_resource_types=supported_resource_types,
                 max_buffered_resources=max_buffered_resources,
                 cancel_event=cancel_event,
@@ -726,6 +755,10 @@ def deidentify_ndjson_stream(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: PolicyInput | None = None,
+    subject_key: str | bytes | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
     supported_resource_types: Iterable[str] | None = None,
     max_buffered_resources: int = DEFAULT_MAX_BUFFERED_RESOURCES,
     cancel_event: Event | None = None,
@@ -741,6 +774,10 @@ def deidentify_ndjson_stream(
         policy=policy,
         method=method,
         deidentifier=deidentifier,
+        schema_policy=_resolve_fhir_schema_policy(schema_policy),
+        subject_key=subject_key,
+        date_shift_secret=date_shift_secret,
+        date_shift_max_days=date_shift_max_days,
         supported_resource_types=(
             frozenset(supported_resource_types)
             if supported_resource_types is not None
@@ -763,6 +800,10 @@ async def deidentify_ndjson_async(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: PolicyInput | None = None,
+    subject_key: str | bytes | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
     supported_resource_types: Iterable[str] | None = None,
     max_buffered_resources: int = DEFAULT_MAX_BUFFERED_RESOURCES,
     cancel_event: Event | None = None,
@@ -783,6 +824,10 @@ async def deidentify_ndjson_async(
                 policy=policy,
                 method=method,
                 deidentifier=deidentifier,
+                schema_policy=_resolve_fhir_schema_policy(schema_policy),
+                subject_key=subject_key,
+                date_shift_secret=date_shift_secret,
+                date_shift_max_days=date_shift_max_days,
                 supported_resource_types=(
                     frozenset(supported_resource_types)
                     if supported_resource_types is not None
@@ -811,6 +856,10 @@ class _NDJSONStreamProcessor:
     policy: str
     method: str
     deidentifier: Deidentifier | None
+    schema_policy: SchemaPolicy | None
+    subject_key: str | bytes | None
+    date_shift_secret: str | bytes | None
+    date_shift_max_days: int
     supported_resource_types: frozenset[str]
     max_buffered_resources: int
     cancel_event: Event | None
@@ -871,12 +920,24 @@ class _NDJSONStreamProcessor:
         if self.peak_buffered_resources > self.max_buffered_resources:
             raise RuntimeError("configured resource buffer bound was exceeded")
         try:
-            transformed = de_identify_resource(
-                resource,
-                policy=self.policy,
-                method=self.method,
-                deidentifier=self.deidentifier,
-            )
+            if self.schema_policy is None:
+                transformed = de_identify_resource(
+                    resource,
+                    policy=self.policy,
+                    method=self.method,
+                    deidentifier=self.deidentifier,
+                )
+            else:
+                transformed = apply_schema_policy(
+                    resource,
+                    self.schema_policy,
+                    subject_key=self.subject_key,
+                    date_shift_secret=self.date_shift_secret,
+                    date_shift_max_days=self.date_shift_max_days,
+                    deidentifier=self.deidentifier,
+                    text_policy=self.policy,
+                    text_method=self.method,
+                )
             if not isinstance(transformed, dict):
                 raise TypeError("privacy pipeline returned an invalid resource")
             if transformed.get("resourceType") != resource_type:
@@ -930,6 +991,10 @@ def deidentify_export(
     policy: str = _DEFAULT_POLICY,
     method: str = _DEFAULT_METHOD,
     deidentifier: Deidentifier | None = None,
+    schema_policy: PolicyInput | None = None,
+    subject_key: str | bytes | None = None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_max_days: int = DEFAULT_DATE_SHIFT_MAX_DAYS,
     supported_resource_types: Iterable[str] | None = None,
     max_buffered_resources: int = DEFAULT_MAX_BUFFERED_RESOURCES,
     checkpoint_path: str | Path | None = None,
@@ -945,6 +1010,10 @@ def deidentify_export(
             policy=policy,
             method=method,
             max_buffered_resources=max_buffered_resources,
+            schema_policy=schema_policy,
+            subject_key=subject_key,
+            date_shift_secret=date_shift_secret,
+            date_shift_max_days=date_shift_max_days,
         ),
         deidentifier=deidentifier,
         supported_resource_types=supported_resource_types,
@@ -1087,10 +1156,67 @@ def _local_checkpoint_configuration(
         "method": config.method,
         "max_buffered_resources": config.max_buffered_resources,
         "supported_resource_types": sorted(supported_resource_types),
+        "schema_policy": _schema_policy_fingerprint(config.schema_policy),
+        "subject_key": _opaque_key_fingerprint(config.subject_key),
+        "date_shift_secret": _opaque_key_fingerprint(config.date_shift_secret),
+        "date_shift_max_days": config.date_shift_max_days,
     }
     return _sha256_bytes(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     )
+
+
+def _resolve_fhir_schema_policy(policy: PolicyInput | None) -> SchemaPolicy | None:
+    if policy is None:
+        return None
+    loaded = load_schema_policy(policy)
+    if loaded.schema != "fhir":
+        raise SchemaPolicyError("FHIR Bulk Data requires a FHIR schema policy")
+    return loaded
+
+
+def _schema_policy_fingerprint(policy: PolicyInput | None) -> str | None:
+    loaded = _resolve_fhir_schema_policy(policy)
+    if loaded is None:
+        return None
+    payload = {
+        "schema_version": loaded.schema_version,
+        "name": loaded.name,
+        "schema": loaded.schema,
+        "base_policy": loaded.base_policy,
+        "default_action": loaded.default_action,
+        "identifier_fields": loaded.identifier_fields,
+        "known_fields": loaded.known_fields,
+        "rules": [
+            {
+                "path": rule.path,
+                "action": rule.action,
+                "field_type": rule.field_type,
+                "generalization": rule.generalization,
+                "level": rule.level,
+            }
+            for rule in loaded.rules
+        ],
+    }
+    return _sha256_bytes(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+
+
+def _opaque_key_fingerprint(value: str | bytes | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        key = value.encode("utf-8")
+    elif isinstance(value, bytes):
+        key = value
+    else:
+        raise SchemaPolicyError("schema-policy key material must be text or bytes")
+    return hmac.new(
+        key,
+        b"openmed-fhir-bulk-checkpoint-v1",
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _parse_resource_line(path: Path, line: str, line_number: int) -> dict[str, Any]:
