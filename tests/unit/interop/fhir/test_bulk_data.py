@@ -156,3 +156,77 @@ def test_malformed_line_is_reported_without_echoing_resource_content(
     assert summary.resources_deidentified == 1
     assert summary.error_count == 1
     assert "synthetic-phi-should-not-echo" not in json.dumps(summary.to_dict())
+
+
+def test_schema_policy_and_date_key_changes_invalidate_checkpoint(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    _write_file(
+        source / "Patient.ndjson",
+        [
+            {
+                "resourceType": "Patient",
+                "id": "patient-1",
+                "birthDate": "1980-01-15",
+                "name": [{"text": "Jane Roe"}],
+            }
+        ],
+    )
+
+    def run(schema_policy: str, secret: bytes):
+        config = BulkGatewayConfig(
+            source,
+            output,
+            schema_policy=schema_policy,
+            date_shift_secret=secret,
+        )
+        assert secret.decode() not in repr(config)
+        return BulkDataGateway(
+            config,
+            deidentifier=_fake_deidentify,
+        ).export()
+
+    first_secret = b"synthetic-first-checkpoint-secret"
+    second_secret = b"synthetic-second-checkpoint-secret"
+    assert run("fhir_hipaa_safe_harbor", first_secret).summary.resumed_files == 0
+    assert run("fhir_hipaa_safe_harbor", first_secret).summary.resumed_files == 1
+    assert run("fhir_research_limited_dataset", first_secret).summary.resumed_files == 0
+    assert run("fhir_hipaa_safe_harbor", second_secret).summary.resumed_files == 0
+
+    checkpoint = (output / ".openmed-fhir-bulk-checkpoint.json").read_bytes()
+    assert first_secret not in checkpoint
+    assert second_secret not in checkpoint
+    assert b"fhir_hipaa_safe_harbor" not in checkpoint
+
+
+def test_schema_policy_rejects_unmapped_resource_type_without_output(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Condition.ndjson"
+    destination = tmp_path / "output.ndjson"
+    _write_file(
+        source,
+        [
+            {
+                "resourceType": "Condition",
+                "id": "condition-1",
+                "note": [{"text": "Jane Roe"}],
+            }
+        ],
+    )
+
+    summary = deidentify_ndjson(
+        source,
+        destination,
+        schema_policy="fhir_hipaa_safe_harbor",
+        date_shift_secret=b"synthetic-schema-key",
+        deidentifier=_fake_deidentify,
+    )
+
+    assert summary.resources_deidentified == 0
+    assert summary.error_count == 1
+    assert summary.errors[0].message == "resource transformation failed"
+    assert destination.read_text(encoding="utf-8") == ""
+    assert "Jane Roe" not in json.dumps(summary.to_dict())
