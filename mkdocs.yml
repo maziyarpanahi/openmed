@@ -167,6 +167,7 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
+      - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
