@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an in-memory no-PHI telemetry exporter with closed counter families,
+  bounded dimensions and totals, atomic event validation, exception-type-only
+  categorization, deterministic JSON and Prometheus rendering, and no
+  mandatory network transport (#2414).
+- Added a bounded, deterministic tabular re-identification risk report with
+  aggregate-only JSON and Markdown renderers, immutable report state,
+  fail-closed consistency checks, and locally derived threshold outcomes
+  (#2411).
+- Added a deterministic local pre-push privacy scanner that checks every new
+  commit blob for direct identifiers, secrets, and sensitive structured fields;
+  emits value-free reports; supports narrowly versioned synthetic-fixture
+  allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a bounded, thread-safe privacy budget ledger for named aggregate
+  release contexts with atomic epsilon/delta charging, counts-only evidence,
+  immutable configuration views, and value-free failures (#2410).
+- Added caller-owned HMAC-SHA256 audit-report key rotation with bounded key
+  material, key-ID based current and retained-key verification, canonical
+  mapping checks, fail-closed provider handling, and value-free failures
+  (#2408).
 - Added a bounded, deterministic minimum-necessary structured field selector
   with caller-declared purpose mappings, policy allowlists and denylists,
   fail-closed unknown declarations, value-free decision explanations, and
@@ -62,6 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a local session-end hook that transactionally scrubs completed JSON and
+  JSONL traces with value-free failure reports and concurrent-change checks
+  (#2300).
 - Added deterministic authenticated encryption for reversible surrogate
   mappings, with caller-owned keys, owner-only atomic persistence, and
   value-free failures (#2293).

@@ -132,6 +132,7 @@ classification:
     - guides/streaming-traces.md
     - guides/trace-audit.md
     - reference/trace-fidelity.md
+    - guides/session-end-hook.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
@@ -202,6 +203,7 @@ classification:
     - legacy-indic-encoding.md
     - profiling.md
     - core-observability.md
+    - operations/no-phi-telemetry.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
     - benchmarks/cost-vs-cloud.md
@@ -272,6 +274,7 @@ classification:
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
+    - security/pre-push-privacy.md
     - security/trace-audit-artifact.md
     - security/ci-privacy-scan.md
     - security/secret-detection.md
@@ -280,6 +283,7 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
     - security/key-management.md
+    - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
     - integrations-langchain.md
     - integrations/langchain.md
@@ -390,6 +394,8 @@ classification:
     - security/hf-token-policy.md
     - security/supply-chain.md
     - security/path-portability.md
+    - security/tabular-risk-report.md
+    - security/privacy-budget.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
     - security/sbom.md
