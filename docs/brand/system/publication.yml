@@ -203,6 +203,7 @@ classification:
     - legacy-indic-encoding.md
     - profiling.md
     - core-observability.md
+    - operations/no-phi-telemetry.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
     - benchmarks/cost-vs-cloud.md
