@@ -242,6 +242,7 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/privacy-corpus.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -265,6 +266,8 @@ classification:
     - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
     - security/deletion-plans.md
+    - security/surrogate-audit.md
+    - security/redaction-idempotence.md
     - sms-short-text-deid.md
     - anonymization.md
     - guides/dataset-upload-guard.md
@@ -285,6 +288,8 @@ classification:
     - security/audit-retention.md
     - security/redaction-diff.md
     - security/policy-composition.md
+    - security/evidence-integrity.md
+    - security/tabular-schema-gates.md
     - security/key-management.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
