@@ -308,6 +308,7 @@ classification:
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
+    - integrations/omop-cohort-check.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
     - integrations/warehouse-remote-function.md
@@ -335,6 +336,7 @@ classification:
     - guides/fhir-omop-interoperability.md
     - interop/archive-safety.md
     - fhir-interop.md
+    - integrations/fhir-r5-fidelity.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
