@@ -430,6 +430,7 @@ classification:
   link_only:
     - benchmarks/golden.md
     - clinical-domains.md
+    - compliance/access-review-expiry.md
     - compliance/dpa-template.md
     - compliance/dpia-template.md
     - compliance/gdpr-dsar-export.md
