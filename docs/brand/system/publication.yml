@@ -260,6 +260,7 @@ classification:
     - api/compatibility-gate.md
     - guides/file-redaction.md
     - reidentification-risk.md
+    - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
     - sms-short-text-deid.md
     - anonymization.md
