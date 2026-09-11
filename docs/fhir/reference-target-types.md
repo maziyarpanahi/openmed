@@ -26,7 +26,7 @@ The supported R4 and R5 field maps are exposed as
 `FHIR_R4_REFERENCE_TARGETS`, `FHIR_R5_REFERENCE_TARGETS`, and
 `REFERENCE_TARGET_ALLOWLISTS`. Only fields in those explicit maps are
 inspected. This keeps unknown profiles and unsupported fields non-blocking.
-For R5, the checker recognizes `MedicationUsage` and the R5 choice-element
+For R5, the checker recognizes `MedicationStatement` and the R5 choice-element
 spellings used by this map.
 
 The checker resolves only local `ResourceType/id` references, untyped local IDs
@@ -49,3 +49,5 @@ Diagnostics never echo reference strings, resource IDs, identifiers, or other
 resource values. An empty result is represented by the standard informational
 `No issues detected.` OperationOutcome issue. This helper is an export safety
 check, not a complete FHIR validator or a clinical decision guarantee.
+
+The target maps are verified against the published [R4 resource definitions](https://hl7.org/fhir/R4/profiles-resources.json) and [R5 resource definitions](https://hl7.org/fhir/R5/profiles-resources.json). R5 retains `MedicationStatement`; its `CodeableReference` fields wrap a nested `Reference`. The definitions are used during maintenance only and are not downloaded at runtime.

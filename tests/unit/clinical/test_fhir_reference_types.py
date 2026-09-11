@@ -120,11 +120,11 @@ def test_contained_reference_is_explicitly_non_blocking_and_value_free():
     assert "contained-synthetic-subject" not in json.dumps(outcome)
 
 
-def test_r5_medication_usage_uses_the_r5_allowlist():
+def test_r5_medication_statement_uses_the_r5_allowlist():
     resources = [
         {"resourceType": "Patient", "id": "subject-a"},
         {
-            "resourceType": "MedicationUsage",
+            "resourceType": "MedicationStatement",
             "id": "usage-a",
             "subject": {"reference": "Patient/subject-a"},
         },
@@ -191,3 +191,46 @@ def test_findings_are_deterministic_and_do_not_mutate_input():
     assert first[0].reason == "missing"
     assert first[0].path == "resources[0].subject"
     assert json.dumps(resources, sort_keys=True) == snapshot
+
+
+def test_r5_codeable_reference_is_checked():
+    resources = [
+        {"resourceType": "Medication", "id": "m"},
+        {
+            "resourceType": "MedicationStatement",
+            "medication": {"reference": {"reference": "Medication/m"}},
+        },
+    ]
+    assert find_reference_target_issues(resources, fhir_version="R5") == ()
+    resources[1]["medication"]["reference"]["reference"] = "Patient/m"
+    assert (
+        find_reference_target_issues(resources, fhir_version="R5")[0].kind
+        == "disallowed"
+    )
+
+
+def test_r4_diagnostic_result_only_accepts_observations():
+    resources = [
+        {"resourceType": "ImagingStudy", "id": "study"},
+        {
+            "resourceType": "DiagnosticReport",
+            "result": [{"reference": "ImagingStudy/study"}],
+        },
+    ]
+    assert find_reference_target_issues(resources)[0].kind == "disallowed"
+
+
+def test_relative_reference_rejects_trailing_segments():
+    resources = [
+        {"resourceType": "Patient", "id": "p"},
+        {"resourceType": "Observation", "subject": {"reference": "Patient/p/extra"}},
+    ]
+    assert find_reference_target_issues(resources)[0].kind == "missing"
+
+
+def test_unknown_keys_do_not_create_diagnostic_paths():
+    marker = "subject[123456789]"
+    outcome = check_reference_targets(
+        {"resourceType": "Observation", marker: {"reference": "Patient/missing"}}
+    )
+    assert marker not in json.dumps(outcome)
