@@ -288,7 +288,7 @@ def test_ecl_is_delegated_to_configured_fhir_expand_endpoint() -> None:
             "url": "https://terminology.example/fhir/ValueSet/$expand",
             "params": {
                 "url": f"http://snomed.info/sct?fhir_vs=ecl/{ecl}",
-                "system-version": "1.0.0",
+                "system-version": "http://snomed.info/sct|1.0.0",
                 "count": "1000",
             },
             "headers": {
@@ -477,3 +477,53 @@ def test_cache_manifest_contains_only_hashes_and_versioned_metadata(
     assert VALUESET_URL not in manifest_path.read_text(encoding="utf-8")
     artifact_path = next(cache.cache_dir.glob("*/expansion.json"))
     assert "Synthetic finding" not in artifact_path.read_text(encoding="utf-8")
+
+
+def test_local_cache_does_not_hide_changed_definition(tmp_path) -> None:
+    engine = ValueSetExpansionEngine(
+        vocabularies={SYSTEM: _snapshot()}, cache_dir=tmp_path
+    )
+    payload = _local_valueset()
+    assert "SYN-003" not in engine.expand_valueset(payload)
+    payload["compose"].pop("exclude")
+    result = engine.expand_valueset(payload)
+    assert "SYN-003" in result
+    assert not result.provenance.cache_hit
+
+
+def test_remote_cache_is_bound_to_endpoint(tmp_path) -> None:
+    cache = ValueSetExpansionCache(tmp_path)
+    first = ValueSetExpansionEngine(
+        "https://one.example/fhir", cache=cache, client=_Client(_remote_valueset())
+    )
+    first.expand_valueset(VALUESET_URL, version="1.0.0")
+    second = ValueSetExpansionEngine(
+        "https://two.example/fhir",
+        cache=cache,
+        client=_Client(_remote_valueset(codes=("SYN-003",))),
+    )
+    result = second.expand_valueset(VALUESET_URL, version="1.0.0")
+    assert result.members == {"SYN-003"}
+    assert not result.provenance.cache_hit
+
+
+@pytest.mark.parametrize("field, value", [("offset", 1), ("total", 1)])
+def test_remote_inconsistent_page_metadata_fails_closed(field, value) -> None:
+    payload = _remote_valueset()
+    payload["expansion"][field] = value
+    engine = ValueSetExpansionEngine(
+        "https://one.example/fhir", client=_Client(payload)
+    )
+    with pytest.raises(ValueSetExpansionResponseError):
+        engine.expand_valueset(VALUESET_URL)
+
+
+def test_valueset_version_is_not_inferred_from_code_system_version() -> None:
+    payload = _remote_valueset()
+    payload["expansion"]["parameter"] = [
+        {"name": "system-version", "valueUri": f"{SYSTEM}|2026.09"}
+    ]
+    engine = ValueSetExpansionEngine(
+        "https://one.example/fhir", client=_Client(payload)
+    )
+    assert engine.expand_valueset(VALUESET_URL, version="1.0.0").version == "1.0.0"

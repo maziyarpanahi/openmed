@@ -147,3 +147,10 @@ encryption, licensing, and deletion remain the caller's responsibility.
 The engine constrains terminology for grounding and export workflows; it does
 not make a clinical decision and does not replace terminology governance or
 license review.
+
+Local cache identities bind both the supplied ValueSet definition and its
+resolved members; changing a loaded vocabulary or definition cannot reuse a
+stale entry under the same URL and version. Remote cache identities also bind
+the configured endpoint and ECL system. ValueSet versions remain independent
+of code-system version pins. Remote pages must match their requested offsets
+and declared totals.

@@ -247,7 +247,12 @@ class ValueSetExpansion(AbstractSet[str]):
     _codes: frozenset[str] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        normalized = tuple(sorted(set(self.codings)))
+        normalized = tuple(
+            sorted(
+                set(self.codings),
+                key=lambda member: (member.system, member.code, member.version or ""),
+            )
+        )
         object.__setattr__(self, "codings", normalized)
         object.__setattr__(
             self,
@@ -416,6 +421,10 @@ class ValueSetExpansionCache:
             len(expansion.codings) != manifest.get("member_count")
             or expansion.version != normalized_version
             or expansion.provenance.restricted != restricted
+            or (
+                not self.allow_restricted
+                and any(_is_restricted(member.system) for member in expansion.codings)
+            )
         ):
             return None
         return replace(
@@ -434,7 +443,10 @@ class ValueSetExpansionCache:
 
         if not isinstance(expansion, ValueSetExpansion):
             raise TypeError("expansion must be a ValueSetExpansion")
-        if expansion.provenance.restricted and not self.allow_restricted:
+        if (
+            expansion.provenance.restricted
+            or any(_is_restricted(member.system) for member in expansion.codings)
+        ) and not self.allow_restricted:
             raise ValueSetExpansionPolicyError(
                 "restricted expansion caching requires allow_restricted=True"
             )
@@ -641,23 +653,25 @@ class ValueSetExpansionEngine:
             if version != declared_version:
                 raise ValueError("requested version does not match ValueSet.version")
         resolved_version = version or declared_version or payload_hash
-        source_identity = valueset_url or f"urn:openmed:valueset:{payload_hash}"
         restricted_hint = _payload_contains_restricted_system(payload)
-        cached = self._cache_load(
-            source_identity,
-            resolved_version,
-            source_kind="local",
-        )
-        if cached is not None:
-            return cached
-
         codings, vocabulary_versions, expansion_identifier = self._local_members(
             payload
         )
+        if len(codings) > self.max_members:
+            raise ValueSetExpansionResponseError(
+                "local expansion exceeded the configured member limit"
+            )
         restricted = restricted_hint or any(
             _is_restricted(member.system) for member in codings
         )
         response_hash = _members_digest(codings, resolved_version)
+        # A canonical/version pair alone does not bind caller-loaded content.
+        source_identity = f"urn:openmed:valueset:{payload_hash}:{response_hash}"
+        cached = self._cache_load(
+            source_identity, resolved_version, source_kind="local"
+        )
+        if cached is not None:
+            return cached
         expansion = ValueSetExpansion(
             codings=codings,
             provenance=ExpansionProvenance(
@@ -683,7 +697,20 @@ class ValueSetExpansionEngine:
             members, item_count = _members_from_contains(expansion.get("contains"))
             _require_complete_expansion(expansion, item_count)
             identifier = _optional_text(expansion.get("identifier"))
-            return tuple(sorted(members)), (), identifier
+            return (
+                tuple(
+                    sorted(
+                        members,
+                        key=lambda member: (
+                            member.system,
+                            member.code,
+                            member.version or "",
+                        ),
+                    )
+                ),
+                (),
+                identifier,
+            )
 
         compose = payload.get("compose")
         if not isinstance(compose, Mapping):
@@ -817,8 +844,16 @@ class ValueSetExpansionEngine:
         source_kind: Literal["valueset-url", "ecl"],
         version: str | None,
     ) -> ValueSetExpansion:
+        cache_identity = json.dumps(
+            {
+                "source": source,
+                "endpoint": self.endpoint,
+                "ecl_system": self.ecl_system_uri if source_kind == "ecl" else None,
+            },
+            sort_keys=True,
+        )
         if version is not None:
-            cached = self._cache_load(source, version, source_kind=source_kind)
+            cached = self._cache_load(cache_identity, version, source_kind=source_kind)
             if cached is not None:
                 return cached
         if self.endpoint is None:
@@ -836,7 +871,7 @@ class ValueSetExpansionEngine:
                 "url": _ecl_implicit_valueset_url(self.ecl_system_uri, source)
             }
             if version is not None:
-                base_params["system-version"] = version
+                base_params["system-version"] = f"{self.ecl_system_uri}|{version}"
         base_params["count"] = str(self.page_size)
 
         members: dict[tuple[str, str], ValueSetMember] = {}
@@ -876,6 +911,10 @@ class ValueSetExpansionEngine:
                 response_version = current_version
             current_url = _optional_uri(payload.get("url"), "response ValueSet.url")
             if current_url is not None:
+                if source_kind == "valueset-url" and current_url != source:
+                    raise ValueSetExpansionResponseError(
+                        "terminology response ValueSet URL does not match the request"
+                    )
                 if response_url is not None and current_url != response_url:
                     raise ValueSetExpansionResponseError(
                         "terminology ValueSet URL changed between pages"
@@ -902,7 +941,18 @@ class ValueSetExpansionEngine:
                         "terminology expansion total changed between pages"
                     )
                 total = current_total
-            if total is None or len(members) >= total:
+            returned_offset = _optional_nonnegative_integer(
+                expansion.get("offset"), "expansion.offset"
+            )
+            if returned_offset is not None and returned_offset != next_offset:
+                raise ValueSetExpansionResponseError(
+                    "terminology expansion returned an unexpected page offset"
+                )
+            if total is not None and len(members) > total:
+                raise ValueSetExpansionResponseError(
+                    "terminology expansion exceeds its declared total"
+                )
+            if total is None or len(members) == total:
                 break
             if item_count == 0:
                 raise ValueSetExpansionResponseError(
@@ -956,7 +1006,7 @@ class ValueSetExpansionEngine:
                 restricted=restricted,
             ),
         )
-        return self._cache_store(source, result)
+        return self._cache_store(cache_identity, result)
 
     def _cache_load(
         self,
@@ -995,10 +1045,10 @@ class ValueSetExpansionEngine:
                     params=dict(params),
                     headers=headers,
                 )
-            except (TimeoutError, OSError) as exc:
+            except Exception:
                 raise ValueSetExpansionResponseError(
                     "terminology expansion request failed"
-                ) from exc
+                ) from None
             status = int(getattr(response, "status_code", 200))
             if status >= 300:
                 raise ValueSetExpansionResponseError(
@@ -1006,10 +1056,10 @@ class ValueSetExpansionEngine:
                 )
             try:
                 payload = response.json()
-            except (TypeError, ValueError) as exc:
+            except (TypeError, ValueError):
                 raise ValueSetExpansionResponseError(
                     "terminology expansion response was not valid JSON"
-                ) from exc
+                ) from None
             return _validate_remote_payload(payload)
 
         request_url = f"{operation_url}?{urlparse.urlencode(params)}"
@@ -1027,21 +1077,21 @@ class ValueSetExpansionEngine:
         except urlerror.HTTPError as exc:
             raise ValueSetExpansionResponseError(
                 f"terminology expansion returned HTTP {exc.code}"
-            ) from exc
-        except (urlerror.URLError, TimeoutError, OSError) as exc:
+            ) from None
+        except (urlerror.URLError, TimeoutError, OSError):
             raise ValueSetExpansionResponseError(
                 "terminology expansion request failed"
-            ) from exc
+            ) from None
         if len(raw) > _MAX_RESPONSE_BYTES:
             raise ValueSetExpansionResponseError(
                 "terminology expansion response is too large"
             )
         try:
             payload = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
             raise ValueSetExpansionResponseError(
                 "terminology expansion response was not valid JSON"
-            ) from exc
+            ) from None
         return _validate_remote_payload(payload)
 
 
@@ -1256,7 +1306,7 @@ def _remote_version(
     parameter_names = (
         ("system-version", "version", "valueSetVersion")
         if source_kind == "ecl"
-        else ("valueSetVersion", "version", "system-version")
+        else ("valueSetVersion", "version")
     )
     for parameter_name in parameter_names:
         for parameter in parameters:
@@ -1265,7 +1315,11 @@ def _remote_version(
             for key in ("valueString", "valueUri", "valueCanonical"):
                 value = _optional_version(parameter.get(key))
                 if value is not None:
-                    return value
+                    return (
+                        value.rsplit("|", 1)[-1]
+                        if parameter_name == "system-version"
+                        else value
+                    )
     version = _optional_version(payload.get("version"))
     if version is not None:
         return version
@@ -1311,10 +1365,10 @@ def _local_filters_match(
             try:
                 if re.search(str(raw_value), actual) is None:
                     return False
-            except re.error as exc:
+            except re.error:
                 raise ValueSetExpansionUnsupportedError(
                     "local ValueSet filter contains an invalid regular expression"
-                ) from exc
+                ) from None
             continue
         raise ValueSetExpansionUnsupportedError(
             "local ValueSet filter operator requires terminology-server delegation"
@@ -1369,7 +1423,13 @@ def _member_version_pins(
 
 def _members_digest(members: Sequence[ValueSetMember], version: str) -> str:
     payload = {
-        "members": [member.to_dict() for member in sorted(set(members))],
+        "members": [
+            member.to_dict()
+            for member in sorted(
+                set(members),
+                key=lambda member: (member.system, member.code, member.version or ""),
+            )
+        ],
         "version": version,
     }
     return _digest_bytes(_canonical_json_bytes(payload))
@@ -1470,10 +1530,10 @@ def _ecl_implicit_valueset_url(system_uri: str, ecl: str) -> str:
 def _endpoint(value: object) -> str:
     try:
         endpoint = _absolute_uri(value, "terminology endpoint")
-    except ValueError as exc:
+    except ValueError:
         raise ValueSetExpansionConfigurationError(
             "terminology endpoint must be an absolute HTTP(S) URL"
-        ) from exc
+        ) from None
     parsed = urlparse.urlsplit(endpoint)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueSetExpansionConfigurationError(
