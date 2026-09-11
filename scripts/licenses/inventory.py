@@ -33,7 +33,7 @@ DEFAULT_PYPROJECT = ROOT / "pyproject.toml"
 
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)")
 NORMALIZED_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-LICENSE_TOKEN_RE = re.compile(r"[A-Za-z0-9.+-]+")
+LICENSE_TOKEN_RE = re.compile(r"[A-Za-z0-9.+-]+|[()]")
 MARKDOWN_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 
 
@@ -249,27 +249,34 @@ def classify_license(license_expression: object) -> str:
     if re.search(r"[^A-Za-z0-9.+()_\-\s]", expression):
         return LicenseClass.UNKNOWN
 
-    tokens = [
-        _normalize_license_token(token)
-        for token in LICENSE_TOKEN_RE.findall(expression)
-    ]
-    if not tokens:
+    raw_tokens = LICENSE_TOKEN_RE.findall(expression)
+    if "".join(raw_tokens) != re.sub(r"\s+", "", expression):
         return LicenseClass.UNKNOWN
-
     license_tokens: list[str] = []
     expecting_license = True
-    for token in tokens:
-        if not token:
+    depth = 0
+    for raw_token in raw_tokens:
+        if raw_token == "(":
+            if not expecting_license:
+                return LicenseClass.UNKNOWN
+            depth += 1
             continue
+        if raw_token == ")":
+            if expecting_license or depth == 0:
+                return LicenseClass.UNKNOWN
+            depth -= 1
+            continue
+        token = _normalize_license_token(raw_token)
         is_operator = token in LICENSE_OPERATORS
-        if expecting_license == is_operator:
+        # WITH requires a separately reviewed exception, not another license.
+        if token == "with" or expecting_license == is_operator:
             return LicenseClass.UNKNOWN
         if is_operator:
             expecting_license = True
         else:
             license_tokens.append(token)
             expecting_license = False
-    if expecting_license:
+    if expecting_license or depth:
         return LicenseClass.UNKNOWN
     if not license_tokens:
         return LicenseClass.UNKNOWN
@@ -451,11 +458,11 @@ def _rows_from_payload(payload: object) -> list[object]:
         if isinstance(rows, list):
             return rows
         if isinstance(rows, Mapping):
-            return [
-                {"name": name, **details}
-                for name, details in rows.items()
-                if isinstance(details, Mapping)
-            ]
+            if any(not isinstance(details, Mapping) for details in rows.values()):
+                raise InventoryError("inventory entry must be an object")
+            if any("name" in details for details in rows.values()):
+                raise InventoryError("inventory mapping contains an ambiguous name")
+            return [{"name": name, **details} for name, details in rows.items()]
     raise InventoryError("inventory payload has no dependency entries")
 
 

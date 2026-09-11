@@ -236,3 +236,32 @@ def test_malformed_inventory_error_does_not_echo_source_values(tmp_path: Path) -
         inventory.parse_inventory(path)
 
     assert "synthetic-private-value" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "expression", ["((MIT)", "MIT)", "MIT (OR Apache-2.0)", "MIT_", "MIT WITH MIT"]
+)
+def test_malformed_permissive_expression_cannot_pass(expression: str) -> None:
+    assert inventory.classify_license(expression) == inventory.LicenseClass.UNKNOWN
+
+
+def test_balanced_permissive_group_is_supported() -> None:
+    assert inventory.classify_license("(MIT OR Apache-2.0) AND BSD-3-Clause") == (
+        inventory.LicenseClass.PERMISSIVE
+    )
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        {"known": {"license": "MIT"}, "unreviewed": "unknown"},
+        {"unreviewed": {"name": "known", "license": "MIT"}},
+    ],
+)
+def test_mapping_cannot_silently_drop_or_rename_entries(
+    tmp_path: Path, entries
+) -> None:
+    path = tmp_path / "inventory.json"
+    path.write_text(json.dumps({"dependencies": entries}), encoding="utf-8")
+    with pytest.raises(inventory.InventoryError):
+        inventory.parse_inventory(path)
