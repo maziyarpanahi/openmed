@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded, deterministic, offline policy-migration checker with
   fail-closed schema and protection-type changes, privacy-safe reports, and a
   report-bound human acknowledgement gate for weakening changes (#2407).
+- Added declarative field-level FHIR and OMOP de-identification policies with
+  fail-closed identifier handling, patient-consistent date shifting, schema
+  linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
