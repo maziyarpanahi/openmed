@@ -143,7 +143,7 @@ def test_public_report_payload_contains_no_mapping_metadata() -> None:
     assert "RAW-PATIENT-DESCRIPTION" not in json.dumps(payload)
 
 
-@pytest.mark.parametrize("error_type", [RuntimeError, TypeError])
+@pytest.mark.parametrize("error_type", [RuntimeError, TypeError, MemoryError])
 def test_iterator_errors_are_value_free_and_unchained(error_type: type[Exception]):
     secret = "RAW-SYNTHETIC-PATIENT"
 

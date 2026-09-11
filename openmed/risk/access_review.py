@@ -93,7 +93,7 @@ def _bounded_tuple(values: Iterable[Any], *, limit: int, kind: str) -> tuple[Any
             if len(items) >= limit:
                 raise _validation_error(f"{kind} exceeds the supported count")
             items.append(item)
-    except (AccessReviewValidationError, MemoryError):
+    except AccessReviewValidationError:
         raise
     except Exception:
         raise _validation_error(f"{kind} could not be read safely") from None
@@ -118,7 +118,7 @@ def _field_tuple(value: FieldCollection, *, kind: str) -> tuple[str, ...]:
             _identifier(item, kind="field name")
             for item in _bounded_tuple(candidates, limit=_MAX_FIELDS, kind=kind)
         }
-    except (AccessReviewValidationError, MemoryError):
+    except AccessReviewValidationError:
         raise
     except Exception:
         raise _validation_error(f"{kind} could not be read safely") from None
@@ -737,8 +737,6 @@ def review_structured_access(
             resource_schema,
             denied_fields=denied_fields,
         )
-    except MemoryError:
-        raise
     except Exception:
         raise _validation_error(
             "structured access review declarations are invalid"
