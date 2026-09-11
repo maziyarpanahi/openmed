@@ -286,6 +286,7 @@ classification:
     - security/audit-retention.md
     - security/redaction-diff.md
     - security/policy-composition.md
+    - security/evidence-integrity.md
     - security/key-management.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
