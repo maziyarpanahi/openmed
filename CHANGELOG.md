@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   privacy-safe audit retention, with deterministic local-only loading,
   strict duplicate and alias handling, and value-free validation failures
   (#2406).
+- Added declarative field-level FHIR and OMOP de-identification policies with
+  fail-closed identifier handling, patient-consistent date shifting, schema
+  linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
