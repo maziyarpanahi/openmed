@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with caller-declared purpose mappings, policy allowlists and denylists,
   fail-closed unknown declarations, value-free decision explanations, and
   projection restricted to selector-approved fields (#2412).
+- Added a bounded, counts-only audit-artifact retention planner with explicit
+  disposition rules, deletion evidence, remaining-set verification, strict
+  input fields, and fail-closed future timestamps (#2409).
 - Added a deterministic, offline CycloneDX 1.6 evidence generator for the base
   runtime dependency closure, with source and manifest hashes, bounded local
   inputs, atomic output, and no embedded URLs or build paths (#2416).
