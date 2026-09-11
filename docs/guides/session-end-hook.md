@@ -37,6 +37,8 @@ values or the input path.
 The hook uses deterministic local rules. Sensitive fields such as email,
 phone, name, address, patient or member identifiers, dates of birth, tokens,
 and message or prompt content are replaced with category-only placeholders.
+Numeric and boolean values in sensitive fields are replaced with zero or false
+while preserving their scalar type; null values remain null.
 Structured values such as email addresses, phone numbers, IP addresses,
 credentials, bearer tokens, common identifiers, and labeled names or birth
 dates are also scrubbed when they appear in otherwise neutral fields.

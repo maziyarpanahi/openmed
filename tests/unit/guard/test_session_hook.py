@@ -6,6 +6,7 @@ import json
 import os
 import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -227,3 +228,71 @@ def test_change_during_temporary_write_is_not_overwritten(
     assert exc_info.value.code == "concurrent_change"
     assert trace_path.read_text(encoding="utf-8") == concurrent
     assert not list(tmp_path.glob(".openmed-session-scrub-*.tmp"))
+
+
+def test_path_and_descriptor_ctime_can_differ(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trace_path = tmp_path / "trace.json"
+    trace_path.write_text('{"email":"synthetic.person@example.test"}', encoding="utf-8")
+    real_fstat = os.fstat
+
+    def windows_fstat(descriptor: int) -> SimpleNamespace:
+        metadata = real_fstat(descriptor)
+        fields = {
+            name: getattr(metadata, name)
+            for name in dir(metadata)
+            if name.startswith("st_")
+        }
+        fields["st_ctime_ns"] += 1_000_000_000
+        return SimpleNamespace(**fields)
+
+    monkeypatch.setattr("openmed.guard.session_hook.os.fstat", windows_fstat)
+    assert scrub_trace(trace_path).changed
+    assert not scrub_trace(trace_path).changed
+    assert json.loads(trace_path.read_text())["email"] == "[REDACTED:EMAIL]"
+
+
+def test_numeric_identifiers_are_scrubbed_without_changing_scalar_types(
+    tmp_path: Path,
+) -> None:
+    trace_path = tmp_path / "trace.json"
+    trace_path.write_text(
+        json.dumps({"patient_id": 987654321, "mrn": 12345.0, "status": 200}),
+        encoding="utf-8",
+    )
+    assert scrub_trace(trace_path).redaction_count == 2
+    result = json.loads(trace_path.read_text())
+    assert result == {"patient_id": 0, "mrn": 0.0, "status": 200}
+    assert type(result["patient_id"]) is int
+    assert type(result["mrn"]) is float
+    assert not scrub_trace(trace_path).changed
+
+
+def test_descriptor_ctime_change_still_rejects_same_size_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trace_path = tmp_path / "trace.json"
+    original = '{"email":"synthetic.person@example.test"}'
+    trace_path.write_text(original, encoding="utf-8")
+    real_fstat = os.fstat
+    calls = 0
+
+    def changed_fstat(descriptor: int) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        metadata = real_fstat(descriptor)
+        fields = {
+            name: getattr(metadata, name)
+            for name in dir(metadata)
+            if name.startswith("st_")
+        }
+        if calls >= 3:
+            fields["st_ctime_ns"] += 1_000_000_000
+        return SimpleNamespace(**fields)
+
+    monkeypatch.setattr("openmed.guard.session_hook.os.fstat", changed_fstat)
+    with pytest.raises(SessionTraceError) as error:
+        scrub_trace(trace_path)
+    assert error.value.code == "concurrent_change"
+    assert trace_path.read_text() == original

@@ -472,6 +472,9 @@ def _reject_non_finite(value: str) -> Any:
 def _scrub_node(node: Any, context: str | None = None) -> tuple[Any, int]:
     if isinstance(node, str):
         return _scrub_string(node, context)
+    if context and isinstance(node, (bool, int, float)):
+        replacement = type(node)(0)
+        return replacement, int(node != replacement)
     if isinstance(node, list):
         scrubbed_items: list[Any] = []
         redactions = 0
@@ -665,16 +668,19 @@ def _same_file_snapshot(before: os.stat_result, after: os.stat_result) -> bool:
         and stat.S_ISREG(after.st_mode)
         and os.path.samestat(before, after)
         and _portable_snapshot(before) == _portable_snapshot(after)
+        and before.st_ctime_ns == after.st_ctime_ns
     )
 
 
-def _portable_snapshot(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+def _portable_snapshot(metadata: os.stat_result) -> tuple[int, int, int, int]:
+    # Windows Python 3.12 lstat reports creation time as ctime, while fstat
+    # reports metadata change time. Compare ctime only within the same API
+    # in _same_file_snapshot; retain both path and descriptor race checks.
     return (
         metadata.st_mode,
         metadata.st_nlink,
         metadata.st_size,
         metadata.st_mtime_ns,
-        metadata.st_ctime_ns,
     )
 
 
