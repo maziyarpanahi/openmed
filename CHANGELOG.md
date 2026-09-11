@@ -68,6 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded, manifest-driven deletion impact planner with deterministic
   counts-only reports, reverse-dependency analysis, ownership checks, and
   explicit plan-bound confirmation before injected local execution (#2529).
+- Added a deterministic, offline OMOP cohort export validator for key,
+  relationship, vocabulary, and NOTE/NOTE_NLP provenance invariants, with
+  aggregate counts and content-derived row fingerprints instead of source
+  values (#2402).
+- Added a bounded, deterministic FHIR R5 Bundle round-trip fidelity diff with
+  stable entry matching, explicit serializer-difference declarations, and
+  value-free reports containing structural paths, types, and SHA-256 digests
+  (#2401).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

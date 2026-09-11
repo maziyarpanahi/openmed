@@ -234,6 +234,7 @@ nav:
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
+      - OMOP Cohort Export Validation: integrations/omop-cohort-check.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
@@ -261,6 +262,7 @@ nav:
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
