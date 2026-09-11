@@ -291,6 +291,31 @@ from .policy_composition import (
 from .policy_composition import (
     policy_fingerprint as composition_policy_fingerprint,
 )
+from .policy_simulation import (
+    ACTION_CHANGE_VALUES,
+    BLOCKING_CHANGE_VALUES,
+    COUNT_CHANGE_VALUES,
+    GATE_OUTCOME_VALUES,
+    POLICY_SIMULATION_ARTIFACT,
+    POLICY_SIMULATION_MATRIX_SCHEMA_VERSION,
+    POLICY_SIMULATION_SCHEMA_VERSION,
+    PolicyScenario,
+    PolicySimulationError,
+    PolicySimulationMatrix,
+    PolicySimulationPolicy,
+    PolicySimulationReport,
+    PolicySimulationRow,
+    PolicySimulationScenario,
+    PolicySimulationSchemaError,
+    build_policy_simulation_matrix,
+    render_policy_matrix,
+    render_policy_simulation_matrix,
+    run_policy_simulation,
+    simulate_policy_matrix,
+)
+from .policy_simulation import (
+    PolicyVersion as PolicySimulationVersion,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
 from .privacy_budget import (
     MAX_PRIVACY_BUDGET_CONTEXTS,
@@ -759,4 +784,25 @@ __all__ = [
     "render_tabular_risk_json",
     "render_tabular_risk_markdown",
     "tabular_risk_report",
+    "ACTION_CHANGE_VALUES",
+    "BLOCKING_CHANGE_VALUES",
+    "COUNT_CHANGE_VALUES",
+    "GATE_OUTCOME_VALUES",
+    "POLICY_SIMULATION_ARTIFACT",
+    "POLICY_SIMULATION_MATRIX_SCHEMA_VERSION",
+    "POLICY_SIMULATION_SCHEMA_VERSION",
+    "PolicyScenario",
+    "PolicySimulationError",
+    "PolicySimulationMatrix",
+    "PolicySimulationPolicy",
+    "PolicySimulationReport",
+    "PolicySimulationRow",
+    "PolicySimulationScenario",
+    "PolicySimulationSchemaError",
+    "PolicySimulationVersion",
+    "build_policy_simulation_matrix",
+    "render_policy_matrix",
+    "render_policy_simulation_matrix",
+    "run_policy_simulation",
+    "simulate_policy_matrix",
 ]

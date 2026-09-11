@@ -392,6 +392,7 @@ classification:
     - contributing/reproducible-dependencies.md
     - security/license-inventory.md
     - security/exception-taxonomy.md
+    - security/policy-simulation.md
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md

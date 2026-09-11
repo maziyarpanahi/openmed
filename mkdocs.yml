@@ -320,6 +320,7 @@ nav:
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Dependency License Inventory: security/license-inventory.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
+      - Privacy-policy Simulation Matrix: security/policy-simulation.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
