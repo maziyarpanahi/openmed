@@ -48,7 +48,6 @@ __all__ = [
 BUDGET_MIGRATION_SCHEMA_VERSION = "openmed.dp_budget_migration.v1"
 _DEFAULT_SNAPSHOT_SCHEMA_VERSION = "openmed.dp_budget_ledger.v1"
 _MISSING = object()
-_FLOAT_TOLERANCE = 1e-12
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,127}$")
 _SHA256_RE = re.compile(r"^(?:sha256:)?[0-9a-fA-F]{64}$")
 _PHI_PATTERNS = (
@@ -1208,12 +1207,7 @@ def _issue_sort_key(issue: BudgetMigrationIssue) -> tuple[str, str, str]:
 
 
 def _decreased(after: float, before: float) -> bool:
-    return after < before and not math.isclose(
-        after,
-        before,
-        rel_tol=0.0,
-        abs_tol=_FLOAT_TOLERANCE,
-    )
+    return after < before
 
 
 def _increased(after: float, before: float) -> bool:
