@@ -80,6 +80,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added bounded privacy-policy composition with explicit scope-overrides,
   deterministic scope precedence and inheritance, and validated value-free
   decision traces (#2522).
+- Added a bounded, metadata-only synthetic privacy regression corpus manifest
+  with deterministic fixture hashes, policy and severity coverage validation,
+  immutable invariants, and atomic local persistence (#2420).
+- Added a bounded, local evidence-bundle integrity verifier with file and
+  manifest hashes, policy and provenance checks, and value-free reports
+  (#2427).
+- Added a bounded tabular schema-drift privacy gate with counts-only evidence,
+  conservative stable-ID matching, and release blocking for unsafe role or
+  structural drift (#2524).
+- Added a bounded, deterministic referential-integrity auditor for surrogate
+  maps with cardinality, collision, orphan, and cross-table consistency checks,
+  closed input schemas, and counts-only value-free reports (#2538).
+- Added a bounded, deterministic nested structured-redaction idempotence checker
+  for comparing shape, action, surrogate, policy, and count evidence across
+  synthetic FHIR- and OMOP-shaped passes without retaining protected values
+  (#2523).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
