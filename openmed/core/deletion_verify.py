@@ -32,6 +32,8 @@ _EVIDENCE_STATUSES = frozenset({"completed", "rejected", "rolled_back"})
 _READ_CHUNK_SIZE = 1024 * 1024
 MAX_ARTIFACTS: Final = 128
 MAX_PATH_LENGTH: Final = 4_096
+MAX_RECOVERY_BYTES: Final = 128 * 1024 * 1024
+_USE_MEMORY_RECOVERY = os.name == "nt"
 
 PathLike: TypeAlias = str | os.PathLike[str]
 EvidenceStatus: TypeAlias = Literal["completed", "rejected", "rolled_back"]
@@ -225,6 +227,7 @@ class _StagedArtifact:
     fingerprint: str = field(repr=False)
     mode: int
     recovery_descriptor: int | None = field(default=None, repr=False)
+    recovery_bytes: bytes | None = field(default=None, repr=False)
 
 
 def _same_file_state(first: os.stat_result, second: os.stat_result) -> bool:
@@ -310,7 +313,7 @@ def _assert_no_symlink_components(root: Path, candidate: Path) -> None:
 
 
 def _open_for_hash(path: Path) -> int:
-    flags = os.O_RDONLY
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     no_follow = getattr(os, "O_NOFOLLOW", 0)
     try:
         return os.open(path, flags | no_follow)
@@ -638,7 +641,7 @@ def _copy_descriptor_to_path(descriptor: int, target: Path, mode: int) -> None:
         os.lseek(descriptor, 0, os.SEEK_SET)
         output_descriptor = os.open(
             target,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
             0o600,
         )
         while True:
@@ -736,6 +739,38 @@ def _stage_all(
                 != item.fingerprint
             ):
                 _safe_os_error(DeletionTransactionError)
+            if _USE_MEMORY_RECOVERY:
+                # Windows cannot unlink or rename the backup while the CRT
+                # descriptor is open. Retain a bounded, verified memory copy
+                # through cleanup and evidence publication instead.
+                remaining = MAX_RECOVERY_BYTES - sum(
+                    len(previous.recovery_bytes or b"") for previous in staged
+                )
+                if backup_state.st_size > remaining:
+                    _safe_os_error(DeletionTransactionError)
+                os.lseek(recovery_descriptor, 0, os.SEEK_SET)
+                chunks: list[bytes] = []
+                total = 0
+                while True:
+                    chunk = os.read(
+                        recovery_descriptor,
+                        min(_READ_CHUNK_SIZE, remaining - total + 1),
+                    )
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > remaining:
+                        _safe_os_error(DeletionTransactionError)
+                    chunks.append(chunk)
+                recovery_bytes = b"".join(chunks)
+                if (
+                    f"sha256:{hashlib.sha256(recovery_bytes).hexdigest()}"
+                    != item.fingerprint
+                ):
+                    _safe_os_error(DeletionTransactionError)
+                object.__setattr__(staged_item, "recovery_bytes", recovery_bytes)
+                os.close(recovery_descriptor)
+                object.__setattr__(staged_item, "recovery_descriptor", None)
         except OSError:
             _safe_os_error(DeletionTransactionError)
 
@@ -765,28 +800,34 @@ def _verify_staged_before_commit(staged: list[_StagedArtifact]) -> None:
         if (
             payload_state is None
             or backup_state is None
-            or descriptor is None
+            or (descriptor is None and item.recovery_bytes is None)
             or payload_state.st_nlink != 1
             or backup_state.st_nlink != 1
             or (payload_state.st_dev, payload_state.st_ino)
             == (backup_state.st_dev, backup_state.st_ino)
             or _hash_open_file(item.payload, payload_state) != item.fingerprint
-            or _hash_descriptor(descriptor, backup_state) != item.fingerprint
+            or (
+                _hash_descriptor(descriptor, backup_state)
+                if descriptor is not None
+                else f"sha256:{hashlib.sha256(item.recovery_bytes or b'').hexdigest()}"
+            )
+            != item.fingerprint
         ):
             _safe_os_error(DeletionTransactionError)
 
 
 def _restore_from_descriptor(item: _StagedArtifact) -> None:
     descriptor = item.recovery_descriptor
-    if descriptor is None:
+    if descriptor is None and item.recovery_bytes is None:
         _safe_os_error(DeletionTransactionError)
 
     temporary: Path | None = None
     try:
-        descriptor_state = os.fstat(descriptor)
-        if _hash_descriptor(descriptor, descriptor_state) != item.fingerprint:
-            _safe_os_error(DeletionTransactionError)
-        os.lseek(descriptor, 0, os.SEEK_SET)
+        if descriptor is not None:
+            descriptor_state = os.fstat(descriptor)
+            if _hash_descriptor(descriptor, descriptor_state) != item.fingerprint:
+                _safe_os_error(DeletionTransactionError)
+            os.lseek(descriptor, 0, os.SEEK_SET)
         with tempfile.NamedTemporaryFile(
             "wb",
             dir=item.original.parent,
@@ -794,11 +835,14 @@ def _restore_from_descriptor(item: _StagedArtifact) -> None:
             delete=False,
         ) as handle:
             temporary = Path(handle.name)
-            while True:
-                chunk = os.read(descriptor, _READ_CHUNK_SIZE)
-                if not chunk:
-                    break
-                handle.write(chunk)
+            if descriptor is None:
+                handle.write(item.recovery_bytes or b"")
+            else:
+                while True:
+                    chunk = os.read(descriptor, _READ_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
             handle.flush()
             os.fsync(handle.fileno())
             os.chmod(temporary, item.mode)
@@ -854,6 +898,7 @@ def _restore_staged(staged: list[_StagedArtifact]) -> int:
 
 def _close_recovery_descriptors(staged: list[_StagedArtifact]) -> None:
     for item in staged:
+        object.__setattr__(item, "recovery_bytes", None)
         descriptor = item.recovery_descriptor
         if descriptor is None:
             continue
@@ -884,6 +929,13 @@ def _rollback_transaction(
     backup: Path,
 ) -> int:
     try:
+        if _USE_MEMORY_RECOVERY:
+            # A failed memory snapshot can leave a descriptor open. Payloads
+            # and backups are still present at that point, so release it first.
+            for item in staged:
+                if item.recovery_descriptor is not None:
+                    os.close(item.recovery_descriptor)
+                    object.__setattr__(item, "recovery_descriptor", None)
         restored = _restore_staged(staged)
         _remove_directory(payload)
         _remove_directory(backup)

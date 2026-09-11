@@ -68,3 +68,11 @@ journaled filesystem transaction and cannot guarantee recovery after process,
 kernel, storage-device, or power failure. Deletion also removes directory
 entries; it is not a claim of physical secure erasure on flash or copy-on-write
 storage.
+
+### Windows recovery
+
+Windows uses a verified in-memory recovery copy because an open backup handle
+prevents rename and deletion. The combined recovery payload is limited to 128 MiB
+per request. Requests that exceed this limit roll back staged files before any
+payload is deleted. Recovery references are released after completion or rollback.
+All platforms fingerprint and copy file contents in binary mode.

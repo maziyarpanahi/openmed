@@ -356,3 +356,32 @@ def test_evidence_publish_failure_after_cleanup_restores_from_descriptor(
     assert evidence["status"] == "rolled_back"
     assert evidence["rolled_back_count"] == 1
     assert list(tmp_path.glob(".openmed-deletion-*")) == []
+
+
+@pytest.fixture(autouse=True, params=[False, True])
+def recovery_backend(request, monkeypatch):
+    if deletion_verify.os.name == "nt" and not request.param:
+        pytest.skip("Descriptor recovery requires POSIX unlink semantics")
+    monkeypatch.setattr(deletion_verify, "_USE_MEMORY_RECOVERY", request.param)
+
+
+def test_binary_fingerprints_preserve_crlf_and_control_z(tmp_path):
+    content = b"SYNTHETIC\r\n\x1a\x00\xff"
+    artifact = tmp_path / "binary.bin"
+    fingerprint = _write_artifact(artifact, content)
+    assert fingerprint == "sha256:" + hashlib.sha256(content).hexdigest()
+    assert delete_verified_artifacts(tmp_path, [(artifact, fingerprint)]).passed
+
+
+def test_memory_recovery_limit_rolls_back_before_deletion(tmp_path, monkeypatch):
+    monkeypatch.setattr(deletion_verify, "_USE_MEMORY_RECOVERY", True)
+    monkeypatch.setattr(deletion_verify, "MAX_RECOVERY_BYTES", 20)
+    first = tmp_path / "first.bin"
+    second = tmp_path / "second.bin"
+    fingerprints = [
+        (path, _write_artifact(path, b"SYNTHETIC_123")) for path in (first, second)
+    ]
+    with pytest.raises(DeletionTransactionError):
+        delete_verified_artifacts(tmp_path, fingerprints)
+    assert first.read_bytes() == second.read_bytes() == b"SYNTHETIC_123"
+    assert list(tmp_path.glob(".openmed-deletion-*")) == []
