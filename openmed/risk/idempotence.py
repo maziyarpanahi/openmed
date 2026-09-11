@@ -685,6 +685,10 @@ def _coerce_mapping(value: Mapping[Any, Any]) -> tuple[Any, Any]:
     payload = _copy_json_tree(value)
     if not isinstance(payload, dict):
         raise IdempotenceInputError("redaction pass must contain an object")
+    # FHIR resources can legitimately contain data, output, or result fields.
+    # A resourceType discriminator takes precedence over wrapper aliases.
+    if "resourceType" in payload:
+        return payload, {}
     metadata = payload
     resource_keys = [
         key

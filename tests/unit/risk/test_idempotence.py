@@ -340,3 +340,17 @@ def test_public_evidence_objects_reject_raw_values() -> None:
             report.first_pass,
             shape_fingerprint="sha256:synthetic-private-shape",
         )
+
+
+@pytest.mark.parametrize(
+    ("resource_type", "field", "value"),
+    [("Binary", "data", "U1lOVEhFVElD"), ("DiagnosticReport", "result", [])],
+)
+def test_bare_fhir_resource_fields_are_not_wrapper_aliases(resource_type, field, value):
+    first = {"resourceType": resource_type, "id": "synthetic-first", field: value}
+    second = first | {"id": "synthetic-second"}
+    report = check_idempotence(first, second)
+    assert not report.passed
+    assert "$.id" in report.non_idempotent_paths
+    assert "synthetic-first" not in report.to_json()
+    assert "synthetic-second" not in report.to_json()
