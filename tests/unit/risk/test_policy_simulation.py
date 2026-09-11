@@ -197,3 +197,29 @@ def test_policy_version_and_scenario_are_immutable() -> None:
 
     with pytest.raises(TypeError):
         policy.actions["PERSON"] = "redact"  # type: ignore[index]
+
+
+def test_policy_class_actions_apply_to_canonical_labels() -> None:
+    from openmed.risk.policy_simulation import PolicyVersion
+
+    policy = PolicyVersion(
+        "synthetic", policy_label_actions={"DIRECT_IDENTIFIER": "redact"}
+    )
+    assert policy.action_for("PERSON") == "redact"
+    assert policy.action_for("person") == "redact"
+    assert policy.action_for("DISEASE") == "keep"
+
+
+def test_invalid_policy_file_traceback_does_not_include_source(tmp_path) -> None:
+    import traceback
+
+    from openmed.risk.policy_simulation import (
+        PolicySimulationSchemaError,
+        simulate_policy_matrix,
+    )
+
+    marker = "SYNTHETIC-PRIVATE-PATH"
+    path = tmp_path / marker
+    with pytest.raises(PolicySimulationSchemaError) as error:
+        simulate_policy_matrix(path, {}, [])
+    assert marker not in "".join(traceback.format_exception(error.value))

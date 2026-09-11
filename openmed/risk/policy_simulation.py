@@ -22,6 +22,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Literal, cast
 
+from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.core.redaction_strength import action_strength
 from openmed.core.schemas.span import ACTION_VALUES
@@ -184,10 +185,10 @@ def _canonical_json(value: Any) -> str:
             separators=(",", ":"),
             sort_keys=True,
         )
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError):
         raise PolicySimulationSchemaError(
             "simulation values must be JSON-compatible"
-        ) from exc
+        ) from None
 
 
 def _digest(value: Any) -> str:
@@ -338,6 +339,10 @@ class PolicyVersion:
         if action is not None:
             return action
         action = _case_insensitive_lookup(self.policy_label_actions, safe_class)
+        if action is None and safe_class.upper() in CANONICAL_LABELS:
+            action = _case_insensitive_lookup(
+                self.policy_label_actions, policy_label_for(safe_class.upper())
+            )
         return self.default_action if action is None else action
 
     @property
@@ -912,21 +917,21 @@ def _coerce_policy(value: Any) -> PolicyVersion:
             return _load_policy_path(path)
         try:
             return PolicyVersion.from_profile(load_policy(value))
-        except (TypeError, ValueError, OSError) as exc:
+        except (TypeError, ValueError, OSError):
             raise PolicySimulationSchemaError(
                 "policy version could not be loaded"
-            ) from exc
+            ) from None
     try:
         return PolicyVersion.from_profile(load_policy(value))
-    except (TypeError, ValueError, OSError) as exc:
-        raise PolicySimulationSchemaError("policy version is incompatible") from exc
+    except (TypeError, ValueError, OSError):
+        raise PolicySimulationSchemaError("policy version is incompatible") from None
 
 
 def _load_policy_path(path: Path) -> PolicyVersion:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise PolicySimulationSchemaError("policy file could not be loaded") from exc
+    except (OSError, UnicodeError, ValueError):
+        raise PolicySimulationSchemaError("policy file could not be loaded") from None
     if not isinstance(payload, Mapping):
         raise PolicySimulationSchemaError("policy file must contain a mapping")
     return PolicyVersion.from_mapping(cast(Mapping[str, Any], payload))
