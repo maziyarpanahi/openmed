@@ -100,10 +100,10 @@ def _timestamp(value: datetime | str, *, field_name: str) -> datetime:
         encoded = value[:-1] + "+00:00" if value.endswith("Z") else value
         try:
             value = datetime.fromisoformat(encoded)
-        except ValueError as exc:
+        except ValueError:
             raise AccessReviewValidationError(
                 f"{field_name} must be an ISO-8601 timestamp"
-            ) from exc
+            ) from None
     if not isinstance(value, datetime):
         raise AccessReviewValidationError(
             f"{field_name} must be a timezone-aware datetime"
@@ -137,10 +137,10 @@ def _category_values(
     else:
         try:
             candidates = tuple(value)
-        except TypeError as exc:
+        except TypeError:
             raise AccessReviewValidationError(
                 f"{field_name} must be an iterable of decision categories"
-            ) from exc
+            ) from None
 
     return tuple(
         sorted(
@@ -160,10 +160,10 @@ def _reason_values(value: Iterable[str] | str) -> tuple[str, ...]:
     else:
         try:
             values = tuple(value)
-        except TypeError as exc:
+        except TypeError:
             raise AccessReviewValidationError(
                 "reasons must be an iterable of access-review reason codes"
-            ) from exc
+            ) from None
 
     unknown = tuple(
         item
@@ -291,8 +291,8 @@ class AccessReview:
 
         try:
             payload = json.loads(data)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise AccessReviewValidationError("access review JSON is invalid") from exc
+        except (TypeError, json.JSONDecodeError):
+            raise AccessReviewValidationError("access review JSON is invalid") from None
         return cls.from_dict(payload)
 
 

@@ -180,3 +180,12 @@ def test_clock_is_required_and_no_implicit_wall_clock_is_used() -> None:
             _review(),
             expected_policy_fingerprint=POLICY_FINGERPRINT,
         )
+
+
+def test_invalid_timestamp_traceback_does_not_echo_input() -> None:
+    import traceback
+
+    marker = "SYNTHETIC-PRIVATE-TIMESTAMP"
+    with pytest.raises(AccessReviewValidationError) as error:
+        AccessReview(marker, EXPIRES_AT, POLICY_FINGERPRINT)
+    assert marker not in "".join(traceback.format_exception(error.value))
