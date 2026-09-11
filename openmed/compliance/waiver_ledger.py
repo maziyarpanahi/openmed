@@ -94,10 +94,10 @@ def _coerce_event_type(value: WaiverEventType | str) -> WaiverEventType:
     canonical = value.strip().lower().replace("_", "-").replace(" ", "-")
     try:
         return WaiverEventType(canonical)
-    except ValueError as exc:
+    except ValueError:
         raise WaiverLedgerError(
             "event_type must be a supported lifecycle event"
-        ) from exc
+        ) from None
 
 
 def _coerce_state(value: WaiverState | str) -> WaiverState:
@@ -108,8 +108,8 @@ def _coerce_state(value: WaiverState | str) -> WaiverState:
     canonical = value.strip().lower().replace("_", "-").replace(" ", "-")
     try:
         return WaiverState(canonical)
-    except ValueError as exc:
-        raise WaiverLedgerError("state must be a supported waiver state") from exc
+    except ValueError:
+        raise WaiverLedgerError("state must be a supported waiver state") from None
 
 
 @overload
@@ -461,8 +461,8 @@ class WaiverLedger:
         resolved_waiver_id = _identifier(waiver_id, "waiver_id")
         try:
             return self._states[resolved_waiver_id]
-        except KeyError as exc:
-            raise UnknownWaiverError("waiver has no lifecycle record") from exc
+        except KeyError:
+            raise UnknownWaiverError("waiver has no lifecycle record") from None
 
     def state_counts(self) -> dict[str, int]:
         """Return counts for every state in a stable order."""
@@ -564,8 +564,8 @@ class WaiverLedger:
 
         try:
             decoded = json.loads(payload)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise WaiverLedgerError("waiver ledger JSON is invalid") from exc
+        except (TypeError, json.JSONDecodeError):
+            raise WaiverLedgerError("waiver ledger JSON is invalid") from None
         return cls.from_mapping(decoded)
 
 

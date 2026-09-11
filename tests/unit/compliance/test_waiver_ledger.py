@@ -130,3 +130,16 @@ def test_event_records_are_frozen_and_json_round_trip_is_stable() -> None:
     restored = WaiverLedger.from_json(ledger.to_json())
     assert restored.to_json() == ledger.to_json()
     assert restored.events == ledger.events
+
+
+def test_invalid_event_traceback_does_not_echo_input() -> None:
+    import traceback
+
+    from openmed.compliance.waiver_ledger import WaiverLedger, WaiverLedgerError
+
+    marker = "SYNTHETIC-PRIVATE-EVENT"
+    with pytest.raises(WaiverLedgerError) as error:
+        WaiverLedger().record(marker, "waiver-1", "policy-1")
+    assert (
+        marker.lower() not in "".join(traceback.format_exception(error.value)).lower()
+    )
