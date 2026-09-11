@@ -135,7 +135,10 @@ def _parse_datetime(value: Any) -> datetime | None:
 
     if candidate.tzinfo is None or candidate.utcoffset() is None:
         return None
-    return candidate.astimezone(_UTC)
+    try:
+        return candidate.astimezone(_UTC)
+    except (ValueError, OverflowError):
+        return None
 
 
 @dataclass(frozen=True, init=False)
@@ -689,8 +692,8 @@ def evaluate_evidence_freshness(
             invalid_link_indices.add(index)
         if supersedes is not None and supersedes in id_to_indices:
             superseded_ids.add(supersedes)
-        if superseded_by is not None:
-            superseded_ids.add(record.evidence_id or "")
+        if superseded_by is not None and _safe_token(record.evidence_id):
+            superseded_ids.add(record.evidence_id)
 
     reasons: Counter[str] = Counter()
     current_count = 0

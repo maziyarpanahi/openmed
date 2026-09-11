@@ -222,3 +222,28 @@ def test_mapping_aliases_and_policy_mapping_are_supported_without_payload_copyin
 
     assert report.passed is True
     assert "synthetic-only-value" not in report.to_json()
+
+
+def test_malformed_unhashable_reference_is_reported_not_raised() -> None:
+    policy = EvidenceFreshnessPolicy("policy-v1", {"audit": timedelta(days=1)})
+    report = evaluate_evidence_freshness(
+        {"evidence_id": ["synthetic"], "superseded_by": "next"},
+        policy,
+        as_of="2026-01-01T00:00:00Z",
+    )
+    assert report.reason_counts == {"invalid_evidence_id": 1}
+
+
+def test_timestamp_outside_utc_range_is_invalid() -> None:
+    policy = EvidenceFreshnessPolicy("policy-v1", {"audit": timedelta(days=1)})
+    report = evaluate_evidence_freshness(
+        {
+            "evidence_id": "one",
+            "evidence_type": "audit",
+            "generated_at": "0001-01-01T00:00:00+01:00",
+            "policy_version": "policy-v1",
+        },
+        policy,
+        as_of="2026-01-01T00:00:00Z",
+    )
+    assert report.reason_counts == {"invalid_timestamp": 1}
