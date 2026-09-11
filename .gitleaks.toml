@@ -55,6 +55,14 @@ paths = ['''docs/website/index\.html$''']
 regexes = ['''data-cf-beacon=.*"token": "[0-9a-f]{32}"''']
 
 [[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic dataset marker in the guard regression fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/guard/test_dataset\.py$''']
+regexes = ['''SYNTHETIC_(TOKEN|MARKER) = "SYNTHETIC_SUBJECT_001"''']
+
+[[allowlists]]
 targetRules = ["aws-access-token"]
 description = "Synthetic AWS-shaped credential in the privacy scanner unit test"
 condition = "AND"
