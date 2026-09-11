@@ -6,6 +6,23 @@ measurement, and adversarial re-identification analysis.
 
 from typing import Any
 
+from .access_review import (
+    ACCESS_MODES,
+    ACCESS_REVIEW_SCHEMA_VERSION,
+    EXPORT_ACCESS,
+    READ_ACCESS,
+    AccessModeReview,
+    AccessReviewError,
+    AccessReviewReport,
+    AccessReviewValidationError,
+    WorkflowAccessReview,
+    WorkflowRequirement,
+    access_review_report,
+    build_access_review_report,
+    render_access_review,
+    review_access,
+    review_structured_access,
+)
 from .aggregate_dp import (
     AggregateDPBudgetLedger,
     AggregateDPRelease,
@@ -18,6 +35,28 @@ from .aggregate_dp import (
     release_aggregate,
 )
 from .audit_diff import AuditDiff, diff_audit_reports
+from .audit_retention import (
+    AUDIT_RETENTION_FORMAT,
+    AUDIT_RETENTION_VERSION,
+    MAX_AUDIT_RETENTION_ARTIFACTS,
+    MAX_AUDIT_RETENTION_COUNT,
+    MAX_AUDIT_RETENTION_JSON_BYTES,
+    MAX_AUDIT_RETENTION_METRICS,
+    MAX_AUDIT_RETENTION_RULES,
+    AuditArtifact,
+    AuditArtifactRecord,
+    AuditRetentionPolicy,
+    AuditRetentionReport,
+    DeletionFingerprint,
+    RetainedArtifactSummary,
+    RetentionPolicy,
+    RetentionReport,
+    RetentionRule,
+    artifact_set_fingerprint,
+    scrub,
+    scrub_audit_artifacts,
+    verify_remaining_artifacts,
+)
 from .budget import (
     CURRENT_EPSILON_POLICY_SCHEMA_VERSION,
     DEFAULT_DP_SURROGATE_SENSITIVITIES,
@@ -55,6 +94,31 @@ from .dashboard import (
     write_release_assessment_dashboard,
     write_risk_dashboard,
 )
+from .deletion_plan import (
+    ConfirmationRequiredError,
+    DeletionArtifact,
+    DeletionExecutionError,
+    DeletionExecutionResult,
+    DeletionImpactPlan,
+    DeletionPlanError,
+    build_deletion_plan,
+    execute_deletion_plan,
+    load_deletion_manifest,
+    plan_deletion_impact,
+)
+from .dependency_report import (
+    RISK_CATEGORIES,
+    AdvisoryFinding,
+    DependencyRisk,
+    LockedDependency,
+    build_dependency_risk_report,
+    dependency_risk_report,
+    dependency_risk_report_json,
+    generate_dependency_risk_report,
+    parse_advisory_snapshot,
+    parse_lockfile,
+    write_dependency_risk_report,
+)
 from .differential_privacy import (
     AggregateKind,
     DifferentialPrivacy,
@@ -81,6 +145,16 @@ from .differential_privacy import (
 )
 from .differential_privacy import (
     release_aggregate as release_dp_aggregate,
+)
+from .evidence_check import (
+    DEFAULT_REQUIRED_SECTIONS,
+    EVIDENCE_BUNDLE_SCHEMA_VERSION,
+    MANIFEST_FILENAME,
+    REQUIRED_PROVENANCE_FIELDS,
+    EvidenceBundleCheck,
+    EvidenceFailureCategory,
+    check_evidence_bundle,
+    verify_evidence_bundle,
 )
 from .evidence_replay import (
     EVIDENCE_REPLAY_MANIFEST_KIND,
@@ -124,6 +198,18 @@ from .exception_taxonomy import (
     validate_record,
     validate_telemetry,
     validate_telemetry_record,
+)
+from .idempotence import (
+    IDEMPOTENCE_SCHEMA_VERSION,
+    IdempotenceDifference,
+    IdempotenceInputError,
+    IdempotenceReport,
+    RedactionEvent,
+    RedactionPassSummary,
+    ShapeNode,
+    check_idempotence,
+    check_redaction_idempotence,
+    compare_structured_redaction,
 )
 from .k_anonymity import (
     EquivalenceClass,
@@ -181,164 +267,6 @@ from .membership_inference import (
 from .membership_inference import (
     run_membership_inference_self_test as _run_table_membership_inference_self_test,
 )
-from .population import PopulationRiskAssessment, assess_population_risk
-from .qi_profiler import (
-    GeneralizationPlan,
-    QIColumnProfile,
-    QIGeneralization,
-    QIProfiler,
-    QIProfilerReport,
-    QuasiIdentifierProfiler,
-    apply_generalization_plan,
-    profile_qi,
-    profile_quasi_identifier_risk,
-    profile_quasi_identifiers,
-)
-from .reid import (
-    LongitudinalCorpus,
-    LongitudinalEvidence,
-    LongitudinalNote,
-    LongitudinalPatient,
-    build_longitudinal_corpus,
-    cross_modal_linkage_risk_report,
-    longitudinal_attack_fingerprint,
-    longitudinal_risk_report,
-    quasi_identifier_key,
-    quasi_identifier_key_bytes,
-    risk_report,
-)
-from .release import (
-    AnonymityPolicy,
-    AnonymizationResult,
-    AttributeDisclosureSummary,
-    GeneralizationSummary,
-    ReleaseAssessment,
-    ReleasedOutputValidation,
-    UtilitySummary,
-    anonymize_release,
-    assess_release,
-    release_dataset_digest,
-    release_schema_digest,
-    safe_risk_summary,
-    validate_released_output,
-)
-from .synthetic_tabular import (
-    DEFAULT_CORRELATION_TOLERANCE,
-    DEFAULT_MARGINAL_TOLERANCE,
-    ColumnDistribution,
-    TabularProfile,
-    fit_tabular_profile,
-    sample_synthetic_table,
-    tabular_fidelity_report,
-)
-
-
-def membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
-    """Run the bounded-QI or table membership self-test.
-
-    Calls that declare ``quasi_identifiers`` retain the bounded exact-match
-    API. Other calls use the table attack-advantage API.
-    """
-
-    if "quasi_identifiers" in kwargs:
-        return _bounded_membership_inference_self_test(*args, **kwargs)
-    return _table_membership_inference_self_test(*args, **kwargs)
-
-
-def run_membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility dispatcher for both membership self-test APIs."""
-
-    if "quasi_identifiers" in kwargs:
-        return _run_bounded_membership_inference_self_test(*args, **kwargs)
-    return _run_table_membership_inference_self_test(*args, **kwargs)
-
-
-from .access_review import (
-    ACCESS_MODES,
-    ACCESS_REVIEW_SCHEMA_VERSION,
-    EXPORT_ACCESS,
-    READ_ACCESS,
-    AccessModeReview,
-    AccessReviewError,
-    AccessReviewReport,
-    AccessReviewValidationError,
-    WorkflowAccessReview,
-    WorkflowRequirement,
-    access_review_report,
-    build_access_review_report,
-    render_access_review,
-    review_access,
-    review_structured_access,
-)
-from .audit_retention import (
-    AUDIT_RETENTION_FORMAT,
-    AUDIT_RETENTION_VERSION,
-    MAX_AUDIT_RETENTION_ARTIFACTS,
-    MAX_AUDIT_RETENTION_COUNT,
-    MAX_AUDIT_RETENTION_JSON_BYTES,
-    MAX_AUDIT_RETENTION_METRICS,
-    MAX_AUDIT_RETENTION_RULES,
-    AuditArtifact,
-    AuditArtifactRecord,
-    AuditRetentionPolicy,
-    AuditRetentionReport,
-    DeletionFingerprint,
-    RetainedArtifactSummary,
-    RetentionPolicy,
-    RetentionReport,
-    RetentionRule,
-    artifact_set_fingerprint,
-    scrub,
-    scrub_audit_artifacts,
-    verify_remaining_artifacts,
-)
-from .deletion_plan import (
-    ConfirmationRequiredError,
-    DeletionArtifact,
-    DeletionExecutionError,
-    DeletionExecutionResult,
-    DeletionImpactPlan,
-    DeletionPlanError,
-    build_deletion_plan,
-    execute_deletion_plan,
-    load_deletion_manifest,
-    plan_deletion_impact,
-)
-from .dependency_report import (
-    RISK_CATEGORIES,
-    AdvisoryFinding,
-    DependencyRisk,
-    LockedDependency,
-    build_dependency_risk_report,
-    dependency_risk_report,
-    dependency_risk_report_json,
-    generate_dependency_risk_report,
-    parse_advisory_snapshot,
-    parse_lockfile,
-    write_dependency_risk_report,
-)
-from .evidence_check import (
-    DEFAULT_REQUIRED_SECTIONS,
-    EVIDENCE_BUNDLE_SCHEMA_VERSION,
-    MANIFEST_FILENAME,
-    REQUIRED_PROVENANCE_FIELDS,
-    EvidenceBundleCheck,
-    EvidenceFailureCategory,
-    check_evidence_bundle,
-    verify_evidence_bundle,
-)
-from .idempotence import (
-    IDEMPOTENCE_SCHEMA_VERSION,
-    IdempotenceDifference,
-    IdempotenceInputError,
-    IdempotenceReport,
-    RedactionEvent,
-    RedactionPassSummary,
-    ShapeNode,
-    check_idempotence,
-    check_redaction_idempotence,
-    compare_structured_redaction,
-)
 from .minimum_necessary import (
     MAX_AVAILABLE_FIELDS,
     MAX_FIELDS_PER_DECLARATION,
@@ -379,6 +307,7 @@ from .policy_composition import (
 from .policy_composition import (
     policy_fingerprint as composition_policy_fingerprint,
 )
+from .population import PopulationRiskAssessment, assess_population_risk
 from .privacy_budget import (
     MAX_PRIVACY_BUDGET_CONTEXTS,
     MAX_PRIVACY_BUDGET_EPSILON,
@@ -389,6 +318,18 @@ from .privacy_budget import (
     PrivacyBudgetLedgerExceeded,
     PrivacyBudgetSpend,
     ReleaseContextPrivacyBudget,
+)
+from .qi_profiler import (
+    GeneralizationPlan,
+    QIColumnProfile,
+    QIGeneralization,
+    QIProfiler,
+    QIProfilerReport,
+    QuasiIdentifierProfiler,
+    apply_generalization_plan,
+    profile_qi,
+    profile_quasi_identifier_risk,
+    profile_quasi_identifiers,
 )
 from .redaction_diff import (
     ACTION_COUNT_CHANGE,
@@ -406,6 +347,34 @@ from .redaction_diff import (
     fingerprint_policy,
     policy_fingerprint,
     render_redaction_diff,
+)
+from .reid import (
+    LongitudinalCorpus,
+    LongitudinalEvidence,
+    LongitudinalNote,
+    LongitudinalPatient,
+    build_longitudinal_corpus,
+    cross_modal_linkage_risk_report,
+    longitudinal_attack_fingerprint,
+    longitudinal_risk_report,
+    quasi_identifier_key,
+    quasi_identifier_key_bytes,
+    risk_report,
+)
+from .release import (
+    AnonymityPolicy,
+    AnonymizationResult,
+    AttributeDisclosureSummary,
+    GeneralizationSummary,
+    ReleaseAssessment,
+    ReleasedOutputValidation,
+    UtilitySummary,
+    anonymize_release,
+    assess_release,
+    release_dataset_digest,
+    release_schema_digest,
+    safe_risk_summary,
+    validate_released_output,
 )
 from .schema_drift import (
     SchemaContract,
@@ -429,6 +398,15 @@ from .surrogate_audit import (
     audit_surrogate_maps,
     check_surrogate_map_integrity,
 )
+from .synthetic_tabular import (
+    DEFAULT_CORRELATION_TOLERANCE,
+    DEFAULT_MARGINAL_TOLERANCE,
+    ColumnDistribution,
+    TabularProfile,
+    fit_tabular_profile,
+    sample_synthetic_table,
+    tabular_fidelity_report,
+)
 from .tabular_report import (
     MAX_TABULAR_RISK_CELL_STRING_CHARS,
     MAX_TABULAR_RISK_COLUMNS,
@@ -443,6 +421,27 @@ from .tabular_report import (
     render_tabular_risk_markdown,
     tabular_risk_report,
 )
+
+
+def membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
+    """Run the bounded-QI or table membership self-test.
+
+    Calls that declare ``quasi_identifiers`` retain the bounded exact-match
+    API. Other calls use the table attack-advantage API.
+    """
+
+    if "quasi_identifiers" in kwargs:
+        return _bounded_membership_inference_self_test(*args, **kwargs)
+    return _table_membership_inference_self_test(*args, **kwargs)
+
+
+def run_membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
+    """Compatibility dispatcher for both membership self-test APIs."""
+
+    if "quasi_identifiers" in kwargs:
+        return _run_bounded_membership_inference_self_test(*args, **kwargs)
+    return _run_table_membership_inference_self_test(*args, **kwargs)
+
 
 __all__ = [
     "ACCESS_MODES",
