@@ -264,6 +264,7 @@ classification:
     - reidentification-risk.md
     - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
+    - security/deletion-plans.md
     - sms-short-text-deid.md
     - anonymization.md
     - guides/dataset-upload-guard.md
@@ -396,6 +397,7 @@ classification:
     - security/path-portability.md
     - security/tabular-risk-report.md
     - security/privacy-budget.md
+    - security/deletion-verification.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
     - security/sbom.md
