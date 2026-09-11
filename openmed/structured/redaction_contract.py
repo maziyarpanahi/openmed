@@ -1163,6 +1163,8 @@ def _transform(
                 contract=contract,
                 stats=stats,
             )
+            if child_value is _REMOVE and child is not None:
+                stats.nullified_value_count += 1
             transformed_list.append(None if child_value is _REMOVE else child_value)
         return transformed_list
 
@@ -1190,7 +1192,7 @@ def _apply_rule(
             replacement = REDACTED_VALUE
         return (
             replacement,
-            replacement != value,
+            type(replacement) is not type(value) or replacement != value,
             False,
             value is not None and replacement is None,
         )

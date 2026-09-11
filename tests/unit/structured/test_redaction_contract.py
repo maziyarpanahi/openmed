@@ -397,3 +397,30 @@ def test_invalid_scalar_and_strict_inputs_are_bounded_and_value_free():
             RedactionContract(),
         )
     assert "synthetic" not in str(key_error.value)
+
+
+@pytest.mark.parametrize("source,replacement", [(0, False), (True, 1), (1, 1.0)])
+def test_replacement_counts_changes_between_distinct_json_scalar_types(
+    source: object, replacement: object
+):
+    result = redact_resource(
+        {"value": source},
+        RedactionContract(rules=(RedactionRule("value", replacement=replacement),)),
+    )
+
+    assert type(result.resource["value"]) is type(replacement)
+    assert result.report.changed_value_count == 1
+    assert result.report.source_digest != result.report.output_digest
+
+
+def test_array_removal_reports_nullification_without_removing_a_position():
+    result = redact_resource(
+        {"values": ["synthetic-value", None]},
+        RedactionContract.from_paths(["values[*]"], action=ACTION_REMOVE),
+    )
+
+    assert result.resource == {"values": [None, None]}
+    assert result.report.changed_value_count == 1
+    assert result.report.nullified_value_count == 1
+    assert result.report.null_preserved_count == 1
+    assert result.report.removed_field_count == 0
