@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   artifacts, with symlink, alias, and hard-link refusal, independent recovery
   copies, commit-stage rollback, and counts-only evidence (#2418).
 
+- Added a bounded, manifest-driven deletion impact planner with deterministic
+  counts-only reports, reverse-dependency analysis, ownership checks, and
+  explicit plan-bound confirmation before injected local execution (#2529).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

@@ -264,6 +264,7 @@ classification:
     - reidentification-risk.md
     - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
+    - security/deletion-plans.md
     - sms-short-text-deid.md
     - anonymization.md
     - guides/dataset-upload-guard.md
