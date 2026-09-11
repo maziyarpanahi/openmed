@@ -23,7 +23,7 @@ _FOCUSED_TEST = (
 )
 
 
-def test_required_rules_have_fixture_and_focused_test_coverage() -> None:
+def test_required_rules_have_fixture_and_focused_test_coverage(monkeypatch) -> None:
     matrix = build_policy_coverage_matrix()
 
     assert matrix.verified is True
@@ -42,6 +42,41 @@ def test_required_rules_have_fixture_and_focused_test_coverage() -> None:
     assert all(
         row.resource_path.startswith("openmed/core/policies/") for row in matrix.rows
     )
+
+    # Exercise each declared evidence link through the public policy pipeline.
+    # These synthetic category fixtures live here; the report contains only IDs.
+    from openmed.core import pii
+    from openmed.processing.outputs import EntityPrediction, PredictionResult
+
+    fixtures = {
+        "synthetic-policy-direct-identifiers": "Synthetic Example",
+        "synthetic-policy-quasi-identifiers": "Synthetic Region",
+        "synthetic-policy-sensitive-attributes": "Synthetic Attribute",
+        "synthetic-policy-clinical-concepts": "Synthetic Finding",
+    }
+    for row in matrix.rows:
+        surface = fixtures[row.fixture_id]
+        entity = EntityPrediction(
+            text=surface, label=row.label, start=0, end=len(surface), confidence=0.99
+        )
+
+        def extract(text, *args, **kwargs):
+            return PredictionResult(
+                text=text,
+                entities=[entity],
+                model_name="synthetic",
+                timestamp="2026-01-01T00:00:00",
+            )
+
+        monkeypatch.setattr(pii, "extract_pii", extract)
+        result = pii.deidentify(surface, policy=row.policy_name, use_safety_sweep=False)
+        if row.action == "keep":
+            assert result.deidentified_text == surface, row.rule_id
+        else:
+            assert result.pii_entities, row.rule_id
+            assert (
+                result.pii_entities[0].metadata["policy_action"]["action"] == row.action
+            ), row.rule_id
 
 
 def test_matrix_includes_structured_field_links_and_keep_rules() -> None:

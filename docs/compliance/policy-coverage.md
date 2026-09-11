@@ -52,3 +52,7 @@ The matrix proves that policy definitions have declared local evidence links.
 It does not measure model recall, certify a jurisdictional control, or replace
 focused behavioral tests. Reviewers should inspect the referenced tests and
 run the narrow policy-coverage test before relying on the artifact.
+
+The referenced focused test runs every matrix row through the public
+de-identification policy pipeline with synthetic category fixtures and checks
+the effective action or unchanged output for `keep` rules.
