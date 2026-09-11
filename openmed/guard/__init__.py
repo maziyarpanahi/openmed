@@ -1,5 +1,8 @@
 """Local privacy guards and counts-only audit artifacts."""
 
+from importlib import import_module
+from typing import Any
+
 from .audit import (
     ARTIFACT_NAME,
     SCHEMA_VERSION,
@@ -35,6 +38,9 @@ from .dataset import (
 )
 
 __all__ = [
+    "SessionScrubResult",
+    "SessionTraceError",
+    "scrub_trace",
     "ARTIFACT_NAME",
     "SCHEMA_VERSION",
     "TraceAudit",
@@ -65,3 +71,13 @@ __all__ = [
     "scan_dataset_files",
     "scan_text",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Load session-hook exports without importing the executable eagerly."""
+    if name not in {"SessionScrubResult", "SessionTraceError", "scrub_trace"}:
+        raise AttributeError(name)
+    module = import_module(".session_hook", __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value

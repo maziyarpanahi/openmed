@@ -216,6 +216,17 @@ from .minimum_necessary import (
     select_minimum_necessary_fields,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
+from .privacy_budget import (
+    MAX_PRIVACY_BUDGET_CONTEXTS,
+    MAX_PRIVACY_BUDGET_EPSILON,
+    MAX_PRIVACY_BUDGET_SPENDS,
+    PRIVACY_BUDGET_LEDGER_SCHEMA_VERSION,
+    PrivacyBudgetDecision,
+    PrivacyBudgetLedger,
+    PrivacyBudgetLedgerExceeded,
+    PrivacyBudgetSpend,
+    ReleaseContextPrivacyBudget,
+)
 from .qi_profiler import (
     GeneralizationPlan,
     QIColumnProfile,
@@ -264,6 +275,20 @@ from .synthetic_tabular import (
     fit_tabular_profile,
     sample_synthetic_table,
     tabular_fidelity_report,
+)
+from .tabular_report import (
+    MAX_TABULAR_RISK_CELL_STRING_CHARS,
+    MAX_TABULAR_RISK_COLUMNS,
+    MAX_TABULAR_RISK_ROWS,
+    MAX_TABULAR_RISK_TOTAL_CELLS,
+    TabularRiskReport,
+    TabularRiskThresholds,
+    build_tabular_risk_report,
+    compute_tabular_risk_report,
+    generate_tabular_risk_report,
+    render_tabular_risk_json,
+    render_tabular_risk_markdown,
+    tabular_risk_report,
 )
 
 
@@ -394,7 +419,16 @@ __all__ = [
     "MembershipSelfTestResult",
     "MembershipInferenceReport",
     "MembershipInferenceResult",
+    "MAX_PRIVACY_BUDGET_CONTEXTS",
+    "MAX_PRIVACY_BUDGET_EPSILON",
+    "MAX_PRIVACY_BUDGET_SPENDS",
     "PopulationRiskAssessment",
+    "PRIVACY_BUDGET_LEDGER_SCHEMA_VERSION",
+    "PrivacyBudgetDecision",
+    "PrivacyBudgetLedger",
+    "PrivacyBudgetLedgerExceeded",
+    "PrivacyBudgetSpend",
+    "ReleaseContextPrivacyBudget",
     "SelectionExplanation",
     "SelectionResult",
     "SurrogateDrawKind",
@@ -501,4 +535,16 @@ __all__ = [
     "write_risk_dashboard",
     "utility_report",
     "utility_vs_epsilon",
+    "MAX_TABULAR_RISK_CELL_STRING_CHARS",
+    "MAX_TABULAR_RISK_COLUMNS",
+    "MAX_TABULAR_RISK_ROWS",
+    "MAX_TABULAR_RISK_TOTAL_CELLS",
+    "TabularRiskReport",
+    "TabularRiskThresholds",
+    "build_tabular_risk_report",
+    "compute_tabular_risk_report",
+    "generate_tabular_risk_report",
+    "render_tabular_risk_json",
+    "render_tabular_risk_markdown",
+    "tabular_risk_report",
 ]
