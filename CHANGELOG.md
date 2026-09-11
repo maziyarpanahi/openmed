@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, deterministic nested-resource redaction contract with
+  explicit scalar paths and actions, stable arrays and identifiers, closed
+  policy validation, and raw-value-free reports and failures (#2413).
 - Added declarative field-level FHIR and OMOP de-identification policies with
   fail-closed identifier handling, patient-consistent date shifting, schema
   linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
@@ -37,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a reusable offline CI privacy scanner with explicit scan paths,
+  non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
+  report writes (#2299).
 - Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
   DOM-based search-suggestion XSS tracked as CVE-2026-73295.
 
