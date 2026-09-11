@@ -43,7 +43,7 @@ MISMATCH_CATEGORIES: Final = (
 _DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-fA-F]{64}$")
 _SOURCE_REVISION_RE = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
 _SCHEMA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$")
-_FIELD_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+_FIELD_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:+@-]{0,255}$")
 _BUILD_INPUT_KEY_RE = re.compile(r"^[^\x00-\x1f\x7f]{1,128}$")
 _ARTIFACT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+@-]{0,127}$")
 
