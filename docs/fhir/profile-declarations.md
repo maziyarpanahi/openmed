@@ -66,3 +66,7 @@ This is an export consistency guard, not a complete FHIR conformance
 validator, compliance certification, or clinical decision guarantee. Keep
 catalogs and checked resources synthetic or apply the caller's data-access and
 privacy policy before invoking it.
+
+Canonical versions after `|` are profile versions, independent of the FHIR
+release selected by `fhir_version`. Standalone diagnostics use the fixed
+`Resource` root so untrusted resource type values cannot enter reports.

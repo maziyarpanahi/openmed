@@ -663,7 +663,9 @@ def _check_resource(
             )
             continue
         try:
-            canonical, declared_version = _normalise_canonical(raw_profile)
+            canonical, declared_version = _normalise_canonical(
+                raw_profile, allow_version=True
+            )
         except (TypeError, ValueError):
             findings.append(
                 _finding(
@@ -707,20 +709,6 @@ def _check_resource(
                     PROFILE_FHIR_VERSION_MISMATCH,
                     "not-supported",
                     "Declared profile is not supported in the requested FHIR release.",
-                    profile_path,
-                )
-            )
-        declared_fhir_version = (
-            _normalise_fhir_version(declared_version)
-            if _looks_like_fhir_version(declared_version)
-            else None
-        )
-        if declared_fhir_version is not None and declared_fhir_version != fhir_version:
-            findings.append(
-                _finding(
-                    PROFILE_FHIR_VERSION_MISMATCH,
-                    "value",
-                    "Profile declaration version conflicts with the requested FHIR release.",
                     profile_path,
                 )
             )
@@ -980,6 +968,8 @@ def _normalise_canonical(
     if any(character.isspace() for character in value):
         raise ValueError("canonical profile URL must not contain whitespace")
     canonical, separator, version = value.partition("|")
+    if "|" in version:
+        raise ValueError("canonical profile version is malformed")
     if not _is_canonical_url(canonical):
         raise ValueError("canonical profile URL must be an absolute URI")
     if separator and (not allow_version or not version):
@@ -992,7 +982,10 @@ def _is_canonical_url(value: Any) -> bool:
         return False
     if any(character.isspace() for character in value):
         return False
-    parsed = urlparse(value)
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return False
     if parsed.scheme not in {"http", "https", "urn"}:
         return False
     if parsed.scheme in {"http", "https"}:
@@ -1041,12 +1034,7 @@ def _resource_type_for(
 
 
 def _default_root(resource: Mapping[str, Any]) -> str:
-    resource_type = resource.get("resourceType")
-    return (
-        resource_type
-        if isinstance(resource_type, str) and resource_type
-        else "Resource"
-    )
+    return "Resource"
 
 
 def _safe_expression(value: str) -> str:

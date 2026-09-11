@@ -64,7 +64,7 @@ def test_missing_profile_declaration_is_classified() -> None:
     )
 
     assert _codes(findings) == [MISSING_PROFILE_DECLARATION]
-    assert findings[0]["expression"] == ["Patient.meta.profile"]
+    assert findings[0]["expression"] == ["Resource.meta.profile"]
 
 
 def test_duplicate_and_unknown_declarations_are_classified() -> None:
@@ -162,8 +162,37 @@ def test_operation_outcome_adapter_has_a_safe_fhir_shape() -> None:
                 "diagnostics": (
                     "Profile declaration is not present in the injected local catalog."
                 ),
-                "expression": ["Patient.meta.profile[0]"],
+                "expression": ["Resource.meta.profile[0]"],
             }
         ],
     }
     assert UNKNOWN_PROFILE not in json.dumps(outcome)
+
+
+def test_profile_version_is_independent_of_fhir_release() -> None:
+    catalog = {
+        PATIENT_PROFILE: {
+            "resource_type": "Patient",
+            "fhir_versions": ["R4"],
+            "profile_versions": ["5.0.0"],
+        }
+    }
+    assert (
+        check_profile_declarations(_patient(PATIENT_PROFILE + "|5.0.0"), catalog) == []
+    )
+
+
+def test_rejected_resource_type_is_not_copied_into_findings() -> None:
+    marker = "SYNTHETIC-PRIVATE-RESOURCE-TYPE"
+    findings = check_profile_declarations({"resourceType": marker}, PROFILE_CATALOG)
+    assert findings
+    assert marker not in json.dumps(findings)
+
+
+def test_malformed_canonical_produces_value_free_findings() -> None:
+    marker = "SYNTHETIC-PRIVATE"
+    findings = check_profile_declarations(
+        _patient("https://[" + marker), PROFILE_CATALOG
+    )
+    assert findings
+    assert marker not in json.dumps(findings)
