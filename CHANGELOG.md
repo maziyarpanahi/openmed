@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added deterministic authenticated encryption for reversible surrogate
+  mappings, with caller-owned keys, owner-only atomic persistence, and
+  value-free failures (#2293).
 - Added a fail-closed local dataset-upload privacy guard with block and
   redact-to-staging modes, privacy-safe reports, and private atomic staging
   files (#2297).

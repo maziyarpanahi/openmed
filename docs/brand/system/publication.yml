@@ -280,6 +280,7 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
     - security/key-management.md
+    - security/encrypted-surrogate-vault.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
