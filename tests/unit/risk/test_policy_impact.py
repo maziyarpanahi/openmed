@@ -9,7 +9,9 @@ import pytest
 
 from openmed.core.audit import stable_hash
 from openmed.risk import (
-    PolicyVersion,
+    PolicyImpactVersion as PolicyVersion,
+)
+from openmed.risk import (
     TypedResource,
     evaluate_policy_impact,
 )

@@ -38,3 +38,6 @@ the order of synthetic resources does not change the digest.
 The simulator is read-only: it copies normalized scalar settings and never
 mutates a live policy or budget. It performs no network calls. The result is
 review evidence, not a compliance certification or a clinical decision.
+
+The root `openmed.risk` namespace exports the policy description as
+`PolicyImpactVersion`. The defining module also retains its local `PolicyVersion` name.

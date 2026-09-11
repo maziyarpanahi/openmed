@@ -171,12 +171,14 @@ from .policy_impact import (
     PolicyImpactChange,
     PolicyImpactDigest,
     PolicyResource,
-    PolicyVersion,
     TypedResource,
     compare_policy_versions,
     evaluate_policy_impact,
     policy_impact_digest,
     simulate_policy_impact,
+)
+from .policy_impact import (
+    PolicyVersion as PolicyImpactVersion,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .qi_profiler import (
@@ -336,7 +338,7 @@ __all__ = [
     "PolicyImpactChange",
     "PolicyImpactDigest",
     "PolicyResource",
-    "PolicyVersion",
+    "PolicyImpactVersion",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
