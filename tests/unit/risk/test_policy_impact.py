@@ -214,3 +214,16 @@ def test_invalid_resource_type_does_not_echo_sensitive_input_in_exception() -> N
         )
 
     assert raw_value not in str(exc_info.value)
+
+
+def test_profile_adapter_preserves_inherited_label_actions() -> None:
+    from dataclasses import replace
+
+    from openmed.core.policy import load_policy
+
+    baseline = replace(load_policy("clinical_minimal_redaction"), actions={})
+    candidate = replace(baseline, policy_label_actions={"CLINICAL_CONCEPT": "redact"})
+    impact = evaluate_policy_impact(baseline, candidate, {"DISEASE": 2})
+    assert impact.action_deltas[0].from_value == "keep"
+    assert impact.action_deltas[0].to_value == "redact"
+    assert impact.action_deltas[0].count == 2

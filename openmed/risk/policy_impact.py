@@ -21,6 +21,7 @@ from types import MappingProxyType
 from typing import Any, TypeAlias
 
 from openmed.core.audit import stable_hash
+from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.policy import PolicyName, PolicyProfile, load_policy
 from openmed.core.schemas.span import ACTION_KEEP, ACTION_VALUES
 
@@ -445,7 +446,11 @@ def _resolve_policy(
     if isinstance(value, PolicyProfile):
         return PolicyVersion(
             name=value.name,
-            actions={**value.policy_label_actions, **value.actions},
+            actions={
+                **value.policy_label_actions,
+                **value.actions,
+                **{label: value.action_for(label) for label in CANONICAL_LABELS},
+            },
             default_action=value.default_action,
             default_gate=tuple(
                 gate_name
