@@ -209,9 +209,12 @@ nav:
       - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Audit-artifact Retention: security/audit-retention.md
+      - Policy-aware Redaction Diffs: security/redaction-diff.md
+      - Privacy Policy Composition: security/policy-composition.md
       - Key Management and Rotation: security/key-management.md
       - Audit-report Signing Key Rotation: security/audit-key-rotation.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
+      - Structured Access Review: security/access-review.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
