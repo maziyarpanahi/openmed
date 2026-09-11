@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an in-memory no-PHI telemetry exporter with closed counter families,
+  bounded dimensions and totals, atomic event validation, exception-type-only
+  categorization, deterministic JSON and Prometheus rendering, and no
+  mandatory network transport (#2414).
 - Added a bounded, deterministic tabular re-identification risk report with
   aggregate-only JSON and Markdown renderers, immutable report state,
   fail-closed consistency checks, and locally derived threshold outcomes
