@@ -266,9 +266,12 @@ nav:
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
+      - FHIR Profile Declarations: fhir/profile-declarations.md
+      - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
+      - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR DiagnosticReport Export: fhir/diagnostic-report-export.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
