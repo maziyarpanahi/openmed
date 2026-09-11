@@ -164,3 +164,32 @@ def test_envelope_and_payload_bounds_are_enforced() -> None:
 
     with pytest.raises(AuditEnvelopeBoundsError):
         parse_audit_envelope(_envelope(), max_payload_bytes=4)
+
+
+@pytest.mark.parametrize("field_name", ["payload_type", "report_type"])
+def test_unhashable_metadata_uses_the_safe_error_family(field_name) -> None:
+    from openmed.compliance.audit_envelope import (
+        AuditEnvelopeError,
+        create_audit_envelope,
+        parse_audit_envelope,
+    )
+
+    envelope = create_audit_envelope({}, signature="synthetic-signature")
+    envelope[field_name] = ["synthetic"]
+    with pytest.raises(AuditEnvelopeError):
+        parse_audit_envelope(envelope)
+
+
+def test_deep_json_and_mapping_fail_with_bounded_parser_errors() -> None:
+    from openmed.compliance.audit_envelope import (
+        AuditEnvelopeError,
+        parse_audit_envelope,
+    )
+
+    with pytest.raises(AuditEnvelopeError):
+        parse_audit_envelope('{"payload":' + "[" * 1500 + "0" + "]" * 1500 + "}")
+    nested = {}
+    for _ in range(1500):
+        nested = {"payload": nested}
+    with pytest.raises(AuditEnvelopeError):
+        parse_audit_envelope(nested)

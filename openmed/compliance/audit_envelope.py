@@ -364,7 +364,7 @@ def _canonical_json_bytes(value: Any, *, field_name: str) -> bytes:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("ascii")
-    except (TypeError, UnicodeError, ValueError, OverflowError):
+    except (TypeError, UnicodeError, ValueError, OverflowError, RecursionError):
         _raise(
             AuditEnvelopeValidationError,
             "audit envelope payload is not canonical JSON",
@@ -483,6 +483,7 @@ def _load_document(
                 "audit envelope object keys must be text",
                 field_name="envelope",
             )
+        _check_json_shape(document)
         encoded = _canonical_json_bytes(document, field_name="envelope")
     elif isinstance(value, str):
         try:
@@ -506,7 +507,8 @@ def _load_document(
                 parse_constant=_reject_json_constant,
             )
         except (
-            json.JSONDecodeError,
+            ValueError,
+            RecursionError,
             UnicodeError,
             _DuplicateJsonKey,
             _InvalidJsonConstant,
@@ -531,7 +533,8 @@ def _load_document(
                 parse_constant=_reject_json_constant,
             )
         except (
-            json.JSONDecodeError,
+            ValueError,
+            RecursionError,
             UnicodeError,
             _DuplicateJsonKey,
             _InvalidJsonConstant,
@@ -955,7 +958,9 @@ def _parse_payload(
         if payload_type_value is _MISSING:
             payload_type = actual_type
         else:
-            if payload_type_value not in _PAYLOAD_TYPES - {"omitted"}:
+            if not isinstance(
+                payload_type_value, str
+            ) or payload_type_value not in _PAYLOAD_TYPES - {"omitted"}:
                 _raise(
                     AuditEnvelopeValidationError,
                     "audit envelope payload type is invalid",
@@ -1001,7 +1006,10 @@ def _parse_payload(
     if payload_type_value is _MISSING:
         payload_type = "omitted"
     else:
-        if payload_type_value not in _PAYLOAD_TYPES:
+        if (
+            not isinstance(payload_type_value, str)
+            or payload_type_value not in _PAYLOAD_TYPES
+        ):
             _raise(
                 AuditEnvelopeValidationError,
                 "audit envelope payload type is invalid",
@@ -1386,11 +1394,15 @@ def parse_audit_envelope(
         field_name="report_type",
         default=_MISSING,
     )
-    if report_type is not _MISSING and report_type not in {
-        AUDIT_ENVELOPE_REPORT_TYPE,
-        "audit_envelope",
-        "openmed.audit_envelope",
-    }:
+    if report_type is not _MISSING and (
+        not isinstance(report_type, str)
+        or report_type
+        not in {
+            AUDIT_ENVELOPE_REPORT_TYPE,
+            "audit_envelope",
+            "openmed.audit_envelope",
+        }
+    ):
         _raise(
             AuditEnvelopeValidationError,
             "audit envelope report type is unsupported",
