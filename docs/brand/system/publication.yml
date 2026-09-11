@@ -307,6 +307,7 @@ classification:
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
+    - integrations/omop-cohort-check.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
     - integrations/warehouse-remote-function.md

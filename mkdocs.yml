@@ -233,6 +233,7 @@ nav:
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
+      - OMOP Cohort Export Validation: integrations/omop-cohort-check.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
