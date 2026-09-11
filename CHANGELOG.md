@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit blob for direct identifiers, secrets, and sensitive structured fields;
   emits value-free reports; supports narrowly versioned synthetic-fixture
   allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a bounded, counts-only audit-artifact retention planner with explicit
+  disposition rules, deletion evidence, remaining-set verification, strict
+  input fields, and fail-closed future timestamps (#2409).
+- Added a deterministic, offline CycloneDX 1.6 evidence generator for the base
+  runtime dependency closure, with source and manifest hashes, bounded local
+  inputs, atomic output, and no embedded URLs or build paths (#2416).
+- Added a deterministic offline dependency risk report that correlates local
+  locked versions with caller-supplied advisory snapshots, emits bounded
+  value-free risk summaries, and performs no package-manager or network calls
+  (#2417).
 - Added deterministic counts-only trace privacy audit artifacts with canonical
   policy and file hashes, immutable category counts, value-free JSON and
   Markdown renderings, stable file fingerprinting, and private atomic writes
@@ -52,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added deterministic authenticated encryption for reversible surrogate
+  mappings, with caller-owned keys, owner-only atomic persistence, and
+  value-free failures (#2293).
 - Added a fail-closed local dataset-upload privacy guard with block and
   redact-to-staging modes, privacy-safe reports, and private atomic staging
   files (#2297).
