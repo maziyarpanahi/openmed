@@ -112,9 +112,10 @@ class SurrogateVaultCrypto:
     def write(self, path: str | Path, mapping: Mapping[str, str]) -> None:
         """Atomically write an encrypted mapping to ``path``.
 
-        Only the encrypted envelope reaches the temporary file. The temporary
-        file is created with owner-only permissions and removed on every exit
-        path.
+        Only the encrypted envelope reaches the temporary file. On POSIX, the
+        temporary file is restricted to its owner. On Windows, access control
+        is inherited from the destination directory. The temporary file is
+        removed on every exit path.
         """
 
         encrypted = self.encrypt(mapping)

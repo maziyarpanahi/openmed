@@ -125,7 +125,8 @@ def test_file_helpers_store_only_ciphertext_and_clean_up_temporary_files(
     persisted = path.read_bytes()
     assert all(value.encode("utf-8") not in persisted for value in MAPPING)
     assert not list(tmp_path.glob("*.tmp"))
-    assert path.stat().st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o077 == 0
     assert crypto.read(path) == MAPPING
     assert load_mapping(path, KEY) == MAPPING
 

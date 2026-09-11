@@ -41,8 +41,10 @@ pip install "openmed[integrity]"
 ## Encrypt and restore a mapping
 
 The mapping remains in process memory while it is encrypted. Only the JSON
-envelope is written to disk, and file writes use an owner-only temporary file
-followed by an atomic replacement:
+envelope is written to disk, and file writes use a temporary file followed by
+an atomic replacement. The temporary file is owner-only on POSIX; on Windows,
+it inherits access control from the destination directory, which the caller
+must restrict appropriately:
 
 ```python
 from pathlib import Path
