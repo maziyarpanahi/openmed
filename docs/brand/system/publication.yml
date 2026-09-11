@@ -277,6 +277,7 @@ classification:
     - guides/in-place-redaction.md
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
+    - security/audit-retention.md
     - security/key-management.md
     - integrations-langchain.md
     - integrations/langchain.md
