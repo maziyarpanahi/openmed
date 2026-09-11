@@ -1,5 +1,23 @@
-"""Explicit local guards for data egress and upload call sites."""
+"""Local privacy guards and counts-only audit artifacts."""
 
+from importlib import import_module
+from typing import Any
+
+from .audit import (
+    ARTIFACT_NAME,
+    SCHEMA_VERSION,
+    TraceAudit,
+    TraceAuditArtifact,
+    TraceAuditError,
+    TracePrivacyAudit,
+    build_trace_audit,
+    count_categories,
+    fingerprint_file,
+    hash_bytes,
+    hash_policy,
+    render_trace_audit_json,
+    render_trace_audit_markdown,
+)
 from .dataset import (
     BLOCK_ONLY_MODE,
     DEFAULT_MODE,
@@ -20,6 +38,22 @@ from .dataset import (
 )
 
 __all__ = [
+    "SessionScrubResult",
+    "SessionTraceError",
+    "scrub_trace",
+    "ARTIFACT_NAME",
+    "SCHEMA_VERSION",
+    "TraceAudit",
+    "TraceAuditArtifact",
+    "TraceAuditError",
+    "TracePrivacyAudit",
+    "build_trace_audit",
+    "count_categories",
+    "fingerprint_file",
+    "hash_bytes",
+    "hash_policy",
+    "render_trace_audit_json",
+    "render_trace_audit_markdown",
     "BLOCK_ONLY_MODE",
     "DEFAULT_MODE",
     "REDACT_TO_STAGING_MODE",
@@ -37,3 +71,13 @@ __all__ = [
     "scan_dataset_files",
     "scan_text",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Load session-hook exports without importing the executable eagerly."""
+    if name not in {"SessionScrubResult", "SessionTraceError", "scrub_trace"}:
+        raise AttributeError(name)
+    module = import_module(".session_hook", __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
