@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a versioned, bounded privacy policy-as-data schema for jurisdiction,
+  recall floors, de-identification actions, surrogate strategy, and
+  privacy-safe audit retention, with deterministic local-only loading,
+  strict duplicate and alias handling, and value-free validation failures
+  (#2406).
 - Added an in-memory no-PHI telemetry exporter with closed counter families,
   bounded dimensions and totals, atomic event validation, exception-type-only
   categorization, deterministic JSON and Prometheus rendering, and no
