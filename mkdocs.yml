@@ -205,6 +205,7 @@ nav:
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Audit-artifact Retention: security/audit-retention.md
       - Key Management and Rotation: security/key-management.md
+      - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
