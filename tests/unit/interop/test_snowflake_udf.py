@@ -123,3 +123,24 @@ def test_register_udf_requires_optional_snowflake_extra(monkeypatch):
 
     with pytest.raises(ImportError, match=r"openmed\[snowflake\]"):
         snowflake_udf.register_udf(object())
+
+
+@pytest.mark.parametrize(
+    ("value", "literal"),
+    [
+        (r"@stage/helpers\new.py", r"'@stage/helpers\\new.py'"),
+        (r"@stage/owner\'s.py", r"'@stage/owner\\''s.py'"),
+        ("@stage/line\nbreak.py", r"'@stage/line\nbreak.py'"),
+        (r"@stage/file\'); SELECT 1; --", r"'@stage/file\\''); SELECT 1; --'"),
+    ],
+)
+def test_sql_literals_preserve_values_and_quote_boundaries(value, literal):
+    sql = snowflake_udf.generate_create_function_sql(
+        packages=["openmed", value],
+        imports=[value],
+        handler=value,
+    )
+
+    assert f"PACKAGES = ('openmed', {literal})" in sql
+    assert f"IMPORTS = ({literal})" in sql
+    assert sql.endswith(f"HANDLER = {literal};")

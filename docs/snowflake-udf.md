@@ -73,7 +73,9 @@ session.sql(sql).collect()
 
 The generated statement includes `LANGUAGE PYTHON`, the configured
 `RUNTIME_VERSION`, `PACKAGES`, and the
-`openmed.interop.snowflake_udf.deidentify_udf` `HANDLER`.
+`openmed.interop.snowflake_udf.deidentify_udf` `HANDLER`. Backslashes,
+apostrophes, and line breaks in package, import, and handler values are escaped
+as Snowflake string literals.
 
 This adapter does not contact a Snowflake account during local tests. Supply
 your own Snowflake package or stage configuration for deployment, and review

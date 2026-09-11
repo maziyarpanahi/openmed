@@ -197,7 +197,7 @@ def _validate_qualified_identifier(value: str, *, field: str) -> str:
 
 
 def _escape_sql_literal(value: str) -> str:
-    return value.replace("'", "''")
+    return value.replace("\\", "\\\\").replace("'", "''").replace("\n", "\\n")
 
 
 def _sql_literals(values: Sequence[str]) -> str:
