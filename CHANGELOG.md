@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, deterministic minimum-necessary structured field selector
+  with caller-declared purpose mappings, policy allowlists and denylists,
+  fail-closed unknown declarations, value-free decision explanations, and
+  projection restricted to selector-approved fields (#2412).
 - Added a bounded, counts-only audit-artifact retention planner with explicit
   disposition rules, deletion evidence, remaining-set verification, strict
   input fields, and fail-closed future timestamps (#2409).
