@@ -276,6 +276,20 @@ from .synthetic_tabular import (
     sample_synthetic_table,
     tabular_fidelity_report,
 )
+from .tabular_report import (
+    MAX_TABULAR_RISK_CELL_STRING_CHARS,
+    MAX_TABULAR_RISK_COLUMNS,
+    MAX_TABULAR_RISK_ROWS,
+    MAX_TABULAR_RISK_TOTAL_CELLS,
+    TabularRiskReport,
+    TabularRiskThresholds,
+    build_tabular_risk_report,
+    compute_tabular_risk_report,
+    generate_tabular_risk_report,
+    render_tabular_risk_json,
+    render_tabular_risk_markdown,
+    tabular_risk_report,
+)
 
 
 def membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
@@ -521,4 +535,16 @@ __all__ = [
     "write_risk_dashboard",
     "utility_report",
     "utility_vs_epsilon",
+    "MAX_TABULAR_RISK_CELL_STRING_CHARS",
+    "MAX_TABULAR_RISK_COLUMNS",
+    "MAX_TABULAR_RISK_ROWS",
+    "MAX_TABULAR_RISK_TOTAL_CELLS",
+    "TabularRiskReport",
+    "TabularRiskThresholds",
+    "build_tabular_risk_report",
+    "compute_tabular_risk_report",
+    "generate_tabular_risk_report",
+    "render_tabular_risk_json",
+    "render_tabular_risk_markdown",
+    "tabular_risk_report",
 ]

@@ -199,6 +199,7 @@ nav:
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md
       - CI Privacy Scan: security/ci-privacy-scan.md
       - Secret Token Detection: security/secret-detection.md
@@ -318,6 +319,7 @@ nav:
       - Manual HF Model Publication: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Resource Path Portability Audit: security/path-portability.md
+      - Tabular Re-identification Risk Report: security/tabular-risk-report.md
       - Aggregate Release Privacy Budgets: security/privacy-budget.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Offline Dependency Risk Report: security/dependency-risk.md
