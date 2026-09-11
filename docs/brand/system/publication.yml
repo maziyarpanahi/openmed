@@ -365,6 +365,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/license-inventory.md
     - security/exception-taxonomy.md
     - security/export-naming.md
     - security/disclosure-policy.md
