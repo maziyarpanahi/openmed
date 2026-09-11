@@ -248,6 +248,7 @@ nav:
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
+      - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md

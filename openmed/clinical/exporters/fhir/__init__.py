@@ -1,4 +1,4 @@
-"""FHIR R4 export helpers for clinical resources."""
+"""FHIR export and offline validation helpers for clinical resources."""
 
 from __future__ import annotations
 
@@ -49,6 +49,18 @@ from .grounded import (
     to_fhir,
 )
 from .observation import to_observation
+from .observation_extensions import (
+    DEFAULT_OBSERVATION_EXTENSION_RULES,
+    FHIR_R4,
+    FHIR_R5,
+    OBSERVATION_EXTENSION_BASE_URL,
+    OBSERVATION_UNKNOWN_STATE_CODES,
+    OBSERVATION_UNKNOWN_STATE_EXTENSION_URL,
+    ObservationExtensionFinding,
+    ObservationExtensionSpec,
+    check_observation_extensions,
+    validate_observation_extensions,
+)
 from .operation_outcome import (
     OperationOutcomeIssue,
     from_validation_result,
@@ -86,6 +98,9 @@ __all__ = [
     "CONDITION_CLINICAL_SYSTEM",
     "CONDITION_VER_STATUS_SYSTEM",
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
+    "DEFAULT_OBSERVATION_EXTENSION_RULES",
+    "FHIR_R4",
+    "FHIR_R5",
     "DIAGNOSTIC_REPORT_FIELDS_R4R5",
     "DIAGNOSTIC_REPORT_STATUS_UNKNOWN",
     "DIAGNOSTIC_REPORT_STATUSES",
@@ -94,6 +109,12 @@ __all__ = [
     "MEDICAL_DEVICE_ASSIST_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_ONLY_DISCLAIMER",
     "POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL",
+    "OBSERVATION_EXTENSION_BASE_URL",
+    "OBSERVATION_UNKNOWN_STATE_CODES",
+    "OBSERVATION_UNKNOWN_STATE_EXTENSION_URL",
+    "ObservationExtensionFinding",
+    "ObservationExtensionSpec",
+    "check_observation_extensions",
     "to_condition",
     "to_diagnostic_report",
     "to_observation",
@@ -121,6 +142,7 @@ __all__ = [
     "validate_fhir_reference_types",
     "validate_reference_targets",
     "validate_reference_types",
+    "validate_observation_extensions",
     "FHIRClinicalExchangeWorkbench",
     "FHIRExchange",
     "FHIRExchangeError",
