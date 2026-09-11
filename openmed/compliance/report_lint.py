@@ -85,11 +85,12 @@ def _normalise_kind(kind: str) -> str:
 def _is_finite_number(value: object) -> bool:
     """Return whether ``value`` is a finite, non-boolean number."""
 
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
 
 
 def _validate_optional_bound(value: object, *, allow_zero: bool) -> int | None:

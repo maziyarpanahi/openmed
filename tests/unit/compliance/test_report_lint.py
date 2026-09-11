@@ -184,3 +184,10 @@ def test_strict_lint_raises_a_value_free_error() -> None:
 
     assert sensitive_value not in str(error.value)
     assert error.value.result.valid is False
+
+
+def test_oversized_number_produces_a_finding_instead_of_overflow() -> None:
+    schema = ReportSchema({"score": ReportFieldSpec("number")})
+    result = lint_report({"score": 10**1000}, schema)
+    assert not result.valid
+    assert [finding.code for finding in result.findings] == ["invalid_number"]
