@@ -231,3 +231,19 @@ def test_core_package_reexports_validator_api():
     assert core.KeyCustodyMetadata is KeyCustodyMetadata
     assert core.validate_key_custody_metadata is validate_key_custody_metadata
     assert core.KeyCustodyValidator().validate(_metadata()).valid
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_unknown_field_names_cannot_leak_into_reports(nested):
+    marker = "SYNTHETIC-PRIVATE-FIELD"
+    payload = _metadata()
+    if nested:
+        payload["transitions"] = [
+            {"state": "active", "at": payload["created_at"], marker: b"synthetic"}
+        ]
+    else:
+        payload[marker] = b"synthetic"
+    result = validate_key_custody_metadata(payload)
+    assert not result.valid
+    assert marker not in result.to_json()
+    assert marker not in str(result.violations)

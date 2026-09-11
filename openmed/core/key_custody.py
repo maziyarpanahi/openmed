@@ -590,7 +590,7 @@ def _validate_field_names(
             if _is_secret_field(field)
             else "unsupported_field"
         )
-        violations.append(KeyCustodyViolation(code, record_index, field))
+        violations.append(KeyCustodyViolation(code, record_index, "field"))
 
 
 def _read_key_id(
@@ -813,7 +813,7 @@ def _read_transitions(
                     KeyCustodyViolation(
                         code,
                         record_index,
-                        f"{field_prefix}.{field}",
+                        f"{field_prefix}.field",
                     )
                 )
         state_fields = [
@@ -997,7 +997,12 @@ def _find_bytes_path(value: Any, path: str = "metadata") -> str | None:
         return path
     if isinstance(value, Mapping):
         for field, nested in value.items():
-            field_name = field if isinstance(field, str) else "field"
+            field_name = (
+                field
+                if isinstance(field, str)
+                and field in _RECORD_FIELDS | _TRANSITION_FIELDS
+                else "field"
+            )
             nested_path = _find_bytes_path(nested, f"{path}.{field_name}")
             if nested_path is not None:
                 return nested_path.removeprefix("metadata.")
