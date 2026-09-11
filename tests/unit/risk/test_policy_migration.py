@@ -332,3 +332,11 @@ def test_invalid_input_errors_do_not_include_input_value() -> None:
         compare_policy_versions("not-a-policy-value", {"default_action": "mask"})
 
     assert "not-a-policy-value" not in str(exc_info.value)
+
+
+def test_migration_export_preserves_redaction_change_classification() -> None:
+    import openmed.risk as risk
+    from openmed.risk.redaction_diff import ChangeClassification as RedactionChange
+
+    assert risk.ChangeClassification is RedactionChange
+    assert risk.MigrationClassification is MigrationClassification

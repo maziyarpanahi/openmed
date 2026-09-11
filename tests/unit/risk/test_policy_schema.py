@@ -18,7 +18,7 @@ from openmed.risk import (
     MAX_POLICY_ACTIONS,
     MAX_POLICY_RECALL_OVERRIDES,
     AuditRetention,
-    PrivacyPolicy,
+    PrivacyPolicySchema,
     RecallFloors,
     SurrogateStrategy,
     default_policy_schema,
@@ -55,7 +55,7 @@ def test_defaults_are_explicit_and_preserve_legacy_local_behavior() -> None:
 
 
 def test_policy_covers_jurisdiction_floors_actions_surrogates_and_retention() -> None:
-    policy = PrivacyPolicy.from_mapping(
+    policy = PrivacyPolicySchema.from_mapping(
         {
             "schema_version": 1,
             "name": "synthetic-clinical-review",
@@ -95,13 +95,13 @@ def test_unknown_actions_are_rejected_without_echoing_the_configured_value() -> 
     configured_value = "synthetic-invalid-action"
 
     with pytest.raises(ValueError, match="one of") as exc_info:
-        PrivacyPolicy.from_mapping({"actions": {"PERSON": configured_value}})
+        PrivacyPolicySchema.from_mapping({"actions": {"PERSON": configured_value}})
 
     assert configured_value not in str(exc_info.value)
 
 
 def test_actions_accept_existing_policy_label_defaults_and_normalize_labels() -> None:
-    policy = PrivacyPolicy.from_mapping(
+    policy = PrivacyPolicySchema.from_mapping(
         {
             "default_action": "redact",
             "policy_label_actions": {"DIRECT_IDENTIFIER": "mask"},
@@ -115,23 +115,23 @@ def test_actions_accept_existing_policy_label_defaults_and_normalize_labels() ->
 
 
 def test_serialization_is_deterministic_and_round_trips() -> None:
-    policy = PrivacyPolicy(
+    policy = PrivacyPolicySchema(
         name="deterministic-policy",
         actions={"EMAIL": "hash", "PERSON": "mask"},
         recall_floors={"default": 0.9, "PERSON": 0.99},
     )
 
     first = policy.canonical_json()
-    second = PrivacyPolicy.from_json(policy.to_json()).canonical_json()
+    second = PrivacyPolicySchema.from_json(policy.to_json()).canonical_json()
 
     assert first == second
-    assert policy.digest == PrivacyPolicy.from_json(first).digest
+    assert policy.digest == PrivacyPolicySchema.from_json(first).digest
     assert policy.digest.startswith("sha256:")
     assert json.loads(first)["actions"] == {"EMAIL": "hash", "PERSON": "mask"}
 
 
 def test_legacy_flat_fields_keep_safe_defaults_explicit() -> None:
-    policy = PrivacyPolicy.from_mapping(
+    policy = PrivacyPolicySchema.from_mapping(
         {
             "name": "legacy-policy",
             "default_action": "mask",
@@ -187,24 +187,24 @@ def test_local_loader_and_linter_do_not_need_network(tmp_path) -> None:
 
 def test_unknown_top_level_fields_fail_closed() -> None:
     with pytest.raises(ValueError, match="unsupported"):
-        PrivacyPolicy.from_mapping({"not_a_policy_field": True})
+        PrivacyPolicySchema.from_mapping({"not_a_policy_field": True})
 
 
 @pytest.mark.parametrize("version", [True, 1.0, "1"])
 def test_schema_version_requires_the_exact_integer_type(version: object) -> None:
     with pytest.raises(ValueError, match="schema_version"):
-        PrivacyPolicy(schema_version=version)  # type: ignore[arg-type]
+        PrivacyPolicySchema(schema_version=version)  # type: ignore[arg-type]
 
 
 def test_duplicate_json_fields_and_aliases_fail_closed() -> None:
     with pytest.raises(ValueError, match="invalid policy JSON"):
-        PrivacyPolicy.from_json(
+        PrivacyPolicySchema.from_json(
             '{"schema_version":1,"schema_version":2,"default_action":"mask"}'
         )
     with pytest.raises(ValueError, match="conflicting aliases"):
-        PrivacyPolicy.from_mapping({"schema_version": 1, "version": 1})
+        PrivacyPolicySchema.from_mapping({"schema_version": 1, "version": 1})
     with pytest.raises(ValueError, match="conflicting aliases"):
-        PrivacyPolicy.from_mapping(
+        PrivacyPolicySchema.from_mapping(
             {
                 "default_action": "mask",
                 "actions": {"default": "mask"},
@@ -214,13 +214,13 @@ def test_duplicate_json_fields_and_aliases_fail_closed() -> None:
 
 def test_non_finite_json_numbers_fail_closed() -> None:
     with pytest.raises(ValueError, match="invalid policy JSON"):
-        PrivacyPolicy.from_json('{"recall_floor":NaN}')
+        PrivacyPolicySchema.from_json('{"recall_floor":NaN}')
 
 
 def test_policy_cardinality_and_retention_are_bounded() -> None:
     actions = {f"CUSTOM_{index}": "mask" for index in range(MAX_POLICY_ACTIONS + 1)}
     with pytest.raises(ValueError, match="item limit"):
-        PrivacyPolicy(actions=actions)
+        PrivacyPolicySchema(actions=actions)
 
     recall_overrides = {
         f"CUSTOM_{index}": 0.99 for index in range(MAX_POLICY_RECALL_OVERRIDES + 1)
@@ -248,10 +248,20 @@ def test_hostile_mappings_and_validation_errors_do_not_expose_values() -> None:
     sensitive = "SYNTHETIC_PRIVATE_LABEL"
 
     with pytest.raises(ValueError) as exc_info:
-        PrivacyPolicy.from_mapping(_HostileMapping())
+        PrivacyPolicySchema.from_mapping(_HostileMapping())
     assert "synthetic-sensitive-value" not in str(exc_info.value)
     assert lint_policy_schema(_HostileMapping()) == ("policy schema is invalid",)
 
     with pytest.raises(TypeError) as exc_info:
-        PrivacyPolicy.from_mapping({"actions": {sensitive: object()}})
+        PrivacyPolicySchema.from_mapping({"actions": {sensitive: object()}})
     assert sensitive not in str(exc_info.value)
+
+
+def test_schema_export_preserves_the_composition_policy_api() -> None:
+    import openmed.risk as risk
+    from openmed.risk.policy_composition import PrivacyPolicy as CompositionPolicy
+    from openmed.risk.policy_schema import PrivacyPolicy as SchemaPolicy
+
+    assert risk.PrivacyPolicy is CompositionPolicy
+    assert risk.PrivacyPolicySchema is SchemaPolicy
+    assert risk.PrivacyPolicySchema.from_mapping({}).schema_version == 1
