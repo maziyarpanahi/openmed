@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a reusable offline CI privacy scanner with explicit scan paths,
+  non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
+  report writes (#2299).
 - Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
   DOM-based search-suggestion XSS tracked as CVE-2026-73295.
 
