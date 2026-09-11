@@ -226,3 +226,53 @@ def test_malformed_resource_reports_only_safe_paths():
         "extension-not-array",
     ]
     assert sensitive_synthetic_value not in json.dumps(findings)
+
+
+def test_unknown_value_field_does_not_leak_into_diagnostics():
+    marker = "SYNTHETIC-SENSITIVE-KEY"
+    resource = _observation(
+        [
+            {
+                "url": OBSERVATION_UNKNOWN_STATE_EXTENSION_URL,
+                "value" + marker: "unknown",
+            }
+        ]
+    )
+    findings = check_observation_extensions(resource)
+    assert findings
+    assert marker not in json.dumps(findings)
+
+
+def test_nested_url_must_match_the_explicit_allowlist():
+    url = "https://synthetic.example/parent"
+    resource = _observation(
+        [
+            {
+                "url": url,
+                "extension": [
+                    {"url": "https://unapproved.example/flag", "valueBoolean": True}
+                ],
+            }
+        ]
+    )
+    findings = check_observation_extensions(
+        resource,
+        allowed_extensions={
+            url: {
+                "nested": {"flag": {"value_types": ["valueBoolean"], "min_occurs": 1}}
+            },
+        },
+    )
+    assert {f["finding_code"] for f in findings} == {
+        "unsupported-nested-extension-url",
+        "nested-extension-cardinality",
+    }
+
+
+def test_malformed_url_returns_a_value_free_finding():
+    resource = _observation(
+        [{"url": "https://[SYNTHETIC-PRIVATE", "valueBoolean": True}]
+    )
+    findings = check_observation_extensions(resource)
+    assert findings[0]["finding_code"] == "invalid-extension-url"
+    assert "SYNTHETIC-PRIVATE" not in json.dumps(findings)

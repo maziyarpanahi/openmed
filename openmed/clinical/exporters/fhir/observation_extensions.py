@@ -530,7 +530,7 @@ def _validate_extension(
                     "error",
                     "value",
                     "Extension value type is not permitted by the offline allowlist.",
-                    f"{path}.{value_field}",
+                    f"{path}.{value_field if value_field in _FHIR_VALUE_FIELDS else 'value[x]'}",
                 )
             )
         else:
@@ -542,7 +542,7 @@ def _validate_extension(
                         "error",
                         "value",
                         "Extension value has an unsupported shape.",
-                        f"{path}.{value_field}",
+                        f"{path}.{value_field if value_field in _FHIR_VALUE_FIELDS else 'value[x]'}",
                     )
                 )
             is_inferred_marker = (
@@ -567,7 +567,7 @@ def _validate_extension(
                         "error",
                         "value",
                         diagnostics,
-                        f"{path}.{value_field}",
+                        f"{path}.{value_field if value_field in _FHIR_VALUE_FIELDS else 'value[x]'}",
                     )
                 )
     elif not has_nested or (isinstance(raw_nested, list) and not nested_items):
@@ -818,7 +818,10 @@ def _is_canonical_url(value: Any) -> bool:
         return False
     if any(character.isspace() for character in value):
         return False
-    parsed = urlparse(value)
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return False
     if parsed.scheme not in _CANONICAL_URI_SCHEMES:
         return False
     if parsed.scheme in {"http", "https"}:
@@ -839,22 +842,13 @@ def _find_nested_spec(
     specs: Mapping[str, ObservationExtensionSpec],
     child_url: str,
 ) -> ObservationExtensionSpec | None:
-    direct = specs.get(child_url)
-    if direct is not None:
-        return direct
-    local_name = child_url.rsplit("/", 1)[-1]
-    return specs.get(local_name)
+    return specs.get(child_url)
 
 
 def _nested_count(counts: Mapping[str, int], key: str) -> int:
     """Count a nested rule keyed by either its local or canonical URL."""
 
-    names = {key, key.rsplit("/", 1)[-1]}
-    return sum(
-        count
-        for actual_url, count in counts.items()
-        if actual_url in names or actual_url.rsplit("/", 1)[-1] in names
-    )
+    return counts.get(key, 0)
 
 
 def _within_cardinality(
