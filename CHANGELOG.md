@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic, offline CycloneDX 1.6 evidence generator for the base
+  runtime dependency closure, with source and manifest hashes, bounded local
+  inputs, atomic output, and no embedded URLs or build paths (#2416).
 - Added a deterministic offline dependency risk report that correlates local
   locked versions with caller-supplied advisory snapshots, emits bounded
   value-free risk summaries, and performs no package-manager or network calls
