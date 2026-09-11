@@ -340,3 +340,33 @@ def test_migration_export_preserves_redaction_change_classification() -> None:
 
     assert risk.ChangeClassification is RedactionChange
     assert risk.MigrationClassification is MigrationClassification
+
+
+@pytest.mark.parametrize(
+    ("before_config", "after_config"),
+    [
+        ({"default_action": "redact"}, {"default_action": "mask"}),
+        (
+            {"recall_floors": {"critical": 1.0}},
+            {"recall_floors": {"critical": 0.99}},
+        ),
+    ],
+)
+def test_versioned_policy_schema_weakening_requires_bound_acknowledgement(
+    before_config: dict[str, object], after_config: dict[str, object]
+) -> None:
+    from openmed.risk.policy_schema import PrivacyPolicy
+
+    before = PrivacyPolicy.from_mapping(before_config).to_dict()
+    after = PrivacyPolicy.from_mapping(after_config).to_dict()
+    report = compare_policy_versions(before, after)
+
+    assert report.classification == MigrationClassification.INCOMPATIBLE
+    assert report.requires_acknowledgement is True
+    with pytest.raises(PolicyMigrationAcknowledgementRequired):
+        check_policy_migration(before, after)
+    approved = check_policy_migration(
+        before, after, acknowledgement_token=report.acknowledgement_token
+    )
+    assert approved.approved is True
+    assert approved.after_digest == report.after_digest
