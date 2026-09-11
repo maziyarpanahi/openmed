@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded, counts-only audit-artifact retention planner with explicit
   disposition rules, deletion evidence, remaining-set verification, strict
   input fields, and fail-closed future timestamps (#2409).
+- Added deterministic counts-only trace privacy audit artifacts with canonical
+  policy and file hashes, immutable category counts, value-free JSON and
+  Markdown renderings, stable file fingerprinting, and private atomic writes
+  (#2302).
 - Added deterministic, PHI-free local release compute, cost, energy, and
   carbon tracking with orchestrator-linked stage timings, per-run and rolling
   budget verdicts, family/tier/workload breakdowns, optional advisory queue
@@ -47,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a fail-closed local dataset-upload privacy guard with block and
+  redact-to-staging modes, privacy-safe reports, and private atomic staging
+  files (#2297).
 - Added a reusable offline CI privacy scanner with explicit scan paths,
   non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
   report writes (#2299).
