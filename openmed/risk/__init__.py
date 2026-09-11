@@ -6,6 +6,23 @@ measurement, and adversarial re-identification analysis.
 
 from typing import Any
 
+from .access_review import (
+    ACCESS_MODES,
+    ACCESS_REVIEW_SCHEMA_VERSION,
+    EXPORT_ACCESS,
+    READ_ACCESS,
+    AccessModeReview,
+    AccessReviewError,
+    AccessReviewReport,
+    AccessReviewValidationError,
+    WorkflowAccessReview,
+    WorkflowRequirement,
+    access_review_report,
+    build_access_review_report,
+    render_access_review,
+    review_access,
+    review_structured_access,
+)
 from .aggregate_dp import (
     AggregateDPBudgetLedger,
     AggregateDPRelease,
@@ -325,6 +342,8 @@ def run_membership_inference_self_test(*args: Any, **kwargs: Any) -> Any:
 
 
 __all__ = [
+    "ACCESS_MODES",
+    "ACCESS_REVIEW_SCHEMA_VERSION",
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
     "AUDIT_RETENTION_FORMAT",
     "AUDIT_RETENTION_VERSION",
@@ -376,7 +395,9 @@ __all__ = [
     "DiversityClass",
     "DPMechanism",
     "EpsilonPolicy",
+    "EXPORT_ACCESS",
     "GenerationSpend",
+    "READ_ACCESS",
     "DifferentialPrivacy",
     "ColumnDistribution",
     "APPROVAL_ROLES",
@@ -454,6 +475,13 @@ __all__ = [
     "TabularProfile",
     "RISK_CATEGORIES",
     "AdvisoryFinding",
+    "AccessModeReview",
+    "AccessReviewError",
+    "AccessReviewReport",
+    "AccessReviewValidationError",
+    "WorkflowAccessReview",
+    "WorkflowRequirement",
+    "access_review_report",
     "TaxonomyFinding",
     "TaxonomyRule",
     "TaxonomyValidationResult",
@@ -468,6 +496,7 @@ __all__ = [
     "build_deletion_plan",
     "build_longitudinal_corpus",
     "build_dependency_risk_report",
+    "build_access_review_report",
     "bounded_membership_inference_self_test",
     "cross_modal_linkage_risk_report",
     "check_l_diversity",
@@ -506,6 +535,8 @@ __all__ = [
     "quasi_identifier_key",
     "quasi_identifier_key_bytes",
     "risk_report",
+    "review_access",
+    "review_structured_access",
     "run_membership_inference_self_test",
     "sample_synthetic_table",
     "select_fields",
@@ -548,6 +579,7 @@ __all__ = [
     "release_dataset_digest",
     "release_schema_digest",
     "render_release_assessment_dashboard",
+    "render_access_review",
     "render_risk_dashboard",
     "safe_risk_summary",
     "validate_released_output",
