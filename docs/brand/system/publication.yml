@@ -132,6 +132,7 @@ classification:
     - guides/streaming-traces.md
     - guides/trace-audit.md
     - reference/trace-fidelity.md
+    - guides/session-end-hook.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
@@ -167,6 +168,7 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - grounding.md
@@ -201,6 +203,7 @@ classification:
     - legacy-indic-encoding.md
     - profiling.md
     - core-observability.md
+    - operations/no-phi-telemetry.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
     - benchmarks/cost-vs-cloud.md
@@ -239,6 +242,7 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/privacy-corpus.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -259,9 +263,12 @@ classification:
     - api/compatibility-gate.md
     - guides/file-redaction.md
     - reidentification-risk.md
+    - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
+    - security/deletion-plans.md
     - sms-short-text-deid.md
     - anonymization.md
+    - guides/dataset-upload-guard.md
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
@@ -269,12 +276,21 @@ classification:
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
+    - security/pre-push-privacy.md
+    - security/trace-audit-artifact.md
+    - security/ci-privacy-scan.md
     - security/secret-detection.md
     - guides/in-place-redaction.md
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
+    - security/audit-retention.md
+    - security/redaction-diff.md
+    - security/policy-composition.md
     - security/evidence-integrity.md
     - security/key-management.md
+    - security/audit-key-rotation.md
+    - security/encrypted-surrogate-vault.md
+    - security/access-review.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
@@ -296,6 +312,7 @@ classification:
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
+    - integrations/omop-cohort-check.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
     - integrations/warehouse-remote-function.md
@@ -323,6 +340,7 @@ classification:
     - guides/fhir-omop-interoperability.md
     - interop/archive-safety.md
     - fhir-interop.md
+    - integrations/fhir-r5-fidelity.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
@@ -366,6 +384,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/license-inventory.md
     - security/exception-taxonomy.md
     - security/export-naming.md
     - security/disclosure-policy.md
@@ -380,7 +399,11 @@ classification:
     - security/hf-token-policy.md
     - security/supply-chain.md
     - security/path-portability.md
+    - security/tabular-risk-report.md
+    - security/privacy-budget.md
+    - security/deletion-verification.md
     - supply-chain/vulnerability-scanning.md
+    - security/dependency-risk.md
     - security/sbom.md
     - supply-chain/provenance.md
     - supply-chain/sbom.md
