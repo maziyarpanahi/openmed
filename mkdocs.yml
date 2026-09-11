@@ -321,6 +321,7 @@ nav:
       - Resource Path Portability Audit: security/path-portability.md
       - Tabular Re-identification Risk Report: security/tabular-risk-report.md
       - Aggregate Release Privacy Budgets: security/privacy-budget.md
+      - Sensitive Artifact Deletion Verification: security/deletion-verification.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Offline Dependency Risk Report: security/dependency-risk.md
       - Software Bill of Materials: security/sbom.md

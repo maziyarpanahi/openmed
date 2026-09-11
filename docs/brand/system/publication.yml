@@ -393,6 +393,7 @@ classification:
     - security/path-portability.md
     - security/tabular-risk-report.md
     - security/privacy-budget.md
+    - security/deletion-verification.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
     - security/sbom.md
