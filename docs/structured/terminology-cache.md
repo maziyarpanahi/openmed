@@ -1,15 +1,9 @@
 # Provenance-aware terminology cache
 
-`openmed.structured.terminology_cache` provides a small local cache for
-caller-supplied terminology responses. It is deterministic and does not make
-network requests, read environment configuration, or download vocabulary
-content.
+`openmed.structured.terminology_cache` caches caller-supplied responses locally,
+without network requests, environment configuration, or vocabulary downloads.
 
-## Store and retrieve a release-pinned response
-
-Use both the vocabulary identifier and the exact release identifier for every
-entry. The returned entry carries the source and SHA-256 fingerprints needed to
-audit which response was used:
+## Store and retrieve an exact release
 
 ```python
 from openmed.structured import TerminologyCache
@@ -21,63 +15,39 @@ entry = cache.put(
     {"codes": [{"code": "SYN-001", "display": "Synthetic finding"}]},
     source="local-fixture",
 )
-
 cached = cache.get("synthetic-vocabulary", "2026.01")
 assert cached is not None
 assert cached.response == entry.response
 assert cached.provenance.release == "2026.01"
-assert cached.provenance.source == "local-fixture"
 assert cached.provenance.fingerprint.startswith("sha256:")
 ```
 
-Responses are copied and canonicalized before storage. Mapping key order does
-not change the response fingerprint, and callers receive a detached copy from
-`entry.response`. Responses must be JSON-compatible and must not contain
-non-finite numbers. Cycles and structures nested beyond 64 containers are
-rejected with value-free errors.
+Responses are copied and canonicalized; mapping order does not affect their
+SHA-256 fingerprints. `entry.response` returns a detached copy. Inputs must be
+JSON-compatible: non-finite numbers, cycles, and nesting beyond 64 containers
+raise value-free errors.
 
-An exact vocabulary and release key is immutable while it remains cached.
-Repeating `put()` with identical response and source provenance is idempotent;
-trying to replace that key with different content or a different source raises
-`TerminologyProvenanceError`. Call `invalidate()` before an intentional
-replacement so the provenance transition is explicit.
+A cached vocabulary/release key is immutable. Repeating `put()` with identical
+content and source is idempotent. Changing either raises
+`TerminologyProvenanceError`; call `invalidate()` before intentional replacement.
 
 ## Refuse stale releases
 
-The cache never substitutes one release for another. If a vocabulary is cached
-under one release and a caller requests a different release, `get()` raises
-`StaleTerminologyError` instead of returning the older response. A source
-mismatch for an otherwise exact key raises `TerminologyProvenanceError`.
+Requesting a different release of a cached vocabulary raises
+`StaleTerminologyError`. An exact key with a mismatched source raises
+`TerminologyProvenanceError`. Load the requested release explicitly; the cache
+never substitutes an older response.
 
-```python
-from openmed.structured.terminology_cache import (
-    StaleTerminologyError,
-    TerminologyCache,
-)
-
-try:
-    cache.get("synthetic-vocabulary", "2026.02")
-except StaleTerminologyError:
-    # Load the caller's 2026.02 response explicitly, then call cache.put().
-    pass
-```
-
-`get_or_compute()` accepts a caller-owned computation for a cache miss. It does
-not run that computation for an exact hit and does not run it after a stale
-release is detected. Any network access required to obtain a response remains
-an explicit caller concern; the cache itself is local-only.
+`get_or_compute()` calls the supplied computation only on a cache miss, never
+on an exact hit or after detecting a stale release. Any network retrieval is
+the caller's responsibility.
 
 ## Privacy-safe metadata
 
-`TerminologyCacheEntry.to_dict()` and `TerminologyCache.report()` contain only
-cache keys, source identifiers, schema values, and fingerprints. They omit the
-terminology response by default, so they can be used for logs and audit
-metadata without copying response contents. Use `entry.response` only at the
-explicit terminology operation that needs the caller-supplied data. Source
-identifiers should be stable non-sensitive labels, never patient identifiers
-or note text.
+`TerminologyCacheEntry.to_dict()` and `TerminologyCache.report()` omit response
+contents by default. They expose keys, source identifiers, schema values, and
+fingerprints for auditing. Use stable, non-sensitive source labels; never use
+patient identifiers or note text. Access `entry.response` only where needed.
 
-The cache contains no bundled restricted vocabulary, credentials, or clinical
-decision logic. It provides provenance and reuse only; callers remain
-responsible for licensing, validation, and qualified review of terminology
-content.
+No restricted vocabulary, credentials, or clinical decision logic is bundled.
+Callers remain responsible for licensing, validation, and qualified review.
