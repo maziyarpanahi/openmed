@@ -268,6 +268,7 @@ classification:
     - security/deletion-plans.md
     - security/surrogate-audit.md
     - security/redaction-idempotence.md
+    - security/evidence-replay.md
     - sms-short-text-deid.md
     - anonymization.md
     - guides/dataset-upload-guard.md

@@ -194,6 +194,7 @@ nav:
       - Deletion Impact Plans: security/deletion-plans.md
       - Surrogate-map Referential-integrity Audit: security/surrogate-audit.md
       - Nested Redaction Idempotence: security/redaction-idempotence.md
+      - Privacy Evidence Replay: security/evidence-replay.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - Dataset Upload Privacy Guard: guides/dataset-upload-guard.md
