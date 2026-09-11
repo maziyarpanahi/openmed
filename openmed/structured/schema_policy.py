@@ -196,7 +196,9 @@ class SchemaPolicy:
         }:
             return True
         if any(
-            _path_matches(pattern, normalized) for pattern in self.identifier_fields
+            _path_matches(pattern, candidate)
+            for pattern in self.identifier_fields
+            for candidate in _path_ancestors(normalized)
         ):
             return True
         return _looks_like_identifier_path(normalized)

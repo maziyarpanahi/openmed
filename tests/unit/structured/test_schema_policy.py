@@ -326,6 +326,26 @@ def test_camel_case_identifier_is_inferred_and_suppressed():
     )
 
 
+def test_declared_identifier_container_suppresses_uncovered_descendants():
+    policy = {
+        "schema_version": 1,
+        "name": "synthetic-container-policy",
+        "schema": "fhir",
+        "fields": {"Patient.resourceType": "keep"},
+        "identifier_fields": ["Patient.custom"],
+    }
+    patient = {
+        "resourceType": "Patient",
+        "custom": {"value": "synthetic-private-value", "alternates": [123456789]},
+    }
+
+    findings = lint_schema_policy(patient, policy)
+    assert all(finding.code == "uncovered-identifier" for finding in findings)
+    assert len(findings) == 2
+    transformed = apply_schema_policy(patient, policy)
+    assert transformed == {"resourceType": "Patient", "custom": {"alternates": []}}
+
+
 @pytest.mark.parametrize(
     "payload",
     [
