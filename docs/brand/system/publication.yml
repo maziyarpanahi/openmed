@@ -267,6 +267,7 @@ classification:
     - privacy/structured-risk-lab.md
     - security/deletion-plans.md
     - security/surrogate-audit.md
+    - security/redaction-idempotence.md
     - sms-short-text-deid.md
     - anonymization.md
     - guides/dataset-upload-guard.md
