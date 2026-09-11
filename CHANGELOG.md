@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic counts-only trace privacy audit artifacts with canonical
+  policy and file hashes, immutable category counts, value-free JSON and
+  Markdown renderings, stable file fingerprinting, and private atomic writes
+  (#2302).
 - Added deterministic, PHI-free local release compute, cost, energy, and
   carbon tracking with orchestrator-linked stage timings, per-run and rolling
   budget verdicts, family/tier/workload breakdowns, optional advisory queue

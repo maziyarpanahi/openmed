@@ -1,5 +1,20 @@
-"""Explicit local guards for data egress and upload call sites."""
+"""Local privacy guards and counts-only audit artifacts."""
 
+from .audit import (
+    ARTIFACT_NAME,
+    SCHEMA_VERSION,
+    TraceAudit,
+    TraceAuditArtifact,
+    TraceAuditError,
+    TracePrivacyAudit,
+    build_trace_audit,
+    count_categories,
+    fingerprint_file,
+    hash_bytes,
+    hash_policy,
+    render_trace_audit_json,
+    render_trace_audit_markdown,
+)
 from .dataset import (
     BLOCK_ONLY_MODE,
     DEFAULT_MODE,
@@ -20,6 +35,19 @@ from .dataset import (
 )
 
 __all__ = [
+    "ARTIFACT_NAME",
+    "SCHEMA_VERSION",
+    "TraceAudit",
+    "TraceAuditArtifact",
+    "TraceAuditError",
+    "TracePrivacyAudit",
+    "build_trace_audit",
+    "count_categories",
+    "fingerprint_file",
+    "hash_bytes",
+    "hash_policy",
+    "render_trace_audit_json",
+    "render_trace_audit_markdown",
     "BLOCK_ONLY_MODE",
     "DEFAULT_MODE",
     "REDACT_TO_STAGING_MODE",
