@@ -199,6 +199,7 @@ nav:
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md
       - CI Privacy Scan: security/ci-privacy-scan.md
       - Secret Token Detection: security/secret-detection.md
