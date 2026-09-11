@@ -12,9 +12,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an immutable, provenance-aware local terminology cache keyed by exact
   vocabulary releases, with deterministic response fingerprints, stale-release
   refusal, response-free reports, and bounded value-free validation (#2400).
+- Added an in-memory no-PHI telemetry exporter with closed counter families,
+  bounded dimensions and totals, atomic event validation, exception-type-only
+  categorization, deterministic JSON and Prometheus rendering, and no
+  mandatory network transport (#2414).
+- Added a bounded, deterministic tabular re-identification risk report with
+  aggregate-only JSON and Markdown renderers, immutable report state,
+  fail-closed consistency checks, and locally derived threshold outcomes
+  (#2411).
+- Added a deterministic local pre-push privacy scanner that checks every new
+  commit blob for direct identifiers, secrets, and sensitive structured fields;
+  emits value-free reports; supports narrowly versioned synthetic-fixture
+  allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a bounded, thread-safe privacy budget ledger for named aggregate
+  release contexts with atomic epsilon/delta charging, counts-only evidence,
+  immutable configuration views, and value-free failures (#2410).
+- Added caller-owned HMAC-SHA256 audit-report key rotation with bounded key
+  material, key-ID based current and retained-key verification, canonical
+  mapping checks, fail-closed provider handling, and value-free failures
+  (#2408).
+- Added a bounded, deterministic minimum-necessary structured field selector
+  with caller-declared purpose mappings, policy allowlists and denylists,
+  fail-closed unknown declarations, value-free decision explanations, and
+  projection restricted to selector-approved fields (#2412).
+- Added a bounded, counts-only audit-artifact retention planner with explicit
+  disposition rules, deletion evidence, remaining-set verification, strict
+  input fields, and fail-closed future timestamps (#2409).
+- Added a deterministic, offline CycloneDX 1.6 evidence generator for the base
+  runtime dependency closure, with source and manifest hashes, bounded local
+  inputs, atomic output, and no embedded URLs or build paths (#2416).
+- Added a deterministic offline dependency risk report that correlates local
+  locked versions with caller-supplied advisory snapshots, emits bounded
+  value-free risk summaries, and performs no package-manager or network calls
+  (#2417).
+- Added deterministic counts-only trace privacy audit artifacts with canonical
+  policy and file hashes, immutable category counts, value-free JSON and
+  Markdown renderings, stable file fingerprinting, and private atomic writes
+  (#2302).
+- Added deterministic, PHI-free local release compute, cost, energy, and
+  carbon tracking with orchestrator-linked stage timings, per-run and rolling
+  budget verdicts, family/tier/workload breakdowns, optional advisory queue
+  throttling, and hash-verified ledger replay (#1244).
+- Added a bounded, deterministic nested-resource redaction contract with
+  explicit scalar paths and actions, stable arrays and identifiers, closed
+  policy validation, and raw-value-free reports and failures (#2413).
 - Added declarative field-level FHIR and OMOP de-identification policies with
   fail-closed identifier handling, patient-consistent date shifting, schema
   linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
+- Added bounded local deletion verification for fingerprinted sensitive
+  artifacts, with symlink, alias, and hard-link refusal, independent recovery
+  copies, commit-stage rollback, and counts-only evidence (#2418).
+
+- Added a bounded, manifest-driven deletion impact planner with deterministic
+  counts-only reports, reverse-dependency analysis, ownership checks, and
+  explicit plan-bound confirmation before injected local execution (#2529).
+- Added a deterministic, offline OMOP cohort export validator for key,
+  relationship, vocabulary, and NOTE/NOTE_NLP provenance invariants, with
+  aggregate counts and content-derived row fingerprints instead of source
+  values (#2402).
+- Added a bounded, deterministic FHIR R5 Bundle round-trip fidelity diff with
+  stable entry matching, explicit serializer-difference declarations, and
+  value-free reports containing structural paths, types, and SHA-256 digests
+  (#2401).
+- Added bounded, deterministic structured access reviews that compare workflow
+  read and export declarations with resource schemas and deny policies while
+  keeping schema values out of JSON, Markdown, and validation failures (#2419).
+- Added bounded, policy-aware diffs for aggregate redaction summaries, with
+  closed value-free inputs, deterministic policy fingerprints, and structured
+  action, category, and count changes (#2426).
+- Added bounded privacy-policy composition with explicit scope-overrides,
+  deterministic scope precedence and inheritance, and validated value-free
+  decision traces (#2522).
+- Added a bounded, metadata-only synthetic privacy regression corpus manifest
+  with deterministic fixture hashes, policy and severity coverage validation,
+  immutable invariants, and atomic local persistence (#2420).
+- Added a bounded, local evidence-bundle integrity verifier with file and
+  manifest hashes, policy and provenance checks, and value-free reports
+  (#2427).
+- Added a bounded tabular schema-drift privacy gate with counts-only evidence,
+  conservative stable-ID matching, and release blocking for unsafe role or
+  structural drift (#2524).
+- Added a bounded, deterministic referential-integrity auditor for surrogate
+  maps with cardinality, collision, orphan, and cross-table consistency checks,
+  closed input schemas, and counts-only value-free reports (#2538).
+- Added a bounded, deterministic nested structured-redaction idempotence checker
+  for comparing shape, action, surrogate, policy, and count evidence across
+  synthetic FHIR- and OMOP-shaped passes without retaining protected values
+  (#2523).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
@@ -40,6 +124,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a local session-end hook that transactionally scrubs completed JSON and
+  JSONL traces with value-free failure reports and concurrent-change checks
+  (#2300).
+- Added deterministic authenticated encryption for reversible surrogate
+  mappings, with caller-owned keys, owner-only atomic persistence, and
+  value-free failures (#2293).
+- Added a fail-closed local dataset-upload privacy guard with block and
+  redact-to-staging modes, privacy-safe reports, and private atomic staging
+  files (#2297).
+- Added a reusable offline CI privacy scanner with explicit scan paths,
+  non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
+  report writes (#2299).
 - Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
   DOM-based search-suggestion XSS tracked as CVE-2026-73295.
 
