@@ -56,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added declarative field-level FHIR and OMOP de-identification policies with
   fail-closed identifier handling, patient-consistent date shifting, schema
   linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
+- Added a deterministic, local key-custody metadata validator for synthetic
+  signing and surrogate workflows, with lifecycle transition checks,
+  purpose/algorithm compatibility, digest-only reports, and fail-closed
+  rejection of bytes, secret-like, or unknown fields (#2648).
 - Added bounded local deletion verification for fingerprinted sensitive
   artifacts, with symlink, alias, and hard-link refusal, independent recovery
   copies, commit-stage rollback, and counts-only evidence (#2418).

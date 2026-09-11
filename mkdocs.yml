@@ -217,6 +217,7 @@ nav:
       - Evidence-bundle Integrity: security/evidence-integrity.md
       - Tabular Schema Drift Gates: security/tabular-schema-gates.md
       - Key Management and Rotation: security/key-management.md
+      - Key Custody Metadata: security/key-custody-metadata.md
       - Audit-report Signing Key Rotation: security/audit-key-rotation.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
       - Structured Access Review: security/access-review.md
