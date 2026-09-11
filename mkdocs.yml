@@ -203,6 +203,7 @@ nav:
       - In-place Trace Redaction: guides/in-place-redaction.md
       - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
+      - Audit-artifact Retention: security/audit-retention.md
       - Key Management and Rotation: security/key-management.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
@@ -299,6 +300,7 @@ nav:
       - Local Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
+      - Dependency License Inventory: security/license-inventory.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
@@ -314,6 +316,7 @@ nav:
       - Supply Chain Controls: security/supply-chain.md
       - Resource Path Portability Audit: security/path-portability.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
+      - Offline Dependency Risk Report: security/dependency-risk.md
       - Software Bill of Materials: security/sbom.md
       - SLSA Build Provenance: supply-chain/provenance.md
       - Container Image SBOM: supply-chain/sbom.md
