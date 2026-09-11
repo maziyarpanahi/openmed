@@ -262,3 +262,22 @@ def test_medmentions_top1_report_enforces_floor_without_bundling_corpus(
     assert report.metrics["passed"] is True
     assert report.metadata["corpus_bundled"] is False
     assert report.metadata["restricted_vocabulary_bundled"] is False
+
+
+@pytest.mark.parametrize(
+    "payload", [b'{"resourceType":"OperationOutcome","issue":1}', b"\xff"]
+)
+def test_malformed_validator_output_fails_closed(
+    tmp_path, monkeypatch, payload
+) -> None:
+    jar = tmp_path / "validator.jar"
+    jar.write_bytes(b"synthetic")
+
+    def fake_run(command, **kwargs):
+        Path(command[command.index("-output") + 1]).write_bytes(payload)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+    result = grounding_export_suite.validate_with_hl7_validator({}, validator_jar=jar)
+    assert result.errors == 1
+    assert result.failure_reason == "validator_output_invalid"

@@ -327,7 +327,10 @@ def validate_with_hl7_validator(
             return _validator_failure("validator_timeout", executed=True)
         except OSError:
             return _validator_failure("validator_process_error", executed=False)
-        output_text = output.read_text(encoding="utf-8") if output.exists() else ""
+        try:
+            output_text = output.read_text(encoding="utf-8") if output.exists() else ""
+        except (OSError, UnicodeError):
+            return _validator_failure("validator_output_invalid", executed=True)
         severities = _operation_outcome_severities(output_text)
         failure_reason = None
         if severities is None:
@@ -404,7 +407,7 @@ def _operation_outcome_severities(payload: str) -> Counter[str] | None:
         return None
     try:
         outcome = json.loads(payload)
-    except json.JSONDecodeError:
+    except (ValueError, RecursionError):
         return None
     if (
         not isinstance(outcome, Mapping)
@@ -444,10 +447,10 @@ def _validator_output_hash(
     issue_codes: Counter[str] = Counter()
     try:
         outcome = json.loads(payload)
-    except json.JSONDecodeError:
+    except (ValueError, RecursionError):
         outcome = None
-    if isinstance(outcome, Mapping):
-        for issue in outcome.get("issue") or ():
+    if isinstance(outcome, Mapping) and isinstance(outcome.get("issue"), list):
+        for issue in outcome["issue"]:
             if not isinstance(issue, Mapping):
                 continue
             severity = str(issue.get("severity") or "unknown").casefold()
