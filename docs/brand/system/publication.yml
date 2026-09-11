@@ -167,6 +167,7 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
     - grounding.md
@@ -270,6 +271,7 @@ classification:
     - india-health-id-deidentification.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
+    - security/ci-privacy-scan.md
     - security/secret-detection.md
     - guides/in-place-redaction.md
     - privacy/trace-recovery.md

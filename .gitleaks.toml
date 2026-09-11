@@ -61,3 +61,11 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''tests/unit/guard/test_dataset\.py$''']
 regexes = ['''SYNTHETIC_(TOKEN|MARKER) = "SYNTHETIC_SUBJECT_001"''']
+
+[[allowlists]]
+targetRules = ["aws-access-token"]
+description = "Synthetic AWS-shaped credential in the privacy scanner unit test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/test_privacy_scan_action\.py$''']
+regexes = ['''key: AKIA(?:ABCDEFGHIJKLMNOP)''']
