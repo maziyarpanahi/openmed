@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, deterministic tabular re-identification risk report with
+  aggregate-only JSON and Markdown renderers, immutable report state,
+  fail-closed consistency checks, and locally derived threshold outcomes
+  (#2411).
 - Added a deterministic local pre-push privacy scanner that checks every new
   commit blob for direct identifiers, secrets, and sensitive structured fields;
   emits value-free reports; supports narrowly versioned synthetic-fixture

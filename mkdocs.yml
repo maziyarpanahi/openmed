@@ -318,6 +318,7 @@ nav:
       - Manual HF Model Publication: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Resource Path Portability Audit: security/path-portability.md
+      - Tabular Re-identification Risk Report: security/tabular-risk-report.md
       - Aggregate Release Privacy Budgets: security/privacy-budget.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Offline Dependency Risk Report: security/dependency-risk.md

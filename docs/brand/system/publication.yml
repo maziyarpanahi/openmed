@@ -390,6 +390,7 @@ classification:
     - security/hf-token-policy.md
     - security/supply-chain.md
     - security/path-portability.md
+    - security/tabular-risk-report.md
     - security/privacy-budget.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
