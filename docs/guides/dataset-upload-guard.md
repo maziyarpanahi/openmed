@@ -37,6 +37,12 @@ else:
 `"block"` is accepted as a short alias. A blocked call raises
 `DatasetUploadBlockedError`; the wrapped upload function is never called.
 
+Immediately before invoking the uploader, block mode rereads the selected files
+and rejects any whose bytes changed during scanning. The caller must keep source
+files stable until the upload callable finishes reading them; this path-based
+wrapper cannot make a later read by an arbitrary upload client atomic. Likewise,
+keep a staging directory under exclusive caller control through a staged upload.
+
 ## Redact to a staging directory
 
 Redaction mode writes new UTF-8 files under the configured staging directory,

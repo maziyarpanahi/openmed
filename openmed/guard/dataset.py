@@ -351,6 +351,15 @@ class DatasetUploadGuard:
                 ) from None
             report = replace(report, staged_file_ids=report.file_ids)
 
+        if self.mode == BLOCK_ONLY_MODE:
+            for scan in scans:
+                try:
+                    unchanged = scan.path.read_bytes() == scan.data
+                except OSError:
+                    unchanged = False
+                if not unchanged:
+                    raise DatasetGuardError("dataset file changed before upload")
+
         try:
             upload_result = self._upload(
                 tuple(upload_paths), *upload_args, **upload_kwargs

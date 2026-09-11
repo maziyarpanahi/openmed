@@ -241,3 +241,26 @@ def test_overlapping_custom_findings_fail_closed(tmp_path: Path) -> None:
 
     with pytest.raises(DatasetGuardError, match="overlapping findings"):
         scan_dataset_files(source, scanner=scanner)
+
+
+def test_block_mode_rechecks_scanned_bytes_before_invoking_upload(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first.csv"
+    second = tmp_path / "second.csv"
+    first.write_text("synthetic-clean-first")
+    second.write_text("synthetic-clean-second")
+    uploaded = []
+
+    def scanner(text: str):
+        if text == "synthetic-clean-second":
+            first.write_text(SYNTHETIC_EMAIL)
+        return ()
+
+    guard = DatasetUploadGuard(uploaded.append, scanner=scanner)
+    with pytest.raises(DatasetGuardError, match="changed before upload") as error:
+        guard((first, second))
+
+    assert uploaded == []
+    assert SYNTHETIC_EMAIL not in str(error.value)
+    assert str(first) not in str(error.value)
