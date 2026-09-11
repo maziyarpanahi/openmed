@@ -181,12 +181,14 @@ from .policy_simulation import (
     PolicySimulationRow,
     PolicySimulationScenario,
     PolicySimulationSchemaError,
-    PolicyVersion,
     build_policy_simulation_matrix,
     render_policy_matrix,
     render_policy_simulation_matrix,
     run_policy_simulation,
     simulate_policy_matrix,
+)
+from .policy_simulation import (
+    PolicyVersion as PolicySimulationVersion,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .qi_profiler import (
@@ -298,7 +300,7 @@ __all__ = [
     "PolicySimulationRow",
     "PolicySimulationScenario",
     "PolicySimulationSchemaError",
-    "PolicyVersion",
+    "PolicySimulationVersion",
     "DPGenerationBudgetAccountant",
     "DPSurrogateBudget",
     "DPSurrogateBudgetExceeded",

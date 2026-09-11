@@ -8,11 +8,13 @@ import socket
 
 import pytest
 
-from openmed.risk.policy_simulation import (
+from openmed.risk import (
     PolicySimulationSchemaError,
-    PolicyVersion,
     render_policy_simulation_matrix,
     simulate_policy_matrix,
+)
+from openmed.risk import (
+    PolicySimulationVersion as PolicyVersion,
 )
 
 
@@ -213,7 +215,7 @@ def test_policy_class_actions_apply_to_canonical_labels() -> None:
 def test_invalid_policy_file_traceback_does_not_include_source(tmp_path) -> None:
     import traceback
 
-    from openmed.risk.policy_simulation import (
+    from openmed.risk import (
         PolicySimulationSchemaError,
         simulate_policy_matrix,
     )

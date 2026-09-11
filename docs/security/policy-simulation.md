@@ -72,3 +72,6 @@ budget. Resource classes and gate names are categories, not source values;
 keep them free of patient text and identifiers. Do not place raw PHI,
 credentials, restricted datasets, or payload-bearing fields in scenarios or
 committed fixtures.
+
+The root `openmed.risk` namespace exports the policy description as
+`PolicySimulationVersion`. The defining module also retains its local `PolicyVersion` name.
