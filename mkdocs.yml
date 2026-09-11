@@ -206,6 +206,7 @@ nav:
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Audit-artifact Retention: security/audit-retention.md
       - Key Management and Rotation: security/key-management.md
+      - Audit-report Signing Key Rotation: security/audit-key-rotation.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
@@ -316,6 +317,7 @@ nav:
       - Manual HF Model Publication: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Resource Path Portability Audit: security/path-portability.md
+      - Aggregate Release Privacy Budgets: security/privacy-budget.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Offline Dependency Risk Report: security/dependency-risk.md
       - Software Bill of Materials: security/sbom.md

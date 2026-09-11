@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, thread-safe privacy budget ledger for named aggregate
+  release contexts with atomic epsilon/delta charging, counts-only evidence,
+  immutable configuration views, and value-free failures (#2410).
+- Added caller-owned HMAC-SHA256 audit-report key rotation with bounded key
+  material, key-ID based current and retained-key verification, canonical
+  mapping checks, fail-closed provider handling, and value-free failures
+  (#2408).
 - Added a bounded, deterministic minimum-necessary structured field selector
   with caller-declared purpose mappings, policy allowlists and denylists,
   fail-closed unknown declarations, value-free decision explanations, and
