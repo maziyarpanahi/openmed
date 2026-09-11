@@ -69,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a local session-end hook that transactionally scrubs completed JSON and
+  JSONL traces with value-free failure reports and concurrent-change checks
+  (#2300).
 - Added deterministic authenticated encryption for reversible surrogate
   mappings, with caller-owned keys, owner-only atomic persistence, and
   value-free failures (#2293).

@@ -132,6 +132,7 @@ classification:
     - guides/streaming-traces.md
     - guides/trace-audit.md
     - reference/trace-fidelity.md
+    - guides/session-end-hook.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md

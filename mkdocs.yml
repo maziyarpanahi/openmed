@@ -57,6 +57,7 @@ nav:
       - Streaming Trace Redaction: guides/streaming-traces.md
       - Read-only Trace Scan Report: guides/trace-audit.md
       - Trace Replay Fidelity: reference/trace-fidelity.md
+      - Session-end Trace Scrub Hook: guides/session-end-hook.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
