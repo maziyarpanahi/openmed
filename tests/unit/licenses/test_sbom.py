@@ -375,3 +375,10 @@ def test_malformed_requirement_fails_without_echoing_the_value() -> None:
     with pytest.raises(sbom.SbomError) as error:
         sbom._parse_dependency_name(marker)
     assert marker not in str(error.value)
+
+
+@pytest.mark.parametrize("expression", ["(MIT)", "((Apache-2.0))"])
+def test_parenthesized_single_license_emits_a_license_id(expression: str) -> None:
+    assert sbom._license_value(expression) == [
+        {"license": {"id": expression.strip("()")}}
+    ]

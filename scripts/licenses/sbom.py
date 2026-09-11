@@ -333,7 +333,7 @@ def _license_value(value: object) -> list[dict[str, Any]]:
         return _unknown_license()
     if any(operator in tokens for operator in _SPDX_OPERATORS):
         return [{"expression": candidate}]
-    return [{"license": {"id": candidate}}]
+    return [{"license": {"id": next(iter(license_ids))}}]
 
 
 def _valid_spdx_expression(value: str) -> bool:
