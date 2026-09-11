@@ -53,3 +53,11 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''docs/website/index\.html$''']
 regexes = ['''data-cf-beacon=.*"token": "[0-9a-f]{32}"''']
+
+[[allowlists]]
+targetRules = ["aws-access-token"]
+description = "Synthetic AWS-shaped credential in the privacy scanner unit test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/test_privacy_scan_action\.py$''']
+regexes = ['''key: AKIA(?:ABCDEFGHIJKLMNOP)''']
