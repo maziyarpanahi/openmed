@@ -97,6 +97,14 @@ def test_local_file_fingerprint_never_serializes_file_content(tmp_path):
     assert fingerprint_file(source) == artifact.file_fingerprints[0]
 
 
+def test_fingerprint_preserves_raw_newlines_and_end_of_file_bytes(tmp_path):
+    payload = b"synthetic-first\r\nsynthetic-second\x1asynthetic-tail\r\n"
+    source = tmp_path / "trace.bin"
+    source.write_bytes(payload)
+
+    assert fingerprint_file(source) == f"sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
 def test_invalid_inputs_fail_without_echoing_values(tmp_path):
     sensitive_name = "SYNTHETIC-SENSITIVE-PATH-VALUE"
     missing = tmp_path / sensitive_name

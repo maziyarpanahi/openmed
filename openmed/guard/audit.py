@@ -73,6 +73,7 @@ def fingerprint_file(path: str | Path) -> str:
         if not stat.S_ISREG(path_stat.st_mode):
             raise TraceAuditError("unable to fingerprint trace file")
         flags = os.O_RDONLY
+        flags |= getattr(os, "O_BINARY", 0)
         flags |= getattr(os, "O_CLOEXEC", 0)
         flags |= getattr(os, "O_NOFOLLOW", 0)
         descriptor = os.open(candidate, flags)
