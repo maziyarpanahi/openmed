@@ -44,6 +44,9 @@ does not itself emit an aggregate, persist files, or contact a service.
 Checking and charging are protected by one local lock, so concurrent callers
 cannot individually pass a stale check and collectively exceed the context
 ceiling. `check` remains advisory; `record_release` is the atomic gate.
+Even the smallest positive floating-point spend is charged; adding a tiny spend
+to an exhausted ceiling cannot round it away. Rejected projections that would
+round back to the ceiling are reported conservatively above that ceiling.
 
 ## Boundaries
 

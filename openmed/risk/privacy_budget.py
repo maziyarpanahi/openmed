@@ -25,6 +25,9 @@ MAX_PRIVACY_BUDGET_SPENDS: Final = 10_000
 MAX_PRIVACY_BUDGET_EPSILON: Final = 1_000_000.0
 
 _MAX_COUNT: Final = (1 << 63) - 1
+# Preserve decimal representations across the complete binary64 exponent range,
+# including subnormal spends added to the bounded million-unit ceiling.
+_ACCOUNTING_PRECISION: Final = 400
 _SAFE_CONTEXT_RE: Final = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
 _PHI_PATTERNS: Final = (
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
@@ -469,7 +472,7 @@ class PrivacyBudgetLedger:
             )
             current_epsilon, current_delta = self._totals[key]
             with localcontext() as context_decimal:
-                context_decimal.prec = 64
+                context_decimal.prec = _ACCOUNTING_PRECISION
                 self._totals[key] = (
                     current_epsilon + _decimal(requested_epsilon),
                     current_delta + _decimal(requested_delta),
@@ -579,13 +582,19 @@ class PrivacyBudgetLedger:
             raise KeyError("no privacy budget registered for release context") from None
         current_epsilon, current_delta = self._totals[context]
         with localcontext() as context_decimal:
-            context_decimal.prec = 64
+            context_decimal.prec = _ACCOUNTING_PRECISION
             projected_epsilon_decimal = current_epsilon + _decimal(epsilon)
             projected_delta_decimal = current_delta + _decimal(delta)
         epsilon_ok = projected_epsilon_decimal <= _decimal(budget.epsilon)
         delta_ok = projected_delta_decimal <= _decimal(budget.delta)
         projected_epsilon = float(projected_epsilon_decimal)
         projected_delta = float(projected_delta_decimal)
+        # An exact excess can round back to the float ceiling. Report the next
+        # representable value so the public decision preserves the rejection.
+        if not epsilon_ok and projected_epsilon <= budget.epsilon:
+            projected_epsilon = math.nextafter(budget.epsilon, math.inf)
+        if not delta_ok and projected_delta <= budget.delta:
+            projected_delta = math.nextafter(budget.delta, math.inf)
         allowed = epsilon_ok and delta_ok
         return PrivacyBudgetDecision(
             allowed=allowed,
