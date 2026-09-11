@@ -357,8 +357,8 @@ def _parse_budget_as_of(value: datetime | str | None) -> datetime:
     else:
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise ValueError(f"Invalid budget as_of timestamp: {value!r}") from exc
+        except ValueError:
+            raise ValueError("Invalid budget as_of timestamp") from None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)

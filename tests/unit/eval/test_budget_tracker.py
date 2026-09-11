@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,6 +41,25 @@ FACTORS = CostCarbonFactors(
     runner_power_kw=0.1,
     carbon_intensity_kg_per_kwh=0.4,
 )
+
+
+def test_invalid_budget_field_names_are_not_echoed() -> None:
+    with pytest.raises(BudgetTrackingError) as error:
+        CostCarbonFactors.from_mapping({"synthetic-sensitive-field": 1})
+    assert "synthetic-sensitive-field" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "operation", [rolling_weekly_totals, compute_fleet_budget_metrics]
+)
+def test_invalid_budget_timestamps_do_not_leak_through_exception_causes(operation):
+    sensitive = "synthetic-sensitive-timestamp"
+    with pytest.raises(ValueError) as error:
+        operation((), as_of=sensitive)
+    assert sensitive not in str(error.value)
+    assert sensitive not in "".join(traceback.format_exception_only(error.value))
+    assert error.value.__suppress_context__
+    assert error.value.__cause__ is None
 
 
 def _threshold(cost: float) -> BudgetThresholds:

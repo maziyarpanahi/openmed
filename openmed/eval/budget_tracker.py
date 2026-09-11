@@ -91,9 +91,9 @@ def _reject_unknown_fields(
 ) -> None:
     if not isinstance(value, Mapping):
         raise BudgetTrackingError(f"{label} must be an object")
-    unknown = sorted(set(value) - allowed)
+    unknown = set(value) - allowed
     if unknown:
-        raise BudgetTrackingError(f"{label} contains unsupported fields: {unknown}")
+        raise BudgetTrackingError(f"{label} contains unsupported fields")
 
 
 def _positive_integer(value: Any, field: str) -> int:
@@ -137,8 +137,8 @@ def _utc_datetime(value: datetime | str | None) -> datetime:
     elif isinstance(value, str):
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise BudgetTrackingError("timestamp must be ISO-8601") from exc
+        except ValueError:
+            raise BudgetTrackingError("timestamp must be ISO-8601") from None
     else:
         raise BudgetTrackingError("timestamp must be ISO-8601")
     if parsed.tzinfo is None:
