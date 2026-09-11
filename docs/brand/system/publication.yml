@@ -203,6 +203,7 @@ classification:
     - legacy-indic-encoding.md
     - profiling.md
     - core-observability.md
+    - operations/no-phi-telemetry.md
     - benchmarks/low-resource.md
     - benchmarks/i18n-throughput.md
     - benchmarks/cost-vs-cloud.md
@@ -391,6 +392,7 @@ classification:
     - security/hf-token-policy.md
     - security/supply-chain.md
     - security/path-portability.md
+    - security/tabular-risk-report.md
     - security/privacy-budget.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
