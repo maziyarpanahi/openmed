@@ -86,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a bounded, local evidence-bundle integrity verifier with file and
   manifest hashes, policy and provenance checks, and value-free reports
   (#2427).
+- Added a bounded tabular schema-drift privacy gate with counts-only evidence,
+  conservative stable-ID matching, and release blocking for unsafe role or
+  structural drift (#2524).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

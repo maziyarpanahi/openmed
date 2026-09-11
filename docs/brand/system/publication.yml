@@ -287,6 +287,7 @@ classification:
     - security/redaction-diff.md
     - security/policy-composition.md
     - security/evidence-integrity.md
+    - security/tabular-schema-gates.md
     - security/key-management.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
