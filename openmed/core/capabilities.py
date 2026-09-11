@@ -162,6 +162,13 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
         description="Presidio RecognizerResult interoperability",
         install="presidio-analyzer",
     ),
+    "medspacy": BackendSpec(
+        name="medspacy",
+        extra="medspacy",
+        modules=("medspacy", "spacy"),
+        description="medspaCy ConText assertion interoperability",
+        install="medspacy",
+    ),
     "philter": BackendSpec(
         name="philter",
         extra="philter",
