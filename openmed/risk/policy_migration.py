@@ -1360,7 +1360,11 @@ def _is_action_path(path: tuple[str, ...]) -> bool:
 
 
 def _is_metadata_path(path: tuple[str, ...]) -> bool:
-    return any(segment.lower() in _METADATA_KEYS for segment in path)
+    # A detector label such as NAME must not turn its rule configuration into
+    # metadata. Unknown changes inside protection rules always fail closed.
+    return not _is_protection_path(path) and any(
+        segment.lower() in _METADATA_KEYS for segment in path
+    )
 
 
 def _is_protection_path(path: tuple[str, ...]) -> bool:

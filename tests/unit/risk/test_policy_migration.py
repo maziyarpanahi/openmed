@@ -138,6 +138,20 @@ def test_unknown_rule_values_are_reported_without_raw_values() -> None:
     assert "synthetic-pattern-b" not in serialized
 
 
+@pytest.mark.parametrize("label", ["NAME", "name", "EMAIL"])
+def test_rule_metadata_names_cannot_bypass_acknowledgement(label: str) -> None:
+    before = {"rules": {label: {"pattern": "synthetic-pattern-a"}}}
+    after = {"rules": {label: {"pattern": "synthetic-pattern-b"}}}
+
+    report = compare_policy_versions(before, after)
+
+    assert report.classification is MigrationClassification.INCOMPATIBLE
+    assert report.requires_acknowledgement
+    with pytest.raises(PolicyMigrationAcknowledgementRequired):
+        check_policy_migration(before, after)
+    assert "synthetic-pattern" not in report.to_json()
+
+
 @pytest.mark.parametrize("key", ["schema_version", "version"])
 def test_schema_version_changes_fail_closed(key: str) -> None:
     before = _policy()
