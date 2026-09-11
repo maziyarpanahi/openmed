@@ -333,6 +333,7 @@ classification:
     - guides/fhir-omop-interoperability.md
     - interop/archive-safety.md
     - fhir-interop.md
+    - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
