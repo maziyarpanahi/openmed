@@ -9,6 +9,18 @@ from .audit_chain import (
     append_to_chain_file,
     verify_chain,
 )
+from .audit_key_rotation import (
+    MAX_AUDIT_HMAC_KEY_BYTES,
+    MIN_AUDIT_HMAC_KEY_BYTES,
+    AuditKeyProvider,
+    AuditKeyRotationError,
+    AuditKeyRotationSigner,
+    AuditKeyRotationVerifier,
+    AuditReportSigner,
+    AuditReportVerifier,
+    sign_audit_report,
+    verify_audit_report,
+)
 from .budget import RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
@@ -223,6 +235,16 @@ __all__ = [
     "ChainVerificationResult",
     "append_to_chain_file",
     "verify_chain",
+    "AuditKeyProvider",
+    "AuditKeyRotationError",
+    "AuditKeyRotationSigner",
+    "AuditKeyRotationVerifier",
+    "AuditReportSigner",
+    "AuditReportVerifier",
+    "MAX_AUDIT_HMAC_KEY_BYTES",
+    "MIN_AUDIT_HMAC_KEY_BYTES",
+    "sign_audit_report",
+    "verify_audit_report",
     "redaction_preview",
     "render_redaction_preview",
     "ReviewQueue",
