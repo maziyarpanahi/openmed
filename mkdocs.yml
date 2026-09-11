@@ -57,6 +57,7 @@ nav:
       - Streaming Trace Redaction: guides/streaming-traces.md
       - Read-only Trace Scan Report: guides/trace-audit.md
       - Trace Replay Fidelity: reference/trace-fidelity.md
+      - Session-end Trace Scrub Hook: guides/session-end-hook.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
@@ -186,6 +187,7 @@ nav:
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
+      - Minimum-necessary Field Selection: security/minimum-necessary.md
       - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
@@ -206,6 +208,7 @@ nav:
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Audit-artifact Retention: security/audit-retention.md
       - Key Management and Rotation: security/key-management.md
+      - Audit-report Signing Key Rotation: security/audit-key-rotation.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
@@ -315,6 +318,7 @@ nav:
       - Manual HF Model Publication: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Resource Path Portability Audit: security/path-portability.md
+      - Aggregate Release Privacy Budgets: security/privacy-budget.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Offline Dependency Risk Report: security/dependency-risk.md
       - Software Bill of Materials: security/sbom.md

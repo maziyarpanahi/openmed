@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit blob for direct identifiers, secrets, and sensitive structured fields;
   emits value-free reports; supports narrowly versioned synthetic-fixture
   allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a bounded, thread-safe privacy budget ledger for named aggregate
+  release contexts with atomic epsilon/delta charging, counts-only evidence,
+  immutable configuration views, and value-free failures (#2410).
+- Added caller-owned HMAC-SHA256 audit-report key rotation with bounded key
+  material, key-ID based current and retained-key verification, canonical
+  mapping checks, fail-closed provider handling, and value-free failures
+  (#2408).
+- Added a bounded, deterministic minimum-necessary structured field selector
+  with caller-declared purpose mappings, policy allowlists and denylists,
+  fail-closed unknown declarations, value-free decision explanations, and
+  projection restricted to selector-approved fields (#2412).
 - Added a bounded, counts-only audit-artifact retention planner with explicit
   disposition rules, deletion evidence, remaining-set verification, strict
   input fields, and fail-closed future timestamps (#2409).
@@ -62,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a local session-end hook that transactionally scrubs completed JSON and
+  JSONL traces with value-free failure reports and concurrent-change checks
+  (#2300).
 - Added deterministic authenticated encryption for reversible surrogate
   mappings, with caller-owned keys, owner-only atomic persistence, and
   value-free failures (#2293).

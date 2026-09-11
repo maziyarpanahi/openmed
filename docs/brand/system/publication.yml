@@ -132,6 +132,7 @@ classification:
     - guides/streaming-traces.md
     - guides/trace-audit.md
     - reference/trace-fidelity.md
+    - guides/session-end-hook.md
     - serving/resilience.md
     - serving/backpressure.md
     - serving/kserve-triton.md
@@ -260,6 +261,7 @@ classification:
     - api/compatibility-gate.md
     - guides/file-redaction.md
     - reidentification-risk.md
+    - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
     - sms-short-text-deid.md
     - anonymization.md
@@ -280,6 +282,7 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
     - security/key-management.md
+    - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
     - integrations-langchain.md
     - integrations/langchain.md
@@ -387,6 +390,7 @@ classification:
     - security/hf-token-policy.md
     - security/supply-chain.md
     - security/path-portability.md
+    - security/privacy-budget.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
     - security/sbom.md
