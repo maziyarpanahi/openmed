@@ -110,7 +110,7 @@ def register_udf(
     if stage_location is not None:
         register_kwargs["stage_location"] = stage_location
 
-    return session.udf.register(deidentify_udf, **register_kwargs)
+    return session.udf.register(_snowpark_handler, **register_kwargs)
 
 
 def generate_create_function_sql(
@@ -171,6 +171,12 @@ def generate_create_function_sql(
         lines.append(f"IMPORTS = ({_sql_literals(import_values)})")
     lines.append(f"HANDLER = '{_escape_sql_literal(handler_value)}';")
     return "\n".join(lines)
+
+
+def _snowpark_handler(text):
+    """Expose one input without union hints for Snowpark's eager introspection."""
+
+    return deidentify_udf(text)
 
 
 def _load_string_type() -> Any:

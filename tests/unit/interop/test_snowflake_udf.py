@@ -62,7 +62,12 @@ def test_register_udf_forwards_handler_and_name(monkeypatch):
     )
 
     assert result == "registered-udf"
-    assert registered["function"] is snowflake_udf.deidentify_udf
+    handler = registered["function"]
+    assert callable(handler)
+    monkeypatch.setattr(
+        snowflake_udf, "deidentify_udf", lambda text: f"redacted:{text}"
+    )
+    assert handler("synthetic") == "redacted:synthetic"
     assert registered["name"] == "OPENMED_REDACT"
     assert registered["packages"] == ["openmed", "pandas"]
     assert registered["imports"] == ["@stage/helper.py"]
@@ -144,3 +149,30 @@ def test_sql_literals_preserve_values_and_quote_boundaries(value, literal):
     assert f"PACKAGES = ('openmed', {literal})" in sql
     assert f"IMPORTS = ({literal})" in sql
     assert sql.endswith(f"HANDLER = {literal};")
+
+
+@pytest.mark.integration
+def test_real_snowpark_local_registration_accepts_one_nullable_input(monkeypatch):
+    snowpark = pytest.importorskip("snowflake.snowpark")
+    pytest.importorskip("snowflake.snowpark.mock")
+    from snowflake.snowpark.functions import call_udf, col
+    from snowflake.snowpark.types import StringType, StructField, StructType
+
+    monkeypatch.setattr(
+        openmed,
+        "deidentify",
+        lambda text, **kwargs: SimpleNamespace(deidentified_text="[NAME]"),
+    )
+    with (
+        snowpark.Session.builder.config("local_testing", True)
+        .config("disable_local_testing_telemetry", True)
+        .create()
+    ) as session:
+        snowflake_udf.register_udf(session)
+        frame = session.create_dataframe(
+            [(None,), ("Jane Roe",)],
+            schema=StructType([StructField("TEXT", StringType())]),
+        )
+        rows = frame.select(call_udf("OPENMED_DEIDENTIFY", col("TEXT"))).collect()
+
+    assert [row[0] for row in rows] == [None, "[NAME]"]
