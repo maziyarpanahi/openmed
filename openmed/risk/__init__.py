@@ -216,6 +216,17 @@ from .minimum_necessary import (
     select_minimum_necessary_fields,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
+from .privacy_budget import (
+    MAX_PRIVACY_BUDGET_CONTEXTS,
+    MAX_PRIVACY_BUDGET_EPSILON,
+    MAX_PRIVACY_BUDGET_SPENDS,
+    PRIVACY_BUDGET_LEDGER_SCHEMA_VERSION,
+    PrivacyBudgetDecision,
+    PrivacyBudgetLedger,
+    PrivacyBudgetLedgerExceeded,
+    PrivacyBudgetSpend,
+    ReleaseContextPrivacyBudget,
+)
 from .qi_profiler import (
     GeneralizationPlan,
     QIColumnProfile,
@@ -394,7 +405,16 @@ __all__ = [
     "MembershipSelfTestResult",
     "MembershipInferenceReport",
     "MembershipInferenceResult",
+    "MAX_PRIVACY_BUDGET_CONTEXTS",
+    "MAX_PRIVACY_BUDGET_EPSILON",
+    "MAX_PRIVACY_BUDGET_SPENDS",
     "PopulationRiskAssessment",
+    "PRIVACY_BUDGET_LEDGER_SCHEMA_VERSION",
+    "PrivacyBudgetDecision",
+    "PrivacyBudgetLedger",
+    "PrivacyBudgetLedgerExceeded",
+    "PrivacyBudgetSpend",
+    "ReleaseContextPrivacyBudget",
     "SelectionExplanation",
     "SelectionResult",
     "SurrogateDrawKind",
