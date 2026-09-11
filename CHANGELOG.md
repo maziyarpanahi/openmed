@@ -13,6 +13,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aggregate-only JSON and Markdown renderers, immutable report state,
   fail-closed consistency checks, and locally derived threshold outcomes
   (#2411).
+- Added a deterministic local pre-push privacy scanner that checks every new
+  commit blob for direct identifiers, secrets, and sensitive structured fields;
+  emits value-free reports; supports narrowly versioned synthetic-fixture
+  allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a bounded, thread-safe privacy budget ledger for named aggregate
+  release contexts with atomic epsilon/delta charging, counts-only evidence,
+  immutable configuration views, and value-free failures (#2410).
+- Added caller-owned HMAC-SHA256 audit-report key rotation with bounded key
+  material, key-ID based current and retained-key verification, canonical
+  mapping checks, fail-closed provider handling, and value-free failures
+  (#2408).
+- Added a bounded, deterministic minimum-necessary structured field selector
+  with caller-declared purpose mappings, policy allowlists and denylists,
+  fail-closed unknown declarations, value-free decision explanations, and
+  projection restricted to selector-approved fields (#2412).
+- Added a bounded, counts-only audit-artifact retention planner with explicit
+  disposition rules, deletion evidence, remaining-set verification, strict
+  input fields, and fail-closed future timestamps (#2409).
+- Added a deterministic, offline CycloneDX 1.6 evidence generator for the base
+  runtime dependency closure, with source and manifest hashes, bounded local
+  inputs, atomic output, and no embedded URLs or build paths (#2416).
+- Added a deterministic offline dependency risk report that correlates local
+  locked versions with caller-supplied advisory snapshots, emits bounded
+  value-free risk summaries, and performs no package-manager or network calls
+  (#2417).
+- Added deterministic counts-only trace privacy audit artifacts with canonical
+  policy and file hashes, immutable category counts, value-free JSON and
+  Markdown renderings, stable file fingerprinting, and private atomic writes
+  (#2302).
 - Added deterministic, PHI-free local release compute, cost, energy, and
   carbon tracking with orchestrator-linked stage timings, per-run and rolling
   budget verdicts, family/tier/workload breakdowns, optional advisory queue
@@ -48,6 +77,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a local session-end hook that transactionally scrubs completed JSON and
+  JSONL traces with value-free failure reports and concurrent-change checks
+  (#2300).
+- Added deterministic authenticated encryption for reversible surrogate
+  mappings, with caller-owned keys, owner-only atomic persistence, and
+  value-free failures (#2293).
+- Added a fail-closed local dataset-upload privacy guard with block and
+  redact-to-staging modes, privacy-safe reports, and private atomic staging
+  files (#2297).
 - Added a reusable offline CI privacy scanner with explicit scan paths,
   non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
   report writes (#2299).
