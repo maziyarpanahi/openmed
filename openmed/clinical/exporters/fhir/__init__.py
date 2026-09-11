@@ -49,6 +49,18 @@ from .grounded import (
     to_fhir,
 )
 from .observation import to_observation
+from .observation_extensions import (
+    DEFAULT_OBSERVATION_EXTENSION_RULES,
+    FHIR_R4,
+    FHIR_R5,
+    OBSERVATION_EXTENSION_BASE_URL,
+    OBSERVATION_UNKNOWN_STATE_CODES,
+    OBSERVATION_UNKNOWN_STATE_EXTENSION_URL,
+    ObservationExtensionFinding,
+    ObservationExtensionSpec,
+    check_observation_extensions,
+    validate_observation_extensions,
+)
 from .operation_outcome import (
     OperationOutcomeIssue,
     from_validation_result,
@@ -62,8 +74,6 @@ from .privacy import (
 from .profile_check import check_bundle
 from .profile_declarations import (
     DUPLICATE_PROFILE_DECLARATION,
-    FHIR_R4,
-    FHIR_R5,
     MISSING_PROFILE_DECLARATION,
     PROFILE_FHIR_VERSION_MISMATCH,
     PROFILE_RESOURCE_TYPE_MISMATCH,
@@ -75,6 +85,17 @@ from .profile_declarations import (
     validate_profile_declarations,
 )
 from .provenance import to_audit_event, to_provenance
+from .reference_types import (
+    FHIR_R4_REFERENCE_TARGETS,
+    FHIR_R5_REFERENCE_TARGETS,
+    REFERENCE_TARGET_ALLOWLISTS,
+    ReferenceTargetIssue,
+    check_reference_targets,
+    find_reference_target_issues,
+    validate_fhir_reference_types,
+    validate_reference_targets,
+    validate_reference_types,
+)
 from .references import deterministic_fullurl
 from .uscore import US_CORE_VERSION, ConformanceResult, check_us_core
 from .validate import (
@@ -90,6 +111,7 @@ __all__ = [
     "CONDITION_VER_STATUS_SYSTEM",
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
     "DUPLICATE_PROFILE_DECLARATION",
+    "DEFAULT_OBSERVATION_EXTENSION_RULES",
     "FHIR_R4",
     "FHIR_R5",
     "DIAGNOSTIC_REPORT_FIELDS_R4R5",
@@ -106,6 +128,12 @@ __all__ = [
     "PROFILE_VALIDATION_MODE_MISMATCH",
     "ProfileDeclarationFinding",
     "ProfileDeclarationSpec",
+    "OBSERVATION_EXTENSION_BASE_URL",
+    "OBSERVATION_UNKNOWN_STATE_CODES",
+    "OBSERVATION_UNKNOWN_STATE_EXTENSION_URL",
+    "ObservationExtensionFinding",
+    "ObservationExtensionSpec",
+    "check_observation_extensions",
     "to_condition",
     "to_diagnostic_report",
     "to_observation",
@@ -127,6 +155,16 @@ __all__ = [
     "to_provenance",
     "UNKNOWN_PROFILE_DECLARATION",
     "validate_profile_declarations",
+    "FHIR_R4_REFERENCE_TARGETS",
+    "FHIR_R5_REFERENCE_TARGETS",
+    "REFERENCE_TARGET_ALLOWLISTS",
+    "ReferenceTargetIssue",
+    "check_reference_targets",
+    "find_reference_target_issues",
+    "validate_fhir_reference_types",
+    "validate_reference_targets",
+    "validate_reference_types",
+    "validate_observation_extensions",
     "FHIRClinicalExchangeWorkbench",
     "FHIRExchange",
     "FHIRExchangeError",

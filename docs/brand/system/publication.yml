@@ -323,9 +323,11 @@ classification:
     - interop/archive-safety.md
     - fhir-interop.md
     - fhir/profile-declarations.md
+    - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
+    - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md
     - fhir/diagnostic-report-export.md
     - fhir/operation-outcome.md
