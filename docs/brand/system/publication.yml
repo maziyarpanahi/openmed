@@ -284,6 +284,7 @@ classification:
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
     - security/redaction-diff.md
+    - security/policy-composition.md
     - security/key-management.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md

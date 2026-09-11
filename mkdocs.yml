@@ -210,6 +210,7 @@ nav:
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Audit-artifact Retention: security/audit-retention.md
       - Policy-aware Redaction Diffs: security/redaction-diff.md
+      - Privacy Policy Composition: security/policy-composition.md
       - Key Management and Rotation: security/key-management.md
       - Audit-report Signing Key Rotation: security/audit-key-rotation.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
