@@ -283,9 +283,12 @@ classification:
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
+    - security/redaction-diff.md
+    - security/policy-composition.md
     - security/key-management.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
+    - security/access-review.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
