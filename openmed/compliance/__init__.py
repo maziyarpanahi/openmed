@@ -225,6 +225,23 @@ from .policy_coverage import (
     render_policy_coverage_markdown,
     validate_policy_coverage,
 )
+from .privacy_gate import (
+    PRIVACY_GATE_REPORT_TYPE,
+    PRIVACY_GATE_SCHEMA_VERSION,
+    GateResult,
+    GateState,
+    GateStatus,
+    PrivacyGateAggregator,
+    PrivacyGateDecisionRecord,
+    PrivacyGateResult,
+    PrivacyGateState,
+    PrivacyReleaseGateRecord,
+    ReleaseDecision,
+    aggregate_privacy_gate_results,
+    aggregate_privacy_gates,
+    build_privacy_release_gate,
+    render_privacy_release_gate,
+)
 from .release_evidence import build_release_expert_review_evidence
 from .report_cardinality import (
     DEFAULT_REPORT_CARDINALITY_BUDGET,
@@ -533,4 +550,19 @@ __all__ = [
     "compute_build_inputs_digest",
     "compute_dependency_lock_digest",
     "verify_release_provenance",
+    "GateResult",
+    "GateState",
+    "GateStatus",
+    "PRIVACY_GATE_REPORT_TYPE",
+    "PRIVACY_GATE_SCHEMA_VERSION",
+    "PrivacyGateAggregator",
+    "PrivacyGateDecisionRecord",
+    "PrivacyGateResult",
+    "PrivacyGateState",
+    "PrivacyReleaseGateRecord",
+    "ReleaseDecision",
+    "aggregate_privacy_gate_results",
+    "aggregate_privacy_gates",
+    "build_privacy_release_gate",
+    "render_privacy_release_gate",
 ]
