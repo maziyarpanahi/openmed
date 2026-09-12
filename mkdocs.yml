@@ -264,6 +264,7 @@ nav:
       - Privacy Report Field Linting: compliance/report-lint.md
       - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
+      - Reproducible Release Provenance: compliance/reproducible-release.md
       - Access-scope Minimization Evidence: compliance/access-scope.md
       - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
       - Privacy Evidence Freshness Gate: compliance/evidence-freshness.md
