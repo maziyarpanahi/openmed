@@ -172,6 +172,24 @@ from .evidence_replay import (
     replay_evidence,
     verify_evidence_replay,
 )
+from .exception_budget import (
+    ExceptionBudget,
+    ExceptionBudgetExceeded,
+    ExceptionBudgetGate,
+    ExceptionBudgetVerdict,
+    ExceptionBudgetViolation,
+    PrivacyException,
+    PrivacyExceptionBudget,
+    PrivacyExceptionBudgetExceeded,
+    check_exception_budget,
+    check_privacy_exception_budget,
+    evaluate_exception_budget,
+    evaluate_privacy_exception_budget,
+    scope_fingerprint,
+)
+from .exception_budget import (
+    fingerprint_policy as fingerprint_exception_policy,
+)
 from .exception_taxonomy import (
     APPROVAL_ROLES,
     APPROVAL_STATUSES,
@@ -510,23 +528,6 @@ from .tabular_report import (
     render_tabular_risk_json,
     render_tabular_risk_markdown,
     tabular_risk_report,
-)
-
-from .exception_budget import (
-    ExceptionBudget,
-    ExceptionBudgetExceeded,
-    ExceptionBudgetGate,
-    ExceptionBudgetVerdict,
-    ExceptionBudgetViolation,
-    PrivacyException,
-    PrivacyExceptionBudget,
-    PrivacyExceptionBudgetExceeded,
-    check_exception_budget,
-    check_privacy_exception_budget,
-    evaluate_exception_budget,
-    evaluate_privacy_exception_budget,
-    fingerprint_policy as fingerprint_exception_policy,
-    scope_fingerprint,
 )
 
 
