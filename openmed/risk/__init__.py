@@ -156,6 +156,22 @@ from .evidence_check import (
     check_evidence_bundle,
     verify_evidence_bundle,
 )
+from .evidence_replay import (
+    EVIDENCE_REPLAY_MANIFEST_KIND,
+    EVIDENCE_REPLAY_SCHEMA_VERSION,
+    EvidenceReplayError,
+    EvidenceReplayReport,
+    EvidenceReplaySchemaError,
+    ReplayMismatch,
+    UnsafeReplayInputError,
+    build_evidence_manifest,
+    compute_environment_fingerprint,
+    compute_policy_fingerprint,
+    compute_result_fingerprint,
+    load_evidence_manifest,
+    replay_evidence,
+    verify_evidence_replay,
+)
 from .exception_taxonomy import (
     APPROVAL_ROLES,
     APPROVAL_STATUSES,
@@ -452,23 +468,6 @@ from .tabular_report import (
     render_tabular_risk_json,
     render_tabular_risk_markdown,
     tabular_risk_report,
-)
-
-from .evidence_replay import (
-    EVIDENCE_REPLAY_MANIFEST_KIND,
-    EVIDENCE_REPLAY_SCHEMA_VERSION,
-    EvidenceReplayError,
-    EvidenceReplayReport,
-    EvidenceReplaySchemaError,
-    ReplayMismatch,
-    UnsafeReplayInputError,
-    build_evidence_manifest,
-    compute_environment_fingerprint,
-    compute_policy_fingerprint,
-    compute_result_fingerprint,
-    load_evidence_manifest,
-    replay_evidence,
-    verify_evidence_replay,
 )
 
 
