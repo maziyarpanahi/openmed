@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an immutable, provenance-aware local terminology cache keyed by exact
+  vocabulary releases, with deterministic response fingerprints, stale-release
+  refusal, response-free reports, and bounded value-free validation (#2400).
 - Added a bounded, deterministic, offline policy-migration checker with
   fail-closed schema and protection-type changes, privacy-safe reports, and a
   report-bound human acknowledgement gate for weakening changes (#2407).
