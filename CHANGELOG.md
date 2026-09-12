@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an optional Snowpark adapter and generated Python UDF SQL for
+  in-warehouse text de-identification with lazy dependency loading, compatible
+  Snowpark registration, and escaped SQL literals (#2369).
+- Added an immutable, provenance-aware local terminology cache keyed by exact
+  vocabulary releases, with deterministic response fingerprints, stale-release
+  refusal, response-free reports, and bounded value-free validation (#2400).
+- Added a bounded, deterministic, offline policy-migration checker with
+  fail-closed schema and protection-type changes, privacy-safe reports, and a
+  report-bound human acknowledgement gate for weakening changes (#2407).
 - Added an in-memory no-PHI telemetry exporter with closed counter families,
   bounded dimensions and totals, atomic event validation, exception-type-only
   categorization, deterministic JSON and Prometheus rendering, and no
@@ -21,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit blob for direct identifiers, secrets, and sensitive structured fields;
   emits value-free reports; supports narrowly versioned synthetic-fixture
   allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a versioned, bounded privacy policy-as-data schema for jurisdiction,
+  recall floors, de-identification actions, surrogate strategy, and
+  privacy-safe audit retention, with deterministic local-only loading,
+  strict duplicate and alias handling, and value-free validation failures
+  (#2406).
 - Added a bounded, thread-safe privacy budget ledger for named aggregate
   release contexts with atomic epsilon/delta charging, counts-only evidence,
   immutable configuration views, and value-free failures (#2410).
@@ -56,6 +70,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added declarative field-level FHIR and OMOP de-identification policies with
   fail-closed identifier handling, patient-consistent date shifting, schema
   linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
+- Added a deterministic, local key-custody metadata validator for synthetic
+  signing and surrogate workflows, with lifecycle transition checks,
+  purpose/algorithm compatibility, digest-only reports, and fail-closed
+  rejection of bytes, secret-like, or unknown fields (#2648).
+- Added bounded local deletion verification for fingerprinted sensitive
+  artifacts, with symlink, alias, and hard-link refusal, independent recovery
+  copies, commit-stage rollback, and counts-only evidence (#2418).
+
+- Added a bounded, manifest-driven deletion impact planner with deterministic
+  counts-only reports, reverse-dependency analysis, ownership checks, and
+  explicit plan-bound confirmation before injected local execution (#2529).
+- Added a deterministic, offline OMOP cohort export validator for key,
+  relationship, vocabulary, and NOTE/NOTE_NLP provenance invariants, with
+  aggregate counts and content-derived row fingerprints instead of source
+  values (#2402).
+- Added a bounded, deterministic FHIR R5 Bundle round-trip fidelity diff with
+  stable entry matching, explicit serializer-difference declarations, and
+  value-free reports containing structural paths, types, and SHA-256 digests
+  (#2401).
+- Added bounded, deterministic structured access reviews that compare workflow
+  read and export declarations with resource schemas and deny policies while
+  keeping schema values out of JSON, Markdown, and validation failures (#2419).
+- Added bounded, policy-aware diffs for aggregate redaction summaries, with
+  closed value-free inputs, deterministic policy fingerprints, and structured
+  action, category, and count changes (#2426).
+- Added bounded privacy-policy composition with explicit scope-overrides,
+  deterministic scope precedence and inheritance, and validated value-free
+  decision traces (#2522).
+- Added a bounded, metadata-only synthetic privacy regression corpus manifest
+  with deterministic fixture hashes, policy and severity coverage validation,
+  immutable invariants, and atomic local persistence (#2420).
+- Added a bounded, local evidence-bundle integrity verifier with file and
+  manifest hashes, policy and provenance checks, and value-free reports
+  (#2427).
+- Added a bounded tabular schema-drift privacy gate with counts-only evidence,
+  conservative stable-ID matching, and release blocking for unsafe role or
+  structural drift (#2524).
+- Added a bounded, deterministic referential-integrity auditor for surrogate
+  maps with cardinality, collision, orphan, and cross-table consistency checks,
+  closed input schemas, and counts-only value-free reports (#2538).
+- Added a bounded, deterministic nested structured-redaction idempotence checker
+  for comparing shape, action, surrogate, policy, and count evidence across
+  synthetic FHIR- and OMOP-shaped passes without retaining protected values
+  (#2523).
+- Added a bounded, offline privacy evidence replay verifier with counts-only
+  synthetic manifests, stable policy/environment/result fingerprints, and
+  privacy-safe schema, environment, policy, and result drift reports (#2527).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
