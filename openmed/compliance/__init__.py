@@ -106,6 +106,18 @@ from .part11 import (
     verify_part11_audit_trail,
 )
 from .release_evidence import build_release_expert_review_evidence
+from .report_cardinality import (
+    DEFAULT_REPORT_CARDINALITY_BUDGET,
+    CardinalityBudget,
+    CardinalityReport,
+    CardinalityViolation,
+    ReportCardinalityBudget,
+    ReportCardinalityReport,
+    ReportCardinalityViolation,
+    check_report_cardinality,
+    enforce_report_cardinality,
+    evaluate_report_cardinality,
+)
 from .report_lint import (
     DEFAULT_ARRAY_MAX_ITEMS,
     DEFAULT_CODE_MAX_LENGTH,
@@ -241,4 +253,14 @@ __all__ = [
     "ArtifactSizeBudgetViolation",
     "check_artifact_size_budget",
     "evaluate_artifact_size_budget",
+    "CardinalityBudget",
+    "CardinalityReport",
+    "CardinalityViolation",
+    "DEFAULT_REPORT_CARDINALITY_BUDGET",
+    "ReportCardinalityBudget",
+    "ReportCardinalityReport",
+    "ReportCardinalityViolation",
+    "check_report_cardinality",
+    "enforce_report_cardinality",
+    "evaluate_report_cardinality",
 ]

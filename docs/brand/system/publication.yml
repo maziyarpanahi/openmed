@@ -328,6 +328,7 @@ classification:
     - interop/x12-837-redaction.md
     - interop/artifact-inventory.md
     - compliance.md
+    - compliance/report-cardinality.md
     - compliance/report-lint.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/artifact-size-budgets.md
