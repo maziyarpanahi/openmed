@@ -117,6 +117,7 @@ a dependency also declared in another extra.
 | `safetensors` | `mlx` | `Apache-2.0` |
 | `scispacy` | `scispacy` | `Apache-2.0` |
 | `scrubadub` | `scrubadub` | `Apache-2.0` |
+| `snowflake-snowpark-python` | `snowflake` | `Apache-2.0` |
 | `spacy` | `spacy` | `MIT` |
 | `sqlalchemy` | `sqlalchemy` | `MIT` |
 | `strawberry-graphql` | `service` | `MIT` |

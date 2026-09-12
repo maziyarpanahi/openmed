@@ -80,6 +80,20 @@ def test_apache_airflow_license_is_reviewed_without_installed_metadata(monkeypat
     assert reason == "permissive license"
 
 
+def test_snowpark_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("snowflake-snowpark-python")
+    allowed, reason = policy.is_allowed_license(
+        "snowflake-snowpark-python",
+        license_text,
+    )
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_gitpython_license_is_reviewed_without_installed_metadata(monkeypatch):
     monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
 
