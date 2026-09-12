@@ -93,6 +93,7 @@ nav:
       - Advanced NER & Output Formatting: output-formatting.md
       - Cross-format Offset Properties: structured/offset-properties.md
       - Schema Snapshot Compatibility: structured/schema-snapshots.md
+      - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
@@ -203,6 +204,7 @@ nav:
       - Per-Language De-identification: languages.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
+      - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Pre-push Privacy Scanner: security/pre-push-privacy.md
@@ -218,9 +220,11 @@ nav:
       - Evidence-bundle Integrity: security/evidence-integrity.md
       - Tabular Schema Drift Gates: security/tabular-schema-gates.md
       - Key Management and Rotation: security/key-management.md
+      - Key Custody Metadata: security/key-custody-metadata.md
       - Audit-report Signing Key Rotation: security/audit-key-rotation.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
       - Structured Access Review: security/access-review.md
+      - Surrogate-key Providers: security/surrogate-key-providers.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
@@ -247,6 +251,7 @@ nav:
       - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
       - PySpark De-identification UDFs: spark-deidentification.md
+      - Snowflake Python De-identification UDFs: snowflake-udf.md
       - Prefect Batch De-identification: prefect-integration.md
       - Airflow Redaction Operator: integrations/airflow.md
       - spaCy Pipeline Component: spacy-component.md
@@ -255,6 +260,11 @@ nav:
       - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Offline Artifact Inventory: interop/artifact-inventory.md
       - Compliance Posture: compliance.md
+      - Privacy Report Cardinality Budgets: compliance/report-cardinality.md
+      - Privacy Report Field Linting: compliance/report-lint.md
+      - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
+      - Access-scope Minimization Evidence: compliance/access-scope.md
+      - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
       - Privacy Evidence Freshness Gate: compliance/evidence-freshness.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Privacy-Artifact Lineage Manifests: compliance/artifact-lineage.md
@@ -329,6 +339,7 @@ nav:
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
+      - Policy Migration Reviews: security/policy-migrations.md
       - MCP Prompt Injection Guard: security/prompt-injection-guard.md
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md

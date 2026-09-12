@@ -168,6 +168,7 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
@@ -277,6 +278,7 @@ classification:
     - languages.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
+    - security/policy-as-data.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/pre-push-privacy.md
@@ -292,9 +294,11 @@ classification:
     - security/evidence-integrity.md
     - security/tabular-schema-gates.md
     - security/key-management.md
+    - security/key-custody-metadata.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
     - security/access-review.md
+    - security/surrogate-key-providers.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
@@ -321,6 +325,7 @@ classification:
     - integrations/distributed-sql-udf.md
     - integrations/warehouse-remote-function.md
     - spark-deidentification.md
+    - snowflake-udf.md
     - prefect-integration.md
     - integrations/airflow.md
     - spacy-component.md
@@ -329,6 +334,11 @@ classification:
     - interop/x12-837-redaction.md
     - interop/artifact-inventory.md
     - compliance.md
+    - compliance/report-cardinality.md
+    - compliance/report-lint.md
+    - compliance/21-cfr-part-11-audit-trail.md
+    - compliance/access-scope.md
+    - compliance/artifact-size-budgets.md
     - compliance/evidence-freshness.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/artifact-lineage.md
@@ -401,6 +411,7 @@ classification:
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
+    - security/policy-migrations.md
     - security/prompt-injection-guard.md
     - security/mcp-consent-receipts.md
     - security/mcp-authorization-matrix.md
@@ -433,6 +444,7 @@ classification:
   link_only:
     - benchmarks/golden.md
     - clinical-domains.md
+    - compliance/access-review-expiry.md
     - compliance/dpa-template.md
     - compliance/dpia-template.md
     - compliance/gdpr-dsar-export.md
