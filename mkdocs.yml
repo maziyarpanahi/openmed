@@ -334,6 +334,7 @@ nav:
       - Policy-impact Digest: security/policy-impact.md
       - Dependency License Inventory: security/license-inventory.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
+      - Differential-Privacy Budget Migrations: security/budget-migrations.md
       - Privacy-policy Simulation Matrix: security/policy-simulation.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md

@@ -406,6 +406,7 @@ classification:
     - security/policy-impact.md
     - security/license-inventory.md
     - security/exception-taxonomy.md
+    - security/budget-migrations.md
     - security/policy-simulation.md
     - security/export-naming.md
     - security/disclosure-policy.md
