@@ -62,6 +62,53 @@ TEXT = (
 )
 
 
+@pytest.mark.parametrize("separator", ["\n", "\r\n", "\n\n", "\r"])
+def test_header_names_do_not_consume_following_fields_after_normalization(separator):
+    source = separator.join(
+        [
+            "Patientin: Anna Beispiel",
+            "Geburtsdatum: 29.02.1980",
+            "Behandelnde Ärztin: Dr. Eva Muster",
+            "Aufnahme: 28.02.2024.",
+            "Keine Dyspnoe. Metoprolol 47,5 mg zweimal täglich.",
+        ]
+    )
+    result = processor().process_batch([doc(source)])[0]
+    assert result.complete
+    expected = (
+        source.replace("Anna Beispiel", "[PERSON]")
+        .replace("Eva Muster", "[PERSON]")
+        .replace("29.02.1980", "[DATE_OF_BIRTH]")
+    )
+    assert result.deidentified_text == expected
+    for span in result.spans:
+        assert not any(c in source[span["start"] : span["end"]] for c in "\r\n")
+
+
+def test_name_hash_is_independent_of_the_following_header():
+    engine = processor(pseudonym_key=b"a" * 32)
+    outputs = engine.process_batch(
+        [
+            doc(
+                "Patientin: Anna Beispiel\nGeburtsdatum: 29.02.1980",
+                id="a",
+                method="hash",
+                pseudonym_scope="demo",
+            ),
+            doc(
+                "Patientin: Anna Beispiel\nAufnahme: 02.03.2024",
+                id="b",
+                method="hash",
+                pseudonym_scope="demo",
+            ),
+        ]
+    )
+    names = [
+        re.search(r"\[PERSON_[a-f0-9]{32}\]", r.deidentified_text)[0] for r in outputs
+    ]
+    assert names[0] == names[1]
+
+
 def test_batched_pipeline_retains_order_options_and_clinical_bytes():
     engine = processor()
     results = engine.process_batch([doc(TEXT), doc(TEXT, id="note-2", method="remove")])
@@ -177,9 +224,27 @@ def test_date_shift_preserves_chronology_and_masks_non_dates():
     )[0]
     assert result.complete
     assert "Anna Beispiel" not in result.deidentified_text
-    assert "17.03.1962" in result.deidentified_text
+    assert "17.03.1962" not in result.deidentified_text
+    assert "1962" not in result.deidentified_text
+    assert "[DATE_OF_BIRTH]" in result.deidentified_text
     assert "10.09.2026" in result.deidentified_text
     assert "12.09.2026" in result.deidentified_text
+    assert "date_shift_unresolved" not in result.warnings
+
+
+def test_date_shift_masks_leap_day_birth_and_preserves_encounter_interval():
+    result = processor().process_batch(
+        [
+            doc(
+                "Geburtsdatum: 29.02.1980. Aufnahme: 28.02.2024. Kontrolle: 02.03.2024.",
+                method="shift_dates",
+                date_shift_days=17,
+            )
+        ]
+    )[0]
+    assert result.deidentified_text == (
+        "Geburtsdatum: [DATE_OF_BIRTH]. Aufnahme: 16.03.2024. Kontrolle: 19.03.2024."
+    )
     assert "date_shift_unresolved" not in result.warnings
 
 

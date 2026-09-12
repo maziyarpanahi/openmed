@@ -141,7 +141,17 @@ class _ClinicalPipeline(Pipeline):
 
     def stage1_normalize(self, text):
         if self.prepared is None:
-            self.prepared = super().stage1_normalize(text)
+            normalized = super().stage1_normalize(text)
+            # Collapsing a line break to a space joins adjacent name/header
+            # fields. Keep one newline at the same normalized offset so both
+            # detectors and policy decisions retain the document structure.
+            chars = list(normalized.normalized_text)
+            for index, (start, end) in enumerate(
+                normalized.offset_map.normalized_to_original_span
+            ):
+                if chars[index].isspace() and any(c in text[start:end] for c in "\r\n"):
+                    chars[index] = "\n"
+            self.prepared = replace(normalized, normalized_text="".join(chars))
         if text != self.prepared.original_text:
             raise RuntimeError("prepared document does not match source")
         return self.prepared
@@ -233,6 +243,14 @@ class _ClinicalPipeline(Pipeline):
                 for key, value in (entity.metadata or {}).items()
                 if key != "policy_action"
             }
+            if (
+                method == "shift_dates"
+                and normalize_label(entity.label) == "DATE_OF_BIRTH"
+            ):
+                entity.metadata["policy_action"] = {
+                    "action": "mask",
+                    "source": "clinical_birth_date_policy",
+                }
         kwargs["effective_method"] = "mask" if method == "hash" else method
         result = super().stage10_emit(text, pii_result, **kwargs)
         if method == "hash":
@@ -261,7 +279,7 @@ class _ClinicalPipeline(Pipeline):
             result.method = "hash"
         if method == "shift_dates":
             for entity in result.pii_entities:
-                if entity.canonical_label in {"DATE", "DATE_OF_BIRTH"} and (
+                if entity.canonical_label == "DATE" and (
                     entity.redacted_text or ""
                 ).startswith("["):
                     self.review_reasons.add("date_shift_unresolved")
