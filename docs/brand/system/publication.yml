@@ -340,7 +340,6 @@ classification:
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
     - compliance/evidence-freshness.md
-    - compliance/21-cfr-part-11-audit-trail.md
     - compliance/artifact-lineage.md
     - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md
