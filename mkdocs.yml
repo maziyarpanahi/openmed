@@ -260,6 +260,7 @@ nav:
       - Offline Artifact Inventory: interop/artifact-inventory.md
       - Compliance Posture: compliance.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
+      - Access-scope Minimization Evidence: compliance/access-scope.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
