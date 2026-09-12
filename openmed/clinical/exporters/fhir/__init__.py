@@ -43,9 +43,11 @@ from .exchange import (
     import_fhir,
     validate_exchange,
 )
-from .grounded import (
+from .facade import (
     COREFERENCE_EVIDENCE_EXTENSION_URL,
     FHIR_RESOURCE_TYPES,
+    FHIRBundle,
+    FHIRExportSummary,
     to_fhir,
 )
 from .observation import to_observation
@@ -191,4 +193,6 @@ __all__ = [
     "ConformanceResult",
     "US_CORE_VERSION",
     "check_us_core",
+    "FHIRBundle",
+    "FHIRExportSummary",
 ]

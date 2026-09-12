@@ -53,9 +53,11 @@ from .fhir import (
     PROFILE_RESOURCE_TYPE_MISMATCH,
     PROFILE_VALIDATION_MODE_MISMATCH,
     UNKNOWN_PROFILE_DECLARATION,
+    FHIRBundle,
     FHIRClinicalExchangeWorkbench,
     FHIRExchange,
     FHIRExchangeWorkbench,
+    FHIRExportSummary,
     ObservationExtensionFinding,
     ObservationExtensionSpec,
     ProfileDeclarationFinding,
@@ -216,4 +218,6 @@ __all__ = [
     "load_valueset",
     "validate_code",
     "validate_codeable_concept",
+    "FHIRBundle",
+    "FHIRExportSummary",
 ]

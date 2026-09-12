@@ -70,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added declarative field-level FHIR and OMOP de-identification policies with
   fail-closed identifier handling, patient-consistent date shifting, schema
   linting, CSV/Parquet support, and resumable FHIR NDJSON integration (#2187).
+- Added the canonical grounded-span `to_fhir()` facade with label-driven
+  Condition, Observation, MedicationStatement, and Procedure dispatch,
+  deterministic Bundle assembly, PHI-free exported/unmapped label counts, and
+  graceful skipping for labels without an exporter. The facade remains the
+  same callable as the established grounded exporter and never synthesizes a
+  Patient resource.
 - Added a deterministic, local key-custody metadata validator for synthetic
   signing and surrogate workflows, with lifecycle transition checks,
   purpose/algorithm compatibility, digest-only reports, and fail-closed
