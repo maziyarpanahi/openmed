@@ -336,6 +336,7 @@ classification:
     - compliance.md
     - compliance/report-cardinality.md
     - compliance/report-lint.md
+    - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
@@ -402,8 +403,10 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/policy-impact.md
     - security/license-inventory.md
     - security/exception-taxonomy.md
+    - security/policy-simulation.md
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md

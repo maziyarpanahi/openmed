@@ -201,6 +201,30 @@ from .part11 import (
     readiness_checklist,
     verify_part11_audit_trail,
 )
+from .policy_coverage import (
+    MANIFEST_FILENAME as POLICY_COVERAGE_MANIFEST_FILENAME,
+)
+from .policy_coverage import (
+    MARKDOWN_FILENAME as POLICY_COVERAGE_MARKDOWN_FILENAME,
+)
+from .policy_coverage import (
+    MATRIX_ID as POLICY_COVERAGE_MATRIX_ID,
+)
+from .policy_coverage import (
+    SCHEMA_VERSION as POLICY_COVERAGE_SCHEMA_VERSION,
+)
+from .policy_coverage import (
+    PolicyCoverageBinding,
+    PolicyCoverageError,
+    PolicyCoverageMatrix,
+    PolicyCoverageResult,
+    PolicyCoverageRow,
+    UncoveredPolicyRuleError,
+    build_policy_coverage_matrix,
+    generate_policy_coverage,
+    render_policy_coverage_markdown,
+    validate_policy_coverage,
+)
 from .release_evidence import build_release_expert_review_evidence
 from .report_cardinality import (
     DEFAULT_REPORT_CARDINALITY_BUDGET,
@@ -447,4 +471,18 @@ __all__ = [
     "assert_evidence_freshness",
     "check_evidence_freshness",
     "evaluate_evidence_freshness",
+    "POLICY_COVERAGE_MANIFEST_FILENAME",
+    "POLICY_COVERAGE_MARKDOWN_FILENAME",
+    "POLICY_COVERAGE_MATRIX_ID",
+    "POLICY_COVERAGE_SCHEMA_VERSION",
+    "PolicyCoverageBinding",
+    "PolicyCoverageError",
+    "PolicyCoverageMatrix",
+    "PolicyCoverageResult",
+    "PolicyCoverageRow",
+    "UncoveredPolicyRuleError",
+    "build_policy_coverage_matrix",
+    "generate_policy_coverage",
+    "render_policy_coverage_markdown",
+    "validate_policy_coverage",
 ]

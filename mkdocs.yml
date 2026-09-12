@@ -262,6 +262,7 @@ nav:
       - Compliance Posture: compliance.md
       - Privacy Report Cardinality Budgets: compliance/report-cardinality.md
       - Privacy Report Field Linting: compliance/report-lint.md
+      - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Access-scope Minimization Evidence: compliance/access-scope.md
       - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
@@ -330,8 +331,10 @@ nav:
       - Local Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
+      - Policy-impact Digest: security/policy-impact.md
       - Dependency License Inventory: security/license-inventory.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
+      - Privacy-policy Simulation Matrix: security/policy-simulation.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
