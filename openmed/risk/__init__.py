@@ -291,6 +291,21 @@ from .policy_composition import (
 from .policy_composition import (
     policy_fingerprint as composition_policy_fingerprint,
 )
+from .policy_impact import (
+    CURRENT_POLICY_IMPACT_SCHEMA_VERSION,
+    PolicyImpact,
+    PolicyImpactChange,
+    PolicyImpactDigest,
+    PolicyResource,
+    TypedResource,
+    compare_policy_versions,
+    evaluate_policy_impact,
+    policy_impact_digest,
+    simulate_policy_impact,
+)
+from .policy_impact import (
+    PolicyVersion as PolicyImpactVersion,
+)
 from .policy_simulation import (
     ACTION_CHANGE_VALUES,
     BLOCKING_CHANGE_VALUES,
@@ -805,4 +820,15 @@ __all__ = [
     "render_policy_simulation_matrix",
     "run_policy_simulation",
     "simulate_policy_matrix",
+    "CURRENT_POLICY_IMPACT_SCHEMA_VERSION",
+    "PolicyImpact",
+    "PolicyImpactChange",
+    "PolicyImpactDigest",
+    "PolicyImpactVersion",
+    "PolicyResource",
+    "TypedResource",
+    "compare_policy_versions",
+    "evaluate_policy_impact",
+    "policy_impact_digest",
+    "simulate_policy_impact",
 ]

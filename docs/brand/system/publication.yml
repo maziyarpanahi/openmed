@@ -390,6 +390,7 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/policy-impact.md
     - security/license-inventory.md
     - security/exception-taxonomy.md
     - security/policy-simulation.md
