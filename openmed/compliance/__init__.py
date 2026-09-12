@@ -5,6 +5,22 @@ surrogate vault, de-identification audit reports, and a tamper-evident audit
 chain, plus deterministic technical control crosswalks for auditor handoff.
 """
 
+from .artifact_lineage import (
+    ARTIFACT_LINEAGE_SCHEMA_VERSION,
+    EMPTY_POLICY_FINGERPRINT,
+    LINEAGE_NODE_SCHEMA_VERSION,
+    ArtifactLineageDiagnostics,
+    ArtifactLineageError,
+    ArtifactLineageManifest,
+    ArtifactLineageNode,
+    ArtifactLineageParent,
+    ArtifactLineageValidationError,
+    build_artifact_lineage_manifest,
+    compute_artifact_hash,
+    compute_policy_fingerprint,
+    load_artifact_lineage_manifest,
+    verify_artifact_lineage,
+)
 from .audit_chain import (
     AuditRecord,
     AuditSink,
@@ -193,4 +209,18 @@ __all__ = [
     "SafeHarborAttestation",
     "SafeHarborCategoryAttestation",
     "generate_safe_harbor_attestation",
+    "ARTIFACT_LINEAGE_SCHEMA_VERSION",
+    "EMPTY_POLICY_FINGERPRINT",
+    "LINEAGE_NODE_SCHEMA_VERSION",
+    "ArtifactLineageDiagnostics",
+    "ArtifactLineageError",
+    "ArtifactLineageManifest",
+    "ArtifactLineageNode",
+    "ArtifactLineageParent",
+    "ArtifactLineageValidationError",
+    "build_artifact_lineage_manifest",
+    "compute_artifact_hash",
+    "compute_policy_fingerprint",
+    "load_artifact_lineage_manifest",
+    "verify_artifact_lineage",
 ]
