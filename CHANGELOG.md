@@ -139,6 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with owner-free approval metadata, bounded digest-only evidence, explicit UTC
   expiry checks, deterministic serialization, and value-free validation
   failures (#2528).
+- Added a deterministic, local-only privacy exception budget gate that counts
+  bounded synthetic waiver metadata by severity, scope, expiry, and policy
+  fingerprint, failing closed on exceeded or unbounded exceptions (#2591).
 
 ### Security
 

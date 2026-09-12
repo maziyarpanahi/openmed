@@ -410,6 +410,7 @@ classification:
     - security/exception-taxonomy.md
     - security/budget-migrations.md
     - security/policy-simulation.md
+    - security/exception-budgets.md
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
