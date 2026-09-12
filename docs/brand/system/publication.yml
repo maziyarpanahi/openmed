@@ -333,8 +333,11 @@ classification:
     - interop/x12-837-redaction.md
     - interop/artifact-inventory.md
     - compliance.md
+    - compliance/report-cardinality.md
+    - compliance/report-lint.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/access-scope.md
+    - compliance/artifact-size-budgets.md
     - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md
     - compliance/north-africa-pdpl-0908-checklist.md

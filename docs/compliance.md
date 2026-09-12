@@ -43,6 +43,9 @@ issue, and without including real patient data.
 - [Structured privacy access-review expiry gate](compliance/access-review-expiry.md)
   provides a deterministic, local-only check for review validity, policy
   fingerprint, and required decision categories.
+- [Privacy report cardinality budgets](compliance/report-cardinality.md)
+  bound typed report containers and emit only safe paths and counts when a
+  report exceeds its local budget.
 
 ## Deployment Templates
 
