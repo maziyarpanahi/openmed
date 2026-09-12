@@ -95,7 +95,7 @@ from .exception_budget import (
     check_privacy_exception_budget,
     evaluate_exception_budget,
     evaluate_privacy_exception_budget,
-    fingerprint_policy,
+    fingerprint_policy as fingerprint_exception_policy,
     scope_fingerprint,
 )
 from .exception_taxonomy import (
@@ -515,7 +515,7 @@ __all__ = [
     "evaluate_budget",
     "evaluate_exception_budget",
     "evaluate_privacy_exception_budget",
-    "fingerprint_policy",
+    "fingerprint_exception_policy",
     "fit_tabular_profile",
     "gaussian_mechanism",
     "gaussian_noise",

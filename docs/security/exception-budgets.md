@@ -57,3 +57,8 @@ verdict is safe to serialize with `to_dict()` for a release report.
 This is a release-capacity control, not a compliance certification or a
 clinical decision guarantee. It does not decide whether a finding should have
 been waived.
+
+The root namespace exports this gate's fingerprint helper as
+`fingerprint_exception_policy`. Its defining module retains the local
+`fingerprint_policy` name, while the existing root `fingerprint_policy`
+continues to refer to redaction comparison.

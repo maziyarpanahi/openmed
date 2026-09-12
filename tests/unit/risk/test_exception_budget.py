@@ -13,7 +13,7 @@ from openmed.risk import (
     PrivacyException,
     check_exception_budget,
     evaluate_exception_budget,
-    fingerprint_policy,
+    fingerprint_exception_policy,
     scope_fingerprint,
 )
 
@@ -61,8 +61,8 @@ def test_report_counts_all_dimensions_deterministically_and_hashes_scope() -> No
     }
     assert first.counts_by_expiry == {"bounded": 2}
     assert first.counts_by_policy_fingerprint == {
-        fingerprint_policy("policy-a"): 1,
-        fingerprint_policy("policy-b"): 1,
+        fingerprint_exception_policy("policy-a"): 1,
+        fingerprint_exception_policy("policy-b"): 1,
     }
     assert first.to_dict() == second.to_dict()
     encoded = json.dumps(first.to_dict(), sort_keys=True)
@@ -174,6 +174,14 @@ def test_privacy_exception_object_stores_only_safe_metadata() -> None:
     assert exception.severity == "high"
     assert exception.expires_at == date(2026, 9, 1)
     assert payload["scope_fingerprint"] == scope_fingerprint("synthetic-subject-scope")
-    assert payload["policy_fingerprint"] == fingerprint_policy("policy-a")
+    assert payload["policy_fingerprint"] == fingerprint_exception_policy("policy-a")
     assert "synthetic-subject-scope" not in repr(exception)
     assert "policy-a" not in json.dumps(payload, sort_keys=True)
+
+
+def test_root_fingerprints_preserve_both_policy_apis() -> None:
+    from openmed import risk
+    from openmed.risk import exception_budget, redaction_diff
+
+    assert risk.fingerprint_policy is redaction_diff.fingerprint_policy
+    assert risk.fingerprint_exception_policy is exception_budget.fingerprint_policy
