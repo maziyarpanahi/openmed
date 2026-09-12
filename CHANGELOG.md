@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added bounded BMP CORE/INFO header geometry preflight with explicit limits,
+  value-free errors, and synthetic file-level regression tests (#3114).
+
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
