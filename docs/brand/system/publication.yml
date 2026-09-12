@@ -459,6 +459,7 @@ classification:
     - compliance/model-card-eu-ai-act-fields.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
+    - compliance/waiver-ledger.md
     - demo/browser-egress.md
     - integrations-llamaindex.md
     - i18n/glossary.md
