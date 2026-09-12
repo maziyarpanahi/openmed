@@ -156,6 +156,22 @@ from .evidence_check import (
     check_evidence_bundle,
     verify_evidence_bundle,
 )
+from .evidence_replay import (
+    EVIDENCE_REPLAY_MANIFEST_KIND,
+    EVIDENCE_REPLAY_SCHEMA_VERSION,
+    EvidenceReplayError,
+    EvidenceReplayReport,
+    EvidenceReplaySchemaError,
+    ReplayMismatch,
+    UnsafeReplayInputError,
+    build_evidence_manifest,
+    compute_environment_fingerprint,
+    compute_policy_fingerprint,
+    compute_result_fingerprint,
+    load_evidence_manifest,
+    replay_evidence,
+    verify_evidence_replay,
+)
 from .exception_taxonomy import (
     APPROVAL_ROLES,
     APPROVAL_STATUSES,
@@ -291,23 +307,6 @@ from .policy_composition import (
 from .policy_composition import (
     policy_fingerprint as composition_policy_fingerprint,
 )
-from .policy_impact import (
-    CURRENT_POLICY_IMPACT_SCHEMA_VERSION,
-    PolicyImpact,
-    PolicyImpactChange,
-    PolicyImpactDigest,
-    PolicyResource,
-    TypedResource,
-    evaluate_policy_impact,
-    policy_impact_digest,
-    simulate_policy_impact,
-)
-from .policy_impact import (
-    PolicyVersion as PolicyImpactVersion,
-)
-from .policy_impact import (
-    compare_policy_versions as compare_policy_impact_versions,
-)
 from .policy_migration import (
     MAX_POLICY_MIGRATION_DEPTH,
     MAX_POLICY_MIGRATION_ITEMS,
@@ -355,31 +354,6 @@ from .policy_schema import (
     lint_policy_schema,
     load_policy_schema,
     validate_policy_schema,
-)
-from .policy_simulation import (
-    ACTION_CHANGE_VALUES,
-    BLOCKING_CHANGE_VALUES,
-    COUNT_CHANGE_VALUES,
-    GATE_OUTCOME_VALUES,
-    POLICY_SIMULATION_ARTIFACT,
-    POLICY_SIMULATION_MATRIX_SCHEMA_VERSION,
-    POLICY_SIMULATION_SCHEMA_VERSION,
-    PolicyScenario,
-    PolicySimulationError,
-    PolicySimulationMatrix,
-    PolicySimulationPolicy,
-    PolicySimulationReport,
-    PolicySimulationRow,
-    PolicySimulationScenario,
-    PolicySimulationSchemaError,
-    build_policy_simulation_matrix,
-    render_policy_matrix,
-    render_policy_simulation_matrix,
-    run_policy_simulation,
-    simulate_policy_matrix,
-)
-from .policy_simulation import (
-    PolicyVersion as PolicySimulationVersion,
 )
 from .population import PopulationRiskAssessment, assess_population_risk
 from .privacy_budget import (
@@ -494,6 +468,53 @@ from .tabular_report import (
     render_tabular_risk_json,
     render_tabular_risk_markdown,
     tabular_risk_report,
+)
+
+from .policy_impact import (
+    CURRENT_POLICY_IMPACT_SCHEMA_VERSION,
+    PolicyImpact,
+    PolicyImpactChange,
+    PolicyImpactDigest,
+    PolicyResource,
+    TypedResource,
+    evaluate_policy_impact,
+    policy_impact_digest,
+    simulate_policy_impact,
+)
+
+from .policy_impact import (
+    PolicyVersion as PolicyImpactVersion,
+)
+
+from .policy_impact import (
+    compare_policy_versions as compare_policy_impact_versions,
+)
+
+from .policy_simulation import (
+    ACTION_CHANGE_VALUES,
+    BLOCKING_CHANGE_VALUES,
+    COUNT_CHANGE_VALUES,
+    GATE_OUTCOME_VALUES,
+    POLICY_SIMULATION_ARTIFACT,
+    POLICY_SIMULATION_MATRIX_SCHEMA_VERSION,
+    POLICY_SIMULATION_SCHEMA_VERSION,
+    PolicyScenario,
+    PolicySimulationError,
+    PolicySimulationMatrix,
+    PolicySimulationPolicy,
+    PolicySimulationReport,
+    PolicySimulationRow,
+    PolicySimulationScenario,
+    PolicySimulationSchemaError,
+    build_policy_simulation_matrix,
+    render_policy_matrix,
+    render_policy_simulation_matrix,
+    run_policy_simulation,
+    simulate_policy_matrix,
+)
+
+from .policy_simulation import (
+    PolicyVersion as PolicySimulationVersion,
 )
 
 
@@ -893,6 +914,20 @@ __all__ = [
     "lint_policy_schema",
     "load_policy_schema",
     "validate_policy_schema",
+    "EVIDENCE_REPLAY_MANIFEST_KIND",
+    "EVIDENCE_REPLAY_SCHEMA_VERSION",
+    "EvidenceReplayError",
+    "EvidenceReplayReport",
+    "EvidenceReplaySchemaError",
+    "ReplayMismatch",
+    "UnsafeReplayInputError",
+    "build_evidence_manifest",
+    "compute_environment_fingerprint",
+    "compute_policy_fingerprint",
+    "compute_result_fingerprint",
+    "load_evidence_manifest",
+    "replay_evidence",
+    "verify_evidence_replay",
     "ACTION_CHANGE_VALUES",
     "BLOCKING_CHANGE_VALUES",
     "COUNT_CHANGE_VALUES",

@@ -114,6 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for comparing shape, action, surrogate, policy, and count evidence across
   synthetic FHIR- and OMOP-shaped passes without retaining protected values
   (#2523).
+- Added a bounded, offline privacy evidence replay verifier with counts-only
+  synthetic manifests, stable policy/environment/result fingerprints, and
+  privacy-safe schema, environment, policy, and result drift reports (#2527).
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).

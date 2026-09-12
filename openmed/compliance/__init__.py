@@ -58,6 +58,22 @@ from .access_scope import (
     render_access_scope_evidence,
     render_access_scope_markdown,
 )
+from .artifact_lineage import (
+    ARTIFACT_LINEAGE_SCHEMA_VERSION,
+    EMPTY_POLICY_FINGERPRINT,
+    LINEAGE_NODE_SCHEMA_VERSION,
+    ArtifactLineageDiagnostics,
+    ArtifactLineageError,
+    ArtifactLineageManifest,
+    ArtifactLineageNode,
+    ArtifactLineageParent,
+    ArtifactLineageValidationError,
+    build_artifact_lineage_manifest,
+    compute_artifact_hash,
+    compute_policy_fingerprint,
+    load_artifact_lineage_manifest,
+    verify_artifact_lineage,
+)
 from .artifact_size_budget import (
     ArtifactBudgetCategory,
     ArtifactDescriptor,
@@ -98,6 +114,33 @@ from .dsar import (
     assemble_dsar_package,
     plan_erasure,
     render_dsar_summary,
+)
+from .evidence_freshness import (
+    DUPLICATE_EVIDENCE_ID,
+    EXPIRED_EVIDENCE,
+    FUTURE_TIMESTAMP,
+    INVALID_EVIDENCE_ID,
+    INVALID_EVIDENCE_TYPE,
+    INVALID_POLICY_VERSION,
+    INVALID_SUPERSESSION_LINK,
+    INVALID_TIMESTAMP,
+    MISSING_EVIDENCE,
+    MISSING_EVIDENCE_ID,
+    MISSING_EVIDENCE_TYPE,
+    MISSING_POLICY_VERSION,
+    MISSING_TIMESTAMP,
+    POLICY_MISMATCH,
+    SUPERSEDED_EVIDENCE,
+    UNKNOWN_EVIDENCE_TYPE,
+    EvidenceAgePolicy,
+    EvidenceFreshnessError,
+    EvidenceFreshnessPolicy,
+    EvidenceFreshnessReport,
+    EvidenceRecord,
+    PrivacyEvidence,
+    assert_evidence_freshness,
+    check_evidence_freshness,
+    evaluate_evidence_freshness,
 )
 from .expert_attestation import (
     EXPERT_ATTESTATION_CANONICALIZATION,
@@ -158,30 +201,6 @@ from .part11 import (
     readiness_checklist,
     verify_part11_audit_trail,
 )
-from .policy_coverage import (
-    MANIFEST_FILENAME as POLICY_COVERAGE_MANIFEST_FILENAME,
-)
-from .policy_coverage import (
-    MARKDOWN_FILENAME as POLICY_COVERAGE_MARKDOWN_FILENAME,
-)
-from .policy_coverage import (
-    MATRIX_ID as POLICY_COVERAGE_MATRIX_ID,
-)
-from .policy_coverage import (
-    SCHEMA_VERSION as POLICY_COVERAGE_SCHEMA_VERSION,
-)
-from .policy_coverage import (
-    PolicyCoverageBinding,
-    PolicyCoverageError,
-    PolicyCoverageMatrix,
-    PolicyCoverageResult,
-    PolicyCoverageRow,
-    UncoveredPolicyRuleError,
-    build_policy_coverage_matrix,
-    generate_policy_coverage,
-    render_policy_coverage_markdown,
-    validate_policy_coverage,
-)
 from .release_evidence import build_release_expert_review_evidence
 from .report_cardinality import (
     DEFAULT_REPORT_CARDINALITY_BUDGET,
@@ -220,6 +239,35 @@ from .safe_harbor import (
     SafeHarborAttestation,
     SafeHarborCategoryAttestation,
     generate_safe_harbor_attestation,
+)
+
+from .policy_coverage import (
+    MANIFEST_FILENAME as POLICY_COVERAGE_MANIFEST_FILENAME,
+)
+
+from .policy_coverage import (
+    MARKDOWN_FILENAME as POLICY_COVERAGE_MARKDOWN_FILENAME,
+)
+
+from .policy_coverage import (
+    MATRIX_ID as POLICY_COVERAGE_MATRIX_ID,
+)
+
+from .policy_coverage import (
+    SCHEMA_VERSION as POLICY_COVERAGE_SCHEMA_VERSION,
+)
+
+from .policy_coverage import (
+    PolicyCoverageBinding,
+    PolicyCoverageError,
+    PolicyCoverageMatrix,
+    PolicyCoverageResult,
+    PolicyCoverageRow,
+    UncoveredPolicyRuleError,
+    build_policy_coverage_matrix,
+    generate_policy_coverage,
+    render_policy_coverage_markdown,
+    validate_policy_coverage,
 )
 
 __all__ = [
@@ -389,6 +437,45 @@ __all__ = [
     "lint_report",
     "require_valid_report",
     "validate_report",
+    "ARTIFACT_LINEAGE_SCHEMA_VERSION",
+    "EMPTY_POLICY_FINGERPRINT",
+    "LINEAGE_NODE_SCHEMA_VERSION",
+    "ArtifactLineageDiagnostics",
+    "ArtifactLineageError",
+    "ArtifactLineageManifest",
+    "ArtifactLineageNode",
+    "ArtifactLineageParent",
+    "ArtifactLineageValidationError",
+    "build_artifact_lineage_manifest",
+    "compute_artifact_hash",
+    "compute_policy_fingerprint",
+    "load_artifact_lineage_manifest",
+    "verify_artifact_lineage",
+    "DUPLICATE_EVIDENCE_ID",
+    "EXPIRED_EVIDENCE",
+    "EvidenceAgePolicy",
+    "EvidenceFreshnessError",
+    "EvidenceFreshnessPolicy",
+    "EvidenceFreshnessReport",
+    "EvidenceRecord",
+    "FUTURE_TIMESTAMP",
+    "INVALID_EVIDENCE_ID",
+    "INVALID_EVIDENCE_TYPE",
+    "INVALID_POLICY_VERSION",
+    "INVALID_SUPERSESSION_LINK",
+    "INVALID_TIMESTAMP",
+    "MISSING_EVIDENCE",
+    "MISSING_EVIDENCE_ID",
+    "MISSING_EVIDENCE_TYPE",
+    "MISSING_POLICY_VERSION",
+    "MISSING_TIMESTAMP",
+    "POLICY_MISMATCH",
+    "PrivacyEvidence",
+    "SUPERSEDED_EVIDENCE",
+    "UNKNOWN_EVIDENCE_TYPE",
+    "assert_evidence_freshness",
+    "check_evidence_freshness",
+    "evaluate_evidence_freshness",
     "POLICY_COVERAGE_MANIFEST_FILENAME",
     "POLICY_COVERAGE_MARKDOWN_FILENAME",
     "POLICY_COVERAGE_MATRIX_ID",
