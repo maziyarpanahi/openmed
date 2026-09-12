@@ -168,6 +168,7 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
@@ -242,6 +243,7 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/privacy-corpus.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -264,6 +266,10 @@ classification:
     - reidentification-risk.md
     - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
+    - security/deletion-plans.md
+    - security/surrogate-audit.md
+    - security/redaction-idempotence.md
+    - security/evidence-replay.md
     - sms-short-text-deid.md
     - anonymization.md
     - guides/dataset-upload-guard.md
@@ -272,6 +278,7 @@ classification:
     - languages.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
+    - security/policy-as-data.md
     - pii-smart-merging.md
     - security/no-raw-phi-logging.md
     - security/pre-push-privacy.md
@@ -282,9 +289,16 @@ classification:
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
+    - security/redaction-diff.md
+    - security/policy-composition.md
+    - security/evidence-integrity.md
+    - security/tabular-schema-gates.md
     - security/key-management.md
+    - security/key-custody-metadata.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
+    - security/access-review.md
+    - security/surrogate-key-providers.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
@@ -306,10 +320,12 @@ classification:
     - integrations/pandas-on-spark.md
     - integrations/ray-map-batches.md
     - integrations/sqlalchemy.md
+    - integrations/omop-cohort-check.md
     - duckdb-deidentification.md
     - integrations/distributed-sql-udf.md
     - integrations/warehouse-remote-function.md
     - spark-deidentification.md
+    - snowflake-udf.md
     - prefect-integration.md
     - integrations/airflow.md
     - spacy-component.md
@@ -319,7 +335,15 @@ classification:
     - interop/artifact-inventory.md
     - compliance.md
     - compliance/audit-envelopes.md
+    - compliance/report-cardinality.md
+    - compliance/report-lint.md
+    - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
+    - compliance/reproducible-release.md
+    - compliance/access-scope.md
+    - compliance/artifact-size-budgets.md
+    - compliance/evidence-freshness.md
+    - compliance/artifact-lineage.md
     - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md
     - compliance/north-africa-pdpl-0908-checklist.md
@@ -331,12 +355,17 @@ classification:
     - compliance/consent-data-use-tags.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
+    - compliance/privacy-release-gate.md
     - guides/fhir-omop-interoperability.md
     - interop/archive-safety.md
     - fhir-interop.md
+    - integrations/fhir-r5-fidelity.md
+    - fhir/profile-declarations.md
+    - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
+    - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md
     - fhir/diagnostic-report-export.md
     - fhir/operation-outcome.md
@@ -377,14 +406,19 @@ classification:
     - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
+    - security/policy-impact.md
     - security/license-inventory.md
     - security/exception-taxonomy.md
+    - security/budget-migrations.md
+    - security/policy-simulation.md
+    - security/exception-budgets.md
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
+    - security/policy-migrations.md
     - security/prompt-injection-guard.md
     - security/mcp-consent-receipts.md
     - security/mcp-authorization-matrix.md
@@ -394,6 +428,7 @@ classification:
     - security/path-portability.md
     - security/tabular-risk-report.md
     - security/privacy-budget.md
+    - security/deletion-verification.md
     - supply-chain/vulnerability-scanning.md
     - security/dependency-risk.md
     - security/sbom.md
@@ -416,6 +451,7 @@ classification:
   link_only:
     - benchmarks/golden.md
     - clinical-domains.md
+    - compliance/access-review-expiry.md
     - compliance/dpa-template.md
     - compliance/dpia-template.md
     - compliance/gdpr-dsar-export.md
