@@ -260,6 +260,7 @@ nav:
       - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Offline Artifact Inventory: interop/artifact-inventory.md
       - Compliance Posture: compliance.md
+      - Audit-envelope Metadata: compliance/audit-envelopes.md
       - Privacy Report Cardinality Budgets: compliance/report-cardinality.md
       - Privacy Report Field Linting: compliance/report-lint.md
       - Privacy-policy Coverage Matrix: compliance/policy-coverage.md

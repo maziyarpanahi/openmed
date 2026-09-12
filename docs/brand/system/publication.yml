@@ -334,6 +334,7 @@ classification:
     - interop/x12-837-redaction.md
     - interop/artifact-inventory.md
     - compliance.md
+    - compliance/audit-envelopes.md
     - compliance/report-cardinality.md
     - compliance/report-lint.md
     - compliance/policy-coverage.md
