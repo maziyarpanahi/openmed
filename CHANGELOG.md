@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, deterministic, offline policy-migration checker with
+  fail-closed schema and protection-type changes, privacy-safe reports, and a
+  report-bound human acknowledgement gate for weakening changes (#2407).
 - Added an in-memory no-PHI telemetry exporter with closed counter families,
   bounded dimensions and totals, atomic event validation, exception-type-only
   categorization, deterministic JSON and Prometheus rendering, and no
@@ -21,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit blob for direct identifiers, secrets, and sensitive structured fields;
   emits value-free reports; supports narrowly versioned synthetic-fixture
   allowlists; and installs atomically while preserving existing hooks (#2298).
+- Added a versioned, bounded privacy policy-as-data schema for jurisdiction,
+  recall floors, de-identification actions, surrogate strategy, and
+  privacy-safe audit retention, with deterministic local-only loading,
+  strict duplicate and alias handling, and value-free validation failures
+  (#2406).
 - Added a bounded, thread-safe privacy budget ledger for named aggregate
   release contexts with atomic epsilon/delta charging, counts-only evidence,
   immutable configuration views, and value-free failures (#2410).
