@@ -40,4 +40,7 @@ mutates a live policy or budget. It performs no network calls. The result is
 review evidence, not a compliance certification or a clinical decision.
 
 The root `openmed.risk` namespace exports the policy description as
-`PolicyImpactVersion`. The defining module also retains its local `PolicyVersion` name.
+`PolicyImpactVersion` and the comparison function as `compare_policy_impact_versions`.
+The defining module retains its local `PolicyVersion` and
+`compare_policy_versions` names. The root `compare_policy_versions` function
+continues to refer to policy migration.

@@ -229,3 +229,11 @@ def test_profile_adapter_preserves_inherited_label_actions() -> None:
     assert impact.action_deltas[0].from_value == "keep"
     assert impact.action_deltas[0].to_value == "redact"
     assert impact.action_deltas[0].count == 2
+
+
+def test_root_comparison_exports_preserve_both_policy_apis() -> None:
+    from openmed import risk
+    from openmed.risk import policy_impact, policy_migration
+
+    assert risk.compare_policy_versions is policy_migration.compare_policy_versions
+    assert risk.compare_policy_impact_versions is policy_impact.compare_policy_versions
