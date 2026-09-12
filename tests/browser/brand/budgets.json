@@ -13,13 +13,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3284992
+    "json": 3289088
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3284992
+    "docs/search/search_index.json": 3289088
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -41,6 +41,6 @@
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded.",
-    "The policy documentation search index measures 3281116 bytes; its 3284992-byte ceiling rounds this audited payload up to the next 4 KiB boundary."
+    "The combined documentation search index including the Snowflake guide measures 3286828 bytes; its 3289088-byte ceiling rounds this audited payload up to the next 4 KiB boundary."
   ]
 }
