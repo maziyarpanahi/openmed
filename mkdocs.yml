@@ -264,6 +264,7 @@ nav:
       - Privacy Report Field Linting: compliance/report-lint.md
       - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
+      - Reproducible Release Provenance: compliance/reproducible-release.md
       - Access-scope Minimization Evidence: compliance/access-scope.md
       - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
       - Privacy Evidence Freshness Gate: compliance/evidence-freshness.md
@@ -279,6 +280,7 @@ nav:
       - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
+      - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
@@ -334,6 +336,7 @@ nav:
       - Policy-impact Digest: security/policy-impact.md
       - Dependency License Inventory: security/license-inventory.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
+      - Differential-Privacy Budget Migrations: security/budget-migrations.md
       - Privacy-policy Simulation Matrix: security/policy-simulation.md
       - Privacy Exception Budgets: security/exception-budgets.md
       - Export Filename Policy: security/export-naming.md

@@ -338,6 +338,7 @@ classification:
     - compliance/report-lint.md
     - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
+    - compliance/reproducible-release.md
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
     - compliance/evidence-freshness.md
@@ -353,6 +354,7 @@ classification:
     - compliance/consent-data-use-tags.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
+    - compliance/privacy-release-gate.md
     - guides/fhir-omop-interoperability.md
     - interop/archive-safety.md
     - fhir-interop.md
@@ -406,6 +408,7 @@ classification:
     - security/policy-impact.md
     - security/license-inventory.md
     - security/exception-taxonomy.md
+    - security/budget-migrations.md
     - security/policy-simulation.md
     - security/exception-budgets.md
     - security/export-naming.md
