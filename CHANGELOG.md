@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added tiny RF64 refusal fixtures that pin WAV envelope rejection, short-read
+  boundaries, and stream restoration without changing the parser (#3117).
+
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
