@@ -119,8 +119,6 @@ __all__ = [
     "DIAGNOSTIC_REPORT_FIELDS_R4R5",
     "DIAGNOSTIC_REPORT_STATUS_UNKNOWN",
     "DIAGNOSTIC_REPORT_STATUSES",
-    "FHIRBundle",
-    "FHIRExportSummary",
     "FHIR_RESOURCE_TYPES",
     "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_EXTENSION_URL",
@@ -195,4 +193,6 @@ __all__ = [
     "ConformanceResult",
     "US_CORE_VERSION",
     "check_us_core",
+    "FHIRBundle",
+    "FHIRExportSummary",
 ]
