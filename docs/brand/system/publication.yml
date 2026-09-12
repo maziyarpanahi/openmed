@@ -293,9 +293,11 @@ classification:
     - security/evidence-integrity.md
     - security/tabular-schema-gates.md
     - security/key-management.md
+    - security/key-custody-metadata.md
     - security/audit-key-rotation.md
     - security/encrypted-surrogate-vault.md
     - security/access-review.md
+    - security/surrogate-key-providers.md
     - integrations-langchain.md
     - integrations/langchain.md
     - integrations/arrow-flight.md
