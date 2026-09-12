@@ -98,6 +98,7 @@ nav:
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
+      - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
       - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
       - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md

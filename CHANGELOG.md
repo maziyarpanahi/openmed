@@ -185,6 +185,11 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added local, deterministic FHIR ValueSet expansion over caller-loaded free
+  vocabulary snapshots plus explicit FHIR `$expand` and ECL delegation to a
+  caller-supplied terminology endpoint. Results include versioned provenance;
+  caching is user-controlled, and restricted member codes are never persisted
+  without a second explicit policy opt-in (#926).
 - Added closed, versioned federated aggregate metric envelopes with finite
   clipping bounds, minimum-group suppression, coarse participant bands,
   controlled privacy mechanisms, confidence intervals, deterministic JSON,
