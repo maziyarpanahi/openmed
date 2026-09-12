@@ -137,6 +137,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AllergyIntolerance resources, including base-R4-first validation,
   must-support warnings, required-binding errors, canonical profile resolution,
   and compact CC0 constraint metadata (#2366).
+- Completed the synthetic grounding/export conformance suite with fail-closed
+  out-of-process HL7 FHIR R4 validation, an official-validator malformed
+  resource negative control, expanded ACHILLES-style OMOP column/key/reference
+  checks, and paired JSON/Markdown `BenchmarkReport` artifacts (#2359).
 - Added a versioned federated update metadata envelope with coordinator-owned
   parameter expectations, bounded exact shape arithmetic, deterministic JSON,
   clipping declarations, and value-free rejection of unknown or identifying

@@ -103,6 +103,48 @@ The checker covers cardinality, fixed and pattern values, locally enumerable
 bindings, and selected slices. It does not execute FHIRPath invariants, fetch
 packages, or call remote terminology servers.
 
+## Run the grounding/export conformance suite
+
+The synthetic round-trip suite exports the committed fabricated grounding
+fixture through `to_fhir()` and `to_omop()`. It validates the transaction
+Bundle with the official HL7 FHIR R4 validator, runs a deliberately malformed
+Observation as a negative control, applies the local ACHILLES-style OMOP smoke
+check, and writes the result as a `BenchmarkReport` in JSON and Markdown.
+
+The validator JAR is not bundled with OpenMed. Fetch it explicitly through an
+approved artifact workflow, verify its checksum, and keep it outside the
+repository. The empty `grounding-validate` extra documents this opt-in boundary
+without installing Java code or changing the local-first runtime:
+
+```bash
+uv pip install -e ".[grounding-validate]"
+curl --fail --location \
+  https://github.com/hapifhir/org.hl7.fhir.core/releases/download/6.8.1/validator_cli.jar \
+  --output /opt/fhir/validator_cli.jar
+echo "7d05b31196557a8ed2748d3c8a1646deba9b6600f5b6946be598949bd11eefe2  /opt/fhir/validator_cli.jar" \
+  | sha256sum --check --strict
+uv run python -m openmed.eval.suites.grounding_export \
+  --validator-jar /opt/fhir/validator_cli.jar \
+  --output grounding-export-validation.json \
+  --markdown-output grounding-export-validation.md
+```
+
+Artifact download is a one-time, user-directed setup step. Suite execution
+uses `-tx n/a`, performs no terminology or telemetry calls, and sends no
+Bundle data out of process beyond the local Java invocation. If no JAR is
+supplied, the command runs only the dependency-free structural preflight and
+marks `official_validator_executed` as `false`; official conformance evidence
+requires the JAR-backed run. Validator prose is never copied into the report:
+only severity counts, stable failure codes, and SHA-256 evidence fingerprints
+are retained.
+
+The documented ACHILLES-style subset is intentionally smaller than full OHDSI
+ACHILLES. It checks the four emitted core table names, complete loader-owned
+columns, primary-key type/uniqueness, nonnegative concept IDs, resolvable
+concept/person/visit/note/NOTE_NLP references, NOTE_NLP offsets, and reciprocal
+NOTE_NLP-to-domain-event reachability. Full ACHILLES still requires a deployed
+CDM database and remains out of scope.
+
 ## Check US Core locally
 
 For OpenMed's four supported export profiles, use the bundled US Core 9.0.0

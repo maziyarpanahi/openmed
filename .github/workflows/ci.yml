@@ -140,7 +140,7 @@ jobs:
 
     - name: Install validation dependencies
       run: |
-        uv sync --frozen --extra dev --python 3.11
+        uv sync --frozen --extra dev --extra grounding-validate --python 3.11
 
     - name: Fetch pinned HL7 FHIR validator
       run: |
@@ -154,14 +154,17 @@ jobs:
       run: |
         uv run python -m openmed.eval.suites.grounding_export \
           --validator-jar "$RUNNER_TEMP/validator_cli.jar" \
-          --output grounding-export-validation.json
+          --output grounding-export-validation.json \
+          --markdown-output grounding-export-validation.md
 
     - name: Upload grounding export validation report
       if: always() && hashFiles('grounding-export-validation.json') != ''
       uses: actions/upload-artifact@v7
       with:
         name: grounding-export-validation
-        path: grounding-export-validation.json
+        path: |
+          grounding-export-validation.json
+          grounding-export-validation.md
 
   lockfile-drift:
     runs-on: ubuntu-latest
