@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import struct
+import wave
 
 import pytest
 
@@ -14,6 +15,7 @@ from openmed.multimodal.wav_metadata import (
     WavMetadataError,
     read_wav_metadata,
 )
+from tests.fixtures.multimodal.rf64 import RF64_CASES
 
 
 def _chunk(chunk_id: bytes, payload: bytes) -> bytes:
@@ -253,3 +255,91 @@ def test_invalid_header_limits_are_rejected(max_header_bytes) -> None:
 
 def test_default_header_limit_is_bounded() -> None:
     assert DEFAULT_MAX_WAV_HEADER_BYTES == 64 * 1024
+
+
+@pytest.mark.parametrize("name,payload", RF64_CASES, ids=[c[0] for c in RF64_CASES])
+def test_rf64_rejection_category_is_stable(name, payload) -> None:
+    assert len(payload) <= 128
+    assert payload[:4] == b"RF64"
+    with pytest.raises(WavMetadataError) as raised:
+        read_wav_metadata(payload)
+    assert raised.value.category == "wav_signature_invalid"
+    assert str(raised.value) == "wav_signature_invalid"
+
+
+@pytest.mark.parametrize("name,payload", RF64_CASES, ids=[c[0] for c in RF64_CASES])
+@pytest.mark.parametrize("chunk_size", [1, 2, 3, 7, 12])
+def test_rf64_rejected_before_reading_any_ds64_chunk(name, payload, chunk_size) -> None:
+    class HeaderOnlyStream:
+        def __init__(self) -> None:
+            self.stream = io.BytesIO(payload)
+            self.requests: list[int] = []
+            self.closed = False
+
+        def seekable(self) -> bool:
+            return False
+
+        def read(self, size: int) -> bytes:
+            assert 0 < size <= 12 - self.stream.tell()
+            self.requests.append(size)
+            return self.stream.read(min(size, chunk_size))
+
+    stream = HeaderOnlyStream()
+    with pytest.raises(WavMetadataError, match="^wav_signature_invalid$"):
+        read_wav_metadata(stream)
+    assert stream.stream.tell() == 12
+    assert stream.requests[0] == 12
+    assert not stream.closed
+
+
+@pytest.mark.parametrize("name,payload", RF64_CASES, ids=[c[0] for c in RF64_CASES])
+def test_rf64_failure_restores_seekable_stream(name, payload) -> None:
+    stream = io.BytesIO(b"prefix" + payload)
+    stream.seek(6)
+    with pytest.raises(WavMetadataError, match="^wav_signature_invalid$"):
+        read_wav_metadata(stream)
+    assert stream.tell() == 6
+    assert not stream.closed
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("name,payload", RF64_CASES, ids=[c[0] for c in RF64_CASES])
+def test_rf64_real_file_end_to_end(tmp_path, name, payload) -> None:
+    path = tmp_path / f"synthetic-{name}.wav"
+    path.write_bytes(b"prefix" + payload)
+    with path.open("rb") as stream:
+        stream.seek(6)
+        with pytest.raises(WavMetadataError, match="^wav_signature_invalid$"):
+            read_wav_metadata(stream)
+        assert stream.tell() == 6
+        assert not stream.closed
+
+
+@pytest.mark.parametrize("cut", range(12))
+def test_rf64_incomplete_envelope_retains_truncated_reason(cut) -> None:
+    with pytest.raises(WavMetadataError, match="^wav_header_truncated$"):
+        read_wav_metadata(RF64_CASES[0][1][:cut])
+
+
+@pytest.mark.parametrize("limit", [1, 11])
+def test_rf64_header_limit_is_checked_before_signature(limit) -> None:
+    with pytest.raises(WavMetadataError, match="^wav_header_limit_exceeded$"):
+        read_wav_metadata(RF64_CASES[0][1], max_header_bytes=limit)
+
+
+@pytest.mark.integration
+def test_stdlib_generated_riff_wave_still_works_end_to_end(tmp_path) -> None:
+    path = tmp_path / "synthetic-empty.wav"
+    with wave.open(str(path), "wb") as writer:
+        writer.setnchannels(2)
+        writer.setsampwidth(2)
+        writer.setframerate(44100)
+        writer.writeframes(b"")
+    with wave.open(str(path), "rb") as reader:
+        expected = (reader.getnchannels(), reader.getframerate(), reader.getnframes())
+    with path.open("rb") as stream:
+        result = read_wav_metadata(stream)
+        assert stream.tell() == 0
+    assert (result.channels, result.sample_rate_hz, result.frame_count) == expected
+    assert result.data_byte_count == 0
+    assert result.duration_seconds == 0.0
