@@ -421,3 +421,15 @@ def test_errors_are_content_free():
         evaluate_asset_limits(MOBILE_V1, 42, "image")  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         evaluate_asset_limits({"max_pages": 1}, manifest(), "image")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("value", [10**1000, -(10**1000)])
+def test_unbounded_numeric_inputs_have_stable_errors(value):
+    with pytest.raises(AssetLimitError):
+        MOBILE_V1.with_limits(max_duration_seconds=value)
+    with pytest.raises(AssetLimitError):
+        evaluate_asset_limits(MOBILE_V1, manifest(duration_seconds=value), "audio")
+    with pytest.raises(AssetLimitError):
+        LimitFinding("pixels", "limit_exceeded", value, None)
+    with pytest.raises(AssetLimitError):
+        LimitFinding("pixels", "limit_exceeded", 1, value)
