@@ -409,3 +409,34 @@ def test_privacy_guard_rejects_non_string_keys_and_non_finite_numbers() -> None:
         _assert_safe_payload({1: "value"})
     with pytest.raises(RunSummaryPrivacyError, match="non_finite_number"):
         _assert_safe_payload({"value": float("inf")})
+
+
+@pytest.mark.parametrize("value", [10**1000, -(10**1000)])
+def test_strict_parsers_reject_unbounded_duration_with_field_error(value):
+    payload = RunSummary.from_events([]).to_dict()
+    payload["duration_seconds"] = value
+    for parse, source in [
+        (RunSummary.from_dict, payload),
+        (RunSummary.from_json, json.dumps(payload)),
+    ]:
+        with pytest.raises(RunSummaryError, match="^duration_seconds: out_of_range$"):
+            parse(source)
+
+
+def test_malformed_json_does_not_retain_submitted_content():
+    with pytest.raises(RunSummaryError, match="^summary: invalid_json$") as caught:
+        RunSummary.from_json('{"synthetic-private-note":')
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("field", ["workflow_ids", "artifact_digests"])
+def test_strict_parser_rejects_objects_in_sequence_fields(field):
+    payload = RunSummary.from_events([]).to_dict()
+    payload[field] = {"clinical-review": "synthetic-private-note"}
+    for parser, source in [
+        (RunSummary.from_dict, payload),
+        (RunSummary.from_json, json.dumps(payload)),
+    ]:
+        with pytest.raises(RunSummaryError, match=f"^{field}: invalid_sequence$"):
+            parser(source)

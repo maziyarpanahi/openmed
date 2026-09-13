@@ -68,8 +68,10 @@ def _validate_count(value: Any, field_name: str, maximum: int) -> int:
 
 
 def _validate_duration(value: Any) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if type(value) not in (int, float):
         raise RunSummaryError("duration_seconds: invalid_number")
+    if not 0 <= value <= _MAX_DURATION_SECONDS:
+        raise RunSummaryError("duration_seconds: out_of_range")
     normalized = float(value)
     if (
         not math.isfinite(normalized)
@@ -230,8 +232,10 @@ class RunSummary:
             fields = set(payload)
         except (KeyboardInterrupt, SystemExit):
             raise
-        except BaseException:
-            raise RunSummaryError("summary: invalid_mapping") from None
+        except Exception:
+            fields = None
+        if fields is None:
+            raise RunSummaryError("summary: invalid_mapping")
         if fields - _SUMMARY_FIELDS:
             raise RunSummaryError("summary: unknown_field")
         if _SUMMARY_FIELDS - fields:
@@ -241,8 +245,13 @@ class RunSummary:
             values = {field_name: payload[field_name] for field_name in fields}
         except (KeyboardInterrupt, SystemExit):
             raise
-        except BaseException:
-            raise RunSummaryError("summary: unreadable_mapping") from None
+        except Exception:
+            values = None
+        if values is None:
+            raise RunSummaryError("summary: unreadable_mapping")
+        for field_name in ("workflow_ids", "artifact_digests"):
+            if type(values[field_name]) not in (list, tuple):
+                raise RunSummaryError(f"{field_name}: invalid_sequence")
         return cls(
             schema_version=values["schema_version"],
             workflow_ids=values["workflow_ids"],
@@ -257,6 +266,8 @@ class RunSummary:
         """Build a run summary from bounded JSON with duplicate-key checks."""
         if not isinstance(payload, (str, bytes, bytearray)):
             raise RunSummaryError("summary: invalid_json")
+        if len(payload) > MAX_RUN_SUMMARY_JSON_BYTES:
+            raise RunSummaryError("summary: json_too_large")
         try:
             payload_size = (
                 len(payload.encode("utf-8"))
@@ -264,7 +275,9 @@ class RunSummary:
                 else len(payload)
             )
         except UnicodeEncodeError:
-            raise RunSummaryError("summary: invalid_json") from None
+            payload_size = None
+        if payload_size is None:
+            raise RunSummaryError("summary: invalid_json")
         if payload_size > MAX_RUN_SUMMARY_JSON_BYTES:
             raise RunSummaryError("summary: json_too_large")
         try:
@@ -277,9 +290,11 @@ class RunSummary:
             raise
         except RunSummaryError:
             raise
-        except BaseException:
-            raise RunSummaryError("summary: invalid_json") from None
-        return cls.from_dict(decoded)
+        except Exception:
+            pass
+        else:
+            return cls.from_dict(decoded)
+        raise RunSummaryError("summary: invalid_json")
 
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic metadata-only JSON-compatible data."""

@@ -49,3 +49,7 @@ markdown_report = summary.to_markdown()
 JSON keys, outcome rows, workflow identifiers, and artifact digests have stable
 ordering. Artifact contents and workflow content are never read by the summary
 layer.
+
+Strict parsing rejects mapping objects in sequence fields and checks duration
+bounds before converting numbers to floats. Malformed JSON and unreadable
+mappings produce field-only failures without retaining source exceptions.
