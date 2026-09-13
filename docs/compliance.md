@@ -40,6 +40,14 @@ issue, and without including real patient data.
 - [Pan-African Malabo Convention baseline](compliance/africa-malabo-baseline.md)
   maps Article 14(1) sensitive-data categories to conservative, non-`keep`
   canonical-label actions while preserving national-law precedence.
+- [Privacy waiver lifecycle ledger](compliance/waiver-ledger.md) records
+  deterministic, aggregate-only waiver state without identities or finding text.
+- [Structured privacy access-review expiry gate](compliance/access-review-expiry.md)
+  provides a deterministic, local-only check for review validity, policy
+  fingerprint, and required decision categories.
+- [Privacy report cardinality budgets](compliance/report-cardinality.md)
+  bound typed report containers and emit only safe paths and counts when a
+  report exceeds its local budget.
 
 ## Deployment Templates
 
