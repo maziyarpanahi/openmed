@@ -227,6 +227,15 @@ from .pptx import (
     map_text_spans_to_pptx_runs,
     write_redacted_pptx,
 )
+from .preflight import (
+    PREFLIGHT_CHECKS,
+    PREFLIGHT_SCHEMA_VERSION,
+    PreflightError,
+    PreflightFinding,
+    PreflightReport,
+    PreflightStatus,
+    preflight_asset,
+)
 from .processing_summary import (
     PROCESSING_SUMMARY_SCHEMA_VERSION,
     AbstentionCount,
@@ -332,6 +341,13 @@ __all__ = [
     "LimitProfile",
     "MOBILE_V1",
     "evaluate_asset_limits",
+    "PREFLIGHT_CHECKS",
+    "PREFLIGHT_SCHEMA_VERSION",
+    "PreflightError",
+    "PreflightFinding",
+    "PreflightReport",
+    "PreflightStatus",
+    "preflight_asset",
     "MANIFEST_VERSION",
     "AssetBatch",
     "AssetBatchError",
