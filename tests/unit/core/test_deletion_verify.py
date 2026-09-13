@@ -385,3 +385,118 @@ def test_memory_recovery_limit_rolls_back_before_deletion(tmp_path, monkeypatch)
         delete_verified_artifacts(tmp_path, fingerprints)
     assert first.read_bytes() == second.read_bytes() == b"SYNTHETIC_123"
     assert list(tmp_path.glob(".openmed-deletion-*")) == []
+
+
+def test_hash_accepts_windows_path_and_descriptor_creation_times(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    artifact = tmp_path / "synthetic.bin"
+    content = b"SYNTHETIC\r\n\x1a"
+    artifact.write_bytes(content)
+    descriptor = deletion_verify._open_for_hash(artifact)
+    real_fstat = deletion_verify.os.fstat
+    state = real_fstat(descriptor)
+    fields = {
+        name: getattr(state, name)
+        for name in (
+            "st_mode",
+            "st_dev",
+            "st_ino",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+            "st_nlink",
+        )
+    }
+    expected = SimpleNamespace(**fields, st_birthtime_ns=123)
+    opened = SimpleNamespace(
+        **{**fields, "st_ctime_ns": fields["st_ctime_ns"] + 1}, st_birthtime_ns=123
+    )
+    monkeypatch.setattr(deletion_verify, "_WINDOWS_STAT", True, raising=False)
+    monkeypatch.setattr(deletion_verify.os, "fstat", lambda fd: opened)
+    try:
+        assert deletion_verify._hash_descriptor(descriptor, expected) == (
+            "sha256:" + hashlib.sha256(content).hexdigest()
+        )
+    finally:
+        deletion_verify.os.close(descriptor)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "st_dev",
+        "st_ino",
+        "st_size",
+        "st_mtime_ns",
+        "st_nlink",
+        "st_birthtime_ns",
+    ],
+)
+def test_windows_hash_rejects_changed_identity_or_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    from types import SimpleNamespace
+
+    artifact = tmp_path / "synthetic.bin"
+    artifact.write_bytes(b"SYNTHETIC")
+    descriptor = deletion_verify._open_for_hash(artifact)
+    state = deletion_verify.os.fstat(descriptor)
+    fields = {
+        name: getattr(state, name)
+        for name in (
+            "st_mode",
+            "st_dev",
+            "st_ino",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+            "st_nlink",
+        )
+    }
+    fields["st_birthtime_ns"] = 123
+    expected = SimpleNamespace(**fields)
+    opened = SimpleNamespace(**{**fields, field: fields[field] + 1})
+    monkeypatch.setattr(deletion_verify, "_WINDOWS_STAT", True, raising=False)
+    monkeypatch.setattr(deletion_verify.os, "fstat", lambda fd: opened)
+    try:
+        with pytest.raises(DeletionTransactionError):
+            deletion_verify._hash_descriptor(descriptor, expected)
+    finally:
+        deletion_verify.os.close(descriptor)
+
+
+def test_windows_hash_rejects_descriptor_metadata_change_during_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    artifact = tmp_path / "synthetic.bin"
+    artifact.write_bytes(b"SYNTHETIC")
+    descriptor = deletion_verify._open_for_hash(artifact)
+    state = deletion_verify.os.fstat(descriptor)
+    fields = {
+        name: getattr(state, name)
+        for name in (
+            "st_mode",
+            "st_dev",
+            "st_ino",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+            "st_nlink",
+        )
+    }
+    fields["st_birthtime_ns"] = 123
+    expected = SimpleNamespace(**fields)
+    changed = SimpleNamespace(**{**fields, "st_ctime_ns": fields["st_ctime_ns"] + 1})
+    states = iter([expected, changed])
+    monkeypatch.setattr(deletion_verify, "_WINDOWS_STAT", True, raising=False)
+    monkeypatch.setattr(deletion_verify.os, "fstat", lambda fd: next(states))
+    try:
+        with pytest.raises(DeletionTransactionError):
+            deletion_verify._hash_descriptor(descriptor, expected)
+    finally:
+        deletion_verify.os.close(descriptor)
