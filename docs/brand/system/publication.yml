@@ -219,6 +219,7 @@ classification:
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
     - training/federated-metrics.md
+    - training/federated-preflight.md
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
