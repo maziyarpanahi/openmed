@@ -135,7 +135,7 @@ from openmed.clinical.exporters import to_fhir, to_omop
 bundle = to_fhir(
     grounded,
     subject_reference="Patient/local-subject",
-    document_id="local-document",
+    doc_id="local-document",
 )
 
 tables = to_omop(
