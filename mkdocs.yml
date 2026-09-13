@@ -58,6 +58,7 @@ nav:
       - Streaming Trace Redaction: guides/streaming-traces.md
       - Read-only Trace Scan Report: guides/trace-audit.md
       - Trace Replay Fidelity: reference/trace-fidelity.md
+      - Session-end Trace Scrub Hook: guides/session-end-hook.md
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
@@ -93,9 +94,12 @@ nav:
       - Advanced NER & Output Formatting: output-formatting.md
       - Cross-format Offset Properties: structured/offset-properties.md
       - Schema Snapshot Compatibility: structured/schema-snapshots.md
+      - Provenance-aware Terminology Cache: structured/terminology-cache.md
+      - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
+      - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
       - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
       - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
@@ -127,6 +131,7 @@ nav:
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Core Pipeline Observability: core-observability.md
+      - No-PHI Telemetry: operations/no-phi-telemetry.md
       - Low-resource Benchmark: benchmarks/low-resource.md
       - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Cost vs Cloud: benchmarks/cost-vs-cloud.md
@@ -165,6 +170,7 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
+      - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -186,21 +192,41 @@ nav:
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
+      - Minimum-necessary Field Selection: security/minimum-necessary.md
       - Structured Privacy and Re-identification Risk Lab: privacy/structured-risk-lab.md
+      - Deletion Impact Plans: security/deletion-plans.md
+      - Surrogate-map Referential-integrity Audit: security/surrogate-audit.md
+      - Nested Redaction Idempotence: security/redaction-idempotence.md
+      - Privacy Evidence Replay: security/evidence-replay.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
+      - Dataset Upload Privacy Guard: guides/dataset-upload-guard.md
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
+      - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Pre-push Privacy Scanner: security/pre-push-privacy.md
+      - Counts-only Trace Audit: security/trace-audit-artifact.md
+      - CI Privacy Scan: security/ci-privacy-scan.md
       - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md
       - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
+      - Audit-artifact Retention: security/audit-retention.md
+      - Policy-aware Redaction Diffs: security/redaction-diff.md
+      - Privacy Policy Composition: security/policy-composition.md
+      - Evidence-bundle Integrity: security/evidence-integrity.md
+      - Tabular Schema Drift Gates: security/tabular-schema-gates.md
       - Key Management and Rotation: security/key-management.md
+      - Key Custody Metadata: security/key-custody-metadata.md
+      - Audit-report Signing Key Rotation: security/audit-key-rotation.md
+      - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
+      - Structured Access Review: security/access-review.md
+      - Surrogate-key Providers: security/surrogate-key-providers.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - LangChain Redaction Node: integrations/langchain.md
       - Arrow Flight De-identification: integrations/arrow-flight.md
@@ -222,10 +248,12 @@ nav:
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
+      - OMOP Cohort Export Validation: integrations/omop-cohort-check.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - Warehouse Remote-Function Handler: integrations/warehouse-remote-function.md
       - PySpark De-identification UDFs: spark-deidentification.md
+      - Snowflake Python De-identification UDFs: snowflake-udf.md
       - Prefect Batch De-identification: prefect-integration.md
       - Airflow Redaction Operator: integrations/airflow.md
       - spaCy Pipeline Component: spacy-component.md
@@ -234,7 +262,16 @@ nav:
       - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Offline Artifact Inventory: interop/artifact-inventory.md
       - Compliance Posture: compliance.md
+      - Audit-envelope Metadata: compliance/audit-envelopes.md
+      - Privacy Report Cardinality Budgets: compliance/report-cardinality.md
+      - Privacy Report Field Linting: compliance/report-lint.md
+      - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
+      - Reproducible Release Provenance: compliance/reproducible-release.md
+      - Access-scope Minimization Evidence: compliance/access-scope.md
+      - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
+      - Privacy Evidence Freshness Gate: compliance/evidence-freshness.md
+      - Privacy-Artifact Lineage Manifests: compliance/artifact-lineage.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
@@ -246,12 +283,17 @@ nav:
       - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
+      - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
+      - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
+      - FHIR Profile Declarations: fhir/profile-declarations.md
+      - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
+      - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
       - FHIR DiagnosticReport Export: fhir/diagnostic-report-export.md
       - FHIR OperationOutcome Reports: fhir/operation-outcome.md
@@ -294,12 +336,19 @@ nav:
       - Local Model Release Queue: model-release-queue.md
       - Development Workflow: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
+      - Policy-impact Digest: security/policy-impact.md
+      - Dependency License Inventory: security/license-inventory.md
+      - No-PHI Exception Taxonomy: security/exception-taxonomy.md
+      - Differential-Privacy Budget Migrations: security/budget-migrations.md
+      - Privacy-policy Simulation Matrix: security/policy-simulation.md
+      - Privacy Exception Budgets: security/exception-budgets.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
+      - Policy Migration Reviews: security/policy-migrations.md
       - MCP Prompt Injection Guard: security/prompt-injection-guard.md
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md
@@ -307,7 +356,11 @@ nav:
       - Manual HF Model Publication: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Resource Path Portability Audit: security/path-portability.md
+      - Tabular Re-identification Risk Report: security/tabular-risk-report.md
+      - Aggregate Release Privacy Budgets: security/privacy-budget.md
+      - Sensitive Artifact Deletion Verification: security/deletion-verification.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
+      - Offline Dependency Risk Report: security/dependency-risk.md
       - Software Bill of Materials: security/sbom.md
       - SLSA Build Provenance: supply-chain/provenance.md
       - Container Image SBOM: supply-chain/sbom.md
