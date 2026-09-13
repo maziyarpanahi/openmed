@@ -148,6 +148,7 @@ nav:
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
       - Preference Pair Schema: reference/preference-schema.md
+      - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Bounded Asset Digests: multimodal/asset-digests.md
