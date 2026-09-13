@@ -28,6 +28,8 @@ from .outcomes import (
     allowed_reason_codes,
 )
 from .run_summary import (
+    MAX_RUN_SUMMARY_JSON_BYTES,
+    RUN_SUMMARY_SCHEMA_VERSION,
     RunEvent,
     RunSummary,
     RunSummaryError,
@@ -52,7 +54,9 @@ __all__ = [
     "OutcomeClass",
     "OutcomeError",
     "MAX_ARTIFACT_BYTE_SIZE",
+    "MAX_RUN_SUMMARY_JSON_BYTES",
     "RunEvent",
+    "RUN_SUMMARY_SCHEMA_VERSION",
     "RunSummary",
     "RunSummaryError",
     "RunSummaryPrivacyError",
