@@ -126,6 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an offline manifest-coherence regenerator and CI drift gate for the
   runtime model registry, PII language defaults, governed README counts,
   registry model cards, and generated model and benchmark documentation (#77).
+- Added deterministic agent action phases with an explicit reviewed resume
+  path, terminal boundaries, and payload-free transition validation (#2998).
 - Added exact OMOP CDM v5.4 `visit_occurrence`, `observation_period`, and
   `note_nlp` exporters with deterministic local keys, bounded clinical dates,
   source offsets, and assertion-derived NLP term fields (#2360).
