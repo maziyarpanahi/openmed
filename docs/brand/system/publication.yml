@@ -232,6 +232,7 @@ classification:
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/wav-preflight.md
+    - multimodal/wav-metadata.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
