@@ -149,6 +149,7 @@ nav:
       - Federated Update Metadata: training/federated-update-metadata.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
+      - GIF Header Preflight: multimodal/gif-header-preflight.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Bounded Asset Digests: multimodal/asset-digests.md
