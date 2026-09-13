@@ -223,6 +223,7 @@ classification:
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
     - reference/preference-schema.md
+    - multimodal/bmp-header-preflight.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
     - multimodal/asset-digests.md
