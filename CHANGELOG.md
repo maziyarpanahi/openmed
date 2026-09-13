@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boundaries, and stream restoration without changing the parser (#3117).
 - Added bounded VP8, VP8L, and VP8X WebP geometry preflight with explicit limits,
   value-free errors, and synthetic file-level regression tests (#3116).
+- Added structural locale normalization and explicit alias duplicate/unsupported-format checks
+  with synthetic file-level regression fixtures (#3119).
 
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible

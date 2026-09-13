@@ -151,6 +151,7 @@ nav:
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
       - WebP Header Preflight: multimodal/webp-header-preflight.md
+      - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Bounded Asset Digests: multimodal/asset-digests.md
