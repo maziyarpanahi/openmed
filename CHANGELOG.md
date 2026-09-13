@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
