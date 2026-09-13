@@ -34,6 +34,7 @@ MAX_ARTIFACTS: Final = 128
 MAX_PATH_LENGTH: Final = 4_096
 MAX_RECOVERY_BYTES: Final = 128 * 1024 * 1024
 _USE_MEMORY_RECOVERY = os.name == "nt"
+_WINDOWS_STAT = os.name == "nt"
 
 PathLike: TypeAlias = str | os.PathLike[str]
 EvidenceStatus: TypeAlias = Literal["completed", "rejected", "rolled_back"]
@@ -251,6 +252,23 @@ def _same_identity_and_content(first: os.stat_result, second: os.stat_result) ->
     )
 
 
+def _same_open_file_state(first: os.stat_result, second: os.stat_result) -> bool:
+    # On Windows CPython 3.12, pathname stat exposes creation time as ctime,
+    # while fstat exposes metadata-change time. Compare their explicit birth
+    # times instead, without relaxing identity, size, mtime, or link checks.
+    # Descriptor-to-descriptor checks during hashing still compare ctime.
+    if (
+        _WINDOWS_STAT
+        and hasattr(first, "st_birthtime_ns")
+        and hasattr(second, "st_birthtime_ns")
+    ):
+        return (
+            _same_identity_and_content(first, second)
+            and first.st_birthtime_ns == second.st_birthtime_ns
+        )
+    return _same_file_state(first, second)
+
+
 def _safe_os_error(error_type: type[DeletionVerificationError]) -> None:
     raise error_type from None
 
@@ -330,7 +348,7 @@ def _hash_descriptor(descriptor: int, expected_state: os.stat_result) -> str:
         os.lseek(descriptor, 0, os.SEEK_SET)
     except OSError:
         _safe_os_error(ArtifactAccessError)
-    if not stat.S_ISREG(opened_state.st_mode) or not _same_file_state(
+    if not stat.S_ISREG(opened_state.st_mode) or not _same_open_file_state(
         expected_state, opened_state
     ):
         _safe_os_error(DeletionTransactionError)
