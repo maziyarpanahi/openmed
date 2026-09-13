@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an exact schema version and strict, bounded dictionary and JSON parsers
+  for privacy-safe agent run summaries, including duplicate-field, non-finite
+  number, unknown-field, and unsupported-version rejection (#3038).
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
