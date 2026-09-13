@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a privacy-safe multimodal preflight report (`preflight_asset`) that
+  runs manifest validation, bounded media-type detection, modality profile
+  checks, limit-profile evaluation, and a bounded digest pass in a fixed order
+  and returns one accept-or-abstain `PreflightReport` with ordered, allowlisted
+  findings, a preflight `AbstentionRecord`, and byte-stable JSON; unevaluable
+  checks, including a PDF's pixel rules, abstain rather than accept (#2980).
+- Added immutable pre-decode limit profiles for multimodal assets (`MOBILE_V1`,
+  `DESKTOP_V1`) with inclusive ceilings for bytes, pages, pixels per unit, total
+  pixels, frames, and audio duration, evaluated over the privacy-safe asset
+  manifest into deterministic `LimitFinding` records; unevaluable rules,
+  including a PDF's pixel rules, are reported as `insufficient_metadata` rather
+  than assumed safe (#2956).
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
