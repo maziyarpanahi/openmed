@@ -237,6 +237,7 @@ classification:
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
+    - multimodal/provider-results.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/pdf-redaction-fidelity.md
