@@ -176,6 +176,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
   DOM-based search-suggestion XSS tracked as CVE-2026-73295.
 
+### Fixed
+
+- Fixed verified artifact deletion and rollback on Windows Python 3.12 by
+  comparing explicit creation timestamps across pathname and descriptor stat
+  results, while retaining identity and in-read mutation checks.
+
 ## [2.3.0] - 2026-09-04
 
 OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
