@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
@@ -195,6 +197,8 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added local, deterministic FHIR ValueSet expansion over caller-loaded free
   vocabulary snapshots plus explicit FHIR `$expand` and ECL delegation to a
   caller-supplied terminology endpoint. Results include versioned provenance;
@@ -598,6 +602,8 @@ PHI-safe by default.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added pinned DeepGrove Maple Preview support through Python MLX-LM and a
   native OpenMedKit MLX architecture, with privacy-bounded PII removal,
   clinical entities, directed relations, and note-grounded reasoning/chat.
@@ -726,6 +732,8 @@ text should follow `docs/migration/2.0-to-2.1.md`.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added dependency-free OpenDocument Text (`.odt`) extraction with paragraph
   and list reading order, deterministic table linearization, character-offset
   source maps, multimodal registry discovery, and usage documentation (#857).
@@ -2023,6 +2031,8 @@ surfaces delivered after `v1.8.1`.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added concise cross-platform ONNX inference APIs: `OnnxModel` for Python CPU,
   `loadOnnxModel` for WebGPU/WebAssembly, and `OpenMedKit.fromDirectory` for
   Android with Hugging Face tokenizer offset parity. The same exported model
@@ -2115,6 +2125,8 @@ This release summarizes the cross-platform runtime, service hardening, multimoda
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added the Android OpenMedKit surface: a Gradle project, Kotlin public API, token-classification decoder, ONNX and ORT Mobile paths, ML Kit OCR adapter, model catalog/download cache, document/image intake, Compose demo, scan demo, Python-to-Android span parity fixtures, Android CI, and guarded Maven Central publishing (#1114, #1115, #1116, #1117, #1118, #1119, #1120, #1121, #1122, #1123, #1124, #1146, #1148, #1149, #1150, #1155, #1156, #1161, #1162).
 - Added browser, mobile JavaScript, and cross-platform client runtimes, including a typed OpenMedKit web package for Transformers.js/ONNX Runtime Web, a React Native bridge, Swift-Kotlin parity checks, public API parity coverage, and a typed TypeScript service client surface (#1132, #1177, #1178, #1123).
 - Added production service and deployment capabilities: API-key/JWT auth, request correlation IDs, no-PHI JSON logging, OpenTelemetry tracing, gRPC, async jobs and webhooks, Helm deployment, multi-arch containers, circuit breakers, model-load retry/backoff, privacy-gateway redaction before external calls, SMART-on-FHIR bulk ingestion, object-storage batch runs, Spark/Dask/lakehouse/columnar redaction, DuckDB and pandas/polars accessors, agent/MCP tool orchestration, hardened distroless images, image signing, SLSA provenance, container SBOMs, and vulnerability scanning (#1080, #1081, #1082, #1084, #1109, #1110, #1126, #1127, #1129, #1130, #1131, #1133, #1136, #1138, #1139, #1140, #1141, #1143, #1144, #1152, #1153, #1154, #1175, #1176, #1179, #1180, #1185, #1189).
@@ -2157,6 +2169,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added lightweight multimodal document primitives, source spans, lazy handler
   registration, `redact_document`, image redaction, PDF span coordinate
   projection, Markdown/AsciiDoc offset-preserving extraction, audit-safe image,
@@ -2346,6 +2360,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added a policy-aware de-identification runtime with canonical `OpenMedSpan` schema contracts, a ten-stage `Pipeline`, detector arbitration/cascade routing, calibrated per-label/language/policy thresholds, deterministic safety sweep backstops, and six bundled policy profiles (`hipaa_safe_harbor`, `hipaa_expert_review_assist`, `gdpr_pseudonymization`, `research_limited_dataset`, `strict_no_leak`, `clinical_minimal_redaction`).
 - Added signed, reproducible de-identification audit reports with span provenance, residual-risk metadata, reproducibility hashes, and optional HMAC signatures.
 - Added re-identification risk reporting and adversarial re-identification benchmark support, including `openmed benchmark pii --attack reid`.
@@ -2402,6 +2418,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added batch PII extraction and de-identification support through `BatchProcessor(operation="extract_pii")` and `BatchProcessor(operation="deidentify")`, including document-level `batch_size` chunking, shared loader/pipeline reuse, tests, docs, and a runnable example.
 - Added REST service model lifecycle controls with `GET /models/loaded`, `POST /models/unload`, request-level `keep_alive`, `OPENMED_SERVICE_KEEP_ALIVE`, and model-loader cache release helpers.
 - Added chunked Swift/OpenMedKit PII extraction for long OCR text and refreshed the OpenMed Scan Demo clinical document flow with updated sample text, a printable sample PDF, and a generator script.
@@ -2451,6 +2469,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Arabic (`ar`), Japanese (`ja`), and Turkish (`tr`) PII extraction support in the Python SDK, including language defaults, localized regex patterns, fake replacement data, and anonymizer locale routing.
 - Registry entries for all API-visible Arabic, Japanese, and Turkish PII source checkpoints: 2 Arabic, 3 Japanese, and 32 Turkish models.
 - Preconverted MLX routing for the 28 supported Arabic, Japanese, and Turkish PII `-mlx` repositories so `OpenMedConfig(backend="mlx")` can resolve uploaded artifacts directly.
@@ -2489,6 +2509,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **OpenMed Multilingual Privacy Filter family**, registered across PyTorch and MLX:
   - `OpenMed/privacy-filter-multilingual` — PyTorch / Transformers (CPU + CUDA).
   - `OpenMed/privacy-filter-multilingual-mlx` — MLX full-precision (Apple Silicon).
@@ -2521,6 +2543,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Faker-backed PII anonymization engine** (`openmed.core.anonymizer`):
   - `Anonymizer` class with cached per-locale Faker instances, deterministic seeding (`hashlib.blake2b`), and label-keyed generator dispatch.
   - `AnonymizerConfig` dataclass for advanced configuration.
@@ -2585,6 +2609,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Expanded Python MLX runtime support** for OpenMed MLX artifacts beyond classic token classification, including GLiNER span NER, GLiClass zero-shot classification, GLiNER-Relex relation extraction, and OpenAI Privacy Filter artifacts.
 - **Native OpenAI Privacy Filter MLX pipeline** with tiktoken-compatible tokenization, byte-offset reconstruction, BIOES/Viterbi decoding, model-led span repair, and support for the public `OpenMed/privacy-filter-mlx` and `OpenMed/privacy-filter-mlx-8bit` artifacts.
 - **Native Swift OpenMedKit GLiNER-family APIs**:
@@ -2619,6 +2645,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Portuguese PII and de-identification support** via `lang="pt"`
   - Registered 31 API-visible Portuguese PII checkpoints from the OpenMed Hugging Face collection
   - Default Portuguese model: `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1`
@@ -2636,6 +2664,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Apple MLX inference backend** for hardware-accelerated NER on Apple Silicon
   - `openmed.mlx.models.bert_tc`: Pure MLX BERT implementation with token-classification head
   - `openmed.mlx.inference`: MLX NER pipeline producing HuggingFace-compatible output format
@@ -2673,6 +2703,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Aadhaar national ID support** for Hindi and Telugu PII detection
   - Added Verhoeff checksum validator (`validate_aadhaar`) for 12-digit Aadhaar numbers
   - Added Aadhaar patterns with context-aware scoring to Hindi and Telugu pattern libraries
@@ -2705,6 +2737,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Span-boundary quality gates** (`openmed.core.quality_gates`)
   - `validate_entity_spans()` checks start < end, in-bounds, text-match, and zero-length invariants for every entity after tokenizer repair and smart merging
   - `detect_overlapping_entities()` returns pairs of overlapping character spans for informational use
@@ -2735,6 +2769,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Dutch, Hindi, and Telugu PII support**
   - `extract_pii()` and `deidentify()` now accept `lang="nl"`, `lang="hi"`, and `lang="te"`
   - Added sparse public registry entries for:
@@ -2775,6 +2811,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Dockerized REST MVP** for OpenMed service use-cases
   - New FastAPI service module at `openmed.service`
   - `GET /health` endpoint for service status and active profile reporting
@@ -2843,6 +2881,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Spanish PII Detection & De-identification**: Full Spanish language support for PII extraction
   - `extract_pii()` and `deidentify()` now accept `lang="es"` for Spanish clinical text
   - Automatic model selection for Spanish — correct language-specific model chosen when `lang="es"`
@@ -2891,6 +2931,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Multilingual PII Detection & De-identification**: Language-aware PII extraction for clinical text
   - `extract_pii()` and `deidentify()` now accept a `lang` parameter (ISO 639-1: `en`, `fr`, `de`, `it`)
   - Automatic model selection — correct language-specific model chosen when `lang` is specified
@@ -2945,6 +2987,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Context-Aware PII Scoring**: Presidio-inspired confidence scoring system
   - `PIIPattern` dataclass extended with `base_score`, `context_words`, `context_boost`, and `validator` fields
   - Context detection via `find_context_words()` - boosts confidence when keywords like "SSN:", "DOB:", "NPI:" appear near detected entities
@@ -2976,6 +3020,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **PII Detection & De-identification**: HIPAA-compliant PII extraction and de-identification
   - `extract_pii()` function for detecting PII entities in clinical text
   - `deidentify()` function with 5 de-identification methods:
@@ -3060,6 +3106,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Interactive TUI (Terminal User Interface)**: Full-featured terminal workbench for clinical NER analysis
   - Rich text input with multi-line support
   - Color-coded entity highlighting in annotated view
@@ -3094,6 +3142,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - **Batch Processing**: Process multiple texts or files in a single operation
   - `BatchProcessor` class for configurable batch operations
   - `BatchItem`, `BatchItemResult`, `BatchResult` dataclasses
@@ -3133,6 +3183,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Medical-aware tokenizer with customizable exceptions
 - CLI `--use-medical-tokenizer` and `--medical-tokenizer-exceptions` flags
 
@@ -3144,6 +3196,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - GLiNER2 support for zero-shot NER
 - Enhanced model registry with GLiNER2 family
 
@@ -3151,6 +3205,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Typer-based CLI interface (`openmed` command)
 - `analyze` command for single text analysis
 - `models list` and `models info` commands
@@ -3165,6 +3221,8 @@ changed, with no deleted or renamed files detected in the release range.
 
 ### Added
 
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Initial public release
 - Core NER pipeline with HuggingFace integration
 - Model registry with curated biomedical models

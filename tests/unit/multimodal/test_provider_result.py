@@ -391,3 +391,24 @@ def test_unreadable_count_mapping_does_not_leak_upstream_error() -> None:
 def test_dataclass_replace_revalidates_cross_field_invariants() -> None:
     with pytest.raises(ProviderResultError, match="output digest is invalid"):
         replace(_result(), outcome=ProviderResultOutcome.VALIDATION_FAILURE)
+
+
+@pytest.mark.parametrize("value", [10**1000, -(10**1000)])
+def test_huge_duration_is_a_value_free_validation_error(value):
+    with pytest.raises(ProviderResultError, match="^provider duration is invalid$"):
+        _result(duration_ms=value)
+
+
+@pytest.mark.parametrize("field", ["outcome", "abstention_code"])
+def test_unknown_enum_does_not_retain_submitted_value(field):
+    with pytest.raises(ProviderResultError) as caught:
+        _result(**{field: "synthetic-private-note"})
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_malformed_json_does_not_retain_source_content():
+    with pytest.raises(ProviderResultError) as caught:
+        ProviderResultEnvelope.from_json('{"synthetic-private-note":')
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None

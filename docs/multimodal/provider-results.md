@@ -97,3 +97,7 @@ text beside this envelope when logging it.
 This module defines and validates metadata only. It does not invoke a provider,
 define a clinical output schema, convert provider-specific output, persist a
 result, verify digest content, or attest to output quality.
+
+Duration bounds are checked before float conversion, including oversized Python
+integers. Unknown enum values and malformed JSON produce value-free failures
+without retaining the original exception or submitted content in a cause chain.

@@ -218,8 +218,10 @@ class ProviderResultEnvelope:
                 parse_constant=_reject_constant,
             )
         except (UnicodeError, ValueError, RecursionError):
-            raise ProviderResultError("provider result JSON is invalid") from None
-        return cls.from_dict(decoded)
+            pass
+        else:
+            return cls.from_dict(decoded)
+        raise ProviderResultError("provider result JSON is invalid")
 
 
 def _identifier(value: object, kind: str) -> str:
@@ -245,7 +247,8 @@ def _outcome(value: object) -> ProviderResultOutcome:
             raise ValueError
         return ProviderResultOutcome(value)
     except ValueError:
-        raise ProviderResultError("provider result outcome is unsupported") from None
+        pass
+    raise ProviderResultError("provider result outcome is unsupported")
 
 
 def _abstention_code(value: object) -> ProviderAbstentionCode | None:
@@ -256,11 +259,14 @@ def _abstention_code(value: object) -> ProviderAbstentionCode | None:
             raise ValueError
         return ProviderAbstentionCode(value)
     except ValueError:
-        raise ProviderResultError("provider abstention code is unsupported") from None
+        pass
+    raise ProviderResultError("provider abstention code is unsupported")
 
 
 def _duration(value: object) -> float:
     if type(value) not in (int, float):
+        raise ProviderResultError("provider duration is invalid")
+    if not 0 <= cast(int | float, value) <= _MAX_DURATION_MS:
         raise ProviderResultError("provider duration is invalid")
     duration = float(cast(int | float, value))
     if not math.isfinite(duration) or not 0.0 <= duration <= _MAX_DURATION_MS:
