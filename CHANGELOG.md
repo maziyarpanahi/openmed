@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added structural locale normalization and explicit alias duplicate/unsupported-format checks
+  with synthetic file-level regression fixtures (#3119).
+
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
