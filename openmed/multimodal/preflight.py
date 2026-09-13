@@ -3,9 +3,9 @@
 One pre-decode entry point that runs the committed preflight contracts -- the
 asset manifest, bounded media-type detection, the modality manifest profiles,
 the pre-decode limit profiles, and the bounded streaming digest -- in a fixed
-order and folds the results into a single accept-or-abstain report. Every
-image, PDF, DICOM, waveform, and audio provider runs the same checks and
-receives the same findings.
+order and folds the results into a single accept-or-abstain report. Image, PDF, DICOM, waveform, and audio providers can call this helper to
+share the same checks and findings. Existing providers are not automatically
+routed through it.
 
 The report carries deterministic findings, reason codes, schema versions,
 numeric metadata, and digests only. It never opens a decoder, never keeps the
@@ -16,6 +16,7 @@ abstains.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -79,6 +80,16 @@ _FIXED_FINDINGS: Final = {
 }
 
 _MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_DETECTED_MEDIA_TYPES: Final = frozenset(
+    {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/tiff",
+        "application/dicom",
+        "audio/wav",
+    }
+)
 _METADATA_PROFILES: Final = {
     "image": IMAGE_V1,
     "pdf": PDF_V1,
@@ -214,6 +225,7 @@ class PreflightReport:
         _require_optional(self.metadata_profile, ManifestProfile, "metadata_profile")
         if self.detected_media_type is not None and (
             type(self.detected_media_type) is not str
+            or self.detected_media_type not in _DETECTED_MEDIA_TYPES
         ):
             raise PreflightError("detected_media_type must be a string or None")
         _require_optional(self.media_type_status, MediaTypeStatus, "media_type_status")
@@ -231,6 +243,21 @@ class PreflightReport:
                 or self.manifest is None
                 or self.digest is None
                 or self.media_type_status is not MediaTypeStatus.MATCH
+            ):
+                raise PreflightError("an accepted report must have passed every check")
+            expected_modality = _modality_for(self.manifest.media_type)
+            expected_profile = _METADATA_PROFILES.get(expected_modality)
+            if (
+                expected_profile is None
+                or self.modality != expected_modality
+                or self.metadata_profile != expected_profile
+                or self.detected_media_type != self.manifest.media_type
+                or self.digest.sha256 != self.manifest.sha256
+                or self.digest.byte_count != self.manifest.byte_size
+                or validate_manifest_metadata(expected_profile, self.manifest)
+                or evaluate_asset_limits(
+                    self.limit_profile, self.manifest, expected_modality
+                )
             ):
                 raise PreflightError("an accepted report must have passed every check")
         elif not findings or self.abstention is None:
@@ -295,8 +322,8 @@ def preflight_asset(
     metadata fields; the limit profile evaluates the resource ceilings; and
     the source is hashed, reading at most one byte past the declared size, to
     confirm the declared digest. The digest pass is skipped, and reported as
-    unevaluated, unless the byte-size ceiling was evaluated and passed, so no
-    more than the profile's byte ceiling is ever read.
+    unevaluated, unless the byte-size ceiling was evaluated and passed, so reads
+    are bounded by the smaller declared/profile byte ceiling plus one probe byte.
 
     A malformed manifest ends preflight before the source is touched. Streams
     are read from their current position; seekable streams are restored on
@@ -324,7 +351,14 @@ def preflight_asset(
             [PreflightFinding("manifest", "malformed_manifest")], limit_profile
         )
 
-    reader = _Source(source)
+    reader = _Source(
+        source,
+        prefix_limit=min(
+            MAX_MEDIA_TYPE_PREFIX_BYTES,
+            validated.byte_size + 1,
+            limit_profile.max_byte_size + 1,
+        ),
+    )
     try:
         return _run_checks(validated, reader, limit_profile)
     finally:
@@ -468,15 +502,22 @@ class _Source:
     :class:`PreflightError` categories with no underlying detail attached.
     """
 
-    __slots__ = ("_data", "_position", "_prefix", "_stream")
+    __slots__ = ("_data", "_position", "_prefix", "_prefix_limit", "_stream")
 
-    def __init__(self, source: Any) -> None:
+    def __init__(self, source: Any, *, prefix_limit: int) -> None:
         self._prefix: bytes | None = None
+        self._prefix_limit = prefix_limit
         if isinstance(source, (bytes, bytearray, memoryview)):
-            self._data: bytes | None = bytes(source)
-            self._stream = None
-            self._position: int | None = None
-            return
+            try:
+                data = memoryview(source).cast("B")
+            except (TypeError, ValueError):
+                pass
+            else:
+                self._data: memoryview | None = data
+                self._stream = None
+                self._position: int | None = None
+                return
+            raise PreflightError("preflight_source_contract_error")
         if not callable(getattr(source, "read", None)):
             raise TypeError("source must be bytes-like or a binary stream")
         self._data = None
@@ -486,14 +527,17 @@ class _Source:
     def prefix(self) -> bytes:
         if self._prefix is None:
             if self._data is not None:
-                self._prefix = self._data[:MAX_MEDIA_TYPE_PREFIX_BYTES]
+                self._prefix = bytes(self._data[: self._prefix_limit])
             else:
-                self._prefix = _read_prefix(self._stream)
+                self._prefix = _read_prefix(self._stream, self._prefix_limit)
         return self._prefix
 
     def digest(self, *, max_bytes: int) -> AssetDigest:
         if self._data is not None:
-            return digest_asset(self._data, max_bytes=max_bytes)
+            size = self._data.nbytes
+            if size > max_bytes:
+                raise DigestLimitExceededError(maximum_bytes=max_bytes, bytes_read=size)
+            return AssetDigest(hashlib.sha256(self._data).hexdigest(), size)
         try:
             digest = digest_asset(
                 _PrefixedStream(self.prefix(), self._stream), max_bytes=max_bytes
@@ -548,10 +592,10 @@ def _stream_position(stream: Any) -> int | None:
     raise PreflightError("preflight_source_position_error")
 
 
-def _read_prefix(stream: Any) -> bytes:
+def _read_prefix(stream: Any, limit: int) -> bytes:
     prefix = b""
-    while len(prefix) < MAX_MEDIA_TYPE_PREFIX_BYTES:
-        request_bytes = MAX_MEDIA_TYPE_PREFIX_BYTES - len(prefix)
+    while len(prefix) < limit:
+        request_bytes = limit - len(prefix)
         chunk = _read_chunk(stream, request_bytes)
         if not chunk:
             break

@@ -838,3 +838,51 @@ def test_preflight_contract_is_available_from_public_multimodal_api():
     assert multimodal.PreflightError is PreflightError
     assert multimodal.PREFLIGHT_SCHEMA_VERSION == PREFLIGHT_SCHEMA_VERSION
     assert multimodal.PREFLIGHT_CHECKS == PREFLIGHT_CHECKS
+
+
+def test_report_rejects_unverified_acceptance_and_free_text():
+    from dataclasses import replace
+
+    accepted = preflight_asset(IMAGE_MANIFEST, PNG)
+    for changes in (
+        {"detected_media_type": "synthetic-private-note"},
+        {"detected_media_type": "image/jpeg"},
+        {"metadata_profile": None},
+        {"modality": None},
+        {"digest": AssetDigest("0" * 64, len(PNG))},
+        {"digest": AssetDigest(sha(PNG), len(PNG) + 1)},
+        {"limit_profile": DESKTOP_V1.with_limits(max_byte_size=1)},
+    ):
+        with pytest.raises(PreflightError) as caught:
+            replace(accepted, **changes)
+        assert "synthetic-private-note" not in str(caught.value)
+
+
+def test_tiny_limits_bound_the_prefix_and_digest_reads():
+    stream = NonSeekableStream(PNG * 100)
+    report = preflight_asset(
+        IMAGE_MANIFEST, stream, limit_profile=DESKTOP_V1.with_limits(max_byte_size=2)
+    )
+    assert report.status is PreflightStatus.ABSTAIN
+    assert stream._stream.tell() <= 3
+
+
+def test_rejected_mutable_buffer_is_not_copied_before_limits():
+    import tracemalloc
+
+    source = bytearray(PNG) + bytearray(4 * 1024**2)
+    data = manifest(source, "image/png", width=8, height=8)
+    profile = DESKTOP_V1.with_limits(max_byte_size=1)
+    tracemalloc.start()
+    try:
+        report = preflight_asset(data, source, limit_profile=profile)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert report.status is PreflightStatus.ABSTAIN
+    assert peak < 1024**2
+
+
+def test_noncontiguous_buffers_fail_with_categorical_error():
+    with pytest.raises(PreflightError, match="^preflight_source_contract_error$"):
+        preflight_asset(IMAGE_MANIFEST, memoryview(PNG)[::2])

@@ -95,7 +95,11 @@ def _require_bounded_int(value: Any, name: str, maximum: int) -> None:
 
 
 def _require_positive_number(value: Any, name: str) -> None:
-    if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+    if (
+        type(value) not in (int, float)
+        or not 0 < value <= MAX_PIXEL_PRODUCT
+        or not math.isfinite(value)
+    ):
         raise AssetLimitError(f"{name} must be a bounded positive finite number")
 
 
@@ -126,7 +130,9 @@ class LimitFinding:
         if self.observed is not None:
             if type(self.observed) is bool or type(self.observed) not in (int, float):
                 raise AssetLimitError("finding observed must be numeric or null")
-            if not math.isfinite(self.observed) or self.observed < 0:
+            if not 0 <= self.observed <= MAX_PIXEL_PRODUCT or not math.isfinite(
+                self.observed
+            ):
                 raise AssetLimitError(
                     "finding observed must be a finite non-negative number"
                 )
@@ -185,7 +191,7 @@ class LimitProfile:
 
     def limit_for(self, field_name: str) -> int | float:
         """Return the ceiling that applies to a limit field."""
-        if field_name not in _FIELD_SET:
+        if type(field_name) is not str or field_name not in _FIELD_SET:
             raise AssetLimitError("limit field_name is unsupported")
         return getattr(self, _LIMIT_ATTRIBUTES[field_name])
 
@@ -334,10 +340,17 @@ def _read_inputs(manifest: Mapping[str, Any] | AssetManifest) -> dict[str, int |
         try:
             fields = dict(manifest)
         except Exception:
-            raise AssetLimitError("manifest metadata could not be read") from None
+            pass
+        else:
+            return _validated_inputs(fields)
+        raise AssetLimitError("manifest metadata could not be read")
     else:
         raise TypeError("manifest must be a mapping or AssetManifest")
 
+    return _validated_inputs(fields)
+
+
+def _validated_inputs(fields: Mapping[str, Any]) -> dict[str, int | float]:
     inputs: dict[str, int | float] = {}
     for field_name in _MANIFEST_INPUTS:
         if field_name not in fields or fields[field_name] is None:

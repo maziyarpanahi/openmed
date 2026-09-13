@@ -45,8 +45,8 @@ or a caller-owned profile.
 
 The digest pass reads at most one byte past the declared size, and it runs
 only when the byte-size ceiling was evaluated and passed. Otherwise it is
-reported as `not_evaluated`, so preflight never reads more than the limit
-profile's byte ceiling. Streams are read from their current position; seekable
+reported as `not_evaluated`. Prefix and digest reads are bounded by the
+smaller declared/profile byte ceiling plus one probe byte. Streams are read from their current position; seekable
 streams are restored on success or failure, non-seekable streams are hashed
 through a replay of the already-read prefix, and caller-owned streams are
 never closed. Bytes-like values are hashed in memory.
@@ -109,3 +109,15 @@ manifest leaves every optional field `null`. Source failures raise
 
 Preflight does not decode media, run a model, downsample inputs, choose
 clinical thresholds, or certify that accepted media is benign.
+
+## Maintained report boundary
+
+Direct report construction validates the detected media type against the detector's
+closed vocabulary. An accepted report must also have matching media, manifest,
+metadata profile, digest and resource-limit evidence. Caller-supplied metadata
+names are declarations; syntax checks cannot establish their provenance.
+
+Bytes-like inputs are inspected through a contiguous byte view without copying
+the complete asset. Noncontiguous buffers are rejected. Prefix and digest reads
+are bounded by the smaller declared/profile byte ceiling plus one probe byte;
+small caller limits therefore also constrain media detection.
