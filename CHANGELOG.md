@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic schema compatibility evaluation for versioned agent
+  artifacts with closed outcomes, stable reason codes, caller-declared ranges,
+  fail-closed unknown kinds, and strict SemVer 2.0 precedence (#3000).
 - Added bounded BMP CORE/INFO header geometry preflight with explicit limits,
   value-free errors, and synthetic file-level regression tests (#3114).
 - Added bounded GIF logical-screen and bounded global-color-table preflight with explicit limits,

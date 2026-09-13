@@ -43,6 +43,17 @@ from .run_summary import (
     RunSummaryError,
     RunSummaryPrivacyError,
 )
+from .schema_compatibility import (
+    COMPATIBILITY_SCHEMA_VERSION,
+    CompatibilityOutcome,
+    CompatibilityReason,
+    CompatibilityResult,
+    SchemaCompatibilityError,
+    SchemaCompatibilityMatrix,
+    SchemaRange,
+    SemVer,
+    check_schema_compatibility,
+)
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 
 __all__ = [
@@ -56,6 +67,10 @@ __all__ = [
     "ArtifactReference",
     "ArtifactReferenceError",
     "CapabilityId",
+    "COMPATIBILITY_SCHEMA_VERSION",
+    "CompatibilityOutcome",
+    "CompatibilityReason",
+    "CompatibilityResult",
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
     "CorrelationIdError",
@@ -75,11 +90,16 @@ __all__ = [
     "RunId",
     "PolicyId",
     "PurposeId",
+    "SchemaCompatibilityError",
+    "SchemaCompatibilityMatrix",
+    "SchemaRange",
+    "SemVer",
     "ToolId",
     "TimingValidationError",
     "WorkflowOutcome",
     "WorkflowId",
     "allowed_reason_codes",
+    "check_schema_compatibility",
     "security",
     "validate_artifact_references",
 ]
