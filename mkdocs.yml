@@ -157,6 +157,7 @@ nav:
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
+      - WAV Metadata and RF64: multimodal/wav-metadata.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
