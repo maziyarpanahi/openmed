@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -14,6 +15,10 @@ HF_OFFLINE_ENV_VARS = (
     "HF_DATASETS_OFFLINE",
 )
 _FALSE_ENV_VALUES = {"", "0", "false", "no", "off"}
+
+_NETWORK_GUARD_LOCK = threading.RLock()
+_NETWORK_GUARD_DEPTH = 0
+_NETWORK_GUARD_ORIGINALS: tuple[Any, Any, Any] | None = None
 
 OFFLINE_NETWORK_ERROR = (
     "OPENMED_OFFLINE/local_only=True blocks outbound network access after "
@@ -99,32 +104,54 @@ def raise_offline_error(action: str) -> None:
     raise OfflineModeError(f"{OFFLINE_NETWORK_ERROR} Blocked action: {action}.")
 
 
+def _blocked_socket_connection(*args: Any, **kwargs: Any) -> Any:
+    """Reject a socket operation while any offline guard is active."""
+    raise_offline_error("socket connection")
+
+
 @contextmanager
 def network_blocked_if_offline(
     config: Any = None,
     *,
     local_only: bool = False,
 ) -> Iterator[None]:
-    """Block outbound sockets for configured or explicitly local-only work."""
+    """Block outbound sockets for configured or explicitly local-only work.
+
+    Overlapping and nested guard scopes share one process-level patch. The
+    original socket functions are restored only after the final active scope
+    exits, so one thread cannot reopen egress while another remains guarded.
+    """
+    global _NETWORK_GUARD_DEPTH, _NETWORK_GUARD_ORIGINALS
+
     if local_only:
         enable_hf_offline_flags()
     elif not configure_offline_mode(config):
         yield
         return
 
-    original_connect = socket.socket.connect
-    original_connect_ex = socket.socket.connect_ex
-    original_create_connection = socket.create_connection
+    with _NETWORK_GUARD_LOCK:
+        if _NETWORK_GUARD_DEPTH == 0:
+            _NETWORK_GUARD_ORIGINALS = (
+                socket.socket.connect,
+                socket.socket.connect_ex,
+                socket.create_connection,
+            )
+            socket.socket.connect = _blocked_socket_connection  # type: ignore[method-assign]
+            socket.socket.connect_ex = _blocked_socket_connection  # type: ignore[method-assign]
+            socket.create_connection = _blocked_socket_connection  # type: ignore[assignment]
+        _NETWORK_GUARD_DEPTH += 1
 
-    def _blocked_connect(*args: Any, **kwargs: Any) -> Any:
-        raise_offline_error("socket connection")
-
-    socket.socket.connect = _blocked_connect  # type: ignore[method-assign]
-    socket.socket.connect_ex = _blocked_connect  # type: ignore[method-assign]
-    socket.create_connection = _blocked_connect  # type: ignore[assignment]
     try:
         yield
     finally:
-        socket.socket.connect = original_connect  # type: ignore[method-assign]
-        socket.socket.connect_ex = original_connect_ex  # type: ignore[method-assign]
-        socket.create_connection = original_create_connection  # type: ignore[assignment]
+        with _NETWORK_GUARD_LOCK:
+            _NETWORK_GUARD_DEPTH -= 1
+            if _NETWORK_GUARD_DEPTH == 0:
+                assert _NETWORK_GUARD_ORIGINALS is not None
+                original_connect, original_connect_ex, original_create_connection = (
+                    _NETWORK_GUARD_ORIGINALS
+                )
+                socket.socket.connect = original_connect  # type: ignore[method-assign]
+                socket.socket.connect_ex = original_connect_ex  # type: ignore[method-assign]
+                socket.create_connection = original_create_connection  # type: ignore[assignment]
+                _NETWORK_GUARD_ORIGINALS = None
