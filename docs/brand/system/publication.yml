@@ -186,6 +186,7 @@ classification:
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
+    - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
     - clinical/chinese-terminology-grounding.md
