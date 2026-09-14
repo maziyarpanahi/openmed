@@ -53,7 +53,11 @@ def test_broken_manifest_reports_all_line_numbered_violations(tmp_path: Path) ->
     assert result.ok is False
     assert [str(violation) for violation in result.violations] == [
         "line 1: missing required key: repo_id",
-        "line 2: license must be one of: apache-2.0, other, or null",
+        (
+            "line 2: license must be one of: apache-2.0, bsd-2-clause, "
+            "bsd-3-clause, cc-by-3.0, cc-by-4.0, cc0-1.0, isc, mit, "
+            "unlicense, other, or null"
+        ),
         "line 3: reproducibility_hash must match sha256:<64 lowercase hex characters>",
     ]
 

@@ -5,6 +5,11 @@ request text, model output text, or PHI-bearing bodies into spans. Tracing is
 off by default. If no tracing environment variable is set, the service does not
 create an OTLP exporter and does not push telemetry to a collector.
 
+This service flag is independent from the core privacy-pipeline instrumentation.
+To trace the ten `Pipeline` stages or collect their aggregate histograms, see
+[Core Pipeline Observability](../core-observability.md). Enabling either surface
+does not implicitly enable the other.
+
 ## Enable Tracing
 
 Install the service extra:

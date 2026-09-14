@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>اجرای محلی‌محور</b> &nbsp;·&nbsp; <b>34 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 ورودی مانیفست</b> &nbsp;·&nbsp; <b>33 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -120,7 +120,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
 ]
 ```
 
@@ -331,7 +331,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII چندزبانه (35 مسیر پشتیبانی‌شده؛ 34 مسیر با مدل)
+## PII چندزبانه (36 مسیر پشتیبانی‌شده؛ 33 مسیر با مدل)
 
 استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr`، در مجموع **فهرست ثبت‌شدهٔ مدل‌های PII**.
 
@@ -472,7 +472,7 @@ OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شد�
 
 </div>
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
