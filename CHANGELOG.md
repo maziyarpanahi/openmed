@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `serialize_measurement_trends`, compact JSON for measurement trends that is
+  byte-identical for equivalent input orderings and rejects non-finite derived values,
+  with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
+  tied on one timepoint are now ordered by value instead of input position (#3107).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
