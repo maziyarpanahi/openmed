@@ -210,8 +210,8 @@ specific HMAC key through a secret-management channel and do not publish it.
 
 The current estimator deliberately uses a conservative patient-level bound. A
 patient with fewer than two notes, or without a stable attack fingerprint, has
-a bound of `0.0`. A patient with reusable surrogate evidence, an age trajectory,
-or rare-attribute evidence has a bound of `1.0`. The report's
+a bound of `0.0`. A patient with reusable surrogate evidence, a coherent age or
+date trajectory, or rare-attribute evidence has a bound of `1.0`. The report's
 `linkage_success_upper_bound` is the maximum patient bound, so adding documents
 cannot lower it. This is a safety upper bound, not a calibrated probability or
 the observed success rate of a particular attacker.
@@ -248,6 +248,44 @@ digests, and optional start/end offsets and section metadata. They never contain
 the evidence value. The dashboard and signed gate apply a narrower allowlist:
 only digests, offsets, counts, and scores are retained; category, source,
 section, and any unknown fields are discarded.
+
+Use `mitigate_longitudinal_linkage()` when a release exceeds its configured
+ceiling. It copies and flattens the input records, changes only patient cohorts
+above the ceiling, and returns the mitigated records separately from the safe
+audit report. The default policy diversifies repeated surrogates per note,
+applies alternating deterministic offsets to precise ages and dates, and
+suppresses recognized rare-attribute fields and spans. Consecutive notes can
+share a surrogate or trajectory offset by increasing the corresponding cohort
+size; this deliberately preserves more consistency at the cost of uniqueness.
+
+```python
+from openmed.risk import (
+    LongitudinalMitigationPolicy,
+    mitigate_longitudinal_linkage,
+)
+
+mitigation = mitigate_longitudinal_linkage(
+    deidentified_notes,
+    hmac_key=longitudinal_hmac_key,
+    policy=LongitudinalMitigationPolicy(
+        linkage_ceiling=0.0,
+        surrogate_cohort_size=1,
+        age_cohort_size=1,
+        date_cohort_size=1,
+    ),
+)
+if not mitigation.meets_ceiling:
+    raise RuntimeError("longitudinal release remains above its linkage ceiling")
+
+mitigated_notes = mitigation.records
+safe_audit_report = mitigation.to_report_dict()
+```
+
+The safe audit report contains only HMAC digests, offsets, counts, policy
+parameters, and before/after bounds. It never embeds the transformed records or
+raw evidence. A policy can intentionally retain more within-cohort consistency,
+so callers must check `meets_ceiling` and still run the signed longitudinal
+release gate before publishing a release.
 
 Add the panel to either existing HTML dashboard with the optional
 `longitudinal` argument. The aggregate release dashboard is the appropriate

@@ -1,64 +1,64 @@
-"""Conversion workflow credential policy tests."""
+"""GitHub Actions model-publication boundary tests."""
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CONVERT_WORKFLOW = ROOT / ".github" / "workflows" / "convert-models.yml"
+WORKFLOWS = ROOT / ".github" / "workflows"
 HF_TOKEN_POLICY = ROOT / "docs" / "security" / "hf-token-policy.md"
+RETIRED_MODEL_WORKFLOWS = (
+    WORKFLOWS / "convert-models.yml",
+    WORKFLOWS / "nightly-release.yml",
+)
+FORBIDDEN_ACTIONS_MODEL_PUBLISH_MARKERS = (
+    "hf-publish",
+    "HF_WRITE_TOKEN",
+    "openmed.core.hf_publish",
+    "openmed.mlx.convert",
+    "openmed.coreml.convert",
+    "openmed.onnx.convert",
+    "scripts/release/dispatch_batch.py",
+    "scripts/release/orchestrate.py run",
+)
 
 
-def test_convert_workflow_uses_protected_hf_publish_environment():
-    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
-
-    assert "publish_to_hub:" in workflow
-    assert "  publish-hf:" in workflow
-    assert "name: hf-publish" in workflow
-    assert "HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}" in workflow
+def test_hosted_model_conversion_and_publish_workflows_are_removed() -> None:
+    assert all(not path.exists() for path in RETIRED_MODEL_WORKFLOWS)
 
 
-def test_convert_workflow_fails_publish_job_before_setup_when_hf_token_is_missing():
-    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
-    publish_job = workflow.split("  publish-hf:", maxsplit=1)[1]
+def test_actions_workflows_cannot_convert_or_publish_model_artifacts() -> None:
+    violations: dict[str, list[str]] = {}
+    workflow_paths = (*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml"))
+    for path in sorted(workflow_paths):
+        workflow = path.read_text(encoding="utf-8")
+        markers = [
+            marker
+            for marker in FORBIDDEN_ACTIONS_MODEL_PUBLISH_MARKERS
+            if marker in workflow
+        ]
+        if markers:
+            violations[path.name] = markers
 
-    assert "Require HF write token before publish" in workflow
-    assert 'if [ -z "${HF_WRITE_TOKEN:-}" ]; then' in workflow
-    assert "::error title=Missing HF_WRITE_TOKEN::" in workflow
-    assert "exit 1" in workflow
-    assert re.search(r"hf_[A-Za-z0-9]{20,}", workflow) is None
-    assert 'echo "$HF_WRITE_TOKEN' not in workflow
-    guard_position = publish_job.index(
-        "    - name: Require HF write token before publish"
-    )
-    assert guard_position < publish_job.index("    - uses: actions/checkout")
-    assert guard_position < publish_job.index("    - name: Set up Python")
-    assert guard_position < publish_job.index(
-        "    - name: Install publish dependencies"
-    )
+    assert violations == {}
 
 
-def test_convert_workflow_publishes_downloaded_conversion_artifacts():
-    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
+def test_model_release_gate_requires_explicit_dispatch() -> None:
+    workflow = (WORKFLOWS / "release-gates.yml").read_text(encoding="utf-8")
 
-    assert "actions/download-artifact@v8" in workflow
-    assert "name: mlx-model" in workflow
-    assert "name: coreml-model" in workflow
-    assert "python -m openmed.core.hf_publish" in workflow
-    assert "--artifact-dir publish-artifacts/mlx-output" in workflow
-    assert "--artifact-dir publish-artifacts/coreml-output" in workflow
-    assert '--format "$FORMAT"' in workflow
-    assert "--format coreml" in workflow
-    assert "published-model-manifest" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "repository_dispatch:" in workflow
+    assert "\n  schedule:" not in workflow
+    assert "cron:" not in workflow
 
 
-def test_hf_token_policy_documents_scope_storage_rotation_and_revocation():
+def test_hf_token_policy_requires_local_manual_publication() -> None:
     policy = HF_TOKEN_POLICY.read_text(encoding="utf-8")
+    compact = " ".join(policy.split())
 
-    assert "org-write access" in policy
-    assert "`HF_WRITE_TOKEN` secret" in policy
-    assert "`hf-publish` GitHub Actions protected environment" in policy
-    assert "Rotate the token every 90 days" in policy
-    assert "Revoke the token" in policy
-    assert "org-wide write access" in policy
+    assert "must not store" in compact
+    assert "GitHub Actions" in compact
+    assert "maintainer-controlled machine" in compact
+    assert "explicit local command" in compact
+    assert "Revoke" in compact
+    assert "org-wide write access" in compact

@@ -28,16 +28,16 @@ def add_registry_command(subparsers: argparse._SubParsersAction) -> None:
     list_parser = commands.add_parser("list", help="List named registry pointers.")
     _add_local_state_arguments(list_parser)
     list_parser.add_argument(
-        "--family", default=None, help="Limit output to one family."
+        "--slot", default=None, help="Limit output to one family::tier::format slot."
     )
     list_parser.set_defaults(handler=_handle_list)
 
     lineage_parser = commands.add_parser(
         "lineage",
-        help="Show supersession and rollback lineage for one family.",
+        help="Show supersession and rollback lineage for one registry slot.",
     )
     _add_local_state_arguments(lineage_parser)
-    lineage_parser.add_argument("family", help="Manifest model family.")
+    lineage_parser.add_argument("slot", help="Registry slot (family::tier::format).")
     lineage_parser.set_defaults(handler=_handle_lineage)
 
     rollback_parser = commands.add_parser(
@@ -45,7 +45,7 @@ def add_registry_command(subparsers: argparse._SubParsersAction) -> None:
         help="Repoint latest to last_green using a releasable gate report.",
     )
     _add_local_state_arguments(rollback_parser)
-    rollback_parser.add_argument("family", help="Manifest model family.")
+    rollback_parser.add_argument("slot", help="Registry slot (family::tier::format).")
     rollback_parser.add_argument(
         "--gate-report",
         type=Path,
@@ -83,15 +83,15 @@ def _service(args: argparse.Namespace) -> RegistryService:
 
 def _handle_list(args: argparse.Namespace) -> int:
     service = _service(args)
-    pointers = service.pointers(args.family)
-    if args.family is not None:
-        payload = {"family": args.family, "pointers": pointers}
-        human = _format_pointer_set(args.family, pointers)
+    pointers = service.pointers(args.slot)
+    if args.slot is not None:
+        payload = {"slot": args.slot, "pointers": pointers}
+        human = _format_pointer_set(args.slot, pointers)
     else:
-        payload = {"families": pointers}
+        payload = {"slots": pointers}
         human = "\n".join(
-            _format_pointer_set(family, family_pointers)
-            for family, family_pointers in pointers.items()
+            _format_pointer_set(slot, slot_pointers)
+            for slot, slot_pointers in pointers.items()
         )
         if not human:
             human = "No registry pointers configured."
@@ -100,18 +100,18 @@ def _handle_list(args: argparse.Namespace) -> int:
 
 def _handle_lineage(args: argparse.Namespace) -> int:
     service = _service(args)
-    lineage = service.lineage(args.family)
+    lineage = service.lineage(args.slot)
     human = (
         "\n".join(
             f"{edge['recorded_at']} {edge['relation']}: "
             f"{edge['from']} -> {edge['to']} ({edge['reason']})"
             for edge in lineage
         )
-        or f"No lineage recorded for {args.family}."
+        or f"No lineage recorded for {args.slot}."
     )
     return emit(
         args,
-        {"family": args.family, "lineage": lineage},
+        {"slot": args.slot, "lineage": lineage},
         human=human,
     )
 
@@ -124,26 +124,26 @@ def _handle_rollback(args: argparse.Namespace) -> int:
         gate_report = GateReport.from_dict(
             json.loads(args.gate_report.read_text(encoding="utf-8"))
         )
-        service.rollback(args.family, gate_report=gate_report)
+        service.rollback(args.slot, gate_report=gate_report)
     except (OSError, ValueError, RegistryError) as exc:
         raise CliError(
             f"Registry rollback failed: {exc}",
             code="registry_rollback_failed",
             exit_code=EXIT_ERROR,
         ) from exc
-    pointers = service.pointers(args.family)
-    lineage = service.lineage(args.family)
+    pointers = service.pointers(args.slot)
+    lineage = service.lineage(args.slot)
     return emit(
         args,
         {
-            "family": args.family,
+            "slot": args.slot,
             "pointers": pointers,
             "lineage_edge": lineage[-1] if lineage else None,
         },
-        human=(f"Rolled back {args.family} latest to {pointers['latest']}."),
+        human=(f"Rolled back {args.slot} latest to {pointers['latest']}."),
     )
 
 
-def _format_pointer_set(family: str, pointers: dict[str, object]) -> str:
+def _format_pointer_set(slot: str, pointers: dict[str, object]) -> str:
     values = ", ".join(f"{name}={target or '-'}" for name, target in pointers.items())
-    return f"{family}: {values}"
+    return f"{slot}: {values}"
