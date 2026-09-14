@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, aggregate-only review-yield metrics for guarded clinical
+  relation candidates, with accepted, corrected, rejected, duplicate, and
+  deferred outcomes by relation class (#2753).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
