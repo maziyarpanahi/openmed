@@ -85,6 +85,7 @@ def test_registered_backends_cover_every_optional_seam():
         "hf",
         "multimodal",
         "service",
+        "triton",
         "mcp",
     ):
         assert seam in names, f"missing capability seam: {seam}"
