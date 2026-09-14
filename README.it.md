@@ -24,7 +24,7 @@ Il runtime locale principale di OpenMed esegue estrazione e de-identificazione d
 </p>
 
 <p>
-  <b>Esecuzione locale prioritaria</b> &nbsp;·&nbsp; <b>34 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 voci del manifesto</b> &nbsp;·&nbsp; <b>33 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -102,7 +102,7 @@ Sull’hardware Apple supportato, OpenMed può usare **MLX** e **[OpenMedKit](sw
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Sugli host non Apple Silicon, i nomi dei modelli MLX vengono sostituiti automati
 
 ---
 
-## PII multilingue (35 route supportate; 34 supportate da modelli)
+## PII multilingue (36 route supportate; 33 supportate da modelli)
 
 Estrazione e de-identificazione in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` e `tr`: **il catalogo registrato dei modelli PII** in totale.
 
@@ -393,7 +393,7 @@ Se OpenMed ti è utile nella tua ricerca, ti preghiamo di citarlo:
 
 Se OpenMed ti è utile, una stella aiuta altri a scoprirlo.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

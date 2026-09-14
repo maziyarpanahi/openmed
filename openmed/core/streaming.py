@@ -20,15 +20,17 @@ from .schemas.span import OpenMedSpan
 class StreamingDeidentificationEvent:
     """A safely-emittable redacted stream fragment.
 
-    The final event carries the aggregate audit record and final global-offset
-    span records. Non-final events intentionally expose only redacted text so
-    provisional window doc ids are not leaked into downstream audit handling.
+    The final event carries the aggregate audit record, final global-offset
+    span records, and the opt-in reversible mapping. Non-final events
+    intentionally expose only redacted text so provisional window doc ids are
+    not leaked into downstream audit handling.
     """
 
     redacted_text: str
     final: bool = False
     spans: tuple[OpenMedSpan, ...] = ()
     audit_record: Mapping[str, Any] | None = None
+    mapping: Mapping[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,7 @@ class StreamingDeidentifier:
         self._chunk_count = 0
         self._max_observed_buffer = 0
         self._spans: tuple[OpenMedSpan, ...] = ()
+        self._mapping: dict[str, str] = {}
         self._audit_record: Mapping[str, Any] | None = None
         self._last_window_audit: Mapping[str, Any] | None = None
 
@@ -204,6 +207,7 @@ class StreamingDeidentifier:
                 final=True,
                 spans=self._spans,
                 audit_record=audit_record,
+                mapping=dict(self._mapping) if self.keep_mapping else None,
             )
         )
         return tuple(events)
@@ -305,6 +309,16 @@ class StreamingDeidentifier:
         entities = tuple(entity for entity in window.entities if entity.end <= cutoff)
         redacted_text = _render_redacted_prefix(original_text, entities, cutoff)
         spans = tuple(span for span in window.spans if span.end <= cutoff)
+        if self.keep_mapping:
+            for entity in entities:
+                replacement = getattr(entity, "redacted_text", None)
+                if replacement:
+                    original = getattr(entity, "original_text", None) or getattr(
+                        entity,
+                        "text",
+                        "",
+                    )
+                    self._mapping[str(replacement)] = str(original)
 
         global_spans = tuple(
             replace(
@@ -437,7 +451,12 @@ def _adjust_text_boundary(text: str, cutoff: int) -> int:
             while token_end < len(text) and _is_identifier_token_char(text[token_end]):
                 token_end += 1
             if _is_identifier_like_token(text[token_start:token_end]):
-                cutoff = token_start
+                # The current window has already analyzed the complete token.
+                # Prefer emitting through its end when a delimiter is present;
+                # otherwise retain the incomplete tail. Both choices avoid a
+                # partially emitted identifier, while the forward choice keeps
+                # the carry buffer within its configured bound.
+                cutoff = token_end if token_end < len(text) else token_start
                 left = text[cutoff - 1] if cutoff > 0 else ""
                 right = text[cutoff] if cutoff < len(text) else ""
         if left.isspace() and right.isspace():
