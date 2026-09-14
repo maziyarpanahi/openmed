@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertOfflineAssetPath,
   deidentify,
   loadOrtWebSession,
   loadOrtWebTokenClassificationPipeline,
@@ -98,6 +99,21 @@ test("rejects remote model and wasm asset paths", async () => {
         cache: new Map(),
       }),
     /local\/offline/,
+  );
+});
+
+test("rejects UNC and remote-host file asset paths", () => {
+  for (const path of [
+    "\\\\models.example.invalid\\share\\model.onnx",
+    "file://models.example.invalid/share/model.onnx",
+    "file:////models.example.invalid/share/model.onnx",
+  ]) {
+    assert.throws(() => assertOfflineAssetPath(path), /local\/offline/);
+  }
+
+  assert.equal(
+    assertOfflineAssetPath("file:///models/openmed/model.onnx"),
+    "file:///models/openmed/model.onnx",
   );
 });
 

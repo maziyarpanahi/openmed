@@ -6,7 +6,7 @@ import importlib.util
 import json
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
@@ -582,6 +582,10 @@ _LEGACY_MODEL_ALIASES = {
     ],
     "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+    # The former dedicated Tamil checkpoint is no longer in the public Hub
+    # catalog. Keep its registry key as a compatibility alias for the explicit
+    # multilingual placeholder while callers migrate to qualified weights.
+    "OpenMed/privacy-filter-multilingual": ["pii_ta_msuperclinical_large"],
 }
 
 
@@ -857,7 +861,9 @@ def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
         return None
 
     formats = set(row.get("formats") or ())
-    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+    if "mlx-2bit" in formats:
+        bytes_per_parameter = 0.30
+    elif formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
         bytes_per_parameter = 0.55
     elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
         bytes_per_parameter = 1.05
@@ -1070,13 +1076,21 @@ def _add_pointer_aliases(
     registry_state: Mapping[str, Any],
 ) -> None:
     by_repo_id = {model.model_id: model for model in registry.values()}
-    for family, pointers in pointer_targets(registry_state).items():
+    slots = registry_state.get("slots", {})
+    for slot, pointers in pointer_targets(registry_state).items():
+        checkpoints = slots.get(slot, {}).get("checkpoints", {})
         for pointer_name, repo_id in pointers.items():
             if repo_id is None:
                 continue
             model = by_repo_id.get(repo_id)
-            if model is not None:
-                registry[_slug(f"{family}_{pointer_name}")] = model
+            if model is None:
+                continue
+            # Pointer aliases carry the slot's assigned registry version, not
+            # the display version parsed from the repo name.
+            assigned = checkpoints.get(repo_id)
+            if isinstance(assigned, str) and assigned:
+                model = replace(model, semantic_version=assigned)
+            registry[_slug(f"{slot}_{pointer_name}")] = model
 
 
 def _build_registry(

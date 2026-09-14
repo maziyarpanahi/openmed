@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 from collections import defaultdict
 from importlib import resources
 from pathlib import Path
@@ -50,6 +52,22 @@ def test_surname_gazetteer_is_large_packaged_and_explicitly_licensed():
     assert {"欧阳", "司马", "诸葛", "上官"} <= CHINESE_COMPOUND_SURNAMES
     assert all(_HAN_NAME.fullmatch(surname) for surname in CHINESE_SURNAMES)
     assert all(len(surname) in {1, 2} for surname in CHINESE_SURNAMES)
+
+
+def test_fresh_pii_i18n_import_does_not_cycle_through_clinical_api():
+    code = """
+from openmed.core.pii_i18n import CHINESE_SURNAMES
+assert len(CHINESE_SURNAMES) >= 400
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_zh_language_resolution_selects_the_chinese_surrogate_path():
