@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added Unicode whitespace regression coverage for vital-sign parsing and fixed the
+  cases it found: non-breaking, narrow, thin, and other Unicode spaces inside labels
+  such as `oxygen saturation` no longer turn a vital sign into `unknown`, and units
+  such as `mm Hg` match their ASCII spelling (#3106).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
