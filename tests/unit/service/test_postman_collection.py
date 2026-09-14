@@ -407,7 +407,11 @@ def test_accept_headers_match_json_and_ndjson_response_handling() -> None:
         }
         expected = (
             "application/x-ndjson"
-            if _request_operation(request_item) == ("post", "/pii/extract/stream")
+            if _request_operation(request_item)
+            in {
+                ("post", "/pii/extract/stream"),
+                ("post", "/pii/deidentify/stream"),
+            }
             else "application/json"
         )
         assert headers["accept"] == expected
