@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, offline SDOH negated-need resolution with
+  determinant-specific assertion scope, value-free provenance, and human
+  review for double-negated, contradictory, and uncertain findings (#2731).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
