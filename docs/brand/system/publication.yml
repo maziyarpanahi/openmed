@@ -187,6 +187,7 @@ classification:
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
+    - clinical/citation-boundary-validation.md
     - clinical/evidence-tables.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
