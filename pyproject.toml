@@ -171,6 +171,10 @@ quickumls = [
 # adding restricted code or dependencies.
 interop-gpl = []
 
+# The official HL7 FHIR validator is a user-fetched Java artifact invoked in a
+# subprocess. This marker extra intentionally installs no validator code.
+grounding-validate = []
+
 # extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
 # stdin/stdout subprocess bridge. This explicit extra keeps GPL code out of the
 # base and general multimodal environments.
@@ -286,6 +290,10 @@ spark = [
   "pyspark>=3.5,<4",
   "pandas>=2.0",
   "pyarrow>=16",
+]
+
+snowflake = [
+  "snowflake-snowpark-python>=1.0,<2",
 ]
 
 hf = [

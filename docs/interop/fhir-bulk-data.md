@@ -16,6 +16,8 @@ gateway = BulkDataGateway(
         output_dir="./deidentified-export",
         policy="hipaa_safe_harbor",
         method="replace",
+        schema_policy="fhir_hipaa_safe_harbor",
+        date_shift_secret=date_shift_secret,
         max_buffered_resources=1,
     )
 )
@@ -34,6 +36,69 @@ skips that file, and resumes the remaining files. A partial `.part` file is
 never promoted to the final output. Output serialization is deterministic, so
 an interrupted and resumed synthetic export has byte-identical completed
 files and no duplicate resources.
+
+When `schema_policy` is set, the checkpoint compatibility hash also covers the
+complete field policy, date-shift settings, and opaque fingerprints of the
+subject/date keys. A changed policy or key is therefore reprocessed instead of
+resuming incompatible output; raw key material is never checkpointed.
+
+## Field-level schema policies
+
+Schema policies map canonical FHIR or OMOP paths to `suppress`, `generalize`,
+`date-shift`, `route-to-deidentify`, or `keep`. Bundled Safe Harbor-oriented and
+research limited-dataset variants are available for both schemas. They are
+technical controls, not a legal determination that a data set satisfies HIPAA
+or another regulatory framework.
+
+Before processing, use `lint_schema_policy(data, policy)` to find observed
+fields without explicit rules and `validate_schema_policy(policy,
+schema_fields)` to compare a policy with a known schema. Uncovered
+identifier-shaped or identifier-declared fields are suppressed; other fields
+follow the policy's `default_action` and produce reviewable warnings.
+
+```python
+from openmed.structured import apply_schema_policy, lint_schema_policy
+
+findings = lint_schema_policy(bundle, "fhir_hipaa_safe_harbor")
+if any(finding.severity == "error" for finding in findings):
+    raise ValueError("FHIR schema has uncovered identifier fields")
+
+deidentified = apply_schema_policy(
+    bundle,
+    "fhir_hipaa_safe_harbor",
+    date_shift_secret=date_shift_secret,
+)
+```
+
+FHIR Bundle wrappers and their resources are inspected separately. Unsafe
+Bundle identifiers, signatures, request/response metadata, links, and external
+`fullUrl` values are removed. References to removed external URLs are rewritten
+to safe relative references when their target entry has a valid resource type
+and id. Opaque `urn:uuid` and `urn:oid` linkage remains intact. Resource types
+without rules in the selected schema policy are rejected instead of copied.
+
+For OMOP, pass a mapping of linked table names to rows or use `apply_omop_file`
+for a CSV/Parquet file. Linked rows use `person_id` or an explicit `subject_key`
+for consistent date offsets. Blank optional dates stay blank, direct person
+source identifiers are suppressed, and clinical `*_source_value` fields are
+routed through the configured text de-identifier.
+
+```python
+from openmed.structured import apply_omop_file, apply_schema_policy
+
+tables = apply_schema_policy(
+    {"person": person_rows, "visit_occurrence": visit_rows},
+    "omop_hipaa_safe_harbor",
+    date_shift_secret=date_shift_secret,
+)
+
+apply_omop_file(
+    "visit_occurrence.csv",
+    "deidentified/visit_occurrence.parquet",
+    "omop_hipaa_safe_harbor",
+    date_shift_secret=date_shift_secret,
+)
+```
 
 ## Fail-closed behavior
 

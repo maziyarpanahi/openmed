@@ -118,7 +118,7 @@ def build_bundle() -> dict[str, Any]:
     """Export and smoke-check the fabricated spans."""
     bundle = to_fhir(
         example_spans(),
-        document_id="synthetic-interop-example",
+        doc_id="synthetic-interop-example",
         subject_reference="Patient/synthetic-patient",
     )
     if bundle is None:

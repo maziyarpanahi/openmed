@@ -115,6 +115,32 @@ Every locally executed candidate outcome is appended to
 artifact digest, decision, final pointer target, smoke state, start/completion
 timestamps, run status, and git SHA under a provenance hash. Gate reports live
 under `gates/release_reports/<run-id>/`.
+
+Release compute budgets use the same explicit local workflow. Review rolling
+spend before selecting a batch, ask the orchestrator to write deterministic
+stage timings, then append the linked cost and carbon record:
+
+```bash
+python scripts/release/budget_report.py status \
+  --ledger gates/budget_ledger.jsonl \
+  --output gates/release_reports/budget-status.json
+python scripts/release/orchestrate.py run \
+  --weekday <weekday> \
+  --run-id <run-id> \
+  --budget-timings gates/release_reports/<run-id>/budget-stage-timings.json
+python scripts/release/budget_report.py record \
+  --timings gates/release_reports/<run-id>/budget-stage-timings.json \
+  --ledger gates/budget_ledger.jsonl \
+  --orchestrator-ledger gates/release_runs.jsonl \
+  --output gates/release_reports/<run-id>/budget-report.json
+```
+
+An `OVER` verdict recommends reducing a future batch, for example by passing
+`--max-candidates 1` to an explicitly initiated run. It is advisory and never
+overrides or skips privacy, recall, provenance, publication, or smoke-test
+gates. Stage timings and budget rows contain only validated identifiers,
+aggregate measurements, reviewed factors, hashes, and threshold decisions.
+
 A maintainer reviews and commits the ledger, reports, manifest, and registry
 state through a normal PR. Reconstruct and validate a run without a live API
 call with:

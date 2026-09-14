@@ -163,6 +163,7 @@ REVIEWED_LICENSES = {
     "safetensors": "Apache-2.0",
     "scrubadub": "Apache-2.0",
     "scispacy": "Apache-2.0",
+    "snowflake-snowpark-python": "Apache-2.0",
     "spacy": "MIT",
     "sqlalchemy": "MIT",
     "strawberry-graphql": "MIT",
