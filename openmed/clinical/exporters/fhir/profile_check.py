@@ -23,6 +23,14 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
+from ._validation_primitives import (
+    _extract_codes,
+    _is_present,
+    _Occurrence,
+    _occurrence_groups,
+    _OccurrenceGroup,
+    _path_expression,
+)
 from .operation_outcome import OperationOutcomeIssue, to_operation_outcome
 
 __all__ = ["check_bundle"]
@@ -56,18 +64,6 @@ class _Package:
     profiles: Mapping[str, Mapping[str, Any]]
     value_sets: Mapping[str, _ValueSet]
     findings: tuple[_Finding, ...]
-
-
-@dataclass(frozen=True)
-class _Occurrence:
-    value: Any
-    expression: str
-
-
-@dataclass(frozen=True)
-class _OccurrenceGroup:
-    expression: str
-    occurrences: tuple[_Occurrence, ...]
 
 
 def check_bundle(
@@ -812,24 +808,6 @@ def _value_in_value_set(value: Any, codes: frozenset[tuple[str, str]]) -> bool:
     return False
 
 
-def _extract_codes(value: Any) -> list[tuple[str, str]]:
-    if isinstance(value, str):
-        return [("", value)]
-    if not isinstance(value, Mapping):
-        return []
-    code = value.get("code")
-    if isinstance(code, str):
-        system = value.get("system")
-        return [((system if isinstance(system, str) else ""), code)]
-    coding = value.get("coding")
-    if isinstance(coding, list):
-        codes: list[tuple[str, str]] = []
-        for item in coding:
-            codes.extend(_extract_codes(item))
-        return codes
-    return []
-
-
 def _check_slice(
     resource: Mapping[str, Any],
     resource_type: str,
@@ -1127,90 +1105,3 @@ def _unsupported_constraint_findings(
                         )
                     )
     return findings
-
-
-def _occurrence_groups(
-    node: Any,
-    segments: Sequence[str],
-    root_expression: str,
-) -> list[_OccurrenceGroup]:
-    if not segments:
-        occurrence = (
-            (_Occurrence(node, root_expression),) if _is_present(node) else tuple()
-        )
-        return [_OccurrenceGroup(root_expression, occurrence)]
-
-    parents = [_Occurrence(node, root_expression)]
-    for segment in segments[:-1]:
-        next_parents: list[_Occurrence] = []
-        for parent in parents:
-            next_parents.extend(_children(parent, segment))
-        parents = next_parents
-        if not parents:
-            return []
-
-    final_segment = segments[-1]
-    groups: list[_OccurrenceGroup] = []
-    for parent in parents:
-        children = tuple(_children(parent, final_segment))
-        groups.append(
-            _OccurrenceGroup(
-                expression=_child_expression(parent.expression, final_segment),
-                occurrences=children,
-            )
-        )
-    return groups
-
-
-def _children(parent: _Occurrence, segment: str) -> list[_Occurrence]:
-    if not isinstance(parent.value, Mapping):
-        return []
-    children: list[_Occurrence] = []
-    for key in _matching_keys(parent.value, segment):
-        value = parent.value[key]
-        expression = f"{parent.expression}.{key}"
-        if isinstance(value, list):
-            children.extend(
-                _Occurrence(item, f"{expression}[{index}]")
-                for index, item in enumerate(value)
-                if _is_present(item)
-            )
-        elif _is_present(value):
-            children.append(_Occurrence(value, expression))
-    return children
-
-
-def _matching_keys(node: Mapping[str, Any], segment: str) -> list[str]:
-    if segment.endswith("[x]"):
-        prefix = segment[:-3]
-        return sorted(
-            key
-            for key in node
-            if key.startswith(prefix)
-            and len(key) > len(prefix)
-            and key[len(prefix)].isupper()
-        )
-    return [segment] if segment in node else []
-
-
-def _child_expression(parent_expression: str, segment: str) -> str:
-    if segment.endswith("[x]"):
-        segment = segment[:-3]
-    return f"{parent_expression}.{segment}"
-
-
-def _path_expression(root_expression: str, segments: Sequence[str]) -> str:
-    expression = root_expression
-    for segment in segments:
-        expression = _child_expression(expression, segment)
-    return expression
-
-
-def _is_present(value: Any) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return bool(value.strip())
-    if isinstance(value, (Mapping, Sequence)) and not isinstance(value, (str, bytes)):
-        return bool(value)
-    return True
