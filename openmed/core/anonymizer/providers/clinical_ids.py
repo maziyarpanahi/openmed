@@ -25,6 +25,7 @@ deterministic:
   - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Mexican CURP and RFC (embedded dates with modulo-10/modulo-11 checks)
   - Chinese Resident Identity Card (18 characters with MOD 11-2 checksum)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
@@ -296,6 +297,193 @@ def generate_spanish_nie(*, rng: random.Random | None = None) -> str:
     number = int(_SPANISH_NIE_PREFIX_VALUES[prefix] + digits)
     check = _SPANISH_DNI_LETTERS[number % len(_SPANISH_DNI_LETTERS)]
     return f"{prefix}{digits}{check}"
+
+
+_MEXICAN_CURP_ALPHABET = "0123456789ABCDEFGHIJKLMN\u00d1OPQRSTUVWXYZ"
+_MEXICAN_CURP_STATE_CODES = (
+    "AS",
+    "BC",
+    "BS",
+    "CC",
+    "CH",
+    "CL",
+    "CM",
+    "CS",
+    "DF",
+    "DG",
+    "GT",
+    "GR",
+    "HG",
+    "JC",
+    "MC",
+    "MN",
+    "MS",
+    "NE",
+    "NL",
+    "NT",
+    "OC",
+    "PL",
+    "QT",
+    "QR",
+    "SP",
+    "SL",
+    "SR",
+    "TC",
+    "TL",
+    "TS",
+    "VZ",
+    "YN",
+    "ZS",
+)
+_MEXICAN_CURP_ROOT_BLOCKLIST = frozenset({"BUEI", "CACA", "MAME", "PENE"})
+_MEXICAN_CURP_CONSONANTS = "BCDFGHJKLMNPQRSTVWXYZ"
+_MEXICAN_RFC_ALPHABET = "0123456789ABCDEFGHIJKLMN&OPQRSTUVWXYZ \u00d1"
+_MEXICAN_RFC_ROOT_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ&"
+_MEXICAN_RFC_HOMOCLAVE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+
+def _mexican_curp_check_digit(body: str) -> str:
+    """Return the modulo-10 CURP verifier for a 17-character body."""
+    total = sum(
+        _MEXICAN_CURP_ALPHABET.index(character) * weight
+        for character, weight in zip(body, range(18, 1, -1), strict=True)
+    )
+    return str((10 - total % 10) % 10)
+
+
+def _mexican_rfc_check_character(body: str) -> str:
+    """Return the modulo-11 RFC verifier for an 11/12-character body."""
+    padded_body = body.rjust(12)
+    total = sum(
+        _MEXICAN_RFC_ALPHABET.index(character) * weight
+        for character, weight in zip(padded_body, range(13, 1, -1), strict=True)
+    )
+    remainder = total % 11
+    return "0" if remainder == 0 else "A" if remainder == 1 else str(11 - remainder)
+
+
+def generate_mexican_curp(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic Mexican CURP distinct from ``original``.
+
+    The small root blocklist is deliberately a synthetic stand-in for the
+    official inappropriate-word exclusion list, which OpenMed does not bundle.
+    Birth dates are generated no later than today so the output remains
+    plausible without retaining the source date.
+
+    Args:
+        original: Optional source CURP that the surrogate must not equal.
+        rng: Optional deterministic random source.
+
+    Returns:
+        An 18-character CURP accepted by :func:`validate_mexican_curp`.
+    """
+    from openmed.core.pii_i18n import validate_mexican_curp
+
+    source = rng or random.Random()
+    normalized = (
+        re.sub(r"\s+", "", original).upper() if isinstance(original, str) else ""
+    )
+    first = date(1940, 1, 1).toordinal()
+    last = date.today().toordinal()
+
+    for _ in range(100):
+        root = (
+            source.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            + source.choice("AEIOUX")
+            + "".join(source.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in range(2))
+        )
+        if root in _MEXICAN_CURP_ROOT_BLOCKLIST:
+            continue
+
+        birth_date = date.fromordinal(source.randint(first, last))
+        century_marker = (
+            str(source.randint(0, 9))
+            if birth_date.year < 2000
+            else source.choice("ABCDEFGHIJ")
+        )
+        body = (
+            f"{root}{birth_date:%y%m%d}{source.choice(('H', 'M'))}"
+            f"{source.choice(_MEXICAN_CURP_STATE_CODES)}"
+            f"{''.join(source.choice(_MEXICAN_CURP_CONSONANTS) for _ in range(3))}"
+            f"{century_marker}"
+        )
+        candidate = body + _mexican_curp_check_digit(body)
+        if candidate != normalized and validate_mexican_curp(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Mexican CURP")
+
+
+def generate_mexican_rfc(
+    original: str | None = None,
+    *,
+    person: bool | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic Mexican RFC in the person or company form.
+
+    Args:
+        original: Optional source RFC that the surrogate must not equal.
+        person: ``True`` for the 13-character individual form, ``False`` for
+            the 12-character legal-entity form, or ``None`` to preserve a
+            valid source form or choose randomly.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A 12- or 13-character RFC accepted by :func:`validate_mexican_rfc`.
+    """
+    from openmed.core.pii_i18n import validate_mexican_rfc
+
+    source = rng or random.Random()
+    normalized = (
+        re.sub(r"\s+", "", original).upper() if isinstance(original, str) else ""
+    )
+    if person is None:
+        if len(normalized) in {12, 13}:
+            is_person = len(normalized) == 13
+        else:
+            is_person = source.choice((False, True))
+    else:
+        is_person = person
+
+    first = date(1940, 1, 1).toordinal()
+    last = date.today().toordinal()
+    root_length = 4 if is_person else 3
+
+    for _ in range(100):
+        root = "".join(
+            source.choice(_MEXICAN_RFC_ROOT_CHARACTERS) for _ in range(root_length)
+        )
+        registration_date = date.fromordinal(source.randint(first, last))
+        homoclave = "".join(
+            source.choice(_MEXICAN_RFC_HOMOCLAVE_CHARACTERS) for _ in range(2)
+        )
+        body = f"{root}{registration_date:%y%m%d}{homoclave}"
+        candidate = body + _mexican_rfc_check_character(body)
+        if candidate != normalized and validate_mexican_rfc(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Mexican RFC")
+
+
+class MexicanCURPProvider(BaseProvider):
+    """Generate checksum-valid synthetic Mexican CURP identifiers."""
+
+    def mexican_curp(self, original: str | None = None) -> str:
+        """Return a Mexican CURP surrogate distinct from ``original``."""
+        return generate_mexican_curp(original, rng=self.generator.random)
+
+
+class MexicanRFCProvider(BaseProvider):
+    """Generate checksum-valid synthetic Mexican RFC identifiers."""
+
+    def mexican_rfc(self, original: str | None = None) -> str:
+        """Return an RFC surrogate, preserving a valid source form."""
+        return generate_mexican_rfc(original, rng=self.generator.random)
 
 
 def generate_ssn(*, rng: random.Random | None = None) -> str:
@@ -4036,6 +4224,8 @@ __all__ = [
     "SpanishDNIProvider",
     "PortugueseNIFProvider",
     "SpanishNIEProvider",
+    "MexicanCURPProvider",
+    "MexicanRFCProvider",
     "SwissAHVProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
@@ -4096,6 +4286,8 @@ __all__ = [
     "generate_malaysian_mykad",
     "generate_mpesa_transaction_code",
     "generate_moroccan_cin",
+    "generate_mexican_curp",
+    "generate_mexican_rfc",
     "generate_ng_mobile_number",
     "generate_philhealth_pin",
     "generate_philsys_psn",
