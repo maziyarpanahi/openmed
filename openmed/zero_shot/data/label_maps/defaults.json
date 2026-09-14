@@ -291,5 +291,13 @@
     "CareIntervention",
     "PainScore",
     "SkinAssessment"
+  ],
+  "functional_status": [
+    "ADLActivity",
+    "AssistanceLevel",
+    "MobilityAbility",
+    "AssistiveDevice",
+    "FunctionalScale",
+    "CognitiveStatus"
   ]
 }
