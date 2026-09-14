@@ -37,6 +37,11 @@ def _entity(text, surface, label):
         ),
         ("Dr. Parkinson veranlasste die Untersuchung.", "Parkinson", "clinician"),
         ("Patient: Dr. Parkinson; Morbus Parkinson", "Parkinson", "patient"),
+        ("Patient: Anna Beispiel\tDiagnose: Asthma.", "Anna Beispiel", "patient"),
+        ("Patient: Anna\tBeispiel\tDiagnose: Asthma.", "Anna\tBeispiel", "patient"),
+        ("Patient: John Doe DOB: 01/02/1980", "John Doe", "patient"),
+        ("Patient: John Doe Date of birth: 01/02/1980", "John Doe", "patient"),
+        ("Doctor: Eva Muster Diagnosis: Asthma.", "Eva Muster", "clinician"),
     ],
 )
 def test_complete_names_have_explicit_role_and_exact_source(text, expected, role):

@@ -69,6 +69,9 @@ protects whole clinical spans from ambiguous name/location/organization labels;
 it cannot silently exempt an identifier in a patient or doctor name field.
 Custom terms outside the bundled vocabulary always require review,
 including when the deployment otherwise qualifies the model/language route.
+This includes process-wide terms registered with `add_protected_terms`.
+Each document uses one term snapshot for filtering and review status, so updates
+made during inference take effect on subsequent documents.
 The same effective category/role policy is reapplied after the safety sweep.
 Within this profile, partial-word predictions such as `Ke` inside `Keine` are
 checked against the entire enclosing source word. A clinical word must match
@@ -78,6 +81,8 @@ Any overlap with an explicit personal-name context prevents this protection.
 The maintained clinical vocabulary includes German regression terms and
 negation cues. Context distinguishes a clinical eponym from an explicit name
 field: `Morbus Parkinson` is preserved while `Patient: Parkinson` is masked.
+Names in inline fields stop before the next field heading; tabs and line breaks
+retain their structural role during preprocessing and their original output bytes.
 This vocabulary is intentionally small and is not a substitute for an
 independently reviewed clinical holdout.
 

@@ -490,7 +490,11 @@ def _vitals(text, entities, sections, assertions, language, check):
         result = structure_vital_sign(surface, language=language)
         expected = 2 if result["kind"] == "blood_pressure" else 1
         unambiguous = len(_NUMBERS.findall(surface)) == expected
-        parsed = result["kind"] != "unknown" and unambiguous
+        parsed = (
+            result["kind"] != "unknown"
+            and unambiguous
+            and _quantity_boundary_complete(text, entity["start"], entity["end"])
+        )
         records.append(
             {
                 "source": _reference(entity),

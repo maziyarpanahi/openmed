@@ -648,6 +648,28 @@ def test_vital_candidate_with_multiple_or_missing_values_cannot_silently_use_fir
     assert (record["measurement"] is not None) == parsed
 
 
+@pytest.mark.parametrize(
+    "source,partial",
+    [
+        ("HR 120 bpm", "HR 12"),
+        ("RR 120/80 mmHg", "RR 120/8"),
+        ("HF 80/min", "HF 80/mi"),
+        ("Temperature 37.5 C", "Temperature 37"),
+    ],
+)
+def test_truncated_vital_numbers_and_units_remain_unparsed(source, partial):
+    result = analyze_clinical_context(
+        source,
+        [{"start": 0, "end": len(partial), "label": "Vital Sign"}],
+        language="en",
+        tasks=["vitals"],
+    )
+    record = result["tasks"]["vitals"]["records"][0]
+    assert record["extraction_status"] == "unparsed"
+    assert record["measurement"] is None
+    assert record["source"]["end"] == len(partial)
+
+
 def test_unsupported_language_and_incomplete_coverage_withhold_structured_records():
     spans = [{"start": 0, "end": 9, "label": "Drug", "score": 0.9}]
     for controls, status in [

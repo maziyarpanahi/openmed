@@ -62,6 +62,52 @@ TEXT = (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_runtime_protection(monkeypatch):
+    from openmed.core import clinical_protect
+
+    monkeypatch.setattr(clinical_protect, "_RUNTIME_TERMS", set())
+
+
+@pytest.mark.parametrize("initially_protected", [False, True])
+def test_runtime_protection_uses_one_snapshot_for_filtering_and_review(
+    monkeypatch, initially_protected
+):
+    from openmed.core import clinical_protect
+
+    if initially_protected:
+        clinical_protect.add_protected_terms(["Anna"])
+    engine = processor(qualified_languages=["de"])
+    predict = engine.model.predict_batch_detailed
+
+    def change_runtime_terms(texts, **kwargs):
+        if initially_protected:
+            clinical_protect._RUNTIME_TERMS.clear()
+        else:
+            clinical_protect.add_protected_terms(["Anna"])
+        return predict(texts, **kwargs)
+
+    monkeypatch.setattr(engine.model, "predict_batch_detailed", change_runtime_terms)
+    result = engine.process_batch([doc("Anna berichtet über Dyspnoe.")])[0]
+    assert result.complete
+    assert ("Anna" in result.deidentified_text) == initially_protected
+    assert (
+        "custom_protection_requires_review" in result.warnings
+    ) == initially_protected
+    assert result.status == ("needs_review" if initially_protected else "complete")
+
+
+@pytest.mark.parametrize("separator", [" ", "\t"])
+@pytest.mark.parametrize(
+    "heading", ["Diagnose", "DOB", "Date of birth", "Blood pressure"]
+)
+def test_inline_headers_remain_outside_name_spans(separator, heading):
+    source = f"Patient: Anna Beispiel{separator}{heading}: Befund."
+    result = processor().process_batch([doc(source)])[0]
+    assert result.complete
+    assert result.deidentified_text == source.replace("Anna Beispiel", "[PERSON]")
+
+
 @pytest.mark.parametrize("separator", ["\n", "\r\n", "\n\n", "\r"])
 def test_header_names_do_not_consume_following_fields_after_normalization(separator):
     source = separator.join(

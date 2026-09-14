@@ -27,6 +27,7 @@ from .clinical_label_map import (
 )
 from .clinical_language import ClinicalLanguage, resolve_clinical_language
 from .clinical_policy import ClinicalPolicy, resolve_clinical_policy
+from .clinical_protect import load_bundled_terms, protected_terms
 from .config import OpenMedConfig
 from .labels import normalize_label
 from .pipeline import Pipeline
@@ -123,6 +124,7 @@ class _ClinicalPipeline(Pipeline):
         self.prepared = None
         self.prediction = None
         self.review_reasons: set[str] = set()
+        self.protection_terms = protected_terms(extra_terms=document.options.keep_terms)
         super().__init__(
             lang=language.language,
             model_name=processor.model_id,
@@ -138,6 +140,7 @@ class _ClinicalPipeline(Pipeline):
             telemetry_enabled=False,
         )
         self.clinical_protect_options["protect_word_fragments"] = True
+        self.clinical_protect_options["term_snapshot"] = self.protection_terms
 
     def stage1_normalize(self, text):
         if self.prepared is None:
@@ -149,8 +152,11 @@ class _ClinicalPipeline(Pipeline):
             for index, (start, end) in enumerate(
                 normalized.offset_map.normalized_to_original_span
             ):
-                if chars[index].isspace() and any(c in text[start:end] for c in "\r\n"):
-                    chars[index] = "\n"
+                if chars[index].isspace():
+                    if any(c in text[start:end] for c in "\r\n"):
+                        chars[index] = "\n"
+                    elif "\t" in text[start:end]:
+                        chars[index] = "\t"
             self.prepared = replace(normalized, normalized_text="".join(chars))
         if text != self.prepared.original_text:
             raise RuntimeError("prepared document does not match source")
@@ -477,14 +483,8 @@ class ClinicalPrivacyProcessor:
             warnings.add("model_language_not_qualified")
         if policy.narrowed:
             warnings.add("policy_narrowed")
-        if document.options.keep_terms:
-            from .clinical_protect import load_bundled_terms, normalize_term
-
-            if any(
-                normalize_term(term) not in load_bundled_terms()
-                for term in document.options.keep_terms
-            ):
-                warnings.add("custom_protection_requires_review")
+        if pipeline.protection_terms - load_bundled_terms():
+            warnings.add("custom_protection_requires_review")
         for term in document.options.keep_terms:
             for match in re.finditer(
                 r"(?<!\w)" + re.escape(term) + r"(?!\w)", document.text, re.I

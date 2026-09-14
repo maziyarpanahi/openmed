@@ -428,7 +428,7 @@ class OnnxModel:
             for window in encoded_windows:
                 for token_index, offset in zip(window.token_indices, window.offsets):
                     if token_index is not None:
-                        if not 0 <= offset[0] < offset[1] <= len(text):
+                        if not 0 <= offset[0] <= offset[1] <= len(text):
                             raise RuntimeError(
                                 "tokenizer returned invalid source offsets"
                             )
@@ -708,7 +708,21 @@ def _custom_tokenizer_windows(
     types = list(encoded.get("token_type_ids", [[0] * len(ids)])[0])
     if not len(ids) == len(offsets) == len(masks) == len(types):
         raise RuntimeError("tokenizer returned inconsistent field lengths")
-    content = [i for i, (start, end) in enumerate(offsets) if start != end and masks[i]]
+    special = encoded.get("special_tokens_mask")
+    if special is not None:
+        special = list(special[0])
+        if len(special) != len(ids):
+            raise RuntimeError("tokenizer returned inconsistent field lengths")
+        content = [i for i in range(len(ids)) if masks[i] and not special[i]]
+    else:
+        # Trimmed ByteLevel whitespace tokens can have equal source offsets.
+        # Keep them between the content boundaries even without a special mask.
+        anchored = [i for i, pair in enumerate(offsets) if pair != (0, 0) and masks[i]]
+        content = (
+            [i for i in range(anchored[0], anchored[-1] + 1) if masks[i]]
+            if anchored
+            else []
+        )
     return _windows_from_encoding(
         ids, offsets, masks, types, content, document, max_length, stride
     )

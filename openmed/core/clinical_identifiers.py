@@ -13,10 +13,19 @@ from openmed.processing.outputs import EntityPrediction
 
 from .labels import DATE_OF_BIRTH, ID_NUM, PERSON, PHONE, STREET_ADDRESS
 
-CLINICAL_IDENTIFIER_VERSION = "clinical-identifiers-de-en-v2"
+CLINICAL_IDENTIFIER_VERSION = "clinical-identifiers-de-en-v3"
 _WORD = r"[A-ZÀ-ÖØ-Þ][^\W\d_]*(?:[\u0300-\u036f][^\W\d_]*)*(?:[’'-][^\W\d_]+)*"
 _INITIAL = r"[A-ZÀ-ÖØ-Þ]\."
-_PART = rf"(?:{_INITIAL}|{_WORD})"
+_MULTIWORD_FIELD = (
+    r"(?i:date[ \t]+of[ \t]+birth|medical[ \t]+record[ \t]+(?:number|no\.)|"
+    r"patient[ \t]+(?:id|name)|blood[ \t]+pressure|heart[ \t]+rate)"
+)
+# A following field is not part of a name. The trailing word boundary prevents
+# regex backtracking from retaining a truncated prefix of its heading.
+_PART = (
+    rf"(?!{_MULTIWORD_FIELD}[ \t]*:)(?:{_INITIAL}|{_WORD})"
+    rf"(?![\w’'-]|[ \t]*:)"
+)
 _NAME = rf"{_PART}(?:[ \t]+(?:(?:von|van|de|der|den|zu|zur)[ \t]+)?{_PART}){{0,5}}"
 _TITLE = r"(?:(?i:dr|prof)\.[ \t]*(?:(?i:med)\.[ \t]*)?)"
 _PATIENT = re.compile(

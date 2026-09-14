@@ -222,6 +222,7 @@ def filter_protected_spans(
     lang: str = "en",
     enabled: bool = True,
     protect_word_fragments: bool = False,
+    term_snapshot: frozenset[str] | None = None,
 ) -> ClinicalProtectionResult:
     """Filter protected clinical terms and return aggregate metadata.
 
@@ -234,13 +235,19 @@ def filter_protected_spans(
         enabled: Return spans unchanged when false.
         protect_word_fragments: Also protect a subword prediction contained in
             a whole protected source word or phrase, outside personal-name contexts.
+        term_snapshot: Complete normalized term set for one processing operation.
+            When supplied, use it instead of rereading runtime or config terms.
 
     Returns:
         A :class:`ClinicalProtectionResult` with retained spans and counts.
     """
 
     span_list = list(spans)
-    terms = protected_terms(extra_terms=extra_terms, include_builtin=include_builtin)
+    terms = (
+        term_snapshot
+        if term_snapshot is not None
+        else protected_terms(extra_terms=extra_terms, include_builtin=include_builtin)
+    )
     if not enabled or not terms:
         return ClinicalProtectionResult(
             spans=span_list,

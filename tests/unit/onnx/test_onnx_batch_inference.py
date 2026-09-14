@@ -142,6 +142,52 @@ def test_tensor_batch_padding_order_and_single_parity(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("adapter_kind", ["native", "custom", "custom-mask"])
+def test_trimmed_bytelevel_whitespace_tokens_retain_complete_coverage(
+    tmp_path, adapter_kind
+):
+    tokenizers = pytest.importorskip("tokenizers")
+    tokenizer = tokenizers.Tokenizer(tokenizers.models.BPE(unk_token="[UNK]"))
+    tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.ByteLevel(
+        add_prefix_space=False
+    )
+    tokenizer.train_from_iterator(
+        ["Anna Müller", "Anna  Müller"],
+        tokenizers.trainers.BpeTrainer(
+            vocab_size=80, special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+        ),
+    )
+    tokenizer.post_processor = tokenizers.processors.RobertaProcessing(
+        ("[SEP]", 3), ("[CLS]", 2), trim_offsets=True, add_prefix_space=False
+    )
+    source = "Anna  Müller"
+    encoding = tokenizer.encode(source)
+    content = [
+        offset
+        for offset, special in zip(encoding.offsets, encoding.special_tokens_mask)
+        if not special
+    ]
+    assert any(start == end for start, end in content)
+    model, _ = model_fixture(tmp_path)
+    adapter = _TokenizersTokenizerAdapter(tokenizer)
+    if adapter_kind == "native":
+        model.tokenizer = adapter
+    else:
+
+        def injected(text, **kwargs):
+            encoded = adapter(text, **kwargs)
+            if adapter_kind == "custom-mask":
+                encoded["special_tokens_mask"] = [encoding.special_tokens_mask]
+            return encoded
+
+        model.tokenizer = injected
+    result = model.predict_batch_detailed([source], max_length=8, stride=1)[0]
+    assert result.complete
+    assert result.token_count == result.processed_tokens == len(content)
+    assert all(0 <= e.start < e.end <= len(source) for e in result.entities)
+    assert spans(model.predict(source)) == spans(result.entities)
+
+
 @pytest.mark.parametrize("stride", [0, 1, 3])
 def test_identifier_across_windows_and_tail_are_complete(tmp_path, stride):
     model, session = model_fixture(tmp_path)
