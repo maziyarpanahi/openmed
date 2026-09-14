@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added duplicate and conflicting sense validation for abbreviation inventories: equivalent
+  candidates, short forms that normalize together, and repeated JSON keys now fail on load
+  instead of being silently dropped, and one long form under distinct semantic types is kept
+  as separate alternatives when a local inventory is merged (#3105).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
