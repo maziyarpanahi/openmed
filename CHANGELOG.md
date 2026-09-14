@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added content-free frame-sampling manifests for clinical video with strict
+  monotonicity, bounds, declared-strategy validation, and a recomputed coverage
+  digest, with synthetic regression tests (#3092).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
