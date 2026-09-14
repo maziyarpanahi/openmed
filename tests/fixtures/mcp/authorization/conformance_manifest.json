@@ -1,0 +1,424 @@
+{
+  "schema_version": "openmed.mcp.authorization_conformance.v1",
+  "synthetic": true,
+  "protected_resource": {
+    "resource": "https://mcp.synthetic.invalid",
+    "authorization_servers": [
+      "https://auth.synthetic.invalid"
+    ],
+    "scopes_supported": [
+      "mcp.tools.read",
+      "mcp.tools.write",
+      "mcp.tools.state_change"
+    ],
+    "bearer_methods_supported": [
+      "header"
+    ]
+  },
+  "authorization_server": {
+    "issuer": "https://auth.synthetic.invalid",
+    "authorization_endpoint": "https://auth.synthetic.invalid/authorize",
+    "token_endpoint": "https://auth.synthetic.invalid/token",
+    "code_challenge_methods_supported": [
+      "S256"
+    ],
+    "registered_redirect_uris": [
+      "http://127.0.0.1:8765/callback"
+    ]
+  },
+  "policy": {
+    "max_tool_payload_bytes": 1024
+  },
+  "cases": [
+    {
+      "id": "positive-read-tool",
+      "kind": "positive",
+      "behavior": "valid read-only tool authorization",
+      "failure_boundary": "tool_authorization",
+      "expected_failure": null,
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "read-verifier",
+          "challenge_ref": "read-verifier"
+        },
+        "client_key_ref": "read-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "read-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "positive-approved-state-change",
+      "kind": "positive",
+      "behavior": "explicitly approved state-changing tool authorization",
+      "failure_boundary": "state_change_policy",
+      "expected_failure": null,
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "state-verifier",
+          "challenge_ref": "state-verifier"
+        },
+        "client_key_ref": "state-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "confirmation_key_ref": "state-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_update_task",
+        "required_scope": "mcp.tools.state_change",
+        "payload_bytes": 128,
+        "state_change": true,
+        "approval": true
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-wrong-audience",
+      "kind": "negative",
+      "behavior": "reject a token issued for another resource",
+      "failure_boundary": "token_validation",
+      "expected_failure": "wrong_audience",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "audience-verifier",
+          "challenge_ref": "audience-verifier"
+        },
+        "client_key_ref": "audience-client-key"
+      },
+      "token_claims": {
+        "audience": "https://other-resource.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "audience-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-missing-resource-indicator",
+      "kind": "negative",
+      "behavior": "reject authorization without a protected resource indicator",
+      "failure_boundary": "authorization_request",
+      "expected_failure": "missing_resource_indicator",
+      "authorization_request": {
+        "resource": null,
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "resource-verifier",
+          "challenge_ref": "resource-verifier"
+        },
+        "client_key_ref": "resource-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": null,
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "resource-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-token-passthrough",
+      "kind": "negative",
+      "behavior": "reject forwarding the bearer credential to a downstream tool",
+      "failure_boundary": "transport_policy",
+      "expected_failure": "token_passthrough",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "passthrough-verifier",
+          "challenge_ref": "passthrough-verifier"
+        },
+        "client_key_ref": "passthrough-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "passthrough-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": true
+      }
+    },
+    {
+      "id": "negative-invalid-pkce",
+      "kind": "negative",
+      "behavior": "reject an authorization code exchange with mismatched PKCE references",
+      "failure_boundary": "authorization_code_exchange",
+      "expected_failure": "invalid_pkce",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "pkce-verifier",
+          "challenge_ref": "different-challenge"
+        },
+        "client_key_ref": "pkce-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "pkce-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-redirect-mismatch",
+      "kind": "negative",
+      "behavior": "reject a callback URI not registered by the authorization client",
+      "failure_boundary": "redirect_validation",
+      "expected_failure": "redirect_mismatch",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/unregistered",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "redirect-verifier",
+          "challenge_ref": "redirect-verifier"
+        },
+        "client_key_ref": "redirect-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "redirect-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-insufficient-tool-scope",
+      "kind": "negative",
+      "behavior": "reject a tool call when its required scope is absent",
+      "failure_boundary": "tool_authorization",
+      "expected_failure": "insufficient_tool_scope",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "scope-verifier",
+          "challenge_ref": "scope-verifier"
+        },
+        "client_key_ref": "scope-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "scope-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_update_task",
+        "required_scope": "mcp.tools.write",
+        "payload_bytes": 128,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-oversized-payload",
+      "kind": "negative",
+      "behavior": "reject a tool payload above the local MCP policy limit",
+      "failure_boundary": "payload_policy",
+      "expected_failure": "oversized_payload",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "payload-verifier",
+          "challenge_ref": "payload-verifier"
+        },
+        "client_key_ref": "payload-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "payload-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_list_models",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 2048,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-unapproved-state-change",
+      "kind": "negative",
+      "behavior": "reject a state-changing tool call without explicit approval",
+      "failure_boundary": "state_change_policy",
+      "expected_failure": "unapproved_state_change",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "approval-verifier",
+          "challenge_ref": "approval-verifier"
+        },
+        "client_key_ref": "approval-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "confirmation_key_ref": "approval-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_update_task",
+        "required_scope": "mcp.tools.state_change",
+        "payload_bytes": 128,
+        "state_change": true,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    }
+  ]
+}
