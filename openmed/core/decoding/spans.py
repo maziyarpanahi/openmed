@@ -18,6 +18,7 @@ import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from typing import Any, Final
 
 from ..labels import supports_name_boundary_refinement
@@ -409,37 +410,33 @@ def snap_span_to_grapheme_boundaries(
     Empty spans remain empty and are moved to the preceding cluster boundary.
     Returned offsets always index the original ``text`` directly.
     """
+    return _snap_span_to_grapheme_boundaries(
+        start,
+        end,
+        text,
+        grapheme_break_checker(text),
+    )
+
+
+def _snap_span_to_grapheme_boundaries(
+    start: int,
+    end: int,
+    text: str,
+    has_break: Callable[[int], bool],
+) -> tuple[int, int]:
+    """Snap a span with a caller-owned grapheme-boundary predicate."""
     text_length = len(text)
     safe_start = max(0, min(int(start), text_length))
     safe_end = max(safe_start, min(int(end), text_length))
     snapped_start = safe_start
-    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
-    if ids_internal_boundaries:
-        while 0 < snapped_start < text_length and not _has_grapheme_break_at(
-            text,
-            snapped_start,
-            ids_internal_boundaries,
-        ):
-            snapped_start -= 1
-    else:
-        while 0 < snapped_start < text_length and not _has_grapheme_break(
-            text, snapped_start
-        ):
-            snapped_start -= 1
+    while 0 < snapped_start < text_length and not has_break(snapped_start):
+        snapped_start -= 1
     if safe_start == safe_end:
         return snapped_start, snapped_start
 
     snapped_end = safe_end
-    if ids_internal_boundaries:
-        while snapped_end < text_length and not _has_grapheme_break_at(
-            text,
-            snapped_end,
-            ids_internal_boundaries,
-        ):
-            snapped_end += 1
-    else:
-        while snapped_end < text_length and not _has_grapheme_break(text, snapped_end):
-            snapped_end += 1
+    while snapped_end < text_length and not has_break(snapped_end):
+        snapped_end += 1
     return snapped_start, snapped_end
 
 
@@ -503,7 +500,13 @@ def snap_span_to_graphemes(start: int, end: int, text: str) -> tuple[int, int]:
     return snap_span_to_grapheme_boundaries(start, end, text)
 
 
-def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
+def trim_span_whitespace(
+    start: int,
+    end: int,
+    text: str,
+    *,
+    break_checker: Callable[[int], bool] | None = None,
+) -> tuple[int, int]:
     """Strip whole Unicode whitespace clusters from ``text[start:end]``.
 
     Input boundaries are first snapped outward, so the returned ``[start, end)``
@@ -511,20 +514,45 @@ def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
     Full-width U+3000 spaces are trimmed only at the edges; interior spaces and
     Han characters remain untouched. A zero-width joiner is never considered
     whitespace by itself.
+
+    Args:
+        start: Inclusive code-point offset into ``text``.
+        end: Exclusive code-point offset into ``text``.
+        text: Source text whose offsets are being refined.
+        break_checker: Optional caller-owned grapheme-boundary predicate for
+            ``text``. Reusing one avoids rebuilding document-level boundary
+            state when several spans from the same text are refined.
+
+    Returns:
+        The trimmed ``(start, end)`` code-point offsets.
     """
-    start, end = snap_span_to_grapheme_boundaries(start, end, text)
+    has_break = (
+        break_checker if break_checker is not None else grapheme_break_checker(text)
+    )
+    start, end = _snap_span_to_grapheme_boundaries(start, end, text, has_break)
     if start == end:
         return start, end
 
-    clusters = list(iter_grapheme_cluster_spans(text))
-    selected = [
-        cluster for cluster in clusters if cluster[0] >= start and cluster[1] <= end
-    ]
+    # Snapped boundaries are cluster boundaries, so the clusters of
+    # interest partition exactly [start, end). Walk only that window instead
+    # of materializing every cluster in the document (the previous behavior,
+    # which rescanned the whole text once per span).
+    while start < end:
+        cluster_end = start + 1
+        while cluster_end < end and not has_break(cluster_end):
+            cluster_end += 1
+        if not _cluster_is_whitespace(text[start:cluster_end]):
+            break
+        start = cluster_end
 
-    while selected and _cluster_is_whitespace(text[slice(*selected[0])]):
-        start = selected.pop(0)[1]
-    while selected and _cluster_is_whitespace(text[slice(*selected[-1])]):
-        end = selected.pop()[0]
+    while end > start:
+        cluster_start = end - 1
+        while cluster_start > start and not has_break(cluster_start):
+            cluster_start -= 1
+        if not _cluster_is_whitespace(text[cluster_start:end]):
+            break
+        end = cluster_start
+
     return start, end
 
 
@@ -724,6 +752,7 @@ def refine_privacy_filter_span(
     confidence: float = 0.0,
     morphology_allowlist: Iterable[str] = (),
     minimum_morphology_confidence: float = 0.9,
+    break_checker: Callable[[int], bool] | None = None,
 ) -> tuple[int, int]:
     """Tighten a PII span without crossing grapheme or script boundaries.
 
@@ -733,8 +762,33 @@ def refine_privacy_filter_span(
     or other scripts. Every returned boundary is snapped to a whole grapheme.
     All inputs and outputs are Python code-point offsets into the same source
     string; this function never performs byte-based offset arithmetic.
+
+    Args:
+        label: Privacy-filter label associated with the span.
+        start: Inclusive code-point offset into ``text``.
+        end: Exclusive code-point offset into ``text``.
+        text: Source text whose offsets are being refined.
+        indic_morphology: Whether to apply opt-in Indic name morphology.
+        language: Optional language hint for Indic morphology.
+        confidence: Model confidence used by morphology safeguards.
+        morphology_allowlist: Allowed stems for morphology refinement.
+        minimum_morphology_confidence: Minimum confidence for morphology.
+        break_checker: Optional caller-owned grapheme-boundary predicate for
+            ``text``. Reusing one avoids rebuilding document-level boundary
+            state for each span.
+
+    Returns:
+        The refined ``(start, end)`` code-point offsets.
     """
-    start, end = trim_span_whitespace(start, end, text)
+    has_break = (
+        break_checker if break_checker is not None else grapheme_break_checker(text)
+    )
+    start, end = trim_span_whitespace(
+        start,
+        end,
+        text,
+        break_checker=has_break,
+    )
     span_text = text[start:end]
     normalized = label.lower()
     script_runs = list(segment_by_script(span_text))
@@ -749,6 +803,7 @@ def refine_privacy_filter_span(
                 start + match_start,
                 start + match_end,
                 text,
+                break_checker=has_break,
             )
 
     scripts = {script for _, _, script in script_runs}
@@ -757,7 +812,12 @@ def refine_privacy_filter_span(
             if span_text.lower().endswith(suffix):
                 end -= len(suffix)
                 break
-    start, end = trim_span_whitespace(start, end, text)
+    start, end = trim_span_whitespace(
+        start,
+        end,
+        text,
+        break_checker=has_break,
+    )
     if indic_morphology:
         refinement = refine_indic_name_span(
             label,
@@ -938,7 +998,14 @@ def _has_grapheme_break_at(
     return _has_grapheme_break(text, index)
 
 
+@lru_cache(maxsize=4096)
 def _grapheme_break_class(char: str) -> str:
+    """Return the UAX #29 extended-grapheme-break class of a single character.
+
+    Results are memoized per code point: decode paths classify the same
+    characters repeatedly across spans, and a lone code point carries no
+    document content.
+    """
     codepoint = ord(char)
     if char == "\r":
         return "CR"
@@ -1005,6 +1072,7 @@ def _continues_indic_conjunct(text: str, index: int) -> bool:
     return False
 
 
+@lru_cache(maxsize=4096)
 def _is_indic_consonant(char: str) -> bool:
     return _in_ranges(ord(char), _INDIC_CONSONANT_RANGES)
 
@@ -1027,7 +1095,10 @@ def _is_extended_pictographic(codepoint: int) -> bool:
 
 
 def _in_ranges(codepoint: int, ranges: tuple[tuple[int, int], ...]) -> bool:
-    return any(start <= codepoint <= end for start, end in ranges)
+    for start, end in ranges:
+        if start <= codepoint <= end:
+            return True
+    return False
 
 
 def _byte_offset(text: str, char_offset: int) -> int:

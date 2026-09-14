@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from io import StringIO
 from pathlib import Path
 
 from scripts.android.build_android_catalog import (
@@ -9,6 +10,7 @@ from scripts.android.build_android_catalog import (
     is_android_runnable_format,
     is_permissive_license,
     load_manifest_rows,
+    run,
     write_catalog,
 )
 
@@ -113,6 +115,14 @@ def test_committed_manifest_derives_only_safe_android_rows() -> None:
 
     catalog_rows = build_catalog_rows(manifest_rows)
 
+    assert catalog_rows
+    catalog_repo_ids = {row["repo_id"] for row in catalog_rows}
+    assert "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android" in (
+        catalog_repo_ids
+    )
+    assert "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android" in (
+        catalog_repo_ids
+    )
     for row in catalog_rows:
         assert is_permissive_license(row["license"])
         assert row["repo_id"]
@@ -122,3 +132,26 @@ def test_committed_manifest_derives_only_safe_android_rows() -> None:
         assert all(
             is_android_runnable_format(format_name) for format_name in row["formats"]
         )
+
+
+def test_run_refuses_to_write_an_empty_catalog(tmp_path: Path) -> None:
+    manifest = tmp_path / "models.jsonl"
+    output = tmp_path / "catalog.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "repo_id": "OpenMed/pytorch-only",
+                "formats": ["pytorch"],
+                "license": "apache-2.0",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    stderr = StringIO()
+
+    exit_code = run(manifest, output, stderr=stderr)
+
+    assert exit_code == 1
+    assert not output.exists()
+    assert "Refusing to write an empty Android model catalog" in stderr.getvalue()
