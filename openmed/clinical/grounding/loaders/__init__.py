@@ -1,5 +1,15 @@
 """Vocabulary-specific loaders for local clinical terminology releases."""
 
+from .hpo_loader import (
+    HPO_LICENSE_NOTE,
+    HPO_SYSTEM_URI,
+    HPOConcept,
+    HPOLoader,
+    HpoLoader,
+    HPOVocabularyError,
+    HPOVocabularyLoader,
+    HpoVocabularyLoader,
+)
 from .icd10cm_loader import (
     ICD10CM_CODE_PATTERN,
     ICD10CM_LICENSE_NOTE,
@@ -34,6 +44,14 @@ from .rxnorm_loader import (
 
 __all__ = [
     "DEFAULT_TTY_PRIORITY",
+    "HPOConcept",
+    "HPO_LICENSE_NOTE",
+    "HPO_SYSTEM_URI",
+    "HPOVocabularyError",
+    "HPOVocabularyLoader",
+    "HPOLoader",
+    "HpoLoader",
+    "HpoVocabularyLoader",
     "ICD10CM_CODE_PATTERN",
     "ICD10CM_LICENSE_NOTE",
     "ICD10CM_SYSTEM_URI",
