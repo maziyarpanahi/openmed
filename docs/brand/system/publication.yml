@@ -227,6 +227,7 @@ classification:
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
     - multimodal/webp-header-preflight.md
+    - multimodal/audio-resampling-plans.md
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
