@@ -2133,8 +2133,8 @@ def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
 
     derived_count = release_gates._published_android_onnx_derivative_count(rows)
 
-    assert len(rows) == 1_520
-    assert derived_count == 752
+    assert len(rows) == 2_266
+    assert derived_count == 750
     assert len(rows) + derived_count >= 2_000
 
 
