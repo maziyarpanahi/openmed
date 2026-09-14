@@ -83,6 +83,7 @@ routing is first requested, and do not download or bundle model weights.
 | `el`   | Greek      | `OpenMed/privacy-filter-multilingual`                       | `el_GR`      | AMKA Luhn-aware surrogates.                                  |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
 | `es`   | Spanish    | `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1`   | `es_ES`      | DNI/NIE checksum-aware surrogates.                           |
+| `fa`   | Persian    | `OpenMed/privacy-filter-multilingual`                      | `fa_IR`      | Iranian NID, RTL, Eastern digits, and Jalali date patterns. |
 | `fr`   | French     | `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1`    | `fr_FR`      | NIR / INSEE; `fr_SN`, `fr_CI`, and `fr_CM` locale overlays.  |
 | `gu`   | Gujarati   | `env:OPENMED_INDIC_NER_MODEL`                               | `gu_IN`      | Optional Indic NER weights.                                  |
 | `he`   | Hebrew     | `OpenMed/privacy-filter-multilingual`                      | `he_IL`      | Served by the multilingual privacy filter.                   |
@@ -104,7 +105,7 @@ routing is first requested, and do not download or bundle model weights.
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
 | `sv`   | Swedish    | `OpenMed/privacy-filter-multilingual`                       | `sv_SE`      | Personnummer Luhn validation and surrogates.                 |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
-| `ta`   | Tamil      | `OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1`   | `ta_IN`      | Dedicated Tamil PII registry entry.                          |
+| `ta`   | Tamil      | `OpenMed/privacy-filter-multilingual`                       | `ta_IN`      | Public placeholder; dedicated weights are not bundled.       |
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
@@ -119,10 +120,10 @@ Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 `user-supplied` (`gu`, `kn`, `ml`, `pa`, `ne`, and `ur`) ship no bundled
-weights and require a caller-supplied model. Only the rows naming an
-`OpenMed/...` repository are model-backed, and those are exactly
-`SUPPORTED_LANGUAGES`. Codes absent from the table entirely (for example
-`pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
+weights and require a caller-supplied model. Russian and Tamil retain explicit
+public placeholder routes for compatibility, but neither placeholder is a
+claim of dedicated trained weights. Codes absent from the table entirely (for
+example `pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
@@ -318,6 +319,20 @@ Before: Paciente Maria Garcia, DNI 12345678Z
 After:  Paciente [NAME], DNI [ID]
 ```
 
+### Persian — `fa`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `fa_IR`
+
+The multilingual checkpoint is a compatibility placeholder until dedicated
+Persian weights are published and evaluated. The built-in pack adds RTL
+Persian patterns, Eastern-digit normalization, Jalali dates, and checksum-valid
+Iranian national-ID surrogates.
+
+```text
+Before: بیمار با کد ملی ۱۲۳۴۵۶۷۸۹۱ در تاریخ ۱۴۰۵/۰۵/۲۹ مراجعه کرد.
+After:  بیمار با کد ملی [ID] در تاریخ [DATE] مراجعه کرد.
+```
+
 ### French — `fr`
 
 - Model: `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1` · locale `fr_FR`
@@ -392,7 +407,11 @@ After:  [PERSON] [LOCATION] ਵਿੱਚ [ORGANIZATION] ਗਿਆ।
 
 ### Tamil — `ta`
 
-- Model: `OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1` · locale `ta_IN`
+- Model: `OpenMed/privacy-filter-multilingual` (placeholder) · locale `ta_IN`
+
+The formerly configured dedicated checkpoint is not in the public model
+catalog. Treat the placeholder as compatibility routing, not qualified Tamil
+model coverage; configure and evaluate explicit weights for production use.
 
 ```text
 Before: அருண் சென்னையில் காவேரி மருத்துவமனை சென்றார்.

@@ -24,6 +24,237 @@ from openmed.service.batcher import (
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 
 
+def test_keyed_batches_progress_independently_and_never_overlap_the_same_model():
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls, active = [], set()
+
+        async def dispatch(items):
+            key = items[0][0]
+            assert key not in active
+            assert all(item[0] == key for item in items)
+            active.add(key)
+            calls.append(list(items))
+            try:
+                if key == "clinical" and items[0][1] == 0:
+                    entered.set()
+                    await release.wait()
+                return list(items)
+            finally:
+                active.remove(key)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=2,
+            max_wait_ms=1,
+            max_concurrent_batches=2,
+            batch_key=lambda item: item[0],
+            max_queue_wait_ms=5000,
+        )
+        tasks = [asyncio.create_task(batcher.submit(("clinical", i))) for i in range(2)]
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            queued = asyncio.create_task(batcher.submit(("clinical", 2)))
+            fast = await asyncio.wait_for(
+                asyncio.gather(
+                    *(batcher.submit(("privacy", i), priority="bulk") for i in range(2))
+                ),
+                1,
+            )
+            assert fast == [("privacy", 0), ("privacy", 1)]
+            assert not tasks[1].done() and not queued.done()
+            tasks[0].cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await tasks[0]
+            assert not tasks[1].done() and not queued.done()
+            assert (await batcher.queue_depths())["interactive"] == 1
+            release.set()
+            assert await tasks[1] == ("clinical", 1)
+            assert await queued == ("clinical", 2)
+            assert calls == [
+                [("clinical", 0), ("clinical", 1)],
+                [("privacy", 0), ("privacy", 1)],
+                [("clinical", 2)],
+            ]
+        finally:
+            release.set()
+            await batcher.close()
+
+    asyncio.run(scenario())
+
+
+def test_key_failure_releases_its_slot_and_close_drains_other_active_key():
+    async def scenario():
+        entered, fail, other, release = (asyncio.Event() for _ in range(4))
+
+        async def dispatch(items):
+            if items[0] == ("a", 0):
+                entered.set()
+                await fail.wait()
+                raise ValueError("synthetic dispatch failure")
+            if items[0][0] == "b":
+                other.set()
+                await release.wait()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=1,
+            max_wait_ms=0,
+            max_concurrent_batches=2,
+            batch_key=lambda item: item[0],
+        )
+        first = asyncio.create_task(batcher.submit(("a", 0)))
+        await asyncio.wait_for(entered.wait(), 1)
+        second = asyncio.create_task(batcher.submit(("b", 0)))
+        await asyncio.wait_for(other.wait(), 1)
+        pending = asyncio.create_task(batcher.submit(("a", 1)))
+        fail.set()
+        with pytest.raises(ValueError, match="synthetic"):
+            await first
+        assert await asyncio.wait_for(pending, 1) == ("a", 1)
+        closing = asyncio.create_task(batcher.close())
+        await asyncio.sleep(0)
+        assert not closing.done()
+        release.set()
+        assert await second == ("b", 0)
+        await closing
+        assert (await batcher.admission_snapshot()).depth == 0
+        with pytest.raises(RuntimeError, match="closed"):
+            await batcher.submit(("a", 2))
+
+    asyncio.run(scenario())
+
+
+def test_keyed_batching_rejects_unbounded_or_unhashable_keys_before_admission():
+    with pytest.raises(ValueError, match="bounded"):
+        DynamicBatcher(
+            lambda items: items,
+            max_batch_size=2,
+            max_wait_ms=0,
+            batch_key=lambda item: item,
+        )
+
+    async def scenario():
+        batcher = DynamicBatcher(
+            lambda items: items,
+            max_batch_size=2,
+            max_wait_ms=0,
+            max_concurrent_batches=2,
+            batch_key=lambda item: [],
+        )
+        with pytest.raises(TypeError):
+            await batcher.submit("test")
+        assert (await batcher.admission_snapshot()).depth == 0
+        await batcher.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("batch_size", [1, 2, 3, 4, 5, 8])
+def test_keyed_batches_do_not_starve_a_different_bulk_model(batch_size):
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def dispatch(items):
+            calls.append(list(items))
+            if items == [("a", "held")]:
+                entered.set()
+                await release.wait()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=batch_size,
+            max_wait_ms=0,
+            max_concurrent_batches=1,
+            batch_key=lambda item: item[0],
+            max_queue_wait_ms=5000,
+        )
+        held = asyncio.create_task(batcher.submit(("a", "held")))
+        await asyncio.wait_for(entered.wait(), 1)
+        tasks = [asyncio.create_task(batcher.submit(("a", str(i)))) for i in range(40)]
+        tasks.append(
+            asyncio.create_task(batcher.submit(("b", "bulk"), priority="bulk"))
+        )
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.wait_for(asyncio.gather(held, *tasks), 2)
+        assert calls.index([("b", "bulk")]) <= 4
+        await batcher.close()
+
+    asyncio.run(scenario())
+
+
+def test_bounded_dispatch_keeps_interactive_priority_over_waiting_bulk():
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def dispatch(items):
+            calls.append(list(items))
+            started.set()
+            await release.wait()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=1,
+            max_wait_ms=0,
+            max_concurrent_batches=1,
+            max_queue_wait_ms=5000,
+        )
+        first = asyncio.create_task(batcher.submit("bulk-1", priority="bulk"))
+        await started.wait()
+        bulk = asyncio.create_task(batcher.submit("bulk-2", priority="bulk"))
+        interactive = asyncio.create_task(batcher.submit("interactive"))
+        await asyncio.sleep(0)
+        assert calls == [["bulk-1"]]
+        assert await batcher.queue_depths() == {"interactive": 1, "bulk": 1}
+        release.set()
+        assert await asyncio.gather(first, bulk, interactive) == [
+            "bulk-1",
+            "bulk-2",
+            "interactive",
+        ]
+        assert calls == [["bulk-1"], ["interactive"], ["bulk-2"]]
+        await batcher.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            await batcher.submit("late")
+
+    asyncio.run(scenario())
+
+
+def test_close_cancels_queued_jobs_and_drains_running_dispatch():
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def dispatch(items):
+            started.set()
+            await release.wait()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch, max_batch_size=1, max_wait_ms=0, max_concurrent_batches=1
+        )
+        first = asyncio.create_task(batcher.submit(1))
+        await started.wait()
+        pending = asyncio.create_task(batcher.submit(2))
+        await asyncio.sleep(0)
+        closing = asyncio.create_task(batcher.close())
+        await asyncio.sleep(0)
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+        assert not closing.done()
+        release.set()
+        assert await first == 1
+        await closing
+        assert await batcher.queue_depths() == {"interactive": 0, "bulk": 0}
+
+    asyncio.run(scenario())
+
+
 class FakeLoader:
     """Minimal loader double for service runtime tests."""
 

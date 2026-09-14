@@ -3,6 +3,7 @@
   "fixture_count": 1,
   "generated_at": "2026-06-14T00:00:00Z",
   "metadata": {
+    "release_tag": "v2.0.0",
     "source": "committed benchmark report",
     "synthetic": true
   },
