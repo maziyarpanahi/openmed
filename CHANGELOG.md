@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added `serialize_measurement_trends`, compact JSON for measurement trends that is
+  byte-identical for equivalent input orderings and rejects non-finite derived values,
+  with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
+  tied on one timepoint are now ordered by value instead of input position (#3107).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
