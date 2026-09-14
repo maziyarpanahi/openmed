@@ -191,6 +191,7 @@ classification:
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
+    - clinical/relation-unit-compatibility.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
     - indic-normalization.md
