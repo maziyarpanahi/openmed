@@ -40,6 +40,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
+    "obstetrics_gynecology": "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
     "allergy_intolerance": (
@@ -59,6 +60,12 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "AdministrationDate to occurrence[x], and VaccineSeries to "
         "protocolApplied.series. This is extraction metadata only; it does not "
         "create exporter, recommendation, dosing, or scheduling logic."
+    ),
+    "obstetrics_gynecology": (
+        "The display labels cover pregnancy and reproductive-health concepts for "
+        "structured extraction only. This metadata does not compute gestational "
+        "age, score risk, infer diagnosis, recommend care, or bundle restricted "
+        "terminology; human review remains required."
     ),
 }
 

@@ -44,6 +44,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/pediatrics_growth.jsonl",
         "tests/fixtures/clinical/nursing_observation.jsonl",
         "tests/fixtures/clinical/radiology_finding.jsonl",
+        "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
     ):
         assert Path(fixture_path).exists()
         assert fixture_path in markdown
