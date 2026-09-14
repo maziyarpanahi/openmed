@@ -67,6 +67,7 @@ from openmed.core.pii_i18n import (
     build_african_mobile_pattern,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
+    normalize_gujarati_digits,
     validate_bangladesh_nid,
     validate_belgian_rrn,
     validate_bengali_aadhaar,
@@ -87,6 +88,9 @@ from openmed.core.pii_i18n import (
     validate_german_steuer_id,
     validate_ghana_card_pin,
     validate_greek_amka,
+    validate_gujarat_daman_diu_pin,
+    validate_gujarati_aadhaar,
+    validate_gujarati_indian_phone,
     validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
@@ -145,6 +149,7 @@ class TestConstants:
             "am",
             "as",
             "bn",
+            "gu",
             "en",
             "fr",
             "de",
@@ -216,6 +221,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["es"] == "Spanish-"
         assert LANGUAGE_MODEL_PREFIX["nl"] == "Dutch-"
         assert LANGUAGE_MODEL_PREFIX["hi"] == "Hindi-"
+        assert LANGUAGE_MODEL_PREFIX["gu"] == "Gujarati-"
         assert LANGUAGE_MODEL_PREFIX["bn"] == "Bengali-"
         assert LANGUAGE_MODEL_PREFIX["ta"] == "Tamil-"
         assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
@@ -251,6 +257,7 @@ class TestConstants:
     def test_default_pii_models_naming(self):
         assert DEFAULT_PII_MODELS["am"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["as"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["gu"] == "OpenMed/privacy-filter-multilingual"
         assert "French" in DEFAULT_PII_MODELS["fr"]
         assert "German" in DEFAULT_PII_MODELS["de"]
         assert "Italian" in DEFAULT_PII_MODELS["it"]
@@ -450,6 +457,48 @@ class TestBengaliValidators:
     )
     def test_bengali_postcode_rejects_invalid_formats(self, value):
         assert not validate_bengali_postcode(value)
+
+
+class TestGujaratiValidators:
+    """Validator and fused-name coverage for the Gujarati language pack."""
+
+    def test_gujarati_digits_normalize_without_changing_length(self):
+        value = "આધાર ૨૪૬૭ ૭૮૩૨ ૫૪૮૪"
+        normalized = normalize_gujarati_digits(value)
+
+        assert normalized == "આધાર 2467 7832 5484"
+        assert len(normalized) == len(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("2467 7832 5484", "૨૪૬૭ ૭૮૩૨ ૫૪૮૪"),
+    )
+    def test_gujarati_aadhaar_accepts_ascii_and_native_digits(self, value):
+        assert validate_gujarati_aadhaar(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("+91 98765 43210", "+૯૧ ૯૮૭૬૫ ૪૩૨૧૦"),
+    )
+    def test_gujarati_mobile_accepts_ascii_and_native_digits(self, value):
+        assert validate_gujarati_indian_phone(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("380001", "૩૮૦૦૦૧", "396210", "૩૯૬૨૧૦"),
+    )
+    def test_gujarat_pin_accepts_ascii_and_native_digits(self, value):
+        assert validate_gujarat_daman_diu_pin(value)
+
+    def test_gujarati_patterns_keep_fused_suffixes_in_one_name_span(self):
+        text = "રોગી શ્રી નરેશભાઈ અને શ્રીમતી રમીલાબેન"
+        units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["gu"])
+
+        assert [
+            text[start:end]
+            for start, end, entity_type, *_rest in units
+            if entity_type == "name"
+        ] == ["નરેશભાઈ", "રમીલાબેન"]
 
 
 class TestValidateIranNationalID:

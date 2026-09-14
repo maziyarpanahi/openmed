@@ -24,7 +24,7 @@ Runtime kuu ya ndani ya OpenMed hufanya uchimbaji na uondoaji utambulisho baada 
 </p>
 
 <p>
-  <b>Maingizo 2,266 ya manifesti</b> &nbsp;·&nbsp; <b>Lugha 33 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Maingizo 2,266 ya manifesti</b> &nbsp;·&nbsp; <b>Lugha 34 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -432,7 +432,7 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (njia 36 zinazotumika; 33 zikitumia modeli)
+## PII ya lugha nyingi (njia 37 zinazotumika; 34 zikitumia modeli)
 
 Utoaji na uondoaji utambulisho huunga mkono **misimbo 35 ya lugha za PII**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,

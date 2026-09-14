@@ -58,7 +58,9 @@ _PLUGIN_PROVIDER_FALLBACKS: Dict[str, Generator] = {}
 _PLUGIN_PROVIDER_DISPATCHERS: Dict[str, Generator] = {}
 _PLUGIN_SPAN_HASH_KEY = secrets.token_bytes(32)
 
-_INDIA_LOCALES = frozenset({"as_IN", "en_IN", "hi_IN", "mr_IN", "or_IN", "ta_IN"})
+_INDIA_LOCALES = frozenset(
+    {"as_IN", "en_IN", "gu_IN", "hi_IN", "mr_IN", "or_IN", "ta_IN"}
+)
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -675,6 +677,7 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "as_IN": "aadhaar",
     "en_IN": "aadhaar",
+    "gu_IN": "aadhaar",
     "hi_IN": "aadhaar",
     "mr_IN": "aadhaar",
     "or_IN": "aadhaar",

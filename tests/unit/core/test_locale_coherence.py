@@ -258,6 +258,55 @@ class TestLocaleResolution:
         assert person != "ଅରୁଣ ଦାସ"
         assert validate_aadhaar(aadhaar)
 
+    def test_gujarati_pack_uses_native_locale_and_gender_suffixes(self):
+        pack = get_language_pack("gu")
+
+        assert pack is not None
+        assert pack.scripts == ("Gujarati",)
+        assert "gu" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["gu"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["gu"] == "Gujarati"
+        assert LANGUAGE_MODEL_PREFIX["gu"] == "Gujarati-"
+        assert LANGUAGE_MONTH_NAMES["gu"] == [
+            "જાન્યુઆરી",
+            "ફેબ્રુઆરી",
+            "માર્ચ",
+            "એપ્રિલ",
+            "મે",
+            "જૂન",
+            "જુલાઈ",
+            "ઑગસ્ટ",
+            "સપ્ટેમ્બર",
+            "ઑક્ટોબર",
+            "નવેમ્બર",
+            "ડિસેમ્બર",
+        ]
+        assert LANG_TO_LOCALE["gu"] == "gu_IN"
+        assert NATIONAL_ID_PROVIDERS["gu"] == ("gu_IN", "aadhaar")
+        assert "gu_IN" in AVAILABLE_LOCALES
+        assert "gu" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("gu") == "gu_IN"
+            anonymizer = Anonymizer(lang="gu", consistent=True, seed=691)
+            male = anonymizer.surrogate("નરેશભાઈ", "PERSON")
+            female = anonymizer.surrogate("રમીલાબેન", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "2467 7832 5484",
+                "national_id",
+            )
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert re.fullmatch(r"[\u0A80-\u0AFF]+ભાઈ", male)
+        assert re.fullmatch(r"[\u0A80-\u0AFF]+બેન", female)
+        assert male != "નરેશભાઈ"
+        assert female != "રમીલાબેન"
+        assert validate_aadhaar(aadhaar)
+
     def test_marathi_pack_uses_approximate_locale_and_three_part_names(self):
         assert "mr" in SUPPORTED_LANGUAGES
         assert DEFAULT_PII_MODELS["mr"] == "OpenMed/privacy-filter-multilingual"
