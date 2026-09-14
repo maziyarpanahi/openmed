@@ -12,6 +12,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /models/unload`
 - `POST /analyze`
 - `POST /ground`
+- `POST /profile`
 - `POST /pii/extract`
 - `POST /pii/extract/stream`
 - `POST /pii/deidentify`
