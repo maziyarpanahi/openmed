@@ -40,6 +40,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
+    "wound_assessment": "tests/fixtures/clinical/wound_assessment.jsonl",
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
     "allergy_intolerance": (
@@ -59,6 +60,12 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "AdministrationDate to occurrence[x], and VaccineSeries to "
         "protocolApplied.series. This is extraction metadata only; it does not "
         "create exporter, recommendation, dosing, or scheduling logic."
+    ),
+    "wound_assessment": (
+        "This map is intentionally distinct from the dermatology lesion map: it "
+        "captures wound-care descriptors as written for nursing and surgical "
+        "review. It does not infer wound staging, predict healing, recommend "
+        "treatment, or make clinical decisions."
     ),
 }
 

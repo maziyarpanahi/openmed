@@ -53,6 +53,23 @@ def test_default_coverage_gate_passes_with_non_empty_per_label_spans() -> None:
     )
 
 
+def test_wound_assessment_reports_per_label_coverage() -> None:
+    report = assert_domain_coverage_gate(domains=("wound_assessment",))
+
+    domain = report.per_domain[0]
+    assert domain.domain == "wound_assessment"
+    assert [coverage.label for coverage in domain.per_label] == [
+        "WoundType",
+        "WoundLocation",
+        "WoundStage",
+        "WoundDimension",
+        "ExudateDescriptor",
+        "TissueType",
+        "DressingType",
+    ]
+    assert all(coverage.span_count == 1 for coverage in domain.per_label)
+
+
 def test_missing_fixture_fails_with_domain_only_evidence(tmp_path: Path) -> None:
     report = run_domain_coverage(
         label_map={"missing_domain": ["Problem"]},
