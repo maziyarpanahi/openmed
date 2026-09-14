@@ -137,10 +137,12 @@ def test_missing_original_fails_closed_when_rasterizing(monkeypatch):
     def raise_ioerror(path, page, bbox):
         raise FileNotFoundError(str(path))
 
-    with pytest.raises(FileNotFoundError):
-        verify_redacted_pdf(
-            "original.pdf", "redacted.pdf", [REGION], rasterizer=raise_ioerror
-        )
+    source = "Synthetic_Patient_John_Doe.pdf"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        verify_redacted_pdf(source, "redacted.pdf", [REGION], rasterizer=raise_ioerror)
+
+    assert source not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
 
 
 def test_page_bbox_tuple_region_is_accepted(monkeypatch):

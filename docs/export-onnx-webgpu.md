@@ -157,25 +157,33 @@ paths. Select the fp16 graph when WebGPU is available and the fp32 graph for
 the WebAssembly fallback:
 
 ```typescript
-import { loadOrtWebSession } from "openmed";
+import { loadWebGpuTokenClassificationSession } from "openmed";
 
-const hasWebGpu = "gpu" in navigator;
-const loaded = await loadOrtWebSession({
-  modelPath: hasWebGpu
-    ? "/models/example-onnx/model.webgpu.onnx"
-    : "/models/example-onnx/model.onnx",
+const session = await loadWebGpuTokenClassificationSession({
+  modelPath: {
+    webgpu: "/models/example-onnx/model.webgpu.onnx",
+    wasm: "/models/example-onnx/model.onnx",
+  },
   assetPath: "/onnxruntime/",
 });
 
-const session = loaded.session;
+const logits = await session.run({
+  inputIds,
+  attentionMask,
+  batchSize: 1,
+  sequenceLength: inputIds.length,
+});
+
+await session.dispose();
 ```
 
-`loadOrtWebSession` chooses WebGPU first, then threaded WASM, then basic WASM.
-It rejects remote model and runtime asset URLs so PHI processing does not
-silently depend on a CDN. Tokenization, `session.run(...)`, and logits decoding
-remain application responsibilities; the
-[ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md) shows the complete
-OpenMed pipeline adapter.
+The typed session probes a real adapter, chooses WebGPU first, and then selects
+threaded or basic WASM with the dedicated fp32 artifact. It rejects remote model
+and runtime asset URLs so PHI processing does not silently depend on a CDN. See
+the [WebGPU Token-Classification Runtime](./runtimes/webgpu.md) for capability,
+benchmark, parity/recall, and offline-inference details. The lower-level
+[ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md) remains available for
+custom feed and decoding adapters.
 
 ### Transformers.js
 
