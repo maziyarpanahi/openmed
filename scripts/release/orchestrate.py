@@ -31,11 +31,13 @@ Design notes
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, NamedTuple, Sequence
@@ -44,6 +46,11 @@ from openmed.core.repro_hash import (
     compute_canonical_payload_hash,
     compute_file_digest,
     resolve_git_sha,
+)
+from openmed.eval.budget_tracker import (
+    BENCHMARK_REFRESH,
+    StageTiming,
+    write_stage_timings,
 )
 from openmed.eval.release_gates import (
     QUARANTINED,
@@ -73,6 +80,7 @@ SMOKE_NOT_RUN = "NOT_RUN"
 
 _WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday")
 _SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_SAFE_BUDGET_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _SAFE_REPO_ID_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 _SUPPORTED_NIGHTLY_FORMATS = frozenset({"onnx", "webgpu", "int8"})
 
@@ -122,10 +130,11 @@ _NIGHTLY_REQUIRED_RECORD_FIELDS = frozenset(
 
 # Conservative PHI-shaped patterns. The builder controls its own inputs, so this
 # is a defensive guard (and the subject of a no-raw-PHI test), not a scrubber.
+_LONG_DIGIT_PATTERN = re.compile(r"\b\d{10,}\b")
 _PHI_PATTERNS = (
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # US SSN
     re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),  # email
-    re.compile(r"\b\d{10,}\b"),  # long digit runs (MRN / phone / account)
+    _LONG_DIGIT_PATTERN,  # long digit runs (MRN / phone / account)
 )
 
 # Format-constrained hash/identifier fields. These are exactly the "hashes and
@@ -173,6 +182,14 @@ class NightlyCandidate(NamedTuple):
                 )
             return item.strip()
 
+        def budget_label(name: str) -> str:
+            item = required(name)
+            if not _SAFE_BUDGET_LABEL_RE.fullmatch(item):
+                raise ReleaseManifestError(
+                    f"nightly queue field {name!r} must be a safe budget identifier"
+                )
+            return item
+
         candidate_id = required("id")
         if not _SAFE_ID_RE.fullmatch(candidate_id):
             raise ReleaseManifestError(
@@ -215,8 +232,8 @@ class NightlyCandidate(NamedTuple):
             theme=theme,
             source_model_id=source_model_id,
             repo_id=repo_id,
-            family=required("family"),
-            tier=required("tier"),
+            family=budget_label("family"),
+            tier=budget_label("tier"),
             param_count=param_count,
             format=format_name,
             fixture_path=required("fixture_path"),
@@ -307,8 +324,8 @@ def _verified_artifact_digest(family: str, digest: str | None) -> str:
     return digest
 
 
-def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[str]:
-    def walk(key: str, value: Any) -> Iterable[str]:
+def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[tuple[str, str]]:
+    def walk(key: str, value: Any) -> Iterable[tuple[str, str]]:
         if (
             key in _HASH_FIELDS
             or key.endswith(("_hash", "_digest"))
@@ -324,7 +341,7 @@ def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[str]:
             for nested_value in value:
                 yield from walk(key, nested_value)
         elif isinstance(value, str):
-            yield value
+            yield key, value
 
     for key, value in record.items():
         yield from walk(str(key), value)
@@ -333,8 +350,21 @@ def _iter_record_strings(record: Mapping[str, Any]) -> Iterable[str]:
 def _assert_no_phi(record: Mapping[str, Any]) -> None:
     """Reject a record whose values look like raw PHI before it is written."""
 
-    for value in _iter_record_strings(record):
+    run_id = record.get("run_id")
+    for key, value in _iter_record_strings(record):
         for pattern in _PHI_PATTERNS:
+            if key == "run_id" and pattern is _LONG_DIGIT_PATTERN:
+                continue
+            if (
+                key == "gate_report_path"
+                and pattern is _LONG_DIGIT_PATTERN
+                and isinstance(run_id, str)
+            ):
+                remaining_path = "/".join(
+                    part for part in value.split("/") if part != run_id
+                )
+                if not pattern.search(remaining_path):
+                    continue
             if pattern.search(value):
                 raise ReleaseManifestError(
                     "refusing to write PHI-shaped value to the release ledger"
@@ -1136,11 +1166,11 @@ class ReleaseRuntime:
 
     def smoke(self, candidate: NightlyCandidate) -> None:
         try:
-            from scripts.release.smoke_test import run_fresh_venv_smoke
+            smoke_test = importlib.import_module("scripts.release.smoke_test")
         except ImportError:  # pragma: no cover - direct script execution path
-            from smoke_test import run_fresh_venv_smoke
+            smoke_test = importlib.import_module("smoke_test")
 
-        run_fresh_venv_smoke(
+        smoke_test.run_fresh_venv_smoke(
             candidate.repo_id,
             format_name=candidate.format,
             repository_root=self.root,
@@ -1408,6 +1438,36 @@ def _safe_stage(candidate: NightlyCandidate, stage: str) -> None:
     print(f"nightly candidate {candidate.candidate_id}: {stage}")
 
 
+def _timed_stage(
+    candidate: NightlyCandidate,
+    stage: str,
+    action: Callable[[], Any],
+    *,
+    timings: list[StageTiming],
+    monotonic_clock: Callable[[], float],
+) -> Any:
+    """Run one stage and retain only aggregate, PHI-free resource timing."""
+
+    started = monotonic_clock()
+    try:
+        return action()
+    finally:
+        elapsed_seconds = max(monotonic_clock() - started, 0.0)
+        device = candidate.device.strip().lower()
+        gpu_stage = stage == "eval" and device not in {"cpu", "none"}
+        timings.append(
+            StageTiming.from_elapsed(
+                stage=stage,
+                candidate_id=candidate.candidate_id,
+                family=candidate.family,
+                tier=candidate.tier,
+                workload=BENCHMARK_REFRESH,
+                elapsed_seconds=elapsed_seconds,
+                gpu=gpu_stage,
+            )
+        )
+
+
 def orchestrate_nightly(
     candidates: Sequence[NightlyCandidate],
     *,
@@ -1417,12 +1477,15 @@ def orchestrate_nightly(
     ledger_path: str | Path = DEFAULT_LEDGER,
     reports_dir: str | Path = DEFAULT_REPORTS_DIR,
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    monotonic_clock: Callable[[], float] = time.monotonic,
+    stage_timings_path: str | Path | None = None,
 ) -> list[NightlyResult]:
     """Run the full release chain per candidate and continue after quarantine."""
 
     if not candidates:
         raise ReleaseManifestError("nightly orchestration needs at least one candidate")
     results: list[NightlyResult] = []
+    stage_timings: list[StageTiming] = []
     for candidate in candidates:
         started_at = _iso_timestamp(clock)
         artifact_dir: Path | None = None
@@ -1433,26 +1496,54 @@ def orchestrate_nightly(
         stage = "build"
         try:
             _safe_stage(candidate, stage)
-            artifact_dir = runtime.build(candidate)
-            artifact_digest = runtime.artifact_digest(artifact_dir)
+
+            def build_artifact() -> tuple[Path, str]:
+                built = runtime.build(candidate)
+                return built, runtime.artifact_digest(built)
+
+            artifact_dir, artifact_digest = _timed_stage(
+                candidate,
+                stage,
+                build_artifact,
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
+            )
 
             stage = "eval"
             _safe_stage(candidate, stage)
-            benchmark = runtime.evaluate(
+            benchmark = _timed_stage(
                 candidate,
-                artifact_dir,
-                generated_at=started_at,
+                stage,
+                lambda: runtime.evaluate(
+                    candidate,
+                    artifact_dir,
+                    generated_at=started_at,
+                ),
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
             )
 
             stage = "gate"
             _safe_stage(candidate, stage)
-            report = runtime.gate(candidate, benchmark)
-            report_path, report_relative = _gate_report_output(
-                report,
-                candidate=candidate,
-                run_id=run_id,
-                reports_dir=reports_dir,
-                repository_root=runtime.root,
+
+            def evaluate_gate() -> tuple[GateReport, Path, str]:
+                nonlocal report
+                report = runtime.gate(candidate, benchmark)
+                output_path, relative_path = _gate_report_output(
+                    report,
+                    candidate=candidate,
+                    run_id=run_id,
+                    reports_dir=reports_dir,
+                    repository_root=runtime.root,
+                )
+                return report, output_path, relative_path
+
+            report, report_path, report_relative = _timed_stage(
+                candidate,
+                stage,
+                evaluate_gate,
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
             )
         except Exception:
             report = report or runtime.failure_report(candidate, stage=stage)
@@ -1519,25 +1610,43 @@ def orchestrate_nightly(
         try:
             stage = "model-card"
             _safe_stage(candidate, stage)
-            runtime.build_card(
+            _timed_stage(
                 candidate,
-                artifact_dir,
-                report,
-                git_sha=git_sha,
-                released=started_at[:10],
+                stage,
+                lambda: runtime.build_card(
+                    candidate,
+                    artifact_dir,
+                    report,
+                    git_sha=git_sha,
+                    released=started_at[:10],
+                ),
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
             )
             stage = "publish"
             _safe_stage(candidate, stage)
-            runtime.publish(
+            _timed_stage(
                 candidate,
-                artifact_dir,
-                report_path,
-                git_sha=git_sha,
-                released=started_at[:10],
+                stage,
+                lambda: runtime.publish(
+                    candidate,
+                    artifact_dir,
+                    report_path,
+                    git_sha=git_sha,
+                    released=started_at[:10],
+                ),
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
             )
             stage = "promote"
             _safe_stage(candidate, stage)
-            runtime.promote(candidate, report)
+            _timed_stage(
+                candidate,
+                stage,
+                lambda: runtime.promote(candidate, report),
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
+            )
         except Exception:
             runtime.report_quarantine(
                 candidate,
@@ -1568,15 +1677,33 @@ def orchestrate_nightly(
         try:
             stage = "smoke"
             _safe_stage(candidate, stage)
-            runtime.smoke(candidate)
+            _timed_stage(
+                candidate,
+                stage,
+                lambda: runtime.smoke(candidate),
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
+            )
             smoke_status = SMOKE_PASSED
             stage = "last-green"
-            runtime.mark_last_green(candidate, report)
+            _timed_stage(
+                candidate,
+                stage,
+                lambda: runtime.mark_last_green(candidate, report),
+                timings=stage_timings,
+                monotonic_clock=monotonic_clock,
+            )
         except Exception:
             if stage == "smoke":
                 smoke_status = SMOKE_FAILED
             try:
-                rollback_target = runtime.rollback(candidate)
+                rollback_target = _timed_stage(
+                    candidate,
+                    "rollback",
+                    lambda: runtime.rollback(candidate),
+                    timings=stage_timings,
+                    monotonic_clock=monotonic_clock,
+                )
             except Exception:
                 runtime.report_quarantine(
                     candidate,
@@ -1649,6 +1776,12 @@ def orchestrate_nightly(
         git_sha=git_sha,
         ledger_path=ledger_path,
     )
+    if stage_timings_path is not None:
+        write_stage_timings(
+            stage_timings,
+            run_id=run_id,
+            path=stage_timings_path,
+        )
     return results
 
 
@@ -1686,11 +1819,22 @@ def _nightly_run_main(argv: Sequence[str]) -> int:
     parser.add_argument("--registry-state", type=Path, default=DEFAULT_REGISTRY_STATE)
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument("--budget-timings", type=Path, default=None)
+    parser.add_argument(
+        "--max-candidates",
+        type=int,
+        default=0,
+        help="Optional advisory queue throttle; zero keeps the reviewed batch.",
+    )
     parser.add_argument("--no-quarantine-issues", action="store_true")
     args = parser.parse_args(list(argv))
 
     try:
         candidates = load_nightly_queue(args.queue, weekday=args.weekday)
+        if args.max_candidates < 0:
+            raise ReleaseManifestError("max_candidates cannot be negative")
+        if args.max_candidates:
+            candidates = candidates[: args.max_candidates]
         if not candidates:
             print(f"nightly weekday {args.weekday.lower()}: no reviewed candidates")
             return 0
@@ -1711,6 +1855,7 @@ def _nightly_run_main(argv: Sequence[str]) -> int:
             runtime=runtime,
             ledger_path=args.ledger,
             reports_dir=args.reports_dir,
+            stage_timings_path=args.budget_timings,
         )
         audit_nightly_run(
             args.run_id,

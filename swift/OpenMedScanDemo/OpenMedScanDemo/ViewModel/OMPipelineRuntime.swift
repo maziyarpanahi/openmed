@@ -1,8 +1,9 @@
 import Foundation
 import OpenMedKit
+
 #if canImport(UIKit)
-import UIKit
-import Vision
+    import UIKit
+    import Vision
 #endif
 
 /// Thin, self-contained wrapper around OpenMedKit used by `ScanFlowViewModel`.
@@ -13,6 +14,7 @@ public actor OMPipelineRuntime {
 
     private var piiRuntimes: [String: OpenMed] = [:]
     private var relationRuntimes: [String: OpenMedRelationExtractor] = [:]
+    private var mapleRuntimes: [String: OpenMedMaple] = [:]
     private let blockingQueue = DispatchQueue(label: "com.openmed.scan.pipeline", qos: .userInitiated)
 
     public init() {}
@@ -24,7 +26,28 @@ public actor OMPipelineRuntime {
         modelID: ScanModelID,
         confidenceThreshold: Float = 0.5
     ) async throws -> PIIOutput {
+        if modelID == .maplePreview {
+            await unloadPIIRuntimes()
+            await unloadRelationRuntimes()
+            let runtime = try await loadMapleRuntime(for: modelID)
+            let response = try await runtime.complete(
+                OpenMedMapleRequest(
+                    task: .deidentify,
+                    document: text,
+                    maximumTokens: 1_536
+                )
+            )
+            guard let maskedText = response.redactedText else {
+                throw PipelineError.missingMapleRedaction
+            }
+            return PIIOutput(
+                entities: response.entities.map(DetectedEntity.init(maple:)),
+                maskedText: maskedText
+            )
+        }
+
         await unloadRelationRuntimes()
+        await unloadMapleRuntimes()
         let runtime = try await loadPIIRuntime(for: modelID)
         let predictions = try await runBlocking {
             try runtime.extractPIIChunked(
@@ -42,11 +65,32 @@ public actor OMPipelineRuntime {
     public func runClinical(
         maskedText: String,
         labels: [String],
-        threshold: Float
+        threshold: Float,
+        modelID: ScanModelID
     ) async throws -> ClinicalOutput {
+        if modelID == .maplePreview {
+            await unloadPIIRuntimes()
+            await unloadRelationRuntimes()
+            let runtime = try await loadMapleRuntime(for: modelID)
+            let response = try await runtime.complete(
+                OpenMedMapleRequest(
+                    task: .relationExtraction,
+                    document: maskedText,
+                    entityLabels: labels,
+                    relationLabels: Self.defaultRelationLabels,
+                    maximumTokens: 2_048
+                )
+            )
+            return ClinicalOutput(
+                entities: response.entities.map(DetectedEntity.init(maple:)),
+                relations: response.relations.map(DetectedRelation.init(maple:))
+            )
+        }
+
         await unloadPIIRuntimes()
+        await unloadMapleRuntimes()
         let extractor = try await loadRelationRuntime(for: .glinerRelex)
-        let entities = try await runBlocking {
+        let result = try await runBlocking {
             try extractor.extract(
                 maskedText,
                 entityLabels: labels,
@@ -54,43 +98,72 @@ public actor OMPipelineRuntime {
                 threshold: threshold,
                 relationThreshold: 0.9,
                 flatNER: true
-            ).entities
+            )
         }
-        let converted = entities.map(DetectedEntity.init(zeroShot:))
-        return ClinicalOutput(entities: converted)
+        return ClinicalOutput(
+            entities: result.entities.map(DetectedEntity.init(zeroShot:)),
+            relations: result.relations.map(DetectedRelation.init(openMedKit:))
+        )
+    }
+
+    public func reason(
+        maskedText: String,
+        question: String,
+        messages: [OpenMedMapleMessage],
+        onFinalAnswerChunk: (@Sendable (String) async -> Void)? = nil
+    ) async throws -> String {
+        await unloadPIIRuntimes()
+        await unloadRelationRuntimes()
+        let runtime = try await loadMapleRuntime(for: .maplePreview)
+        let task: OpenMedMapleTask = messages.isEmpty ? .reasoning : .chat
+        let response = try await runtime.complete(
+            OpenMedMapleRequest(
+                task: task,
+                document: maskedText,
+                messages: messages,
+                question: question,
+                maximumTokens: 1_536
+            ),
+            onFinalAnswerChunk: onFinalAnswerChunk
+        )
+        guard let answer = response.answer, !answer.isEmpty else {
+            throw PipelineError.missingMapleAnswer
+        }
+        return answer
     }
 
     #if canImport(UIKit)
-    public func recognizeText(in images: [UIImage]) async throws -> TextRecognitionResult {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    var combined: [String] = []
-                    for image in images {
-                        guard let cgImage = image.cgImage else {
-                            throw PipelineError.invalidImage
+        public func recognizeText(in images: [UIImage]) async throws -> TextRecognitionResult {
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        var combined: [String] = []
+                        for image in images {
+                            guard let cgImage = image.cgImage else {
+                                throw PipelineError.invalidImage
+                            }
+                            let request = VNRecognizeTextRequest()
+                            request.recognitionLevel = .accurate
+                            request.usesLanguageCorrection = true
+                            request.automaticallyDetectsLanguage = true
+                            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                            try handler.perform([request])
+                            let observations = (request.results ?? []).sorted(by: Self.recognitionSort)
+                            let lines = observations.compactMap { $0.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            let page = lines.filter { !$0.isEmpty }.joined(separator: "\n")
+                            if !page.isEmpty { combined.append(page) }
                         }
-                        let request = VNRecognizeTextRequest()
-                        request.recognitionLevel = .accurate
-                        request.usesLanguageCorrection = true
-                        request.automaticallyDetectsLanguage = true
-                        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                        try handler.perform([request])
-                        let observations = (request.results ?? []).sorted(by: Self.recognitionSort)
-                        let lines = observations.compactMap { $0.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        let page = lines.filter { !$0.isEmpty }.joined(separator: "\n")
-                        if !page.isEmpty { combined.append(page) }
+                        continuation.resume(
+                            returning: TextRecognitionResult(
+                                text: combined.joined(separator: "\n\n"),
+                                pageCount: images.count
+                            ))
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
-                    continuation.resume(returning: TextRecognitionResult(
-                        text: combined.joined(separator: "\n\n"),
-                        pageCount: images.count
-                    ))
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
-    }
     #endif
 
     // MARK: - Cached runtimes
@@ -107,29 +180,40 @@ public actor OMPipelineRuntime {
         await clearRuntimeMemoryCacheOnPipelineQueue()
     }
 
-    #if canImport(UIKit)
-    private static func recognitionSort(
-        lhs: VNRecognizedTextObservation,
-        rhs: VNRecognizedTextObservation
-    ) -> Bool {
-        let lhsBox = lhs.boundingBox
-        let rhsBox = rhs.boundingBox
-        let verticalOverlap = min(lhsBox.maxY, rhsBox.maxY) - max(lhsBox.minY, rhsBox.minY)
-        let centerDelta = abs(lhsBox.midY - rhsBox.midY)
-        let sameLineThreshold = max(0.004, max(lhsBox.height, rhsBox.height) * 0.65)
-        let sameLine = verticalOverlap > min(lhsBox.height, rhsBox.height) * 0.2
-            || centerDelta <= sameLineThreshold
-
-        if sameLine { return lhsBox.minX < rhsBox.minX }
-        return lhsBox.midY > rhsBox.midY
+    public func unloadMapleRuntimes() async {
+        guard !mapleRuntimes.isEmpty else { return }
+        let runtimes = mapleRuntimes.values
+        mapleRuntimes.removeAll(keepingCapacity: false)
+        for runtime in runtimes {
+            await runtime.unload()
+        }
+        await clearRuntimeMemoryCacheOnPipelineQueue()
     }
+
+    #if canImport(UIKit)
+        private static func recognitionSort(
+            lhs: VNRecognizedTextObservation,
+            rhs: VNRecognizedTextObservation
+        ) -> Bool {
+            let lhsBox = lhs.boundingBox
+            let rhsBox = rhs.boundingBox
+            let verticalOverlap = min(lhsBox.maxY, rhsBox.maxY) - max(lhsBox.minY, rhsBox.minY)
+            let centerDelta = abs(lhsBox.midY - rhsBox.midY)
+            let sameLineThreshold = max(0.004, max(lhsBox.height, rhsBox.height) * 0.65)
+            let sameLine =
+                verticalOverlap > min(lhsBox.height, rhsBox.height) * 0.2
+                || centerDelta <= sameLineThreshold
+
+            if sameLine { return lhsBox.minX < rhsBox.minX }
+            return lhsBox.midY > rhsBox.midY
+        }
     #endif
 
     private func loadPIIRuntime(for modelID: ScanModelID) async throws -> OpenMed {
         if let cached = piiRuntimes[modelID.artifactRepoID] { return cached }
         let directory = try OpenMedModelStore.cachedMLXModelDirectory(
             repoID: modelID.artifactRepoID,
-            revision: "main"
+            revision: modelID.revision
         )
         guard FileManager.default.fileExists(atPath: directory.path) else {
             throw PipelineError.modelNotReady(modelID)
@@ -141,11 +225,25 @@ public actor OMPipelineRuntime {
         return runtime
     }
 
+    private func loadMapleRuntime(for modelID: ScanModelID) async throws -> OpenMedMaple {
+        if let cached = mapleRuntimes[modelID.artifactRepoID] { return cached }
+        let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+            repoID: modelID.artifactRepoID,
+            revision: modelID.revision
+        )
+        guard OpenMedMaple.isModelDirectoryReady(directory) else {
+            throw PipelineError.modelNotReady(modelID)
+        }
+        let runtime = try await OpenMedMaple(modelDirectoryURL: directory)
+        mapleRuntimes[modelID.artifactRepoID] = runtime
+        return runtime
+    }
+
     private func loadRelationRuntime(for modelID: ScanModelID) async throws -> OpenMedRelationExtractor {
         if let cached = relationRuntimes[modelID.artifactRepoID] { return cached }
         let directory = try OpenMedModelStore.cachedMLXModelDirectory(
             repoID: modelID.artifactRepoID,
-            revision: "main"
+            revision: modelID.revision
         )
         guard FileManager.default.fileExists(atPath: directory.path) else {
             throw PipelineError.modelNotReady(modelID)
@@ -233,8 +331,10 @@ public struct PIIOutput: Sendable {
 
 public struct ClinicalOutput: Sendable {
     public let entities: [DetectedEntity]
-    public init(entities: [DetectedEntity]) {
+    public let relations: [DetectedRelation]
+    public init(entities: [DetectedEntity], relations: [DetectedRelation] = []) {
         self.entities = entities
+        self.relations = relations
     }
 }
 
@@ -246,6 +346,8 @@ public struct TextRecognitionResult: Sendable {
 public enum PipelineError: LocalizedError {
     case modelNotReady(ScanModelID)
     case invalidImage
+    case missingMapleRedaction
+    case missingMapleAnswer
 
     public var errorDescription: String? {
         switch self {
@@ -253,14 +355,18 @@ public enum PipelineError: LocalizedError {
             return "The \(id.displayName) model is not yet prepared. Tap download first."
         case .invalidImage:
             return "Could not read the scanned image."
+        case .missingMapleRedaction:
+            return "Maple did not return a validated redacted document. Please try again."
+        case .missingMapleAnswer:
+            return "Maple did not return a final answer. Please try a more specific question."
         }
     }
 }
 
 // MARK: - Conversions
 
-private extension DetectedEntity {
-    init(openMedKit prediction: EntityPrediction) {
+extension DetectedEntity {
+    fileprivate init(openMedKit prediction: EntityPrediction) {
         self.init(
             label: prediction.label,
             text: prediction.text,
@@ -270,7 +376,7 @@ private extension DetectedEntity {
         )
     }
 
-    init(zeroShot entity: OpenMedZeroShotEntity) {
+    fileprivate init(zeroShot entity: OpenMedZeroShotEntity) {
         self.init(
             label: entity.label,
             text: entity.text,
@@ -279,28 +385,57 @@ private extension DetectedEntity {
             end: entity.end
         )
     }
+
+    fileprivate init(maple entity: OpenMedMapleEntity) {
+        self.init(
+            label: entity.label,
+            text: entity.text,
+            confidence: nil,
+            start: entity.start,
+            end: entity.end
+        )
+    }
 }
 
-private extension EntityCategory {
+extension DetectedRelation {
+    fileprivate init(openMedKit relation: OpenMedRelation) {
+        self.init(
+            label: relation.label,
+            head: relation.head.text,
+            tail: relation.tail.text,
+            confidence: Double(relation.score)
+        )
+    }
+
+    fileprivate init(maple relation: OpenMedMapleRelation) {
+        self.init(
+            label: relation.label,
+            head: relation.head,
+            tail: relation.tail
+        )
+    }
+}
+
+extension EntityCategory {
     /// Compact token used inside the masked paragraph, e.g. `[NAME]`.
-    var shortToken: String {
+    fileprivate var shortToken: String {
         switch self {
-        case .person:       return "NAME"
-        case .date:         return "DATE"
-        case .identifier:   return "ID"
-        case .contact:      return "CONTACT"
-        case .location:     return "ADDRESS"
+        case .person: return "NAME"
+        case .date: return "DATE"
+        case .identifier: return "ID"
+        case .contact: return "CONTACT"
+        case .location: return "ADDRESS"
         case .organization: return "ORG"
-        case .condition:    return "CONDITION"
-        case .symptom:      return "SYMPTOM"
-        case .medication:   return "MED"
-        case .dosage:       return "DOSE"
-        case .procedure:    return "PROCEDURE"
-        case .test:         return "TEST"
-        case .allergy:      return "ALLERGY"
-        case .followUp:     return "FOLLOW-UP"
-        case .carePlan:     return "CARE PLAN"
-        case .other:        return "REDACTED"
+        case .condition: return "CONDITION"
+        case .symptom: return "SYMPTOM"
+        case .medication: return "MED"
+        case .dosage: return "DOSE"
+        case .procedure: return "PROCEDURE"
+        case .test: return "TEST"
+        case .allergy: return "ALLERGY"
+        case .followUp: return "FOLLOW-UP"
+        case .carePlan: return "CARE PLAN"
+        case .other: return "REDACTED"
         }
     }
 }

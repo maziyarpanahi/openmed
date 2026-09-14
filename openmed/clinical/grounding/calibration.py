@@ -13,7 +13,9 @@ from openmed.eval.metrics import expected_calibration_error, reliability_bins
 
 SCHEMA_VERSION = 1
 GROUNDING_CALIBRATION_ARTIFACT = "openmed.grounding.calibration.report"
+GROUNDING_CALIBRATION_CONFIG = "openmed.grounding.calibrator"
 DEFAULT_GROUNDING_LABEL = "*"
+DEFAULT_GROUNDING_REVIEW_THRESHOLD = 0.50
 DEFAULT_MIN_GROUNDING_ACCURACY = 0.85
 DEFAULT_MIN_GROUNDING_COVERAGE = 0.70
 DEFAULT_RELIABILITY_BINS = 10
@@ -129,12 +131,28 @@ class GroundingCalibrator:
         """Return a JSON-ready fitted calibrator payload."""
 
         return {
+            "schema_version": SCHEMA_VERSION,
             "groups": [
                 group.to_dict()
                 for _, group in sorted(self.groups.items(), key=lambda item: item[0])
             ],
             "fallback": self.fallback.to_dict(),
         }
+
+    def to_config(self) -> dict[str, Any]:
+        """Return versioned, JSON-ready parameters for local persistence."""
+
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "artifact_type": GROUNDING_CALIBRATION_CONFIG,
+            **self.to_dict(),
+        }
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "GroundingCalibrator":
+        """Restore a calibrator from a versioned local configuration."""
+
+        return _calibrator_from_config(config)
 
 
 @dataclass(frozen=True)
@@ -306,12 +324,12 @@ def coerce_grounding_calibration_records(
         record_system = (
             score_item.system
             if isinstance(score_item, GroundingCalibrationRecord)
-            else None
+            else _object_value(score_item, "system", "system_uri", "vocabulary")
         )
         record_label = (
             score_item.label
             if isinstance(score_item, GroundingCalibrationRecord)
-            else None
+            else _object_value(score_item, "label", "entity_type", "kind")
         )
 
         score = _score_from_item(score_item)
@@ -623,6 +641,90 @@ def apply_grounding_abstention(
     )
 
 
+def apply_concept_match_calibration(
+    matches: Sequence[Any],
+    calibrator: GroundingCalibrator,
+    *,
+    review_threshold: float | Mapping[str, Any] | None = None,
+    threshold: float | Mapping[str, Any] | None = None,
+    label: str = DEFAULT_GROUNDING_LABEL,
+    labels: Sequence[str] | None = None,
+    systems: Sequence[str] | None = None,
+) -> tuple[Any, ...]:
+    """Attach calibrated confidence and review state to lexical matches.
+
+    ``matches`` must contain :class:`~openmed.clinical.grounding.matcher.ConceptMatch`
+    instances.  The raw lexical score is preserved, while the returned
+    immutable match carries a probability from the fitted per-vocabulary map.
+    A match whose probability is strictly below its configured threshold is
+    marked ``review_required``; it is never silently removed.
+
+    Thresholds may be a single value or a mapping keyed by the same vocabulary
+    identifier used during fitting.  This operation is deterministic and uses
+    no network or model-training path.
+    """
+
+    from .matcher import ConceptMatch
+
+    if not isinstance(calibrator, GroundingCalibrator):
+        raise TypeError("calibrator must be a GroundingCalibrator")
+    items = tuple(matches)
+    if labels is not None and len(labels) != len(items):
+        raise ValueError("labels must have the same length as matches")
+    if systems is not None and len(systems) != len(items):
+        raise ValueError("systems must have the same length as matches")
+    if review_threshold is not None and threshold is not None:
+        raise ValueError("provide only one of review_threshold or threshold")
+    selected_threshold = review_threshold if review_threshold is not None else threshold
+    if selected_threshold is None:
+        thresholds: Mapping[str, Any] = {"*": DEFAULT_GROUNDING_REVIEW_THRESHOLD}
+    elif isinstance(selected_threshold, Mapping):
+        thresholds = selected_threshold
+    else:
+        thresholds = {"*": selected_threshold}
+
+    calibrated: list[ConceptMatch] = []
+    for index, match in enumerate(items):
+        if not isinstance(match, ConceptMatch):
+            raise TypeError("matches must contain ConceptMatch objects")
+        system = systems[index] if systems is not None else _match_system(match)
+        match_label = (
+            labels[index] if labels is not None else _match_label(match, label)
+        )
+        probability = calibrator.predict(
+            system=system,
+            label=match_label,
+            score=match.score,
+        )
+        match_threshold = _threshold_for_system(system, thresholds)
+        review_required = probability < match_threshold
+        calibration = dict(match.calibration)
+        calibration.update(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "artifact_type": GROUNDING_CALIBRATION_CONFIG,
+                "system": _normalize_system(system),
+                "label": _normalize_label(match_label),
+                "raw_score": match.score,
+                "calibrated_confidence": probability,
+                "review_threshold": match_threshold,
+                "review_required": review_required,
+            }
+        )
+        calibrated.append(
+            replace(
+                match,
+                calibrated_confidence=probability,
+                review_required=review_required,
+                calibration=calibration,
+            )
+        )
+    return tuple(calibrated)
+
+
+calibrate_concept_matches = apply_concept_match_calibration
+
+
 def _vocabulary_reports(
     records: Sequence[GroundingCalibrationRecord],
     probabilities: Sequence[float],
@@ -790,7 +892,10 @@ def _score_from_item(item: Any) -> float:
         if value is None:
             raise ValueError("grounding score mapping requires score")
         return _bounded_probability(value, "score")
-    return _bounded_probability(item, "score")
+    value = _object_value(item, "score", "confidence", "similarity", "probability")
+    if value is None:
+        return _bounded_probability(item, "score")
+    return _bounded_probability(value, "score")
 
 
 def _correct_from_items(score_item: Any, gold_item: Any) -> bool:
@@ -806,7 +911,7 @@ def _correct_from_items(score_item: Any, gold_item: Any) -> bool:
             if value is not None:
                 return _bool_from_value(value)
             predicted_code = _first_value(
-                getattr(score_item, "code", None),
+                _object_value(score_item, "code", "concept_id"),
                 score_item.get("code") if isinstance(score_item, Mapping) else None,
                 score_item.get("predicted_code")
                 if isinstance(score_item, Mapping)
@@ -839,6 +944,16 @@ def _correct_from_items(score_item: Any, gold_item: Any) -> bool:
         )
         if value is not None:
             return _bool_from_value(value)
+    value = _object_value(
+        score_item,
+        "correct",
+        "is_correct",
+        "matched",
+        "accurate",
+        "target",
+    )
+    if value is not None:
+        return _bool_from_value(value)
     raise ValueError("grounding calibration requires correctness labels")
 
 
@@ -848,6 +963,8 @@ def _weight_from_items(score_item: Any, gold_item: Any) -> float:
         value = score_item.weight
     elif isinstance(score_item, Mapping):
         value = _first_value(score_item.get("weight"), score_item.get("span_weight"))
+    else:
+        value = _object_value(score_item, "weight", "span_weight")
     if value is None and isinstance(gold_item, Mapping):
         value = _first_value(gold_item.get("weight"), gold_item.get("span_weight"))
     if value is None:
@@ -865,13 +982,25 @@ def _metadata_from_items(score_item: Any, gold_item: Any) -> dict[str, Any]:
             metadata.update(dict(item.metadata))
         elif isinstance(item, Mapping) and isinstance(item.get("metadata"), Mapping):
             metadata.update(dict(item["metadata"]))
+        else:
+            raw_metadata = _object_value(item, "metadata")
+            if isinstance(raw_metadata, Mapping):
+                metadata.update(dict(raw_metadata))
+            match_type = _object_value(item, "match_type")
+            if match_type is not None:
+                metadata.setdefault("match_type", str(match_type))
     return metadata
 
 
 def _threshold_for_system(system: str, operating_points: Mapping[str, Any]) -> float:
-    value = operating_points.get(system)
-    if value is None:
-        value = operating_points.get(system.lower(), operating_points.get("*"))
+    normalized_system = _normalize_system(system)
+    value = _first_value(
+        operating_points.get(system),
+        operating_points.get(normalized_system),
+        operating_points.get(str(system).lower()),
+        operating_points.get(str(system).upper()),
+        operating_points.get("*"),
+    )
     if isinstance(value, GroundingOperatingPoint):
         return value.threshold
     if isinstance(value, Mapping):
@@ -881,6 +1010,35 @@ def _threshold_for_system(system: str, operating_points: Mapping[str, Any]) -> f
     if threshold is None:
         raise ValueError(f"missing grounding operating point for {system}")
     return _bounded_probability(threshold, "threshold")
+
+
+def _match_system(match: Any) -> str:
+    metadata = _object_value(match, "metadata")
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    return str(
+        _first_value(
+            metadata.get("calibration_system"),
+            metadata.get("vocabulary"),
+            metadata.get("system"),
+            _object_value(match, "system_uri", "system"),
+        )
+    )
+
+
+def _match_label(match: Any, default: str) -> str:
+    metadata = _object_value(match, "metadata")
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    return str(
+        _first_value(
+            metadata.get("calibration_label"),
+            metadata.get("label"),
+            metadata.get("entity_type"),
+            metadata.get("kind"),
+            default,
+        )
+    )
 
 
 def _merge_grounding_provenance(
@@ -927,6 +1085,17 @@ def _first_value(*values: Any) -> Any:
     return None
 
 
+def _object_value(item: Any, *names: str) -> Any:
+    for name in names:
+        if isinstance(item, Mapping):
+            value = item.get(name)
+        else:
+            value = getattr(item, name, None)
+        if value is not None:
+            return value
+    return None
+
+
 def _first_text(
     *mappings: Mapping[str, Any],
     keys: Sequence[str],
@@ -959,6 +1128,87 @@ def _optional_float(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _calibrator_from_config(config: Mapping[str, Any]) -> GroundingCalibrator:
+    if not isinstance(config, Mapping):
+        raise TypeError("grounding calibration config must be a mapping")
+    if config.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(
+            "unsupported grounding calibration config schema_version: "
+            f"{config.get('schema_version')!r}"
+        )
+    artifact_type = config.get("artifact_type")
+    if artifact_type is not None and artifact_type not in {
+        GROUNDING_CALIBRATION_CONFIG,
+        GROUNDING_CALIBRATION_ARTIFACT,
+    }:
+        raise ValueError(
+            "grounding calibration config artifact_type must be "
+            f"{GROUNDING_CALIBRATION_CONFIG!r}"
+        )
+
+    payload = config.get("calibrator", config)
+    if not isinstance(payload, Mapping):
+        raise ValueError("grounding calibration config calibrator must be a mapping")
+    raw_groups = payload.get("groups")
+    if not isinstance(raw_groups, Sequence) or isinstance(raw_groups, (str, bytes)):
+        raise ValueError("grounding calibration config groups must be a sequence")
+
+    groups: dict[tuple[str, str], GroundingCalibrationGroup] = {}
+    for raw_group in raw_groups:
+        group = _group_from_config(raw_group)
+        key = (group.system, group.label)
+        if key in groups:
+            raise ValueError(f"duplicate grounding calibration group {key!r}")
+        groups[key] = group
+
+    fallback_payload = payload.get("fallback")
+    if not isinstance(fallback_payload, Mapping):
+        raise ValueError("grounding calibration config requires a fallback group")
+    fallback = _group_from_config(fallback_payload)
+    return GroundingCalibrator(groups=groups, fallback=fallback)
+
+
+def _group_from_config(payload: Any) -> GroundingCalibrationGroup:
+    if not isinstance(payload, Mapping):
+        raise ValueError("grounding calibration group must be a mapping")
+    raw_knots = payload.get("knots")
+    if not isinstance(raw_knots, Sequence) or isinstance(raw_knots, (str, bytes)):
+        raise ValueError("grounding calibration group knots must be a sequence")
+
+    knots: list[tuple[float, float]] = []
+    previous_score = -1.0
+    previous_probability = -1.0
+    for raw_knot in raw_knots:
+        if not isinstance(raw_knot, Mapping):
+            raise ValueError("grounding calibration knots must be mappings")
+        score = _bounded_probability(raw_knot.get("max_score"), "max_score")
+        probability = _bounded_probability(
+            raw_knot.get("probability"),
+            "probability",
+        )
+        if score < previous_score or probability < previous_probability:
+            raise ValueError("grounding calibration knots must be monotonic")
+        knots.append((score, probability))
+        previous_score = score
+        previous_probability = probability
+
+    sample_count = int(payload.get("sample_count", 0))
+    positive_count = int(payload.get("positive_count", 0))
+    total_weight = float(payload.get("total_weight", 0.0))
+    if sample_count < 0 or positive_count < 0 or positive_count > sample_count:
+        raise ValueError("grounding calibration group counts are invalid")
+    if not math.isfinite(total_weight) or total_weight < 0.0:
+        raise ValueError("grounding calibration group total_weight is invalid")
+    return GroundingCalibrationGroup(
+        system=_normalize_system(payload.get("system")),
+        label=_normalize_label(payload.get("label")),
+        knots=tuple(knots),
+        sample_count=sample_count,
+        positive_count=positive_count,
+        total_weight=total_weight,
+    )
+
+
 def _utc_now() -> str:
     return (
         datetime.now(timezone.utc)
@@ -972,16 +1222,20 @@ def _utc_now() -> str:
 
 __all__ = [
     "DEFAULT_GROUNDING_LABEL",
+    "DEFAULT_GROUNDING_REVIEW_THRESHOLD",
     "DEFAULT_MIN_GROUNDING_ACCURACY",
     "DEFAULT_MIN_GROUNDING_COVERAGE",
     "DEFAULT_RELIABILITY_BINS",
     "GROUNDING_CALIBRATION_ARTIFACT",
+    "GROUNDING_CALIBRATION_CONFIG",
     "GroundingCalibrationGroup",
     "GroundingCalibrationRecord",
     "GroundingCalibrationResult",
     "GroundingCalibrator",
     "GroundingOperatingPoint",
+    "apply_concept_match_calibration",
     "apply_grounding_abstention",
+    "calibrate_concept_matches",
     "calibrate_grounding",
     "coerce_grounding_calibration_records",
     "coverage_accuracy_curve",
