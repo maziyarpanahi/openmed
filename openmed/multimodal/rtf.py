@@ -15,10 +15,18 @@ byte offset into the file on disk.
 from __future__ import annotations
 
 import codecs
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from ._text_redaction import (
+    TextReplacement,
+    detect_replacements,
+    policy_value,
+    validate_distinct_paths,
+    validate_replacements,
+)
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import UnsupportedDocumentError
 
@@ -213,6 +221,30 @@ def extract_rtf(path: str | Path) -> ExtractedDocument:
     source = source_path.read_bytes().decode(_SOURCE_ENCODING)
     _ensure_rtf_header(source)
     return _RtfExtractor(source).document(source_path)
+
+
+def write_redacted_rtf(
+    source_path: str | Path,
+    output_path: str | Path,
+    replacements: Iterable[TextReplacement],
+) -> Path:
+    """Project extracted-text replacements into a distinct valid RTF copy."""
+    source = Path(source_path)
+    output = Path(output_path)
+    validate_distinct_paths(source, output)
+    document = extract_rtf(source)
+    logical = validate_replacements(document, replacements)
+    edits = _project_replacements(document, logical)
+
+    source_text = source.read_bytes().decode(_SOURCE_ENCODING)
+    _validate_projected_replacements(edits)
+    redacted = source_text
+    for start, end, replacement in sorted(edits, reverse=True):
+        redacted = redacted[:start] + replacement + redacted[end:]
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(redacted.encode(_SOURCE_ENCODING))
+    return output
 
 
 def _ensure_rtf_header(source: str) -> None:
@@ -501,9 +533,87 @@ class _RtfExtractor:
                     "format": "rtf",
                     "source_start": source_start,
                     "source_end": source_end,
+                    "source_map_mode": (
+                        "linear" if len(text) == source_end - source_start else "atomic"
+                    ),
                 },
             )
         )
+
+
+def _project_replacements(
+    document: ExtractedDocument,
+    replacements: Sequence[TextReplacement],
+) -> tuple[TextReplacement, ...]:
+    projected: list[TextReplacement] = []
+    spans = tuple(document.spans)
+    span_index = 0
+    for start, end, replacement in replacements:
+        while span_index < len(spans) and spans[span_index].end <= start:
+            span_index += 1
+        covered = 0
+        cursor = span_index
+        replacement_inserted = False
+        while cursor < len(spans) and spans[cursor].start < end:
+            span = spans[cursor]
+            overlap_start = max(start, span.start)
+            overlap_end = min(end, span.end)
+            if overlap_start < overlap_end:
+                covered += overlap_end - overlap_start
+                source_start = int(span.metadata["source_start"])
+                source_end = int(span.metadata["source_end"])
+                if span.metadata.get("source_map_mode") == "linear":
+                    source_start += overlap_start - span.start
+                    source_end = source_start + (overlap_end - overlap_start)
+                    rendered = replacement if not replacement_inserted else ""
+                else:
+                    prefix = document.text[span.start : overlap_start]
+                    suffix = document.text[overlap_end : span.end]
+                    rendered = prefix
+                    if not replacement_inserted:
+                        rendered += replacement
+                    rendered += suffix
+                projected.append((source_start, source_end, _escape_rtf(rendered)))
+                replacement_inserted = True
+            cursor += 1
+        if covered != end - start:
+            raise ValueError("RTF replacement range contains structural text")
+    return tuple(projected)
+
+
+def _validate_projected_replacements(
+    edits: Sequence[tuple[int, int, str]],
+) -> None:
+    cursor = 0
+    for start, end, _ in sorted(edits):
+        if start < cursor:
+            raise ValueError("projected RTF replacement ranges overlap")
+        if start >= end:
+            raise ValueError("projected RTF replacement range is empty")
+        cursor = end
+
+
+def _escape_rtf(text: str) -> str:
+    escaped: list[str] = []
+    for character in text.replace("\r\n", "\n").replace("\r", "\n"):
+        if character in "\\{}":
+            escaped.append("\\" + character)
+        elif character == "\n":
+            escaped.append("\\line ")
+        elif character == "\t":
+            escaped.append("\\tab ")
+        elif " " <= character <= "~":
+            escaped.append(character)
+        else:
+            encoded = character.encode("utf-16-le")
+            for offset in range(0, len(encoded), 2):
+                unit = int.from_bytes(
+                    encoded[offset : offset + 2],
+                    "little",
+                )
+                signed = unit if unit < 0x8000 else unit - 0x10000
+                escaped.append(f"\\u{signed}?")
+    return "".join(escaped)
 
 
 def _strip_trailing_breaks(text: str, mapped_end: int) -> str:
@@ -554,10 +664,27 @@ def _rtf_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
-    return extract_rtf(path)
+    document = extract_rtf(path)
+    replacements = detect_replacements(document, models, lang, policy)
+    output_path = policy_value(
+        policy,
+        "output_path",
+        "redacted_path",
+        "destination_path",
+    )
+    metadata = dict(document.metadata)
+    metadata["detected_span_count"] = len(replacements)
+    if replacements and output_path is not None:
+        write_redacted_rtf(path, output_path, replacements)
+        metadata["redacted_rtf_path"] = str(output_path)
+    return ExtractedDocument(
+        text=document.text,
+        spans=document.spans,
+        metadata=metadata,
+    )
 
 
 register_handler(".rtf", _rtf_handler, requires_multimodal=False)
 
 
-__all__ = ["extract_rtf"]
+__all__ = ["extract_rtf", "write_redacted_rtf"]

@@ -98,6 +98,15 @@ print(encoding["tokens"][:10])
 
 `load_model` lets you access the underlying HF `AutoModel` + `AutoTokenizer` for workflows that outgrow pipelines.
 
+## User-operated KServe and Triton backends
+
+Set `OpenMedConfig.backend="remote"` to preserve the normal
+`ModelLoader.create_pipeline` call while running the ONNX graph through a
+user-operated KServe V2 or Triton endpoint. OpenMed still tokenizes and decodes
+locally, and the remote backend is never part of automatic backend selection.
+See [KServe and Triton model repositories](serving/kserve-triton.md) for the
+repository generator, complete config, and privacy boundary.
+
 ## Releasing cached models
 
 Long-running services can release cached model references when VRAM or RAM should be reclaimed:

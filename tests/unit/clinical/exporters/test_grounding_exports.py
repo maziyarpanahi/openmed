@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from openmed.clinical import CoreferenceChain
@@ -286,6 +287,51 @@ def test_to_omop_emits_four_core_tables_and_passes_smoke() -> None:
     assert tables.table("condition_occurrence")[0]["condition_concept_id"] == 910001
     assert tables.table("drug_exposure")[0]["drug_source_value"] == "Novo tablet"
     assert achilles_smoke_check(tables) == ()
+
+
+def test_achilles_smoke_reports_missing_columns_and_foreign_keys() -> None:
+    spans = _spans()
+    tables = to_omop(
+        spans,
+        document_text=(
+            "Aster syndrome. Novo tablet. Elin panel 7.2 mg/dL. Juno procedure."
+        ),
+        person_id="synthetic-person",
+    )
+    corrupted = {
+        name: tuple(dict(row) for row in rows) for name, rows in tables.tables.items()
+    }
+    corrupted["measurement"][0].pop("measurement_concept_id")
+    corrupted["drug_exposure"][0]["drug_concept_id"] = "not-an-id"
+    corrupted["condition_occurrence"][0]["note_id"] = None
+    corrupted["procedure_occurrence"][0]["person_id"] = 999_999_999
+
+    violations = achilles_smoke_check(replace(tables, tables=corrupted))
+
+    assert any(
+        item.table == "measurement"
+        and item.column == "measurement_concept_id"
+        and item.reason == "missing_column"
+        for item in violations
+    )
+    assert any(
+        item.table == "drug_exposure"
+        and item.column == "drug_concept_id"
+        and item.reason == "invalid_concept_id"
+        for item in violations
+    )
+    assert any(
+        item.table == "procedure_occurrence"
+        and item.column == "person_id"
+        and item.reason == "missing_person"
+        for item in violations
+    )
+    assert any(
+        item.table == "condition_occurrence"
+        and item.column == "note_id"
+        and item.reason == "invalid_foreign_key"
+        for item in violations
+    )
 
 
 def test_to_omop_preserves_unmapped_source_and_excludes_refuted() -> None:
