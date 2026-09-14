@@ -45,6 +45,30 @@ sections:
   impression:
     - Impression
     - Conclusion
+  technique:
+    - Technique
+    - Protocol
+    - Technical Factors
+  specimen:
+    - Specimen
+    - Specimens
+    - Specimen Description
+  diagnosis:
+    - Diagnosis
+    - Final Diagnosis
+    - Diagnosis Summary
+  synoptic:
+    - Synoptic
+    - Synoptic Report
+    - Synoptic Checklist
+  staging:
+    - Staging
+    - Pathologic Stage
+    - Tumor Stage
+  grading:
+    - Grading
+    - Histologic Grade
+    - Tumor Grade
   chief_complaint:
     - Chief Complaint
     - CC

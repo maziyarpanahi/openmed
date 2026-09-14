@@ -94,7 +94,7 @@ def test_offline_mode_serves_cached_vocab_without_download(monkeypatch, tmp_path
     monkeypatch.setenv("OPENMED_OFFLINE", "1")
     cached_dir = tmp_path / "cache" / "rxnorm"
     cached_dir.mkdir(parents=True)
-    _write_fixture(cached_dir, "concepts")
+    cached_fixture = _write_fixture(cached_dir, "concepts")
 
     def fail_download(url: str, target: Path, timeout: float) -> None:
         raise AssertionError("download should not be attempted")
@@ -105,7 +105,7 @@ def test_offline_mode_serves_cached_vocab_without_download(monkeypatch, tmp_path
             "rxnorm": VocabSource(
                 system="rxnorm",
                 url="https://example.invalid/rxnorm.tsv",
-                sha256="0" * 64,
+                sha256=_sha256(cached_fixture),
             )
         },
         downloader=fail_download,
