@@ -44,6 +44,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/pediatrics_growth.jsonl",
         "tests/fixtures/clinical/nursing_observation.jsonl",
         "tests/fixtures/clinical/radiology_finding.jsonl",
+        "tests/fixtures/clinical/medical_device.jsonl",
     ):
         assert Path(fixture_path).exists()
         assert fixture_path in markdown
@@ -53,3 +54,5 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
     assert "not a contraindication check" in markdown
     assert "OM-138 FHIR Immunization exporter" in markdown
     assert "VaccineLot to lotNumber" in markdown
+    assert "UDI lookup or decoding" in markdown
+    assert "requires human review" in markdown

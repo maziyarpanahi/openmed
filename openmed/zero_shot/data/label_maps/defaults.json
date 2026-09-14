@@ -291,5 +291,13 @@
     "CareIntervention",
     "PainScore",
     "SkinAssessment"
+  ],
+  "medical_device": [
+    "DeviceType",
+    "DeviceIdentifier",
+    "Manufacturer",
+    "ModelNumber",
+    "ImplantSite",
+    "DeviceStatus"
   ]
 }

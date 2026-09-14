@@ -422,6 +422,19 @@
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 
+## Medical Device
+
+**Alignment:** The display labels are descriptive extraction metadata for a planned FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, ModelNumber, ImplantSite, and DeviceStatus describe device mentions without UDI lookup or decoding or contacting GUDID or any other network service. DeviceIdentifier remains a HIPAA device identifier and requires human review; this catalog is not clinical guidance and does not make device, treatment, or safety decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| DeviceType | DEVICE_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceIdentifier | DEVICE_IDENTIFIER | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/medical_device.jsonl |
+| Manufacturer | ORGANIZATION | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/medical_device.jsonl |
+| ModelNumber | DEVICE_MODEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| ImplantSite | IMPLANT_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/medical_device.jsonl |
+
 ## Offline Coverage Evaluation
 
 The fixture-backed clinical domains are checked by the aggregate-only `clinical_domain_coverage` suite. Run `openmed benchmark domain-coverage --json --output domain-coverage.json` from the repository root to verify that every shipped display label has a non-empty synthetic span and that fixture labels resolve to the canonical label catalog.
