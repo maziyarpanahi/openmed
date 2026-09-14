@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic claim-level citation support metrics with optional
+  clinician adjudication, privacy-safe orphan and unused-evidence counts, and
+  synthetic offline regression coverage (#2754).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
