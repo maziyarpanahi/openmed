@@ -180,8 +180,6 @@ class OnnxModel:
         tokenizer: Any | None = None,
         session: Any | None = None,
     ) -> None:
-        np, ort, auto_tokenizer = _load_runtime_dependencies()
-        self._np = np
         self.artifact_dir = Path(artifact_dir).expanduser().resolve()
         self.model_path, self.variant = _resolve_model_path(
             self.artifact_dir,
@@ -190,6 +188,8 @@ class OnnxModel:
         )
         self.config = _read_json(self.artifact_dir / "config.json")
         self.id2label = _read_id2label(self.artifact_dir, self.config)
+        np, ort, auto_tokenizer = _load_runtime_dependencies()
+        self._np = np
         self.tokenizer = tokenizer or auto_tokenizer.from_pretrained(
             str(self.artifact_dir),
             local_files_only=True,
