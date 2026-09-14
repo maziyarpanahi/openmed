@@ -141,6 +141,21 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("as_IN", "aadhaar"),
     ),
     _pack(
+        "kn",
+        "OpenMed/privacy-filter-multilingual",
+        "kn_IN",
+        ("Kannada",),
+        national_id_provider=("kn_IN", "aadhaar"),
+        routing_markers=(
+            "ರೋಗಿ",
+            "ಹೆಸರು",
+            "ಆಧಾರ್",
+            "ಪಿನ್",
+            "ಜನವರಿ",
+            "ಫೆಬ್ರವರಿ",
+        ),
+    ),
+    _pack(
         "bn",
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "bn_BD",
@@ -366,7 +381,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
 SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "bn": "bn_BD",
     "gu": "gu_IN",
-    "kn": "kn_IN",
     "ml": "ml_IN",
     # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
     # approximation entry and no conceptual backend mapping.
@@ -380,7 +394,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "gu",
-    "kn",
     "ml",
     "ne",
     "pa",
@@ -457,6 +470,7 @@ _LOCALE_ORDER = (
     "ne",
     "or",
     "as",
+    "kn",
     "bn",
     "te",
     "ta",
@@ -509,6 +523,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "mr",
     "or",
     "as",
+    "kn",
     "te",
     "ta",
     "am",
