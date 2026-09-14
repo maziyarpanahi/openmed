@@ -230,6 +230,7 @@ classification:
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
+    - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
@@ -459,6 +460,8 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - clinical/context-analysis.md
+    - privacy/clinical-preserve.md
     - benchmarks/golden.md
     - clinical-domains.md
     - compliance/access-review-expiry.md

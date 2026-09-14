@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added complete detection of bounded German postal-address fields and fragment
+  protection inside known clinical phrases, with person-name counterexamples
+  and independent mask/remove/replace regression checks.
+- Added preview clinical-preserving privacy processing with explicit language,
+  category and role controls, full-document ONNX tensor batching, bounded
+  cancellation and per-document review status. Clinical protection, source
+  offsets and output policy remain consistent across the safety sweep.
+- Added German clinical context, temporal and quantity extraction regressions,
+  memory-streamed Tesseract OCR and PDF reading-order/redaction checks. These
+  preview capabilities require independent task and language qualification.
 - Added bounded BMP CORE/INFO header geometry preflight with explicit limits,
   value-free errors, and synthetic file-level regression tests (#3114).
 - Added bounded GIF logical-screen and bounded global-color-table preflight with explicit limits,
