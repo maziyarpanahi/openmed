@@ -38,6 +38,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "nursing_observation": "tests/fixtures/clinical/nursing_observation.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
+    "pathology_histology": "tests/fixtures/clinical/pathology_histology.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
 }
@@ -59,6 +60,11 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "AdministrationDate to occurrence[x], and VaccineSeries to "
         "protocolApplied.series. This is extraction metadata only; it does not "
         "create exporter, recommendation, dosing, or scheduling logic."
+    ),
+    "pathology_histology": (
+        "The display labels describe pathology-report content for offline "
+        "extraction and human review only. They do not grade or stage a tumor, "
+        "apply diagnostic rules, recommend treatment, or make clinical decisions."
     ),
 }
 

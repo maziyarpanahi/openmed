@@ -161,6 +161,11 @@
     "GROWTH_PARAMETER": "mask",
     "GROWTH_PERCENTILE": "mask",
     "DEVELOPMENTAL_MILESTONE": "mask",
+    "HISTOLOGIC_FINDING": "mask",
+    "HISTOLOGIC_GRADE": "mask",
+    "MARGIN_STATUS": "mask",
+    "IHC_STAIN": "mask",
+    "SPECIMEN_TYPE": "mask",
     "OTHER": "keep"
   }
 }
