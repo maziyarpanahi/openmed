@@ -132,15 +132,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Verify npm credentials
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "NPM_ACCESS_TOKEN is not configured in the npm environment."
-            exit 1
-          fi
-
       - name: Install npm dependencies
         working-directory: js/openmedkit-web
         run: npm ci
@@ -149,7 +140,105 @@ jobs:
         working-directory: js/openmedkit-web
         run: npm run build
 
+      - name: Check for an existing matching npm release
+        id: npm-release
+        working-directory: js/openmedkit-web
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version=$(node -p "require('./package.json').version")
+          tag_version=${RELEASE_TAG#v}
+          if [ "$npm_version" != "$tag_version" ]; then
+            echo "Version mismatch: npm $npm_version != tag $tag_version"
+            exit 1
+          fi
+
+          registry_metadata="$RUNNER_TEMP/npm-release.json"
+          http_status=$(curl --silent --show-error --location \
+            --output "$registry_metadata" --write-out '%{http_code}' \
+            "https://registry.npmjs.org/openmed/$npm_version")
+          if [ "$http_status" = "404" ]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$http_status" != "200" ]; then
+            echo "Unexpected npm registry response: HTTP $http_status"
+            exit 1
+          fi
+
+          registry_version=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).version")
+          registry_git_head=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).gitHead || ''")
+          registry_shasum=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).dist.shasum")
+          registry_tarball_url=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).dist.tarball")
+          release_commit=$(git rev-parse HEAD)
+          if [ "$registry_version" != "$npm_version" ] \
+             || [ "$registry_git_head" != "$release_commit" ]; then
+            echo "Existing npm release does not match the immutable tag: version=$registry_version gitHead=$registry_git_head"
+            exit 1
+          fi
+
+          pack_metadata="$RUNNER_TEMP/npm-pack.json"
+          npm pack --ignore-scripts --json > "$pack_metadata"
+          tarball=$(PACK_METADATA="$pack_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.PACK_METADATA, 'utf8'))[0].filename")
+          registry_tarball="$RUNNER_TEMP/openmed-$npm_version-registry.tgz"
+          curl --fail --silent --show-error --location \
+            --output "$registry_tarball" "$registry_tarball_url"
+          downloaded_shasum=$(sha1sum "$registry_tarball" | awk '{print $1}')
+          if [ "$downloaded_shasum" != "$registry_shasum" ]; then
+            echo "Downloaded npm tarball failed its registry digest: downloaded=$downloaded_shasum registry=$registry_shasum"
+            exit 1
+          fi
+
+          local_contents="$RUNNER_TEMP/npm-local-contents"
+          registry_contents="$RUNNER_TEMP/npm-registry-contents"
+          mkdir -p "$local_contents" "$registry_contents"
+          tar -xzf "$tarball" -C "$local_contents"
+          tar -xzf "$registry_tarball" -C "$registry_contents"
+          if ! diff --recursive --brief --no-dereference \
+            "$local_contents/package" "$registry_contents/package"; then
+            echo "Existing npm tarball contents do not match the immutable tag build."
+            exit 1
+          fi
+
+          package_digest() {
+            package_root=$1
+            (
+              cd "$package_root"
+              find . -type f -print0 \
+                | sort -z \
+                | xargs -0 sha256sum \
+                | sha256sum \
+                | awk '{print $1}'
+            )
+          }
+          local_content_digest=$(package_digest "$local_contents/package")
+          registry_content_digest=$(package_digest "$registry_contents/package")
+          if [ "$local_content_digest" != "$registry_content_digest" ]; then
+            echo "Existing npm package content digest mismatch: local=$local_content_digest registry=$registry_content_digest"
+            exit 1
+          fi
+          echo "Matching openmed@$npm_version is already published; skipping npm upload."
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify npm credentials
+        if: steps.npm-release.outputs.exists != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_ACCESS_TOKEN is not configured in the npm environment."
+            exit 1
+          fi
+
       - name: Publish npm package with provenance
+        if: steps.npm-release.outputs.exists != 'true'
         working-directory: js/openmedkit-web
         run: npm publish --ignore-scripts --access public --provenance
         env:

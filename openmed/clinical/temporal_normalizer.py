@@ -241,6 +241,8 @@ def normalize_temporal(
     text: str,
     spans: Iterable[Mapping[str, object] | Sequence[int]],
     reference_time: str | date | datetime | None,
+    *,
+    language: str = "en",
 ) -> list[NormalizedTimex]:
     """Normalize caller-supplied temporal spans to TIMEX3-style ISO values.
 
@@ -251,6 +253,10 @@ def normalize_temporal(
         reference_time: Document reference time used for relative expressions.
             An ISO string, :class:`date`, :class:`datetime`, or ``None`` is
             accepted. ``None`` never falls back to the current wall clock.
+        language: Explicit normalization rules, ``en`` (default) or ``de``.
+            German supports ISO/D.M.YYYY dates, full German month names and
+            explicit relative day/week/month/year expressions. Unrecognized
+            spans remain unresolved; source text is never translated.
 
     Returns:
         Normalized records in the same order as the supplied spans.
@@ -262,12 +268,22 @@ def normalize_temporal(
 
     if not isinstance(text, str):
         raise TypeError("text must be a string")
+    if language not in ("en", "de"):
+        raise ValueError("temporal normalization supports explicit en or de language")
     reference = _coerce_reference_time(reference_time)
     records: list[NormalizedTimex] = []
     for raw_span in spans:
         start, end = _coerce_span(raw_span, text_length=len(text))
         phrase = text[start:end]
-        normalized = _normalize_phrase(phrase, reference)
+        if language == "de":
+            from openmed.clinical.temporal_german import _german_value
+
+            value, anchor, flags = _german_value(
+                phrase, reference.value.date() if reference else None
+            )
+            normalized = _result(phrase, 0, len(phrase), "DATE", value, anchor, *flags)
+        else:
+            normalized = _normalize_phrase(phrase, reference)
         records.append(
             NormalizedTimex(
                 text=phrase,

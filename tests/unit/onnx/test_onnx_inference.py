@@ -98,8 +98,9 @@ def _install_dependencies(monkeypatch, snapshot_download):
     monkeypatch.setattr(
         inference,
         "_load_runtime_dependencies",
-        lambda: (np, FakeOrt, FakeTokenizer, snapshot_download),
+        lambda: (np, FakeOrt, FakeTokenizer),
     )
+    monkeypatch.setattr(inference, "_load_snapshot_download", lambda: snapshot_download)
 
 
 def test_from_pretrained_loads_cpu_int8_and_predicts_entities(
@@ -168,6 +169,27 @@ def test_direct_onnx_path_uses_sibling_metadata(tmp_path: Path, monkeypatch) -> 
 
     assert model.variant == "fp32"
     assert model.artifact_dir == artifact_dir
+
+
+def test_local_artifact_does_not_load_hub_downloader(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_dir = _write_artifact(tmp_path)
+    monkeypatch.setattr(
+        inference,
+        "_load_runtime_dependencies",
+        lambda: (np, FakeOrt, FakeTokenizer),
+    )
+
+    def reject_hub_download():
+        raise AssertionError("local edge inference attempted to load Hub tooling")
+
+    monkeypatch.setattr(inference, "_load_snapshot_download", reject_hub_download)
+
+    model = inference.OnnxModel.from_pretrained(artifact_dir)
+
+    assert model.variant == "int8"
 
 
 @pytest.mark.parametrize("threshold", [-0.01, 1.01])
