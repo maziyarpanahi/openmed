@@ -16,9 +16,22 @@ from typing import Any, Iterable, Mapping
 
 from .outcomes import OutcomeClass, WorkflowOutcome
 
+RUN_SUMMARY_SCHEMA_VERSION = "openmed.agent.run_summary.v1"
+MAX_RUN_SUMMARY_JSON_BYTES = 1_048_576
+
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,126}[A-Za-z0-9])?$")
 _OUTCOME_NAMES = tuple(sorted(outcome.value for outcome in OutcomeClass))
+_SUMMARY_FIELDS = frozenset(
+    {
+        "schema_version",
+        "workflow_ids",
+        "outcome_counts",
+        "tool_call_count",
+        "duration_seconds",
+        "artifact_digests",
+    }
+)
 
 _MAX_EVENTS = 10_000
 _MAX_WORKFLOWS = 1_024
@@ -55,8 +68,10 @@ def _validate_count(value: Any, field_name: str, maximum: int) -> int:
 
 
 def _validate_duration(value: Any) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if type(value) not in (int, float):
         raise RunSummaryError("duration_seconds: invalid_number")
+    if not 0 <= value <= _MAX_DURATION_SECONDS:
+        raise RunSummaryError("duration_seconds: out_of_range")
     normalized = float(value)
     if (
         not math.isfinite(normalized)
@@ -114,8 +129,14 @@ class RunSummary:
     tool_call_count: int
     duration_seconds: float
     artifact_digests: tuple[str, ...]
+    schema_version: str = RUN_SUMMARY_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        if (
+            type(self.schema_version) is not str
+            or self.schema_version != RUN_SUMMARY_SCHEMA_VERSION
+        ):
+            raise RunSummaryError("schema_version: unsupported_version")
         workflow_ids = _as_tuple(self.workflow_ids, "workflow_ids")
         if len(workflow_ids) > _MAX_WORKFLOWS:
             raise RunSummaryError("workflow_ids: too_many_items")
@@ -199,9 +220,86 @@ class RunSummary:
             artifact_digests=tuple(sorted(artifact_digests)),
         )
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "RunSummary":
+        """Build a run summary from an exact metadata-only mapping."""
+        if not isinstance(payload, Mapping) or isinstance(
+            payload, (str, bytes, bytearray)
+        ):
+            raise RunSummaryError("summary: invalid_mapping")
+
+        try:
+            fields = set(payload)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            fields = None
+        if fields is None:
+            raise RunSummaryError("summary: invalid_mapping")
+        if fields - _SUMMARY_FIELDS:
+            raise RunSummaryError("summary: unknown_field")
+        if _SUMMARY_FIELDS - fields:
+            raise RunSummaryError("summary: missing_field")
+
+        try:
+            values = {field_name: payload[field_name] for field_name in fields}
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            values = None
+        if values is None:
+            raise RunSummaryError("summary: unreadable_mapping")
+        for field_name in ("workflow_ids", "artifact_digests"):
+            if type(values[field_name]) not in (list, tuple):
+                raise RunSummaryError(f"{field_name}: invalid_sequence")
+        return cls(
+            schema_version=values["schema_version"],
+            workflow_ids=values["workflow_ids"],
+            outcome_counts=values["outcome_counts"],
+            tool_call_count=values["tool_call_count"],
+            duration_seconds=values["duration_seconds"],
+            artifact_digests=values["artifact_digests"],
+        )
+
+    @classmethod
+    def from_json(cls, payload: str | bytes | bytearray) -> "RunSummary":
+        """Build a run summary from bounded JSON with duplicate-key checks."""
+        if not isinstance(payload, (str, bytes, bytearray)):
+            raise RunSummaryError("summary: invalid_json")
+        if len(payload) > MAX_RUN_SUMMARY_JSON_BYTES:
+            raise RunSummaryError("summary: json_too_large")
+        try:
+            payload_size = (
+                len(payload.encode("utf-8"))
+                if isinstance(payload, str)
+                else len(payload)
+            )
+        except UnicodeEncodeError:
+            payload_size = None
+        if payload_size is None:
+            raise RunSummaryError("summary: invalid_json")
+        if payload_size > MAX_RUN_SUMMARY_JSON_BYTES:
+            raise RunSummaryError("summary: json_too_large")
+        try:
+            decoded = json.loads(
+                payload,
+                object_pairs_hook=_strict_json_object,
+                parse_constant=_reject_json_constant,
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except RunSummaryError:
+            raise
+        except Exception:
+            pass
+        else:
+            return cls.from_dict(decoded)
+        raise RunSummaryError("summary: invalid_json")
+
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic metadata-only JSON-compatible data."""
         payload = {
+            "schema_version": self.schema_version,
             "workflow_ids": list(self.workflow_ids),
             "outcome_counts": dict(self.outcome_counts),
             "tool_call_count": self.tool_call_count,
@@ -279,7 +377,23 @@ def _assert_safe_payload(payload: Any, *, location: str = "root") -> None:
     raise RunSummaryPrivacyError(f"{location}: forbidden_type")
 
 
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise RunSummaryError("summary: duplicate_field")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> Any:
+    del value
+    raise RunSummaryError("summary: non_finite_number")
+
+
 __all__ = [
+    "MAX_RUN_SUMMARY_JSON_BYTES",
+    "RUN_SUMMARY_SCHEMA_VERSION",
     "RunEvent",
     "RunSummary",
     "RunSummaryError",

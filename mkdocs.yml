@@ -32,6 +32,7 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Artifact References: agent/artifact-references.md
       - Agent Action Execution Phases: agent/action-phases.md
+      - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Event Correlation: agent/event-correlation.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
@@ -149,15 +150,23 @@ nav:
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
       - Preference Pair Schema: reference/preference-schema.md
+      - BMP Header Preflight: multimodal/bmp-header-preflight.md
+      - GIF Header Preflight: multimodal/gif-header-preflight.md
+      - WebP Header Preflight: multimodal/webp-header-preflight.md
+      - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
+      - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
+      - Multimodal Preflight Report: multimodal/preflight.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
+      - Content-free Provider Results: multimodal/provider-results.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
+      - WAV Metadata and RF64: multimodal/wav-metadata.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md

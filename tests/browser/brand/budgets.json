@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 520,
-    "maximum_total_bytes": 48398700,
-    "maximum_unique_payload_bytes": 48061704,
+    "maximum_files": 529,
+    "maximum_total_bytes": 49822756,
+    "maximum_unique_payload_bytes": 49485760,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -13,18 +13,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3407872
+    "json": 3410453
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3407872
+    "docs/search/search_index.json": 3410453
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 4718592,
-    "/docs/model-tokenizer-script-coverage/": 6815744
+    "/docs/": 4736257,
+    "/docs/model-tokenizer-script-coverage/": 6848075
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -33,10 +33,11 @@
   },
   "notes": [
     "Artifact limits are based on the exact staged v2.3 schema candidate plus the audited documentation, federated metrics, and manifest-backed catalog surfaces, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The audited candidate including agent action execution phases on current master contains 520 files, 48287950 total bytes, 47950954 unique payload bytes, and 336996 duplicate payload bytes.",
-    "The action execution phases guide and its navigation registration add one file, 167414 total bytes, and 167997 unique payload bytes against the same-environment current master baseline; duplicate payload bytes decrease by 583 bytes as generated payload hashes change.",
-    "The combined search index is 3366741 bytes; the 3407872-byte JSON category and governed search-index ceilings retain 41131 bytes of bounded search headroom.",
-    "The 48061704-byte unique-payload ceiling and 48398700-byte total-payload ceiling each retain 110750 bytes of bounded documentation headroom.",
+    "The measured baseline at upstream db7ef5d8dc002d73969c39ab029a60f2f814a0c1 with the locked uv environment, Python 3.12.13, and UTF-8 mode contains 528 files, 49550623 total bytes, 49213627 unique payload bytes, and 336996 duplicate payload bytes.",
+    "The candidate adding the action-phases guide to upstream db7ef5d8dc002d73969c39ab029a60f2f814a0c1 contains 529 files, 49712006 total bytes, 49375010 unique payload bytes, and 336996 duplicate payload bytes; versus the baseline it adds one file and 161383 total/unique bytes with no duplicate-byte increase.",
+    "The action-phases guide and navigation increase docs/search/search_index.json by 5752 bytes to 3410453; JSON and governed search-index ceilings were raised by 2581 bytes, the measured minimum needed for this candidate.",
+    "The 49822756-byte total-payload ceiling and 49485760-byte unique-payload ceiling each retain 110750 bytes over the measured candidate.",
+    "Fresh Chromium route checks measure upstream /docs/ at 4730358 bytes and the action-phases candidate at 4736257 (+5899), and upstream model-tokenizer coverage at 6842173 and the candidate at 6848075 (+5902). Both upstream routes already exceed their former caps; those two ceilings were set to candidate measurements, while / and all other route and page-metric limits remain unchanged.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",

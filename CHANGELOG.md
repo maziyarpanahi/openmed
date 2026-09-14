@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added bounded BMP CORE/INFO header geometry preflight with explicit limits,
+  value-free errors, and synthetic file-level regression tests (#3114).
+- Added bounded GIF logical-screen and bounded global-color-table preflight with explicit limits,
+  value-free errors, and synthetic file-level regression tests (#3115).
+- Added tiny RF64 refusal fixtures that pin WAV envelope rejection, short-read
+  boundaries, and stream restoration without changing the parser (#3117).
+- Added bounded VP8, VP8L, and VP8X WebP geometry preflight with explicit limits,
+  value-free errors, and synthetic file-level regression tests (#3116).
+- Added structural locale normalization and explicit alias duplicate/unsupported-format checks
+  with synthetic file-level regression fixtures (#3119).
+
+- Added a privacy-safe multimodal preflight report (`preflight_asset`) that
+  runs manifest validation, bounded media-type detection, modality profile
+  checks, limit-profile evaluation, and a bounded digest pass in a fixed order
+  and returns one accept-or-abstain `PreflightReport` with ordered, allowlisted
+  findings, a preflight `AbstentionRecord`, and byte-stable JSON; unevaluable
+  checks, including a PDF's pixel rules, abstain rather than accept (#2980).
+- Added immutable pre-decode limit profiles for multimodal assets (`MOBILE_V1`,
+  `DESKTOP_V1`) with inclusive ceilings for bytes, pages, pixels per unit, total
+  pixels, frames, and audio duration, evaluated over the privacy-safe asset
+  manifest into deterministic `LimitFinding` records; unevaluable rules,
+  including a PDF's pixel rules, are reported as `insufficient_metadata` rather
+  than assumed safe (#2956).
+- Added an exact schema version and strict, bounded dictionary and JSON parsers
+  for privacy-safe agent run summaries, including duplicate-field, non-finite
+  number, unknown-field, and unsupported-version rejection (#3038).
+- Added strict, content-free multimodal provider result envelopes with bounded
+  counts and timing, deterministic serialization, and value-free failures (#3006).
 - Added an optional Snowpark adapter and generated Python UDF SQL for
   in-warehouse text de-identification with lazy dependency loading, compatible
   Snowpark registration, and escaped SQL literals (#2369).
@@ -147,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameter expectations, bounded exact shape arithmetic, deterministic JSON,
   clipping declarations, and value-free rejection of unknown or identifying
   fields (#3010).
+- Added typed, canonical governance identifiers for capabilities, purposes,
+  policies, workflows, and tools, with shared validation and value-free
+  diagnostics (#3042).
 - Added a versioned no-PHI exception taxonomy for telemetry and audit records,
   with owner-free approval metadata, bounded digest-only evidence, explicit UTC
   expiry checks, deterministic serialization, and value-free validation
