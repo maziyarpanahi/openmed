@@ -6203,6 +6203,7 @@ _GUJARATI_PIN_CONTEXT = [
     "postcode",
     "postal",
 ]
+_GUJARATI_ADDRESS_CONTEXT = ["સરનામું", "રસ્તો", "રોડ", "માર્ગ", "address"]
 
 _GUJARATI_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
@@ -6309,6 +6310,21 @@ _GUJARATI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
         validator=validate_gujarat_daman_diu_pin,
         reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![\w\u0A80-\u0AFF])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,5}}[ \t]+"
+        rf"(?:(?:{_GUJARATI_GRAPHEME})+[ \t]+){{1,4}}"
+        rf"(?:રસ્તો|રોડ|માર્ગ|શેરી)"
+        rf"(?![\w\u0A80-\u0AFF])",
+        "street_address",
+        priority=8,
+        base_score=0.75,
+        context_words=_GUJARATI_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        context_required=True,
         safety_sweep_requires_context=True,
         flags=0,
     ),
