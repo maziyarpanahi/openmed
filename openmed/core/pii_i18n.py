@@ -6885,6 +6885,7 @@ _KANNADA_PIN_CONTEXT = [
     "postcode",
     "postal",
 ]
+_KANNADA_ADDRESS_CONTEXT = ["ವಿಳಾಸ", "ಬೀದಿ", "ರಸ್ತೆ", "address"]
 
 _KANNADA_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
@@ -6973,6 +6974,21 @@ _KANNADA_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
         validator=validate_karnataka_pin,
         reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![\w\u0C80-\u0CFF])"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{1,5}}[ \t]+"
+        rf"(?:[\u0C80-\u0CFF]{{1,20}}\.?[ \t]*){{1,5}}"
+        rf"(?:ರಸ್ತೆ|ಬೀದಿ)"
+        rf"(?![\w\u0C80-\u0CFF])",
+        "street_address",
+        priority=8,
+        base_score=0.75,
+        context_words=_KANNADA_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        context_required=True,
         safety_sweep_requires_context=True,
         flags=0,
     ),
