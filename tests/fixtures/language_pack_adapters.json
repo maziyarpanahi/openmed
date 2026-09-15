@@ -12,6 +12,7 @@
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
     "fa": "OpenMed/privacy-filter-multilingual",
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
+    "gu": "OpenMed/privacy-filter-multilingual",
     "he": "OpenMed/privacy-filter-multilingual",
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
     "id": "OpenMed/privacy-filter-multilingual",
@@ -176,6 +177,10 @@
     "fr": [
       "fr_FR",
       "ssn"
+    ],
+    "gu": [
+      "gu_IN",
+      "aadhaar"
     ],
     "ha": [
       "ha_NG",
@@ -418,6 +423,7 @@
     "es",
     "fa",
     "fr",
+    "gu",
     "he",
     "hi",
     "id",

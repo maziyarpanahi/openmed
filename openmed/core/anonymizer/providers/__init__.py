@@ -116,10 +116,12 @@ from .clinical_ids import (
 )
 from .script_names import (
     DEVANAGARI_LANGUAGE_PACK,
+    GUJARATI_LANGUAGE_PACK,
     HAN_LANGUAGE_PACK,
     SCRIPT_NAME_PACKS,
     TELUGU_LANGUAGE_PACK,
     generate_devanagari_name,
+    generate_gujarati_name,
     generate_han_name,
     generate_telugu_name,
 )
@@ -173,6 +175,7 @@ __all__ = [
     "ChineseNameProvider",
     "DanishCPRProvider",
     "DEVANAGARI_LANGUAGE_PACK",
+    "GUJARATI_LANGUAGE_PACK",
     "EastAfricanIdProvider",
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
@@ -226,6 +229,7 @@ __all__ = [
     "generate_chinese_surname",
     "generate_danish_cpr",
     "generate_devanagari_name",
+    "generate_gujarati_name",
     "generate_hungarian_taj",
     "generate_gstin",
     "generate_ifsc",
