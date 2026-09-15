@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 import math
 import random
 import time
@@ -20,6 +21,11 @@ from typing import Any, Mapping, Sequence
 LANEFORMER_SOURCE_MODEL = "kogai/laneformer-2b-it"
 LANEFORMER_MLX_MODEL = "OpenMed/laneformer-2b-it-q4-mlx"
 LANEFORMER_DRAFT_MLX_MODEL = "OpenMed/laneformer-pii-draft-350m-q4-mlx"
+MAPLE_SOURCE_MODEL = "deepgrove/maple-preview"
+MAPLE_MLX_MODEL = "deepgrove/maple-preview-2bit-mlx"
+# Maple ships executable custom MLX model code. Pin the reviewed public
+# checkpoint so a mutable Hub branch cannot silently replace that code.
+MAPLE_MLX_REVISION = "361db5da5e74ff6fcdd852d478e1f266ce11013a"
 DEFAULT_SPECULATIVE_TOKENS = 4
 
 _MLX_LANGUAGE_MODEL_MAP: dict[str, str] = {
@@ -29,12 +35,21 @@ _MLX_LANGUAGE_MODEL_MAP: dict[str, str] = {
     "laneformer-pii-draft": LANEFORMER_DRAFT_MLX_MODEL,
     "laneformer-2b-it-draft": LANEFORMER_DRAFT_MLX_MODEL,
     LANEFORMER_DRAFT_MLX_MODEL: LANEFORMER_DRAFT_MLX_MODEL,
+    "maple": MAPLE_MLX_MODEL,
+    "maple-preview": MAPLE_MLX_MODEL,
+    MAPLE_SOURCE_MODEL: MAPLE_MLX_MODEL,
+    MAPLE_MLX_MODEL: MAPLE_MLX_MODEL,
+}
+
+_MLX_LM_REVISIONS: dict[str, str] = {
+    MAPLE_MLX_MODEL: MAPLE_MLX_REVISION,
 }
 
 _MLX_LM_ALLOW_PATTERNS = [
     "README.md",
     "config.json",
     "generation_config.json",
+    "model.safetensors.index.json",
     "model*.safetensors",
     "tokenizer.json",
     "tokenizer_config.json",
@@ -502,7 +517,11 @@ def resolve_mlx_language_model(model_name: str, config: Any = None) -> str:
         repo_id = f"OpenMed/{repo_id}"
 
     cache_dir = getattr(config, "cache_dir", None) if config is not None else None
-    return _download_mlx_lm_artifact(repo_id, cache_dir=cache_dir)
+    return _download_mlx_lm_artifact(
+        repo_id,
+        cache_dir=cache_dir,
+        revision=_MLX_LM_REVISIONS.get(repo_id),
+    )
 
 
 def resolve_mlx_draft_language_model(
@@ -529,7 +548,11 @@ def resolve_mlx_draft_language_model(
     return resolve_mlx_language_model(draft_info.draft_model_id, config=config)
 
 
-def _download_mlx_lm_artifact(repo_id: str, cache_dir: str | None = None) -> str:
+def _download_mlx_lm_artifact(
+    repo_id: str,
+    cache_dir: str | None = None,
+    revision: str | None = None,
+) -> str:
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
@@ -538,12 +561,35 @@ def _download_mlx_lm_artifact(repo_id: str, cache_dir: str | None = None) -> str
             "Install with: pip install openmed[mlx]"
         ) from exc
 
+    download_kwargs: dict[str, Any] = {
+        "repo_id": repo_id,
+        "repo_type": "model",
+        "cache_dir": cache_dir,
+        "allow_patterns": _MLX_LM_ALLOW_PATTERNS,
+    }
+    if revision is not None:
+        download_kwargs["revision"] = revision
+
     return snapshot_download(
-        repo_id=repo_id,
-        repo_type="model",
-        cache_dir=cache_dir,
-        allow_patterns=_MLX_LM_ALLOW_PATTERNS,
+        **download_kwargs,
     )
+
+
+def _mlx_lm_load_kwargs(model_path: str) -> dict[str, Any]:
+    """Return narrowly scoped tokenizer options for reviewed custom artifacts."""
+
+    config_path = Path(model_path) / "config.json"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError):
+        return {}
+    if config.get("model_type") == "maple" and config.get("model_file") == "maple.py":
+        # MLX-LM already executes the artifact's model_file. Transformers also
+        # consults Maple's AutoConfig while constructing its otherwise standard
+        # Qwen tokenizer; explicitly trusting that path prevents an interactive
+        # prompt during pinned, unattended on-device loading.
+        return {"tokenizer_config": {"trust_remote_code": True}}
+    return {}
 
 
 def _unwrap_tokenizer(tokenizer: Any) -> Any:
@@ -847,7 +893,10 @@ class OpenMedMLXLanguageModel:
                 "Install with: pip install openmed[mlx]"
             ) from exc
 
-        self.model, self.tokenizer = load(self.model_path)
+        self.model, self.tokenizer = load(
+            self.model_path,
+            **_mlx_lm_load_kwargs(self.model_path),
+        )
 
     def _load_draft_model(self, draft_model_name: str | None = None) -> bool:
         if self._draft_model is not None and self._draft_tokenizer is not None:
@@ -869,7 +918,10 @@ class OpenMedMLXLanguageModel:
                 "Install with: pip install openmed[mlx]"
             ) from exc
 
-        self._draft_model, self._draft_tokenizer = load(draft_path)
+        self._draft_model, self._draft_tokenizer = load(
+            draft_path,
+            **_mlx_lm_load_kwargs(draft_path),
+        )
         return True
 
     def format_chat_prompt(
@@ -1526,6 +1578,9 @@ __all__ = [
     "LANEFORMER_MLX_MODEL",
     "LANEFORMER_SOURCE_MODEL",
     "LANEFORMER_DRAFT_MLX_MODEL",
+    "MAPLE_MLX_MODEL",
+    "MAPLE_MLX_REVISION",
+    "MAPLE_SOURCE_MODEL",
     "DEFAULT_SPECULATIVE_TOKENS",
     "OpenMedMLXLanguageModel",
     "OpenMedPagedKVCache",
