@@ -264,6 +264,17 @@
 | Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 | CellLine | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
+## Lab
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| LabTest | LAB_TEST | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| LabValue | LAB_VALUE | CLINICAL_CONCEPT | medium | LOINC, SNOMED | Not shipped |
+| Unit | UNIT | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| ReferenceRange | REFERENCE_RANGE | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| AbnormalFlag | ABNORMAL_FLAG | CLINICAL_CONCEPT | medium | LOINC, SNOMED | Not shipped |
+| Specimen | SPECIMEN | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+
 ## Cardiology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
@@ -282,7 +293,7 @@
 | Microorganism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
 | Antibiotic | ANTIBIOTIC | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
 | Susceptibility | SUSCEPTIBILITY | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
-| SpecimenSource | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| SpecimenSource | SPECIMEN | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 | CultureResult | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
 ## Dermatology
