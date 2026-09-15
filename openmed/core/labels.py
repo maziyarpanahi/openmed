@@ -133,6 +133,12 @@ BODY_SITE: Final = "BODY_SITE"
 #: Procedure-record device concepts (issue #313)
 DEVICE: Final = "DEVICE"
 
+#: Medical-device and UDI mention concepts (issue #908)
+DEVICE_TYPE: Final = "DEVICE_TYPE"
+DEVICE_IDENTIFIER: Final = "DEVICE_IDENTIFIER"
+DEVICE_MODEL: Final = "DEVICE_MODEL"
+IMPLANT_SITE: Final = "IMPLANT_SITE"
+
 #: Canonical non-identifier labels shared by the biomedical NER families.
 BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
     {
@@ -420,6 +426,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         PROCEDURE,
         BODY_SITE,
         DEVICE,
+        DEVICE_TYPE,
+        DEVICE_IDENTIFIER,
+        DEVICE_MODEL,
+        IMPLANT_SITE,
         PROBLEM,
         SEVERITY,
         DOSAGE,
@@ -701,6 +711,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             PROCEDURE,
             BODY_SITE,
             DEVICE,
+            DEVICE_TYPE,
+            DEVICE_IDENTIFIER,
+            DEVICE_MODEL,
+            IMPLANT_SITE,
             PROBLEM,
             SEVERITY,
             DOSAGE,
@@ -885,6 +899,13 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Medical-device and UDI mention concepts (issue #908). UDI-like values
+    # remain direct identifiers with the dedicated HIPAA device-identifier
+    # cross-reference; no lookup, decoding, or network access is implied.
+    DEVICE_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DEVICE_IDENTIFIER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    DEVICE_MODEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IMPLANT_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Relation-extraction heads and attributes (issue #252). Free-text
     # problem/indication text and result values remain medium-risk so rare
     # conditions and distinctive measurements are visible to risk tooling,
@@ -1086,6 +1107,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     DEVICE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE_IDENTIFIER: HIPAA_DEVICE_IDENTIFIER,
+    DEVICE_MODEL: HIPAA_UNIQUE_IDENTIFIER,
+    IMPLANT_SITE: HIPAA_UNIQUE_IDENTIFIER,
     PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
     SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
     DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1229,6 +1254,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
     DEVICE: POPIA_HEALTH_INFORMATION,
+    DEVICE_TYPE: POPIA_HEALTH_INFORMATION,
+    DEVICE_IDENTIFIER: POPIA_IDENTIFYING_NUMBER,
+    DEVICE_MODEL: POPIA_HEALTH_INFORMATION,
+    IMPLANT_SITE: POPIA_HEALTH_INFORMATION,
     PROBLEM: POPIA_HEALTH_INFORMATION,
     SEVERITY: POPIA_HEALTH_INFORMATION,
     DOSAGE: POPIA_HEALTH_INFORMATION,
@@ -1656,6 +1685,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "medicaldevice": DEVICE,
     "implant": DEVICE,
     "catheter": DEVICE,
+    # Medical-device and UDI mention concepts (issue #908)
+    "devicetype": DEVICE_TYPE,
+    "deviceidentifier": DEVICE_IDENTIFIER,
+    "udi": DEVICE_IDENTIFIER,
+    "udidi": DEVICE_IDENTIFIER,
+    "devicemodel": DEVICE_MODEL,
+    "modelnumber": DEVICE_MODEL,
+    "manufacturer": ORGANIZATION,
+    "implantsite": IMPLANT_SITE,
+    "implantlocation": IMPLANT_SITE,
+    "devicestatus": OTHER,
     # Anesthesia-record concepts
     "anesthesiatype": ANESTHESIA_TYPE,
     "anesthesia": ANESTHESIA_TYPE,
@@ -2247,6 +2287,10 @@ __all__ = [
     "PROCEDURE",
     "BODY_SITE",
     "DEVICE",
+    "DEVICE_TYPE",
+    "DEVICE_IDENTIFIER",
+    "DEVICE_MODEL",
+    "IMPLANT_SITE",
     "PROBLEM",
     "SEVERITY",
     "DOSAGE",

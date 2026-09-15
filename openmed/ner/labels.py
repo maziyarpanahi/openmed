@@ -40,6 +40,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
+    "medical_device": "tests/fixtures/clinical/medical_device.jsonl",
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
     "allergy_intolerance": (
@@ -59,6 +60,15 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "AdministrationDate to occurrence[x], and VaccineSeries to "
         "protocolApplied.series. This is extraction metadata only; it does not "
         "create exporter, recommendation, dosing, or scheduling logic."
+    ),
+    "medical_device": (
+        "The display labels are descriptive extraction metadata for a planned "
+        "FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, "
+        "ModelNumber, ImplantSite, and DeviceStatus describe device mentions "
+        "without UDI lookup or decoding or contacting GUDID or any other network "
+        "service. DeviceIdentifier remains a HIPAA device identifier and "
+        "requires human review; this catalog is not clinical guidance and does "
+        "not make device, treatment, or safety decisions."
     ),
 }
 

@@ -40,6 +40,7 @@ def test_default_coverage_gate_passes_with_non_empty_per_label_spans() -> None:
 
     assert report.suite == CLINICAL_DOMAIN_COVERAGE
     assert report.passed is True
+    assert "medical_device" in CLINICAL_DOMAIN_FIXTURE_NAMES
     assert tuple(domain.domain for domain in report.per_domain) == tuple(
         sorted(CLINICAL_DOMAIN_FIXTURE_NAMES)
     )
@@ -51,6 +52,22 @@ def test_default_coverage_gate_passes_with_non_empty_per_label_spans() -> None:
         for domain in report.per_domain
         for coverage in domain.per_label
     )
+
+
+def test_medical_device_reports_per_label_coverage() -> None:
+    report = assert_domain_coverage_gate(domains=("medical_device",))
+
+    domain = report.per_domain[0]
+    assert domain.domain == "medical_device"
+    assert [coverage.label for coverage in domain.per_label] == [
+        "DeviceType",
+        "DeviceIdentifier",
+        "Manufacturer",
+        "ModelNumber",
+        "ImplantSite",
+        "DeviceStatus",
+    ]
+    assert all(coverage.span_count == 1 for coverage in domain.per_label)
 
 
 def test_missing_fixture_fails_with_domain_only_evidence(tmp_path: Path) -> None:
