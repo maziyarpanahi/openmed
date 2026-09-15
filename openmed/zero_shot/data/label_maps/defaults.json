@@ -179,6 +179,15 @@
     "Distribution",
     "Anatomy"
   ],
+  "wound_assessment": [
+    "WoundType",
+    "WoundLocation",
+    "WoundStage",
+    "WoundDimension",
+    "ExudateDescriptor",
+    "TissueType",
+    "DressingType"
+  ],
   "ophthalmology": [
     "EyeFinding",
     "VisualAcuity",

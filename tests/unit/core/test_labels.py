@@ -47,6 +47,7 @@ from openmed.core.labels import (
     DNA,
     DOSAGE,
     DOSE_NUMBER,
+    DRESSING_TYPE,
     DRUG,
     DURATION,
     DYSPNEA_GRADE,
@@ -54,6 +55,7 @@ from openmed.core.labels import (
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
     ETHNICITY,
+    EXUDATE_DESCRIPTOR,
     EYE_COLOR,
     FEEDING_ROUTE,
     FINDING,
@@ -153,6 +155,8 @@ from openmed.core.labels import (
     VARIANT_DESCRIPTOR,
     VEHICLE_REGISTRATION,
     VIN,
+    WOUND_STAGE,
+    WOUND_TYPE,
     ZIPCODE,
     ZYGOSITY,
     hipaa_class_for,
@@ -972,6 +976,10 @@ class TestClinicalLabelsAreAdditive:
             LINE_DRAIN_TUBE,
             NURSING_RISK_SCORE,
             CARE_INTERVENTION,
+            WOUND_TYPE,
+            WOUND_STAGE,
+            EXUDATE_DESCRIPTOR,
+            DRESSING_TYPE,
         }
     )
 
