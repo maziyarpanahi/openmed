@@ -143,6 +143,8 @@ promoting the new version.
 - [Migrating from 2.0 to 2.1](migration/2.0-to-2.1.md)
 - [Migrating from 2.1 to 2.2](migration/2.1-to-2.2.md)
 - [Migrating from 2.2 to 2.3](migration/2.2-to-2.3.md)
+- [Migrate from 2.3 to 2.5](migration/2.3-to-2.5.md)
+- [OpenMed 2.5.0 Release Notes](release/v2.5.0.md)
 - [OpenMed 2.3.0 Release Notes](release/v2.3.0.md)
 - [OpenMed 2.2.0 Release Notes](release/v2.2.0.md)
 - [OpenMed 2.1.0 Release Notes](release/v2.1.0.md)

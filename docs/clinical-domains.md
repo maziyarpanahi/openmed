@@ -170,6 +170,22 @@
 | Tissue | TISSUE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 | PathologicalFormation | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 
+## Oncology Staging
+
+**Alignment:** TNM and tumor-descriptor labels capture descriptors explicitly written in an oncology note for descriptive extraction and human review only. OpenMed does not compute a stage group, apply AJCC/UICC staging rules, infer prognosis, recommend treatment, or make a medical decision, and does not bundle staging manuals or proprietary tables.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| TumorCategory | TNM_T | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| NodeCategory | TNM_N | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| MetastasisCategory | TNM_M | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| StageGroup | STAGE_GROUP | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorGrade | TUMOR_GRADE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorSize | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+| ReceptorStatus | RECEPTOR_STATUS | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| ResponseAssessment | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| PrimarySite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+
 ## Anatomy
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
@@ -224,6 +240,21 @@
 | Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 | Condition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
 | Pathology | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+
+## Pathology Histology
+
+**Alignment:** The display labels describe pathology-report content for offline extraction and human review only. They do not grade or stage a tumor, apply diagnostic rules, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| SpecimenType | SPECIMEN_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| GrossDescription | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicFinding | HISTOLOGIC_FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicGrade | HISTOLOGIC_GRADE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MarginStatus | MARGIN_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| ImmunohistochemistryStain | IHC_STAIN | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MitoticCount | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| TissueSite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
 
 ## Hematology
 
@@ -434,6 +465,20 @@
 | AssistiveDevice | DEVICE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
 | FunctionalScale | FUNCTIONAL_SCALE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/functional_status.jsonl |
 | CognitiveStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+
+## Obstetrics Gynecology
+
+**Alignment:** The display labels cover pregnancy and reproductive-health concepts for structured extraction only. This metadata does not compute gestational age, score risk, infer diagnosis, recommend care, or bundle restricted terminology; human review remains required.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GravidityParity | GRAVIDITY_PARITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GestationalAge | GESTATIONAL_AGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| FetalFinding | FETAL_FINDING | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| MenstrualHistory | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| ObstetricEvent | OBSTETRIC_EVENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 
 ## Offline Coverage Evaluation
 
