@@ -53,6 +53,29 @@ def test_default_coverage_gate_passes_with_non_empty_per_label_spans() -> None:
     )
 
 
+def test_obstetrics_gynecology_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("obstetrics_gynecology",))
+
+    assert report.passed is True
+    assert report.missing_fixtures == ()
+    assert report.orphan_labels == ()
+    assert report.missing_labels == ()
+    domain = report.per_domain[0]
+    assert domain.fixture == "obstetrics_gynecology.jsonl"
+    assert domain.fixture_count == 1
+    assert {coverage.label for coverage in domain.per_label} == {
+        "GravidityParity",
+        "GestationalAge",
+        "FetalFinding",
+        "MenstrualHistory",
+        "ObstetricEvent",
+        "GynecologicFinding",
+        "DeliveryMode",
+    }
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+    assert all(coverage.fixture_count == 1 for coverage in domain.per_label)
+
+
 def test_pathology_histology_reports_per_label_coverage_offline() -> None:
     report = assert_domain_coverage_gate(domains=("pathology_histology",))
 

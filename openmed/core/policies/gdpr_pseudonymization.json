@@ -161,6 +161,11 @@
     "GROWTH_PARAMETER": "mask",
     "GROWTH_PERCENTILE": "mask",
     "DEVELOPMENTAL_MILESTONE": "mask",
+    "GRAVIDITY_PARITY": "mask",
+    "GESTATIONAL_AGE": "mask",
+    "FETAL_FINDING": "mask",
+    "OBSTETRIC_EVENT": "mask",
+
     "HISTOLOGIC_FINDING": "mask",
     "HISTOLOGIC_GRADE": "mask",
     "MARGIN_STATUS": "mask",

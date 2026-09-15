@@ -271,6 +271,12 @@ GROWTH_PARAMETER: Final = "GROWTH_PARAMETER"
 GROWTH_PERCENTILE: Final = "GROWTH_PERCENTILE"
 DEVELOPMENTAL_MILESTONE: Final = "DEVELOPMENTAL_MILESTONE"
 
+#: Obstetrics and gynecology concepts (issue #907)
+GRAVIDITY_PARITY: Final = "GRAVIDITY_PARITY"
+GESTATIONAL_AGE: Final = "GESTATIONAL_AGE"
+FETAL_FINDING: Final = "FETAL_FINDING"
+OBSTETRIC_EVENT: Final = "OBSTETRIC_EVENT"
+
 #: Pathology and histology concepts (issue #903)
 HISTOLOGIC_FINDING: Final = "HISTOLOGIC_FINDING"
 HISTOLOGIC_GRADE: Final = "HISTOLOGIC_GRADE"
@@ -480,6 +486,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GROWTH_PARAMETER,
         GROWTH_PERCENTILE,
         DEVELOPMENTAL_MILESTONE,
+        GRAVIDITY_PARITY,
+        GESTATIONAL_AGE,
+        FETAL_FINDING,
+        OBSTETRIC_EVENT,
         VARIANT_DESCRIPTOR,
         PROTEIN_CHANGE,
         ZYGOSITY,
@@ -780,6 +790,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
+            GRAVIDITY_PARITY,
+            GESTATIONAL_AGE,
+            FETAL_FINDING,
+            OBSTETRIC_EVENT,
             HISTOLOGIC_FINDING,
             HISTOLOGIC_GRADE,
             MARGIN_STATUS,
@@ -1048,6 +1062,15 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
             LOINC,
         ),
     ),
+    # Obstetrics and gynecology concepts (issue #907)
+    GRAVIDITY_PARITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    GESTATIONAL_AGE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (SNOMED, LOINC),
+    ),
+    FETAL_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    OBSTETRIC_EVENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Pathology and histology concepts (issue #903)
     HISTOLOGIC_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     HISTOLOGIC_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1210,6 +1233,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GROWTH_PARAMETER: HIPAA_UNIQUE_IDENTIFIER,
     GROWTH_PERCENTILE: HIPAA_UNIQUE_IDENTIFIER,
     DEVELOPMENTAL_MILESTONE: HIPAA_UNIQUE_IDENTIFIER,
+    GRAVIDITY_PARITY: HIPAA_UNIQUE_IDENTIFIER,
+    GESTATIONAL_AGE: HIPAA_UNIQUE_IDENTIFIER,
+    FETAL_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    OBSTETRIC_EVENT: HIPAA_UNIQUE_IDENTIFIER,
     # Pathology and histology concepts
     HISTOLOGIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
     HISTOLOGIC_GRADE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1355,6 +1382,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     GROWTH_PARAMETER: POPIA_HEALTH_INFORMATION,
     GROWTH_PERCENTILE: POPIA_HEALTH_INFORMATION,
     DEVELOPMENTAL_MILESTONE: POPIA_HEALTH_INFORMATION,
+    GRAVIDITY_PARITY: POPIA_HEALTH_INFORMATION,
+    GESTATIONAL_AGE: POPIA_HEALTH_INFORMATION,
+    FETAL_FINDING: POPIA_HEALTH_INFORMATION,
+    OBSTETRIC_EVENT: POPIA_HEALTH_INFORMATION,
     # Pathology and histology concepts
     HISTOLOGIC_FINDING: POPIA_HEALTH_INFORMATION,
     HISTOLOGIC_GRADE: POPIA_HEALTH_INFORMATION,
@@ -1930,6 +1961,24 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "developmentalmilestone": DEVELOPMENTAL_MILESTONE,
     "milestone": DEVELOPMENTAL_MILESTONE,
     "motordevelopment": DEVELOPMENTAL_MILESTONE,
+    # Obstetrics and gynecology concepts (issue #907)
+    "gravidityparity": GRAVIDITY_PARITY,
+    "gravidity": GRAVIDITY_PARITY,
+    "parity": GRAVIDITY_PARITY,
+    "gxp": GRAVIDITY_PARITY,
+    "gestationalage": GESTATIONAL_AGE,
+    "gestationalageweeks": GESTATIONAL_AGE,
+    "gestation": GESTATIONAL_AGE,
+    "fetalfinding": FETAL_FINDING,
+    "fetalstatus": FETAL_FINDING,
+    "obstetricevent": OBSTETRIC_EVENT,
+    "obstetricevents": OBSTETRIC_EVENT,
+    "menstrualhistory": OTHER,
+    "menstrual": OTHER,
+    "gynecologicfinding": CONDITION,
+    "gynaecologicfinding": CONDITION,
+    "deliverymode": PROCEDURE,
+    "modeofdelivery": PROCEDURE,
     # Oncology TNM staging and tumor-descriptor concepts
     "tnmt": TNM_T,
     "tumorcategory": TNM_T,
@@ -2424,6 +2473,10 @@ __all__ = [
     "GROWTH_PARAMETER",
     "GROWTH_PERCENTILE",
     "DEVELOPMENTAL_MILESTONE",
+    "GRAVIDITY_PARITY",
+    "GESTATIONAL_AGE",
+    "FETAL_FINDING",
+    "OBSTETRIC_EVENT",
     "HISTOLOGIC_FINDING",
     "HISTOLOGIC_GRADE",
     "MARGIN_STATUS",

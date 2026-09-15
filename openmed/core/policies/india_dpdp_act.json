@@ -157,6 +157,11 @@
     "GROWTH_PARAMETER": "keep",
     "GROWTH_PERCENTILE": "keep",
     "DEVELOPMENTAL_MILESTONE": "keep",
+    "GRAVIDITY_PARITY": "keep",
+    "GESTATIONAL_AGE": "keep",
+    "FETAL_FINDING": "keep",
+    "OBSTETRIC_EVENT": "keep",
+
     "HISTOLOGIC_FINDING": "keep",
     "HISTOLOGIC_GRADE": "keep",
     "MARGIN_STATUS": "keep",

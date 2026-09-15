@@ -312,5 +312,14 @@
     "CareIntervention",
     "PainScore",
     "SkinAssessment"
+  ],
+  "obstetrics_gynecology": [
+    "GravidityParity",
+    "GestationalAge",
+    "FetalFinding",
+    "MenstrualHistory",
+    "ObstetricEvent",
+    "GynecologicFinding",
+    "DeliveryMode"
   ]
 }

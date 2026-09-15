@@ -453,6 +453,20 @@
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 
+## Obstetrics Gynecology
+
+**Alignment:** The display labels cover pregnancy and reproductive-health concepts for structured extraction only. This metadata does not compute gestational age, score risk, infer diagnosis, recommend care, or bundle restricted terminology; human review remains required.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GravidityParity | GRAVIDITY_PARITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GestationalAge | GESTATIONAL_AGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| FetalFinding | FETAL_FINDING | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| MenstrualHistory | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| ObstetricEvent | OBSTETRIC_EVENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+
 ## Offline Coverage Evaluation
 
 The fixture-backed clinical domains are checked by the aggregate-only `clinical_domain_coverage` suite. Run `openmed benchmark domain-coverage --json --output domain-coverage.json` from the repository root to verify that every shipped display label has a non-empty synthetic span and that fixture labels resolve to the canonical label catalog.
