@@ -1168,6 +1168,171 @@ def validate_spanish_nie(text: str) -> bool:
     return letter == _DNI_LETTERS[number % 23]
 
 
+_MEXICAN_CURP_ALPHABET = "0123456789ABCDEFGHIJKLMN\u00d1OPQRSTUVWXYZ"
+_MEXICAN_CURP_STATE_CODES = frozenset(
+    {
+        "AS",
+        "BC",
+        "BS",
+        "CC",
+        "CH",
+        "CL",
+        "CM",
+        "CS",
+        "DF",
+        "DG",
+        "GT",
+        "GR",
+        "HG",
+        "JC",
+        "MC",
+        "MN",
+        "MS",
+        "NE",
+        "NL",
+        "NT",
+        "OC",
+        "PL",
+        "QT",
+        "QR",
+        "SP",
+        "SL",
+        "SR",
+        "TC",
+        "TL",
+        "TS",
+        "VZ",
+        "YN",
+        "ZS",
+    }
+)
+
+
+def validate_mexican_curp(text: str) -> bool:
+    """Validate a Mexican CURP national identifier.
+
+    CURP values contain an 18-character name root, ``YYMMDD`` birth date,
+    sex code, state code, internal consonants, a century marker, and a
+    modulo-10 check digit. Numeric century markers identify the 1900s, while
+    ``A`` through ``J`` identify the 2000s.
+
+    Args:
+        text: CURP candidate. ASCII case and whitespace are normalized.
+
+    Returns:
+        ``True`` when the structure, embedded date, state/sex fields, and
+        check digit are valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    cleaned = re.sub(r"\s+", "", text).upper()
+    match = re.fullmatch(
+        r"[A-Z][AEIOUX][A-Z]{2}"
+        r"(?P<year>\d{2})(?P<month>\d{2})(?P<day>\d{2})"
+        r"[HM](?P<state>[A-Z]{2})[B-DF-HJ-NP-TV-Z]{3}"
+        r"(?P<century>[0-9A-J])(?P<check>\d)",
+        cleaned,
+    )
+    if match is None or match.group("state") not in _MEXICAN_CURP_STATE_CODES:
+        return False
+
+    year = int(match.group("year"))
+    century = match.group("century")
+    full_year = (1900 if century.isdigit() else 2000) + year
+    try:
+        birth_date = date(
+            full_year,
+            int(match.group("month")),
+            int(match.group("day")),
+        )
+    except ValueError:
+        return False
+    if birth_date > date.today():
+        return False
+
+    try:
+        total = sum(
+            _MEXICAN_CURP_ALPHABET.index(character) * weight
+            for character, weight in zip(cleaned[:17], range(18, 1, -1))
+        )
+    except ValueError:
+        return False
+    expected = (10 - total % 10) % 10
+    return int(match.group("check")) == expected
+
+
+_MEXICAN_RFC_ALPHABET = "0123456789ABCDEFGHIJKLMN&OPQRSTUVWXYZ \u00d1"
+
+
+def validate_mexican_rfc(text: str) -> bool:
+    """Validate an individual or legal-entity Mexican RFC.
+
+    Individual RFCs have four root letters and 13 total characters; legal
+    entities have three root letters and 12 total characters. Both forms
+    carry a ``YYMMDD`` date, two-character homoclave, and modulo-11 check
+    character. The SAT generic domestic and foreign taxpayer sentinels are
+    accepted as documented checksum exceptions.
+
+    Args:
+        text: RFC candidate. ASCII case and whitespace are normalized.
+
+    Returns:
+        ``True`` when the form, embedded date, and check character are valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    cleaned = re.sub(r"\s+", "", text).upper()
+    if (
+        re.fullmatch(
+            r"(?:[A-Z\u00d1&]{3}\d{6}|[A-Z\u00d1&]{4}\d{6})"
+            r"[A-Z0-9]{2}[0-9A]",
+            cleaned,
+        )
+        is None
+    ):
+        return False
+
+    date_start = 4 if len(cleaned) == 13 else 3
+    date_digits = cleaned[date_start : date_start + 6]
+    year = int(date_digits[:2])
+    month = int(date_digits[2:4])
+    day = int(date_digits[4:])
+    if not any(
+        _date_is_plausible(century + year, month, day) for century in (1900, 2000)
+    ):
+        return False
+
+    # These two public sentinel RFCs predate the ordinary checksum rule.
+    if cleaned in {"XAXX010101000", "XEXX010101000"}:
+        return True
+
+    # The 12-character legal-entity form is left-padded with a space so both
+    # forms use the same 13..2 weight sequence over a 12-character body.
+    body = cleaned[:-1].rjust(12)
+    try:
+        total = sum(
+            _MEXICAN_RFC_ALPHABET.index(character) * weight
+            for character, weight in zip(body, range(13, 1, -1))
+        )
+    except ValueError:
+        return False
+
+    remainder = total % 11
+    expected = "0" if remainder == 0 else "A" if remainder == 1 else str(11 - remainder)
+    return cleaned[-1] == expected
+
+
+def _date_is_plausible(year: int, month: int, day: int) -> bool:
+    """Return whether a numeric date exists and is not in the future."""
+    try:
+        candidate = date(year, month, day)
+    except ValueError:
+        return False
+    return candidate <= date.today()
+
+
 def validate_dutch_bsn(text: str) -> bool:
     """Validate Dutch BSN (Burgerservicenummer).
 
@@ -5479,6 +5644,60 @@ _ITALIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_MEXICAN_PII_PATTERNS: List[PIIPattern] = [
+    # CURP (18 characters with an embedded date and modulo-10 verifier).
+    PIIPattern(
+        r"(?<![A-Z0-9])"
+        r"[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{2}"
+        r"[B-DF-HJ-NP-TV-Z]{3}[0-9A-J]\d"
+        r"(?![A-Z0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.65,
+        context_words=[
+            "curp",
+            "clave única de registro de población",
+            "clave unica de registro de poblacion",
+            "registro de población",
+            "registro de poblacion",
+        ],
+        context_boost=0.35,
+        requires_context=True,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        validator=validate_mexican_curp,
+        reject_on_validation_failure=True,
+        flags=re.IGNORECASE,
+    ),
+    # RFC (12-character legal-entity or 13-character individual form).
+    PIIPattern(
+        r"(?<![A-Z0-9\u00d1&])"
+        r"(?:[A-Z\u00d1&]{3}\d{6}|[A-Z\u00d1&]{4}\d{6})"
+        r"[A-Z0-9]{2}[0-9A]"
+        r"(?![A-Z0-9\u00d1&])",
+        "national_id",
+        priority=12,
+        base_score=0.65,
+        context_words=[
+            "rfc",
+            "registro federal de contribuyentes",
+            "contribuyente",
+            "contribuyentes",
+            "persona física",
+            "persona fisica",
+            "persona moral",
+        ],
+        context_boost=0.35,
+        requires_context=True,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        validator=validate_mexican_rfc,
+        reject_on_validation_failure=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _SPANISH_PII_PATTERNS: List[PIIPattern] = [
     # Spanish dates DD/MM/YYYY
     PIIPattern(
@@ -5564,6 +5783,7 @@ _SPANISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.4,
         validator=validate_spanish_nie,
     ),
+    *_MEXICAN_PII_PATTERNS,
     # Spanish street addresses
     PIIPattern(
         r"\b(?:calle|avenida|paseo|plaza|camino|carretera|ronda|traves\u00eda|glorieta)\s+[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]+(?:\s+[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]+)*(?:\s*,?\s*\d{1,5})?\b",
@@ -10557,6 +10777,7 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "es_mx": _MEXICAN_PII_PATTERNS,
     "fr_be": _BELGIAN_PII_PATTERNS,
     "nl_be": _BELGIAN_PII_PATTERNS,
     "de_be": _BELGIAN_PII_PATTERNS,

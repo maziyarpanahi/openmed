@@ -46,6 +46,7 @@ _TOP_LEVEL_FIXTURES: tuple[Path, ...] = tuple(
     for name in (
         "be.jsonl",
         "ch.jsonl",
+        "es_mx.jsonl",
         "financial_ids.jsonl",
     )
 )
