@@ -287,7 +287,8 @@ def grounding_provenance(
                 start=span.start,
                 end=span.end,
                 span_text=span.text,
-                candidates=tuple(span.candidates),
+                candidates=tuple(span.candidates)
+                + tuple(getattr(span, "alternatives", ())),
                 method=method,
                 calibrated_score=calibrated,
                 encoder_index_key=encoder_index_key,
