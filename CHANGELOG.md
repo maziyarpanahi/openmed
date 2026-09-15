@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, privacy-safe directionality validation for guarded
+  causal, treatment, procedure-indication, and medication-indication relations,
+  with typed fail-closed endpoint and direction errors (#2737).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.

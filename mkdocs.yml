@@ -116,6 +116,7 @@ nav:
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
+      - Guarded Relation Directionality: clinical/relation-directionality.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
