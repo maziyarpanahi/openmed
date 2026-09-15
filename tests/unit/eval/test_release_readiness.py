@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 
 from openmed.eval.release_gates import (
@@ -341,7 +342,7 @@ def test_release_workflow_gates_publish_on_readiness():
         assert "steps.check-candidate.outputs.exists != 'true'" in condition
 
 
-def _sdk_repository(tmp_path: Path) -> Path:
+def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
     """Create an isolated history with synthetic model metadata."""
     import subprocess
 
@@ -355,7 +356,9 @@ def _sdk_repository(tmp_path: Path) -> Path:
                 "formats": ["mlx-fp"],
             }
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
+        newline=newline,
     )
     (root / "gates/baseline.json").write_text(
         json.dumps(
@@ -364,7 +367,9 @@ def _sdk_repository(tmp_path: Path) -> Path:
                 "entries": {"pii::small::mlx-fp": {"repo_id": "synthetic/model"}},
             }
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
+        newline=newline,
     )
     state = {
         "schema_version": 1,
@@ -383,6 +388,8 @@ def _sdk_repository(tmp_path: Path) -> Path:
     (root / "gates/registry_state.json").write_text(json.dumps(state))
     for args in (
         ["init", "-q"],
+        # The gate compares artifact bytes, so the fixture must retain them.
+        ["config", "core.autocrlf", "false"],
         ["add", "."],
         [
             "-c",
@@ -401,10 +408,16 @@ def _sdk_repository(tmp_path: Path) -> Path:
     return root
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
 def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
     tmp_path,
+    monkeypatch,
+    newline,
 ):
-    root = _sdk_repository(tmp_path)
+    global_config = tmp_path / "global.gitconfig"
+    global_config.write_text("[core]\n    autocrlf = true\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    root = _sdk_repository(tmp_path, newline=newline)
     path = root / "gates/registry_state.json"
     state = json.loads(path.read_text())
     entry = state["families"]["PII"]
@@ -415,7 +428,7 @@ def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
     report = evaluate_readiness(
         repo_root=root, sdk_baseline="v1.0.0", signing_key=READINESS_KEY
     )
-    assert report.decision == READY
+    assert report.decision == READY, report.failing_checks()
     assert report.verify(READINESS_KEY)
     assert report.checks[0].gate == "sdk_model_continuity"
     assert report.checks[0].details["pointer_count"] == 3
