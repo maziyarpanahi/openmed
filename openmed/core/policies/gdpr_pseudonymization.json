@@ -161,6 +161,12 @@
     "GROWTH_PARAMETER": "mask",
     "GROWTH_PERCENTILE": "mask",
     "DEVELOPMENTAL_MILESTONE": "mask",
+    "TNM_T": "keep",
+    "TNM_N": "keep",
+    "TNM_M": "keep",
+    "STAGE_GROUP": "keep",
+    "TUMOR_GRADE": "keep",
+    "RECEPTOR_STATUS": "keep",
     "OTHER": "keep"
   }
 }
