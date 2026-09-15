@@ -239,7 +239,7 @@ _WHITESPACE_RE = re.compile(r"\s+")
 _OBSERVATION_ABBREVIATION_RE = re.compile(r"^[A-Z][A-Z0-9.]{0,4}$")
 _FOLLOWING_MEASUREMENT_RE = re.compile(
     r"^[ \t]*(?::|=)?[ \t]*"
-    r"(?P<value>[+-]?(?:\d+(?:\.\d*)?|\.\d+))[ \t]*"
+    r"(?P<value>[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+))[ \t]*"
     r"(?P<unit>[A-Za-zµμ%][A-Za-z0-9µμ%./\[\]-]*)"
 )
 
@@ -261,6 +261,7 @@ def filter_medication_candidates(
     *,
     preset: str | MedicationCandidatePreset = MEDICATION_CANDIDATES,
     grounder: MedicationGrounder | None = None,
+    language: object | None = None,
 ) -> list[MedicationCandidate]:
     """Filter broad chemical NER spans into precision-oriented drug candidates.
 
@@ -273,6 +274,7 @@ def filter_medication_candidates(
         entities: EntityPrediction objects or mapping-like NER spans.
         preset: Built-in preset name or a custom policy.
         grounder: Optional local formulary or RxNorm-compatible callable.
+        language: Optional language for observation-number and unit parsing.
 
     Returns:
         Accepted medication candidates in input order.
@@ -314,7 +316,9 @@ def filter_medication_candidates(
         if (
             policy.reject_observation_abbreviations
             and not grounded
-            and _looks_like_observation_abbreviation(text, surface, end)
+            and _looks_like_observation_abbreviation(
+                text, surface, end, language=language
+            )
         ):
             continue
 
@@ -638,6 +642,8 @@ def _looks_like_observation_abbreviation(
     text: str,
     surface: str,
     end: int | None,
+    *,
+    language: object | None = None,
 ) -> bool:
     if end is None or not 0 <= end <= len(text):
         return False
@@ -651,7 +657,9 @@ def _looks_like_observation_abbreviation(
 
     from .units import parse_measurement
 
-    measurement = parse_measurement(match.group("value"), match.group("unit"))
+    measurement = parse_measurement(
+        match.group("value"), match.group("unit"), language=language
+    )
     if measurement["status"] != "ok":
         return False
     dimension = measurement.get("dimension", {})

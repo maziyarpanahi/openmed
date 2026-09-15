@@ -1,10 +1,11 @@
 """Multimodal ingestion and redaction package for section 4.2.
 
-Intended contents include PDF/DOCX/HTML->text+offsets extraction, OCR, and
-image/DICOM redaction. The per-format parsers and OCR adapters use the shared
-``ExtractedDocument`` contract and are registered lazily via
-:func:`register_handler`, so this package stays importable without the
-``multimodal`` extra installed.
+Provides the shared ingest/redact contract (``ExtractedDocument`` and the
+``redact_document`` dispatcher) that PDF/DOCX/HTML->text+offsets, PPTX, OCR,
+and image/DICOM ingesters build on. The per-format parsers and OCR adapters live
+in sibling modules and
+are registered lazily via :func:`register_handler`; this package stays
+importable without the ``multimodal`` extra installed.
 """
 
 from __future__ import annotations
@@ -24,7 +25,36 @@ from . import dicom_sr as _dicom_sr
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_docx as _documents_docx
+from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
+from . import documents_text as _documents_text
+from . import pptx as _pptx
+from .abstention import (
+    ABSTENTION_SCHEMA_VERSION,
+    AbstentionReason,
+    AbstentionRecord,
+    AbstentionStage,
+    AbstentionValidationError,
+)
+from .asset_batch import (
+    BATCH_VERSION,
+    MAX_BATCH_ASSETS,
+    AssetBatch,
+    AssetBatchError,
+    BatchFinding,
+    validate_asset_batch,
+)
+from .asset_limits import (
+    DESKTOP_V1,
+    LIMIT_FIELDS,
+    LIMIT_REASON_CODES,
+    MOBILE_V1,
+    AssetLimitError,
+    LimitFinding,
+    LimitProfile,
+    evaluate_asset_limits,
+)
+from .asset_manifest import MANIFEST_VERSION, AssetManifest, AssetManifestError
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -80,6 +110,25 @@ from .dicom_sr_provenance import (
     render_dicom_sr_provenance,
     serialize_dicom_sr_provenance,
 )
+from .document_graph import (
+    BBox,
+    BoundingBox,
+    DocumentBlock,
+    DocumentColumn,
+    DocumentFormField,
+    DocumentGraph,
+    DocumentGraphBuilder,
+    DocumentNode,
+    DocumentPage,
+    DocumentTable,
+    DocumentTableCell,
+    SourceRegion,
+    build_document_graph,
+    extract_document_graph,
+    extract_pdf_graph,
+    graph_from_ocr,
+    ingest_document_graph,
+)
 from .documents_docx import (
     DocxRedaction,
     DocxRunRange,
@@ -87,10 +136,38 @@ from .documents_docx import (
     map_text_spans_to_docx_runs,
     write_redacted_docx,
 )
+from .documents_html import extract_html, write_redacted_html
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
+from .documents_pdf_layout import (
+    PdfBBox,
+    PdfColumn,
+    PdfPageLayout,
+    PdfReadingOrder,
+    detect_pdf_columns,
+    reconstruct_pdf_reading_order,
+)
+from .documents_pdf_tables import (
+    CaptionRegion,
+    PdfRegions,
+    TableCell,
+    TableRegion,
+    extract_pdf_captions,
+    extract_pdf_regions,
+    extract_pdf_tables,
+    project_region_spans,
+    project_structured_spans,
+)
+from .documents_text import extract_text, write_redacted_text
+from .email import EmailAttachmentReport, RedactedEmail, extract_email, redact_email
 from .epub import extract_epub
-from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .exceptions import (
+    DocumentGraphError,
+    EncryptedDocumentError,
+    MalformedDocumentError,
+    MissingDependencyError,
+    UnsupportedDocumentError,
+)
 from .image import (
     ImageMetadataReport,
     ImageRedactionVerificationError,
@@ -112,6 +189,22 @@ from .layout import (
     LayoutSpan,
     LayoutWordSpan,
     parse_layout,
+)
+from .manifest_profiles import (
+    AUDIO_V1,
+    DICOM_V1,
+    IMAGE_V1,
+    PDF_V1,
+    ManifestProfile,
+    ManifestProfileError,
+    ValidationFinding,
+    validate_manifest_metadata,
+)
+from .media_type import (
+    MAX_MEDIA_TYPE_PREFIX_BYTES,
+    MediaTypeStatus,
+    detect_media_type,
+    validate_media_type,
 )
 from .metadata_scrub import (
     MetadataFinding,
@@ -138,7 +231,54 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
-from .rtf import extract_rtf
+from .odt import extract_odt
+from .pptx import (
+    PptxRedaction,
+    PptxRunRange,
+    extract_pptx,
+    map_text_spans_to_pptx_runs,
+    write_redacted_pptx,
+)
+from .preflight import (
+    PREFLIGHT_CHECKS,
+    PREFLIGHT_SCHEMA_VERSION,
+    PreflightError,
+    PreflightFinding,
+    PreflightReport,
+    PreflightStatus,
+    preflight_asset,
+)
+from .processing_summary import (
+    PROCESSING_SUMMARY_SCHEMA_VERSION,
+    AbstentionCount,
+    AssetDigestEntry,
+    AssetProcessingResult,
+    MediaTypeTotals,
+    OutcomeCount,
+    ProcessingOutcome,
+    ProcessingSummary,
+    ProcessingSummaryError,
+    render_processing_summary_markdown,
+    summarize_processing_run,
+)
+from .render_pdf import (
+    PdfLayoutFidelityError,
+    PdfLayoutFidelityReport,
+    PdfPageFidelity,
+    PdfRedactionRegion,
+    PdfRedactionResult,
+    PdfRenderVerificationError,
+    measure_pdf_layout_fidelity,
+    render_redacted_pdf,
+    write_redacted_pdf,
+)
+from .render_raster import (
+    RasterExportError,
+    RasterExportResult,
+    RasterRedactionPage,
+    render_redacted_raster_pages,
+)
+from .rtf import extract_rtf, write_redacted_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -164,22 +304,84 @@ from .tabular_csv import (
     redact_table,
     shift_quasi_identifier_date,
 )
+from .trace_recovery import (
+    DEFAULT_MAX_RECOVERY_ATTEMPTS,
+    DEFAULT_MAX_TRACE_BYTES,
+    TraceRecoveryError,
+    TraceRecoveryJournal,
+    TraceRedactionResult,
+    recover_trace_redaction,
+    redact_trace_file,
+    redact_trace_in_place,
+    trace_fingerprint,
+    transactional_trace_redact,
+)
 from .verify_pdf import (
     PdfFidelityReport,
+    PdfTextRemovalReport,
+    RedactedTextRemovalError,
     RedactionFidelityError,
     RegionFidelity,
+    TextRemovalRegion,
+    assert_redacted_text_removed,
     verify_redacted_pdf,
+    verify_redacted_text_removed,
 )
+from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "ABSTENTION_SCHEMA_VERSION",
+    "AbstentionReason",
+    "AbstentionRecord",
+    "AbstentionStage",
+    "AbstentionValidationError",
+    "AUDIO_V1",
+    "DICOM_V1",
+    "IMAGE_V1",
+    "PDF_V1",
+    "ManifestProfile",
+    "ManifestProfileError",
+    "ValidationFinding",
+    "validate_manifest_metadata",
     "ExtractedDocument",
     "SourceSpan",
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
     "is_multimodal_available",
+    "AssetManifest",
+    "AssetManifestError",
+    "AssetLimitError",
+    "DESKTOP_V1",
+    "LIMIT_FIELDS",
+    "LIMIT_REASON_CODES",
+    "LimitFinding",
+    "LimitProfile",
+    "MOBILE_V1",
+    "evaluate_asset_limits",
+    "PREFLIGHT_CHECKS",
+    "PREFLIGHT_SCHEMA_VERSION",
+    "PreflightError",
+    "PreflightFinding",
+    "PreflightReport",
+    "PreflightStatus",
+    "preflight_asset",
+    "MANIFEST_VERSION",
+    "AssetBatch",
+    "AssetBatchError",
+    "BATCH_VERSION",
+    "BatchFinding",
+    "MAX_BATCH_ASSETS",
+    "validate_asset_batch",
+    "MAX_MEDIA_TYPE_PREFIX_BYTES",
+    "MediaTypeStatus",
+    "detect_media_type",
+    "validate_media_type",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "DocumentGraphError",
+    "MalformedDocumentError",
+    "EncryptedDocumentError",
     "ChatLogRedactionSummary",
     "RedactedChatLog",
     "TurnRecordAdapter",
@@ -207,26 +409,63 @@ __all__ = [
     "SrContentItem",
     "extract_dicom_sr",
     "walk_sr_content_tree",
-    "DICOM_SR_PROVENANCE_ADVISORY",
-    "DICOM_SR_PROVENANCE_SCHEMA_VERSION",
-    "AmbiguousItemPathError",
-    "AmbiguousDicomSrItemPathError",
-    "DicomSrProvenanceError",
-    "DicomSrProvenanceRecord",
-    "build_dicom_sr_provenance",
-    "map_dicom_sr_provenance",
-    "render_dicom_sr_provenance",
-    "serialize_dicom_sr_provenance",
     "ProjectedRectangle",
+    "PdfBBox",
+    "PdfColumn",
+    "PdfPageLayout",
+    "PdfReadingOrder",
+    "detect_pdf_columns",
+    "reconstruct_pdf_reading_order",
     "extract_pdf",
     "project_text_spans",
+    "BBox",
+    "BoundingBox",
+    "SourceRegion",
+    "DocumentBlock",
+    "DocumentColumn",
+    "DocumentFormField",
+    "DocumentGraph",
+    "DocumentGraphBuilder",
+    "DocumentNode",
+    "DocumentPage",
+    "DocumentTable",
+    "DocumentTableCell",
+    "build_document_graph",
+    "graph_from_ocr",
+    "extract_document_graph",
+    "ingest_document_graph",
+    "extract_pdf_graph",
+    "TableCell",
+    "TableRegion",
+    "CaptionRegion",
+    "PdfRegions",
+    "extract_pdf_tables",
+    "extract_pdf_captions",
+    "extract_pdf_regions",
+    "project_structured_spans",
+    "project_region_spans",
     "DocxRedaction",
     "DocxRunRange",
     "extract_docx",
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
+    "extract_html",
+    "write_redacted_html",
+    "extract_odt",
+    "PptxRedaction",
+    "PptxRunRange",
+    "extract_pptx",
+    "map_text_spans_to_pptx_runs",
+    "write_redacted_pptx",
     "extract_epub",
+    "EmailAttachmentReport",
+    "RedactedEmail",
+    "extract_email",
+    "redact_email",
     "extract_rtf",
+    "write_redacted_rtf",
+    "extract_text",
+    "write_redacted_text",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
@@ -281,11 +520,63 @@ __all__ = [
     "redact_table",
     "derive_date_shift_days",
     "shift_quasi_identifier_date",
+    "DEFAULT_MAX_RECOVERY_ATTEMPTS",
+    "DEFAULT_MAX_TRACE_BYTES",
+    "TraceRedactionResult",
+    "TraceRecoveryError",
+    "TraceRecoveryJournal",
+    "recover_trace_redaction",
+    "redact_trace_file",
+    "redact_trace_in_place",
+    "trace_fingerprint",
+    "transactional_trace_redact",
     "extract_markdown",
     "extract_asciidoc",
     "redact_source_text",
     "PdfFidelityReport",
+    "PdfTextRemovalReport",
     "RegionFidelity",
+    "TextRemovalRegion",
     "RedactionFidelityError",
+    "RedactedTextRemovalError",
+    "assert_redacted_text_removed",
     "verify_redacted_pdf",
+    "verify_redacted_text_removed",
+    "PROCESSING_SUMMARY_SCHEMA_VERSION",
+    "AbstentionCount",
+    "AssetDigestEntry",
+    "AssetProcessingResult",
+    "MediaTypeTotals",
+    "OutcomeCount",
+    "ProcessingOutcome",
+    "ProcessingSummary",
+    "ProcessingSummaryError",
+    "render_processing_summary_markdown",
+    "summarize_processing_run",
+    "PdfLayoutFidelityError",
+    "PdfLayoutFidelityReport",
+    "PdfPageFidelity",
+    "PdfRedactionRegion",
+    "PdfRedactionResult",
+    "PdfRenderVerificationError",
+    "measure_pdf_layout_fidelity",
+    "render_redacted_pdf",
+    "write_redacted_pdf",
+    "RasterExportError",
+    "RasterExportResult",
+    "RasterRedactionPage",
+    "render_redacted_raster_pages",
+    "XlsxCellRedaction",
+    "XlsxRedactionResult",
+    "redact_xlsx",
+    "DICOM_SR_PROVENANCE_ADVISORY",
+    "DICOM_SR_PROVENANCE_SCHEMA_VERSION",
+    "AmbiguousDicomSrItemPathError",
+    "AmbiguousItemPathError",
+    "DicomSrProvenanceError",
+    "DicomSrProvenanceRecord",
+    "build_dicom_sr_provenance",
+    "map_dicom_sr_provenance",
+    "render_dicom_sr_provenance",
+    "serialize_dicom_sr_provenance",
 ]

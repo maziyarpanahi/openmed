@@ -1,9 +1,8 @@
 # Experiencer Refinement
 
-The ConText experiencer axis records who a clinical finding is about. The shipped
-layer resolves it only at the section level: a finding under a *Family History*
-heading is attributed to the family. Free text is finer-grained than that -- a
-single sentence can switch subject ("the patient's *mother* has diabetes", "the
+The ConText experiencer axis records who a clinical finding is about. A finding
+under a *Family History* heading has a family section prior. Local cues refine
+that prior because a single sentence can switch subject ("the patient's *mother* has diabetes", "the
 organ *donor* was CMV-positive").
 
 `openmed.clinical.experiencer` refines the experiencer of a governing span using
@@ -83,6 +82,26 @@ result = resolve_experiencer(text, span)
 An explicit cue always overrides the section prior, so "the patient's father
 also has hypertension" resolves to `family` even inside a patient-default
 section.
+
+## German source text
+
+Pass `language="de"` (or a German locale such as `de-DE`) to
+`resolve_experiencer` or `refine_experiencer`. `assert_context(..., language="de")`
+forwards that language to local subject refinement. Whole-word cues include
+`Mutter`, `Vater`, `Großmutter`, and `Spender`. An explicit `Patient`/`Patientin`
+subject nearer the finding can override the family prior. German contrastive
+conjunctions and line boundaries end cue scope; a word such as
+`Muttersprachlerin` does not match `Mutter`.
+
+Supply `sections=detect_sections(text, language="de")` to `assert_context` to
+retain section boundaries and context-source provenance. German medication
+headers (`Medikation`, `Aktuelle Medikation`, `Entlassmedikation`) end family
+history scope. German normalization also recognizes whole frequency phrases
+such as `zweimal täglich`; it does not infer a schedule from an ambiguous phrase.
+
+These additions have synthetic regression coverage. They do not establish
+German clinical qualification. Language packs beyond English and German still
+use the existing English local-subject rules in this resolver.
 
 ## Notes
 
