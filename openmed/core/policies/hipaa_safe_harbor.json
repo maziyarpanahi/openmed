@@ -120,6 +120,7 @@
     "STRENGTH": "mask",
     "INDICATION": "mask",
     "LAB_VALUE": "mask",
+    "SPECIMEN": "mask",
     "UNIT": "mask",
     "REFERENCE_RANGE": "mask",
     "ABNORMAL_FLAG": "mask",

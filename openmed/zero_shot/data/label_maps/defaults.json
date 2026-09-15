@@ -179,6 +179,14 @@
     "Disease",
     "CellLine"
   ],
+  "lab": [
+    "LabTest",
+    "LabValue",
+    "Unit",
+    "ReferenceRange",
+    "AbnormalFlag",
+    "Specimen"
+  ],
   "cardiology": [
     "CardiacFinding",
     "ECGFinding",

@@ -132,6 +132,7 @@
     "STRENGTH": "keep",
     "INDICATION": "keep",
     "LAB_VALUE": "keep",
+    "SPECIMEN": "keep",
     "UNIT": "keep",
     "REFERENCE_RANGE": "keep",
     "ABNORMAL_FLAG": "keep",
