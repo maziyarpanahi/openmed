@@ -176,12 +176,12 @@ test("browser demo checks every request without retaining synthetic input", asyn
 
   await page.goto("/docs/demo/web/", { waitUntil: "domcontentloaded" });
   await page.locator("#runtime-module").fill("https://example.invalid/runtime.js");
-  await page.locator("#repo-id").fill("./models/synthetic/");
+  await page.locator("#repo-id").fill("./models/maple-synthetic/");
   await page.locator("#input-text").evaluate((element, value) => {
     (element as HTMLTextAreaElement).value = value;
     element.dispatchEvent(new Event("input", { bubbles: true }));
   }, marker);
-  await page.locator("#run-selected").click();
+  await page.locator("#load-model").click();
   await page.locator("#input-text").evaluate((element) => {
     (element as HTMLTextAreaElement).value = "";
     element.dispatchEvent(new Event("input", { bubbles: true }));

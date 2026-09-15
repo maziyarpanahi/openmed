@@ -2,7 +2,7 @@
 
 Portable [Agent Skills](https://agentskills.io) for building with **OpenMed** — the on-device, Apache-2.0 clinical & biomedical NLP library. Each skill is a folder with a `SKILL.md` that works unchanged in **Claude Code**, **OpenAI Codex**, **OpenCode**, and compatible agents. Drop them in and your coding agent learns to wire up OpenMed pipelines — de-identification, NER, FHIR export, evaluation — plus the upstream/downstream healthcare tasks around them.
 
-**72 skills** across 14 categories.
+**73 skills** across 14 categories.
 
 ## Get running in one command
 
@@ -61,6 +61,7 @@ Legend: `→ before` runs upstream of OpenMed, `after →` consumes its output, 
 
 | Skill | What it does | Pairs |
 | --- | --- | --- |
+| [`ask-openmed`](ask-openmed/SKILL.md) | Choose the first OpenMed workflow skill for an intake, privacy, extraction, exchange, or verification request using deterministic local r…. | ↔ adjacent |
 | [`building-with-openmed`](building-with-openmed/SKILL.md) | Orient and bootstrap any project that uses OpenMed, the on-device clinical and biomedical NLP library, for named-entity recognition, PHI …. | ↔ adjacent |
 | [`choosing-openmed-models`](choosing-openmed-models/SKILL.md) | Discover and pick the right OpenMed model for a clinical or biomedical task, domain, or language. | ↔ adjacent |
 | [`deidentifying-clinical-text`](deidentifying-clinical-text/SKILL.md) | Remove, mask, or replace PHI/PII in clinical free text on-device with OpenMed's deidentify(). | ↔ adjacent |
@@ -92,6 +93,7 @@ Legend: `→ before` runs upstream of OpenMed, `after →` consumes its output, 
 | [`generating-synthetic-surrogates`](generating-synthetic-surrogates/SKILL.md) | Replace detected PHI with realistic, type-matched fake values in OpenMed so clinical notes stay readable and parseable instead of full of…. | after → |
 | [`pseudonymizing-for-gdpr`](pseudonymizing-for-gdpr/SKILL.md) | Apply GDPR-grade pseudonymization to clinical or personal text with OpenMed, keeping a separately-held re-linkage key so the data can be …. | after → |
 | [`reviewing-reidentification-risk`](reviewing-reidentification-risk/SKILL.md) | Run expert-determination-style quasi-identifier risk scoring (k-anonymity, l-diversity) plus OpenMed's empirical re-identification attack…. | after → |
+| [`setup-openmed`](setup-openmed/SKILL.md) | Collect a bounded set of de-identification policy decisions and write a deterministic, reviewable DEID-POLICY.md from the versioned local…. | ↔ adjacent |
 | [`shifting-clinical-dates`](shifting-clinical-dates/SKILL.md) | Apply consistent per-patient date shifting in OpenMed that preserves intervals between events while satisfying HIPAA Safe Harbor's date rule. | after → |
 
 ### Clinical NLP — refine OpenMed output
