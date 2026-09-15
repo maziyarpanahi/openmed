@@ -39,6 +39,8 @@ Required fields:
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
   `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
   `policy_profile_actions`, `hard_negatives`, or `critical_findings`.
+  Specialized suites may register an additional category while keeping the
+  same row shape.
   The standalone `indic_name_variants` fixture uses its dedicated consistency
   suite schema because it groups multiple spellings under one synthetic
   identity rather than representing detector spans.
@@ -73,6 +75,19 @@ requires `metadata.synthetic=true` and `metadata.contains_real_phi=false`,
 checks all offsets and references, and rejects inconsistent reduced gold. The
 suite reports aggregate relation counts and PHI-safe reason codes only; no note
 text or graph node ids appear in its gate artifacts.
+
+## Temporal Consistency Fixtures
+
+`fixtures/temporal_consistency.jsonl` uses the same `GoldenFixture` row shape as
+the de-identification gold while adding `metadata.consistency_group`,
+`metadata.variant`, and `metadata.expected_output.axes`. Its synthetic rows
+cover current, historical, hypothetical, and uncertain variants of one finding,
+including a negation variant and a trap that forbids scoring a hypothetical
+finding as recent. The dedicated
+`openmed.eval.suites.temporal_consistency.load_temporal_consistency_fixtures`
+loader validates the shared golden fields, target offsets, axis values, and
+group membership; the fixture is intentionally excluded from the generic
+de-identification fixture set.
 
 ## India Clinical De-Identification Corpus
 
