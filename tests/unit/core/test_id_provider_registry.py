@@ -12,6 +12,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     AfricanPhoneProvider,
     BangladeshNIDProvider,
     IranNationalIDProvider,
+    IrishPPSProvider,
+    JapaneseMyNumberProvider,
     MexicanCURPProvider,
     MexicanRFCProvider,
     register_clinical_providers,
@@ -27,6 +29,8 @@ from openmed.core.pii_i18n import (
     validate_bangladesh_nid,
     validate_bengali_aadhaar,
     validate_iran_national_id,
+    validate_irish_pps,
+    validate_japanese_my_number,
     validate_mexican_curp,
     validate_mexican_rfc,
 )
@@ -52,6 +56,8 @@ EXPECTED_VALIDATOR_KEYS = (
     ("es", "curp"),
     ("es", "rfc"),
     ("nl", "bsn"),
+    ("en_IE", "pps"),
+    ("ja", "my_number"),
     ("in", "aadhaar"),
     ("ir", "iran_national_id"),
     ("zh", "resident_id"),
@@ -110,6 +116,8 @@ ROUND_TRIP_CASES = (
     ("es", "curp", "es_MX"),
     ("es", "rfc", "es_MX"),
     ("nl", "bsn", "nl_NL"),
+    ("en_IE", "pps", "en_IE"),
+    ("ja", "my_number", "ja_JP"),
     ("in", "aadhaar", "en_IN"),
     ("ir", "iran_national_id", "fa_IR"),
     ("zh", "resident_id", "zh_CN"),
@@ -343,6 +351,40 @@ class TestNationalIdRegistry:
         assert spec.validate(surrogate), (
             f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
         )
+
+    def test_checksum_provider_specs_use_the_new_validators(self):
+        pps_spec = get_national_id("en_IE", "pps")
+        my_number_spec = get_national_id("ja", "my_number")
+
+        assert pps_spec is not None
+        assert pps_spec.validate is validate_irish_pps
+        assert pps_spec.faker_provider is IrishPPSProvider
+        assert my_number_spec is not None
+        assert my_number_spec.validate is validate_japanese_my_number
+        assert my_number_spec.faker_provider is JapaneseMyNumberProvider
+
+    @pytest.mark.parametrize(
+        ("language", "locale", "validator"),
+        (
+            ("en", "en_IE", validate_irish_pps),
+            ("ja", "ja_JP", validate_japanese_my_number),
+        ),
+    )
+    def test_checksum_locale_dispatch_generates_valid_surrogates(
+        self,
+        language,
+        locale,
+        validator,
+    ):
+        anonymizer = Anonymizer(lang=language, consistent=True, seed=827)
+
+        surrogate = anonymizer.surrogate(
+            "synthetic-id",
+            "national_id",
+            locale=locale,
+        )
+
+        assert validator(surrogate)
 
     def test_lookup_normalizes_case_hyphens_and_locale(self):
         assert get_national_id("IT-it", "Codice Fiscale") == get_national_id(

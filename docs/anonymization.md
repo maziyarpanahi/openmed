@@ -454,6 +454,10 @@ Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale
 uses Faker's installed `en_PK` backend for general surrogate data while CNIC
 generation remains provider-backed and format-valid.
+The Irish `en_IE` overlay validates PPS numbers with their weighted modulo-23
+check letter, and the Japanese `ja_JP` path validates My Numbers with their
+modulo-11 check digit; both paths generate synthetic, checksum-valid
+surrogates locally.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 

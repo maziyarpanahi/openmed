@@ -1359,6 +1359,62 @@ def validate_dutch_bsn(text: str) -> bool:
     return checksum % 11 == 0
 
 
+_IRISH_PPS_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+
+
+def validate_irish_pps(text: str) -> bool:
+    """Validate an Irish Personal Public Service Number (PPSN).
+
+    A PPSN contains seven digits, a modulo-23 check letter, and an optional
+    second range letter. The digits use weights 8 through 2; when present,
+    the range letter contributes its alphabet position with weight 9.
+    """
+    if not isinstance(text, str):
+        return False
+
+    value = text.strip().upper()
+    match = re.fullmatch(r"([0-9]{7})([A-W])([A-Z])?", value)
+    if match is None:
+        return False
+
+    digits, check_letter, range_letter = match.groups()
+    total = sum(int(digit) * weight for digit, weight in zip(digits, range(8, 1, -1)))
+    if range_letter is not None:
+        total += (ord(range_letter) - ord("A") + 1) * 9
+
+    return check_letter == _IRISH_PPS_CHECK_LETTERS[total % 23]
+
+
+_JAPANESE_MY_NUMBER_WEIGHTS: tuple[int, ...] = (6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+
+
+def validate_japanese_my_number(text: str) -> bool:
+    """Validate a Japanese 12-digit Individual Number (My Number).
+
+    The final digit is derived from the first eleven using the statutory
+    weighted modulo-11 calculation. Plain and conventional 4-4-4 spaced
+    renderings are accepted.
+    """
+    if not isinstance(text, str):
+        return False
+
+    value = text.strip()
+    if re.fullmatch(r"[0-9]{4}(?: ?[0-9]{4}){2}", value) is None:
+        return False
+
+    digits = value.replace(" ", "")
+    if len(set(digits)) == 1:
+        return False
+
+    total = sum(
+        int(digit) * weight
+        for digit, weight in zip(digits[:11], _JAPANESE_MY_NUMBER_WEIGHTS)
+    )
+    remainder = total % 11
+    check_digit = 0 if remainder <= 1 else 11 - remainder
+    return int(digits[-1]) == check_digit
+
+
 # Verhoeff tables for Aadhaar checksum validation
 _VERHOEFF_D = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -4905,6 +4961,34 @@ _KENYA_ID_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_IRISH_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Irish PPSN: seven digits, a weighted modulo-23 check letter, and an
+    # optional range letter. The context gate keeps this alphanumeric shape
+    # from competing with ordinary clinical record numbers.
+    PIIPattern(
+        r"(?<![A-Za-z0-9])[0-9]{7}[A-W][A-Z]?(?![A-Za-z0-9])",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "pps",
+            "ppsn",
+            "pps number",
+            "pps no",
+            "personal public service number",
+            "personal public services number",
+            "uimhir pps",
+            "uimhir phearsanta seirbhíse poiblí",
+            "uimhir phearsanta seirbhise poibli",
+        ],
+        context_boost=0.45,
+        validator=validate_irish_pps,
+        safety_sweep_requires_context=True,
+        reject_on_validation_failure=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
     PIIPattern(
@@ -7539,7 +7623,9 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.25,
     ),
     PIIPattern(
-        r"(?<!\w)(?:\+81[\s-]?)?(?:0\d{1,4}|\d{1,4})[\s-]?\d{1,4}[\s-]?\d{3,4}\b",
+        r"(?<!\w)(?<!\d{4}\s)(?<!\d{4}\s\d{4}\s)"
+        r"(?!\d{4}\s?\d{4}\s?\d{4}\b)"
+        r"(?:\+81[\s-]?)?(?:0\d{1,4}|\d{1,4})[\s-]?\d{1,4}[\s-]?\d{3,4}\b",
         "phone_number",
         priority=8,
         base_score=0.55,
@@ -7564,6 +7650,8 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
             "\u756a\u53f7",
         ],
         context_boost=0.5,
+        validator=validate_japanese_my_number,
+        reject_on_validation_failure=True,
     ),
     PIIPattern(
         r"\b(?:\d{3}-\d{4}|\u3012\d{3}-\d{4})\b",
@@ -10774,6 +10862,7 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "zu": _NGUNI_PII_PATTERNS,
     "xh": _NGUNI_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_ie": _IRISH_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,

@@ -44,6 +44,8 @@ deterministic:
   - UK NHS Number, a patient health identifier validated with the NHS
     Modulus 11 check
   - UK National Insurance Number (NINO)
+  - Irish PPS numbers with a weighted Modulus 23 check letter
+  - Japanese My Numbers with a weighted Modulus 11 check digit
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
   - IBAN and SWIFT/BIC financial identifiers with deterministic validation
@@ -2596,6 +2598,67 @@ class UKNINOProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Irish PPS Number (weighted modulo 23)
+# ---------------------------------------------------------------------------
+
+_IRISH_PPS_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+
+
+def generate_irish_pps(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Irish PPS number with a valid check letter."""
+    source = rng or random.Random()
+    digits = [source.randint(0, 9) for _ in range(7)]
+    if all(digit == 0 for digit in digits):
+        digits[0] = 1
+
+    range_letter = source.choice(("", *"ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    total = sum(digit * weight for digit, weight in zip(digits, range(8, 1, -1)))
+    if range_letter:
+        total += (ord(range_letter) - ord("A") + 1) * 9
+    check_letter = _IRISH_PPS_CHECK_LETTERS[total % 23]
+    return "".join(str(digit) for digit in digits) + check_letter + range_letter
+
+
+class IrishPPSProvider(BaseProvider):
+    """Generate synthetic Irish PPS numbers accepted by the checksum validator."""
+
+    def pps(self) -> str:
+        """Return a checksum-valid Irish PPS number."""
+        return generate_irish_pps(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Japanese My Number (12 digits, weighted modulo 11)
+# ---------------------------------------------------------------------------
+
+_JAPANESE_MY_NUMBER_WEIGHTS = (6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+
+
+def generate_japanese_my_number(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Japanese My Number with a valid check digit."""
+    source = rng or random.Random()
+    body_digits = [source.randint(0, 9) for _ in range(11)]
+    if len(set(body_digits)) == 1:
+        body_digits[-1] = (body_digits[-1] + 1) % 10
+
+    total = sum(
+        digit * weight
+        for digit, weight in zip(body_digits, _JAPANESE_MY_NUMBER_WEIGHTS)
+    )
+    remainder = total % 11
+    check_digit = 0 if remainder <= 1 else 11 - remainder
+    return "".join(str(digit) for digit in (*body_digits, check_digit))
+
+
+class JapaneseMyNumberProvider(BaseProvider):
+    """Generate synthetic Japanese My Numbers accepted by the checksum validator."""
+
+    def my_number(self) -> str:
+        """Return a checksum-valid Japanese My Number."""
+        return generate_japanese_my_number(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Chinese Resident Identity Card (18 characters, ISO 7064 MOD 11-2)
 # ---------------------------------------------------------------------------
 
@@ -4192,9 +4255,11 @@ __all__ = [
     "IndiaHealthIdProvider",
     "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
+    "IrishPPSProvider",
     "IndonesianNIKProvider",
     "IranNationalIDProvider",
     "IsraeliTeudatZehutProvider",
+    "JapaneseMyNumberProvider",
     "KoreanRRNProvider",
     "KENYA_MFL_SYNTHETIC_MAX",
     "KENYA_MFL_SYNTHETIC_MIN",
@@ -4310,6 +4375,8 @@ __all__ = [
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
+    "generate_irish_pps",
+    "generate_japanese_my_number",
     "generate_ukrainian_rnokpp",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",

@@ -93,8 +93,10 @@ from openmed.core.pii_i18n import (
     validate_iban,
     validate_indonesian_nik,
     validate_iran_national_id,
+    validate_irish_pps,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_japanese_my_number,
     validate_jmbg,
     validate_kenya_maisha_namba,
     validate_kenya_mfl_code,
@@ -1008,6 +1010,39 @@ class TestValidateDutchBSN:
 
 
 # ---------------------------------------------------------------------------
+# Irish PPS and Japanese My Number Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateIrishPPS:
+    """Tests for the Irish PPS weighted modulo-23 checksum."""
+
+    def test_valid_pps_with_one_or_two_letters(self):
+        assert validate_irish_pps("1234567T") is True
+        assert validate_irish_pps("1234567FA") is True
+        assert validate_irish_pps("1234567t") is True
+
+    def test_invalid_pps_checksum_or_shape(self):
+        assert validate_irish_pps("1234567A") is False
+        assert validate_irish_pps("1234567TA") is False
+        assert validate_irish_pps("123456T") is False
+
+
+class TestValidateJapaneseMyNumber:
+    """Tests for the Japanese My Number weighted modulo-11 checksum."""
+
+    def test_valid_my_number_plain_and_spaced(self):
+        assert validate_japanese_my_number("123456789018") is True
+        assert validate_japanese_my_number("1234 5678 9018") is True
+
+    def test_invalid_my_number_checksum_or_shape(self):
+        assert validate_japanese_my_number("123456789012") is False
+        assert validate_japanese_my_number("1234 5678 9012") is False
+        assert validate_japanese_my_number("000000000000") is False
+        assert validate_japanese_my_number("1234/5678/9018") is False
+
+
+# ---------------------------------------------------------------------------
 # Belgian RRN and Swiss AHV Validator Tests
 # ---------------------------------------------------------------------------
 
@@ -1113,6 +1148,59 @@ def test_belgian_and_swiss_locale_patterns_require_context_and_validate(
     assert not any(entity.text == value for entity in no_context)
 
 
+def test_irish_pps_locale_pattern_requires_context_and_rejects_bad_checksum():
+    from openmed.core.safety_sweep import safety_sweep
+
+    patterns = get_patterns_for_language("en", locale="en_IE")
+    pps_patterns = [
+        pattern
+        for pattern in patterns
+        if pattern.entity_type == "national_id"
+        and pattern.validator is validate_irish_pps
+    ]
+    assert pps_patterns
+    assert all(pattern.reject_on_validation_failure for pattern in pps_patterns)
+
+    contextual = safety_sweep(
+        "PPS number: 1234567T",
+        [],
+        lang="en",
+        locale="en_IE",
+    )
+    assert any(entity.text == "1234567T" for entity in contextual)
+
+    bare = safety_sweep("1234567T", [], lang="en", locale="en_IE")
+    assert not any(entity.text == "1234567T" for entity in bare)
+
+    invalid = safety_sweep(
+        "PPS number: 1234567A",
+        [],
+        lang="en",
+        locale="en_IE",
+    )
+    assert not any(entity.label == "national_id" for entity in invalid)
+
+
+def test_japanese_my_number_pattern_rejects_bad_checksum_without_phone_overlap():
+    from openmed.core.safety_sweep import safety_sweep
+
+    patterns = get_patterns_for_language("ja")
+    my_number_patterns = [
+        pattern
+        for pattern in patterns
+        if pattern.entity_type == "national_id"
+        and pattern.validator is validate_japanese_my_number
+    ]
+    assert my_number_patterns
+    assert all(pattern.reject_on_validation_failure for pattern in my_number_patterns)
+
+    valid = safety_sweep("マイナンバー: 1234 5678 9018", [], lang="ja")
+    assert any(entity.text == "1234 5678 9018" for entity in valid)
+
+    invalid = safety_sweep("マイナンバー: 1234 5678 9012", [], lang="ja")
+    assert not any(entity.label == "national_id" for entity in invalid)
+
+
 @pytest.mark.parametrize(
     ("language", "locale", "text"),
     [
@@ -1154,8 +1242,8 @@ def test_belgian_and_swiss_locale_dispatch_generates_valid_surrogates(
     assert validator(surrogate)
 
 
-@pytest.mark.parametrize("country", ["be", "ch"])
-def test_belgian_and_swiss_golden_fixtures_deidentify_without_leakage_offline(
+@pytest.mark.parametrize("country", ["be", "ch", "ie"])
+def test_locale_golden_fixtures_deidentify_without_leakage_offline(
     country,
 ):
     from openmed.core.pii import (
@@ -2674,7 +2762,7 @@ class TestLanguagePIIPatterns:
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["ja"] if p.entity_type == "national_id"
         ]
-        text = "1234 5678 9012"
+        text = "1234 5678 9018"
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Japanese My Number pattern should match"
 
