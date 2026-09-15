@@ -164,6 +164,16 @@
     "Condition",
     "Pathology"
   ],
+  "pathology_histology": [
+    "SpecimenType",
+    "GrossDescription",
+    "HistologicFinding",
+    "HistologicGrade",
+    "MarginStatus",
+    "ImmunohistochemistryStain",
+    "MitoticCount",
+    "TissueSite"
+  ],
   "hematology": [
     "Cancer",
     "Disease",

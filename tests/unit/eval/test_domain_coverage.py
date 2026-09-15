@@ -53,6 +53,25 @@ def test_default_coverage_gate_passes_with_non_empty_per_label_spans() -> None:
     )
 
 
+def test_pathology_histology_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("pathology_histology",))
+
+    domain = report.per_domain[0]
+    assert domain.fixture == "pathology_histology.jsonl"
+    assert domain.fixture_count == 1
+    assert {coverage.label for coverage in domain.per_label} == {
+        "SpecimenType",
+        "GrossDescription",
+        "HistologicFinding",
+        "HistologicGrade",
+        "MarginStatus",
+        "ImmunohistochemistryStain",
+        "MitoticCount",
+        "TissueSite",
+    }
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+
+
 def test_oncology_staging_reports_per_label_coverage_offline() -> None:
     report = assert_domain_coverage_gate(domains=("oncology_staging",))
 

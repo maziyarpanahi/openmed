@@ -241,6 +241,21 @@
 | Condition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
 | Pathology | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 
+## Pathology Histology
+
+**Alignment:** The display labels describe pathology-report content for offline extraction and human review only. They do not grade or stage a tumor, apply diagnostic rules, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| SpecimenType | SPECIMEN_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| GrossDescription | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicFinding | HISTOLOGIC_FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicGrade | HISTOLOGIC_GRADE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MarginStatus | MARGIN_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| ImmunohistochemistryStain | IHC_STAIN | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MitoticCount | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| TissueSite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+
 ## Hematology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |

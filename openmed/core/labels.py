@@ -271,6 +271,12 @@ GROWTH_PARAMETER: Final = "GROWTH_PARAMETER"
 GROWTH_PERCENTILE: Final = "GROWTH_PERCENTILE"
 DEVELOPMENTAL_MILESTONE: Final = "DEVELOPMENTAL_MILESTONE"
 
+#: Pathology and histology concepts (issue #903)
+HISTOLOGIC_FINDING: Final = "HISTOLOGIC_FINDING"
+HISTOLOGIC_GRADE: Final = "HISTOLOGIC_GRADE"
+MARGIN_STATUS: Final = "MARGIN_STATUS"
+IHC_STAIN: Final = "IHC_STAIN"
+SPECIMEN_TYPE: Final = "SPECIMEN_TYPE"
 #: Oncology TNM staging and tumor-descriptor concepts (issue #864)
 TNM_T: Final = "TNM_T"
 TNM_N: Final = "TNM_N"
@@ -486,6 +492,11 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GI_SYMPTOM,
         GI_SCORE,
         POLYP_DESCRIPTOR,
+        HISTOLOGIC_FINDING,
+        HISTOLOGIC_GRADE,
+        MARGIN_STATUS,
+        IHC_STAIN,
+        SPECIMEN_TYPE,
         TNM_T,
         TNM_N,
         TNM_M,
@@ -769,6 +780,11 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
+            HISTOLOGIC_FINDING,
+            HISTOLOGIC_GRADE,
+            MARGIN_STATUS,
+            IHC_STAIN,
+            SPECIMEN_TYPE,
             TNM_T,
             TNM_N,
             TNM_M,
@@ -1032,6 +1048,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
             LOINC,
         ),
     ),
+    # Pathology and histology concepts (issue #903)
+    HISTOLOGIC_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HISTOLOGIC_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MARGIN_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IHC_STAIN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    SPECIMEN_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Oncology TNM staging and tumor-descriptor concepts (issue #864). These
     # are descriptive extraction labels; coding hints do not imply stage
     # computation, prognosis, or treatment logic.
@@ -1188,6 +1210,12 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GROWTH_PARAMETER: HIPAA_UNIQUE_IDENTIFIER,
     GROWTH_PERCENTILE: HIPAA_UNIQUE_IDENTIFIER,
     DEVELOPMENTAL_MILESTONE: HIPAA_UNIQUE_IDENTIFIER,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    HISTOLOGIC_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    MARGIN_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    IHC_STAIN: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN_TYPE: HIPAA_UNIQUE_IDENTIFIER,
     # Oncology TNM staging and tumor-descriptor concepts
     TNM_T: HIPAA_UNIQUE_IDENTIFIER,
     TNM_N: HIPAA_UNIQUE_IDENTIFIER,
@@ -1327,6 +1355,12 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     GROWTH_PARAMETER: POPIA_HEALTH_INFORMATION,
     GROWTH_PERCENTILE: POPIA_HEALTH_INFORMATION,
     DEVELOPMENTAL_MILESTONE: POPIA_HEALTH_INFORMATION,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: POPIA_HEALTH_INFORMATION,
+    HISTOLOGIC_GRADE: POPIA_HEALTH_INFORMATION,
+    MARGIN_STATUS: POPIA_HEALTH_INFORMATION,
+    IHC_STAIN: POPIA_HEALTH_INFORMATION,
+    SPECIMEN_TYPE: POPIA_HEALTH_INFORMATION,
     # Oncology TNM staging and tumor-descriptor concepts
     TNM_T: POPIA_HEALTH_INFORMATION,
     TNM_N: POPIA_HEALTH_INFORMATION,
@@ -1912,7 +1946,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "overallstagegroup": STAGE_GROUP,
     "tumorgrade": TUMOR_GRADE,
     "tumourgrade": TUMOR_GRADE,
-    "histologicgrade": TUMOR_GRADE,
     "grade": TUMOR_GRADE,
     "tumorsize": MEASUREMENT,
     "tumoursize": MEASUREMENT,
@@ -1930,6 +1963,21 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "airwaydevice": AIRWAY_MANAGEMENT,
     "feedinghistory": NUTRITIONAL_STATUS,
     "pediatricfinding": CONDITION,
+    # Pathology and histology concepts
+    "specimentype": SPECIMEN_TYPE,
+    "grossdescription": OTHER,
+    "histologicfinding": HISTOLOGIC_FINDING,
+    "histologicalfinding": HISTOLOGIC_FINDING,
+    "histologicgrade": HISTOLOGIC_GRADE,
+    "histologicalgrade": HISTOLOGIC_GRADE,
+    "marginstatus": MARGIN_STATUS,
+    "ihc": IHC_STAIN,
+    "ihcstain": IHC_STAIN,
+    "immunohistochemistry": IHC_STAIN,
+    "immunohistochemistrystain": IHC_STAIN,
+    "mitoticcount": MEASUREMENT,
+    "mitoticindex": MEASUREMENT,
+    "tissuesite": BODY_SITE,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 # CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
@@ -2376,6 +2424,11 @@ __all__ = [
     "GROWTH_PARAMETER",
     "GROWTH_PERCENTILE",
     "DEVELOPMENTAL_MILESTONE",
+    "HISTOLOGIC_FINDING",
+    "HISTOLOGIC_GRADE",
+    "MARGIN_STATUS",
+    "IHC_STAIN",
+    "SPECIMEN_TYPE",
     "TNM_T",
     "TNM_N",
     "TNM_M",
