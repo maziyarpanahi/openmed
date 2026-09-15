@@ -23,6 +23,8 @@ from __future__ import annotations
 import hashlib
 import importlib
 import importlib.util
+import unicodedata
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,6 +48,14 @@ class RedactionFidelityError(RuntimeError):
     """Raised when a redacted PDF fails the leakage / visual-fidelity check."""
 
     def __init__(self, report: "PdfFidelityReport") -> None:
+        self.report = report
+        super().__init__(report.summary())
+
+
+class RedactedTextRemovalError(RuntimeError):
+    """Raised when source text selected for redaction remains extractable."""
+
+    def __init__(self, report: "PdfTextRemovalReport") -> None:
         self.report = report
         super().__init__(report.summary())
 
@@ -92,7 +102,7 @@ class RegionFidelity:
         if self.pixels_changed is not None:
             payload["pixels_changed"] = self.pixels_changed
         if self.label is not None:
-            payload["label"] = self.label
+            payload["label_sha256"] = _sha256(self.label)
         return payload
 
 
@@ -151,6 +161,99 @@ class PdfFidelityReport:
         """Raise :class:`RedactionFidelityError` unless every region passed."""
         if not self.passed:
             raise RedactionFidelityError(self)
+        return self
+
+
+@dataclass(frozen=True)
+class TextRemovalRegion:
+    """Global extracted-text removal result for one source region (PHI-safe)."""
+
+    page: int
+    bbox: tuple[float, float, float, float]
+    source_word_count: int
+    source_sha256: tuple[str, ...]
+    residual_word_count: int
+    residual_sha256: tuple[str, ...]
+    label: str | None = None
+
+    @property
+    def source_text_found(self) -> bool:
+        """Whether extractable source text was found inside the region."""
+        return self.source_word_count > 0
+
+    @property
+    def passed(self) -> bool:
+        """True when source text was measurable and none remains anywhere."""
+        return self.source_text_found and self.residual_word_count == 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return offsets, counts, and hashes without plaintext identifiers."""
+        payload: dict[str, Any] = {
+            "page": self.page,
+            "bbox": list(self.bbox),
+            "passed": self.passed,
+            "source_text_found": self.source_text_found,
+            "source_word_count": self.source_word_count,
+            "source_sha256": list(self.source_sha256),
+            "residual_word_count": self.residual_word_count,
+            "residual_sha256": list(self.residual_sha256),
+        }
+        if self.label is not None:
+            payload["label_sha256"] = _sha256(self.label)
+        return payload
+
+
+@dataclass(frozen=True)
+class PdfTextRemovalReport:
+    """PHI-safe proof that redacted source words are globally unextractable."""
+
+    regions: tuple[TextRemovalRegion, ...] = ()
+
+    @property
+    def passed(self) -> bool:
+        """True only when every non-empty source region is absent from output."""
+        return bool(self.regions) and all(region.passed for region in self.regions)
+
+    @property
+    def failing_regions(self) -> tuple[TextRemovalRegion, ...]:
+        """Return regions with missing source evidence or residual output text."""
+        return tuple(region for region in self.regions if not region.passed)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic report suitable for privacy-safe audit logs."""
+        return {
+            "check": "redacted_pdf_source_text_removal",
+            "passed": self.passed,
+            "region_count": len(self.regions),
+            "failing_region_count": len(self.failing_regions),
+            "regions": [region.to_dict() for region in self.regions],
+        }
+
+    def summary(self) -> str:
+        """Return a plaintext-free verification summary."""
+        if not self.regions:
+            return "PDF text-removal check FAILED: no redaction regions were provided."
+        if self.passed:
+            return (
+                f"PDF text-removal check PASSED for all {len(self.regions)} region(s)."
+            )
+        unmeasurable = sum(
+            1 for region in self.failing_regions if not region.source_text_found
+        )
+        residual = sum(
+            1 for region in self.failing_regions if region.residual_word_count > 0
+        )
+        return (
+            f"PDF text-removal check FAILED: {len(self.failing_regions)} of "
+            f"{len(self.regions)} region(s) failed "
+            f"({residual} with globally extractable source text, "
+            f"{unmeasurable} without extractable source evidence)."
+        )
+
+    def raise_for_residual_text(self) -> "PdfTextRemovalReport":
+        """Raise :class:`RedactedTextRemovalError` unless every region passed."""
+        if not self.passed:
+            raise RedactedTextRemovalError(self)
         return self
 
 
@@ -214,6 +317,105 @@ def verify_redacted_pdf(
     if strict:
         report.raise_for_leakage()
     return report
+
+
+def verify_redacted_text_removed(
+    original: str | Path,
+    redacted: str | Path,
+    spans: Iterable[Any],
+    *,
+    strict: bool = False,
+) -> PdfTextRemovalReport:
+    """Verify that every selected source-word occurrence was removed.
+
+    Unlike :func:`verify_redacted_pdf`, which checks the output text layer at
+    each projected rectangle, this helper accounts for selected word occurrences
+    across the complete extracted text of both PDFs. It therefore catches source
+    words that were moved, reordered, separated, split, merged, or duplicated
+    during re-rendering while allowing unrelated identical words to remain.
+    Reports contain only geometry, counts, and SHA-256 digests; source and
+    residual plaintext are never stored.
+
+    A region with no extractable source text fails closed because this helper
+    cannot prove removal. Scanned/image-only PDFs require the separate OCR path.
+    Pass ``strict=True`` to raise :class:`RedactedTextRemovalError` on failure.
+    """
+    regions = _resolve_regions(original, spans)
+    original_layout = _read_pdf_layout(original)
+    redacted_layout = _read_pdf_layout(redacted)
+
+    region_sources: list[list[tuple[str, str]]] = []
+    selected_words: dict[tuple[int, int], tuple[str, str]] = {}
+    for page, bbox, _label in regions:
+        words, _rects = original_layout.get(page, ((), ()))
+        source: list[tuple[str, str]] = []
+        for word_index, word in enumerate(words):
+            if not _word_overlaps_region(word, bbox):
+                continue
+            normalized = _normalize_extracted_word(word.get("text", ""))
+            if not normalized:
+                continue
+            compact = _compact_extracted_word(normalized)
+            source.append((normalized, compact))
+            selected_words[(page, word_index)] = (normalized, compact)
+        region_sources.append(source)
+
+    original_words = _normalized_layout_words(original_layout)
+    output_words = _normalized_layout_words(redacted_layout)
+    original_counts = Counter(original_words)
+    output_counts = Counter(output_words)
+    selected_counts = Counter(word for word, _compact in selected_words.values())
+    leaking_words = {
+        word
+        for word, selected_count in selected_counts.items()
+        if output_counts[word] > max(0, original_counts[word] - selected_count)
+    }
+
+    original_compact = _normalized_layout_compact_text(original_layout)
+    output_compact = _normalized_layout_compact_text(redacted_layout)
+    selected_compact_counts = Counter(
+        compact for _word, compact in selected_words.values() if compact
+    )
+    leaking_compact = {
+        compact
+        for compact, selected_count in selected_compact_counts.items()
+        if output_compact.count(compact)
+        > max(0, original_compact.count(compact) - selected_count)
+    }
+
+    results: list[TextRemovalRegion] = []
+    for (page, bbox, label), source in zip(regions, region_sources):
+        normalized_source = [word for word, _compact in source]
+        residual = [
+            word
+            for word, compact in source
+            if word in leaking_words or (compact and compact in leaking_compact)
+        ]
+        results.append(
+            TextRemovalRegion(
+                page=page,
+                bbox=bbox,
+                source_word_count=len(normalized_source),
+                source_sha256=tuple(_sha256(word) for word in normalized_source),
+                residual_word_count=len(residual),
+                residual_sha256=tuple(_sha256(word) for word in residual),
+                label=label,
+            )
+        )
+
+    report = PdfTextRemovalReport(regions=tuple(results))
+    if strict:
+        report.raise_for_residual_text()
+    return report
+
+
+def assert_redacted_text_removed(
+    original: str | Path,
+    redacted: str | Path,
+    spans: Iterable[Any],
+) -> PdfTextRemovalReport:
+    """Assert that all extractable source words selected by ``spans`` are gone."""
+    return verify_redacted_text_removed(original, redacted, spans, strict=True)
 
 
 # ---------------------------------------------------------------------------
@@ -333,20 +535,24 @@ def _residual_words(
     region: tuple[float, float, float, float],
 ) -> list[str]:
     residual: list[str] = []
-    region_area = _area(region)
     for word in words:
-        bbox = _word_bbox(word)
-        if bbox is None:
-            continue
-        word_area = _area(bbox)
-        if word_area <= 0 and region_area <= 0:
-            continue
-        overlap = _intersection_area(bbox, region)
-        if overlap <= 0:
-            continue
-        if overlap / max(word_area, 1e-6) >= _WORD_OVERLAP_FRACTION:
+        if _word_overlaps_region(word, region):
             residual.append(str(word.get("text", "")).strip())
     return [text for text in residual if text]
+
+
+def _word_overlaps_region(
+    word: Mapping[str, Any],
+    region: tuple[float, float, float, float],
+) -> bool:
+    bbox = _word_bbox(word)
+    if bbox is None:
+        return False
+    word_area = _area(bbox)
+    if word_area <= 0 and _area(region) <= 0:
+        return False
+    overlap = _intersection_area(bbox, region)
+    return overlap > 0 and overlap / max(word_area, 1e-6) >= _WORD_OVERLAP_FRACTION
 
 
 def _box_covers(
@@ -381,15 +587,14 @@ def _visual_change(
     try:
         before = render(original, page, region)
         after = render(redacted, page, region)
-    except (FileNotFoundError, OSError) as exc:
+    except (FileNotFoundError, OSError):
         # A raster backend was selected but a PDF could not be read. Do NOT
         # silently drop the visual check and let a clean-looking box report a
         # pass — that would fail open on a missing/unreadable original. Surface
         # it so the caller (and the CLI) treat it as a verification error.
         raise FileNotFoundError(
-            f"Could not read a PDF for visual verification of {original!r} / "
-            f"{redacted!r}: {exc}"
-        ) from exc
+            "Could not read a PDF for visual verification"
+        ) from None
     except Exception:  # pragma: no cover - non-IO backend hiccup -> vector fallback.
         return None, "vector"
     return (before != after), "pixel"
@@ -490,9 +695,59 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _normalize_extracted_word(value: Any) -> str:
+    return unicodedata.normalize("NFKC", str(value)).casefold().strip()
+
+
+def _compact_extracted_word(value: Any) -> str:
+    normalized = _normalize_extracted_word(value)
+    return "".join(character for character in normalized if character.isalnum())
+
+
+def _normalized_layout_words(
+    layout: Mapping[
+        int,
+        tuple[tuple[Mapping[str, Any], ...], tuple[Mapping[str, Any], ...]],
+    ],
+) -> tuple[str, ...]:
+    words: list[str] = []
+    for page in sorted(layout):
+        if words:
+            words.append("\0")
+        words.extend(
+            normalized
+            for word in layout[page][0]
+            if (normalized := _normalize_extracted_word(word.get("text", "")))
+        )
+    return tuple(words)
+
+
+def _normalized_layout_compact_text(
+    layout: Mapping[
+        int,
+        tuple[tuple[Mapping[str, Any], ...], tuple[Mapping[str, Any], ...]],
+    ],
+) -> str:
+    pages: list[str] = []
+    for page in sorted(layout):
+        pages.append(
+            "".join(
+                compact
+                for word in layout[page][0]
+                if (compact := _compact_extracted_word(word.get("text", "")))
+            )
+        )
+    return "\0".join(pages)
+
+
 __all__ = [
     "PdfFidelityReport",
+    "PdfTextRemovalReport",
     "RedactionFidelityError",
+    "RedactedTextRemovalError",
     "RegionFidelity",
+    "TextRemovalRegion",
+    "assert_redacted_text_removed",
     "verify_redacted_pdf",
+    "verify_redacted_text_removed",
 ]
