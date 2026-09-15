@@ -357,7 +357,6 @@ def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
             }
         )
         + "\n",
-        encoding="utf-8",
         newline=newline,
     )
     (root / "gates/baseline.json").write_text(
@@ -368,7 +367,6 @@ def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
             }
         )
         + "\n",
-        encoding="utf-8",
         newline=newline,
     )
     state = {
@@ -388,7 +386,8 @@ def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
     (root / "gates/registry_state.json").write_text(json.dumps(state))
     for args in (
         ["init", "-q"],
-        # The gate compares artifact bytes, so the fixture must retain them.
+        # The continuity gate compares bytes; preserve the synthetic files
+        # verbatim instead of inheriting the host's line-ending conversion.
         ["config", "core.autocrlf", "false"],
         ["add", "."],
         [
@@ -414,9 +413,9 @@ def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
     monkeypatch,
     newline,
 ):
-    global_config = tmp_path / "global.gitconfig"
-    global_config.write_text("[core]\n    autocrlf = true\n", encoding="utf-8")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    git_config = tmp_path / "inherited.gitconfig"
+    git_config.write_text("[core]\n\tautocrlf = true\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
     root = _sdk_repository(tmp_path, newline=newline)
     path = root / "gates/registry_state.json"
     state = json.loads(path.read_text())
@@ -428,7 +427,7 @@ def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
     report = evaluate_readiness(
         repo_root=root, sdk_baseline="v1.0.0", signing_key=READINESS_KEY
     )
-    assert report.decision == READY, report.failing_checks()
+    assert report.decision == READY, report.to_dict()
     assert report.verify(READINESS_KEY)
     assert report.checks[0].gate == "sdk_model_continuity"
     assert report.checks[0].details["pointer_count"] == 3
