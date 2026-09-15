@@ -195,6 +195,7 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
