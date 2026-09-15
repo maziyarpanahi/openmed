@@ -339,6 +339,61 @@ class TestLocaleResolution:
             for surrogate in surrogates
         )
 
+    def test_kannada_pack_uses_documented_approximate_locale_and_initial_shape(self):
+        pack = get_language_pack("kn")
+
+        assert pack is not None
+        assert pack.scripts == ("Kannada",)
+        assert "kn" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["kn"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["kn"] == "Kannada"
+        assert LANGUAGE_MODEL_PREFIX["kn"] == "Kannada-"
+        assert LANGUAGE_MONTH_NAMES["kn"] == [
+            "ಜನವರಿ",
+            "ಫೆಬ್ರವರಿ",
+            "ಮಾರ್ಚ್",
+            "ಏಪ್ರಿಲ್",
+            "ಮೇ",
+            "ಜೂನ್",
+            "ಜುಲೈ",
+            "ಆಗಸ್ಟ್",
+            "ಸೆಪ್ಟೆಂಬರ್",
+            "ಅಕ್ಟೋಬರ್",
+            "ನವೆಂಬರ್",
+            "ಡಿಸೆಂಬರ್",
+        ]
+        assert LANG_TO_LOCALE["kn"] == "kn_IN"
+        assert FAKER_BACKEND_LOCALE["kn_IN"] == "en_IN"
+        assert "kn_IN" not in AVAILABLE_LOCALES
+        assert NATIONAL_ID_PROVIDERS["kn"] == ("kn_IN", "aadhaar")
+        assert get_national_id("kn_IN", "aadhaar") is not None
+        assert "kn" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("kn") == "kn_IN"
+            anonymizer = Anonymizer(lang="kn", consistent=True, seed=695)
+            native = anonymizer.surrogate("ಕೆ. ಎಸ್. ರವಿ", "PERSON")
+            code_mixed = anonymizer.surrogate("K. S. Ravi", "PERSON")
+            aadhaar = anonymizer.surrogate("೨೪೬೭ ೭೮೩೨ ೫೪೮೪", "national_id")
+            assert resolve_locale("kn") == "kn_IN"
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "kn_IN" in str(user_warnings[0].message)
+        assert "en_IN" in str(user_warnings[0].message)
+        assert re.fullmatch(
+            r"[\u0C80-\u0CFF]+\.[ \t]*[\u0C80-\u0CFF]+\.[ \t]*[\u0C80-\u0CFF]+",
+            native,
+        )
+        assert re.fullmatch(r"[A-Za-z]+\.[ \t]*[A-Za-z]+\.[ \t]*[A-Za-z]+", code_mixed)
+        assert native != "ಕೆ. ಎಸ್. ರವಿ"
+        assert code_mixed != "K. S. Ravi"
+        assert validate_aadhaar(aadhaar)
+
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):
         language = CONCEPTUAL_LOCALE_LANGUAGES[locale]

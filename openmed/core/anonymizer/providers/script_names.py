@@ -8,6 +8,7 @@ the number of Han characters in the detected name.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Sequence
 from typing import Final
@@ -27,6 +28,7 @@ def _require_language_pack(code: str) -> LanguagePack:
 HAN_LANGUAGE_PACK: Final = _require_language_pack("zh")
 DEVANAGARI_LANGUAGE_PACK: Final = _require_language_pack("hi")
 TELUGU_LANGUAGE_PACK: Final = _require_language_pack("te")
+KANNADA_LANGUAGE_PACK: Final = _require_language_pack("kn")
 
 
 def _unicode_letters(start: int, end: int, name_prefix: str) -> tuple[str, ...]:
@@ -65,6 +67,12 @@ _TELUGU_LETTERS: Final[Sequence[str]] = _unicode_letters(
     0x0C39,
     "TELUGU LETTER",
 )
+_KANNADA_INITIAL_LED_RE = re.compile(
+    r"^(?P<prefix>(?:(?:[A-Za-z]+|[\u0C80-\u0CFF]+)\.[ \t]*){1,2})"
+    r"(?P<given>.+)$"
+)
+_KANNADA_INITIAL_RE = re.compile(r"(?P<token>[A-Za-z]+|[\u0C80-\u0CFF]+)\.")
+_KANNADA_SCRIPT_RE = re.compile(r"[\u0C80-\u0CFF]")
 
 
 def _script_length(
@@ -127,19 +135,74 @@ def generate_telugu_name(faker, original: str, *, locale: str) -> str:
     )
 
 
+def _kannada_values(key: str) -> tuple[str, ...]:
+    """Return the small synthetic Kannada provider vocabulary for ``key``."""
+
+    from ...pii_i18n import LOCALE_FAKE_DATA
+
+    return tuple(LOCALE_FAKE_DATA["kn_IN"][key])
+
+
+def _draw_kannada_value(faker, key: str, original: str) -> str:
+    values = _kannada_values(key)
+    alternatives = tuple(value for value in values if value != original)
+    return str(faker.random_element(alternatives or values))
+
+
+def _generate_kannada_initials(faker, prefix: str) -> str:
+    rendered: list[str] = []
+    for match in _KANNADA_INITIAL_RE.finditer(prefix):
+        token = match.group("token")
+        key = "INITIAL_KANNADA" if _KANNADA_SCRIPT_RE.search(token) else "INITIAL_LATIN"
+        rendered.append(_draw_kannada_value(faker, key, token) + ".")
+        following = prefix[match.end() :]
+        separator = re.match(r"[ \t]*", following)
+        rendered.append(separator.group(0) if separator else "")
+    return "".join(rendered)
+
+
+def generate_kannada_name(faker, original: str, *, locale: str) -> str:
+    """Return a Kannada surrogate preserving place/father initial structure.
+
+    Kannada PERSON spans commonly contain one or two initials before the given
+    name. The bundled synthetic provider keeps that count, dot punctuation,
+    whitespace, and the script of each initial while drawing the given name
+    from a small local vocabulary. The ``ಅವರು`` suffix is outside the span and
+    therefore never reaches this generator.
+    """
+
+    source = original.strip()
+    match = _KANNADA_INITIAL_LED_RE.fullmatch(source)
+    if match is not None:
+        given = match.group("given").strip()
+        given_key = (
+            "FIRST_NAME" if _KANNADA_SCRIPT_RE.search(given) else "FIRST_NAME_LATIN"
+        )
+        replacement = _draw_kannada_value(faker, given_key, given)
+        return _generate_kannada_initials(faker, match.group("prefix")) + replacement
+
+    key = "NAME" if " " in source else "FIRST_NAME"
+    if not _KANNADA_SCRIPT_RE.search(source):
+        key = "NAME_LATIN" if key == "NAME" else "FIRST_NAME_LATIN"
+    return _draw_kannada_value(faker, key, source)
+
+
 SCRIPT_NAME_PACKS: Final = (
     (HAN_LANGUAGE_PACK, "Han", generate_han_name),
     (DEVANAGARI_LANGUAGE_PACK, "Devanagari", generate_devanagari_name),
     (TELUGU_LANGUAGE_PACK, "Telugu", generate_telugu_name),
+    (KANNADA_LANGUAGE_PACK, "Kannada", generate_kannada_name),
 )
 
 
 __all__ = [
     "DEVANAGARI_LANGUAGE_PACK",
     "HAN_LANGUAGE_PACK",
+    "KANNADA_LANGUAGE_PACK",
     "SCRIPT_NAME_PACKS",
     "TELUGU_LANGUAGE_PACK",
     "generate_devanagari_name",
     "generate_han_name",
+    "generate_kannada_name",
     "generate_telugu_name",
 ]
