@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic citation minimality checks for guarded atomic claims,
+  with opaque offset-only reports, token counts, explicit context budgets, and
+  human-review flags (#2742).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
