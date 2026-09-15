@@ -576,6 +576,7 @@ from .trend import (
     TrendDirection,
     build_measurement_trends,
     extract_measurement_trends,
+    serialize_measurement_trends,
 )
 from .units import (
     MEASUREMENT_NORMALIZATION_ADVISORY,
@@ -841,6 +842,7 @@ __all__ = [
     "MeasurementTrend",
     "build_measurement_trends",
     "extract_measurement_trends",
+    "serialize_measurement_trends",
     "ConversionStatus",
     "MeasurementNormalization",
     "MEASUREMENT_NORMALIZATION_ADVISORY",

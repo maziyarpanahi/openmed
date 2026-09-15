@@ -183,6 +183,7 @@ classification:
     - clinical/temporal-normalization.md
     - clinical/medication-reconciliation.md
     - clinical/event-timeline.md
+    - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
