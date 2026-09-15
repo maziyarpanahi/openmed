@@ -177,6 +177,7 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Unsupported Claim Rates: evaluation/summary-unsupported-claims.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
