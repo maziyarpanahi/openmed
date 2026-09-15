@@ -313,6 +313,14 @@
     "PainScore",
     "SkinAssessment"
   ],
+  "functional_status": [
+    "ADLActivity",
+    "AssistanceLevel",
+    "MobilityAbility",
+    "AssistiveDevice",
+    "FunctionalScale",
+    "CognitiveStatus"
+  ],
   "obstetrics_gynecology": [
     "GravidityParity",
     "GestationalAge",

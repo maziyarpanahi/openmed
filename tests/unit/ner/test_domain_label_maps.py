@@ -12,9 +12,11 @@ from pathlib import Path
 import pytest
 
 from openmed.core.labels import (
+    ADL_ACTIVITY,
     AIRWAY_MANAGEMENT,
     ALLERGEN,
     ALLERGY_CRITICALITY,
+    ASSISTANCE_LEVEL,
     BODY_SITE,
     CANONICAL_LABELS,
     CKD_STAGE,
@@ -25,6 +27,7 @@ from openmed.core.labels import (
     DIALYSIS_MODALITY,
     DYSPNEA_GRADE,
     FETAL_FINDING,
+    FUNCTIONAL_SCALE,
     GENE,
     GENE_SYMBOL,
     GESTATIONAL_AGE,
@@ -36,6 +39,7 @@ from openmed.core.labels import (
     IHC_STAIN,
     MARGIN_STATUS,
     MEASUREMENT,
+    MOBILITY_ABILITY,
     NUTRITIONAL_STATUS,
     OBSTETRIC_EVENT,
     OTHER,
@@ -166,6 +170,14 @@ class TestHgvsOffsetStability:
 
 PULMONOLOGY_FIXTURE = (
     Path(__file__).resolve().parents[2] / "fixtures" / "clinical" / "pulmonology.jsonl"
+)
+
+
+FUNCTIONAL_STATUS_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "functional_status.jsonl"
 )
 
 
@@ -436,6 +448,108 @@ class TestPediatricsGrowthDomain:
         }
         assert {"GrowthPercentile", "DevelopmentalMilestone"} <= labels
         assert labels == set(self.EXPECTED_LABELS)
+
+    def test_fixture_entities_match_expected(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"], (
+                    entity
+                )
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
+
+
+class TestFunctionalStatusDomain:
+    """Functional-status and ADL label coverage (issue #911)."""
+
+    EXPECTED_LABELS = [
+        "ADLActivity",
+        "AssistanceLevel",
+        "MobilityAbility",
+        "AssistiveDevice",
+        "FunctionalScale",
+        "CognitiveStatus",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "ADLActivity": ADL_ACTIVITY,
+        "AssistanceLevel": ASSISTANCE_LEVEL,
+        "MobilityAbility": MOBILITY_ABILITY,
+        "AssistiveDevice": "DEVICE",
+        "FunctionalScale": FUNCTIONAL_SCALE,
+        "CognitiveStatus": OTHER,
+    }
+    EXPECTED_ENTITIES = [
+        ("AssistanceLevel", 0, 11, "Independent"),
+        ("ADLActivity", 17, 24, "feeding"),
+        ("AssistanceLevel", 26, 45, "requires assistance"),
+        ("ADLActivity", 51, 58, "bathing"),
+        ("MobilityAbility", 60, 69, "transfers"),
+        ("AssistanceLevel", 75, 87, "minimal help"),
+        ("AssistiveDevice", 96, 102, "walker"),
+        ("FunctionalScale", 104, 120, "Barthel Index 75"),
+        ("CognitiveStatus", 122, 139, "cognitively alert"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in FUNCTIONAL_STATUS_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves(self):
+        assert "functional_status" in available_domains()
+        assert get_default_labels("functional_status") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_label(label) == expected
+
+    def test_new_labels_have_complete_metadata(self):
+        for label in (
+            ADL_ACTIVITY,
+            ASSISTANCE_LEVEL,
+            MOBILITY_ABILITY,
+            FUNCTIONAL_SCALE,
+        ):
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert risk_level_for(label) == "low"
+            assert system_hints_for(label)
+            assert hipaa_class_for(label)
+
+    def test_fixture_reports_offline_per_label_coverage(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not score functional scales" in disclaimer
+        assert {entity["label"] for entity in row["entities"]} == set(
+            self.EXPECTED_LABELS
+        )
 
     def test_fixture_entities_match_expected(self):
         row = self._fixtures()[0]

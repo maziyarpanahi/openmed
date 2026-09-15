@@ -453,6 +453,19 @@
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 
+## Functional Status
+
+**Alignment:** This map captures documented activities of daily living, assistance, mobility, assistive-device mentions, functional-scale references, and cognitive status for offline extraction review. It does not score Barthel or Katz scales, infer care needs, recommend a disposition, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| ADLActivity | ADL_ACTIVITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| AssistanceLevel | ASSISTANCE_LEVEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| MobilityAbility | MOBILITY_ABILITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| AssistiveDevice | DEVICE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| FunctionalScale | FUNCTIONAL_SCALE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+| CognitiveStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+
 ## Obstetrics Gynecology
 
 **Alignment:** The display labels cover pregnancy and reproductive-health concepts for structured extraction only. This metadata does not compute gestational age, score risk, infer diagnosis, recommend care, or bundle restricted terminology; human review remains required.

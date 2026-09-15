@@ -235,6 +235,12 @@ LINE_DRAIN_TUBE: Final = "LINE_DRAIN_TUBE"
 NURSING_RISK_SCORE: Final = "NURSING_RISK_SCORE"
 CARE_INTERVENTION: Final = "CARE_INTERVENTION"
 
+#: Functional-status and activities-of-daily-living concepts (issue #911)
+ADL_ACTIVITY: Final = "ADL_ACTIVITY"
+ASSISTANCE_LEVEL: Final = "ASSISTANCE_LEVEL"
+MOBILITY_ABILITY: Final = "MOBILITY_ABILITY"
+FUNCTIONAL_SCALE: Final = "FUNCTIONAL_SCALE"
+
 #: Clinical-genomics variant-mention concepts (issue #906)
 GENE_SYMBOL: Final = "GENE_SYMBOL"
 VARIANT_DESCRIPTOR: Final = "VARIANT_DESCRIPTOR"
@@ -474,6 +480,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         LINE_DRAIN_TUBE,
         NURSING_RISK_SCORE,
         CARE_INTERVENTION,
+        ADL_ACTIVITY,
+        ASSISTANCE_LEVEL,
+        MOBILITY_ABILITY,
+        FUNCTIONAL_SCALE,
         GENE_SYMBOL,
         CKD_STAGE,
         DIALYSIS_MODALITY,
@@ -766,6 +776,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             LINE_DRAIN_TUBE,
             NURSING_RISK_SCORE,
             CARE_INTERVENTION,
+            ADL_ACTIVITY,
+            ASSISTANCE_LEVEL,
+            MOBILITY_ABILITY,
+            FUNCTIONAL_SCALE,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -999,6 +1013,17 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     LINE_DRAIN_TUBE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NURSING_RISK_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     CARE_INTERVENTION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Functional-status and activities-of-daily-living concepts (issue #911).
+    # These labels describe documented function only; they do not score a
+    # scale, infer care needs, or recommend a disposition.
+    ADL_ACTIVITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ASSISTANCE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MOBILITY_ABILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FUNCTIONAL_SCALE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (SNOMED, LOINC),
+    ),
     # Clinical genomics
     GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1203,6 +1228,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     LINE_DRAIN_TUBE: HIPAA_UNIQUE_IDENTIFIER,
     NURSING_RISK_SCORE: HIPAA_UNIQUE_IDENTIFIER,
     CARE_INTERVENTION: HIPAA_UNIQUE_IDENTIFIER,
+    # Functional-status and activities-of-daily-living concepts
+    ADL_ACTIVITY: HIPAA_UNIQUE_IDENTIFIER,
+    ASSISTANCE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    MOBILITY_ABILITY: HIPAA_UNIQUE_IDENTIFIER,
+    FUNCTIONAL_SCALE: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical genomics
     GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
     VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
@@ -1358,6 +1388,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     LINE_DRAIN_TUBE: POPIA_HEALTH_INFORMATION,
     NURSING_RISK_SCORE: POPIA_HEALTH_INFORMATION,
     CARE_INTERVENTION: POPIA_HEALTH_INFORMATION,
+    ADL_ACTIVITY: POPIA_HEALTH_INFORMATION,
+    ASSISTANCE_LEVEL: POPIA_HEALTH_INFORMATION,
+    MOBILITY_ABILITY: POPIA_HEALTH_INFORMATION,
+    FUNCTIONAL_SCALE: POPIA_HEALTH_INFORMATION,
     GENE_SYMBOL: POPIA_HEALTH_INFORMATION,
     VARIANT_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
     PROTEIN_CHANGE: POPIA_HEALTH_INFORMATION,
@@ -1863,6 +1897,29 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "mobilitystatus": OTHER,
     "painscore": OTHER,
     "skinassessment": BODY_SITE,
+    # Functional-status and activities-of-daily-living concepts
+    "adlactivity": ADL_ACTIVITY,
+    "activityofdailyliving": ADL_ACTIVITY,
+    "feeding": ADL_ACTIVITY,
+    "bathing": ADL_ACTIVITY,
+    "assistancelevel": ASSISTANCE_LEVEL,
+    "assistance": ASSISTANCE_LEVEL,
+    "independent": ASSISTANCE_LEVEL,
+    "requiresassistance": ASSISTANCE_LEVEL,
+    "minimalassistance": ASSISTANCE_LEVEL,
+    "mobilityability": MOBILITY_ABILITY,
+    "mobility": MOBILITY_ABILITY,
+    "ambulation": MOBILITY_ABILITY,
+    "transferability": MOBILITY_ABILITY,
+    "transfers": MOBILITY_ABILITY,
+    "assistivedevice": DEVICE,
+    "walkeraid": DEVICE,
+    "functionalscale": FUNCTIONAL_SCALE,
+    "barthel": FUNCTIONAL_SCALE,
+    "barthelindex": FUNCTIONAL_SCALE,
+    "katz": FUNCTIONAL_SCALE,
+    "katzindex": FUNCTIONAL_SCALE,
+    "cognitivestatus": OTHER,
     # Clinical genomics
     "genesymbol": GENE_SYMBOL,
     "genename": GENE_SYMBOL,
@@ -2452,6 +2509,10 @@ __all__ = [
     "LINE_DRAIN_TUBE",
     "NURSING_RISK_SCORE",
     "CARE_INTERVENTION",
+    "ADL_ACTIVITY",
+    "ASSISTANCE_LEVEL",
+    "MOBILITY_ABILITY",
+    "FUNCTIONAL_SCALE",
     "GENE_SYMBOL",
     "VARIANT_DESCRIPTOR",
     "PROTEIN_CHANGE",

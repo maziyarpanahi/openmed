@@ -53,6 +53,31 @@ def test_default_coverage_gate_passes_with_non_empty_per_label_spans() -> None:
     )
 
 
+def test_functional_status_reports_per_label_coverage() -> None:
+    report = assert_domain_coverage_gate(domains=("functional_status",))
+
+    domain = report.per_domain[0]
+    assert domain.domain == "functional_status"
+    assert [coverage.label for coverage in domain.per_label] == [
+        "ADLActivity",
+        "AssistanceLevel",
+        "MobilityAbility",
+        "AssistiveDevice",
+        "FunctionalScale",
+        "CognitiveStatus",
+    ]
+    assert [coverage.canonical_label for coverage in domain.per_label] == [
+        "ADL_ACTIVITY",
+        "ASSISTANCE_LEVEL",
+        "MOBILITY_ABILITY",
+        "DEVICE",
+        "FUNCTIONAL_SCALE",
+        "OTHER",
+    ]
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+    assert all(coverage.offsets for coverage in domain.per_label)
+
+
 def test_obstetrics_gynecology_reports_per_label_coverage_offline() -> None:
     report = assert_domain_coverage_gate(domains=("obstetrics_gynecology",))
 
