@@ -173,6 +173,7 @@ classification:
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/concept-grounding.md
+    - clinical/data-quality-profiler.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md
     - interop/snomed-terminology-bridge.md
