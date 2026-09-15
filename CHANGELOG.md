@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic de-identification-aware citation boundary validation
+  with post-redaction digest binding, replacement-boundary rejection, and
+  value-free review reports (#2741).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
