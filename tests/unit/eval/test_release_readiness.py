@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -54,7 +56,7 @@ def _make_repo_root(tmp_path: Path) -> Path:
     (root / "README.md").write_text("# OpenMed\n", encoding="utf-8")
     (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
-    migration = root / "docs" / "migration" / "1.9-to-2.0.md"
+    migration = root / "docs" / "migration" / "2.3-to-2.5.md"
     migration.parent.mkdir(parents=True)
     migration.write_text("# Migration Guide\n", encoding="utf-8")
 
@@ -64,8 +66,8 @@ def _make_repo_root(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "schema_version": 1,
-                "before_ref": "v1.9.0",
-                "after_ref": "v2.0.0",
+                "before_ref": "v2.2.0",
+                "after_ref": "v2.3.0",
                 "summary": {
                     "before_symbols": 100,
                     "after_symbols": 105,
@@ -187,7 +189,7 @@ def test_quarantined_extraction_gate_propagates(tmp_path):
 
 def test_missing_migration_guide_fails_closed(tmp_path):
     root = _make_repo_root(tmp_path)
-    (root / "docs" / "migration" / "1.9-to-2.0.md").unlink()
+    (root / "docs" / "migration" / "2.3-to-2.5.md").unlink()
 
     report = _evaluate(root)
 
@@ -195,7 +197,7 @@ def test_missing_migration_guide_fails_closed(tmp_path):
     check = next(
         item for item in report.failing_checks() if item.gate == "required_docs"
     )
-    assert "docs/migration/1.9-to-2.0.md" in check.reason
+    assert "docs/migration/2.3-to-2.5.md" in check.reason
 
 
 def test_disclaimer_comment_does_not_satisfy_gate(tmp_path):
@@ -298,7 +300,14 @@ def test_cli_writes_report_and_returns_success(tmp_path):
 
 
 def test_release_workflow_gates_publish_on_readiness():
-    workflow = Path(".github/workflows/release-gates.yml").read_text(encoding="utf-8")
+    workflow_path = Path(".github/workflows/release-gates.yml")
+    workflow = workflow_path.read_text(encoding="utf-8")
+    parsed = yaml.load(workflow, Loader=yaml.BaseLoader)
+    steps = {
+        step["name"]: step
+        for step in parsed["jobs"]["release-gates"]["steps"]
+        if "name" in step
+    }
 
     assert "Stage candidate before evaluation" in workflow
     assert "Run golden and public SHIELD benchmarks" in workflow
@@ -325,3 +334,137 @@ def test_release_workflow_gates_publish_on_readiness():
     assert 'if [ "$elapsed_seconds" -ge 600 ]' in workflow
     assert "steps.readiness.outcome == 'success'" in workflow
     assert "steps.readiness.outcome != 'success'" in workflow
+    for step_name in ("Quarantine incomplete or failing candidate", "Fail closed"):
+        condition = steps[step_name]["if"]
+        assert "github.event_name == 'workflow_dispatch'" in condition
+        assert "github.event_name == 'push'" not in condition
+        assert "steps.check-candidate.outputs.exists != 'true'" in condition
+
+
+def _sdk_repository(tmp_path: Path) -> Path:
+    """Create an isolated history with synthetic model metadata."""
+    import subprocess
+
+    root = _make_repo_root(tmp_path)
+    (root / "models.jsonl").write_text(
+        json.dumps(
+            {
+                "repo_id": "synthetic/model",
+                "family": "PII",
+                "tier": "small",
+                "formats": ["mlx-fp"],
+            }
+        )
+        + "\n"
+    )
+    (root / "gates/baseline.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "entries": {"pii::small::mlx-fp": {"repo_id": "synthetic/model"}},
+            }
+        )
+        + "\n"
+    )
+    state = {
+        "schema_version": 1,
+        "families": {
+            "PII": {
+                "versions": {"synthetic/model": "1.0.0"},
+                "lineage": [],
+                "pointers": {
+                    "latest": "synthetic/model",
+                    "last_green": "synthetic/model",
+                    "canary": None,
+                },
+            }
+        },
+    }
+    (root / "gates/registry_state.json").write_text(json.dumps(state))
+    for args in (
+        ["init", "-q"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=Synthetic Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "Synthetic baseline",
+        ],
+        ["tag", "v1.0.0"],
+    ):
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+    return root
+
+
+def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
+    tmp_path,
+):
+    root = _sdk_repository(tmp_path)
+    path = root / "gates/registry_state.json"
+    state = json.loads(path.read_text())
+    entry = state["families"]["PII"]
+    entry["checkpoints"] = entry.pop("versions")
+    path.write_text(
+        json.dumps({"schema_version": 2, "slots": {"pii::small::mlx-fp": entry}})
+    )
+    report = evaluate_readiness(
+        repo_root=root, sdk_baseline="v1.0.0", signing_key=READINESS_KEY
+    )
+    assert report.decision == READY
+    assert report.verify(READINESS_KEY)
+    assert report.checks[0].gate == "sdk_model_continuity"
+    assert report.checks[0].details["pointer_count"] == 3
+    assert "qualification" in report.checks[0].details["scope"]
+
+
+def test_sdk_continuity_rejects_changed_artifacts_evidence_and_pointers(tmp_path):
+    root = _sdk_repository(tmp_path)
+    for name in ("models.jsonl", "gates/baseline.json", "gates/registry_state.json"):
+        path = root / name
+        original = path.read_bytes()
+        if name.endswith("registry_state.json"):
+            state = json.loads(original)
+            state["families"]["PII"]["pointers"]["canary"] = "synthetic/other"
+            path.write_text(json.dumps(state))
+        else:
+            path.write_bytes(original + b" ")
+        report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+        assert report.decision == NOT_READY
+        assert not report.checks[0].passed
+        path.write_bytes(original)
+
+
+def test_sdk_continuity_refuses_missing_or_unsafe_baseline(tmp_path):
+    root = _sdk_repository(tmp_path)
+    for baseline in ("v0.9.0", "HEAD", "--help", "v1.0.0:models.jsonl"):
+        report = evaluate_readiness(repo_root=root, sdk_baseline=baseline)
+        assert report.decision == NOT_READY
+        assert not report.checks[0].passed
+
+
+def test_missing_model_gate_still_fails_without_explicit_sdk_scope(tmp_path):
+    root = _sdk_repository(tmp_path)
+    report = evaluate_readiness(repo_root=root)
+    assert report.decision == NOT_READY
+    assert not report.checks[0].passed
+
+
+def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
+    root = _sdk_repository(tmp_path)
+    path = root / "gates/registry_state.json"
+    entry = json.loads(path.read_text())["families"]["PII"]
+    entry["checkpoints"] = entry.pop("versions")
+    for slot, version in (
+        ("pii::large::mlx-fp", "1.0.0"),
+        ("pii::small::mlx-fp", "2.0.0"),
+    ):
+        entry["checkpoints"]["synthetic/model"] = version
+        path.write_text(json.dumps({"schema_version": 2, "slots": {slot: entry}}))
+        report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+        assert report.decision == NOT_READY
+        assert not report.checks[0].passed

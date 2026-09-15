@@ -1,0 +1,43 @@
+schema_version: 1
+
+provenance:
+  task: OM-142
+  source: OpenMed-maintained synthetic/public substance-use cue set
+  license: Apache-2.0 repository asset
+  restricted_data: false
+  synthetic: true
+
+determinants:
+  tobacco:
+    triggers:
+      - tobacco
+      - tobacco use
+      - smoker
+      - smoking
+      - cigarette
+      - cigarettes
+      - pack-year
+      - pack-years
+      - vaping
+      - vapes
+
+  alcohol:
+    triggers:
+      - alcohol
+      - alcohol use
+      - ETOH
+      - drinks
+      - drinking
+      - drinks alcohol
+
+  drug:
+    triggers:
+      - IVDU
+      - illicit drug
+      - illicit drugs
+      - recreational drug
+      - recreational drugs
+      - drug use
+      - cocaine
+      - heroin
+      - methamphetamine
