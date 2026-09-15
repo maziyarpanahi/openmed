@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, value-free guarded clinical-output provenance manifests
+  with input/evidence drift detection, model and policy fingerprints, and
+  contiguous human-review transitions (#2578).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
