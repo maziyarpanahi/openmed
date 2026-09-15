@@ -106,6 +106,7 @@ nav:
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
