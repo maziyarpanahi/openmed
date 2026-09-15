@@ -170,6 +170,22 @@
 | Tissue | TISSUE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 | PathologicalFormation | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 
+## Oncology Staging
+
+**Alignment:** TNM and tumor-descriptor labels capture descriptors explicitly written in an oncology note for descriptive extraction and human review only. OpenMed does not compute a stage group, apply AJCC/UICC staging rules, infer prognosis, recommend treatment, or make a medical decision, and does not bundle staging manuals or proprietary tables.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| TumorCategory | TNM_T | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| NodeCategory | TNM_N | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| MetastasisCategory | TNM_M | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| StageGroup | STAGE_GROUP | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorGrade | TUMOR_GRADE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorSize | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+| ReceptorStatus | RECEPTOR_STATUS | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| ResponseAssessment | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| PrimarySite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+
 ## Anatomy
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |

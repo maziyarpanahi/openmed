@@ -72,6 +72,26 @@ def test_pathology_histology_reports_per_label_coverage_offline() -> None:
     assert all(coverage.span_count > 0 for coverage in domain.per_label)
 
 
+def test_oncology_staging_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("oncology_staging",))
+
+    domain = report.per_domain[0]
+    assert domain.fixture == "oncology_staging.jsonl"
+    assert domain.fixture_count == 1
+    assert {coverage.label for coverage in domain.per_label} == {
+        "TumorCategory",
+        "NodeCategory",
+        "MetastasisCategory",
+        "StageGroup",
+        "TumorGrade",
+        "TumorSize",
+        "ReceptorStatus",
+        "ResponseAssessment",
+        "PrimarySite",
+    }
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+
+
 def test_missing_fixture_fails_with_domain_only_evidence(tmp_path: Path) -> None:
     report = run_domain_coverage(
         label_map={"missing_domain": ["Problem"]},
