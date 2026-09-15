@@ -14,6 +14,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     IranNationalIDProvider,
     IrishPPSProvider,
     JapaneseMyNumberProvider,
+    MexicanCURPProvider,
+    MexicanRFCProvider,
     register_clinical_providers,
 )
 from openmed.core.anonymizer.providers.registry_ids import (
@@ -29,6 +31,8 @@ from openmed.core.pii_i18n import (
     validate_iran_national_id,
     validate_irish_pps,
     validate_japanese_my_number,
+    validate_mexican_curp,
+    validate_mexican_rfc,
 )
 
 
@@ -49,6 +53,8 @@ EXPECTED_VALIDATOR_KEYS = (
     ("it", "codice_fiscale"),
     ("es", "dni"),
     ("es", "nie"),
+    ("es", "curp"),
+    ("es", "rfc"),
     ("nl", "bsn"),
     ("en_IE", "pps"),
     ("ja", "my_number"),
@@ -107,6 +113,8 @@ ROUND_TRIP_CASES = (
     ("it", "codice_fiscale", "it_IT"),
     ("es", "dni", "es_ES"),
     ("es", "nie", "es_ES"),
+    ("es", "curp", "es_MX"),
+    ("es", "rfc", "es_MX"),
     ("nl", "bsn", "nl_NL"),
     ("en_IE", "pps", "en_IE"),
     ("ja", "my_number", "ja_JP"),
@@ -185,6 +193,56 @@ class TestNationalIdRegistry:
             assert spec.validate(surrogate), (
                 f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
             )
+
+    def test_mexican_curp_and_rfc_aliases_generate_valid_surrogates(self):
+        faker = Faker("es_MX")
+        register_clinical_providers(faker)
+        faker.seed_instance(826)
+
+        curp_spec = get_national_id("ES-mx", "CURP")
+        rfc_spec = get_national_id("mx", "RFC")
+        assert curp_spec is not None
+        assert rfc_spec is not None
+        assert curp_spec.validate is validate_mexican_curp
+        assert rfc_spec.validate is validate_mexican_rfc
+
+        curp = getattr(faker, curp_spec.faker_method)("MOBI851113MSPMTP95")
+        person_rfc = getattr(faker, rfc_spec.faker_method)("MYNB630325659")
+        company_rfc = getattr(faker, rfc_spec.faker_method)("MYN430819Q64")
+
+        assert curp != "MOBI851113MSPMTP95"
+        assert validate_mexican_curp(curp)
+        assert len(person_rfc) == 13
+        assert len(company_rfc) == 12
+        assert validate_mexican_rfc(person_rfc)
+        assert validate_mexican_rfc(company_rfc)
+        assert clinical_faker_provider_classes().count(MexicanCURPProvider) == 1
+        assert clinical_faker_provider_classes().count(MexicanRFCProvider) == 1
+
+    @pytest.mark.parametrize(
+        ("source", "validator", "length"),
+        (
+            ("MOBI851113MSPMTP95", validate_mexican_curp, 18),
+            ("MYNB630325659", validate_mexican_rfc, 13),
+            ("MYN430819Q64", validate_mexican_rfc, 12),
+        ),
+    )
+    def test_es_mx_anonymizer_dispatch_preserves_identifier_form(
+        self,
+        source,
+        validator,
+        length,
+    ):
+        surrogate = Anonymizer(
+            lang="es",
+            locale="es_MX",
+            consistent=True,
+            seed=826,
+        ).surrogate(source, "national_id")
+
+        assert surrogate != source
+        assert len(surrogate) == length
+        assert validator(surrogate)
 
     def test_bengali_id_aliases_resolve_and_generate(self):
         faker = Faker("bn_BD")
