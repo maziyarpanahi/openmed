@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, aggregate-only review-yield metrics for guarded clinical
+  relation candidates, with accepted, corrected, rejected, duplicate, and
+  deferred outcomes by relation class (#2753).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.

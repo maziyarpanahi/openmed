@@ -254,6 +254,7 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/relation-review-yield.md
     - evaluation/privacy-corpus.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
