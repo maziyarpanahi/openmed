@@ -136,6 +136,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
+    "fa": "Persian",
     "he": "Hebrew",
     "ja": "Japanese",
     "tr": "Turkish",
@@ -180,6 +181,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
+    "fa": "Persian-",
     "he": "Hebrew-",
     "ja": "Japanese-",
     "tr": "Turkish-",
@@ -1285,6 +1287,87 @@ def validate_assam_pin(text: str) -> bool:
         return False
     normalized = normalize_bengali_assamese_digits(text).strip()
     return validate_indian_pin(normalized) and 780_000 <= int(normalized) <= 789_999
+
+
+def validate_bengali_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Bengali decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(
+        normalize_bengali_assamese_digits(text)
+    )
+
+
+def validate_bangladesh_nid(text: str) -> bool:
+    """Validate the publicly documented Bangladesh NID structure.
+
+    Bangladesh NIDs contain 10, 13, or 17 digits. No publicly specified
+    checksum is available, so validation is intentionally structural only.
+    Bengali decimal digits are normalized to ASCII before validation.
+    """
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    return re.fullmatch(r"(?:[0-9]{10}|[0-9]{13}|[0-9]{17})", normalized) is not None
+
+
+def validate_iran_national_id(text: str) -> bool:
+    """Validate a 10-digit Iranian national identity code (کد ملی).
+
+    Persian and Arabic-Indic digits are normalized to ASCII before applying
+    the public modulo-11 checksum. Repeated-digit values are invalid.
+
+    Args:
+        text: Candidate national identity code.
+
+    Returns:
+        ``True`` when the value has ten digits and a valid check digit.
+    """
+
+    if not isinstance(text, str):
+        return False
+
+    digits = normalize_arabic_indic_digits(text).strip()
+    if re.fullmatch(r"[0-9]{10}", digits) is None or len(set(digits)) == 1:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    remainder = (
+        sum(
+            digit * weight
+            for digit, weight in zip(numbers[:9], range(10, 1, -1), strict=True)
+        )
+        % 11
+    )
+    expected_check_digit = remainder if remainder < 2 else 11 - remainder
+    return numbers[-1] == expected_check_digit
+
+
+def validate_bengali_mobile(text: str) -> bool:
+    """Validate international Indian or Bangladeshi mobile numbers."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    compact = re.sub(r"[\s.-]", "", normalized)
+    return (
+        re.fullmatch(
+            r"(?:\+91[6-9][0-9]{9}|\+8801[3-9][0-9]{8})",
+            compact,
+        )
+        is not None
+    )
+
+
+def validate_bengali_postcode(text: str) -> bool:
+    """Validate a Bangladesh postcode or Indian PIN in Bengali context."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    return re.fullmatch(
+        r"[1-9][0-9]{3}", normalized
+    ) is not None or validate_indian_pin(normalized)
 
 
 def validate_maharashtra_pin(text: str) -> bool:
@@ -3302,6 +3385,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0623\u0643\u062a\u0648\u0628\u0631",
         "\u0646\u0648\u0641\u0645\u0628\u0631",
         "\u062f\u064a\u0633\u0645\u0628\u0631",
+    ],
+    "fa": [
+        "فروردین",
+        "اردیبهشت",
+        "خرداد",
+        "تیر",
+        "مرداد",
+        "شهریور",
+        "مهر",
+        "آبان",
+        "آذر",
+        "دی",
+        "بهمن",
+        "اسفند",
     ],
     "he": [
         "\u05d9\u05e0\u05d5\u05d0\u05e8",
@@ -6156,6 +6253,178 @@ _ASSAMESE_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_BENGALI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u09EC-\u09EF"
+_BENGALI_BD_OPERATOR_DIGIT_CLASS = r"3-9\u09E9-\u09EF"
+_BENGALI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u09E8-\u09EF"
+_BENGALI_NONZERO_DIGIT_CLASS = r"1-9\u09E7-\u09EF"
+_BENGALI_WORD = rf"(?:{_BENGALI_ASSAMESE_GRAPHEME}){{2,}}"
+_BENGALI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["bn"]
+)
+_BENGALI_ROAD_MARKER = r"(?:রোড|সড়ক|সড়ক|রাস্তা|নগর|লেন|মার্গ)"
+
+_BENGALI_DATE_CONTEXT = [
+    "জন্ম",
+    "জন্মতারিখ",
+    "জন্ম তারিখ",
+    "তারিখ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_BENGALI_PHONE_CONTEXT = ["ফোন", "মোবাইল", "যোগাযোগ", "phone", "mobile"]
+_BENGALI_AADHAAR_CONTEXT = [
+    "আধার",
+    "পরিচয়",
+    "পরিচয়",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_BENGALI_NID_CONTEXT = [
+    "জাতীয় পরিচয়পত্র",
+    "জাতীয় পরিচয়পত্র",
+    "এনআইডি",
+    "এনআইডি নম্বর",
+    "nid",
+    "national id",
+]
+_BENGALI_ADDRESS_CONTEXT = [
+    "ঠিকানা",
+    "বাসার ঠিকানা",
+    "বাড়ি",
+    "বাড়ি",
+    "address",
+]
+_BENGALI_POSTCODE_CONTEXT = [
+    "পোস্টকোড",
+    "পোস্ট কোড",
+    "পিন",
+    "পিন কোড",
+    "ডাক",
+    "ঠিকানা",
+    "postcode",
+    "pin",
+]
+
+_BENGALI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_BENGALI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_BENGALI_MONTH_PATTERN})\s+"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_BENGALI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
+        rf"\+[9\u09EF][1\u09E7][\s-]?"
+        rf"[{_BENGALI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]"
+        rf"|"
+        rf"\+[8\u09EE][8\u09EE][0\u09E6][\s-]?"
+        rf"[1\u09E7][{_BENGALI_BD_OPERATOR_DIGIT_CLASS}]"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}][\s.-]?){{7}}"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]"
+        rf")(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_BENGALI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_bengali_mobile,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}"
+        rf"(?P<bn_aadhaar_sep> ?)"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?P=bn_aadhaar_sep)"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_BENGALI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_bengali_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{10}}|"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{13}}|"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{17}})"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=_BENGALI_NID_CONTEXT,
+        context_boost=0.6,
+        validator=validate_bangladesh_nid,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![\w\u0980-\u09FF])"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,5}}[ \t]+)?"
+        rf"(?:{_BENGALI_WORD}[ \t]+){{0,5}}"
+        rf"{_BENGALI_ROAD_MARKER}"
+        rf"(?:[ \t]+[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,5}})?"
+        rf"(?![\w\u0980-\u09FF])",
+        "street_address",
+        priority=9,
+        base_score=0.7,
+        context_words=_BENGALI_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
+        rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}|"
+        rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{5}})"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.4,
+        context_words=_BENGALI_POSTCODE_CONTEXT,
+        context_boost=0.5,
+        validator=validate_bengali_postcode,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
 
 _ODIA_DIGIT_CLASS = r"0-9\u0B66-\u0B6F"
 _ODIA_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0B6C-\u0B6F"
@@ -6672,6 +6941,110 @@ _AMHARIC_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         requires_context=True,
         safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+_PERSIAN_DIGIT_CLASS = "0-9\u0660-\u0669\u06f0-\u06f9"
+_PERSIAN_DECIMAL_DIGIT = rf"[{_PERSIAN_DIGIT_CLASS}]"
+_PERSIAN_ZERO_DIGITS = "0۰٠"
+_PERSIAN_EIGHT_DIGITS = "8۸٨"
+_PERSIAN_NINE_DIGITS = "9۹٩"
+_PERSIAN_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["fa"]
+)
+_PERSIAN_DATE_CONTEXT = ["تاریخ", "تولد", "تاریخ تولد", "پذیرش", "ترخیص"]
+_PERSIAN_PHONE_CONTEXT = ["تلفن", "موبایل", "شماره تماس", "تماس"]
+_PERSIAN_ID_CONTEXT = ["کد ملی", "شماره ملی", "شناسه ملی"]
+_PERSIAN_POSTCODE_CONTEXT = ["کد پستی", "نشانی", "آدرس"]
+_PERSIAN_ADDRESS_CONTEXT = ["آدرس", "نشانی", "محل سکونت"]
+
+_PERSIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}}[/-]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{1,2}}[/-]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{1,2}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_PERSIAN_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{1,2}}\s+"
+        rf"(?:{_PERSIAN_MONTH_PATTERN})\s+"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.75,
+        context_words=_PERSIAN_DATE_CONTEXT,
+        context_boost=0.2,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])(?:"
+        rf"(?:\+[{_PERSIAN_NINE_DIGITS}][{_PERSIAN_EIGHT_DIGITS}]|"
+        rf"[{_PERSIAN_ZERO_DIGITS}]{{2}}"
+        rf"[{_PERSIAN_NINE_DIGITS}][{_PERSIAN_EIGHT_DIGITS}])"
+        rf"[\s.-]?[{_PERSIAN_NINE_DIGITS}]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{2}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{3}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}}|"
+        rf"[{_PERSIAN_ZERO_DIGITS}][{_PERSIAN_NINE_DIGITS}]"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{2}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{3}}[\s.-]?"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{4}})"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "phone_number",
+        priority=11,
+        base_score=0.75,
+        context_words=_PERSIAN_PHONE_CONTEXT,
+        context_boost=0.2,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{10}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=_PERSIAN_ID_CONTEXT,
+        context_boost=0.5,
+        validator=validate_iran_national_id,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_PERSIAN_DIGIT_CLASS}])"
+        rf"{_PERSIAN_DECIMAL_DIGIT}{{10}}"
+        rf"(?![{_PERSIAN_DIGIT_CLASS}])",
+        "postcode",
+        priority=7,
+        base_score=0.35,
+        context_words=_PERSIAN_POSTCODE_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<!\w)(?:خیابان|کوچه)\s+[\u0600-\u06FF\u200c]+"
+        rf"(?:\s+[\u0600-\u06FF\u200c]+){{0,4}}"
+        rf"(?:[،,]\s*کوچه\s+[\u0600-\u06FF\u200c]+"
+        rf"(?:\s+[\u0600-\u06FF\u200c]+){{0,3}})?"
+        rf"(?:[،,]\s*پلاک\s+{_PERSIAN_DECIMAL_DIGIT}{{1,5}})?",
+        "street_address",
+        priority=10,
+        base_score=0.75,
+        context_words=_PERSIAN_ADDRESS_CONTEXT,
+        context_boost=0.2,
         flags=0,
     ),
 ]
@@ -9979,7 +10352,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *_ASSAMESE_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
-    "bn": [],
+    "bn": [
+        *_BENGALI_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "or": [
         *_ODIA_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
@@ -9994,6 +10370,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "ar": _ARABIC_PII_PATTERNS,
+    "fa": _PERSIAN_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "zh": [
@@ -10623,6 +11000,24 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
             "\u062f\u0628\u064a",
         ],
         "ZIPCODE": ["11511", "12345", "54321"],
+    },
+    "fa": {
+        "NAME": ["سارا احمدی", "علی رضایی", "مریم کریمی", "رضا حسینی"],
+        "FIRST_NAME": ["سارا", "علی", "مریم", "رضا"],
+        "LAST_NAME": ["احمدی", "رضایی", "کریمی", "حسینی"],
+        "EMAIL": ["bimar@example.ir", "tamas@example.org"],
+        "PHONE": ["+98 912 345 6789", "0912 765 4321", "۰۹۱۲ ۳۴۵ ۶۷۸۹"],
+        "ID_NUM": ["1234567891", "۱۲۳۴۵۶۷۸۹۱"],
+        "STREET_ADDRESS": [
+            "خیابان ولیعصر، کوچه بهار، پلاک ۱۲",
+            "خیابان آزادی، پلاک ۴۵",
+        ],
+        "URL_PERSONAL": ["https://example.ir"],
+        "USERNAME": ["bimar123", "karbar456"],
+        "DATE": ["۱۴۰۵/۰۵/۲۹", "۵ فروردین ۱۴۰۵"],
+        "AGE": ["۳۸", "۴۵", "۶۲"],
+        "LOCATION": ["تهران", "شیراز", "اصفهان"],
+        "ZIPCODE": ["۱۴۳۹۸۱۴۵۶۷", "۱۹۸۷۶۵۴۳۲۱"],
     },
     "ur": {
         "NAME": [

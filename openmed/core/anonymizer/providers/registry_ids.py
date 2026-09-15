@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_bangladesh_nid,
     validate_belgian_rrn,
     validate_bulgarian_egn,
     validate_chinese_passport,
@@ -53,6 +54,7 @@ from openmed.core.pii_i18n import (
     validate_indian_passport,
     validate_indian_ration_card,
     validate_indonesian_nik,
+    validate_iran_national_id,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
@@ -107,6 +109,7 @@ from .clinical_ids import (
     AfricanPhoneProvider,
     AustralianMedicareProvider,
     AustralianTFNProvider,
+    BangladeshNIDProvider,
     BCPHNProvider,
     BelgianRRNProvider,
     BulgarianEgnProvider,
@@ -124,6 +127,7 @@ from .clinical_ids import (
     IndiaHealthIdProvider,
     IndiaSurrogateProvider,
     IndonesianNIKProvider,
+    IranNationalIDProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
@@ -475,11 +479,36 @@ def _register_builtin_specs() -> None:
         faker_method="ssn",
     )
     _register_aliases(
-        ("in", "india", "en", "hi", "te", "en_IN", "hi_IN", "te_IN"),
+        (
+            "in",
+            "india",
+            "en",
+            "hi",
+            "te",
+            "bn",
+            "en_IN",
+            "hi_IN",
+            "te_IN",
+            "bn_BD",
+        ),
         id_type="aadhaar",
         validate=validate_aadhaar,
         faker_method="aadhaar",
         faker_provider=AadhaarProvider,
+    )
+    _register_aliases(
+        ("bd", "bn", "bn_BD"),
+        id_type="bangladesh_nid",
+        validate=validate_bangladesh_nid,
+        faker_method="bangladesh_nid",
+        faker_provider=BangladeshNIDProvider,
+    )
+    _register_aliases(
+        ("ir", "fa", "fa_IR"),
+        id_type="iran_national_id",
+        validate=validate_iran_national_id,
+        faker_method="iran_national_id",
+        faker_provider=IranNationalIDProvider,
     )
     for id_type, validate, faker_method in (
         ("abha_number", validate_abha_number, "abha_number"),

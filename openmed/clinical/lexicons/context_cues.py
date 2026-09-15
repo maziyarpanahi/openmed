@@ -276,6 +276,7 @@ GERMAN_CONTEXT_LEXICON = ClinicalCueLexicon(
     recent=("aktiv", "akut", "akute", "aktuell", "derzeit", "neu", "laufend"),
     uncertainty=(
         "möglich",
+        "möglicherweise",
         "wahrscheinlich",
         "verdacht auf",
         "ausschluss",
