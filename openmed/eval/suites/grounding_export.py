@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import subprocess
@@ -11,17 +12,19 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from openmed.clinical.exporters import achilles_smoke_check, to_fhir, to_omop
 from openmed.clinical.grounding import Candidate, GroundedSpan
 from openmed.eval.report import BenchmarkReport
+from openmed.interop.omop import OmopCdmTables
 
 __all__ = [
     "DEFAULT_GROUNDING_EXPORT_FIXTURE",
     "FHIR_R4_VERSION",
     "GROUNDING_EXPORT",
     "FhirValidatorResult",
+    "build_malformed_fhir_negative_control",
     "load_grounding_export_fixture",
     "run_grounding_export_suite",
     "validate_fhir_r4_shape",
@@ -51,6 +54,8 @@ class FhirValidatorResult:
         information: Informational findings.
         official_validator_executed: Whether the HL7 validator CLI was run.
         output_hash: SHA-256 evidence fingerprint without validator prose.
+        failure_reason: Stable execution failure code, if validation could not
+            produce a trustworthy OperationOutcome.
     """
 
     errors: int
@@ -58,6 +63,7 @@ class FhirValidatorResult:
     information: int
     official_validator_executed: bool
     output_hash: str
+    failure_reason: str | None = None
 
 
 def load_grounding_export_fixture(
@@ -139,7 +145,9 @@ def run_grounding_export_suite(
         document_id=str(document["document_id"]),
     )
     assert bundle is not None
+    malformed_bundle = build_malformed_fhir_negative_control(bundle)
     structural_errors = validate_fhir_r4_shape(bundle)
+    malformed_structural_errors = validate_fhir_r4_shape(malformed_bundle)
     if validator_jar is None:
         fhir_result = FhirValidatorResult(
             errors=len(structural_errors),
@@ -148,9 +156,21 @@ def run_grounding_export_suite(
             official_validator_executed=False,
             output_hash=_stable_hash(structural_errors),
         )
+        malformed_fhir_result = FhirValidatorResult(
+            errors=len(malformed_structural_errors),
+            warnings=0,
+            information=0,
+            official_validator_executed=False,
+            output_hash=_stable_hash(malformed_structural_errors),
+        )
     else:
         fhir_result = validate_with_hl7_validator(
             bundle,
+            validator_jar=validator_jar,
+            java=java,
+        )
+        malformed_fhir_result = validate_with_hl7_validator(
+            malformed_bundle,
             validator_jar=validator_jar,
             java=java,
         )
@@ -161,16 +181,27 @@ def run_grounding_export_suite(
         )
         for span in spans
     }
-    omop = to_omop(
-        spans,
-        document_text=str(document["text"]),
-        document_id=str(document["document_id"]),
-        person_id=str(document["person_id"]),
-        concept_resolver=concept_map,
-        vocabulary_version="synthetic-v1",
+    omop = cast(
+        OmopCdmTables,
+        to_omop(
+            spans,
+            document_text=str(document["text"]),
+            document_id=str(document["document_id"]),
+            person_id=str(document["person_id"]),
+            concept_resolver=concept_map,
+            vocabulary_version="synthetic-v1",
+        ),
     )
     omop_violations = achilles_smoke_check(omop)
-    passed = fhir_result.errors == 0 and not omop_violations
+    omop_by_table = Counter(item.table for item in omop_violations)
+    omop_by_reason = Counter(item.reason for item in omop_violations)
+    malformed_resource_detected = (
+        malformed_fhir_result.errors > 0
+        and malformed_fhir_result.failure_reason is None
+    )
+    passed = (
+        fhir_result.errors == 0 and malformed_resource_detected and not omop_violations
+    )
     return BenchmarkReport(
         suite=GROUNDING_EXPORT,
         model_name="deterministic-grounding-exporters",
@@ -185,10 +216,18 @@ def run_grounding_export_suite(
                 "official_validator_executed": (
                     fhir_result.official_validator_executed
                 ),
+                "validator_failure_reason": fhir_result.failure_reason,
+                "malformed_resource_detected": malformed_resource_detected,
+                "malformed_resource_errors": malformed_fhir_result.errors,
+                "malformed_validator_failure_reason": (
+                    malformed_fhir_result.failure_reason
+                ),
             },
             "omop": {
                 "achilles_smoke_passed": not omop_violations,
                 "violations": len(omop_violations),
+                "violations_by_reason": dict(sorted(omop_by_reason.items())),
+                "violations_by_table": dict(sorted(omop_by_table.items())),
             },
         },
         metadata={
@@ -196,12 +235,40 @@ def run_grounding_export_suite(
             "phi": False,
             "fhir_version": FHIR_R4_VERSION,
             "validator_output_hash": fhir_result.output_hash,
+            "malformed_validator_output_hash": (malformed_fhir_result.output_hash),
             "omop_smoke_scope": (
-                "core table/column, concept-id, person-id, concept-reference, "
-                "NOTE_NLP offset and reachability checks"
+                "core table presence, complete emitted columns, primary keys, "
+                "concept and foreign-key references, NOTE_NLP offsets, and "
+                "bidirectional event reachability"
             ),
         },
     )
+
+
+def build_malformed_fhir_negative_control(
+    bundle: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return a copy with one required Observation element removed.
+
+    Args:
+        bundle: Exported FHIR Bundle containing an Observation.
+
+    Returns:
+        A deep-copied Bundle whose Observation is missing ``code``.
+
+    Raises:
+        ValueError: If no Observation resource is available to corrupt.
+    """
+
+    malformed = copy.deepcopy(dict(bundle))
+    for entry in malformed.get("entry") or ():
+        if not isinstance(entry, Mapping):
+            continue
+        resource = entry.get("resource")
+        if isinstance(resource, dict) and resource.get("resourceType") == "Observation":
+            resource.pop("code", None)
+            return malformed
+    raise ValueError("FHIR negative control requires an Observation resource")
 
 
 def validate_with_hl7_validator(
@@ -234,40 +301,62 @@ def validate_with_hl7_validator(
             json.dumps(bundle, ensure_ascii=False, sort_keys=True),
             encoding="utf-8",
         )
-        completed = subprocess.run(
-            [
-                java,
-                "-jar",
-                str(jar),
-                str(source),
-                "-version",
-                FHIR_R4_VERSION,
-                "-tx",
-                "n/a",
-                "-extension",
-                _OPENMED_FHIR_EXTENSION_BASE_URL,
-                "-output",
-                str(output),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        output_text = output.read_text(encoding="utf-8") if output.exists() else ""
+        command = [
+            java,
+            "-jar",
+            str(jar),
+            str(source),
+            "-version",
+            FHIR_R4_VERSION,
+            "-tx",
+            "n/a",
+            "-extension",
+            _OPENMED_FHIR_EXTENSION_BASE_URL,
+            "-output",
+            str(output),
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return _validator_failure("validator_timeout", executed=True)
+        except OSError:
+            return _validator_failure("validator_process_error", executed=False)
+        try:
+            output_text = output.read_text(encoding="utf-8") if output.exists() else ""
+        except (OSError, UnicodeError):
+            return _validator_failure("validator_output_invalid", executed=True)
         severities = _operation_outcome_severities(output_text)
+        failure_reason = None
+        if severities is None:
+            severities = Counter()
+            failure_reason = (
+                "validator_output_missing"
+                if not output_text
+                else "validator_output_invalid"
+            )
         errors = severities["fatal"] + severities["error"]
+        if failure_reason is not None:
+            errors = max(errors, 1)
         if completed.returncode != 0 and errors == 0:
             errors = 1
-        digest_source = "\n".join(
-            (str(completed.returncode), completed.stdout, completed.stderr, output_text)
-        )
+            failure_reason = "validator_exit_nonzero"
         return FhirValidatorResult(
             errors=errors,
             warnings=severities["warning"],
             information=severities["information"],
             official_validator_executed=True,
-            output_hash=hashlib.sha256(digest_source.encode("utf-8")).hexdigest(),
+            output_hash=_validator_output_hash(
+                output_text,
+                returncode=completed.returncode,
+                failure_reason=failure_reason,
+            ),
+            failure_reason=failure_reason,
         )
 
 
@@ -312,19 +401,68 @@ def validate_fhir_r4_shape(resource: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(errors)
 
 
-def _operation_outcome_severities(payload: str) -> Counter[str]:
+def _operation_outcome_severities(payload: str) -> Counter[str] | None:
     counts: Counter[str] = Counter()
     if not payload:
-        return counts
+        return None
     try:
         outcome = json.loads(payload)
-    except json.JSONDecodeError:
-        return counts
-    for issue in outcome.get("issue") or ():
-        if isinstance(issue, Mapping):
-            severity = str(issue.get("severity") or "information")
-            counts[severity] += 1
+    except (ValueError, RecursionError):
+        return None
+    if (
+        not isinstance(outcome, Mapping)
+        or outcome.get("resourceType") != "OperationOutcome"
+    ):
+        return None
+    issues = outcome.get("issue")
+    if not isinstance(issues, list):
+        return None
+    for issue in issues:
+        if not isinstance(issue, Mapping):
+            return None
+        severity = str(issue.get("severity") or "").casefold()
+        if severity not in {"fatal", "error", "warning", "information"}:
+            return None
+        counts[severity] += 1
     return counts
+
+
+def _validator_failure(reason: str, *, executed: bool) -> FhirValidatorResult:
+    return FhirValidatorResult(
+        errors=1,
+        warnings=0,
+        information=0,
+        official_validator_executed=executed,
+        output_hash=_stable_hash({"failure_reason": reason}),
+        failure_reason=reason,
+    )
+
+
+def _validator_output_hash(
+    payload: str,
+    *,
+    returncode: int,
+    failure_reason: str | None,
+) -> str:
+    issue_codes: Counter[str] = Counter()
+    try:
+        outcome = json.loads(payload)
+    except (ValueError, RecursionError):
+        outcome = None
+    if isinstance(outcome, Mapping) and isinstance(outcome.get("issue"), list):
+        for issue in outcome["issue"]:
+            if not isinstance(issue, Mapping):
+                continue
+            severity = str(issue.get("severity") or "unknown").casefold()
+            code = str(issue.get("code") or "unknown").casefold()
+            issue_codes[f"{severity}:{code}"] += 1
+    return _stable_hash(
+        {
+            "failure_reason": failure_reason,
+            "issue_codes": dict(sorted(issue_codes.items())),
+            "returncode": returncode,
+        }
+    )
 
 
 def _stable_hash(value: Any) -> str:
@@ -340,6 +478,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--validator-jar", type=Path)
     parser.add_argument("--java", default="java")
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--markdown-output",
+        type=Path,
+        help="Markdown report path (defaults to the JSON output with a .md suffix)",
+    )
     return parser.parse_args(argv)
 
 
@@ -356,6 +499,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         report.write_json(args.output)
     else:
         print(report.to_json())
+    markdown_output = args.markdown_output
+    if markdown_output is None and args.output is not None:
+        markdown_output = args.output.with_suffix(".md")
+    if markdown_output is not None:
+        report.write_markdown(markdown_output)
     return 0 if report.metrics["passed"] else 1
 
 

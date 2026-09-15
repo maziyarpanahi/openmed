@@ -1,16 +1,16 @@
 {
-  "families": {
-    "PII": {
+  "schema_version": 2,
+  "slots": {
+    "pii::small::mlx-fp": {
+      "checkpoints": {
+        "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx": "1.0.0"
+      },
       "lineage": [],
       "pointers": {
         "canary": null,
         "last_green": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
         "latest": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
-      },
-      "versions": {
-        "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx": "1.0.0"
       }
     }
-  },
-  "schema_version": 1
+  }
 }

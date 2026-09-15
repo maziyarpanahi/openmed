@@ -1,0 +1,54 @@
+[workspace]
+name = "openmed"
+channels = ["conda-forge"]
+platforms = [
+  "linux-64",
+  "osx-64",
+  { name = "osx-arm64-macos14", platform = "osx-arm64", macos = "14.0" },
+]
+
+[dependencies]
+# Keep the cross-platform optional wheels available while pyproject.toml
+# continues to support Python >=3.10.
+python = "3.12.*"
+pip = "*"
+
+[pypi-dependencies]
+openmed = { path = ".", editable = true }
+
+[feature.dev.pypi-dependencies]
+openmed = { path = ".", editable = true, extras = ["dev"] }
+# Keep the Pixi test environment on the dependency lines proven by the
+# canonical uv lock across OpenMed's supported Python versions.
+numpy = ">=1.26,<2"
+pandas = ">=2,<3"
+
+[feature.dev.tasks]
+test = "python -m pytest tests/ -q"
+lint = "ruff check ."
+
+[feature.docs.pypi-dependencies]
+openmed = { path = ".", editable = true, extras = ["docs"] }
+
+[feature.docs.tasks]
+docs = "mkdocs build --strict"
+
+[feature.hf.pypi-dependencies]
+openmed = { path = ".", editable = true, extras = ["hf"] }
+
+[feature.service.pypi-dependencies]
+openmed = { path = ".", editable = true, extras = ["service"] }
+
+[feature.mlx]
+platforms = ["osx-arm64-macos14"]
+
+[feature.mlx.pypi-dependencies]
+openmed = { path = ".", editable = true, extras = ["mlx"] }
+
+[environments]
+default = { features = ["dev", "docs"], solve-group = "default" }
+dev = { features = ["dev"], solve-group = "dev" }
+docs = { features = ["docs"], solve-group = "docs" }
+hf = { features = ["hf"], solve-group = "hf" }
+service = { features = ["service"], solve-group = "service" }
+mlx = { features = ["mlx"], solve-group = "mlx" }
