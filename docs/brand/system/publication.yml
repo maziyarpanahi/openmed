@@ -270,6 +270,7 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - clinical/summary-citations.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
