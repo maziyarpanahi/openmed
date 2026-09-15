@@ -40,9 +40,11 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/genomic_variant.jsonl",
         "tests/fixtures/clinical/immunization.jsonl",
         "tests/fixtures/clinical/nutrition_diet.jsonl",
+        "tests/fixtures/clinical/oncology_staging.jsonl",
         "tests/fixtures/clinical/pulmonology.jsonl",
         "tests/fixtures/clinical/pediatrics_growth.jsonl",
         "tests/fixtures/clinical/nursing_observation.jsonl",
+        "tests/fixtures/clinical/pathology_histology.jsonl",
         "tests/fixtures/clinical/radiology_finding.jsonl",
         "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
     ):

@@ -277,6 +277,20 @@ GESTATIONAL_AGE: Final = "GESTATIONAL_AGE"
 FETAL_FINDING: Final = "FETAL_FINDING"
 OBSTETRIC_EVENT: Final = "OBSTETRIC_EVENT"
 
+#: Pathology and histology concepts (issue #903)
+HISTOLOGIC_FINDING: Final = "HISTOLOGIC_FINDING"
+HISTOLOGIC_GRADE: Final = "HISTOLOGIC_GRADE"
+MARGIN_STATUS: Final = "MARGIN_STATUS"
+IHC_STAIN: Final = "IHC_STAIN"
+SPECIMEN_TYPE: Final = "SPECIMEN_TYPE"
+#: Oncology TNM staging and tumor-descriptor concepts (issue #864)
+TNM_T: Final = "TNM_T"
+TNM_N: Final = "TNM_N"
+TNM_M: Final = "TNM_M"
+STAGE_GROUP: Final = "STAGE_GROUP"
+TUMOR_GRADE: Final = "TUMOR_GRADE"
+RECEPTOR_STATUS: Final = "RECEPTOR_STATUS"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -488,6 +502,17 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GI_SYMPTOM,
         GI_SCORE,
         POLYP_DESCRIPTOR,
+        HISTOLOGIC_FINDING,
+        HISTOLOGIC_GRADE,
+        MARGIN_STATUS,
+        IHC_STAIN,
+        SPECIMEN_TYPE,
+        TNM_T,
+        TNM_N,
+        TNM_M,
+        STAGE_GROUP,
+        TUMOR_GRADE,
+        RECEPTOR_STATUS,
         OTHER,
     }
 )
@@ -769,6 +794,17 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             GESTATIONAL_AGE,
             FETAL_FINDING,
             OBSTETRIC_EVENT,
+            HISTOLOGIC_FINDING,
+            HISTOLOGIC_GRADE,
+            MARGIN_STATUS,
+            IHC_STAIN,
+            SPECIMEN_TYPE,
+            TNM_T,
+            TNM_N,
+            TNM_M,
+            STAGE_GROUP,
+            TUMOR_GRADE,
+            RECEPTOR_STATUS,
         }
     ),
     NDPA_SEX_LIFE: frozenset({GENDER, OTHER}),
@@ -1035,6 +1071,25 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ),
     FETAL_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
     OBSTETRIC_EVENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Pathology and histology concepts (issue #903)
+    HISTOLOGIC_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HISTOLOGIC_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MARGIN_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IHC_STAIN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    SPECIMEN_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Oncology TNM staging and tumor-descriptor concepts (issue #864). These
+    # are descriptive extraction labels; coding hints do not imply stage
+    # computation, prognosis, or treatment logic.
+    TNM_T: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TNM_N: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TNM_M: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    STAGE_GROUP: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TUMOR_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    RECEPTOR_STATUS: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        CLINICAL_SYSTEM_HINTS,
+    ),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -1182,6 +1237,19 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GESTATIONAL_AGE: HIPAA_UNIQUE_IDENTIFIER,
     FETAL_FINDING: HIPAA_UNIQUE_IDENTIFIER,
     OBSTETRIC_EVENT: HIPAA_UNIQUE_IDENTIFIER,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    HISTOLOGIC_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    MARGIN_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    IHC_STAIN: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    # Oncology TNM staging and tumor-descriptor concepts
+    TNM_T: HIPAA_UNIQUE_IDENTIFIER,
+    TNM_N: HIPAA_UNIQUE_IDENTIFIER,
+    TNM_M: HIPAA_UNIQUE_IDENTIFIER,
+    STAGE_GROUP: HIPAA_UNIQUE_IDENTIFIER,
+    TUMOR_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    RECEPTOR_STATUS: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -1318,6 +1386,19 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     GESTATIONAL_AGE: POPIA_HEALTH_INFORMATION,
     FETAL_FINDING: POPIA_HEALTH_INFORMATION,
     OBSTETRIC_EVENT: POPIA_HEALTH_INFORMATION,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: POPIA_HEALTH_INFORMATION,
+    HISTOLOGIC_GRADE: POPIA_HEALTH_INFORMATION,
+    MARGIN_STATUS: POPIA_HEALTH_INFORMATION,
+    IHC_STAIN: POPIA_HEALTH_INFORMATION,
+    SPECIMEN_TYPE: POPIA_HEALTH_INFORMATION,
+    # Oncology TNM staging and tumor-descriptor concepts
+    TNM_T: POPIA_HEALTH_INFORMATION,
+    TNM_N: POPIA_HEALTH_INFORMATION,
+    TNM_M: POPIA_HEALTH_INFORMATION,
+    STAGE_GROUP: POPIA_HEALTH_INFORMATION,
+    TUMOR_GRADE: POPIA_HEALTH_INFORMATION,
+    RECEPTOR_STATUS: POPIA_HEALTH_INFORMATION,
     # Catch-all for special personal information without a dedicated label
     OTHER: POPIA_OTHER_SPECIAL_INFORMATION,
 }
@@ -1898,6 +1979,32 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "gynaecologicfinding": CONDITION,
     "deliverymode": PROCEDURE,
     "modeofdelivery": PROCEDURE,
+    # Oncology TNM staging and tumor-descriptor concepts
+    "tnmt": TNM_T,
+    "tumorcategory": TNM_T,
+    "tumourcategory": TNM_T,
+    "tcategory": TNM_T,
+    "tnmn": TNM_N,
+    "nodecategory": TNM_N,
+    "ncategory": TNM_N,
+    "tnmm": TNM_M,
+    "metastasiscategory": TNM_M,
+    "mcategory": TNM_M,
+    "stagegroup": STAGE_GROUP,
+    "overallstage": STAGE_GROUP,
+    "overallstagegroup": STAGE_GROUP,
+    "tumorgrade": TUMOR_GRADE,
+    "tumourgrade": TUMOR_GRADE,
+    "grade": TUMOR_GRADE,
+    "tumorsize": MEASUREMENT,
+    "tumoursize": MEASUREMENT,
+    "receptorstatus": RECEPTOR_STATUS,
+    "receptor": RECEPTOR_STATUS,
+    "hormonereceptorstatus": RECEPTOR_STATUS,
+    "responseassessment": OTHER,
+    "treatmentresponse": OTHER,
+    "primarysite": BODY_SITE,
+    "primarytumorsite": BODY_SITE,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -1905,6 +2012,21 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "airwaydevice": AIRWAY_MANAGEMENT,
     "feedinghistory": NUTRITIONAL_STATUS,
     "pediatricfinding": CONDITION,
+    # Pathology and histology concepts
+    "specimentype": SPECIMEN_TYPE,
+    "grossdescription": OTHER,
+    "histologicfinding": HISTOLOGIC_FINDING,
+    "histologicalfinding": HISTOLOGIC_FINDING,
+    "histologicgrade": HISTOLOGIC_GRADE,
+    "histologicalgrade": HISTOLOGIC_GRADE,
+    "marginstatus": MARGIN_STATUS,
+    "ihc": IHC_STAIN,
+    "ihcstain": IHC_STAIN,
+    "immunohistochemistry": IHC_STAIN,
+    "immunohistochemistrystain": IHC_STAIN,
+    "mitoticcount": MEASUREMENT,
+    "mitoticindex": MEASUREMENT,
+    "tissuesite": BODY_SITE,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 # CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
@@ -2355,4 +2477,15 @@ __all__ = [
     "GESTATIONAL_AGE",
     "FETAL_FINDING",
     "OBSTETRIC_EVENT",
+    "HISTOLOGIC_FINDING",
+    "HISTOLOGIC_GRADE",
+    "MARGIN_STATUS",
+    "IHC_STAIN",
+    "SPECIMEN_TYPE",
+    "TNM_T",
+    "TNM_N",
+    "TNM_M",
+    "STAGE_GROUP",
+    "TUMOR_GRADE",
+    "RECEPTOR_STATUS",
 ]

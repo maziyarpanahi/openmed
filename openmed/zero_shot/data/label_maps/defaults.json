@@ -116,6 +116,17 @@
     "Tissue",
     "PathologicalFormation"
   ],
+  "oncology_staging": [
+    "TumorCategory",
+    "NodeCategory",
+    "MetastasisCategory",
+    "StageGroup",
+    "TumorGrade",
+    "TumorSize",
+    "ReceptorStatus",
+    "ResponseAssessment",
+    "PrimarySite"
+  ],
   "anatomy": [
     "Organ",
     "Tissue",
@@ -152,6 +163,16 @@
     "Disease",
     "Condition",
     "Pathology"
+  ],
+  "pathology_histology": [
+    "SpecimenType",
+    "GrossDescription",
+    "HistologicFinding",
+    "HistologicGrade",
+    "MarginStatus",
+    "ImmunohistochemistryStain",
+    "MitoticCount",
+    "TissueSite"
   ],
   "hematology": [
     "Cancer",

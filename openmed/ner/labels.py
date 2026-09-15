@@ -37,7 +37,9 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "nephrology_renal": "tests/fixtures/clinical/nephrology_renal.jsonl",
     "nursing_observation": "tests/fixtures/clinical/nursing_observation.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
+    "oncology_staging": "tests/fixtures/clinical/oncology_staging.jsonl",
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
+    "pathology_histology": "tests/fixtures/clinical/pathology_histology.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
     "obstetrics_gynecology": "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
@@ -66,6 +68,18 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "structured extraction only. This metadata does not compute gestational "
         "age, score risk, infer diagnosis, recommend care, or bundle restricted "
         "terminology; human review remains required."
+    ),
+    "pathology_histology": (
+        "The display labels describe pathology-report content for offline "
+        "extraction and human review only. They do not grade or stage a tumor, "
+        "apply diagnostic rules, recommend treatment, or make clinical decisions."
+    ),
+    "oncology_staging": (
+        "TNM and tumor-descriptor labels capture descriptors explicitly written "
+        "in an oncology note for descriptive extraction and human review only. "
+        "OpenMed does not compute a stage group, apply AJCC/UICC staging rules, "
+        "infer prognosis, recommend treatment, or make a medical decision, and "
+        "does not bundle staging manuals or proprietary tables."
     ),
 }
 

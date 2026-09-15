@@ -159,10 +159,22 @@
     "GESTATIONAL_AGE": "keep",
     "FETAL_FINDING": "keep",
     "OBSTETRIC_EVENT": "keep",
+
+    "HISTOLOGIC_FINDING": "keep",
+    "HISTOLOGIC_GRADE": "keep",
+    "MARGIN_STATUS": "keep",
+    "IHC_STAIN": "keep",
+    "SPECIMEN_TYPE": "keep",
     "INTAKE_OUTPUT": "keep",
     "LINE_DRAIN_TUBE": "keep",
     "NURSING_RISK_SCORE": "keep",
     "CARE_INTERVENTION": "keep",
+    "TNM_T": "keep",
+    "TNM_N": "keep",
+    "TNM_M": "keep",
+    "STAGE_GROUP": "keep",
+    "TUMOR_GRADE": "keep",
+    "RECEPTOR_STATUS": "keep",
     "OTHER": "keep"
   }
 }

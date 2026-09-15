@@ -159,10 +159,22 @@
     "GESTATIONAL_AGE": "mask",
     "FETAL_FINDING": "mask",
     "OBSTETRIC_EVENT": "mask",
+
+    "HISTOLOGIC_FINDING": "mask",
+    "HISTOLOGIC_GRADE": "mask",
+    "MARGIN_STATUS": "mask",
+    "IHC_STAIN": "mask",
+    "SPECIMEN_TYPE": "mask",
     "INTAKE_OUTPUT": "mask",
     "LINE_DRAIN_TUBE": "mask",
     "NURSING_RISK_SCORE": "mask",
     "CARE_INTERVENTION": "mask",
+    "TNM_T": "mask",
+    "TNM_N": "mask",
+    "TNM_M": "mask",
+    "STAGE_GROUP": "mask",
+    "TUMOR_GRADE": "mask",
+    "RECEPTOR_STATUS": "mask",
     "OTHER": "mask"
   },
   "metadata": {
