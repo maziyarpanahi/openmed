@@ -195,7 +195,7 @@ def write_manifest(
     task = config.get("_mlx_task", "token-classification")
     quantization = config.get("_mlx_quantization")
     quant_bits = quantization.get("bits") if isinstance(quantization, dict) else None
-    format_name = f"mlx-{quant_bits}bit" if quant_bits in {4, 8} else "mlx-fp"
+    format_name = f"mlx-{quant_bits}bit" if quant_bits in {2, 4, 8} else "mlx-fp"
 
     manifest = {
         "format": MANIFEST_FORMAT,
