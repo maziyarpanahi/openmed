@@ -158,6 +158,7 @@ classification:
     - model-loader.md
     - models/bundled-offline.md
     - models/bootstrap-diagnostics.md
+    - models/clinical-slm-template-digests.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md
     - model-registry.md
