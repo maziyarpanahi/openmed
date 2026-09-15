@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, offline SDOH negated-need resolution with
+  determinant-specific assertion scope, value-free provenance, and human
+  review for double-negated, contradictory, and uncertain findings (#2731).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
