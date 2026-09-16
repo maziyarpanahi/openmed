@@ -107,6 +107,11 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
+      - Medication-change Relation Candidates: clinical/medication-change-relations.md
+      - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
+      - Procedure-to-indication Relation Candidates: clinical/procedure-indication-relations.md
+      - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
+      - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md

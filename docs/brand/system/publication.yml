@@ -182,6 +182,11 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/medication-reconciliation.md
+    - clinical/medication-change-relations.md
+    - clinical/laboratory-result-relations.md
+    - clinical/procedure-indication-relations.md
+    - clinical/diagnosis-treatment-relations.md
+    - clinical/relation-review-priority.md
     - clinical/event-timeline.md
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
