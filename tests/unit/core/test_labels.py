@@ -125,6 +125,7 @@ from openmed.core.labels import (
     ORGANIZATION,
     OTHER,
     OXYGEN_SUPPORT,
+    PACK_YEARS,
     PASSWORD,
     PATHOLOGY,
     PERSON,
@@ -154,6 +155,7 @@ from openmed.core.labels import (
     STAGE_GROUP,
     STREET_ADDRESS,
     STRENGTH,
+    SUBSTANCE,
     SUSCEPTIBILITY,
     THYROID_MEASURE,
     TIME,
@@ -165,6 +167,8 @@ from openmed.core.labels import (
     UNIT,
     URINE_FINDING,
     URL,
+    USE_QUANTITY,
+    USE_STATUS,
     USER_AGENT,
     USERNAME,
     VACCINE_LOT,
@@ -1055,6 +1059,10 @@ class TestClinicalLabelsAreAdditive:
             ASSISTANCE_LEVEL,
             MOBILITY_ABILITY,
             FUNCTIONAL_SCALE,
+            SUBSTANCE,
+            USE_STATUS,
+            USE_QUANTITY,
+            PACK_YEARS,
         }
     )
 

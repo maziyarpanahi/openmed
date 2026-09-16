@@ -337,5 +337,14 @@
     "ObstetricEvent",
     "GynecologicFinding",
     "DeliveryMode"
+  ],
+  "substance_use_history": [
+    "Substance",
+    "UseStatus",
+    "UseQuantity",
+    "UseFrequency",
+    "UseDuration",
+    "QuitDate",
+    "PackYears"
   ]
 }

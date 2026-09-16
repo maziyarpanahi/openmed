@@ -246,6 +246,14 @@ ASSISTANCE_LEVEL: Final = "ASSISTANCE_LEVEL"
 MOBILITY_ABILITY: Final = "MOBILITY_ABILITY"
 FUNCTIONAL_SCALE: Final = "FUNCTIONAL_SCALE"
 
+#: Structured substance-use history concepts (issue #912). These labels
+#: describe explicit note spans that can feed ``openmed.clinical.sdoh``;
+#: they do not replace its determinant classification or normalization.
+SUBSTANCE: Final = "SUBSTANCE"
+USE_STATUS: Final = "USE_STATUS"
+USE_QUANTITY: Final = "USE_QUANTITY"
+PACK_YEARS: Final = "PACK_YEARS"
+
 #: Clinical-genomics variant-mention concepts (issue #906)
 GENE_SYMBOL: Final = "GENE_SYMBOL"
 VARIANT_DESCRIPTOR: Final = "VARIANT_DESCRIPTOR"
@@ -490,6 +498,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         ASSISTANCE_LEVEL,
         MOBILITY_ABILITY,
         FUNCTIONAL_SCALE,
+        SUBSTANCE,
+        USE_STATUS,
+        USE_QUANTITY,
+        PACK_YEARS,
         GENE_SYMBOL,
         CKD_STAGE,
         DIALYSIS_MODALITY,
@@ -787,6 +799,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             ASSISTANCE_LEVEL,
             MOBILITY_ABILITY,
             FUNCTIONAL_SCALE,
+            SUBSTANCE,
+            USE_STATUS,
+            USE_QUANTITY,
+            PACK_YEARS,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -1032,6 +1048,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         RISK_LOW,
         (SNOMED, LOINC),
     ),
+    # Structured substance-use spans complement the SDOH determinant helper;
+    # they do not classify risk or compute pack-years.
+    SUBSTANCE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    USE_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    USE_QUANTITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PACK_YEARS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Clinical genomics
     GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1242,6 +1264,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     ASSISTANCE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
     MOBILITY_ABILITY: HIPAA_UNIQUE_IDENTIFIER,
     FUNCTIONAL_SCALE: HIPAA_UNIQUE_IDENTIFIER,
+    SUBSTANCE: HIPAA_UNIQUE_IDENTIFIER,
+    USE_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    USE_QUANTITY: HIPAA_UNIQUE_IDENTIFIER,
+    PACK_YEARS: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical genomics
     GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
     VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
@@ -1402,6 +1428,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     ASSISTANCE_LEVEL: POPIA_HEALTH_INFORMATION,
     MOBILITY_ABILITY: POPIA_HEALTH_INFORMATION,
     FUNCTIONAL_SCALE: POPIA_HEALTH_INFORMATION,
+    SUBSTANCE: POPIA_HEALTH_INFORMATION,
+    USE_STATUS: POPIA_HEALTH_INFORMATION,
+    USE_QUANTITY: POPIA_HEALTH_INFORMATION,
+    PACK_YEARS: POPIA_HEALTH_INFORMATION,
     GENE_SYMBOL: POPIA_HEALTH_INFORMATION,
     VARIANT_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
     PROTEIN_CHANGE: POPIA_HEALTH_INFORMATION,
@@ -1932,6 +1962,16 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "katz": FUNCTIONAL_SCALE,
     "katzindex": FUNCTIONAL_SCALE,
     "cognitivestatus": OTHER,
+    # Structured substance-use history concepts. Frequency, duration, and date
+    # reuse the established canonical attributes instead of creating a second
+    # vocabulary alongside the SDOH helper.
+    "substance": SUBSTANCE,
+    "usestatus": USE_STATUS,
+    "usequantity": USE_QUANTITY,
+    "usefrequency": FREQUENCY,
+    "useduration": DURATION,
+    "quitdate": DATE,
+    "packyears": PACK_YEARS,
     # Clinical genomics
     "genesymbol": GENE_SYMBOL,
     "genename": GENE_SYMBOL,
@@ -2526,6 +2566,10 @@ __all__ = [
     "ASSISTANCE_LEVEL",
     "MOBILITY_ABILITY",
     "FUNCTIONAL_SCALE",
+    "SUBSTANCE",
+    "USE_STATUS",
+    "USE_QUANTITY",
+    "PACK_YEARS",
     "GENE_SYMBOL",
     "VARIANT_DESCRIPTOR",
     "PROTEIN_CHANGE",

@@ -78,6 +78,38 @@ def test_functional_status_reports_per_label_coverage() -> None:
     assert all(coverage.offsets for coverage in domain.per_label)
 
 
+def test_substance_use_history_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("substance_use_history",))
+
+    assert report.passed is True
+    assert report.missing_fixtures == ()
+    assert report.orphan_labels == ()
+    assert report.missing_labels == ()
+    domain = report.per_domain[0]
+    assert domain.fixture == "substance_use_history.jsonl"
+    assert domain.fixture_count == 2
+    assert [coverage.label for coverage in domain.per_label] == [
+        "Substance",
+        "UseStatus",
+        "UseQuantity",
+        "UseFrequency",
+        "UseDuration",
+        "QuitDate",
+        "PackYears",
+    ]
+    assert [coverage.canonical_label for coverage in domain.per_label] == [
+        "SUBSTANCE",
+        "USE_STATUS",
+        "USE_QUANTITY",
+        "FREQUENCY",
+        "DURATION",
+        "DATE",
+        "PACK_YEARS",
+    ]
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+    assert all(coverage.offsets for coverage in domain.per_label)
+
+
 def test_obstetrics_gynecology_reports_per_label_coverage_offline() -> None:
     report = assert_domain_coverage_gate(domains=("obstetrics_gynecology",))
 

@@ -491,6 +491,20 @@
 | GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 | DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 
+## Substance Use History
+
+**Alignment:** This map captures explicit substance, use-status, quantity, frequency, duration, quit-date, and pack-year spans for offline extraction and human review. It is complementary to, not a replacement for, the existing SDOH determinant extractor and does not classify risk, compute pack-years, recommend care, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Substance | SUBSTANCE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseStatus | USE_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseQuantity | USE_QUANTITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseFrequency | FREQUENCY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseDuration | DURATION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| QuitDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/substance_use_history.jsonl |
+| PackYears | PACK_YEARS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+
 ## Offline Coverage Evaluation
 
 The fixture-backed clinical domains are checked by the aggregate-only `clinical_domain_coverage` suite. Run `openmed benchmark domain-coverage --json --output domain-coverage.json` from the repository root to verify that every shipped display label has a non-empty synthetic span and that fixture labels resolve to the canonical label catalog.

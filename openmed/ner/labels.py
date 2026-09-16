@@ -44,6 +44,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
     "obstetrics_gynecology": "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
+    "substance_use_history": ("tests/fixtures/clinical/substance_use_history.jsonl"),
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
     "allergy_intolerance": (
@@ -70,6 +71,13 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "cognitive status for offline extraction review. It does not score "
         "Barthel or Katz scales, infer care needs, recommend a disposition, or "
         "make clinical decisions."
+    ),
+    "substance_use_history": (
+        "This map captures explicit substance, use-status, quantity, frequency, "
+        "duration, quit-date, and pack-year spans for offline extraction and "
+        "human review. It is complementary to, not a replacement for, the "
+        "existing SDOH determinant extractor and does not classify risk, compute "
+        "pack-years, recommend care, or make clinical decisions."
     ),
     "obstetrics_gynecology": (
         "The display labels cover pregnancy and reproductive-health concepts for "
