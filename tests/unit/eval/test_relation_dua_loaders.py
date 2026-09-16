@@ -59,10 +59,21 @@ def test_relation_dua_mappings_are_total_and_canonical() -> None:
     assert set(N2C2_2018_TRACK2_ENTITY_TO_CANONICAL.values()) <= CANONICAL_LABELS
     assert set(MADE_ENTITY_TO_CANONICAL.values()) <= CANONICAL_LABELS
 
+    for source_label, canonical_label in N2C2_2018_TRACK2_ENTITY_TO_CANONICAL.items():
+        assert map_n2c2_2018_track2_entity_label(source_label) == canonical_label
+    for source_type, canonical_type in N2C2_2018_TRACK2_RELATION_TO_CANONICAL.items():
+        assert map_n2c2_2018_track2_relation_type(source_type) == canonical_type
+    for source_label, canonical_label in MADE_ENTITY_TO_CANONICAL.items():
+        assert map_made_entity_label(source_label) == canonical_label
+    for source_type, canonical_type in MADE_RELATION_TO_CANONICAL.items():
+        assert map_made_relation_type(source_type) == canonical_type
+
     assert map_n2c2_2018_track2_entity_label("Drug") == MEDICATION
     assert map_n2c2_2018_track2_entity_label("Reason") == INDICATION
     assert map_n2c2_2018_track2_relation_type("Strength-Drug") == ("DRUG_TO_STRENGTH")
     assert map_made_entity_label("Drugname") == MEDICATION
+    assert map_made_entity_label("Drug_Name") == MEDICATION
+    assert map_made_entity_label("Adverse Drug Event") == CONDITION
     assert map_made_entity_label("Other_SSD") == CONDITION
     assert map_made_entity_label("Severity") == SEVERITY
     assert map_made_relation_type("ADE-Drugname") == "DRUG_TO_ADE"
@@ -319,6 +330,16 @@ def test_relation_dua_loaders_refuse_unconfigured_and_repo_paths(
     repo_root = Path(__file__).resolve().parents[3]
     with pytest.raises(DUACredentialRequired, match="repository tree"):
         loader(repo_root)
+
+
+def test_made_refuses_repository_file_symlink(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source = tmp_path / "credentialed"
+    source.mkdir()
+    (source / "made.json").symlink_to(repo_root / "docs/api/openapi.json")
+
+    with pytest.raises(DUACredentialRequired, match="repository tree"):
+        load_made_relation_fixtures(source)
 
 
 def _span(text: str, surface: str) -> int:

@@ -114,11 +114,10 @@ def map_made_entity_label(label: str) -> str:
 
     aliases = {
         "ade": "ADE",
-        "adverse_drug_event": "ADE",
+        "adversedrugevent": "ADE",
         "drug": "Drugname",
-        "drug_name": "Drugname",
+        "drugname": "Drugname",
         "medication": "Drugname",
-        "other_ssd": "Other SSD",
         "otherssd": "Other SSD",
         "ssd": "Other SSD",
     }
@@ -169,8 +168,10 @@ def load_made_relation_fixtures(
     sources = _source_files(source)
     fixtures: list[DrugProtRelationFixture] = []
     for source_kind, source_path, annotation_path in sources:
+        source_path = _validate_source_path(source_path, source)
         if source_kind == "brat":
             assert annotation_path is not None
+            annotation_path = _validate_source_path(annotation_path, source)
             fixtures.append(
                 _brat_fixture_from_pair(
                     source_path,
@@ -1005,6 +1006,26 @@ def _is_relative_to(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _validate_source_path(path: Path, root: Path) -> Path:
+    resolved_path = path.resolve(strict=False)
+    resolved_root = root.resolve(strict=False)
+    if _is_relative_to(resolved_path, _REPO_ROOT):
+        raise MADECredentialRequired(
+            f"{MADE_DUA_NAME} data must stay outside the repository tree; "
+            f"refusing to read {resolved_path}. No corpus rows were loaded."
+        )
+    if resolved_root.is_dir() and not _is_relative_to(resolved_path, resolved_root):
+        raise MADECredentialRequired(
+            f"{MADE_DUA_NAME} data must stay within the configured credentialed "
+            "path; refusing a source outside that path. No corpus rows were loaded."
+        )
+    if not resolved_path.is_file():
+        raise MADECredentialRequired(
+            f"{MADE_DUA_NAME} source is not a readable file; no corpus rows were loaded"
+        )
+    return resolved_path
 
 
 _missing_entity_mappings = sorted(
