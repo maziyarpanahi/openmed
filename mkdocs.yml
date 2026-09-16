@@ -113,6 +113,11 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
+      - SDOH Longitudinal Status Resolution: clinical/sdoh-longitudinal-resolution.md
+      - SDOH Sensitive-Use Labels: clinical/sdoh-sensitive-use-labels.md
+      - SDOH Review Routing: clinical/sdoh-review-routing.md
+      - SDOH Category Completeness: clinical/sdoh-category-completeness.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
