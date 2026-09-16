@@ -107,6 +107,7 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
+      - Medication-status NLI Precheck: clinical/nli-medication-status.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md
