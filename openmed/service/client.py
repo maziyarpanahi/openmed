@@ -27,12 +27,15 @@ PIILanguage = Literal[
     "kn",
     "ml",
     "mr",
+    "ne",
     "or",
     "pa",
     "ta",
     "te",
+    "ur",
     "pt",
     "ar",
+    "fa",
     "ja",
     "tr",
     "he",
@@ -51,6 +54,7 @@ PIILanguage = Literal[
     "uk",
     "cs",
     "el",
+    "vi",
 ]
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"

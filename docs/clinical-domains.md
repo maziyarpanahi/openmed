@@ -6,10 +6,10 @@
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Disease | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
-| Drug | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
-| Gene | GENE_SYMBOL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
-| Organism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
+| Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+| Drug | DRUG | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
+| Gene | GENE | CLINICAL_CONCEPT | low | SNOMED, HPO | Not shipped |
+| Organism | ORGANISM | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Clinical
 
@@ -25,7 +25,7 @@
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
 | Variant | VARIANT_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
-| Gene | GENE_SYMBOL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Gene | GENE | CLINICAL_CONCEPT | low | SNOMED, HPO | Not shipped |
 | Transcript | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Phenotype | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
@@ -99,7 +99,7 @@
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Species | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Species | SPECIES | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 | Strain | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Taxon | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Habitat | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
@@ -135,103 +135,145 @@
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Disease | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
+| Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 | Condition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
-| Pathology | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Pathology | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 
 ## Pharmaceutical
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Chemical | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
-| Drug | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
+| Chemical | CHEMICAL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Drug | DRUG | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
 | Medication | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
 
 ## Oncology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| SimpleChemical | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Chemical | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
-| AminoAcid | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| AnatomicalSystem | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Cancer | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Cell | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| GeneOrGeneProduct | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| CellularComponent | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| DevelopingAnatomicalStructure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| ImmaterialAnatomicalEntity | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| MultiTissueStructure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Organism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
-| Species | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Organ | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
-| OrganismSubdivision | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| OrganismSubstance | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Tissue | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| PathologicalFormation | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| SimpleChemical | CHEMICAL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Chemical | CHEMICAL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| AminoAcid | CHEMICAL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| AnatomicalSystem | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Cancer | CANCER | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+| Cell | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| GeneOrGeneProduct | GENE_OR_GENE_PRODUCT | CLINICAL_CONCEPT | low | SNOMED, HPO | Not shipped |
+| CellularComponent | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| DevelopingAnatomicalStructure | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| ImmaterialAnatomicalEntity | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| MultiTissueStructure | TISSUE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Organism | ORGANISM | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Species | SPECIES | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Organ | ORGAN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| OrganismSubdivision | ORGANISM | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| OrganismSubstance | ORGANISM | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Tissue | TISSUE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| PathologicalFormation | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+
+## Oncology Staging
+
+**Alignment:** TNM and tumor-descriptor labels capture descriptors explicitly written in an oncology note for descriptive extraction and human review only. OpenMed does not compute a stage group, apply AJCC/UICC staging rules, infer prognosis, recommend treatment, or make a medical decision, and does not bundle staging manuals or proprietary tables.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| TumorCategory | TNM_T | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| NodeCategory | TNM_N | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| MetastasisCategory | TNM_M | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| StageGroup | STAGE_GROUP | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorGrade | TUMOR_GRADE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorSize | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+| ReceptorStatus | RECEPTOR_STATUS | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| ResponseAssessment | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| PrimarySite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
 
 ## Anatomy
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Organ | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
-| Tissue | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Organ | ORGAN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Tissue | TISSUE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Genomics
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| GeneOrGeneProduct | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Gene | GENE_SYMBOL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
-| Protein | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| DNA | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| RNA | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| CellLine | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| CellType | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| GeneOrGeneProduct | GENE_OR_GENE_PRODUCT | CLINICAL_CONCEPT | low | SNOMED, HPO | Not shipped |
+| Gene | GENE | CLINICAL_CONCEPT | low | SNOMED, HPO | Not shipped |
+| Protein | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| DNA | DNA | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| RNA | RNA | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| CellLine | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| CellType | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Chemical
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| SimpleChemical | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Chemical | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
-| Drug | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
+| SimpleChemical | CHEMICAL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Chemical | CHEMICAL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Drug | DRUG | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
 | Medication | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
 
 ## Species
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Organism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
-| Species | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Organism | ORGANISM | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Species | SPECIES | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Protein
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| GeneOrGeneProduct | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Protein | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| ProteinComplex | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| ProteinEnumeration | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| ProteinFamilyOrGroup | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| ProteinVariant | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| GeneOrGeneProduct | GENE_OR_GENE_PRODUCT | CLINICAL_CONCEPT | low | SNOMED, HPO | Not shipped |
+| Protein | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| ProteinComplex | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| ProteinEnumeration | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| ProteinFamilyOrGroup | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| ProteinVariant | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Pathology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Disease | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
+| Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 | Condition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
-| Pathology | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Pathology | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+
+## Pathology Histology
+
+**Alignment:** The display labels describe pathology-report content for offline extraction and human review only. They do not grade or stage a tumor, apply diagnostic rules, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| SpecimenType | SPECIMEN_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| GrossDescription | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicFinding | HISTOLOGIC_FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicGrade | HISTOLOGIC_GRADE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MarginStatus | MARGIN_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| ImmunohistochemistryStain | IHC_STAIN | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MitoticCount | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| TissueSite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
 
 ## Hematology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Cancer | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Disease | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
-| CellLine | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Cancer | CANCER | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+| Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
+| CellLine | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Lab
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| LabTest | LAB_TEST | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| LabValue | LAB_VALUE | CLINICAL_CONCEPT | medium | LOINC, SNOMED | Not shipped |
+| Unit | UNIT | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| ReferenceRange | REFERENCE_RANGE | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| AbnormalFlag | ABNORMAL_FLAG | CLINICAL_CONCEPT | medium | LOINC, SNOMED | Not shipped |
+| Specimen | SPECIMEN | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 
 ## Cardiology
 
@@ -242,7 +284,7 @@
 | EjectionFraction | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | CardiacProcedure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | CardiacDevice | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Microbiology
 
@@ -251,7 +293,7 @@
 | Microorganism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
 | Antibiotic | ANTIBIOTIC | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
 | Susceptibility | SUSCEPTIBILITY | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
-| SpecimenSource | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| SpecimenSource | SPECIMEN | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 | CultureResult | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
 ## Dermatology
@@ -261,7 +303,7 @@
 | SkinLesion | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Morphology | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Distribution | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Ophthalmology
 
@@ -270,7 +312,18 @@
 | EyeFinding | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | VisualAcuity | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | IntraocularPressure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Radiology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Finding | FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| ImagingModality | IMAGING_MODALITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Laterality | LATERALITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Measurement | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Impression | FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
 
 ## Generic
 
@@ -353,6 +406,19 @@
 | AdministrationDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/immunization.jsonl |
 | VaccineSeries | VACCINE_SERIES | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
 
+## Allergy Intolerance
+
+**Alignment:** The display labels are shaped for the planned OM-138 FHIR AllergyIntolerance exporter: Allergen maps to code, ReactionManifestation to reaction.manifestation, ReactionSeverity to reaction.severity, Criticality to criticality, AllergyType to type, and OnsetContext to onset. This is descriptive extraction metadata only; it is not a contraindication check, drug-allergy cross-check, recommendation, or clinical decision logic.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Allergen | ALLERGEN | CLINICAL_CONCEPT | low | RxNorm, SNOMED | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| ReactionManifestation | REACTION_MANIFESTATION | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| ReactionSeverity | REACTION_SEVERITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| Criticality | ALLERGY_CRITICALITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| AllergyType | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/allergy_intolerance.jsonl |
+| OnsetContext | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/allergy_intolerance.jsonl |
+
 ## Pulmonology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
@@ -397,3 +463,36 @@
 | CareIntervention | CARE_INTERVENTION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+
+## Functional Status
+
+**Alignment:** This map captures documented activities of daily living, assistance, mobility, assistive-device mentions, functional-scale references, and cognitive status for offline extraction review. It does not score Barthel or Katz scales, infer care needs, recommend a disposition, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| ADLActivity | ADL_ACTIVITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| AssistanceLevel | ASSISTANCE_LEVEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| MobilityAbility | MOBILITY_ABILITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| AssistiveDevice | DEVICE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| FunctionalScale | FUNCTIONAL_SCALE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+| CognitiveStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+
+## Obstetrics Gynecology
+
+**Alignment:** The display labels cover pregnancy and reproductive-health concepts for structured extraction only. This metadata does not compute gestational age, score risk, infer diagnosis, recommend care, or bundle restricted terminology; human review remains required.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GravidityParity | GRAVIDITY_PARITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GestationalAge | GESTATIONAL_AGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| FetalFinding | FETAL_FINDING | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| MenstrualHistory | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| ObstetricEvent | OBSTETRIC_EVENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+
+## Offline Coverage Evaluation
+
+The fixture-backed clinical domains are checked by the aggregate-only `clinical_domain_coverage` suite. Run `openmed benchmark domain-coverage --json --output domain-coverage.json` from the repository root to verify that every shipped display label has a non-empty synthetic span and that fixture labels resolve to the canonical label catalog.
+
+The gate fails on a missing fixture, an orphan label, an invalid offset, or a label with no span. Reports contain domain names, labels, offsets, and counts only; fixture text is never emitted.

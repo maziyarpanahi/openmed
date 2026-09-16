@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "synthetic": true,
+    "clinical_use": false,
+    "notice": "Synthetic fixture only; production dose ranges are user-supplied and are not bundled by OpenMed."
+  },
+  "ranges": {
+    "synthetic medication alpha": {
+      "oral": {
+        "low": 100,
+        "high": 500,
+        "unit": "mg"
+      }
+    }
+  }
+}

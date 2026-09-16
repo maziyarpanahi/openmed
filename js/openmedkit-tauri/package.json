@@ -1,0 +1,31 @@
+{
+  "name": "@openmed/openmedkit-tauri",
+  "version": "0.1.0",
+  "description": "Typed Tauri client for the OpenMed local de-identification sidecar.",
+  "private": true,
+  "type": "module",
+  "main": "./src/client.ts",
+  "types": "./src/client.ts",
+  "files": [
+    "src",
+    "src-tauri"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run typecheck && tsx --test ../../tests/desktop/test_tauri_client.ts"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": ">=2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "Apache-2.0"
+}

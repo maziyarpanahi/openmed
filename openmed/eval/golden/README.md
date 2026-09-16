@@ -58,6 +58,27 @@ critical-finding disclaimers, and language coverage. The JSON and JSONL files
 are also compatible with `openmed.eval.harness.load_fixtures`; golden-specific
 expected output remains available through each fixture's metadata.
 
+## Multi-annotator annotation imports
+
+The golden loader also provides local-only adapters for multi-annotator
+extraction exports. Use load_brat_multi_annotator_document with a BRAT text file
+and a mapping of annotator ids to their standoff files. Use
+load_label_studio_multi_annotator_export for a Label Studio JSON export; both
+current annotations and legacy completions task keys are accepted.
+
+Each adapter returns a MultiAnnotatorGoldDocument. Its spans are normalized
+EvalSpan values carrying annotator_id, document_id, source_format, and
+source_annotation_id metadata. Its directed AnnotationRelation values preserve
+the source and target annotation ids, relation id, endpoint spans, and
+source-format metadata. Offsets must match the supplied source text, and
+relations with missing endpoints raise ValueError before a document is
+returned. The adapters do not compute agreement, adjudicate disagreements, or
+emit evidence reports.
+
+Committed examples for these tests live under
+tests/fixtures/eval/golden_annotations. They are explicitly synthetic-only and
+contain no real clinical notes or restricted corpora.
+
 ## Temporal TLINK Fixtures
 
 `fixtures/temporal_tlinks.jsonl` contains hand-authored, synthetic-only
@@ -89,6 +110,34 @@ validates the safety manifest, exact span offsets, canonical labels, generated
 identifier shapes, address/PIN pairing, script coverage, and cross-document
 identity metadata. The JSONL file is intentionally excluded from the generic
 golden loader because its richer corpus schema is validated separately.
+
+The `india_clinical_phi_leakage` and `india_surrogate_consistency` suites are
+registered in `openmed.eval.suites.DEFAULT_SUITES`, so `load_suite_fixtures`
+and `suite_metadata` discover them without caller-specific wiring. The
+consistency suite verifies that every declared alias of one synthetic person
+resolves to a single surrogate identity across documents and across Latin,
+Devanagari, and Tamil; that each rendered surrogate stays in its source script;
+that no alias surface survives replacement; and that an identifier repeated
+across documents keeps one surrogate that still satisfies its own shape or
+checksum validator.
+
+`openmed.eval.run_india_clinical_suite_report` combines DPDP per-label policy
+coverage, the residual zero-leak verdict, and the surrogate-consistency verdict
+into one report of counts, canonical labels, offsets, and HMAC hashes; no raw
+identifier or alias surface appears in it.
+
+The consistency gate covers the default name-matching path. Two behaviours are
+recorded in every result as un-gated `known_divergences` entries, so a passing
+verdict is never read as broader assurance than it is:
+
+1. The opt-in `transliteration_aware_name_matching` path does not collapse
+   these aliases into one identity, because the Devanagari inherent vowel and
+   the Tamil surname rendering fold to different Latin keys.
+2. The vault normalizes the key language for personal names to `india` but
+   keeps the document language for structured identifiers, so the same Aadhaar
+   in the Hindi and Tamil notes yields two surrogates. Names link across
+   languages; identifiers do not. The gated linkage check is therefore scoped
+   to `(value, language)`, the granularity the vault actually guarantees.
 
 The corpus contains no real PHI, production data, restricted corpus material,
 or DUA data. It is an assist-only, non-decisional evaluation fixture, not

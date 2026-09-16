@@ -5,6 +5,9 @@ metadata. It composes deterministic ConText-style axes, section priors, scoped
 modifier hits, and lightweight normalization helpers so downstream exporters can
 keep clinical text extraction transparent.
 
+For a bounded composition of sections, source-aligned entities, assertions, and
+cue evidence, see the [clinical context analysis API](context-analysis.md).
+
 !!! warning "Advisory annotations only"
     Context and extraction-depth outputs are advisory annotations for review,
     quality checks, and downstream processing. They must not automatically
@@ -83,7 +86,7 @@ backward compatibility. A registered non-English pack is otherwise isolated:
 missing cues keep the default recent, certain, and affirmed axes rather than
 borrowing English cues.
 
-The shipped `en`, `es`, `fr`, `de`, `zh`, and `hi` packs live in
+The shipped `en`, `es`, `fr`, `de`, `zh`, `hi`, and `pt` packs live in
 `openmed/clinical/lexicons/context_cues.py`. They are compact,
 OpenMed-authored surface-form tables distributed with the repository under
 Apache-2.0. They are not verbatim exports of a publication's supplementary
@@ -105,7 +108,7 @@ compatible with Apache-2.0.
 | [Velupillai et al., *Cue-based assertion classification for Swedish clinical text—developing a lexicon for pyConTextSwe*](https://pmc.ncbi.nlm.nih.gov/articles/PMC4104142/) | The practice of testing language-specific cues, inflections, uncertainty, and error-driven refinements independently. | Swedish is not a shipped pack, and no pyConTextSwe cue or clinical sentence was copied. |
 
 The English pack migrated the pre-registry OpenMed tuples to preserve existing
-behavior. The Spanish, French, German, Chinese, and Hindi packs are
+behavior. The Spanish, French, German, Chinese, Hindi, and Portuguese packs are
 OpenMed-maintained baselines authored as small lists of common surface forms.
 The multilingual publications above informed their structure and review
 criteria; they are not a claim that every shipped phrase occurs in those
@@ -113,6 +116,19 @@ resources. Chinese and Hindi entries in particular are OpenMed-authored
 applications of the published cue-and-scope method, not translations imported
 from those publications. Their committed evaluation evidence is the synthetic
 fixture described below, not a restricted clinical corpus.
+
+The Portuguese pack was authored from no external lexical source: no URL, DOI,
+or third-party cue list was consulted or copied, so there is no upstream
+license to honor beyond this repository's Apache-2.0 terms. Its entries are
+common Brazilian and European Portuguese clinical surface forms, and every one
+of them carries a behavioral regression case in
+`tests/unit/clinical/test_context_multilingual.py`; an exact-set test fails if
+a cue is added without one. Two review notes are recorded rather than assumed.
+Bare `se` is excluded from the conditional cues because it is also the
+reflexive clitic, and bare `previo`/`previa` are excluded because
+`placenta previa` is a diagnosis rather than a temporal marker. The pack has
+not yet had a fluent-clinician sign-off; the shipped evidence is the cue-level
+regression table and the synthetic fixture, not a native-speaker review.
 
 ### Lexicon Fields
 
@@ -236,16 +252,37 @@ mappings with `negation`, `uncertainty`, `experiencer`, and `temporality`, and
 also places those fields under `metadata["clinical_context"]` for compatibility
 with formatted NER results. Input spans are not mutated.
 
+Pass detected or upstream `SectionSpan` metadata through `sections=` to apply
+section-scoped priors. The span must fall inside the section's half-open
+`start`/`end` range. Canonical labels and supported LOINC section codes are
+accepted. With this opt-in path, each result also contains `context_sources`
+and `metadata["clinical_context_sources"]`, recording the winning source for
+each axis.
+
+Precedence is deterministic for every axis:
+
+1. `local` — an explicit in-clause modifier wins.
+2. `section` — a containing-section prior is used when no local modifier wins.
+3. `default` — the existing global default is used otherwise.
+
+Family History supplies `experiencer=family`; Past Medical History supplies
+`temporality=historical`. Section header text is not treated as a local cue, so
+provenance distinguishes a section prior from an explicit statement in the
+section body. Omitting `sections` preserves the prior output shape and values.
+
 ```python
 from openmed.clinical import assert_context
+from openmed.clinical.sections import detect_sections
 
-text = "No evidence of pneumonia."
-start = text.index("pneumonia")
+text = "Past Medical History:\nPneumonia."
+start = text.index("Pneumonia")
 [span] = assert_context(
     text,
-    [{"text": "pneumonia", "start": start, "end": start + 9}],
+    [{"text": "Pneumonia", "start": start, "end": start + 9}],
+    sections=detect_sections(text),
 )
-print(span["negation"])
+print(span["temporality"])
+print(span["context_sources"]["temporality"])
 ```
 
 `assert_context_axes()` returns a compact `ClinicalAssertion` for downstream
@@ -316,6 +353,56 @@ def condition_status_for_context(text: str, modifiers: list[str]) -> dict[str, s
 
 print(condition_status_for_context("pneumonia", ["possible"]))
 print(condition_status_for_context("pneumonia", ["no evidence of"]))
+```
+
+## Patient-Record Span Filter
+
+`filter_patient_record(spans, assertions)` is the shared guarded filter that
+applies the documented inclusion policy to per-span `ClinicalAssertion` records
+and partitions them into patient-record eligible and excluded sets. It prevents
+every grounding/export consumer from re-implementing the "drop non-patient,
+mark negated as refuted" policy independently.
+
+The policy is hard at the experiencer boundary:
+
+* `experiencer` must be `patient` (or unset) for a span to be included.
+  Both `family` and `other` experiencers are excluded with
+  `exclusion_reason='non-patient experiencer'`.
+* `temporality=hypothetical` spans are excluded with
+  `exclusion_reason='hypothetical'` (not asserted as present).
+* `negation=negated` patient spans are **kept** and marked
+  `record_status='refuted'` so downstream grounding can emit
+  `verificationStatus=refuted`.
+* All other patient spans are included with `record_status='recorded'`.
+
+Every input span appears in exactly one output set with an auditable reason or
+status; no span is silently dropped. The filter is a deterministic
+record-construction aid, not a clinical determination.
+
+```python
+from openmed.clinical import (
+    AFFIRMED,
+    CERTAIN,
+    NEGATED,
+    OTHER_EXPERIENCER,
+    PATIENT_EXPERIENCER,
+    RECENT,
+    ClinicalAssertion,
+    filter_patient_record,
+)
+
+spans = [
+    {"text": "diabetes", "start": 0, "end": 8, "label": "CONDITION"},
+    {"text": "mother cancer", "start": 10, "end": 23, "label": "CONDITION"},
+]
+assertions = [
+    ClinicalAssertion(temporality=RECENT, certainty=CERTAIN, negation=AFFIRMED, experiencer=PATIENT_EXPERIENCER),
+    ClinicalAssertion(temporality=RECENT, certainty=CERTAIN, negation=AFFIRMED, experiencer=OTHER_EXPERIENCER),
+]
+
+included, excluded = filter_patient_record(spans, assertions)
+# included:  [PatientRecordSpan(span=spans[0], record_status='recorded')]
+# excluded:  [PatientRecordSpan(span=spans[1], exclusion_reason='non-patient experiencer')]
 ```
 
 ## Timeline, Relation, And Normalization Helpers

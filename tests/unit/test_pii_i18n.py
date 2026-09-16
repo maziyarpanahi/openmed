@@ -23,11 +23,14 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     NIGERIA_HFR_SYNTHETIC_SERIAL_MAX,
     NIGERIA_HFR_SYNTHETIC_SERIAL_MIN,
     generate_african_phone,
+    generate_belgian_rrn,
     generate_bulgarian_egn,
     generate_egyptian_national_id,
     generate_estonian_isikukood,
     generate_ethiopia_fayda,
     generate_jmbg,
+    generate_mexican_curp,
+    generate_mexican_rfc,
     generate_moroccan_cin,
     generate_mpesa_transaction_code,
     generate_philhealth_pin,
@@ -35,12 +38,14 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_russian_oms,
     generate_russian_snils,
     generate_rwanda_id,
+    generate_swiss_ahv,
     generate_tanzania_nida,
     generate_uganda_nin,
     generate_vietnamese_cccd,
     generate_vietnamese_cmnd,
     register_clinical_providers,
 )
+from openmed.core.pii import _prepare_pii_text
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     AADHAAR_PII_PATTERNS,
@@ -59,10 +64,16 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     AfricanMobilePlan,
     build_african_mobile_pattern,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
+    validate_bangladesh_nid,
+    validate_belgian_rrn,
+    validate_bengali_aadhaar,
+    validate_bengali_mobile,
+    validate_bengali_postcode,
     validate_bic,
     validate_bulgarian_egn,
     validate_croatian_oib,
@@ -81,8 +92,11 @@ from openmed.core.pii_i18n import (
     validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
+    validate_iran_national_id,
+    validate_irish_pps,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_japanese_my_number,
     validate_jmbg,
     validate_kenya_maisha_namba,
     validate_kenya_mfl_code,
@@ -90,6 +104,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mexican_curp,
+    validate_mexican_rfc,
     validate_mobile_money_paybill,
     validate_mobile_money_till,
     validate_momo_reference,
@@ -112,6 +128,7 @@ from openmed.core.pii_i18n import (
     validate_spanish_dni,
     validate_spanish_nie,
     validate_swedish_personnummer,
+    validate_swiss_ahv,
     validate_tanzania_nida,
     validate_thai_national_id,
     validate_turkish_tckn,
@@ -147,6 +164,7 @@ class TestConstants:
             "ta",
             "pt",
             "ar",
+            "fa",
             "he",
             "ja",
             "tr",
@@ -166,6 +184,7 @@ class TestConstants:
             "uk",
             "cs",
             "el",
+            "vi",
         }
 
     def test_national_id_only_languages(self):
@@ -185,13 +204,14 @@ class TestConstants:
             "hr",
             "bg",
             "fi",
-            "vi",
             "rw",
             "ur",
         }
 
     def test_language_names_keys(self):
-        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        assert set(LANGUAGE_NAMES.keys()) == (
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+        )
 
     def test_language_model_prefix(self):
         assert LANGUAGE_MODEL_PREFIX["am"] == "Amharic-"
@@ -207,6 +227,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
         assert LANGUAGE_MODEL_PREFIX["pt"] == "Portuguese-"
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
+        assert LANGUAGE_MODEL_PREFIX["fa"] == "Persian-"
         assert LANGUAGE_MODEL_PREFIX["he"] == "Hebrew-"
         assert LANGUAGE_MODEL_PREFIX["ja"] == "Japanese-"
         assert LANGUAGE_MODEL_PREFIX["tr"] == "Turkish-"
@@ -224,10 +245,13 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["uk"] == "Ukrainian-"
         assert LANGUAGE_MODEL_PREFIX["cs"] == "Czech-"
         assert LANGUAGE_MODEL_PREFIX["el"] == "Greek-"
+        assert LANGUAGE_MODEL_PREFIX["vi"] == "Vietnamese-"
 
     def test_default_pii_models_all_languages(self):
-        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
-            INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}
+        assert set(DEFAULT_PII_MODELS.keys()) == (
+            SUPPORTED_LANGUAGES
+            | (INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"})
+            | USER_SUPPLIED_MODEL_LANGUAGES
         )
 
     def test_default_pii_models_naming(self):
@@ -241,7 +265,7 @@ class TestConstants:
         assert "Hindi" in DEFAULT_PII_MODELS["hi"]
         assert "Bengali" in DEFAULT_PII_MODELS["bn"]
         assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
-        assert "Tamil" in DEFAULT_PII_MODELS["ta"]
+        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
         assert "Telugu" in DEFAULT_PII_MODELS["te"]
         assert "Portuguese" in DEFAULT_PII_MODELS["pt"]
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
@@ -265,6 +289,7 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
+        assert "Vietnamese" in DEFAULT_PII_MODELS["vi"]
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -273,6 +298,296 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+class TestBengaliValidators:
+    """Validator coverage for Bengali PII values."""
+
+    @pytest.mark.parametrize(
+        ("entity_type", "value"),
+        (
+            ("date", "১৫/০৮/১৯৮৫"),
+            ("date", "১৫ আগস্ট ১৯৮৫"),
+            ("phone_number", "+৯১ ৯৮৭৬৫ ৪৩২১০"),
+            ("phone_number", "+৮৮০ ১৭১২৩৪৫৬৭৮"),
+            ("national_id", "২৪৬৭ ৭৮৩২ ৫৪৮৪"),
+            ("national_id", "১২৩৪৫৬৭৮৯০"),
+            ("postcode", "১২০৫"),
+            ("postcode", "৭০০০০১"),
+            ("street_address", "১২ কাজী নজরুল ইসলাম রোড"),
+            ("street_address", "শান্তি নগর"),
+        ),
+    )
+    def test_bengali_patterns_detect_required_entities(self, entity_type, value):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == entity_type
+        ]
+
+        assert patterns
+
+        for pattern in patterns:
+            match = re.fullmatch(pattern.pattern, value, pattern.flags)
+            if match is None:
+                continue
+            if pattern.validator is None or pattern.validator(match.group(0)):
+                break
+        else:
+            pytest.fail(f"No validated Bengali {entity_type} pattern matched {value!r}")
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1234567890",
+            "1234567890123",
+            "12345678901234567",
+            "১২৩৪৫৬৭৮৯০",
+            "১২৩৪৫৬৭৮৯০১২৩",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭",
+        ),
+    )
+    def test_bangladesh_nid_accepts_supported_lengths(self, value):
+        assert validate_bangladesh_nid(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "123456789",
+            "12345678901",
+            "123456789012",
+            "12345678901234",
+            "1234567890123456",
+            "123456789012345678",
+            "12345-67890",
+            "১২৩৪৫ ৬৭৮৯০",
+            "１２３４５６７８９０",
+            "",
+            None,
+        ),
+    )
+    def test_bangladesh_nid_rejects_unsupported_structures(self, value):
+        assert not validate_bangladesh_nid(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "১২৩৪৫৬৭৮৯",
+            "১২৩৪৫৬৭৮৯০১",
+            "১২৩৪৫৬৭৮৯০১২৩৪",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬",
+            "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭৮",
+        ),
+    )
+    def test_unsupported_nid_lengths_do_not_match_any_bengali_id_pattern(self, value):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == "national_id"
+        ]
+
+        assert not any(
+            match is not None
+            and (pattern.validator is None or pattern.validator(match.group(0)))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, value, pattern.flags)) is not None
+        )
+
+    def test_bengali_aadhaar_accepts_ascii_and_native_digits(self):
+        assert validate_bengali_aadhaar("2467 7832 5484")
+        assert validate_bengali_aadhaar("২৪৬৭ ৭৮৩২ ৫৪৮৪")
+
+    def test_bengali_aadhaar_rejects_invalid_checksum_and_types(self):
+        assert not validate_bengali_aadhaar("2467 7832 5485")
+        assert not validate_bengali_aadhaar("২৪৬৭ ৭৮৩২ ৫৪৮৫")
+        assert not validate_bengali_aadhaar(None)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "+91 98765 43210",
+            "+৯১ ৯৮৭৬৫ ৪৩২১০",
+            "+880 1712345678",
+            "+৮৮০ ১৭১২৩৪৫৬৭৮",
+        ),
+    )
+    def test_bengali_mobile_accepts_supported_international_numbers(self, value):
+        assert validate_bengali_mobile(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "+91 58765 43210",
+            "+880 1212345678",
+            "+880 171234567",
+            "01712345678",
+            "9876543210",
+            "+৮৮০ ১২১২৩৪৫৬৭৮",
+            "",
+            None,
+        ),
+    )
+    def test_bengali_mobile_rejects_unsupported_numbers(self, value):
+        assert not validate_bengali_mobile(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1205",
+            "১২০৫",
+            "700001",
+            "৭০০০০১",
+        ),
+    )
+    def test_bengali_postcode_accepts_bangladesh_and_indian_formats(self, value):
+        assert validate_bengali_postcode(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "0123",
+            "12345",
+            "000000",
+            "1234567",
+            "１２３４",
+            "",
+            None,
+        ),
+    )
+    def test_bengali_postcode_rejects_invalid_formats(self, value):
+        assert not validate_bengali_postcode(value)
+
+
+class TestValidateIranNationalID:
+    """Tests for the Iranian national identity code checksum."""
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1234567891",
+            "۱۲۳۴۵۶۷۸۹۱",
+            "١٢٣٤٥٦٧٨٩١",
+            " 1234567891 ",
+        ),
+    )
+    def test_accepts_ascii_persian_and_arabic_indic_digits(self, value):
+        assert validate_iran_national_id(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "1234567892",
+            "۱۲۳۴۵۶۷۸۹۲",
+            "0000000000",
+            "۱۱۱۱۱۱۱۱۱۱",
+            "123456789",
+            "12345678910",
+            "12345-67891",
+            "",
+            None,
+        ),
+    )
+    def test_rejects_bad_checksum_repeated_digits_and_invalid_shapes(self, value):
+        assert not validate_iran_national_id(value)
+
+
+class TestPersianPIIPatterns:
+    """Persian RTL pattern, month-name, and synthetic-data coverage."""
+
+    @staticmethod
+    def _matches(entity_type, value):
+        for pattern in LANGUAGE_PII_PATTERNS["fa"]:
+            if pattern.entity_type != entity_type:
+                continue
+            match = re.fullmatch(pattern.pattern, value, pattern.flags)
+            if match is None:
+                continue
+            if pattern.validator is None or pattern.validator(match.group(0)):
+                return True
+        return False
+
+    def test_patterns_are_registered_and_discoverable(self):
+        persian_patterns = LANGUAGE_PII_PATTERNS["fa"]
+        combined = get_patterns_for_language("fa")
+
+        assert persian_patterns
+        assert all(
+            any(pattern is observed for observed in combined)
+            for pattern in persian_patterns
+        )
+
+    def test_all_solar_hijri_month_names_are_registered(self):
+        assert LANGUAGE_MONTH_NAMES["fa"] == [
+            "فروردین",
+            "اردیبهشت",
+            "خرداد",
+            "تیر",
+            "مرداد",
+            "شهریور",
+            "مهر",
+            "آبان",
+            "آذر",
+            "دی",
+            "بهمن",
+            "اسفند",
+        ]
+
+    @pytest.mark.parametrize(
+        ("entity_type", "value"),
+        (
+            ("date", "۱۴۰۵/۰۵/۲۹"),
+            ("date", "5 فروردین 1405"),
+            ("phone_number", "+98 912 345 6789"),
+            ("phone_number", "۰۹۱۲ ۳۴۵ ۶۷۸۹"),
+            ("phone_number", "٠٩١٢ ٣٤٥ ٦٧٨٩"),
+            ("national_id", "۱۲۳۴۵۶۷۸۹۱"),
+            ("postcode", "۱۴۳۹۸۱۴۵۶۷"),
+            ("street_address", "خیابان ولیعصر، کوچه بهار، پلاک ۱۲"),
+        ),
+    )
+    def test_required_entities_match_all_supported_digit_styles(
+        self,
+        entity_type,
+        value,
+    ):
+        assert self._matches(entity_type, value)
+
+    def test_fake_data_is_complete_and_persian(self):
+        data = LANGUAGE_FAKE_DATA["fa"]
+
+        assert {"NAME", "EMAIL", "PHONE", "DATE", "LOCATION"} <= data.keys()
+        assert any("احمدی" in name or "رضایی" in name for name in data["NAME"])
+        assert all("example" in email for email in data["EMAIL"])
+        assert any(phone.startswith(("+98", "09", "۰۹")) for phone in data["PHONE"])
+
+    @pytest.mark.parametrize(
+        ("language", "native_digits"),
+        (
+            ("fa", "۱۲۳۴۵۶۷۸۹۱"),
+            ("fa_IR", "١٢٣٤٥٦٧٨٩١"),
+            ("fa-IR", "۱۲۳۴۵۶۷۸۹۱"),
+        ),
+    )
+    def test_main_pipeline_folds_eastern_digits_without_shifting_offsets(
+        self,
+        language,
+        native_digits,
+    ):
+        text = f"بیمار: کد ملی {native_digits}."
+        start = text.index(native_digits)
+        end = start + len(native_digits)
+
+        prepared = _prepare_pii_text(
+            text,
+            lang=language,
+            normalize_accents=False,
+            preserve_whitespace=True,
+        )
+
+        assert prepared.original_text == text
+        assert prepared.inference_text[start:end] == "1234567891"
+        assert len(prepared.inference_text) == len(text)
+        assert prepared.detection_normalization.folded_native_digits == 10
 
 
 class TestEastAfricanNationalIds:
@@ -695,6 +1010,290 @@ class TestValidateDutchBSN:
 
 
 # ---------------------------------------------------------------------------
+# Irish PPS and Japanese My Number Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateIrishPPS:
+    """Tests for the Irish PPS weighted modulo-23 checksum."""
+
+    def test_valid_pps_with_one_or_two_letters(self):
+        assert validate_irish_pps("1234567T") is True
+        assert validate_irish_pps("1234567FA") is True
+        assert validate_irish_pps("1234567t") is True
+
+    def test_invalid_pps_checksum_or_shape(self):
+        assert validate_irish_pps("1234567A") is False
+        assert validate_irish_pps("1234567TA") is False
+        assert validate_irish_pps("123456T") is False
+
+
+class TestValidateJapaneseMyNumber:
+    """Tests for the Japanese My Number weighted modulo-11 checksum."""
+
+    def test_valid_my_number_plain_and_spaced(self):
+        assert validate_japanese_my_number("123456789018") is True
+        assert validate_japanese_my_number("1234 5678 9018") is True
+
+    def test_invalid_my_number_checksum_or_shape(self):
+        assert validate_japanese_my_number("123456789012") is False
+        assert validate_japanese_my_number("1234 5678 9012") is False
+        assert validate_japanese_my_number("000000000000") is False
+        assert validate_japanese_my_number("1234/5678/9018") is False
+
+
+# ---------------------------------------------------------------------------
+# Belgian RRN and Swiss AHV Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateBelgianRRN:
+    """Tests for validate_belgian_rrn()."""
+
+    def test_valid_pre_2000_rrn(self):
+        assert validate_belgian_rrn("42.01.22-051.81") is True
+
+    def test_valid_post_2000_rrn_uses_prefixed_checksum(self):
+        assert validate_belgian_rrn("00.01.01-001.05") is True
+        assert validate_belgian_rrn("00010100105") is True
+
+    def test_invalid_rrn_wrong_checksum(self):
+        assert validate_belgian_rrn("42.01.22-051.82") is False
+        assert validate_belgian_rrn("00.01.01-001.06") is False
+
+    def test_invalid_rrn_embedded_date_or_sequence(self):
+        assert validate_belgian_rrn("00.02.30-001.15") is False
+        assert validate_belgian_rrn("42.01.22-000.35") is False
+
+    def test_generated_rrns_round_trip_both_century_paths(self):
+        generated = {
+            generate_belgian_rrn(rng=random.Random(seed)) for seed in range(80)
+        }
+        assert all(validate_belgian_rrn(value) for value in generated)
+        checksum_paths = set()
+        for value in generated:
+            digits = re.sub(r"\D", "", value)
+            body = digits[:9]
+            control = int(digits[9:])
+            if control == 97 - (int(body) % 97):
+                checksum_paths.add("pre_2000")
+            if control == 97 - (int(f"2{body}") % 97):
+                checksum_paths.add("post_2000")
+        assert checksum_paths == {"pre_2000", "post_2000"}
+
+
+class TestValidateSwissAHV:
+    """Tests for validate_swiss_ahv()."""
+
+    def test_valid_ahv_plain_and_formatted(self):
+        assert validate_swiss_ahv("7561234567897") is True
+        assert validate_swiss_ahv("756.1234.5678.97") is True
+
+    def test_invalid_ahv_wrong_checksum(self):
+        assert validate_swiss_ahv("756.1234.5678.96") is False
+
+    def test_invalid_ahv_wrong_prefix_even_with_valid_ean_check(self):
+        assert validate_swiss_ahv("7571234567896") is False
+
+    def test_generated_ahv_round_trips(self):
+        for seed in range(40):
+            assert validate_swiss_ahv(generate_swiss_ahv(rng=random.Random(seed)))
+
+
+@pytest.mark.parametrize(
+    ("language", "locale", "context", "value", "validator"),
+    [
+        (
+            "fr",
+            "fr_BE",
+            "Numéro de registre national",
+            "42.01.22-051.81",
+            validate_belgian_rrn,
+        ),
+        ("nl", "nl_BE", "Rijksregisternummer", "42.01.22-051.81", validate_belgian_rrn),
+        (
+            "de",
+            "de_BE",
+            "Nationalregisternummer",
+            "42.01.22-051.81",
+            validate_belgian_rrn,
+        ),
+        ("fr", "fr_CH", "Numéro AVS", "756.1234.5678.97", validate_swiss_ahv),
+        ("de", "de_CH", "AHV-Nummer", "756.1234.5678.97", validate_swiss_ahv),
+        ("it", "it_CH", "Numero AVS", "756.1234.5678.97", validate_swiss_ahv),
+    ],
+)
+def test_belgian_and_swiss_locale_patterns_require_context_and_validate(
+    language,
+    locale,
+    context,
+    value,
+    validator,
+):
+    from openmed.core.safety_sweep import safety_sweep
+
+    locale_patterns = [
+        pattern
+        for pattern in get_patterns_for_language(language, locale=locale)
+        if pattern.entity_type == "national_id" and pattern.validator is validator
+    ]
+    assert locale_patterns
+    assert all(pattern.safety_sweep_requires_context for pattern in locale_patterns)
+
+    contextual = f"{context}: {value}"
+    entities = safety_sweep(contextual, [], lang=language, locale=locale)
+    assert any(entity.text == value for entity in entities)
+
+    no_context = safety_sweep(value, [], lang=language, locale=locale)
+    assert not any(entity.text == value for entity in no_context)
+
+
+def test_irish_pps_locale_pattern_requires_context_and_rejects_bad_checksum():
+    from openmed.core.safety_sweep import safety_sweep
+
+    patterns = get_patterns_for_language("en", locale="en_IE")
+    pps_patterns = [
+        pattern
+        for pattern in patterns
+        if pattern.entity_type == "national_id"
+        and pattern.validator is validate_irish_pps
+    ]
+    assert pps_patterns
+    assert all(pattern.reject_on_validation_failure for pattern in pps_patterns)
+
+    contextual = safety_sweep(
+        "PPS number: 1234567T",
+        [],
+        lang="en",
+        locale="en_IE",
+    )
+    assert any(entity.text == "1234567T" for entity in contextual)
+
+    bare = safety_sweep("1234567T", [], lang="en", locale="en_IE")
+    assert not any(entity.text == "1234567T" for entity in bare)
+
+    invalid = safety_sweep(
+        "PPS number: 1234567A",
+        [],
+        lang="en",
+        locale="en_IE",
+    )
+    assert not any(entity.label == "national_id" for entity in invalid)
+
+
+def test_japanese_my_number_pattern_rejects_bad_checksum_without_phone_overlap():
+    from openmed.core.safety_sweep import safety_sweep
+
+    patterns = get_patterns_for_language("ja")
+    my_number_patterns = [
+        pattern
+        for pattern in patterns
+        if pattern.entity_type == "national_id"
+        and pattern.validator is validate_japanese_my_number
+    ]
+    assert my_number_patterns
+    assert all(pattern.reject_on_validation_failure for pattern in my_number_patterns)
+
+    valid = safety_sweep("マイナンバー: 1234 5678 9018", [], lang="ja")
+    assert any(entity.text == "1234 5678 9018" for entity in valid)
+
+    invalid = safety_sweep("マイナンバー: 1234 5678 9012", [], lang="ja")
+    assert not any(entity.label == "national_id" for entity in invalid)
+
+
+@pytest.mark.parametrize(
+    ("language", "locale", "text"),
+    [
+        ("nl", "nl_BE", "Rijksregisternummer: 42.01.22-051.82"),
+        ("de", "de_CH", "AHV-Nummer: 756.1234.5678.96"),
+    ],
+)
+def test_belgian_and_swiss_locale_patterns_reject_bad_checksums(
+    language,
+    locale,
+    text,
+):
+    from openmed.core.safety_sweep import safety_sweep
+
+    entities = safety_sweep(text, [], lang=language, locale=locale)
+    assert not any(entity.label == "national_id" for entity in entities)
+
+
+@pytest.mark.parametrize(
+    ("language", "locale", "validator"),
+    [
+        ("fr", "fr_BE", validate_belgian_rrn),
+        ("nl", "nl_BE", validate_belgian_rrn),
+        ("de", "de_BE", validate_belgian_rrn),
+        ("fr", "fr_CH", validate_swiss_ahv),
+        ("de", "de_CH", validate_swiss_ahv),
+        ("it", "it_CH", validate_swiss_ahv),
+    ],
+)
+def test_belgian_and_swiss_locale_dispatch_generates_valid_surrogates(
+    language,
+    locale,
+    validator,
+):
+    anon = Anonymizer(lang=language, consistent=True, seed=42)
+
+    surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
+
+    assert validator(surrogate)
+
+
+@pytest.mark.parametrize("country", ["be", "ch", "ie"])
+def test_locale_golden_fixtures_deidentify_without_leakage_offline(
+    country,
+):
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.golden import GoldenFixture
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path(f"openmed/eval/golden/{country}.jsonl")
+    fixture = GoldenFixture.from_mapping(
+        json.loads(fixture_path.read_text(encoding="utf-8").strip())
+    )
+    locale = fixture.metadata["locale"]
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-19T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+        locale=locale,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=locale,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    assert result.deidentified_text == fixture.expected_output["text"]
+    for span in fixture.gold_spans:
+        assert fixture.text[span.start : span.end] == span.text
+        assert span.text not in result.deidentified_text
+
+
+# ---------------------------------------------------------------------------
 # French NIR Validator Tests
 # ---------------------------------------------------------------------------
 
@@ -849,6 +1448,183 @@ class TestValidateSpanishNIE:
 
     def test_invalid_nie_wrong_letter(self):
         assert validate_spanish_nie("X1234567A") is False
+
+
+class TestValidateMexicanCURP:
+    """Tests for Mexican CURP structure, date, and checksum validation."""
+
+    def test_accepts_valid_synthetic_curp(self):
+        assert validate_mexican_curp("MOBI851113MSPMTP95") is True
+
+    def test_accepts_lowercase_and_grouped_whitespace(self):
+        assert validate_mexican_curp("mobi 851113 mspmtp95") is True
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "MOBI851113MSPMTP94",
+            "MOBI851113MSPMTP95"[:-1] + "X",
+        ),
+    )
+    def test_rejects_bad_check_digit(self, value):
+        assert validate_mexican_curp(value) is False
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "MOBI851332MSPMTP95",
+            "MOBI850230MSPMTP95",
+            "MOBI851113MXXMTP95",
+            "MOBI851113XSPMTP95",
+            "MOBI991113MSPMTPA5",
+        ),
+    )
+    def test_rejects_impossible_embedded_fields(self, value):
+        assert validate_mexican_curp(value) is False
+
+    def test_rejects_non_string(self):
+        assert validate_mexican_curp(None) is False
+
+    def test_generated_curps_round_trip_and_mutations_fail(self):
+        rng = random.Random(826)
+        for _ in range(100):
+            value = generate_mexican_curp(rng=rng)
+            assert validate_mexican_curp(value)
+            mutated = value[:-1] + str((int(value[-1]) + 1) % 10)
+            assert not validate_mexican_curp(mutated)
+
+
+class TestValidateMexicanRFC:
+    """Tests for Mexican RFC forms, dates, and modulo-11 checks."""
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "MYNB630325659",
+            "MYN430819Q64",
+            "GODE561231GR8",
+            "XAXX010101000",
+            "XEXX010101000",
+        ),
+    )
+    def test_accepts_valid_person_company_and_sentinel_forms(self, value):
+        assert validate_mexican_rfc(value) is True
+
+    def test_accepts_lowercase_and_grouped_whitespace(self):
+        assert validate_mexican_rfc("myn 430819 q64") is True
+
+    @pytest.mark.parametrize("value", ("MYNB630325658", "MYN430819Q63"))
+    def test_rejects_bad_check_character(self, value):
+        assert validate_mexican_rfc(value) is False
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "MYNB631332659",
+            "MYN431332Q64",
+            "MY630325659",
+            "MYNB63032565!",
+        ),
+    )
+    def test_rejects_impossible_date_or_shape(self, value):
+        assert validate_mexican_rfc(value) is False
+
+    def test_rejects_non_string(self):
+        assert validate_mexican_rfc(None) is False
+
+    @pytest.mark.parametrize("person", (True, False))
+    def test_generated_rfcs_round_trip_and_preserve_form(self, person):
+        rng = random.Random(826)
+        original = "MYNB630325659" if person else "MYN430819Q64"
+        for _ in range(100):
+            value = generate_mexican_rfc(original, person=person, rng=rng)
+            assert len(value) == (13 if person else 12)
+            assert value != original
+            assert validate_mexican_rfc(value)
+
+
+def test_mexican_patterns_are_registered_and_context_gated():
+    from openmed.core.safety_sweep import safety_sweep
+
+    validators = {validate_mexican_curp, validate_mexican_rfc}
+    patterns = [
+        pattern
+        for pattern in get_patterns_for_language("es", locale="es_MX")
+        if pattern.validator in validators
+    ]
+
+    assert {pattern.validator for pattern in patterns} == validators
+    assert all(
+        pattern.requires_context
+        and pattern.context_required
+        and pattern.safety_sweep_requires_context
+        and pattern.reject_on_validation_failure
+        for pattern in patterns
+    )
+    contextual = (
+        "CURP: MOBI851113MSPMTP95; "
+        "RFC persona: MYNB630325659; RFC empresa: MYN430819Q64"
+    )
+    entities = safety_sweep(contextual, [], lang="es", locale="es_MX")
+    assert [entity.text for entity in entities] == [
+        "MOBI851113MSPMTP95",
+        "MYNB630325659",
+        "MYN430819Q64",
+    ]
+    assert safety_sweep("MOBI851113MSPMTP95", [], lang="es", locale="es_MX") == []
+    assert (
+        safety_sweep(
+            "CURP: MOBI851113MSPMTP94",
+            [],
+            lang="es",
+            locale="es_MX",
+        )
+        == []
+    )
+
+
+def test_es_mx_golden_fixture_masks_curp_and_rfc_without_model_or_leakage():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.golden import GoldenFixture
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/es_mx.jsonl")
+    row = json.loads(fixture_path.read_text(encoding="utf-8").splitlines()[0])
+    fixture = GoldenFixture.from_mapping(row)
+    result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-09-14T00:00:00Z",
+        metadata={},
+    )
+    swept, added = _apply_safety_sweep_to_result(
+        fixture.text,
+        result,
+        lang=fixture.language,
+        locale=fixture.metadata["locale"],
+    )
+    redacted = _build_deidentification_result(
+        fixture.text,
+        swept,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=fixture.metadata["locale"],
+    )
+
+    assert added == 3
+    assert redacted.deidentified_text == fixture.expected_output["text"]
+    assert all(
+        span.text not in redacted.deidentified_text for span in fixture.gold_spans
+    )
 
 
 class TestValidatePortugueseCPF:
@@ -1986,7 +2762,7 @@ class TestLanguagePIIPatterns:
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["ja"] if p.entity_type == "national_id"
         ]
-        text = "1234 5678 9012"
+        text = "1234 5678 9018"
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Japanese My Number pattern should match"
 
@@ -2972,6 +3748,27 @@ class TestVietnameseLanguagePack:
     def test_invalid_cccd_lengths_or_groupings(self, value):
         assert not validate_vietnamese_cccd(value)
 
+    def test_cccd_check_is_structural_by_design(self):
+        """CCCD has no public checksum, so length-only checking is deliberate.
+
+        Article 12 of Vietnam's 2023 Law on Identification guarantees only a
+        12-digit natural-number sequence. The province, century, gender and
+        birth-year encoding rules expired with Circular 59/2021/TT-BCA on
+        1 July 2024, so leading-digit ranges must not be enforced: doing so
+        would reject validly issued post-2024 numbers.
+        """
+        # Leading triples outside the retired 001-096 province range stay valid.
+        assert validate_vietnamese_cccd("999203123456")
+        assert validate_vietnamese_cccd("000000000001")
+        # Retired century/gender digit values must not gate acceptance either.
+        assert all(
+            validate_vietnamese_cccd(f"001{digit}03123456") for digit in "0123456789"
+        )
+        # The contract that is enforced is exactly twelve digits.
+        assert not validate_vietnamese_cccd("01234567890")
+        assert not validate_vietnamese_cccd("0123456789012")
+        assert not validate_vietnamese_cccd("00120312345A")
+
     @pytest.mark.parametrize("value", ("123456789", "123 456 789", "123-456-789"))
     def test_valid_cmnd_structures(self, value):
         assert validate_vietnamese_cmnd(value)
@@ -2981,8 +3778,12 @@ class TestVietnameseLanguagePack:
         assert not validate_vietnamese_cmnd(value)
 
     def test_locale_registry_and_cccd_surrogate_round_trip(self):
-        assert "vi" in NATIONAL_ID_ONLY_LANGUAGES
-        assert "vi" not in DEFAULT_PII_MODELS
+        assert "vi" in SUPPORTED_LANGUAGES
+        assert "vi" not in NATIONAL_ID_ONLY_LANGUAGES
+        assert (
+            DEFAULT_PII_MODELS["vi"]
+            == "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1"
+        )
         assert LANG_TO_LOCALE["vi"] == "vi_VN"
         assert LANGUAGE_PII_PATTERNS["vi"]
 
@@ -3049,6 +3850,107 @@ class TestVietnameseLanguagePack:
             for entity in negative_entities
         )
 
+    def test_replace_surrogates_render_vietnamese_dates_day_first(self):
+        """`method="replace"` must honour the `dmy` locale contract for `vi`.
+
+        `_gen_date`/`_gen_date_of_birth` consult
+        ``openmed.core.anonymizer.registry._DAY_FIRST_LOCALES``, which is a
+        separate set from the format-preserving one in ``anonymizer.engine``.
+        Both must list ``vi_VN`` or the replace path silently emits
+        ``MM/DD/YYYY`` for a language documented as day-first.
+        """
+        from openmed.core.anonymizer.registry import (
+            _DAY_FIRST_LOCALES,
+            _gen_date,
+            _gen_date_of_birth,
+        )
+
+        assert LANG_TO_LOCALE["vi"] in _DAY_FIRST_LOCALES
+
+        for generator in (_gen_date, _gen_date_of_birth):
+            faker = Faker("vi_VN")
+            faker.seed_instance(7)
+            vietnamese = generator(faker, "17/08/1985", locale="vi_VN")
+
+            reference = Faker("fr_FR")
+            reference.seed_instance(7)
+            french = generator(reference, "17/08/1985", locale="fr_FR")
+
+            day, month, year = vietnamese.split("/")
+            assert int(day) <= 31 and int(month) <= 12
+            # Same seed and shape as an established day-first pack.
+            assert (day, month) == tuple(french.split("/")[:2])
+            assert year == french.split("/")[2]
+
+    def test_golden_fixture_expected_output_round_trips_from_the_pipeline(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 2
+
+        label_map = {
+            "DATE": "date",
+            "PHONE": "phone_number",
+            "ID_NUM": "national_id",
+            "STREET_ADDRESS": "street_address",
+            "ZIPCODE": "postcode",
+        }
+
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-08-01T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang="vi",
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="mask",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang="vi",
+                consistent=False,
+                seed=None,
+                locale=None,
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["gold_spans"])
+            expected_spans = {
+                (label_map[span["label"]], span["start"], span["end"], span["text"])
+                for span in row["gold_spans"]
+            }
+            actual_spans = {
+                (entity.label, entity.start, entity.end, entity.text)
+                for entity in swept_result.entities
+            }
+            assert actual_spans == expected_spans
+
+            canonicalized_text = result.deidentified_text
+            for canonical_label, internal_label in label_map.items():
+                canonicalized_text = canonicalized_text.replace(
+                    f"[{internal_label}]",
+                    f"[{canonical_label}]",
+                )
+            assert canonicalized_text == row["metadata"]["expected_output"]["text"]
+
     def test_golden_fixture_offsets_and_offline_deidentification(self):
         from openmed.core.pii import (
             _apply_safety_sweep_to_result,
@@ -3058,12 +3960,27 @@ class TestVietnameseLanguagePack:
         from openmed.processing.outputs import PredictionResult
 
         fixture_path = Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
-        row = json.loads(fixture_path.read_text(encoding="utf-8").strip())
-        fixture = GoldenFixture.from_mapping(row)
-        assert fixture.language == "vi"
+        fixtures = [
+            GoldenFixture.from_mapping(json.loads(line))
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(fixtures) == 2
+        assert {fixture.language for fixture in fixtures} == {"vi"}
 
-        for span in fixture.gold_spans:
-            assert fixture.text[span.start : span.end] == span.text
+        for fixture in fixtures:
+            for span in fixture.gold_spans:
+                assert fixture.text[span.start : span.end] == span.text
+
+            self._assert_offline_deidentification_masks_every_span(fixture)
+
+    @staticmethod
+    def _assert_offline_deidentification_masks_every_span(fixture):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
 
         empty_result = PredictionResult(
             text=fixture.text,

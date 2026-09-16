@@ -3,6 +3,7 @@
 import pytest
 
 from openmed.core import model_registry
+from openmed.core.labels import CANONICAL_LABELS
 
 
 def test_get_model_info_known_key():
@@ -67,29 +68,20 @@ def test_resolve_draft_model_for_laneformer_uses_separate_permissive_artifact():
 def test_biomedical_ner_category_entity_types_are_reconciled():
     expected = {
         "Oncology": {
-            "AMINO_ACID",
-            "ANATOMICAL_SYSTEM",
+            "ANATOMY",
             "CANCER",
             "CELL",
-            "CELLULAR_COMPONENT",
-            "CHEM",
-            "DEVELOPING_ANATOMICAL_STRUCTURE",
+            "CHEMICAL",
             "GENE_OR_GENE_PRODUCT",
-            "IMMATERIAL_ANATOMICAL_ENTITY",
-            "MULTI_TISSUE_STRUCTURE",
             "ORGAN",
             "ORGANISM",
-            "ORGANISM_SUBDIVISION",
-            "ORGANISM_SUBSTANCE",
-            "PATHOLOGICAL_FORMATION",
-            "SIMPLE_CHEMICAL",
+            "PATHOLOGY",
             "SPECIES",
             "TISSUE",
         },
         "Anatomy": {"ANATOMY", "ORGAN", "TISSUE"},
         "Genomics": {
-            "CELL_LINE",
-            "CELL_TYPE",
+            "CELL",
             "DNA",
             "GENE",
             "GENE_OR_GENE_PRODUCT",
@@ -97,16 +89,9 @@ def test_biomedical_ner_category_entity_types_are_reconciled():
             "RNA",
         },
         "Pathology": {"CONDITION", "DISEASE", "PATHOLOGY"},
-        "Hematology": {"CANCER", "CL", "DISEASE"},
-        "Protein": {
-            "GENE_OR_GENE_PRODUCT",
-            "PROTEIN",
-            "PROTEIN_COMPLEX",
-            "PROTEIN_ENUM",
-            "PROTEIN_FAMILIY_OR_GROUP",
-            "PROTEIN_VARIANT",
-        },
-        "Chemical": {"CHEM", "DRUG", "MEDICATION", "SIMPLE_CHEMICAL"},
+        "Hematology": {"CANCER", "CELL", "DISEASE"},
+        "Protein": {"GENE_OR_GENE_PRODUCT", "PROTEIN"},
+        "Chemical": {"CHEMICAL", "DRUG", "MEDICATION"},
     }
 
     for category, entity_types in expected.items():
@@ -114,6 +99,16 @@ def test_biomedical_ner_category_entity_types_are_reconciled():
         registered_set = set(registered)
         assert registered_set == entity_types
         assert len(registered) == len(registered_set)
+
+
+def test_non_privacy_category_entity_types_are_canonical():
+    for category, entity_types in model_registry._CATEGORY_ENTITY_TYPES.items():
+        if category == "Privacy":
+            continue
+        assert set(entity_types) <= CANONICAL_LABELS, (
+            f"{category} has non-canonical entity types: "
+            f"{set(entity_types) - CANONICAL_LABELS}"
+        )
 
 
 def test_get_entity_types_by_category_surfaces_biomedical_family_labels():

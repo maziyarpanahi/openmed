@@ -181,6 +181,43 @@ data from PIPL scope. Reassess the policy and your legal controls before
 production processing of personal information or protected health information
 (PHI).
 
+## Evaluate against CBLUE without vendoring it
+
+OpenMed bundles no CBLUE record. The repository ships only synthetic smoke
+fixtures composed from an invented vocabulary, and a CI guard fails the build
+if any committed benchmark-named payload is not marked synthetic.
+
+CBLUE is access-controlled: register on Tianchi, accept the terms, and keep
+the download outside the repository tree. CHIP-CDN's standard-term side also
+derives from a separately licensed national clinical ICD-10 edition, so treat
+its normalization targets as licensed content too. A path inside the
+repository is rejected, which prevents accidental commits of licensed data.
+
+```bash
+export OPENMED_CBLUE_PATH=/data/cblue      # one directory per task id
+export OPENMED_CMEEE_PATH=/data/cblue/cmeee
+```
+
+```python
+from openmed.eval.suites import load_suite_fixtures
+
+fixtures = load_suite_fixtures("cblue-task-coverage")   # synthetic, offline
+```
+
+Supported task shapes are `chip-cdn` (diagnosis normalization) and
+`imcs-v2-ner` (dialogue entities); `cmeie` relation decoding is out of scope.
+Storage and leakage requirements: keep licensed data on managed storage,
+never in a container image or CI cache, and note that suite reports store
+source paths as SHA-256 digests and never retain benchmark text. See
+[Eval Harness & Metrics](eval-harness.md) for layouts, commands, report
+interpretation, and the upgrade or rollback procedure.
+
+Chinese `zh` routing now resolves to a dedicated Chinese PII checkpoint rather
+than the multilingual fallback. Record the emitted `model_evidence` block in
+your model card, and if you substitute your own local model, record its
+license, provenance, and any overlap between its training corpus and the
+CBLUE split you score against.
+
 ## Privacy and network boundary
 
 !!! important

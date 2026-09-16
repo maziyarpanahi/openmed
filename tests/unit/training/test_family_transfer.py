@@ -138,6 +138,18 @@ def test_registry_route_without_donor_stays_native() -> None:
     assert route.mode == "native"
 
 
+def test_vietnamese_resolves_as_native_austroasiatic() -> None:
+    route = resolve_pii_family_transfer_route("vi-VN")
+
+    assert route is not None
+    assert route.language == "vi"
+    assert route.family_id == "austroasiatic"
+    assert route.target_model_id == DEFAULT_PII_MODELS["vi"]
+    assert route.donor_language is None
+    assert route.adapter_id is None
+    assert route.mode == "native"
+
+
 def test_family_router_prefers_an_available_target_adapter() -> None:
     telugu_adapter = _available_adapter("te")
     hindi_adapter = _available_adapter("hi")

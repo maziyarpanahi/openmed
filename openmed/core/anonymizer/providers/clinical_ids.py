@@ -19,17 +19,20 @@ deterministic:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Bangladesh NID structural formats with 10, 13, or 17 digits
   - ABDM identifiers: 14-digit ABHA numbers, ABHA addresses,
     PAN-shaped tax identifiers, and synthetic HPR/HFR registry identifiers
   - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Mexican CURP and RFC (embedded dates with modulo-10/modulo-11 checks)
   - Chinese Resident Identity Card (18 characters with MOD 11-2 checksum)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - East African national IDs for Tanzania, Uganda, Rwanda, and Ethiopia
   - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
+  - Belgian Rijksregister (RRN) and Swiss AHV/AVS national identifiers
   - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
@@ -41,6 +44,8 @@ deterministic:
   - UK NHS Number, a patient health identifier validated with the NHS
     Modulus 11 check
   - UK National Insurance Number (NINO)
+  - Irish PPS numbers with a weighted Modulus 23 check letter
+  - Japanese My Numbers with a weighted Modulus 11 check digit
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
   - IBAN and SWIFT/BIC financial identifiers with deterministic validation
@@ -294,6 +299,193 @@ def generate_spanish_nie(*, rng: random.Random | None = None) -> str:
     number = int(_SPANISH_NIE_PREFIX_VALUES[prefix] + digits)
     check = _SPANISH_DNI_LETTERS[number % len(_SPANISH_DNI_LETTERS)]
     return f"{prefix}{digits}{check}"
+
+
+_MEXICAN_CURP_ALPHABET = "0123456789ABCDEFGHIJKLMN\u00d1OPQRSTUVWXYZ"
+_MEXICAN_CURP_STATE_CODES = (
+    "AS",
+    "BC",
+    "BS",
+    "CC",
+    "CH",
+    "CL",
+    "CM",
+    "CS",
+    "DF",
+    "DG",
+    "GT",
+    "GR",
+    "HG",
+    "JC",
+    "MC",
+    "MN",
+    "MS",
+    "NE",
+    "NL",
+    "NT",
+    "OC",
+    "PL",
+    "QT",
+    "QR",
+    "SP",
+    "SL",
+    "SR",
+    "TC",
+    "TL",
+    "TS",
+    "VZ",
+    "YN",
+    "ZS",
+)
+_MEXICAN_CURP_ROOT_BLOCKLIST = frozenset({"BUEI", "CACA", "MAME", "PENE"})
+_MEXICAN_CURP_CONSONANTS = "BCDFGHJKLMNPQRSTVWXYZ"
+_MEXICAN_RFC_ALPHABET = "0123456789ABCDEFGHIJKLMN&OPQRSTUVWXYZ \u00d1"
+_MEXICAN_RFC_ROOT_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ&"
+_MEXICAN_RFC_HOMOCLAVE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+
+def _mexican_curp_check_digit(body: str) -> str:
+    """Return the modulo-10 CURP verifier for a 17-character body."""
+    total = sum(
+        _MEXICAN_CURP_ALPHABET.index(character) * weight
+        for character, weight in zip(body, range(18, 1, -1), strict=True)
+    )
+    return str((10 - total % 10) % 10)
+
+
+def _mexican_rfc_check_character(body: str) -> str:
+    """Return the modulo-11 RFC verifier for an 11/12-character body."""
+    padded_body = body.rjust(12)
+    total = sum(
+        _MEXICAN_RFC_ALPHABET.index(character) * weight
+        for character, weight in zip(padded_body, range(13, 1, -1), strict=True)
+    )
+    remainder = total % 11
+    return "0" if remainder == 0 else "A" if remainder == 1 else str(11 - remainder)
+
+
+def generate_mexican_curp(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic Mexican CURP distinct from ``original``.
+
+    The small root blocklist is deliberately a synthetic stand-in for the
+    official inappropriate-word exclusion list, which OpenMed does not bundle.
+    Birth dates are generated no later than today so the output remains
+    plausible without retaining the source date.
+
+    Args:
+        original: Optional source CURP that the surrogate must not equal.
+        rng: Optional deterministic random source.
+
+    Returns:
+        An 18-character CURP accepted by :func:`validate_mexican_curp`.
+    """
+    from openmed.core.pii_i18n import validate_mexican_curp
+
+    source = rng or random.Random()
+    normalized = (
+        re.sub(r"\s+", "", original).upper() if isinstance(original, str) else ""
+    )
+    first = date(1940, 1, 1).toordinal()
+    last = date.today().toordinal()
+
+    for _ in range(100):
+        root = (
+            source.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            + source.choice("AEIOUX")
+            + "".join(source.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in range(2))
+        )
+        if root in _MEXICAN_CURP_ROOT_BLOCKLIST:
+            continue
+
+        birth_date = date.fromordinal(source.randint(first, last))
+        century_marker = (
+            str(source.randint(0, 9))
+            if birth_date.year < 2000
+            else source.choice("ABCDEFGHIJ")
+        )
+        body = (
+            f"{root}{birth_date:%y%m%d}{source.choice(('H', 'M'))}"
+            f"{source.choice(_MEXICAN_CURP_STATE_CODES)}"
+            f"{''.join(source.choice(_MEXICAN_CURP_CONSONANTS) for _ in range(3))}"
+            f"{century_marker}"
+        )
+        candidate = body + _mexican_curp_check_digit(body)
+        if candidate != normalized and validate_mexican_curp(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Mexican CURP")
+
+
+def generate_mexican_rfc(
+    original: str | None = None,
+    *,
+    person: bool | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic Mexican RFC in the person or company form.
+
+    Args:
+        original: Optional source RFC that the surrogate must not equal.
+        person: ``True`` for the 13-character individual form, ``False`` for
+            the 12-character legal-entity form, or ``None`` to preserve a
+            valid source form or choose randomly.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A 12- or 13-character RFC accepted by :func:`validate_mexican_rfc`.
+    """
+    from openmed.core.pii_i18n import validate_mexican_rfc
+
+    source = rng or random.Random()
+    normalized = (
+        re.sub(r"\s+", "", original).upper() if isinstance(original, str) else ""
+    )
+    if person is None:
+        if len(normalized) in {12, 13}:
+            is_person = len(normalized) == 13
+        else:
+            is_person = source.choice((False, True))
+    else:
+        is_person = person
+
+    first = date(1940, 1, 1).toordinal()
+    last = date.today().toordinal()
+    root_length = 4 if is_person else 3
+
+    for _ in range(100):
+        root = "".join(
+            source.choice(_MEXICAN_RFC_ROOT_CHARACTERS) for _ in range(root_length)
+        )
+        registration_date = date.fromordinal(source.randint(first, last))
+        homoclave = "".join(
+            source.choice(_MEXICAN_RFC_HOMOCLAVE_CHARACTERS) for _ in range(2)
+        )
+        body = f"{root}{registration_date:%y%m%d}{homoclave}"
+        candidate = body + _mexican_rfc_check_character(body)
+        if candidate != normalized and validate_mexican_rfc(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Mexican RFC")
+
+
+class MexicanCURPProvider(BaseProvider):
+    """Generate checksum-valid synthetic Mexican CURP identifiers."""
+
+    def mexican_curp(self, original: str | None = None) -> str:
+        """Return a Mexican CURP surrogate distinct from ``original``."""
+        return generate_mexican_curp(original, rng=self.generator.random)
+
+
+class MexicanRFCProvider(BaseProvider):
+    """Generate checksum-valid synthetic Mexican RFC identifiers."""
+
+    def mexican_rfc(self, original: str | None = None) -> str:
+        """Return an RFC surrogate, preserving a valid source form."""
+        return generate_mexican_rfc(original, rng=self.generator.random)
 
 
 def generate_ssn(*, rng: random.Random | None = None) -> str:
@@ -698,6 +890,89 @@ class AadhaarProvider(BaseProvider):
 
     def aadhaar(self) -> str:
         return generate_aadhaar(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Bangladesh National ID (10, 13, or 17 digits; structural validation only)
+# ---------------------------------------------------------------------------
+def generate_bangladesh_nid(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structural Bangladesh NID, preserving a valid source length."""
+
+    from openmed.core.pii_i18n import (
+        normalize_bengali_assamese_digits,
+        validate_bangladesh_nid,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+
+    if original is not None and validate_bangladesh_nid(original):
+        normalized = normalize_bengali_assamese_digits(original).strip()
+
+    length = len(normalized) if normalized else source.choice((10, 13, 17))
+    candidate = ""
+
+    for _ in range(20):
+        candidate = str(source.randint(1, 9)) + "".join(
+            str(source.randint(0, 9)) for _ in range(length - 1)
+        )
+        if candidate != normalized:
+            return candidate
+
+    return candidate
+
+
+class BangladeshNIDProvider(BaseProvider):
+    """Generate structural Bangladesh National ID surrogates."""
+
+    def bangladesh_nid(self, original: str | None = None) -> str:
+        return generate_bangladesh_nid(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Iranian National ID (10 digits with a mod-11 checksum)
+# ---------------------------------------------------------------------------
+def generate_iran_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid Iranian national ID distinct from ``original``."""
+
+    from openmed.core.pii_i18n import (
+        normalize_arabic_indic_digits,
+        validate_iran_national_id,
+    )
+
+    source = rng or random.Random()
+    normalized = ""
+    if original is not None and validate_iran_national_id(original):
+        normalized = normalize_arabic_indic_digits(original).strip()
+
+    candidate = ""
+    for _ in range(100):
+        body = [source.randint(0, 9) for _ in range(9)]
+        total = sum(
+            digit * weight for digit, weight in zip(body, range(10, 1, -1), strict=True)
+        )
+        remainder = total % 11
+        check_digit = remainder if remainder < 2 else 11 - remainder
+        candidate = "".join(str(digit) for digit in (*body, check_digit))
+        if candidate != normalized and validate_iran_national_id(candidate):
+            return candidate
+
+    raise RuntimeError("Unable to generate a distinct Iranian national ID")
+
+
+class IranNationalIDProvider(BaseProvider):
+    """Generate checksum-valid Iranian national ID surrogates."""
+
+    def iran_national_id(self, original: str | None = None) -> str:
+        return generate_iran_national_id(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2323,6 +2598,67 @@ class UKNINOProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Irish PPS Number (weighted modulo 23)
+# ---------------------------------------------------------------------------
+
+_IRISH_PPS_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+
+
+def generate_irish_pps(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Irish PPS number with a valid check letter."""
+    source = rng or random.Random()
+    digits = [source.randint(0, 9) for _ in range(7)]
+    if all(digit == 0 for digit in digits):
+        digits[0] = 1
+
+    range_letter = source.choice(("", *"ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    total = sum(digit * weight for digit, weight in zip(digits, range(8, 1, -1)))
+    if range_letter:
+        total += (ord(range_letter) - ord("A") + 1) * 9
+    check_letter = _IRISH_PPS_CHECK_LETTERS[total % 23]
+    return "".join(str(digit) for digit in digits) + check_letter + range_letter
+
+
+class IrishPPSProvider(BaseProvider):
+    """Generate synthetic Irish PPS numbers accepted by the checksum validator."""
+
+    def pps(self) -> str:
+        """Return a checksum-valid Irish PPS number."""
+        return generate_irish_pps(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Japanese My Number (12 digits, weighted modulo 11)
+# ---------------------------------------------------------------------------
+
+_JAPANESE_MY_NUMBER_WEIGHTS = (6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+
+
+def generate_japanese_my_number(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Japanese My Number with a valid check digit."""
+    source = rng or random.Random()
+    body_digits = [source.randint(0, 9) for _ in range(11)]
+    if len(set(body_digits)) == 1:
+        body_digits[-1] = (body_digits[-1] + 1) % 10
+
+    total = sum(
+        digit * weight
+        for digit, weight in zip(body_digits, _JAPANESE_MY_NUMBER_WEIGHTS)
+    )
+    remainder = total % 11
+    check_digit = 0 if remainder <= 1 else 11 - remainder
+    return "".join(str(digit) for digit in (*body_digits, check_digit))
+
+
+class JapaneseMyNumberProvider(BaseProvider):
+    """Generate synthetic Japanese My Numbers accepted by the checksum validator."""
+
+    def my_number(self) -> str:
+        """Return a checksum-valid Japanese My Number."""
+        return generate_japanese_my_number(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Chinese Resident Identity Card (18 characters, ISO 7064 MOD 11-2)
 # ---------------------------------------------------------------------------
 
@@ -2901,6 +3237,70 @@ class PhilippinesIdProvider(BaseProvider):
 
     def philhealth_pin(self) -> str:
         return generate_philhealth_pin(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Belgian Rijksregister (YYMMDD-SSS-CC, modulo-97 with post-2000 prefix)
+# ---------------------------------------------------------------------------
+
+
+def generate_belgian_rrn(*, rng: random.Random | None = None) -> str:
+    """Generate a Belgian RRN accepted by ``validate_belgian_rrn``."""
+    source = rng or random.Random()
+    today = date.today()
+    birth_date = date.fromordinal(
+        source.randint(date(1900, 1, 1).toordinal(), today.toordinal())
+    )
+    sequence = source.randint(1, 998)
+    body = (
+        f"{birth_date.year % 100:02d}{birth_date.month:02d}"
+        f"{birth_date.day:02d}{sequence:03d}"
+    )
+    checksum_input = f"2{body}" if birth_date.year >= 2000 else body
+    control = 97 - (int(checksum_input) % 97)
+    candidate = f"{body[:2]}.{body[2:4]}.{body[4:6]}-{body[6:9]}.{control:02d}"
+
+    from openmed.core.pii_i18n import validate_belgian_rrn
+
+    if not validate_belgian_rrn(candidate):  # pragma: no cover
+        raise RuntimeError("generated Belgian RRN failed checksum validation")
+    return candidate
+
+
+class BelgianRRNProvider(BaseProvider):
+    """Generates checksum-valid Belgian Rijksregister numbers."""
+
+    def belgian_rrn(self) -> str:
+        return generate_belgian_rrn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Swiss AHV / AVS (756 prefix, EAN-13 modulo-10 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_swiss_ahv(*, rng: random.Random | None = None) -> str:
+    """Generate a Swiss AHV/AVS number accepted by ``validate_swiss_ahv``."""
+    source = rng or random.Random()
+    body = "756" + "".join(str(source.randint(0, 9)) for _ in range(9))
+    weighted_sum = sum(
+        int(digit) * (1 if index % 2 == 0 else 3) for index, digit in enumerate(body)
+    )
+    digits = body + str((10 - weighted_sum % 10) % 10)
+    candidate = f"{digits[:3]}.{digits[3:7]}.{digits[7:11]}.{digits[11:]}"
+
+    from openmed.core.pii_i18n import validate_swiss_ahv
+
+    if not validate_swiss_ahv(candidate):  # pragma: no cover
+        raise RuntimeError("generated Swiss AHV failed checksum validation")
+    return candidate
+
+
+class SwissAHVProvider(BaseProvider):
+    """Generates checksum-valid Swiss AHV/AVS identifiers."""
+
+    def swiss_ahv(self) -> str:
+        return generate_swiss_ahv(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -3836,6 +4236,8 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BangladeshNIDProvider",
+    "BelgianRRNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
     "ChineseIdentifierProvider",
@@ -3853,8 +4255,11 @@ __all__ = [
     "IndiaHealthIdProvider",
     "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
+    "IrishPPSProvider",
     "IndonesianNIKProvider",
+    "IranNationalIDProvider",
     "IsraeliTeudatZehutProvider",
+    "JapaneseMyNumberProvider",
     "KoreanRRNProvider",
     "KENYA_MFL_SYNTHETIC_MAX",
     "KENYA_MFL_SYNTHETIC_MIN",
@@ -3884,6 +4289,9 @@ __all__ = [
     "SpanishDNIProvider",
     "PortugueseNIFProvider",
     "SpanishNIEProvider",
+    "MexicanCURPProvider",
+    "MexicanRFCProvider",
+    "SwissAHVProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
     "UkrainianRnokppProvider",
@@ -3891,8 +4299,10 @@ __all__ = [
     "generate_australian_tfn",
     "generate_aadhaar",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bc_phn",
     "generate_bic",
+    "generate_belgian_rrn",
     "generate_bulgarian_egn",
     "generate_canadian_sin",
     "generate_chinese_bank_card",
@@ -3923,6 +4333,7 @@ __all__ = [
     "generate_ontario_health_card",
     "generate_rwanda_id",
     "generate_indonesian_nik",
+    "generate_iran_national_id",
     "generate_indian_ration_card",
     "generate_vehicle_registration",
     "generate_voter_id_epic",
@@ -3940,6 +4351,8 @@ __all__ = [
     "generate_malaysian_mykad",
     "generate_mpesa_transaction_code",
     "generate_moroccan_cin",
+    "generate_mexican_curp",
+    "generate_mexican_rfc",
     "generate_ng_mobile_number",
     "generate_philhealth_pin",
     "generate_philsys_psn",
@@ -3951,6 +4364,7 @@ __all__ = [
     "generate_south_african_id",
     "generate_spanish_nie",
     "generate_ssn",
+    "generate_swiss_ahv",
     "generate_za_id_number",
     "generate_za_mobile_number",
     "generate_thai_national_id",
@@ -3961,6 +4375,8 @@ __all__ = [
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
+    "generate_irish_pps",
+    "generate_japanese_my_number",
     "generate_ukrainian_rnokpp",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",

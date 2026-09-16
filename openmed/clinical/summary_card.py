@@ -172,8 +172,8 @@ def build_summary_card(
 
     Args:
         entities: Sequence of clinical entity mappings or objects. A document
-            mapping with an ``entities``, ``clinical_entities``, or ``spans``
-            field is also accepted.
+            mapping or linked ``DocumentCluster`` with an ``entities``,
+            ``clinical_entities``, or ``spans`` field is also accepted.
         sections: Optional sequence of detected sections, or a section metadata
             mapping with a ``sections`` or ``clinical_sections`` field.
         boilerplate_spans: Optional boilerplate/copy-forward annotations with
@@ -188,14 +188,14 @@ def build_summary_card(
     """
 
     entity_source = entities
-    if isinstance(entities, Mapping):
+    nested_entities = _first_field_value(entities, _ENTITY_CONTAINER_NAMES)
+    if isinstance(entities, Mapping) or nested_entities is not None:
         if sections is None:
             sections = _first_field_value(entities, _SECTION_CONTAINER_NAMES)
         if boilerplate_spans is None:
             boilerplate_spans = _first_field_value(
                 entities, _BOILERPLATE_CONTAINER_NAMES
             )
-        nested_entities = _first_field_value(entities, _ENTITY_CONTAINER_NAMES)
         if nested_entities is not None:
             entity_source = nested_entities
 

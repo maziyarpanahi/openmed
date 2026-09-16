@@ -163,6 +163,37 @@ print(policy.name, policy.default_action)
 因此其输出在 PIPL 下仍属于个人信息；只有不可逆匿名化才可能使数据脱离 PIPL 的适用范围。
 在生产环境处理个人信息或受保护健康信息 (PHI) 前，请重新评估技术策略和法律治理措施。
 
+## 在不内置 CBLUE 数据的前提下进行评测
+
+OpenMed 不内置任何 CBLUE 记录。仓库只提供由虚构词汇合成的冒烟测试样例，并有
+一项 CI 校验：任何以基准名称命名却未标记为合成数据的文件都会导致构建失败。
+
+CBLUE 属于受控获取资源：请在天池注册并接受其条款，并把下载内容保存在仓库目录
+之外。CHIP-CDN 的标准词一侧还源自另行授权的国家临床版 ICD-10，因此其归一化
+目标同样应视为受许可内容。指向仓库内部的路径会被拒绝，从而避免误将受许可数据
+提交入库。
+
+```bash
+export OPENMED_CBLUE_PATH=/data/cblue      # 每个任务一个子目录
+export OPENMED_CMEEE_PATH=/data/cblue/cmeee
+```
+
+```python
+from openmed.eval.suites import load_suite_fixtures
+
+fixtures = load_suite_fixtures("cblue-task-coverage")   # 合成数据，可离线运行
+```
+
+已支持的任务形态为 `chip-cdn`（诊断术语归一化）与 `imcs-v2-ner`（对话实体识别）；
+`cmeie` 关系抽取不在范围内。存储与泄露要求：受许可数据应存放于受管存储，不要写入
+容器镜像或 CI 缓存；评测报告只保存源路径的 SHA-256 摘要，不保留基准文本。
+目录结构、命令、报告解读以及升级或回滚步骤参见
+[Eval Harness & Metrics](/docs/eval-harness/)。
+
+`zh` 路由现已解析到专用的中文 PII 检查点，而不再是多语言兜底模型。请把输出的
+`model_evidence` 字段原样记入模型卡；若替换为自有本地模型，还需记录其许可、
+来源，以及其训练语料与所评测 CBLUE 切分之间是否存在重叠。
+
 ## 隐私与网络边界
 
 !!! important

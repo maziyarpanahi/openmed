@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "name": "openmed-chpo-hpo-starter",
+  "version": "2026.08.0",
+  "license": "CC0-1.0",
+  "redistributable": true,
+  "entries": [
+    {
+      "source_system": "CHPO",
+      "source_code": "CHPO:0001945",
+      "locale": "zh-CN",
+      "aliases": ["发热", "发烧"],
+      "target_system": "HPO",
+      "target_code": "HP:0001945",
+      "target_display": "Fever"
+    },
+    {
+      "source_system": "CHPO",
+      "source_code": "CHPO:0002315",
+      "locale": "zh-CN",
+      "aliases": ["头痛", "头疼"],
+      "target_system": "HPO",
+      "target_code": "HP:0002315",
+      "target_display": "Headache"
+    },
+    {
+      "source_system": "CHPO",
+      "source_code": "CHPO:0001324",
+      "locale": "zh-CN",
+      "aliases": ["肌无力", "肌肉无力"],
+      "target_system": "HPO",
+      "target_code": "HP:0001324",
+      "target_display": "Muscle weakness"
+    }
+  ]
+}

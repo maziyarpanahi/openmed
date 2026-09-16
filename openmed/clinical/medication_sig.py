@@ -12,11 +12,13 @@ from .lexicons.clinical_norm import (
     localized_duration_text,
     localized_frequency_text,
     parse_locale_number,
+    split_measurement_text,
 )
+from .units import parse_measurement
 
 FrequencyPeriodUnit = Literal["h", "d", "wk"]
 DurationUnit = Literal["d", "wk"]
-MedicationSigAttributeType = Literal["frequency", "duration"]
+MedicationSigAttributeType = Literal["dose", "frequency", "duration"]
 Number = int | float
 MEDICATION_CANDIDATES = "medication_candidates"
 MedicationGrounder = Callable[[str], Sequence[Candidate]]
@@ -45,6 +47,21 @@ class DurationNormalization(TypedDict):
     unit: DurationUnit | None
     days: Number | None
     cue: str | None
+
+
+class DoseNormalization(TypedDict):
+    """Structured medication dose amount and unit normalization result."""
+
+    raw: object
+    recognized: bool
+    confidence: float
+    value: Number | None
+    unit: str | None
+    canonical_value: float | None
+    canonical_unit: str | None
+    dimension: dict[str, int]
+    reason: str
+    advisory: str
 
 
 class _FrequencyCue(TypedDict, total=False):
@@ -94,6 +111,12 @@ MEDICATION_SIG_ADVISORY = (
     "Medication sig normalization is deterministic support tooling and is not "
     "a substitute for clinician review; PRN/as-needed cues are flagged without "
     "implying a scheduled numeric frequency."
+)
+
+DOSE_NORMALIZATION_ADVISORY = (
+    "Medication dose normalization is deterministic support tooling and is not "
+    "a substitute for clinician review; it does not determine whether a dose "
+    "is appropriate."
 )
 
 # Provenance: these are common Latin prescription sig abbreviations and plain
@@ -216,7 +239,7 @@ _WHITESPACE_RE = re.compile(r"\s+")
 _OBSERVATION_ABBREVIATION_RE = re.compile(r"^[A-Z][A-Z0-9.]{0,4}$")
 _FOLLOWING_MEASUREMENT_RE = re.compile(
     r"^[ \t]*(?::|=)?[ \t]*"
-    r"(?P<value>[+-]?(?:\d+(?:\.\d*)?|\.\d+))[ \t]*"
+    r"(?P<value>[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+))[ \t]*"
     r"(?P<unit>[A-Za-zµμ%][A-Za-z0-9µμ%./\[\]-]*)"
 )
 
@@ -238,6 +261,7 @@ def filter_medication_candidates(
     *,
     preset: str | MedicationCandidatePreset = MEDICATION_CANDIDATES,
     grounder: MedicationGrounder | None = None,
+    language: object | None = None,
 ) -> list[MedicationCandidate]:
     """Filter broad chemical NER spans into precision-oriented drug candidates.
 
@@ -250,6 +274,7 @@ def filter_medication_candidates(
         entities: EntityPrediction objects or mapping-like NER spans.
         preset: Built-in preset name or a custom policy.
         grounder: Optional local formulary or RxNorm-compatible callable.
+        language: Optional language for observation-number and unit parsing.
 
     Returns:
         Accepted medication candidates in input order.
@@ -291,7 +316,9 @@ def filter_medication_candidates(
         if (
             policy.reject_observation_abbreviations
             and not grounded
-            and _looks_like_observation_abbreviation(text, surface, end)
+            and _looks_like_observation_abbreviation(
+                text, surface, end, language=language
+            )
         ):
             continue
 
@@ -457,6 +484,88 @@ def normalize_duration(
     return _empty_duration(text)
 
 
+def normalize_dose(
+    value: object,
+    unit: object | None = None,
+    *,
+    language: object | None = None,
+) -> DoseNormalization:
+    """Normalize a medication dose amount into a dimension-checked unit.
+
+    ``value`` may be a numeric amount with a separate ``unit``, a measurement
+    string such as ``"500 mg"``, or a mapping/object exposing an amount and a
+    unit. The original amount and unit are preserved for review output while
+    ``canonical_value`` and ``canonical_unit`` are suitable for comparison.
+    Unitless numeric values remain dimensionless so callers can use the helper
+    for synthetic or count-based inputs; a supplied unit is still required for
+    dimensional comparison with a ranged dose.
+
+    Args:
+        value: Dose amount, measurement string, or dose-like mapping/object.
+        unit: Optional unit when ``value`` is a numeric amount.
+        language: Optional source-language code for localized numbers and units.
+
+    Returns:
+        A deterministic mapping with ``recognized=False`` when the amount or
+        unit cannot be normalized. The mapping never recommends or changes a
+        dose.
+    """
+
+    raw = value
+    value, unit = _dose_parts(value, unit)
+    numeric_value = parse_locale_number(value, language=language)
+    if numeric_value is None:
+        return _empty_dose(raw, reason="dose amount is not finite numeric")
+
+    if unit is None or (isinstance(unit, str) and not unit.strip()):
+        cleaned_value = _clean_number(numeric_value)
+        return {
+            "raw": raw,
+            "recognized": True,
+            "confidence": 1.0,
+            "value": cleaned_value,
+            "unit": None,
+            "canonical_value": numeric_value,
+            "canonical_unit": None,
+            "dimension": {},
+            "reason": "",
+            "advisory": DOSE_NORMALIZATION_ADVISORY,
+        }
+
+    normalized_unit = str(unit).strip()
+    measurement = parse_measurement(
+        numeric_value,
+        normalized_unit,
+        language=language,
+    )
+    if measurement["status"] != "ok":
+        return {
+            "raw": raw,
+            "recognized": False,
+            "confidence": 0.0,
+            "value": _clean_number(numeric_value),
+            "unit": normalized_unit,
+            "canonical_value": None,
+            "canonical_unit": None,
+            "dimension": dict(measurement.get("dimension", {})),
+            "reason": measurement.get("reason", "dose unit could not be normalized"),
+            "advisory": DOSE_NORMALIZATION_ADVISORY,
+        }
+
+    return {
+        "raw": raw,
+        "recognized": True,
+        "confidence": 1.0,
+        "value": _clean_number(numeric_value),
+        "unit": normalized_unit,
+        "canonical_value": measurement["canonical_magnitude"],
+        "canonical_unit": measurement["canonical_unit"],
+        "dimension": dict(measurement["dimension"]),
+        "reason": "",
+        "advisory": DOSE_NORMALIZATION_ADVISORY,
+    }
+
+
 def normalize_medication_attribute(
     attribute_type: MedicationSigAttributeType | str,
     text: object,
@@ -475,6 +584,8 @@ def normalize_medication_attribute(
         attribute types without deterministic sig normalization.
     """
 
+    if attribute_type == "dose":
+        return normalize_dose(text, language=language)
     if attribute_type == "frequency":
         return normalize_frequency(text, language=language)
     if attribute_type == "duration":
@@ -531,6 +642,8 @@ def _looks_like_observation_abbreviation(
     text: str,
     surface: str,
     end: int | None,
+    *,
+    language: object | None = None,
 ) -> bool:
     if end is None or not 0 <= end <= len(text):
         return False
@@ -544,7 +657,9 @@ def _looks_like_observation_abbreviation(
 
     from .units import parse_measurement
 
-    measurement = parse_measurement(match.group("value"), match.group("unit"))
+    measurement = parse_measurement(
+        match.group("value"), match.group("unit"), language=language
+    )
     if measurement["status"] != "ok":
         return False
     dimension = measurement.get("dimension", {})
@@ -559,6 +674,55 @@ def _looks_like_observation_abbreviation(
 
 def _empty_frequency(raw: object) -> FrequencyNormalization:
     return _frequency_result(raw, recognized=False, confidence=0.0)
+
+
+def _empty_dose(raw: object, *, reason: str) -> DoseNormalization:
+    return {
+        "raw": raw,
+        "recognized": False,
+        "confidence": 0.0,
+        "value": None,
+        "unit": None,
+        "canonical_value": None,
+        "canonical_unit": None,
+        "dimension": {},
+        "reason": reason,
+        "advisory": DOSE_NORMALIZATION_ADVISORY,
+    }
+
+
+def _dose_parts(value: object, unit: object | None) -> tuple[object, object | None]:
+    if unit is not None:
+        if isinstance(value, str):
+            parts = split_measurement_text(value)
+            if parts is not None:
+                return parts[0], unit
+        return value, unit
+
+    nested = _entity_field(
+        value,
+        "value",
+        "amount",
+        "dose",
+        "magnitude",
+        default=None,
+    )
+    nested_unit = _entity_field(
+        value,
+        "unit",
+        "units",
+        "dose_unit",
+        "dose_units",
+        default=None,
+    )
+    if nested is not None and nested is not value:
+        return nested, nested_unit
+
+    if isinstance(value, str):
+        parts = split_measurement_text(value)
+        if parts is not None:
+            return parts[0], parts[1]
+    return value, None
 
 
 def _frequency_result(
@@ -682,8 +846,10 @@ def _frequency_per_day(period: Number, unit: FrequencyPeriodUnit) -> float:
 
 
 __all__ = [
+    "DOSE_NORMALIZATION_ADVISORY",
     "DurationNormalization",
     "DurationUnit",
+    "DoseNormalization",
     "FrequencyNormalization",
     "FrequencyPeriodUnit",
     "MEDICATION_CANDIDATES",
@@ -693,6 +859,7 @@ __all__ = [
     "MedicationGrounder",
     "MedicationSigAttributeType",
     "filter_medication_candidates",
+    "normalize_dose",
     "normalize_medication_attribute",
     "normalize_duration",
     "normalize_frequency",

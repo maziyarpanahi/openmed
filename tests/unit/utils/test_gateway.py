@@ -138,19 +138,38 @@ class TestValidateLanguage:
             INDIC_NER_LANGUAGES,
             NATIONAL_ID_ONLY_LANGUAGES,
             SUPPORTED_LANGUAGES,
+            USER_SUPPLIED_MODEL_LANGUAGES,
         )
 
         for code in (
-            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+            SUPPORTED_LANGUAGES
+            | INDIC_NER_LANGUAGES
+            | NATIONAL_ID_ONLY_LANGUAGES
+            | USER_SUPPLIED_MODEL_LANGUAGES
         ):
             assert validate_language(code) == code
 
     def test_api_language_set_excludes_national_id_only_languages(self):
-        from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES
+        from openmed.core.pii_i18n import (
+            NATIONAL_ID_ONLY_LANGUAGES,
+            USER_SUPPLIED_MODEL_LANGUAGES,
+        )
 
-        national_id_only = next(iter(NATIONAL_ID_ONLY_LANGUAGES))
+        # Urdu is both national-ID-only and user-supplied-model, and the second
+        # membership keeps it on the public language enums. Pick a code that is
+        # only national-ID-only so this exercises the toggle rather than set
+        # iteration order.
+        national_id_only = sorted(
+            NATIONAL_ID_ONLY_LANGUAGES - USER_SUPPLIED_MODEL_LANGUAGES
+        )[0]
         with pytest.raises(InputValidationError):
             validate_language(national_id_only, include_national_id=False)
+
+    def test_api_language_set_includes_user_supplied_model_languages(self):
+        from openmed.core.pii_i18n import USER_SUPPLIED_MODEL_LANGUAGES
+
+        for code in sorted(USER_SUPPLIED_MODEL_LANGUAGES):
+            assert validate_language(code, include_national_id=False) == code
 
 
 class TestDefaultLimits:

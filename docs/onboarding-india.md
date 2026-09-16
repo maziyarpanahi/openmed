@@ -178,6 +178,60 @@ For multiple short notes, `BatchProcessor(operation="deidentify")` exposes the
 document `batch_size` control and reuses the underlying loader. See
 [Batch Processing](batch-processing.md) for the API.
 
+## Run the India clinical evaluation suite
+
+The India clinical de-identification suite is registered in the standard eval
+harness, so it is discovered like any other suite and needs no caller wiring:
+
+```python
+from openmed.eval.suites import load_suite_fixtures, suite_metadata
+
+fixtures = load_suite_fixtures("india_surrogate_consistency")
+metadata = suite_metadata("india_surrogate_consistency")
+```
+
+One combined report exposes the DPDP per-label policy coverage, the residual
+zero-leak verdict, and the cross-document surrogate-consistency verdict:
+
+```python
+from openmed.eval import run_india_clinical_suite_report
+
+report = run_india_clinical_suite_report()
+print(report.to_dict()["passed"])
+```
+
+The report contains counts, canonical labels, offsets, and HMAC hashes only; it
+never reproduces a raw identifier or name surface.
+
+Surrogate consistency means that every declared alias of the same synthetic
+person resolves to one surrogate identity across documents and across Latin,
+Devanagari, and Tamil, that the rendered surrogate stays in the source script,
+and that an identifier repeated across documents keeps one checksum-valid
+surrogate.
+
+Two behaviours are recorded rather than gated, so read a passing verdict
+accordingly:
+
+- The opt-in `transliteration_aware_name_matching` path does not collapse the
+  corpus aliases into a single identity, because the Devanagari inherent vowel
+  and the Tamil surname rendering fold to different Latin keys. The gated
+  verdict covers the default matching path, which is the shipped default.
+- Personal names are keyed with a normalized language, but structured
+  identifiers keep the document language in the vault key. The same Aadhaar in
+  a Hindi note and a Tamil note therefore receives two surrogates. If you need
+  one surrogate per identifier across a code-mixed record set, normalize the
+  language you pass for identifier labels.
+
+### Safety boundary
+
+- The corpus is synthetic only. It contains no real PHI, no production data,
+  no DUA-restricted content, and no real hospital data.
+- Identifier values are generated algorithmically and checked against the
+  local shape and checksum validators; they are not issued identifiers.
+- The suite is assist-only and non-decisional. It is not clinical ground truth
+  and must not be used to make patient-care decisions.
+- Execution is local, offline, and deterministic.
+
 ## Production checklist
 
 - Keep inference and cached artifacts inside the approved device or network

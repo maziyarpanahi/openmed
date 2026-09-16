@@ -213,6 +213,35 @@ ORDER BY 9, 10, 1, 4
 """.strip()
 
 
+def cohort_resolve(
+    con: Any,
+    definition: Any,
+    *,
+    hierarchy: Any | None = None,
+) -> Any:
+    """Resolve a phenotype through an existing local DuckDB connection.
+
+    ``definition`` may be a :class:`PhenotypeDefinition`, a JSON-compatible
+    mapping, or JSON text.  The return value is a privacy-minimized
+    :class:`~openmed.structured.cohort.CohortResult`.
+    """
+
+    from openmed.structured.cohort import (
+        CohortResolver,
+        PhenotypeDefinition,
+    )
+
+    if isinstance(definition, Mapping):
+        definition = PhenotypeDefinition.from_dict(definition)
+    elif isinstance(definition, (str, bytes, bytearray)):
+        definition = PhenotypeDefinition.from_json(definition)
+    if not isinstance(definition, PhenotypeDefinition):
+        raise TypeError(
+            "definition must be a PhenotypeDefinition, mapping, or JSON document"
+        )
+    return CohortResolver(con, hierarchy=hierarchy).resolve(definition)
+
+
 def _canonical_udf_policy(policy: str | None) -> str:
     normalized = str(policy or "").strip().lower().replace("-", "_")
     if not normalized:
@@ -296,5 +325,6 @@ __all__ = [
     "OpenMedDuckDBUDFs",
     "clinical_extract_relation",
     "clinical_extract_sql",
+    "cohort_resolve",
     "register_openmed_udfs",
 ]

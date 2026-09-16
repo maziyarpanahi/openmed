@@ -26,9 +26,12 @@ from .types import Candidate, GroundedSpan
 from .vocab import RestrictedVocabularyError
 
 __all__ = [
+    "LATERALITY_SITE_PATTERN",
+    "LATERALITY_SITE_SLOTS",
     "POSTCOORDINATION_ATTRIBUTE_SLOTS",
     "POSTCOORDINATION_PROVENANCE_KEY",
     "ConceptReference",
+    "LateralitySiteDecomposer",
     "MentionDecomposer",
     "PostCoordinationDecomposition",
     "PostCoordinationStage",
@@ -37,17 +40,22 @@ __all__ = [
     "RulesPostCoordinationDecomposer",
     "SnomedExpression",
     "build_expression",
+    "decompose_laterality_site_mention",
     "decompose_mention",
     "is_postcoordinated_candidate",
 ]
 
 POSTCOORDINATION_ATTRIBUTE_SLOTS = frozenset(
-    {"laterality", "severity", "morphology", "causative_agent"}
+    {"laterality", "finding_site", "severity", "morphology", "causative_agent"}
 )
 POSTCOORDINATION_PROVENANCE_KEY = "snomed_postcoordination"
+LATERALITY_SITE_SLOTS = frozenset({"laterality", "finding_site"})
+LATERALITY_SITE_PATTERN = "laterality_finding_site"
 
 _CONCEPT_ID_RE = re.compile(r"^[1-9][0-9]{5,17}$")
 _DEFINITION_STATUSES = frozenset({"===", "<<<"})
+_OF_CONNECTOR_RE = re.compile(r"\s+of\s+", flags=re.IGNORECASE)
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 @dataclass(frozen=True)
@@ -238,6 +246,39 @@ class RulesPostCoordinationDecomposer:
             mention,
             focus_resolver=self.focus_resolver,
             refinement_resolver=self.refinement_resolver,
+            start=start,
+            byte_start=byte_start,
+        )
+
+
+@dataclass(frozen=True)
+class LateralitySiteDecomposer:
+    """Resolve the focus + laterality + finding-site pattern only.
+
+    The resolvers remain caller-owned so this class contains no SNOMED CT
+    terminology. Mentions may use the existing composite segmentation (for
+    example, three coordinated fragments) or the conservative
+    ``"<focus> of <laterality> <site>"`` surface form.
+    """
+
+    focus_resolver: FocusResolver
+    laterality_resolver: RefinementResolver
+    finding_site_resolver: RefinementResolver
+
+    def decompose(
+        self,
+        mention: str,
+        *,
+        start: int = 0,
+        byte_start: int | None = None,
+    ) -> PostCoordinationDecomposition | None:
+        """Return an exact two-refinement decomposition, or ``None``."""
+
+        return decompose_laterality_site_mention(
+            mention,
+            focus_resolver=self.focus_resolver,
+            laterality_resolver=self.laterality_resolver,
+            finding_site_resolver=self.finding_site_resolver,
             start=start,
             byte_start=byte_start,
         )
@@ -443,6 +484,74 @@ def decompose_mention(
     )
 
 
+def decompose_laterality_site_mention(
+    mention: str,
+    *,
+    focus_resolver: FocusResolver,
+    laterality_resolver: RefinementResolver,
+    finding_site_resolver: RefinementResolver,
+    start: int = 0,
+    byte_start: int | None = None,
+) -> PostCoordinationDecomposition | None:
+    """Resolve a focus finding with exactly laterality and finding site.
+
+    Existing composite segmentation is tried first. If the mention is not a
+    composite recognized by that shared normalizer, this function conservatively
+    considers only ``"<focus> of <laterality> <site>"`` partitions. Caller
+    resolvers must uniquely confirm all three spans; ambiguous or partial
+    matches fail closed instead of dropping source text or guessing a concept.
+
+    Args:
+        mention: Exact source mention surface.
+        focus_resolver: Caller-owned resolver for the focus finding span.
+        laterality_resolver: Caller-owned resolver returning a ``laterality``
+            refinement.
+        finding_site_resolver: Caller-owned resolver returning a
+            ``finding_site`` refinement.
+        start: Character-coordinate base in the source document.
+        byte_start: UTF-8 byte-coordinate base; defaults to ``start``.
+
+    Returns:
+        A unique exact-pattern decomposition, or ``None`` when unsupported or
+        ambiguous.
+    """
+
+    normalization = normalize_composite(
+        mention,
+        start=start,
+        byte_start=byte_start,
+    )
+    fragment_sets: list[tuple[CompositeMention, ...]] = []
+    if len(normalization.children) == 3:
+        fragment_sets.append(normalization.children)
+    if not normalization.was_split:
+        fragment_sets.extend(
+            _laterality_site_phrase_partitions(
+                mention,
+                start=start,
+                byte_start=start if byte_start is None else byte_start,
+            )
+        )
+
+    matches = tuple(
+        decomposition
+        for fragments in fragment_sets
+        if (
+            decomposition := _resolve_laterality_site_fragments(
+                normalization,
+                fragments,
+                focus_resolver=focus_resolver,
+                laterality_resolver=laterality_resolver,
+                finding_site_resolver=finding_site_resolver,
+            )
+        )
+        is not None
+    )
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
 def is_postcoordinated_candidate(candidate: Candidate) -> bool:
     """Return whether a grounding candidate was composed rather than looked up."""
 
@@ -457,6 +566,127 @@ def _normalize_slot(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("refinement slot must be text")
     return value.strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+def _laterality_site_phrase_partitions(
+    mention: str,
+    *,
+    start: int,
+    byte_start: int,
+) -> tuple[tuple[CompositeMention, ...], ...]:
+    partitions: list[tuple[CompositeMention, ...]] = []
+    for connector in _OF_CONNECTOR_RE.finditer(mention):
+        focus_range = _trim_local_range(mention, 0, connector.start())
+        tail_start, tail_end = _trim_local_range(mention, connector.end(), len(mention))
+        if focus_range[0] == focus_range[1] or tail_start == tail_end:
+            continue
+        for separator in _WHITESPACE_RE.finditer(mention, tail_start, tail_end):
+            laterality_range = _trim_local_range(
+                mention,
+                tail_start,
+                separator.start(),
+            )
+            site_range = _trim_local_range(
+                mention,
+                separator.end(),
+                tail_end,
+            )
+            if (
+                laterality_range[0] == laterality_range[1]
+                or site_range[0] == site_range[1]
+            ):
+                continue
+            partitions.append(
+                tuple(
+                    _postcoordination_span(
+                        mention,
+                        local_start,
+                        local_end,
+                        char_base=start,
+                        byte_base=byte_start,
+                    )
+                    for local_start, local_end in (
+                        focus_range,
+                        laterality_range,
+                        site_range,
+                    )
+                )
+            )
+    return tuple(partitions)
+
+
+def _resolve_laterality_site_fragments(
+    normalization: CompositeNormalization,
+    fragments: tuple[CompositeMention, ...],
+    *,
+    focus_resolver: FocusResolver,
+    laterality_resolver: RefinementResolver,
+    finding_site_resolver: RefinementResolver,
+) -> PostCoordinationDecomposition | None:
+    focus_matches = tuple(
+        (fragment, concept)
+        for fragment in fragments
+        if (concept := focus_resolver(fragment)) is not None
+    )
+    laterality_matches = tuple(
+        (fragment, refinement)
+        for fragment in fragments
+        if (refinement := laterality_resolver(fragment)) is not None
+        and refinement.slot == "laterality"
+    )
+    site_matches = tuple(
+        (fragment, refinement)
+        for fragment in fragments
+        if (refinement := finding_site_resolver(fragment)) is not None
+        and refinement.slot == "finding_site"
+    )
+    if not all(
+        len(matches) == 1
+        for matches in (focus_matches, laterality_matches, site_matches)
+    ):
+        return None
+    focus_mention, focus = focus_matches[0]
+    laterality_mention, laterality = laterality_matches[0]
+    site_mention, site = site_matches[0]
+    if len({focus_mention, laterality_mention, site_mention}) != 3:
+        return None
+    return PostCoordinationDecomposition(
+        normalization=normalization,
+        focus_mention=focus_mention,
+        focus=focus,
+        refinements=(
+            ResolvedRefinement(laterality_mention, laterality),
+            ResolvedRefinement(site_mention, site),
+        ),
+    )
+
+
+def _trim_local_range(text: str, start: int, end: int) -> tuple[int, int]:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+def _postcoordination_span(
+    mention: str,
+    local_start: int,
+    local_end: int,
+    *,
+    char_base: int,
+    byte_base: int,
+) -> CompositeMention:
+    text = mention[local_start:local_end]
+    local_byte_start = len(mention[:local_start].encode("utf-8"))
+    local_byte_end = local_byte_start + len(text.encode("utf-8"))
+    return CompositeMention(
+        text=text,
+        start=char_base + local_start,
+        end=char_base + local_end,
+        byte_start=byte_base + local_byte_start,
+        byte_end=byte_base + local_byte_end,
+    )
 
 
 def _coerce_concept(
@@ -514,9 +744,13 @@ def _composed_provenance(
     edition_uri: str,
 ) -> dict[str, Any]:
     expression_text = expression.to_scg()
+    slots = frozenset(item.slot for item in expression.refinements)
     return {
         "status": "composed",
         "method": "post-coordinated",
+        "pattern": (
+            LATERALITY_SITE_PATTERN if slots == LATERALITY_SITE_SLOTS else "general"
+        ),
         "edition_uri": edition_uri,
         "expression_sha256": hashlib.sha256(
             expression_text.encode("utf-8")

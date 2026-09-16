@@ -184,7 +184,7 @@ def anonymize_table(
             clinical_code_hierarchies=clinical_code_hierarchies,
         )
     except HierarchyError as exc:
-        raise AnonymizationError(str(exc)) from exc
+        raise AnonymizationError(_safe_hierarchy_error(exc)) from exc
 
     try:
         report = enforce_kanon(
@@ -236,7 +236,10 @@ def _validated_quasi_identifiers(
             raise AnonymizationError(
                 "quasi_identifiers keys must be non-empty column names"
             )
-        if column_type not in SUPPORTED_COLUMN_TYPES:
+        if (
+            not isinstance(column_type, str)
+            or column_type not in SUPPORTED_COLUMN_TYPES
+        ):
             supported = ", ".join(sorted(SUPPORTED_COLUMN_TYPES))
             raise AnonymizationError(
                 f"unknown column type {column_type!r} for column {column!r}; "
@@ -400,6 +403,28 @@ def _subject_key(value: Any, *, row_index: int) -> str | bytes:
             f"subject_id_column has an invalid value at row {row_index}"
         )
     return result
+
+
+def _safe_hierarchy_error(error: HierarchyError) -> str:
+    """Return a useful hierarchy error without echoing an input value.
+
+    Leaf generalizers include offending values in some validation messages so
+    that their standalone API is diagnosable. This public table boundary may
+    handle PHI, so it only preserves fixed, value-independent clinical-policy
+    diagnostics and replaces all other hierarchy text with a safe summary.
+    """
+    message = str(error)
+    if "requires clinical code parent-chain data" in message:
+        return "clinical code quasi-identifiers require parent-chain data"
+    if "clinical code hierarchy is missing" in message:
+        return "clinical code hierarchy is missing observed value mappings"
+    if "clinical code parent chains" in message:
+        return "clinical code parent-chain data is not monotone"
+    if "clinical code hierarchy was supplied for non-code column" in message:
+        return "clinical code hierarchy was supplied for a non-code column"
+    if "undeclared columns" in message:
+        return "clinical code hierarchy targets an undeclared column"
+    return "one or more quasi-identifier values are invalid for the declared type"
 
 
 # --------------------------------------------------------------------------- #

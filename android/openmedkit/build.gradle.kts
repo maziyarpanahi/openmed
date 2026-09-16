@@ -1,3 +1,7 @@
+import java.util.Properties
+import java.util.zip.ZipFile
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -23,12 +27,34 @@ val generatedCatalogAssetsDir = layout.buildDirectory.dir("generated/assets/open
 val generatedCatalogAsset = generatedCatalogAssetsDir.map {
     it.file("openmed_model_catalog.jsonl")
 }
+val budgetPropertiesFile = rootProject.layout.projectDirectory.file("gradle/budgets.properties")
+val consumerRulesFile = layout.projectDirectory.file("consumer-rules.pro")
+val releaseAar = layout.buildDirectory.file("outputs/aar/${project.name}-release.aar")
+val aarSizeBudgetReport = layout.buildDirectory.file(
+    "reports/budgets/release-aar-size.properties",
+)
 val centralStagingRepository = layout.buildDirectory.dir("central-staging")
 val centralPortalBundle = layout.buildDirectory.dir("central-portal")
 val pythonExecutable = providers.gradleProperty("openmedPython")
     .orElse(providers.environmentVariable("PYTHON"))
     .orElse("python3")
 val releaseVersionPattern = Regex("""\d+\.\d+\.\d+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?""")
+
+fun readPositiveBudget(key: String): Long {
+    val budgetFile = budgetPropertiesFile.asFile
+    if (!budgetFile.isFile) {
+        throw GradleException("Android budget file does not exist: ${budgetFile.path}")
+    }
+
+    val properties = Properties()
+    budgetFile.inputStream().use(properties::load)
+    val rawValue = properties.getProperty(key)
+        ?: throw GradleException("Missing Android budget '$key' in ${budgetFile.path}.")
+    return rawValue.toLongOrNull()?.takeIf { it > 0 }
+        ?: throw GradleException(
+            "Android budget '$key' must be a positive integer, got '$rawValue'.",
+        )
+}
 
 fun isSnapshotVersion(): Boolean {
     return version.toString().contains("SNAPSHOT", ignoreCase = true)
@@ -65,6 +91,7 @@ android {
         // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
         targetSdk = 33
+        consumerProguardFiles("consumer-rules.pro")
     }
 
     compileOptions {
@@ -108,8 +135,112 @@ tasks.matching { it.name.endsWith("Assets") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
 }
 
+val verifyReleaseConsumerRules by tasks.registering {
+    group = "verification"
+    description = "Verifies that the release AAR packages every consumer rule."
+    dependsOn("bundleReleaseAar")
+    inputs.file(consumerRulesFile)
+    inputs.file(releaseAar)
+
+    doLast {
+        val aarFile = releaseAar.get().asFile
+        if (!aarFile.isFile) {
+            throw GradleException("Release AAR does not exist: ${aarFile.path}")
+        }
+
+        val packagedRules = ZipFile(aarFile).use { archive ->
+            val entry = archive.getEntry("proguard.txt")
+                ?: throw GradleException("Release AAR does not contain proguard.txt")
+            archive.getInputStream(entry).bufferedReader().use { reader ->
+                reader.readLines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+                    .toSet()
+            }
+        }
+        val requiredRules = consumerRulesFile.asFile.readLines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        val missingRules = requiredRules.filterNot(packagedRules::contains)
+        if (missingRules.isNotEmpty()) {
+            throw GradleException(
+                "Release AAR is missing consumer rules: ${missingRules.joinToString()}",
+            )
+        }
+    }
+}
+
 tasks.matching { it.name.startsWith("test") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
+    dependsOn(verifyReleaseConsumerRules)
+}
+
+tasks.withType<Test>().configureEach {
+    val coldStartBudgetReport = layout.buildDirectory.file(
+        "reports/budgets/${name}-cold-start.properties",
+    )
+
+    inputs.file(budgetPropertiesFile)
+    outputs.file(coldStartBudgetReport)
+
+    doFirst {
+        systemProperty(
+            "openmed.coldStart.maxMillis",
+            readPositiveBudget("coldStart.maxMillis"),
+        )
+        systemProperty(
+            "openmed.coldStart.measurementFile",
+            coldStartBudgetReport.get().asFile.absolutePath,
+        )
+    }
+
+    systemProperty("openmedkit.moduleDirectory", projectDir.absolutePath)
+}
+
+val verifyReleaseAarSize by tasks.registering {
+    group = "verification"
+    description = "Fails when the release OpenMedKit AAR exceeds its committed size budget."
+    dependsOn("bundleReleaseAar")
+
+    inputs.file(budgetPropertiesFile)
+    inputs.file(releaseAar)
+    outputs.file(aarSizeBudgetReport)
+
+    doLast {
+        val artifact = releaseAar.get().asFile
+        if (!artifact.isFile) {
+            throw GradleException("Release AAR was not produced at ${artifact.absolutePath}.")
+        }
+
+        val measuredBytes = artifact.length()
+        val maximumBytes = readPositiveBudget("aar.maxBytes")
+        val passed = measuredBytes <= maximumBytes
+        val report = aarSizeBudgetReport.get().asFile
+        report.parentFile.mkdirs()
+        report.writeText(
+            """
+            measuredBytes=$measuredBytes
+            maxBytes=$maximumBytes
+            status=${if (passed) "PASS" else "FAIL"}
+            """.trimIndent() + "\n",
+        )
+
+        logger.lifecycle(
+            "OpenMedKit release AAR size: $measuredBytes bytes (budget: $maximumBytes bytes)",
+        )
+        if (!passed) {
+            throw GradleException(
+                "OpenMedKit release AAR is $measuredBytes bytes, exceeding the " +
+                    "$maximumBytes-byte budget.",
+            )
+        }
+    }
+}
+
+tasks.register("verifyAndroidBudgets") {
+    group = "verification"
+    description = "Runs the release AAR size and offline cold-start budget gates."
+    dependsOn(verifyReleaseAarSize, "testDebugUnitTest")
 }
 
 val verifyReleasePublicationVersion by tasks.registering {

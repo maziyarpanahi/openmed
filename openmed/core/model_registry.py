@@ -6,14 +6,15 @@ import importlib.util
 import json
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from . import labels as label_taxonomy
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
-from .registry_service import (
+from .registry_slots import (
     load_registry_state,
     pointer_targets,
     semantic_version,
@@ -40,6 +41,10 @@ class ModelInfo:
     architecture: Optional[str] = None
     base_model: Optional[str] = None
     formats: List[str] = field(default_factory=list)
+    nnapi_compatible: Optional[bool] = None
+    min_sdk: Optional[int] = None
+    execution_providers: List[str] = field(default_factory=list)
+    tokenizer_assets: List[str] = field(default_factory=list)
     benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
@@ -304,6 +309,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
+    "vietnamese": "vi",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
     code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"
@@ -368,8 +374,159 @@ _PII_ENTITY_TYPES = [
 ]
 
 _CATEGORY_ENTITY_TYPES = {
-    "Disease": ["DISEASE", "CONDITION", "PATHOLOGY"],
-    "Pharmaceutical": ["CHEM", "DRUG", "MEDICATION"],
+    "Disease": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Pharmaceutical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Oncology": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.CANCER,
+        label_taxonomy.CELL,
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Anatomy": [
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Genomics": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.GENE,
+        label_taxonomy.PROTEIN,
+        label_taxonomy.DNA,
+        label_taxonomy.RNA,
+        label_taxonomy.CELL,
+    ],
+    "Chemical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Species": [
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+    ],
+    "Microbiology": [
+        label_taxonomy.MICROORGANISM,
+        label_taxonomy.ANTIBIOTIC,
+        label_taxonomy.SUSCEPTIBILITY,
+    ],
+    "Protein": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.PROTEIN,
+    ],
+    "Pathology": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Hematology": [
+        label_taxonomy.CANCER,
+        label_taxonomy.DISEASE,
+        label_taxonomy.CELL,
+    ],
+    # Forward metadata for future lab-value models; no dedicated Lab model is
+    # registered today. LOINC grounding remains an external follow-up.
+    "Lab": [
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.LAB_VALUE,
+        label_taxonomy.UNIT,
+        label_taxonomy.REFERENCE_RANGE,
+        label_taxonomy.ABNORMAL_FLAG,
+        label_taxonomy.SPECIMEN,
+    ],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+        label_taxonomy.ANATOMY,
+    ],
+    "Ophthalmology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Radiology models; no such model is
+    # registered today (see issue #1971).
+    "Radiology": [
+        label_taxonomy.FINDING,
+        label_taxonomy.IMAGING_MODALITY,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.LATERALITY,
+        label_taxonomy.MEASUREMENT,
+    ],
+    # Forward metadata for future Anesthesia models; no such model is
+    # registered today (see issue #952).
+    "Anesthesia": [
+        label_taxonomy.ANESTHESIA_TYPE,
+        label_taxonomy.ANESTHETIC_AGENT,
+        label_taxonomy.AIRWAY_MANAGEMENT,
+        label_taxonomy.ASA_CLASS,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.CONDITION,
+    ],
+    # Nutrition- registered (see issue #951)
+    "Nutrition": [
+        label_taxonomy.DIET_TYPE,
+        label_taxonomy.NUTRITION_TARGET,
+        label_taxonomy.FEEDING_ROUTE,
+        label_taxonomy.NUTRITIONAL_STATUS,
+    ],
+    # Forward metadata for future Endocrinology models; no such model is
+    # registered today (see issue #895).
+    "Endocrinology": [
+        label_taxonomy.GLYCEMIC_MEASURE,
+        label_taxonomy.THYROID_MEASURE,
+        label_taxonomy.HORMONE_LEVEL,
+        label_taxonomy.INSULIN_REGIMEN,
+        label_taxonomy.CONDITION,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Gastroenterology models; no such model is
+    # registered today (see issue #894).
+    "Gastroenterology": [
+        label_taxonomy.ENDOSCOPIC_FINDING,
+        label_taxonomy.GI_SYMPTOM,
+        label_taxonomy.GI_SCORE,
+        label_taxonomy.POLYP_DESCRIPTOR,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Procedures models; no such model is
+    # registered today (see issue #313).
+    "Procedures": [
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Privacy": _PII_ENTITY_TYPES,
+}
+
+# Model-card labels remain visible in registry discovery results while the
+# category defaults above provide the canonical taxonomy spine.
+_FAMILY_NATIVE_ENTITY_TYPES = {
     "Oncology": [
         "SIMPLE_CHEMICAL",
         "CHEM",
@@ -390,94 +547,15 @@ _CATEGORY_ENTITY_TYPES = {
         "TISSUE",
         "PATHOLOGICAL_FORMATION",
     ],
-    "Anatomy": ["ORGAN", "TISSUE", "ANATOMY"],
-    "Genomics": [
-        "GENE_OR_GENE_PRODUCT",
-        "GENE",
-        "PROTEIN",
-        "DNA",
-        "RNA",
-        "CELL_LINE",
-        "CELL_TYPE",
-    ],
-    "Chemical": ["SIMPLE_CHEMICAL", "CHEM", "DRUG", "MEDICATION"],
-    "Species": ["ORGANISM", "SPECIES"],
-    "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
+    "Genomics": ["CELL_LINE", "CELL_TYPE"],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
     "Protein": [
-        "GENE_OR_GENE_PRODUCT",
-        "PROTEIN",
         "PROTEIN_COMPLEX",
         "PROTEIN_ENUM",
         "PROTEIN_FAMILIY_OR_GROUP",
         "PROTEIN_VARIANT",
     ],
-    "Pathology": ["DISEASE", "CONDITION", "PATHOLOGY"],
-    "Hematology": ["CANCER", "DISEASE", "CL"],
-    # Forward metadata for future Cardiology models; no Cardiology model is
-    # registered today (see issue #317).
-    "Cardiology": [
-        "CARDIAC_FINDING",
-        "ECG_FINDING",
-        "EJECTION_FRACTION",
-        "CARDIAC_PROCEDURE",
-        "CARDIAC_DEVICE",
-        "ANATOMY",
-    ],
-    # Forward metadata for future Dermatology/Ophthalmology models; no such
-    # model is registered today (see issue #318).
-    "Dermatology": ["SKIN_LESION", "MORPHOLOGY", "DISTRIBUTION", "ANATOMY"],
-    "Ophthalmology": [
-        "EYE_FINDING",
-        "VISUAL_ACUITY",
-        "INTRAOCULAR_PRESSURE",
-        "ANATOMY",
-    ],
-    # Forward metadata for future Anesthesia models; no such model is
-    # registered today (see issue #952).
-    "Anesthesia": [
-        "ANESTHESIA_TYPE",
-        "ANESTHETIC_AGENT",
-        "AIRWAY_MANAGEMENT",
-        "ASA_CLASS",
-        "MONITORING_MODALITY",
-        "INTRAOPERATIVE_EVENT",
-    ],
-    # Nutrition- registered (see issue #951)
-    "Nutrition": [
-        "DIET_TYPE",
-        "NUTRITION_TARGET",
-        "FEEDING_ROUTE",
-        "NUTRITIONAL_STATUS",
-    ],
-    # Forward metadata for future Endocrinology models; no such model is
-    # registered today (see issue #895).
-    "Endocrinology": [
-        "GLYCEMIC_MEASURE",
-        "THYROID_MEASURE",
-        "HORMONE_LEVEL",
-        "INSULIN_REGIMEN",
-        "CONDITION",
-        "BODY_SITE",
-    ],
-    # Forward metadata for future Gastroenterology models; no such model is
-    # registered today (see issue #894).
-    "Gastroenterology": [
-        "ENDOSCOPIC_FINDING",
-        "GI_SYMPTOM",
-        "GI_SCORE",
-        "POLYP_DESCRIPTOR",
-        "BODY_SITE",
-    ],
-    # Forward metadata for future Procedures models; no such model is
-    # registered today (see issue #313).
-    "Procedures": [
-        "PROCEDURE",
-        "SURGERY",
-        "DIAGNOSTIC_PROCEDURE",
-        "DEVICE",
-        "APPROACH",
-    ],
-    "Privacy": _PII_ENTITY_TYPES,
+    "Hematology": ["CL"],
 }
 
 _LEGACY_MODEL_ALIASES = {
@@ -514,6 +592,10 @@ _LEGACY_MODEL_ALIASES = {
     ],
     "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+    # The former dedicated Tamil checkpoint is no longer in the public Hub
+    # catalog. Keep its registry key as a compatibility alias for the explicit
+    # multilingual placeholder while callers migrate to qualified weights.
+    "OpenMed/privacy-filter-multilingual": ["pii_ta_msuperclinical_large"],
 }
 
 
@@ -642,10 +724,19 @@ def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
     if isinstance(labels, list) and labels:
         if category != "Privacy" and str(row.get("family") or "").upper() == "NER":
             return _dedupe_entity_types(
-                chain(labels, _CATEGORY_ENTITY_TYPES.get(category, ()))
+                chain(
+                    labels,
+                    _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+                    _CATEGORY_ENTITY_TYPES.get(category, ()),
+                )
             )
         return _dedupe_entity_types(labels)
-    return list(_CATEGORY_ENTITY_TYPES.get(category, []))
+    return _dedupe_entity_types(
+        chain(
+            _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+            _CATEGORY_ENTITY_TYPES.get(category, ()),
+        )
+    )
 
 
 def _recommended_confidence(category: str) -> float:
@@ -694,6 +785,12 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         architecture=row.get("architecture"),
         base_model=row.get("base_model"),
         formats=list(row.get("formats") or []),
+        nnapi_compatible=row.get("nnapi_compatible")
+        if isinstance(row.get("nnapi_compatible"), bool)
+        else None,
+        min_sdk=_positive_int_from_row(row, "min_sdk"),
+        execution_providers=_string_list_from_row(row, "execution_providers"),
+        tokenizer_assets=_string_list_from_row(row, "tokenizer_assets"),
         benchmark=_benchmark_from_row(row),
         latency_ms=_number_map_from_row(row, "latency_ms"),
         peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
@@ -774,7 +871,9 @@ def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
         return None
 
     formats = set(row.get("formats") or ())
-    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+    if "mlx-2bit" in formats:
+        bytes_per_parameter = 0.30
+    elif formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
         bytes_per_parameter = 0.55
     elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
         bytes_per_parameter = 1.05
@@ -849,6 +948,20 @@ def _rounded_mb(value: Optional[float]) -> Optional[float]:
     if value is None:
         return None
     return round(value, 3)
+
+
+def _positive_int_from_row(row: Dict[str, Any], field_name: str) -> Optional[int]:
+    value = row.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _string_list_from_row(row: Dict[str, Any], field_name: str) -> List[str]:
+    value = row.get(field_name)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -973,12 +1086,28 @@ def _add_pointer_aliases(
     registry_state: Mapping[str, Any],
 ) -> None:
     by_repo_id = {model.model_id: model for model in registry.values()}
-    for family, pointers in pointer_targets(registry_state).items():
+    slots = registry_state.get("slots", {})
+    pointer_sets = pointer_targets(registry_state)
+    family_counts: dict[str, int] = {}
+    for key in pointer_sets:
+        family = key.split("::", 1)[0]
+        family_counts[family] = family_counts.get(family, 0) + 1
+    for slot, pointers in pointer_sets.items():
+        checkpoints = slots.get(slot, {}).get("checkpoints", {})
         for pointer_name, repo_id in pointers.items():
             if repo_id is None:
                 continue
             model = by_repo_id.get(repo_id)
-            if model is not None:
+            if model is None:
+                continue
+            # Pointer aliases carry the slot's assigned registry version, not
+            # the display version parsed from the repo name.
+            assigned = checkpoints.get(repo_id)
+            if isinstance(assigned, str) and assigned:
+                model = replace(model, semantic_version=assigned)
+            registry[_slug(f"{slot}_{pointer_name}")] = model
+            family = slot.split("::", 1)[0]
+            if family_counts[family] == 1:
                 registry[_slug(f"{family}_{pointer_name}")] = model
 
 
@@ -1190,6 +1319,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "Ophthalmology",
         "Contains ophthalmology terms",
     ),
+    "\\bct\\b|\\bmri\\b|x[- ]?ray|ultrasound|radiograph|contrast|impression|nodule|opacity": (
+        "Radiology",
+        "Contains radiology/imaging terms",
+    ),
     "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
         "Anesthesia",
         "Contains anesthesia-record terms",
@@ -1217,6 +1350,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "blood|lymph|leukemia|lymphoma": (
         "Hematology",
         "Contains hematological terms",
+    ),
+    "\\blab\\b|mmol\\s*/\\s*l\\b|mg\\s*/\\s*dl\\b|\\bwbc\\b|hemoglobin|creatinine|reference\\s+range|elevated|abnormal|\\bpanel\\b": (
+        "Lab",
+        "Contains laboratory measurement terms",
     ),
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",
@@ -1552,9 +1689,16 @@ def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
 
 def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language."""
-    from .pii_i18n import DEFAULT_PII_MODELS, OPTIONAL_PII_MODEL
+    from .pii_i18n import (
+        DEFAULT_PII_MODELS,
+        OPTIONAL_PII_MODEL,
+        USER_SUPPLIED_PII_MODEL,
+    )
 
     model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id == USER_SUPPLIED_PII_MODEL:
+        # Publicly registered but ships no weights; the caller must supply one.
+        return None
     if model_id != OPTIONAL_PII_MODEL:
         return model_id
     from ..ner.families.indic import configured_indic_ner_model

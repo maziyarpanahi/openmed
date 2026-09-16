@@ -119,6 +119,9 @@ class DrugProtRelation:
     arg2_id: str
     arg1: DrugProtEntity
     arg2: DrugProtEntity
+    scope: str = "sentence"
+    relation_id: str = ""
+    metadata: Mapping[str, Any] | None = None
 
     def to_tuple(self) -> tuple[str, str, str]:
         """Return the compact relation tuple used by tests and adapters."""
@@ -126,7 +129,7 @@ class DrugProtRelation:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready relation representation."""
-        return {
+        payload = {
             "arg1": self.arg1.to_dict(),
             "arg1_id": self.arg1_id,
             "arg2": self.arg2.to_dict(),
@@ -134,6 +137,13 @@ class DrugProtRelation:
             "pmid": self.pmid,
             "relation_type": self.relation_type,
         }
+        if self.scope != "sentence":
+            payload["scope"] = self.scope
+        if self.relation_id:
+            payload["relation_id"] = self.relation_id
+        if self.metadata:
+            payload["metadata"] = dict(self.metadata)
+        return payload
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections import defaultdict
+import math
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +36,10 @@ from openmed.eval.report import _format_value, _plain
 
 DEFAULT_EXAMPLE_CAP = 5
 DEFAULT_CONTEXT_WINDOW = 24
+SYNTHETIC_TABULAR_UTILITY_SCHEMA_VERSION = 1
+DEFAULT_SYNTHETIC_MARGINAL_MAE_CAP = 0.15
+DEFAULT_SYNTHETIC_CORRELATION_MAE_CAP = 0.15
+DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING = 0.10
 CLINICAL_SPAN_KEYS: tuple[str, ...] = (
     "clinical_spans",
     "gold_clinical_spans",
@@ -49,6 +54,442 @@ CLINICAL_CATEGORIES: tuple[str, ...] = tuple(
         if metadata["policy_label"] == CLINICAL_CONCEPT
     )
 )
+
+
+@dataclass(frozen=True)
+class TabularUtilityReport:
+    """Aggregate-only fidelity gate for a synthetic tabular release.
+
+    One-way and two-way marginal errors are mean absolute differences between
+    normalized empirical cell probabilities. Numeric correlation error is the
+    mean absolute Pearson-correlation delta. The default documented caps are
+    ``0.15`` for both marginal and correlation MAE.
+    """
+
+    reference_row_count: int
+    synthetic_row_count: int
+    one_way_marginal_mae: float
+    two_way_marginal_mae: float
+    correlation_mae: float
+    marginal_mae_cap: float
+    correlation_mae_cap: float
+    per_column_mae: Mapping[str, float]
+    per_pair_mae: Sequence[Mapping[str, Any]]
+    correlations: Sequence[Mapping[str, Any]]
+    passed: bool
+    schema_version: int = SYNTHETIC_TABULAR_UTILITY_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic report without source or synthetic values."""
+
+        return {
+            "schema_version": self.schema_version,
+            "reference_row_count": self.reference_row_count,
+            "synthetic_row_count": self.synthetic_row_count,
+            "one_way_marginal_mae": self.one_way_marginal_mae,
+            "two_way_marginal_mae": self.two_way_marginal_mae,
+            "correlation_mae": self.correlation_mae,
+            "marginal_mae_cap": self.marginal_mae_cap,
+            "correlation_mae_cap": self.correlation_mae_cap,
+            "per_column_mae": {
+                name: self.per_column_mae[name] for name in sorted(self.per_column_mae)
+            },
+            "per_pair_mae": [dict(item) for item in self.per_pair_mae],
+            "correlations": [dict(item) for item in self.correlations],
+            "passed": self.passed,
+        }
+
+
+@dataclass(frozen=True)
+class MembershipInferenceRiskReport:
+    """Nearest-synthetic-row membership-inference attack estimate.
+
+    The attack scores candidate rows by their nearest normalized distance to a
+    synthetic row and reports the maximum empirical ``TPR - FPR`` advantage
+    across all score thresholds. This is a regression gate, not a proof of DP;
+    the documented default ceiling is ``0.10``.
+    """
+
+    member_count: int
+    nonmember_count: int
+    synthetic_row_count: int
+    advantage: float
+    advantage_ceiling: float
+    passed: bool
+    method: str = "nearest-synthetic-row-threshold-attack"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return aggregate attack evidence without candidate row values."""
+
+        return {
+            "method": self.method,
+            "member_count": self.member_count,
+            "nonmember_count": self.nonmember_count,
+            "synthetic_row_count": self.synthetic_row_count,
+            "advantage": self.advantage,
+            "advantage_ceiling": self.advantage_ceiling,
+            "passed": self.passed,
+        }
+
+
+def synthetic_tabular_utility_report(
+    reference: Sequence[Mapping[str, Any]],
+    synthetic: Sequence[Mapping[str, Any]],
+    *,
+    marginal_mae_cap: float = DEFAULT_SYNTHETIC_MARGINAL_MAE_CAP,
+    correlation_mae_cap: float = DEFAULT_SYNTHETIC_CORRELATION_MAE_CAP,
+) -> TabularUtilityReport:
+    """Measure one/two-way marginal and numeric-correlation fidelity.
+
+    Args:
+        reference: Held-out real rows used only inside the evaluator.
+        synthetic: Synthetic release rows with the same columns.
+        marginal_mae_cap: Maximum accepted mean absolute probability error for
+            both the one-way and two-way marginal summaries.
+        correlation_mae_cap: Maximum accepted mean absolute correlation delta.
+
+    Returns:
+        An aggregate-only report whose gate fails when any headline MAE exceeds
+        its documented cap.
+    """
+
+    marginal_cap = _unit_interval(
+        marginal_mae_cap,
+        field_name="marginal_mae_cap",
+    )
+    correlation_cap = _finite_non_negative(
+        correlation_mae_cap,
+        field_name="correlation_mae_cap",
+    )
+    if correlation_cap > 2.0:
+        raise ValueError("correlation_mae_cap must be at most 2")
+    reference_rows, names = _coerce_tabular_rows(reference, label="reference")
+    synthetic_rows, synthetic_names = _coerce_tabular_rows(
+        synthetic,
+        label="synthetic",
+    )
+    if set(synthetic_names) != set(names):
+        raise ValueError("synthetic rows must contain exactly the reference columns")
+    synthetic_rows = [{name: row[name] for name in names} for row in synthetic_rows]
+
+    per_column_mae = {
+        name: _marginal_mae(reference_rows, synthetic_rows, (name,)) for name in names
+    }
+    pair_reports: list[dict[str, Any]] = []
+    for left_index, left in enumerate(names):
+        for right in names[left_index + 1 :]:
+            pair_reports.append(
+                {
+                    "columns": [left, right],
+                    "mae": _marginal_mae(
+                        reference_rows,
+                        synthetic_rows,
+                        (left, right),
+                    ),
+                }
+            )
+
+    correlation_reports: list[dict[str, Any]] = []
+    numeric_names = _numeric_column_names(reference_rows, names)
+    for left_index, left in enumerate(numeric_names):
+        for right in numeric_names[left_index + 1 :]:
+            reference_correlation = _pearson_correlation(
+                reference_rows,
+                left,
+                right,
+            )
+            synthetic_correlation = _pearson_correlation(
+                synthetic_rows,
+                left,
+                right,
+            )
+            difference = abs(reference_correlation - synthetic_correlation)
+            correlation_reports.append(
+                {
+                    "columns": [left, right],
+                    "reference": reference_correlation,
+                    "synthetic": synthetic_correlation,
+                    "absolute_error": difference,
+                }
+            )
+
+    one_way_mae = _mean(per_column_mae.values())
+    two_way_mae = _mean(item["mae"] for item in pair_reports)
+    correlation_mae = _mean(item["absolute_error"] for item in correlation_reports)
+    return TabularUtilityReport(
+        reference_row_count=len(reference_rows),
+        synthetic_row_count=len(synthetic_rows),
+        one_way_marginal_mae=one_way_mae,
+        two_way_marginal_mae=two_way_mae,
+        correlation_mae=correlation_mae,
+        marginal_mae_cap=marginal_cap,
+        correlation_mae_cap=correlation_cap,
+        per_column_mae=per_column_mae,
+        per_pair_mae=tuple(pair_reports),
+        correlations=tuple(correlation_reports),
+        passed=bool(
+            one_way_mae <= marginal_cap
+            and two_way_mae <= marginal_cap
+            and correlation_mae <= correlation_cap
+        ),
+    )
+
+
+def membership_inference_risk_report(
+    members: Sequence[Mapping[str, Any]],
+    nonmembers: Sequence[Mapping[str, Any]],
+    synthetic: Sequence[Mapping[str, Any]],
+    *,
+    advantage_ceiling: float = DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
+) -> MembershipInferenceRiskReport:
+    """Estimate membership advantage using a nearest-synthetic-row attack."""
+
+    ceiling = _unit_interval(
+        advantage_ceiling,
+        field_name="advantage_ceiling",
+    )
+    member_rows, names = _coerce_tabular_rows(members, label="members")
+    nonmember_rows, nonmember_names = _coerce_tabular_rows(
+        nonmembers,
+        label="nonmembers",
+    )
+    synthetic_rows, synthetic_names = _coerce_tabular_rows(
+        synthetic,
+        label="synthetic",
+    )
+    expected = set(names)
+    if set(nonmember_names) != expected or set(synthetic_names) != expected:
+        raise ValueError(
+            "member, nonmember, and synthetic rows must have the same columns"
+        )
+    nonmember_rows = [{name: row[name] for name in names} for row in nonmember_rows]
+    synthetic_rows = [{name: row[name] for name in names} for row in synthetic_rows]
+    ranges = _numeric_ranges((*member_rows, *nonmember_rows), names)
+    member_scores = [
+        _nearest_row_similarity(row, synthetic_rows, names, ranges)
+        for row in member_rows
+    ]
+    nonmember_scores = [
+        _nearest_row_similarity(row, synthetic_rows, names, ranges)
+        for row in nonmember_rows
+    ]
+    thresholds = {math.inf, -math.inf, *member_scores, *nonmember_scores}
+    advantage = max(
+        (
+            sum(score >= threshold for score in member_scores) / len(member_scores)
+            - sum(score >= threshold for score in nonmember_scores)
+            / len(nonmember_scores)
+        )
+        for threshold in thresholds
+    )
+    advantage = max(0.0, min(1.0, float(advantage)))
+    return MembershipInferenceRiskReport(
+        member_count=len(member_rows),
+        nonmember_count=len(nonmember_rows),
+        synthetic_row_count=len(synthetic_rows),
+        advantage=advantage,
+        advantage_ceiling=ceiling,
+        passed=bool(advantage <= ceiling),
+    )
+
+
+def membership_inference_risk(
+    members: Sequence[Mapping[str, Any]],
+    nonmembers: Sequence[Mapping[str, Any]],
+    synthetic: Sequence[Mapping[str, Any]],
+    *,
+    advantage_ceiling: float = DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
+) -> MembershipInferenceRiskReport:
+    """Alias for :func:`membership_inference_risk_report`."""
+
+    return membership_inference_risk_report(
+        members,
+        nonmembers,
+        synthetic,
+        advantage_ceiling=advantage_ceiling,
+    )
+
+
+def _coerce_tabular_rows(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    label: str,
+) -> tuple[list[dict[str, Any]], tuple[str, ...]]:
+    if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes, bytearray)):
+        raise TypeError(f"{label} must be a sequence of row mappings")
+    materialized = list(rows)
+    if not materialized:
+        raise ValueError(f"{label} must contain at least one row")
+    if not all(isinstance(row, Mapping) for row in materialized):
+        raise TypeError(f"{label} must contain only row mappings")
+    names = tuple(materialized[0])
+    if not names or any(not isinstance(name, str) or not name for name in names):
+        raise ValueError(f"{label} rows require non-empty string column names")
+    expected = set(names)
+    if any(set(row) != expected for row in materialized):
+        raise ValueError(f"every {label} row must have the same columns")
+    return ([{name: row[name] for name in names} for row in materialized], names)
+
+
+def _marginal_mae(
+    reference: Sequence[Mapping[str, Any]],
+    synthetic: Sequence[Mapping[str, Any]],
+    columns: Sequence[str],
+) -> float:
+    reference_counts = Counter(
+        tuple(_cell_identity(row[column]) for column in columns) for row in reference
+    )
+    synthetic_counts = Counter(
+        tuple(_cell_identity(row[column]) for column in columns) for row in synthetic
+    )
+    support = set(reference_counts) | set(synthetic_counts)
+    return float(
+        sum(
+            abs(
+                reference_counts[key] / len(reference)
+                - synthetic_counts[key] / len(synthetic)
+            )
+            for key in support
+        )
+        / len(support)
+    )
+
+
+def _cell_identity(value: Any) -> tuple[str, Any]:
+    if value is None:
+        return ("null", None)
+    return (type(value).__name__, value)
+
+
+def _numeric_column_names(
+    rows: Sequence[Mapping[str, Any]],
+    names: Sequence[str],
+) -> tuple[str, ...]:
+    return tuple(
+        name
+        for name in names
+        if all(row[name] is None or _as_number(row[name]) is not None for row in rows)
+        and sum(row[name] is not None for row in rows) >= 2
+    )
+
+
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        return number if math.isfinite(number) else None
+    if isinstance(value, str) and value.strip():
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+        return number if math.isfinite(number) else None
+    return None
+
+
+def _pearson_correlation(
+    rows: Sequence[Mapping[str, Any]],
+    left: str,
+    right: str,
+) -> float:
+    pairs = [
+        (left_value, right_value)
+        for row in rows
+        if (left_value := _as_number(row[left])) is not None
+        and (right_value := _as_number(row[right])) is not None
+    ]
+    if len(pairs) < 2:
+        return 0.0
+    left_mean = sum(item[0] for item in pairs) / len(pairs)
+    right_mean = sum(item[1] for item in pairs) / len(pairs)
+    numerator = sum(
+        (left_value - left_mean) * (right_value - right_mean)
+        for left_value, right_value in pairs
+    )
+    left_variance = sum((item[0] - left_mean) ** 2 for item in pairs)
+    right_variance = sum((item[1] - right_mean) ** 2 for item in pairs)
+    denominator = math.sqrt(left_variance * right_variance)
+    if denominator == 0.0:
+        return 0.0
+    return float(max(-1.0, min(1.0, numerator / denominator)))
+
+
+def _numeric_ranges(
+    rows: Sequence[Mapping[str, Any]],
+    names: Sequence[str],
+) -> dict[str, tuple[float, float]]:
+    ranges: dict[str, tuple[float, float]] = {}
+    for name in names:
+        values = [_as_number(row[name]) for row in rows]
+        if values and all(value is not None for value in values):
+            numeric_values = [float(value) for value in values if value is not None]
+            ranges[name] = (min(numeric_values), max(numeric_values))
+    return ranges
+
+
+def _nearest_row_similarity(
+    candidate: Mapping[str, Any],
+    synthetic: Sequence[Mapping[str, Any]],
+    names: Sequence[str],
+    ranges: Mapping[str, tuple[float, float]],
+) -> float:
+    return max(1.0 - _row_distance(candidate, row, names, ranges) for row in synthetic)
+
+
+def _row_distance(
+    left: Mapping[str, Any],
+    right: Mapping[str, Any],
+    names: Sequence[str],
+    ranges: Mapping[str, tuple[float, float]],
+) -> float:
+    distances: list[float] = []
+    for name in names:
+        left_value = left[name]
+        right_value = right[name]
+        if left_value is None or right_value is None:
+            distances.append(0.0 if left_value is right_value else 1.0)
+            continue
+        if name in ranges:
+            low, high = ranges[name]
+            left_number = _as_number(left_value)
+            right_number = _as_number(right_value)
+            if left_number is None or right_number is None:
+                distances.append(1.0)
+            elif high == low:
+                distances.append(0.0 if left_number == right_number else 1.0)
+            else:
+                distances.append(
+                    min(1.0, abs(left_number - right_number) / (high - low))
+                )
+        else:
+            distances.append(
+                0.0
+                if _cell_identity(left_value) == _cell_identity(right_value)
+                else 1.0
+            )
+    return sum(distances) / len(distances)
+
+
+def _finite_non_negative(value: Any, *, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{field_name} must be a finite number")
+    number = float(value)
+    if not math.isfinite(number) or number < 0.0:
+        raise ValueError(f"{field_name} must be finite and non-negative")
+    return number
+
+
+def _unit_interval(value: Any, *, field_name: str) -> float:
+    number = _finite_non_negative(value, field_name=field_name)
+    if number > 1.0:
+        raise ValueError(f"{field_name} must be at most 1")
+    return number
+
+
+def _mean(values: Iterable[float]) -> float:
+    materialized = [float(value) for value in values]
+    return float(sum(materialized) / len(materialized)) if materialized else 0.0
 
 
 @dataclass(frozen=True)
