@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic page batching for document inference, planning
+  ordered half-open page ranges under page-count and per-batch pixel
+  budgets with reject or isolate oversize policies, exact gap-free
+  partitioning, and value-free bound and overflow checks (#3048).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
