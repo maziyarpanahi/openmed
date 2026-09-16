@@ -155,3 +155,36 @@ def test_fixture_safety_findings_do_not_echo_fixture_values(tmp_path: Path) -> N
     assert row["fixture"]["status"] == "contradictory"
     assert report["sources"]["includes_fixture_text"] is False
     assert "Sensitive-looking value" not in json.dumps(report)
+
+
+def test_fixture_source_paths_are_hashed_without_exposing_values(
+    tmp_path: Path,
+) -> None:
+    sensitive_value = "Synthetic Patient Alice 123-45-6789"
+    root = tmp_path / sensitive_value
+    root.mkdir()
+    (root / f"{sensitive_value}.json").write_text(
+        json.dumps(
+            {
+                "language": "en",
+                "text": sensitive_value,
+                "metadata": {"synthetic": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_language_health_matrix(
+        registry=_registry(),
+        manifest_rows=_manifest(),
+        fixture_roots=(root,),
+        languages=("en",),
+        policy_names=("clinical_minimal_redaction",),
+    )
+
+    serialized = json.dumps(report, sort_keys=True)
+    assert sensitive_value not in serialized
+    assert report["languages"][0]["fixture"]["source_ids"][0].startswith(
+        "external:sha256:"
+    )
+    assert report["sources"]["fixture_roots"][0].startswith("external:sha256:")

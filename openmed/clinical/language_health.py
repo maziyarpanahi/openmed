@@ -8,6 +8,7 @@ claim.  Fixture contents are deliberately never copied into the report.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
@@ -118,11 +119,18 @@ def _fixture_safety_status(payloads: Sequence[Mapping[str, Any]]) -> str:
     return "unverified"
 
 
-def _display_fixture_path(path: Path) -> str:
+def _source_reference(path: Path) -> str:
+    """Return a deterministic provenance hash without exposing path text."""
+
+    resolved = path.resolve(strict=False)
     try:
-        return path.relative_to(_REPO_ROOT).as_posix()
+        value = resolved.relative_to(_REPO_ROOT.resolve()).as_posix()
+        scope = "repository"
     except ValueError:
-        return path.name
+        value = resolved.as_posix()
+        scope = "external"
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return f"{scope}:sha256:{digest}"
 
 
 def _fixture_record(
@@ -169,7 +177,7 @@ def _fixture_record(
     if parse_errors:
         safety = "unverified" if safety == "verified_synthetic" else safety
     metadata = {
-        "path": _display_fixture_path(path),
+        "source_id": _source_reference(path),
         "record_count": len(payloads),
         "languages": sorted(languages),
         "safety": safety,
@@ -191,7 +199,7 @@ def _collect_fixture_evidence(
                 {
                     "language": None,
                     "component": "fixture",
-                    "message": f"fixture root {_display_fixture_path(root)} is missing",
+                    "message": (f"fixture root {_source_reference(root)} is missing"),
                 }
             )
             continue
@@ -208,7 +216,8 @@ def _collect_fixture_evidence(
                         "language": None,
                         "component": "fixture",
                         "message": (
-                            f"fixture {metadata['path']} contains invalid JSON records"
+                            "fixture "
+                            f"{metadata['source_id']} contains invalid JSON records"
                         ),
                     }
                 )
@@ -505,7 +514,7 @@ def _fixture_component(
         return (
             {
                 "status": "missing",
-                "files": [],
+                "source_ids": [],
                 "file_count": 0,
                 "record_count": 0,
                 "synthetic_only": False,
@@ -528,12 +537,12 @@ def _fixture_component(
         status = "contradictory"
         issues.append("fixture set contains invalid JSON records")
 
-    files = sorted({str(record["path"]) for record in records})
+    source_ids = sorted({str(record["source_id"]) for record in records})
     return (
         {
             "status": status,
-            "files": files,
-            "file_count": len(files),
+            "source_ids": source_ids,
+            "file_count": len(source_ids),
             "record_count": sum(
                 int(record.get("record_count", 0)) for record in records
             ),
@@ -723,13 +732,13 @@ def build_language_health_matrix(
         },
         "issues": findings,
         "sources": {
-            "manifest": _display_fixture_path(
+            "manifest": _source_reference(
                 Path(manifest_path)
                 if manifest_path is not None
                 else _REPO_ROOT / "models.jsonl"
             ),
             "fixture_roots": [
-                _display_fixture_path(Path(root)) for root in resolved_fixture_roots
+                _source_reference(Path(root)) for root in resolved_fixture_roots
             ],
             "policy_profiles": resolved_policy_names,
             "includes_fixture_text": False,

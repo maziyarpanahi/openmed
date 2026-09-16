@@ -27,11 +27,12 @@ can be `filled`, `missing`, `contradictory`, `fallback`, `limited`,
 `user_supplied`, `not_applicable`, or `unverified`. The row status is
 `healthy`, `degraded`, `missing`, or `contradictory`.
 
-Fixture evidence is metadata-only: the matrix records file names, record
-counts, language codes, and synthetic-safety status, but never fixture text,
-predictions, spans, or expected outputs. A fixture is `filled` only when its
-metadata certifies every observed record as synthetic. This is an evidence
-index, not a clinical validation or compliance certification.
+Fixture evidence is metadata-only: the matrix records deterministic provenance
+hashes, record counts, language codes, and synthetic-safety status, but never
+fixture paths, file names, fixture text, predictions, spans, or expected
+outputs. A fixture is `filled` only when its metadata certifies every observed
+record as synthetic. This is an evidence index, not a clinical validation or
+compliance certification.
 
 Named model fallbacks and user-supplied model routes remain explicit in the
 matrix. They are not silently promoted to trained model coverage. The
