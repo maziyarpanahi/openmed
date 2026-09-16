@@ -350,6 +350,7 @@ def extract_employment_findings(
             continue
 
         if status_match is None:
+            assert type_match is not None
             status_match = _CueMatch(
                 start=type_match.start,
                 end=type_match.end,
@@ -526,6 +527,7 @@ def _validate_status_determinant(
     priority = config.get("status_priority")
     status_cues = config.get("status_cues")
     _validate_cue_sequence(priority, f"{determinant}.status_priority")
+    assert isinstance(priority, Sequence) and not isinstance(priority, str | bytes)
     if not isinstance(status_cues, Mapping) or not status_cues:
         raise ValueError(f"{determinant}.status_cues must be a mapping")
     _validate_cue_mapping(status_cues, f"{determinant}.status_cues")
