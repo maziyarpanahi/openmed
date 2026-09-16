@@ -195,8 +195,6 @@ class EventInterval:
         """Return a report-safe representation without interval values."""
 
         payload: dict[str, Any] = {
-            "event_id": self.event_id,
-            "event_type": self.event_type,
             "source_offsets": [self.source_start, self.source_end],
             "fingerprint": self.fingerprint,
         }
@@ -292,16 +290,11 @@ class EventStatusAssertion:
     def to_dict(self) -> dict[str, Any]:
         """Return a report-safe representation without interval values."""
 
-        payload: dict[str, Any] = {
+        return {
             "status": self.status,
             "source_offsets": [self.source_start, self.source_end],
             "fingerprint": self.fingerprint,
         }
-        if self.assertion_id is not None:
-            payload["assertion_id"] = self.assertion_id
-        if self.event_id is not None:
-            payload["event_id"] = self.event_id
-        return payload
 
 
 StatusAssertion = EventStatusAssertion
@@ -361,10 +354,6 @@ class ContradictionEvidence:
             "source_offsets": [self.source_start, self.source_end],
             "fingerprint": self.fingerprint,
         }
-        if self.event_id is not None:
-            payload["event_id"] = self.event_id
-        if self.event_type is not None:
-            payload["event_type"] = self.event_type
         if self.status is not None:
             payload["status"] = self.status
         return payload

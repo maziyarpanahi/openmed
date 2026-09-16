@@ -180,11 +180,13 @@ def test_conflicting_status_is_scoped_to_same_overlapping_entity() -> None:
 
 def test_mapping_status_is_reported_without_retaining_raw_value() -> None:
     raw_value = "synthetic sensitive assertion"
+    raw_event_id = "patient-jane-doe"
+    raw_event_type = "patient_jane_doe"
     report = report_event_contradictions(
         [
             {
-                "event_id": "status-event-a",
-                "event_type": "problem",
+                "event_id": raw_event_id,
+                "event_type": raw_event_type,
                 "entity_id": "synthetic-problem",
                 "start": "2026-06-01",
                 "end": "2026-06-03",
@@ -193,8 +195,8 @@ def test_mapping_status_is_reported_without_retaining_raw_value() -> None:
                 "value": raw_value,
             },
             {
-                "event_id": "status-event-b",
-                "event_type": "problem",
+                "event_id": "patient-john-doe",
+                "event_type": raw_event_type,
                 "entity_id": "synthetic-problem",
                 "start": "2026-06-02",
                 "end": "2026-06-04",
@@ -210,3 +212,33 @@ def test_mapping_status_is_reported_without_retaining_raw_value() -> None:
     assert report.counts["conflicting_status"] == 1
     assert raw_value not in serialized
     assert "synthetic conflicting assertion" not in serialized
+    assert raw_event_id not in serialized
+    assert raw_event_type not in serialized
+
+
+def test_typed_record_serializers_omit_caller_identifiers() -> None:
+    event = EventInterval(
+        event_id="patient-jane-doe",
+        event_type="patient_jane_doe",
+        interval_start="2026-06-01",
+        interval_end="2026-06-03",
+        source_start=1,
+        source_end=8,
+    )
+    assertion = EventStatusAssertion(
+        entity_id="patient-jane-doe",
+        status="active",
+        source_start=9,
+        source_end=16,
+        assertion_id="assertion-jane-doe",
+        event_id="patient-jane-doe",
+    )
+
+    serialized = json.dumps(
+        {"event": event.to_dict(), "assertion": assertion.to_dict()},
+        sort_keys=True,
+    )
+
+    assert "jane" not in serialized
+    assert event.fingerprint in serialized
+    assert assertion.fingerprint in serialized
