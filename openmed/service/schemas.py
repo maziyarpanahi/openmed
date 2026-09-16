@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal, Optional, Union
 
 from openmed.clinical.grounding.systems import SYSTEM_URIS, canonical_system
@@ -24,21 +24,13 @@ from .keep_alive import parse_keep_alive
 from .limits import get_max_text_length
 
 try:
-    from pydantic import (
-        AliasChoices,
-        BaseModel,
-        ConfigDict,
-        Field,
-        field_validator,
-        model_validator,
-    )
+    from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
     PYDANTIC_V2 = True
 except ImportError:  # pragma: no cover
     from pydantic import BaseModel, Field, root_validator, validator
 
     ConfigDict = None  # type: ignore[assignment]
-    AliasChoices = None  # type: ignore[assignment,misc]
     field_validator = None  # type: ignore[assignment]
     model_validator = None  # type: ignore[assignment]
     PYDANTIC_V2 = False
@@ -207,6 +199,20 @@ def _normalize_grounding_language(value: Any) -> str:
     normalized = str(value).strip().casefold()
     if not normalized:
         raise ValueError("lang must be a non-empty language string")
+    return normalized
+
+
+def _normalize_grounding_language_alias(values: Any) -> Any:
+    if not isinstance(values, Mapping) or "lang" not in values:
+        return values
+    normalized = dict(values)
+    language = normalized.pop("lang")
+    source_language = normalized.get("source_language")
+    if source_language is not None and _normalize_grounding_language(
+        source_language
+    ) != _normalize_grounding_language(language):
+        raise ValueError("lang and source_language must match when both are provided")
+    normalized["source_language"] = language
     return normalized
 
 
@@ -586,11 +592,7 @@ if PYDANTIC_V2:
         systems: list[str] = Field(
             default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
         )
-        source_language: str = Field(
-            default="en",
-            validation_alias=AliasChoices("lang", "source_language"),
-            serialization_alias="lang",
-        )
+        source_language: str = "en"
         top_k: int = Field(default=5, ge=1, le=50)
         offline: bool = True
 
@@ -619,6 +621,11 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_source_language(cls, value: Any) -> str:
             return _normalize_grounding_language(value)
+
+        @model_validator(mode="before")
+        @classmethod
+        def _validate_language_alias(cls, values: Any) -> Any:
+            return _normalize_grounding_language_alias(values)
 
         @model_validator(mode="after")
         def _validate_inputs(self) -> "GroundRequest":
@@ -899,7 +906,7 @@ else:
         systems: list[str] = Field(
             default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
         )
-        source_language: str = Field(default="en", alias="lang")
+        source_language: str = "en"
         top_k: int = Field(default=5, ge=1, le=50)
         offline: bool = True
 
@@ -924,6 +931,10 @@ else:
         @validator("source_language", pre=True)
         def _validate_source_language(cls, value: Any) -> str:
             return _normalize_grounding_language(value)
+
+        @root_validator(pre=True)
+        def _validate_language_alias(cls, values: dict[str, Any]) -> dict[str, Any]:
+            return _normalize_grounding_language_alias(values)
 
         @root_validator
         def _validate_inputs(cls, values: dict[str, Any]) -> dict[str, Any]:

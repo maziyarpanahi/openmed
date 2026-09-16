@@ -465,15 +465,15 @@
             ],
             "title": "Entities"
           },
-          "lang": {
-            "default": "en",
-            "title": "Lang",
-            "type": "string"
-          },
           "offline": {
             "default": true,
             "title": "Offline",
             "type": "boolean"
+          },
+          "source_language": {
+            "default": "en",
+            "title": "Source Language",
+            "type": "string"
           },
           "systems": {
             "items": {
