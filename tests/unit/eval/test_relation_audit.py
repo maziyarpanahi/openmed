@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 
 import pytest
@@ -180,4 +180,21 @@ def test_unreadable_input_never_echoes_sensitive_exception_text() -> None:
 
     with pytest.raises(ValueError, match="input is unreadable") as error:
         audit_relation_candidates(_unreadable_records())
+    assert sensitive_value not in str(error.value)
+
+    class _UnreadableCounts(Mapping[str, int]):
+        def __getitem__(self, key: str) -> int:
+            raise RuntimeError(sensitive_value)
+
+        def __iter__(self) -> Iterator[str]:
+            raise RuntimeError(sensitive_value)
+
+        def __len__(self) -> int:
+            return 1
+
+    with pytest.raises(ValueError, match="dimension is unreadable") as error:
+        RelationCandidateAuditReport(
+            candidate_count=1,
+            by_section=_UnreadableCounts(),
+        )
     assert sensitive_value not in str(error.value)

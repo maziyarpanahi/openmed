@@ -82,8 +82,23 @@ def _normalise_count_mapping(
     if not isinstance(value, Mapping):
         raise ValueError("audit count dimensions must be mappings")
 
+    try:
+        items = iter(value.items())
+    except Exception:
+        raise ValueError("audit count dimension is unreadable") from None
+
     counts: Counter[str] = Counter()
-    for key, raw_count in value.items():
+    while True:
+        try:
+            item = next(items)
+        except StopIteration:
+            break
+        except Exception:
+            raise ValueError("audit count dimension is unreadable") from None
+        try:
+            key, raw_count = item
+        except Exception:
+            raise ValueError("audit count dimension is unreadable") from None
         if isinstance(raw_count, bool) or not isinstance(raw_count, int):
             raise ValueError("audit counts must be non-negative integers")
         if raw_count < 0:
@@ -428,17 +443,25 @@ class RelationCandidateAuditReport:
 
         if not isinstance(data, Mapping):
             raise TypeError("relation-candidate audit report must be a mapping")
-        schema_version = data.get(
-            "schema_version", RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION
-        )
+        try:
+            schema_version = data.get(
+                "schema_version", RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION
+            )
+            candidate_count = data.get(
+                "candidate_count", data.get("total_candidates", 0)
+            )
+            by_relation_family = data.get("by_relation_family", {})
+            by_section = data.get("by_section", {})
+            by_filtering_reason = data.get("by_filtering_reason", {})
+        except Exception:
+            raise ValueError("relation-candidate audit report is unreadable") from None
         if schema_version != RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION:
             raise ValueError("unsupported relation-candidate audit schema version")
-        candidate_count = data.get("candidate_count", data.get("total_candidates", 0))
         return cls(
             candidate_count=candidate_count,
-            by_relation_family=data.get("by_relation_family", {}),
-            by_section=data.get("by_section", {}),
-            by_filtering_reason=data.get("by_filtering_reason", {}),
+            by_relation_family=by_relation_family,
+            by_section=by_section,
+            by_filtering_reason=by_filtering_reason,
             schema_version=schema_version,
         )
 
