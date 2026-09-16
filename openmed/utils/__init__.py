@@ -1,6 +1,13 @@
 """Utility functions for OpenMed."""
 
 from .deprecation import deprecated
+from .gateway import (
+    GatewayLimits,
+    InputValidationError,
+    get_default_limits,
+    normalize_text,
+    validate_language,
+)
 from .logging import get_logger, setup_logging
 from .profiling import (
     BatchMetrics,
@@ -27,6 +34,12 @@ __all__ = [
     "get_logger",
     "validate_input",
     "validate_model_name",
+    # Shared input gateway
+    "InputValidationError",
+    "GatewayLimits",
+    "get_default_limits",
+    "normalize_text",
+    "validate_language",
     # Profiling utilities
     "Profiler",
     "ProfileReport",

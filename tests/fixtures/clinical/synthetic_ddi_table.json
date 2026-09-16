@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "synthetic": true,
+    "clinical_use": false,
+    "license": "CC0-1.0",
+    "notice": "Synthetic non-clinical test data only. Not valid for patient care. Production interaction severity data must be user-supplied and license-cleared."
+  },
+  "interactions": [
+    {
+      "rxcui_1": "900000000001",
+      "rxcui_2": "900000000002",
+      "severity": "synthetic-review-priority",
+      "description": "Synthetic pair Alpha-Beta is listed for test-only clinician review.",
+      "source_citation": "OpenMed OM-829 synthetic DDI fixture, schema version 1"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import pytest
 
 from openmed.core.pii_entity_merger import (
     PIIPattern,
+    calculate_dominant_label,
     find_context_words,
     find_semantic_units,
     merge_entities_with_semantic_units,
@@ -293,6 +294,50 @@ class TestMergeWithContextAwareScoring:
 
         assert len(email_entities) == 1
         assert email_entities[0]["word"] == "john@example.com"
+
+    def test_equal_span_rows_have_a_total_order(self):
+        """Equivalent detector sets must not inherit adapter iteration order."""
+        text = "Taylor Example"
+        entities = [
+            {
+                "entity_type": "PATIENT",
+                "score": 0.9,
+                "start": 0,
+                "end": len(text),
+                "word": text,
+            },
+            {
+                "entity_type": "NAME",
+                "score": 0.9,
+                "start": 0,
+                "end": len(text),
+                "word": text,
+            },
+        ]
+
+        forward = merge_entities_with_semantic_units(
+            entities,
+            text,
+            use_semantic_patterns=False,
+        )
+        reverse = merge_entities_with_semantic_units(
+            list(reversed(entities)),
+            text,
+            use_semantic_patterns=False,
+        )
+
+        assert forward == reverse
+        assert [entity["entity_type"] for entity in forward] == ["NAME", "PATIENT"]
+
+    def test_dominant_label_confidence_tie_is_order_independent(self):
+        entities = [
+            {"entity_type": "PATIENT", "score": 0.9},
+            {"entity_type": "NAME", "score": 0.9},
+        ]
+
+        assert calculate_dominant_label(entities) == calculate_dominant_label(
+            list(reversed(entities))
+        )
 
 
 class TestMultilingualPatterns:

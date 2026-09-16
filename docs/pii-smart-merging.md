@@ -29,7 +29,8 @@ result = extract_pii("DOB: 01/15/1970", use_smart_merging=True)
 # - [date_of_birth] '01/15/1970' (confidence: 0.731)
 ```
 
-Now you get **complete, production-ready entities**.
+Now fragmented predictions are merged into complete semantic entities for
+downstream validation.
 
 ---
 
@@ -449,5 +450,5 @@ def select_label(predictions):
 - 🐛 **FIXED**: Fragmented date entities (e.g., '01' + '/15/1970' → '01/15/1970')
 - 🐛 **FIXED**: Incorrect de-identification output with multiple placeholders per entity
 - 🐛 **FIXED**: Entity position mismatch when input text has leading/trailing whitespace
-- ✅ **TESTED**: All test cases pass (5/5) - production ready
+- ✅ **TESTED**: All five documented fixture cases pass
 - 📚 Added comprehensive documentation and examples

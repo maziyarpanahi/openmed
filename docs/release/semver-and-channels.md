@@ -8,7 +8,7 @@ Model artifacts are data. A bad checkpoint affects one model entry and can be
 rolled back by repointing the manifest to the last green artifact.
 
 - Versioning: repository suffix or artifact revision plus a reproducibility hash.
-- Cadence: daily-capable once the release gates and manifest automation are in place.
+- Cadence: maintainer-triggered after local conversion, evaluation, and review.
 - Gate owner: release engineering plus the evaluation gate.
 - Rollback: manifest pointer flip, regenerated cards, and a tracking issue.
 
@@ -76,3 +76,99 @@ releasable. A candidate must satisfy critical-leakage, recall, quantization
 delta, device-tier, span-integrity, and regression checks before it can move to
 stable. Library releases must also pass the repository policy, dependency
 license policy, and test suite.
+
+Model promotion and Library/SDK publication remain separate release streams.
+`.github/workflows/release-gates.yml` runs only by explicit model-candidate
+dispatch or the metadata-only rollback dispatch; it has no schedule and never
+publishes model artifacts. An SDK `v*` tag does not promote a model. A
+Library/SDK release that changes a `canary`, `latest`, or `last_green` model
+pointer must first complete the model gate with real staged golden and SHIELD
+evidence. When those pointers are unchanged, the SDK tag uses the retained
+last-green model evidence and the tag-driven package, platform, and repository
+gates.
+
+## SDK readiness evidence
+
+For an SDK candidate that retains model targets, use the explicit SDK stream:
+
+```bash
+python -m openmed.eval.release_readiness --sdk-baseline v2.3.0 \
+  --migration-guide docs/migration/2.3-to-2.5.md \
+  --api-compat-report api-surface-diff.json \
+  --e2e-report e2e-golden-report.json --version 2.5.0 \
+  --output release-readiness-report.json --json
+```
+
+This mode verifies the baseline is an ancestor stable tag, requires exact
+`models.jsonl` and retained `gates/baseline.json` contents, and compares every
+model pointer target across registry schema representations. Changed or
+missing evidence fails closed. It does not claim new model qualification.
+Model candidates use `--gate-report` with signed evaluation evidence; the two
+CLI modes cannot be combined. Both streams require API, documentation,
+disclaimer, and golden-suite checks, and emit signed readiness reports.
+
+## Manual Model Orchestration
+
+OpenMed does not build, convert, evaluate, or publish models on a GitHub Actions
+schedule. Maintainers may use `gates/nightly_release_queue.json` as a reviewed
+local control file on explicitly provisioned hardware. A queue row fixes the
+source and target repositories, family, tier, format, parameter count,
+synthetic fixture path, and evaluation suite. Queue identifiers and repository
+identifiers are validated before any conversion starts.
+
+For each explicitly selected candidate, a maintainer can run
+`scripts/release/orchestrate.py run` locally to execute conversion, the shared
+evaluation harness, the signed `ReleaseGate`, artifact-backed model-card
+generation, publication, registry promotion, and a fresh-environment smoke test
+in that order. A non-`RELEASABLE` report halts that candidate before model-card
+generation or publication. The remaining candidates continue, while the run
+becomes `PARTIAL` and its PHI-free evidence records identifiers, hashes, the
+failing stage, the run id, and the git SHA.
+
+The smoke test downloads the just-published repository into a new virtual
+environment and calls both `extract_pii` and `deidentify` on a synthetic probe.
+It emits only a span count and offsets hash. Failure immediately flips the
+family's `latest` registry pointer back to committed `last_green` evidence.
+
+Every locally executed candidate outcome is appended to
+`gates/release_runs.jsonl`. The row binds the gate-report path and hash,
+artifact digest, decision, final pointer target, smoke state, start/completion
+timestamps, run status, and git SHA under a provenance hash. Gate reports live
+under `gates/release_reports/<run-id>/`.
+
+Release compute budgets use the same explicit local workflow. Review rolling
+spend before selecting a batch, ask the orchestrator to write deterministic
+stage timings, then append the linked cost and carbon record:
+
+```bash
+python scripts/release/budget_report.py status \
+  --ledger gates/budget_ledger.jsonl \
+  --output gates/release_reports/budget-status.json
+python scripts/release/orchestrate.py run \
+  --weekday <weekday> \
+  --run-id <run-id> \
+  --budget-timings gates/release_reports/<run-id>/budget-stage-timings.json
+python scripts/release/budget_report.py record \
+  --timings gates/release_reports/<run-id>/budget-stage-timings.json \
+  --ledger gates/budget_ledger.jsonl \
+  --orchestrator-ledger gates/release_runs.jsonl \
+  --output gates/release_reports/<run-id>/budget-report.json
+```
+
+An `OVER` verdict recommends reducing a future batch, for example by passing
+`--max-candidates 1` to an explicitly initiated run. It is advisory and never
+overrides or skips privacy, recall, provenance, publication, or smoke-test
+gates. Stage timings and budget rows contain only validated identifiers,
+aggregate measurements, reviewed factors, hashes, and threshold decisions.
+
+A maintainer reviews and commits the ledger, reports, manifest, and registry
+state through a normal PR. Reconstruct and validate a run without a live API
+call with:
+
+```bash
+python scripts/release/orchestrate.py audit \
+  --run-id <workflow-run-id>-<attempt>
+```
+
+Publication is an explicit local operation and follows the [manual Hugging Face
+publication policy](../security/hf-token-policy.md).

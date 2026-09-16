@@ -19,6 +19,7 @@ from openmed.core.decoding import (
     decode_span_graph,
 )
 
+from ..coreference import CoreferenceChain
 from .frames import (
     ASSISTIVE_EVENT_DISCLAIMER,
     EVENT_FRAME_SCHEMAS,
@@ -26,9 +27,10 @@ from .frames import (
     EventFrame,
     EventType,
     RoleSlot,
+    attach_coreference_representatives,
 )
 
-CLINICAL_EVENT_LEXICON_VERSION = "clinical-events-v1"
+CLINICAL_EVENT_LEXICON_VERSION = "clinical-events-v2"
 
 MedicationChangeAction = Literal[
     "started",
@@ -185,6 +187,47 @@ _LAB_TREND_TRIGGER_CUES: tuple[_TriggerCue, ...] = (
     ),
 )
 
+_GERMAN_MEDICATION_CUES = tuple(
+    _TriggerCue(
+        "medication_change",
+        "action",
+        action,
+        re.compile(pattern, re.IGNORECASE),
+        "German medication change cue",
+    )
+    for action, pattern in (
+        (
+            "restarted",
+            r"\b(?:wieder\s+(?:begonnen|angesetzt|aufgenommen)|wiederaufgenommen)\b",
+        ),
+        ("started", r"\b(?:begonnen|beginnen|angesetzt|eingeleitet|neu\s+verordnet)\b"),
+        ("stopped", r"\b(?:abgesetzt|absetzen|beendet)\b"),
+        ("increased", r"\b(?:erh[öo]ht|gesteigert|aufdosiert)\b"),
+        ("decreased", r"\b(?:reduziert|gesenkt|verringert)\b"),
+        ("held", r"\b(?:pausiert|ausgesetzt|zur[üu]ckgehalten)\b"),
+    )
+)
+_GERMAN_LAB_CUES = tuple(
+    _TriggerCue(
+        "lab_trend",
+        "direction",
+        direction,
+        re.compile(pattern, re.IGNORECASE),
+        "German laboratory trend cue",
+    )
+    for direction, pattern in (
+        (
+            "rising",
+            r"\b(?:steigend|gestiegen|angestiegen|stieg|ansteigend|zunehmend)\b",
+        ),
+        (
+            "falling",
+            r"\b(?:fallend|gefallen|gesunken|sank|abgefallen|r[üu]ckl[äa]ufig)\b",
+        ),
+        ("stable", r"\b(?:stabil|unver[äa]ndert|gleichbleibend)\b"),
+    )
+)
+
 _TIME_ANCHOR_RE = re.compile(
     r"\b(?:today|yesterday|tomorrow|tonight|this\s+morning|this\s+evening|"
     r"overnight|on\s+\d{1,2}/\d{1,2}(?:/\d{2,4})?|"
@@ -242,6 +285,9 @@ def extract_medication_change_events(
     *,
     max_distance: int = 160,
     include_detected_time_anchors: bool = True,
+    coreference_chains: Sequence[CoreferenceChain] = (),
+    language: str = "en",
+    max_events: int | None = None,
 ) -> list[EventFrame]:
     """Extract medication-change event frames from already-detected spans.
 
@@ -255,20 +301,29 @@ def extract_medication_change_events(
         include_detected_time_anchors: Whether to add deterministic time-anchor
             mentions for plain expressions such as ``today`` or ``over 48
             hours``.
+        coreference_chains: Optional document-local clinical coreference chains
+            used to canonicalize TREATMENT heads while retaining source-span
+            provenance.
+        language: Explicit trigger language, ``en`` or ``de``. Source text is
+            never translated. German time spans should be supplied by the caller.
+        max_events: Optional positive trigger limit, checked before role graphs
+            and pairwise medication-conflict analysis are constructed.
 
     Returns:
         Filled event frames with provenance offsets and an assistive disclaimer.
     """
 
     source_text = _validate_text(text)
+    cues = _language_cues(language, _MEDICATION_TRIGGER_CUES, _GERMAN_MEDICATION_CUES)
     prepared_mentions = _prepare_mentions(
         source_text,
         mentions,
-        include_detected_time_anchors=include_detected_time_anchors,
+        include_detected_time_anchors=include_detected_time_anchors
+        and language == "en",
     )
     frames = [
         frame
-        for trigger in _find_triggers(source_text, _MEDICATION_TRIGGER_CUES)
+        for trigger in _bounded_triggers(source_text, cues, language, max_events)
         if (
             frame := _build_event_frame(
                 source_text,
@@ -279,7 +334,11 @@ def extract_medication_change_events(
         )
         is not None
     ]
-    return _surface_medication_conflicts(frames)
+    canonical_frames = [
+        attach_coreference_representatives(frame, coreference_chains, source_text)
+        for frame in frames
+    ]
+    return _surface_medication_conflicts(canonical_frames)
 
 
 def extract_lab_trend_events(
@@ -289,6 +348,9 @@ def extract_lab_trend_events(
     lab_value_graph: SpanGraph | None = None,
     max_distance: int = 180,
     include_detected_time_anchors: bool = True,
+    coreference_chains: Sequence[CoreferenceChain] = (),
+    language: str = "en",
+    max_events: int | None = None,
 ) -> list[EventFrame]:
     """Extract lab-trend event frames from already-detected spans.
 
@@ -302,23 +364,31 @@ def extract_lab_trend_events(
         max_distance: Maximum character gap for linking a trigger to a role.
         include_detected_time_anchors: Whether to add deterministic time-window
             mentions for plain temporal expressions.
+        coreference_chains: Optional document-local clinical coreference chains
+            used to canonicalize TEST heads while retaining source-span
+            provenance.
+        language: Explicit trigger language, ``en`` or ``de``. German time spans
+            should be supplied by the caller; source text is never translated.
+        max_events: Optional positive trigger limit checked before role graphs.
 
     Returns:
         Filled event frames with provenance offsets and an assistive disclaimer.
     """
 
     source_text = _validate_text(text)
+    cues = _language_cues(language, _LAB_TREND_TRIGGER_CUES, _GERMAN_LAB_CUES)
     raw_mentions = list(mentions or ())
     if lab_value_graph is not None:
         raw_mentions.extend(lab_value_event_mentions(lab_value_graph))
     prepared_mentions = _prepare_mentions(
         source_text,
         raw_mentions,
-        include_detected_time_anchors=include_detected_time_anchors,
+        include_detected_time_anchors=include_detected_time_anchors
+        and language == "en",
     )
-    return [
+    frames = [
         frame
-        for trigger in _find_triggers(source_text, _LAB_TREND_TRIGGER_CUES)
+        for trigger in _bounded_triggers(source_text, cues, language, max_events)
         if (
             frame := _build_event_frame(
                 source_text,
@@ -329,6 +399,10 @@ def extract_lab_trend_events(
         )
         is not None
     ]
+    return [
+        attach_coreference_representatives(frame, coreference_chains, source_text)
+        for frame in frames
+    ]
 
 
 def _validate_text(text: str) -> str:
@@ -337,10 +411,32 @@ def _validate_text(text: str) -> str:
     return text
 
 
-def _find_triggers(text: str, cues: Sequence[_TriggerCue]) -> tuple[_Trigger, ...]:
+def _language_cues(language, english, german):
+    if language not in ("en", "de"):
+        raise ValueError("clinical events support explicit en or de language")
+    return german if language == "de" else english
+
+
+def _bounded_triggers(text, cues, language, maximum):
+    if maximum is not None and (type(maximum) is not int or maximum < 1):
+        raise ValueError("clinical event trigger limit must be a positive integer")
+    triggers = _find_triggers(text, cues, language=language)
+    if maximum is not None and len(triggers) > maximum:
+        raise ValueError("clinical_event_trigger_limit")
+    return triggers
+
+
+def _find_triggers(
+    text: str, cues: Sequence[_TriggerCue], *, language: str = "en"
+) -> tuple[_Trigger, ...]:
     triggers: list[_Trigger] = []
     for cue in cues:
         for match in cue.pattern.finditer(text):
+            if any(
+                match.start() < prior.end and prior.start < match.end()
+                for prior in triggers
+            ):
+                continue  # E.g. wieder begonnen is one restart, not also a start.
             triggers.append(
                 _Trigger(
                     event_type=cue.event_type,
@@ -353,6 +449,7 @@ def _find_triggers(text: str, cues: Sequence[_TriggerCue]) -> tuple[_Trigger, ..
                         "lexicon_version": CLINICAL_EVENT_LEXICON_VERSION,
                         "cue": cue.normalized,
                         "cue_source": cue.provenance,
+                        "language": language,
                     },
                 )
             )
@@ -613,18 +710,35 @@ def _dose_role_score(
     following_trigger = mention.start >= trigger.end
     before_trigger = mention.end <= trigger.start
     normalized_action = trigger.normalized
+    german = trigger.provenance.get("language") == "de"
+
+    explicit_old = bool(
+        re.search(
+            r"\b(?:von|zuvor|bisher)\s*$"
+            if german
+            else r"\b(?:from|prior|previous|former|was)\s*$",
+            preceding,
+        )
+    )
+    explicit_new = bool(
+        re.search(
+            r"\b(?:auf|jetzt|nun)\s*$" if german else r"\b(?:to|at|now|new)\s*$",
+            preceding,
+        )
+    )
+    # Explicit source roles override proximity for both requested roles.
+    # A missing counterpart must not recycle the available dose twice.
+    if explicit_old or explicit_new:
+        matches = explicit_old if role == "old_dose" else explicit_new
+        return 0.20 if matches else None
 
     if role == "old_dose":
-        if re.search(r"\b(?:from|prior|previous|former|was)\s*$", preceding):
-            return 0.20
         if normalized_action in {"increased", "decreased"} and before_trigger:
             return 0.12
         if normalized_action in {"held", "stopped"}:
             return 0.08
         return None
 
-    if re.search(r"\b(?:to|at|now|new)\s*$", preceding):
-        return 0.20
     if normalized_action in {"started", "restarted"} and following_trigger:
         return 0.16
     if normalized_action in {"increased", "decreased"} and following_trigger:

@@ -11,10 +11,12 @@ import pytest
 from openmed.core.baseline import (
     BASELINE_PATH,
     BASELINE_SCHEMA_VERSION,
+    BaselineError,
     BaselineMiss,
     baseline_key,
     get_baseline,
     load_baseline_store,
+    relation_baseline_key,
     require_baseline,
     update_baseline_entry,
     validate_baseline_store,
@@ -98,6 +100,11 @@ def test_committed_baseline_store_validates_schema() -> None:
     validate_baseline_store(store)
     assert store["schema_version"] == BASELINE_SCHEMA_VERSION
     assert get_baseline("PII", "Small", "mlx-fp", store=store) is not None
+    assert sorted(store["relation_golden"]["entries"]) == [
+        "relation::asserted-absent",
+        "relation::temporally-before",
+        "relation::treats",
+    ]
 
 
 def test_update_baseline_entry_preserves_other_keys(tmp_path: Path) -> None:
@@ -166,6 +173,33 @@ def test_reproducibility_hash_is_deterministic_for_fixed_inputs() -> None:
 def test_baseline_key_uses_family_tier_format_dimensions() -> None:
     assert baseline_key("PII", "Small", "MLX_FP") == "pii::small::mlx-fp"
     assert baseline_key("General", None, "coreml") == "general::none::coreml"
+
+
+def test_relation_baseline_key_uses_family_and_relation_type_dimensions() -> None:
+    assert (
+        relation_baseline_key("Relation", "TEMPORALLY_BEFORE")
+        == "relation::temporally-before"
+    )
+
+
+def test_relation_baseline_schema_rejects_mismatched_dimensions() -> None:
+    store = _store()
+    store["relation_golden"] = {
+        "entries": {
+            "relation::treats": {
+                "family": "Relation",
+                "fixture_hash": "sha256:" + "a" * 64,
+                "key": "relation::treats",
+                "relation_type": "CAUSES",
+                "strict_f1": 1.0,
+                "tolerance": 0.01,
+            }
+        },
+        "schema_version": 1,
+    }
+
+    with pytest.raises(BaselineError, match="does not match its dimensions"):
+        validate_baseline_store(store)
 
 
 def test_publish_artifact_updates_manifest_and_baseline(

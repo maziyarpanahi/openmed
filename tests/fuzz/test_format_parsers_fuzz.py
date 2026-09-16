@@ -17,6 +17,7 @@ import importlib.util
 import multiprocessing
 import os
 import queue
+import sys
 import tempfile
 import time
 import traceback
@@ -45,8 +46,18 @@ from . import conftest as _fuzz_conftest  # noqa: F401  (import for side effects
 pytestmark = pytest.mark.fuzz
 
 _SEED_DIR = Path(__file__).with_name("seeds")
+# Windows filesystem and antivirus hooks, plus macOS framework startup and
+# filesystem contention, can make tiny valid fixtures exceed the Linux budget
+# on shared runners. Keep execution bounded, but use a platform default that
+# measures parser hangs rather than host noise.
+_DEFAULT_PARSER_TIMEOUT_SECONDS = (
+    2.0 if os.name == "nt" or sys.platform == "darwin" else 0.5
+)
 _PARSER_TIMEOUT_SECONDS = float(
-    os.environ.get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS", "0.5")
+    os.environ.get(
+        "OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS",
+        str(_DEFAULT_PARSER_TIMEOUT_SECONDS),
+    )
 )
 _WORKER_START_TIMEOUT_SECONDS = 15.0
 
@@ -311,6 +322,8 @@ def _parse_x12(data: bytes) -> None:
 
 
 def _execute_target(target_key: str, data: bytes) -> None:
+    if target_key == "__delayed_dispatch__":
+        return
     if target_key == "__broken_offset_map__":
         _assert_document_invariants(
             ExtractedDocument(
@@ -340,6 +353,11 @@ def _worker_main(requests: Any, responses: Any) -> None:
         if request is None:
             return
         target_key, data = request
+        if target_key == "__delayed_dispatch__":
+            time.sleep(0.1)
+        # Queue dispatch can exceed the parser budget on a busy Windows runner.
+        # Acknowledge receipt so only target execution is timed by the parent.
+        responses.put(("started", target_key))
         try:
             _execute_target(target_key, data)
         except _RejectedInput as exc:
@@ -393,6 +411,19 @@ class _ParserWorker:
     def run(self, target_key: str, data: bytes) -> tuple[str, str]:
         assert self._process is not None and self._process.is_alive()
         self._requests.put((target_key, data))
+        try:
+            status, detail = self._responses.get(timeout=_WORKER_START_TIMEOUT_SECONDS)
+        except queue.Empty as exc:
+            self._terminate()
+            raise AssertionError(
+                f"format-parser worker did not accept {target_key}"
+            ) from exc
+        if (status, detail) != ("started", target_key):
+            self._terminate()
+            raise AssertionError(
+                f"format-parser worker returned an invalid start acknowledgement: "
+                f"{status!r}, {detail!r}"
+            )
         try:
             return self._responses.get(timeout=self.timeout)
         except queue.Empty as exc:
@@ -488,6 +519,19 @@ def test_truncated_seeds_do_not_crash_registered_parsers() -> None:
                 _assert_no_crash(worker, parser_target, seed[: max(cutoff, 0)])
 
 
+def test_malformed_email_address_header_does_not_crash_registered_parser() -> None:
+    parser_target = next(
+        target for target in _TARGETS if target.key == "document:eml:.eml"
+    )
+    with _ParserWorker() as worker:
+        status = _assert_no_crash(
+            worker,
+            parser_target,
+            b"From: Synthetic Clinic <clinic@",
+        )
+    assert status == "ok"
+
+
 def test_registered_format_parsers_resist_mutated_input() -> None:
     with _ParserWorker() as worker:
 
@@ -517,6 +561,13 @@ def test_harness_catches_deliberately_broken_offset_map() -> None:
 
     assert status == "failure"
     assert "AssertionError" in detail
+
+
+def test_harness_excludes_worker_dispatch_from_parser_budget() -> None:
+    with _ParserWorker(timeout=0.05) as worker:
+        status, detail = worker.run("__delayed_dispatch__", b"synthetic")
+
+    assert (status, detail) == ("ok", "")
 
 
 def test_harness_terminates_parser_that_exceeds_time_budget() -> None:

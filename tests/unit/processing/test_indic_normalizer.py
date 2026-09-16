@@ -56,6 +56,25 @@ def test_normalization_offset_map_round_trips_multiscript_phi_spans():
         "ന്\u200d",
     ]
     raw = "Latin " + " ".join(raw_tokens) + " end"
+    # Literal expectations: deriving them from the grapheme helpers would share
+    # the break rules with the code under test, so a regression there would move
+    # both sides together and still pass.
+    #
+    # "\u0a71\u0a15\u0a70" opens with the Gurmukhi addak U+0A71, a combining
+    # mark. UAX #29 GB9 binds it to the preceding separator at offset 15, so
+    # offset 16 is not a cluster boundary and the run legitimately starts at 15.
+    # Every other token begins on a boundary and is unaffected.
+    expected_spans = {
+        "\u0928\u093c\u0940\u0932": (6, 10),
+        "\u09b0\u09cb\u0997\u09c0": (11, 15),
+        "\u0a71\u0a15\u0a70": (15, 19),
+        "\u0aa1\u0ac9\u0a95\u0acd\u0a9f\u0ab0": (20, 26),
+        "\u0b35\u0b48\u0b26\u0b4d\u0b5f": (27, 32),
+        "\u0ba8\u0bcb\u0baf\u0bbe\u0bb3\u0bbf": (33, 39),
+        "\u0c30\u0c4b\u0c17\u0c3f": (40, 44),
+        "\u0cb0\u0ccb\u0c97\u0cbf": (45, 49),
+        "\u0d28\u0d4d\u200d": (50, 53),
+    }
     normalized = normalizer.normalize_with_offsets(raw)
     normalized_cursor = 0
     raw_cursor = len("Latin ")
@@ -64,9 +83,9 @@ def test_normalization_offset_map_round_trips_multiscript_phi_spans():
         canonical = normalizer.normalize(token)
         normalized_start = normalized.text.index(canonical, normalized_cursor)
         normalized_end = normalized_start + len(canonical)
-        assert normalized.remap_span(normalized_start, normalized_end) == (
-            raw_cursor,
-            raw_cursor + len(token),
+        assert (
+            normalized.remap_span(normalized_start, normalized_end)
+            == expected_spans[token]
         )
         normalized_cursor = normalized_end
         raw_cursor += len(token) + 1

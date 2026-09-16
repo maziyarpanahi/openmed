@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -68,6 +69,55 @@ def test_cryptography_license_is_reviewed_without_installed_metadata(monkeypatch
     assert reason == "permissive license"
 
 
+def test_apache_airflow_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("apache-airflow")
+    allowed, reason = policy.is_allowed_license("apache-airflow", license_text)
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_snowpark_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("snowflake-snowpark-python")
+    allowed, reason = policy.is_allowed_license(
+        "snowflake-snowpark-python",
+        license_text,
+    )
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_gitpython_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("gitpython")
+    allowed, reason = policy.is_allowed_license("gitpython", license_text)
+
+    assert license_text == "BSD-3-Clause"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_strawberry_graphql_license_is_reviewed_without_installed_metadata(
+    monkeypatch,
+):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("strawberry-graphql")
+    allowed, reason = policy.is_allowed_license("strawberry-graphql", license_text)
+
+    assert license_text == "MIT"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_current_package_data_has_no_restricted_vocab_dumps():
     assert policy.audit_restricted_vocab_data(ROOT) == []
 
@@ -106,6 +156,13 @@ dependencies = ["example-gpl>=1"]
     assert len(results) == 1
     assert results[0].allowed is False
     assert "not allowed" in results[0].reason
+
+
+def test_extract_msg_is_an_explicit_subprocess_bridge_exception():
+    allowed, reason = policy.is_allowed_license("extract-msg", "GPL-3.0-only")
+
+    assert allowed is True
+    assert "out-of-process Outlook MSG bridge" in reason
 
 
 def test_elastic_dependency_fails_policy(tmp_path):
@@ -158,6 +215,26 @@ def test_restricted_vocab_data_marker_fails_policy(tmp_path):
     assert policy.audit_restricted_vocab_data(tmp_path) == [
         Path("openmed/clinical/grounding/data/sct2_Concept_Full.txt")
     ]
+
+
+def test_built_wheel_rejects_restricted_vocabulary_data_entries(tmp_path):
+    wheel = tmp_path / "openmed-0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("openmed/clinical/grounding/data/umls_concepts.csv", "x")
+        archive.writestr("openmed/clinical/grounding/restricted.py", "# adapter")
+
+    assert policy.audit_restricted_vocab_wheel(wheel) == [
+        "openmed/clinical/grounding/data/umls_concepts.csv"
+    ]
+
+
+def test_built_wheel_allows_code_only_restricted_adapters(tmp_path):
+    wheel = tmp_path / "openmed-0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("openmed/clinical/grounding/restricted.py", "# adapter")
+        archive.writestr("openmed/eval/golden/synthetic.jsonl", '{"synthetic":true}')
+
+    assert policy.audit_restricted_vocab_wheel(wheel) == []
 
 
 def test_dev_optional_dependencies_are_not_audited(tmp_path):

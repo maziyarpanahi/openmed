@@ -163,6 +163,8 @@ class SpanGraphConstraints:
             ``(head_node_label, tail_node_label)`` pairs.
         cardinality: Mapping from edge label to incoming/outgoing limits.
         acyclic_edge_labels: Edge labels that must remain acyclic when decoded.
+        transitive_reduction_edge_labels: Acyclic edge labels whose redundant
+            edges should be pruned after decoding while preserving reachability.
         allow_self_edges: Whether an edge may point from a node to itself.
     """
 
@@ -172,6 +174,7 @@ class SpanGraphConstraints:
     )
     cardinality: Mapping[str, EdgeCardinality] = field(default_factory=dict)
     acyclic_edge_labels: Iterable[str] = field(default_factory=tuple)
+    transitive_reduction_edge_labels: Iterable[str] = field(default_factory=tuple)
     allow_self_edges: bool = False
 
     def __post_init__(self) -> None:
@@ -186,10 +189,23 @@ class SpanGraphConstraints:
         }
         cardinality = {str(label): rule for label, rule in self.cardinality.items()}
         acyclic = frozenset(str(label) for label in self.acyclic_edge_labels)
+        transitive_reduction = frozenset(
+            str(label) for label in self.transitive_reduction_edge_labels
+        )
+        if not transitive_reduction.issubset(acyclic):
+            raise ValueError(
+                "transitive_reduction_edge_labels must be a subset of "
+                "acyclic_edge_labels"
+            )
         object.__setattr__(self, "allowed_edge_labels", allowed)
         object.__setattr__(self, "type_compatibility", compatibility)
         object.__setattr__(self, "cardinality", cardinality)
         object.__setattr__(self, "acyclic_edge_labels", acyclic)
+        object.__setattr__(
+            self,
+            "transitive_reduction_edge_labels",
+            transitive_reduction,
+        )
 
     def has_dynamic_constraints(self) -> bool:
         """Return whether constraints require subset-level search."""
@@ -400,13 +416,19 @@ def decode_span_graph(
     else:
         selected_edges = tuple(edge for edge in valid_edges if edge.score >= 0.0)
 
+    reduction_decisions, reduced_edges = _transitively_reduce_edges(
+        selected_edges,
+        resolved_constraints.transitive_reduction_edge_labels,
+        nodes_by_id,
+    )
     ordered_edges = tuple(
-        sorted(selected_edges, key=lambda edge: _edge_canonical_key(edge, nodes_by_id))
+        sorted(reduced_edges, key=lambda edge: _edge_canonical_key(edge, nodes_by_id))
     )
     decisions = _build_decisions(
         kept_edges=ordered_edges,
+        selected_edges=selected_edges,
         valid_edges=valid_edges,
-        local_decisions=local_decisions,
+        local_decisions=(*local_decisions, *reduction_decisions),
         constraints=resolved_constraints,
         nodes_by_id=nodes_by_id,
     )
@@ -584,13 +606,14 @@ def _solution_key(
 def _build_decisions(
     *,
     kept_edges: Sequence[SpanEdge],
+    selected_edges: Sequence[SpanEdge],
     valid_edges: Sequence[SpanEdge],
     local_decisions: Sequence[EdgeDecisionTrace],
     constraints: SpanGraphConstraints,
     nodes_by_id: Mapping[str, SpanNode],
 ) -> tuple[EdgeDecisionTrace, ...]:
-    kept_keys = {(edge.head, edge.tail, edge.label) for edge in kept_edges}
-    selected = tuple(kept_edges)
+    selected_keys = {(edge.head, edge.tail, edge.label) for edge in selected_edges}
+    selected = tuple(selected_edges)
     decisions: list[EdgeDecisionTrace] = list(local_decisions)
 
     for edge in kept_edges:
@@ -604,7 +627,7 @@ def _build_decisions(
 
     for edge in valid_edges:
         key = (edge.head, edge.tail, edge.label)
-        if key in kept_keys:
+        if key in selected_keys:
             continue
         violation = _dynamic_violation(edge, selected, constraints)
         if violation is not None:
@@ -629,6 +652,46 @@ def _build_decisions(
             decisions, key=lambda decision: _decision_sort_key(decision, nodes_by_id)
         )
     )
+
+
+def _transitively_reduce_edges(
+    edges: Sequence[SpanEdge],
+    labels: frozenset[str],
+    nodes_by_id: Mapping[str, SpanNode],
+) -> tuple[tuple[EdgeDecisionTrace, ...], tuple[SpanEdge, ...]]:
+    if not labels:
+        return (), tuple(edges)
+
+    kept = list(edges)
+    decisions: list[EdgeDecisionTrace] = []
+    for label in sorted(labels):
+        label_edges = sorted(
+            (edge for edge in kept if edge.label == label),
+            key=lambda edge: _edge_canonical_key(edge, nodes_by_id),
+        )
+        adjacency: dict[str, set[str]] = {}
+        for edge in label_edges:
+            adjacency.setdefault(edge.head, set()).add(edge.tail)
+
+        for edge in label_edges:
+            adjacency[edge.head].remove(edge.tail)
+            if _has_path(edge.head, edge.tail, adjacency):
+                kept.remove(edge)
+                decisions.append(
+                    EdgeDecisionTrace(
+                        edge=edge,
+                        status="pruned",
+                        reason=(
+                            "edge is implied by another retained path and was "
+                            "omitted from the reduced graph"
+                        ),
+                        constraint=f"transitive_reduction:{label}",
+                    )
+                )
+                continue
+            adjacency[edge.head].add(edge.tail)
+
+    return tuple(decisions), tuple(kept)
 
 
 def _dynamic_violation(

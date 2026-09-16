@@ -288,6 +288,36 @@ def golden_fixture_coverage_report(
     return fixture_coverage_report(path, fixtures=fixtures)
 
 
+def grounding_coverage_report(
+    scores: Sequence[object],
+    gold: Sequence[object] | None = None,
+    *,
+    min_accuracy: float = 0.85,
+    min_coverage: float = 0.70,
+    n_bins: int = 10,
+) -> dict[str, object]:
+    """Return grounding calibration coverage and release-gate evidence."""
+
+    from openmed.clinical.grounding.calibration import (
+        evaluate_grounding_coverage_gate,
+        grounding_calibration_report,
+    )
+
+    report = grounding_calibration_report(
+        scores,
+        gold,
+        min_accuracy=min_accuracy,
+        min_coverage=min_coverage,
+        n_bins=n_bins,
+    )
+    report["coverage_gate"] = evaluate_grounding_coverage_gate(
+        report,
+        min_accuracy=min_accuracy,
+        min_coverage=min_coverage,
+    )
+    return report
+
+
 def naamapadam_language_coverage() -> tuple[dict[str, object], ...]:
     """Return one aggregate-only fixture coverage row per Indic language."""
 
@@ -830,6 +860,7 @@ __all__ = [
     "audit_tokenizer_scripts",
     "fixture_coverage_report",
     "golden_fixture_coverage_report",
+    "grounding_coverage_report",
     "load_transformers_tokenizer",
     "update_manifest_script_coverage",
 ]

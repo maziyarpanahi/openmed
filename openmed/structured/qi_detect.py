@@ -53,7 +53,7 @@ from openmed.core.labels import (
     risk_level_for,
     system_hints_for,
 )
-from openmed.risk.reid import _normalize_qi_value
+from openmed.risk.reid import _normalize_qi_value, quasi_identifier_key_bytes
 
 from .table_io import (
     _canonical_decimal,
@@ -1193,50 +1193,7 @@ def _qi_set_manifest(
 
 
 def _risk_key_bytes(row: Mapping[str, Any], columns: Sequence[str]) -> bytes:
-    key = [
-        [field, *_typed_normalized_value(row, field)]
-        for field in sorted(dict.fromkeys(columns))
-    ]
-    return json.dumps(
-        key,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-
-def _typed_normalized_value(
-    row: Mapping[str, Any],
-    field: str,
-) -> tuple[str, str]:
-    if field not in row:
-        return "missing", ""
-    value = row[field]
-    if value is None:
-        return "null", ""
-    if isinstance(value, bool):
-        return "boolean", "true" if value else "false"
-    if isinstance(value, int):
-        return "integer", str(value)
-    if isinstance(value, float):
-        if math.isnan(value):
-            return "float", "nan"
-        if math.isinf(value):
-            return "float", "infinity" if value > 0 else "-infinity"
-        return "float", _exact_float_text(value)
-    if isinstance(value, Decimal):
-        return "decimal", str(_canonical_decimal(value))
-    if isinstance(value, datetime):
-        return "datetime", _exact_datetime_text(value)
-    if isinstance(value, date):
-        return "date", value.isoformat()
-    if isinstance(value, time):
-        return "time", value.isoformat()
-    if isinstance(value, bytes):
-        return "bytes", value.hex()
-    if isinstance(value, str):
-        return "string", value
-    return f"unsupported:{type(value).__name__}", ""
+    return quasi_identifier_key_bytes(row, fields=columns)
 
 
 def _cell_text(value: Any) -> str:

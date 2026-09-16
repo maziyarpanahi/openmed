@@ -1,0 +1,11 @@
+analyzer:
+  exclude:
+    - build/**
+
+linter:
+  rules:
+    - avoid_print
+    - directives_ordering
+    - prefer_final_fields
+    - prefer_final_locals
+    - unnecessary_lambdas

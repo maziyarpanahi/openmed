@@ -116,6 +116,17 @@
     "Tissue",
     "PathologicalFormation"
   ],
+  "oncology_staging": [
+    "TumorCategory",
+    "NodeCategory",
+    "MetastasisCategory",
+    "StageGroup",
+    "TumorGrade",
+    "TumorSize",
+    "ReceptorStatus",
+    "ResponseAssessment",
+    "PrimarySite"
+  ],
   "anatomy": [
     "Organ",
     "Tissue",
@@ -153,10 +164,28 @@
     "Condition",
     "Pathology"
   ],
+  "pathology_histology": [
+    "SpecimenType",
+    "GrossDescription",
+    "HistologicFinding",
+    "HistologicGrade",
+    "MarginStatus",
+    "ImmunohistochemistryStain",
+    "MitoticCount",
+    "TissueSite"
+  ],
   "hematology": [
     "Cancer",
     "Disease",
     "CellLine"
+  ],
+  "lab": [
+    "LabTest",
+    "LabValue",
+    "Unit",
+    "ReferenceRange",
+    "AbnormalFlag",
+    "Specimen"
   ],
   "cardiology": [
     "CardiacFinding",
@@ -184,6 +213,14 @@
     "VisualAcuity",
     "IntraocularPressure",
     "Anatomy"
+  ],
+  "radiology": [
+    "Finding",
+    "ImagingModality",
+    "Anatomy",
+    "Laterality",
+    "Measurement",
+    "Impression"
   ],
   "generic": [
     "Person",
@@ -243,6 +280,14 @@
     "AdministrationDate",
     "VaccineSeries"
   ],
+  "allergy_intolerance": [
+    "Allergen",
+    "ReactionManifestation",
+    "ReactionSeverity",
+    "Criticality",
+    "AllergyType",
+    "OnsetContext"
+  ],
   "pulmonology": [
     "SpirometryMeasure",
     "OxygenSupport",
@@ -275,5 +320,22 @@
     "CareIntervention",
     "PainScore",
     "SkinAssessment"
+  ],
+  "functional_status": [
+    "ADLActivity",
+    "AssistanceLevel",
+    "MobilityAbility",
+    "AssistiveDevice",
+    "FunctionalScale",
+    "CognitiveStatus"
+  ],
+  "obstetrics_gynecology": [
+    "GravidityParity",
+    "GestationalAge",
+    "FetalFinding",
+    "MenstrualHistory",
+    "ObstetricEvent",
+    "GynecologicFinding",
+    "DeliveryMode"
   ]
 }

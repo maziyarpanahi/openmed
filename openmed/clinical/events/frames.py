@@ -7,6 +7,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
+from openmed.core.schemas import OpenMedSpan
+
+from ..coreference import CoreferenceChain
+
 CLINICAL_EVENT_SCHEMA_VERSION = 1
 
 EventType = Literal["medication_change", "lab_trend"]
@@ -127,6 +131,38 @@ EVENT_FRAME_SCHEMAS: Mapping[EventType, EventFrameSchema] = {
     "lab_trend": LAB_TREND_SCHEMA,
 }
 
+_PROBLEM_HEAD_NAMES = frozenset(
+    {
+        "condition",
+        "diagnosis",
+        "disease",
+        "finding",
+        "problem",
+        "symptom",
+    }
+)
+_TEST_HEAD_NAMES = frozenset(
+    {
+        "analyte",
+        "lab",
+        "lab_name",
+        "lab_test",
+        "measurement",
+        "test",
+    }
+)
+_TREATMENT_HEAD_NAMES = frozenset(
+    {
+        "drug",
+        "medication",
+        "medication_name",
+        "procedure",
+        "therapy",
+        "treatment",
+    }
+)
+_EVENT_HEAD_NAMES = _PROBLEM_HEAD_NAMES | _TEST_HEAD_NAMES | _TREATMENT_HEAD_NAMES
+
 
 @dataclass(frozen=True)
 class RoleSlot:
@@ -168,6 +204,13 @@ class RoleSlot:
             "score": self.score,
             "provenance": copy.deepcopy(dict(self.provenance)),
         }
+
+    @property
+    def cluster_id(self) -> str | None:
+        """Return the canonical coreference cluster id when attached."""
+
+        cluster_id = self.provenance.get("cluster_id")
+        return str(cluster_id) if cluster_id is not None else None
 
 
 @dataclass(frozen=True)
@@ -272,6 +315,80 @@ class EventFrame:
             "conflicts": [conflict.to_dict() for conflict in self.conflicts],
             "provenance": copy.deepcopy(dict(self.provenance)),
         }
+
+
+@dataclass(frozen=True)
+class _CoreferenceBinding:
+    chain: CoreferenceChain
+    source_member: OpenMedSpan
+
+
+def attach_coreference_representatives(
+    frame: EventFrame,
+    coreference_chains: Sequence[CoreferenceChain],
+    text: str,
+) -> EventFrame:
+    """Attach canonical coreference representatives to clinical head roles.
+
+    PROBLEM-, TEST-, and TREATMENT-like role slots whose source offsets occur in
+    a coreference chain are rewritten to the chain representative. The original
+    event-linked offsets remain in privacy-safe role provenance alongside HMAC
+    hashes and the canonical cluster id. Repeated slots from the same cluster
+    are consolidated so mention-local attributes remain attached once to the
+    representative entity within the frame.
+
+    Args:
+        frame: Event frame whose head roles should be canonicalized.
+        coreference_chains: Document-local span-native coreference chains.
+        text: Source document indexed by the role and chain offsets.
+
+    Returns:
+        A new event frame with representative-aware clinical head roles.
+
+    Raises:
+        TypeError: If ``text`` or a chain has the wrong type.
+        ValueError: If chain offsets are invalid, a representative is not a
+            member, or one source offset belongs to multiple clusters.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    bindings = _coreference_bindings(coreference_chains, len(text))
+    if not bindings:
+        return frame
+
+    attached_cluster_ids: set[str] = set()
+    roles: dict[str, tuple[RoleSlot, ...]] = {}
+    for role, slots in frame.roles.items():
+        canonical_slots: list[RoleSlot] = []
+        slot_by_cluster: dict[str, int] = {}
+        for slot in slots:
+            binding = bindings.get((slot.start, slot.end))
+            if binding is None or not _is_clinical_event_head(slot, binding):
+                canonical_slots.append(slot)
+                continue
+            canonical_slot = _representative_role_slot(slot, binding, text)
+            cluster_id = binding.chain.chain_id
+            attached_cluster_ids.add(cluster_id)
+            existing_index = slot_by_cluster.get(cluster_id)
+            if existing_index is None:
+                slot_by_cluster[cluster_id] = len(canonical_slots)
+                canonical_slots.append(canonical_slot)
+                continue
+            canonical_slots[existing_index] = _merge_representative_slots(
+                canonical_slots[existing_index],
+                canonical_slot,
+            )
+        roles[role] = tuple(canonical_slots)
+
+    if not attached_cluster_ids:
+        return frame
+    provenance = copy.deepcopy(dict(frame.provenance))
+    provenance["coreference"] = {
+        "cluster_ids": sorted(attached_cluster_ids),
+        "source": "span_native_clinical_coreference",
+    }
+    return replace(frame, roles=roles, provenance=provenance)
 
 
 @dataclass(frozen=True)
@@ -441,6 +558,116 @@ def _normalize_value(value: str) -> str:
     return " ".join(value.casefold().split())
 
 
+def _coreference_bindings(
+    chains: Sequence[CoreferenceChain],
+    text_length: int,
+) -> dict[tuple[int, int], _CoreferenceBinding]:
+    bindings: dict[tuple[int, int], _CoreferenceBinding] = {}
+    for chain in chains:
+        if not isinstance(chain, CoreferenceChain):
+            raise TypeError("coreference_chains must contain CoreferenceChain values")
+        if chain.representative not in chain.members:
+            raise ValueError("coreference representative must be a chain member")
+        _validate_coreference_span(chain.representative, text_length)
+        for member in chain.members:
+            _validate_coreference_span(member, text_length)
+            offset = (member.start, member.end)
+            existing = bindings.get(offset)
+            if existing is not None and existing.chain.chain_id != chain.chain_id:
+                raise ValueError(
+                    "one coreference source offset cannot belong to multiple clusters"
+                )
+            bindings[offset] = _CoreferenceBinding(
+                chain=chain,
+                source_member=member,
+            )
+    return bindings
+
+
+def _validate_coreference_span(span: OpenMedSpan, text_length: int) -> None:
+    if span.end > text_length:
+        raise ValueError("coreference offsets are outside the source text")
+
+
+def _is_clinical_event_head(
+    slot: RoleSlot,
+    binding: _CoreferenceBinding,
+) -> bool:
+    member = binding.source_member
+    names = {
+        _head_name(slot.role),
+        _head_name(slot.label),
+        _head_name(member.canonical_label),
+        _head_name(member.entity_type),
+    }
+    return bool(names & _EVENT_HEAD_NAMES)
+
+
+def _head_name(value: str) -> str:
+    return value.strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+def _representative_role_slot(
+    slot: RoleSlot,
+    binding: _CoreferenceBinding,
+    text: str,
+) -> RoleSlot:
+    chain = binding.chain
+    representative = chain.representative
+    coreference = {
+        "confidence": chain.confidence,
+        "member_spans": [_safe_span(member) for member in chain.members],
+        "representative": _safe_span(representative),
+        "source_spans": [_safe_span(binding.source_member)],
+    }
+    provenance = copy.deepcopy(dict(slot.provenance))
+    provenance.update(
+        {
+            "cluster_id": chain.chain_id,
+            "coreference": coreference,
+        }
+    )
+    return replace(
+        slot,
+        value=text[representative.start : representative.end],
+        start=representative.start,
+        end=representative.end,
+        source_id=chain.chain_id,
+        provenance=provenance,
+    )
+
+
+def _safe_span(span: OpenMedSpan) -> dict[str, int | str]:
+    return {
+        "start": span.start,
+        "end": span.end,
+        "text_hash": span.text_hash,
+    }
+
+
+def _merge_representative_slots(left: RoleSlot, right: RoleSlot) -> RoleSlot:
+    left_provenance = copy.deepcopy(dict(left.provenance))
+    left_coreference = dict(left_provenance["coreference"])
+    right_coreference = right.provenance["coreference"]
+    source_spans = {
+        (int(item["start"]), int(item["end"]), str(item["text_hash"])): dict(item)
+        for item in (
+            *left_coreference["source_spans"],
+            *right_coreference["source_spans"],
+        )
+    }
+    left_coreference["source_spans"] = [
+        source_spans[key] for key in sorted(source_spans)
+    ]
+    left_provenance["coreference"] = left_coreference
+    scores = [score for score in (left.score, right.score) if score is not None]
+    return replace(
+        left,
+        score=max(scores) if scores else None,
+        provenance=left_provenance,
+    )
+
+
 def _safe_rate(numerator: int, denominator: int) -> float:
     if denominator == 0:
         return 1.0
@@ -478,5 +705,6 @@ __all__ = [
     "MEDICATION_CHANGE_SCHEMA",
     "RoleSlot",
     "RoleSpec",
+    "attach_coreference_representatives",
     "score_event_frame_corpus",
 ]

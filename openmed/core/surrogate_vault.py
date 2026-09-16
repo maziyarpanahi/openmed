@@ -44,6 +44,8 @@ LEGACY_SCHEMA_VERSION = 1
 SCHEMA_VERSION = 2
 HMAC_SCHEME = "hmac-sha256"
 ENCRYPTION_SCHEME = "hmac-sha256-stream-xor+hmac-sha256"
+SUBJECT_SURROGATE_LABEL = "SUBJECT"
+SUBJECT_SURROGATE_LANG = "und"
 
 _EPOCH_PREFIX = "epoch"
 _KEY_ID_BYTES = 8
@@ -52,6 +54,8 @@ _INDIAN_NAME_KEY_LANG = "india"
 _INDIAN_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
 _CHINESE_NAME_KEY_LANG = "zh-pinyin"
 _CHINESE_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
+_SUBJECT_SOURCE_PREFIX = "openmed.subject.v1\x00"
+_SUBJECT_SURROGATE_PREFIX = "openmed.subject.surrogate.v1\x00"
 _SCRIPT_NAME_PREFIXES = {
     "bengali": "BENGALI",
     "devanagari": "DEVANAGARI",
@@ -160,6 +164,10 @@ class SurrogateSource:
             raise ValueError("label must be non-empty")
         if not self.lang:
             object.__setattr__(self, "lang", "en")
+
+
+class SubjectResolutionError(ValueError):
+    """Raised when caller-confirmed subject identifiers cannot be reconciled."""
 
 
 @dataclass(frozen=True)
@@ -365,6 +373,7 @@ class InMemorySurrogateStore:
         name_matching_metadata: Mapping[str, Any] | None = None,
     ) -> None:
         self._entries: dict[SurrogateKey, SurrogateEntry] = {}
+        self._surrogate_keys: dict[tuple[str, str, str], set[SurrogateKey]] = {}
         self._lock = RLock()
         self._epoch_manager = epoch_manager
         self._name_matching_metadata = _validated_name_matching_metadata(
@@ -435,6 +444,10 @@ class InMemorySurrogateStore:
                 surrogate,
                 str(effective_key_id or ""),
             )
+            self._surrogate_keys.setdefault(
+                (key.canonical_label, key.lang, surrogate),
+                set(),
+            ).add(key)
 
     def replace_entries(self, entries: Iterable[SurrogateEntry]) -> None:
         """Replace all entries atomically inside the in-memory store."""
@@ -447,6 +460,12 @@ class InMemorySurrogateStore:
             next_entries[entry.key] = entry
         with self._lock:
             self._entries = next_entries
+            self._surrogate_keys = {}
+            for key, entry in next_entries.items():
+                self._surrogate_keys.setdefault(
+                    (key.canonical_label, key.lang, entry.surrogate),
+                    set(),
+                ).add(key)
 
     def entries(self) -> tuple[SurrogateEntry, ...]:
         """Return entries sorted by their privacy-safe key."""
@@ -459,9 +478,9 @@ class InMemorySurrogateStore:
 
         with self._lock:
             return {
-                entry.surrogate
-                for key, entry in self._entries.items()
-                if key.canonical_label == canonical_label and key.lang == lang
+                surrogate
+                for label, key_lang, surrogate in self._surrogate_keys
+                if label == canonical_label and key_lang == lang
             }
 
     def to_payload(self) -> dict[str, Any]:
@@ -964,6 +983,102 @@ class SurrogateVault:
             self._epoch_manager.current_key,
         )
 
+    def subject_key_for(self, source_identifier: str) -> SurrogateKey:
+        """Build the HMAC-only key for one structured subject identifier.
+
+        The identifier is domain-separated from ordinary entity surfaces and
+        is used only in memory while deriving the key. The returned value never
+        contains the source identifier.
+        """
+
+        return self.key_for(
+            _subject_source_text(source_identifier),
+            label=SUBJECT_SURROGATE_LABEL,
+            lang=SUBJECT_SURROGATE_LANG,
+        )
+
+    def resolve_subject(
+        self,
+        source_identifier: str,
+        *,
+        aliases: Iterable[SurrogateSource | Mapping[str, Any] | tuple[Any, ...]] = (),
+    ) -> str:
+        """Resolve caller-confirmed cross-modal identifiers to one surrogate.
+
+        ``source_identifier`` is the structured subject key. ``aliases`` are
+        identifiers already matched to that subject by the caller, such as a
+        detected note name or MRN. This method deliberately performs no entity
+        matching: it only binds confirmed aliases under their ordinary vault
+        keys so later text replacement and structured de-identification reuse
+        the same value.
+
+        Only HMAC-derived keys are stored. If aliases were previously bound to
+        different subjects, resolution fails without exposing any source value
+        in the exception.
+        """
+
+        anchor = SurrogateSource(
+            source_text=_subject_source_text(source_identifier),
+            label=SUBJECT_SURROGATE_LABEL,
+            lang=SUBJECT_SURROGATE_LANG,
+        )
+        linked_sources = (anchor, *_sources(aliases))
+        sources_by_key = {
+            self.key_for(
+                source.source_text,
+                label=source.label,
+                lang=source.lang,
+            ): source
+            for source in linked_sources
+        }
+
+        existing_by_key: dict[SurrogateKey, str] = {}
+        for key, source in sources_by_key.items():
+            existing = self.get(
+                source.source_text,
+                label=source.label,
+                lang=source.lang,
+            )
+            if existing is not None:
+                existing_by_key[key] = existing
+        existing_surrogates = set(existing_by_key.values())
+        if len(existing_surrogates) > 1:
+            raise SubjectResolutionError(
+                "subject identifiers are already bound to different surrogates"
+            )
+
+        anchor_key = self.subject_key_for(source_identifier)
+        anchor_existing = existing_by_key.get(anchor_key)
+        if existing_surrogates:
+            surrogate = next(iter(existing_surrogates))
+            anchor_bucket = self.store.used_surrogates(
+                canonical_label=anchor_key.canonical_label,
+                lang=anchor_key.lang,
+            )
+            if anchor_existing is None and surrogate in anchor_bucket:
+                raise SubjectResolutionError(
+                    "subject surrogate is already owned by a different subject"
+                )
+        else:
+
+            def create(attempt: int) -> str:
+                material = (
+                    f"{_SUBJECT_SURROGATE_PREFIX}{source_identifier}\x00{attempt}"
+                )
+                token = self.text_hash(material).rsplit(":", 1)[-1][:24]
+                return f"PATIENT_{token.upper()}"
+
+            surrogate = self.get_or_create(
+                anchor.source_text,
+                label=anchor.label,
+                lang=anchor.lang,
+                create_surrogate=create,
+            )
+
+        for key in sources_by_key:
+            self.store.set(key, surrogate, key_id=self.current_key_id)
+        return surrogate
+
     def get(
         self,
         source_text: str,
@@ -1356,6 +1471,15 @@ class SurrogateVault:
 
     def _source_identity(self, source: SurrogateSource) -> _SourceIdentity:
         effective_lang = str(source.lang or "en")
+        if (
+            source.label == SUBJECT_SURROGATE_LABEL
+            and effective_lang == SUBJECT_SURROGATE_LANG
+        ):
+            return _SourceIdentity(
+                canonical_label=SUBJECT_SURROGATE_LABEL,
+                key_lang=SUBJECT_SURROGATE_LANG,
+                key_text=source.source_text,
+            )
         canonical_label = normalize_label(str(source.label), effective_lang)
         if canonical_label in _CHINESE_NAME_LABELS and effective_lang.replace(
             "-", "_"
@@ -1675,6 +1799,14 @@ def _source(*, source_text: str, label: str, lang: str = "en") -> SurrogateSourc
     )
 
 
+def _subject_source_text(source_identifier: str) -> str:
+    if not isinstance(source_identifier, str):
+        raise TypeError("source_identifier must be a string")
+    if not source_identifier:
+        raise ValueError("source_identifier must be non-empty")
+    return f"{_SUBJECT_SOURCE_PREFIX}{source_identifier}"
+
+
 def _linkage_source_text(source_text: str, canonical_label: str) -> str:
     """Return cross-script linkage material without persisting source text."""
 
@@ -1751,12 +1883,15 @@ __all__ = [
     "HMAC_SCHEME",
     "LEGACY_SCHEMA_VERSION",
     "SCHEMA_VERSION",
+    "SUBJECT_SURROGATE_LABEL",
+    "SUBJECT_SURROGATE_LANG",
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "SurrogateEntry",
     "SurrogateKey",
     "SurrogateSource",
     "SurrogateVault",
+    "SubjectResolutionError",
     "VaultConsistencyReport",
     "VaultRotationResult",
 ]

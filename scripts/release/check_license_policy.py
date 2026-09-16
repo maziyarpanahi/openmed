@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import re
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -67,35 +68,44 @@ DISALLOWED_LICENSE_MARKERS = (
 )
 
 GPL_BRIDGE_EXCEPTIONS = {
+    "extract-msg": "GPL-3.0-only; optional out-of-process Outlook MSG bridge",
     "sdcmicro": "GPL-2.0-only; optional out-of-process disclosure-control bridge",
 }
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
+    "apache-airflow": "Apache-2.0",
+    "apache-beam": "Apache-2.0",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
     "confluent-kafka": "Apache-2.0",
     "coremltools": "BSD-3-Clause",
     "cryptography": "Apache-2.0 OR BSD-3-Clause",
+    "dagster": "Apache-2.0",
     "dask": "BSD-3-Clause",
     "duckdb": "MIT",
     "easyocr": "Apache-2.0",
+    "extract-msg": "GPL-3.0-only",
     "faker": "MIT",
     "fastapi": "MIT",
     "fsspec": "BSD-3-Clause",
     "gcsfs": "BSD-3-Clause",
+    "gitpython": "BSD-3-Clause",
     "gliner": "Apache-2.0",
     "grpcio": "Apache-2.0",
     "griffe": "ISC",
     "hanlp": "Apache-2.0",
+    "haystack-ai": "Apache-2.0",
     "hnswlib": "Apache-2.0",
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
+    "kopf": "MIT",
     "langchain-core": "MIT",
+    "langgraph": "MIT",
     "llama-index-core": "MIT",
     "markdown-it-py": "MIT",
     "mcp": "MIT",
@@ -108,6 +118,7 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "numpy": "BSD-3-Clause",
     "onnx": "Apache-2.0",
@@ -118,6 +129,7 @@ REVIEWED_LICENSES = {
     "opentelemetry-api": "Apache-2.0",
     "opentelemetry-exporter-otlp-proto-http": "Apache-2.0",
     "opentelemetry-sdk": "Apache-2.0",
+    "openpyxl": "MIT",
     "openvino": "Apache-2.0",
     "paddleocr": "Apache-2.0",
     "pandas": "BSD-3-Clause",
@@ -142,24 +154,31 @@ REVIEWED_LICENSES = {
     "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
+    "python-pptx": "MIT",
     "quickumls": "MIT",
     "rapidfuzz": "MIT",
+    "ray": "Apache-2.0",
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
     "scrubadub": "Apache-2.0",
     "scispacy": "Apache-2.0",
+    "snowflake-snowpark-python": "Apache-2.0",
     "spacy": "MIT",
+    "sqlalchemy": "MIT",
+    "strawberry-graphql": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
     "torch": "BSD-3-Clause",
     "transformers": "Apache-2.0",
     "typer": "MIT",
     "uvicorn": "BSD-3-Clause",
+    "yasbd-lib": "MPL-2.0",
 }
 
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
 RESTRICTED_VOCAB_DATA_MARKERS = (
+    "cpt",
     "mrconso",
     "mrrel",
     "mrsty",
@@ -381,6 +400,29 @@ def audit_restricted_vocab_data(project_root: Path = ROOT) -> list[Path]:
     return findings
 
 
+def audit_restricted_vocab_wheel(wheel_path: Path) -> list[str]:
+    """Return restricted vocabulary data entries found in a built wheel.
+
+    Args:
+        wheel_path: Built wheel archive to inspect.
+
+    Returns:
+        Sorted archive entry paths that violate the restricted-data policy.
+    """
+
+    if not wheel_path.is_file():
+        raise FileNotFoundError(f"wheel does not exist: {wheel_path}")
+    findings: list[str] = []
+    with zipfile.ZipFile(wheel_path) as archive:
+        for name in archive.namelist():
+            normalized = name.lower().replace("\\", "/")
+            if Path(normalized).suffix not in RESTRICTED_VOCAB_DATA_SUFFIXES:
+                continue
+            if any(marker in normalized for marker in RESTRICTED_VOCAB_DATA_MARKERS):
+                findings.append(name)
+    return sorted(findings)
+
+
 def audit_bundled_license_notices(project_root: Path = ROOT) -> list[str]:
     """Return failures for bundled resources whose required notices are incomplete."""
 
@@ -473,6 +515,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=ROOT,
         help="Project root to scan for restricted bundled vocabulary data.",
     )
+    parser.add_argument(
+        "--wheel",
+        action="append",
+        type=Path,
+        default=[],
+        help="Built wheel to scan for UMLS, SNOMED CT, or CPT data entries.",
+    )
     return parser.parse_args(argv)
 
 
@@ -487,6 +536,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Restricted vocabulary data policy failed:", file=sys.stderr)
         for path in restricted_data:
             print(f"- {path}", file=sys.stderr)
+    restricted_wheel_data: list[tuple[Path, str]] = []
+    for wheel in args.wheel:
+        restricted_wheel_data.extend(
+            (wheel, entry) for entry in audit_restricted_vocab_wheel(wheel)
+        )
+    if restricted_wheel_data:
+        print("Restricted vocabulary wheel policy failed:", file=sys.stderr)
+        for wheel, entry in restricted_wheel_data:
+            print(f"- {wheel}: {entry}", file=sys.stderr)
     bundled_notice_failures = audit_bundled_license_notices(args.project_root)
     if bundled_notice_failures:
         print("Bundled license notice policy failed:", file=sys.stderr)
@@ -496,6 +554,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         1
         if any(not result.allowed for result in results)
         or restricted_data
+        or restricted_wheel_data
         or bundled_notice_failures
         else 0
     )

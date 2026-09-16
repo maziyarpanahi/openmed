@@ -1,0 +1,27 @@
+{
+  "id": "synthetic-medication-coreference-five-surfaces",
+  "document_id": "synthetic-medication-document",
+  "text": "Norexa 10 mg daily was started. The tablet was tolerated. This therapy continued. It remained active. The medication was reviewed.",
+  "representative_index": 0,
+  "mentions": [
+    {"surface": "Norexa", "start": 0, "end": 6},
+    {"surface": "The tablet", "start": 32, "end": 42},
+    {"surface": "This therapy", "start": 58, "end": 70},
+    {"surface": "It", "start": 82, "end": 84},
+    {"surface": "The medication", "start": 102, "end": 116}
+  ],
+  "relation_spans": [
+    {"text": "Norexa", "label": "DRUG", "start": 0, "end": 6, "score": 0.99},
+    {"text": "10 mg", "label": "DOSE", "start": 7, "end": 12, "score": 0.98},
+    {"text": "The tablet", "label": "DRUG", "start": 32, "end": 42, "score": 0.95},
+    {"text": "This therapy", "label": "DRUG", "start": 58, "end": 70, "score": 0.94},
+    {"text": "It", "label": "DRUG", "start": 82, "end": 84, "score": 0.90},
+    {"text": "The medication", "label": "DRUG", "start": 102, "end": 116, "score": 0.93}
+  ],
+  "grounding": {
+    "system": "RXNORM",
+    "code": "SYNTH-RX-1",
+    "display": "Norexa"
+  },
+  "expected_resource_type": "MedicationStatement"
+}

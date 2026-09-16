@@ -17,6 +17,7 @@ from openmed.core.date_shift import stable_offset_for
 from openmed.risk import enforce_kanon
 from openmed.structured import (
     COLUMN_TYPE_AGE,
+    COLUMN_TYPE_CLINICAL_CODE,
     COLUMN_TYPE_DATE,
     COLUMN_TYPE_ZIP,
     GeneralizationLevel,
@@ -60,6 +61,7 @@ ZIP_GRID = ZIP5_GRID + POSTCODE7_GRID
 DATE_GRID = tuple(
     (date(2019, 1, 1) + timedelta(days=i * 53)).isoformat() for i in range(12)
 ) + ("2024-02-29", "2020-02-29", "2000-02-29")
+CLINICAL_CODE_GRID = ("A1", "A2", "44054006")
 
 
 # --------------------------------------------------------------------------- #
@@ -90,10 +92,16 @@ def _date_specificity(label: str) -> float:
     return float(2 - granularity)
 
 
+def _clinical_code_specificity(label: str) -> float:
+    """Coarseness for the exact-or-suppressed data-free code fallback."""
+    return float("inf") if label == SUPPRESSED else 0.0
+
+
 _SPECIFICITY = {
     COLUMN_TYPE_AGE: _age_specificity,
     COLUMN_TYPE_ZIP: _zip_specificity,
     COLUMN_TYPE_DATE: _date_specificity,
+    COLUMN_TYPE_CLINICAL_CODE: _clinical_code_specificity,
 }
 
 
@@ -108,6 +116,7 @@ COLUMN_GRIDS = {
     COLUMN_TYPE_AGE: AGE_GRID,
     COLUMN_TYPE_ZIP: ZIP_GRID,
     COLUMN_TYPE_DATE: DATE_GRID,
+    COLUMN_TYPE_CLINICAL_CODE: CLINICAL_CODE_GRID,
 }
 
 
@@ -117,6 +126,7 @@ COLUMN_GRIDS = {
 def test_supported_column_types_are_registered():
     assert SUPPORTED_COLUMN_TYPES == {
         COLUMN_TYPE_AGE,
+        COLUMN_TYPE_CLINICAL_CODE,
         COLUMN_TYPE_ZIP,
         COLUMN_TYPE_DATE,
     }
@@ -299,6 +309,71 @@ def test_date_shift_requires_patient_key_and_secret():
         generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, patient_key="k")
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"patient_key": "", "secret": SECRET},
+        {"patient_key": "patient-1", "secret": ""},
+        {"patient_key": "patient-1", "secret": SECRET, "max_days": 0},
+    ],
+)
+def test_invalid_date_shift_parameters_raise_typed_error(kwargs):
+    with pytest.raises(HierarchyError, match="parameters are invalid"):
+        generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, **kwargs)
+
+
+def test_date_shift_range_overflow_raises_typed_error():
+    patient_key = "boundary-patient"
+    max_days = 1
+    offset = stable_offset_for(patient_key, max_days=max_days, secret=SECRET)
+    boundary = date.min if offset < 0 else date.max
+
+    with pytest.raises(HierarchyError, match="exceeds the supported date range"):
+        generalize_value(
+            COLUMN_TYPE_DATE,
+            boundary,
+            0,
+            patient_key=patient_key,
+            secret=SECRET,
+            max_days=max_days,
+        )
+
+
+def test_date_shift_preserves_canonical_iso_format_at_year_boundary():
+    patient_key = "boundary-patient"
+    max_days = 1
+    offset = stable_offset_for(patient_key, max_days=max_days, secret=SECRET)
+    assert offset > 0
+
+    shifted = generalize_value(
+        COLUMN_TYPE_DATE,
+        date.min,
+        0,
+        patient_key=patient_key,
+        secret=SECRET,
+        max_days=max_days,
+    )
+
+    assert shifted == (date.min + timedelta(days=offset)).isoformat()
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", shifted)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2024-2-9",
+        "2024-02-9",
+        "20240209",
+        " 2024-02-09 ",
+        "\t2024-02-09",
+        "2024-02-09\n",
+    ],
+)
+def test_date_requires_canonical_iso_string(value):
+    with pytest.raises(HierarchyError, match="ISO YYYY-MM-DD"):
+        generalize_value(COLUMN_TYPE_DATE, value, 1)
+
+
 # --------------------------------------------------------------------------- #
 # Acceptance: typed errors and validation                                     #
 # --------------------------------------------------------------------------- #
@@ -370,6 +445,46 @@ def test_to_enforce_kanon_hierarchy_shape():
         to_enforce_kanon_hierarchy(COLUMN_TYPE_ZIP)
     with pytest.raises(HierarchyError):
         to_enforce_kanon_hierarchy(COLUMN_TYPE_DATE)
+    with pytest.raises(HierarchyError):
+        to_enforce_kanon_hierarchy(COLUMN_TYPE_CLINICAL_CODE, ["A1"])
+
+
+def test_clinical_code_hierarchy_is_materialized_from_pure_parent_chain_data():
+    parent_chains = {
+        "A1": ("A", "ROOT"),
+        "A2": ("A", "ROOT"),
+        "B1": ("B", "ROOT"),
+    }
+    spec = to_enforce_kanon_hierarchy(
+        COLUMN_TYPE_CLINICAL_CODE,
+        list(parent_chains),
+        clinical_code_parent_chains=parent_chains,
+    )
+
+    assert [level["name"] for level in spec] == [
+        "clinical_code:exact",
+        "clinical_code:parent_1",
+        "clinical_code:parent_2",
+        "clinical_code:suppressed",
+    ]
+    assert spec[1]["values"]["A1"] == "A"
+    assert spec[2]["values"]["A1"] == "ROOT"
+    assert spec[-1] == {
+        "name": "clinical_code:suppressed",
+        "default": SUPPRESSED,
+    }
+
+
+def test_clinical_code_parent_data_cannot_split_an_earlier_merge():
+    with pytest.raises(HierarchyError, match="split a class"):
+        to_enforce_kanon_hierarchy(
+            COLUMN_TYPE_CLINICAL_CODE,
+            ["A1", "A2"],
+            clinical_code_parent_chains={
+                "A1": ("A", "ROOT-1"),
+                "A2": ("A", "ROOT-2"),
+            },
+        )
 
 
 def _synthetic_kanon_table():

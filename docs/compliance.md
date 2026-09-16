@@ -40,6 +40,14 @@ issue, and without including real patient data.
 - [Pan-African Malabo Convention baseline](compliance/africa-malabo-baseline.md)
   maps Article 14(1) sensitive-data categories to conservative, non-`keep`
   canonical-label actions while preserving national-law precedence.
+- [Privacy waiver lifecycle ledger](compliance/waiver-ledger.md) records
+  deterministic, aggregate-only waiver state without identities or finding text.
+- [Structured privacy access-review expiry gate](compliance/access-review-expiry.md)
+  provides a deterministic, local-only check for review validity, policy
+  fingerprint, and required decision categories.
+- [Privacy report cardinality budgets](compliance/report-cardinality.md)
+  bound typed report containers and emit only safe paths and counts when a
+  report exceeds its local budget.
 
 ## Deployment Templates
 
@@ -56,6 +64,21 @@ and supervisory-authority guidance:
 - [EU AI Act and GDPR model-card field specification](compliance/model-card-eu-ai-act-fields.md)
   defines intended-purpose, limitation, accuracy/leakage, human-oversight,
   robustness, and GDPR fields for manifest- and `BenchmarkReport`-backed cards.
+
+## Regional implementation checklists
+
+These operational checklists help teams prepare jurisdiction-specific review;
+they do not replace legal advice or supervisory-authority guidance:
+
+- [GDPR data-subject access and deletion export](compliance/gdpr-dsar-export.md)
+  covers local evidence collection, identity verification, export, deletion,
+  and audit handling.
+- [Kenya Data Protection Act identifier checklist](compliance/ke-dpa-identifier-checklist.md)
+  maps synthetic identifier fixtures and conservative validation steps.
+- [Nigeria Data Protection Act identifier checklist](compliance/ng-ndpa-identifier-checklist.md)
+  documents local identifier handling and deployment review.
+- [South Africa POPIA identifier checklist](compliance/za-popia-identifier-checklist.md)
+  documents synthetic validation and residual-risk review.
 
 ## Policy Literals
 

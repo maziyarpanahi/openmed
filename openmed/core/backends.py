@@ -108,14 +108,14 @@ class MLXBackend:
         self._config = config
 
     def is_available(self) -> bool:
+        # MLX only runs on Apple Silicon; gate on the platform first, then defer
+        # the import check to the shared capability probe so every seam answers
+        # "is mlx installed?" the same importless way.
         if platform.system() != "Darwin":
             return False
-        try:
-            import mlx.core  # noqa: F401
+        from .capabilities import is_backend_available
 
-            return True
-        except ImportError:
-            return False
+        return is_backend_available("mlx")
 
     def create_pipeline(
         self,
@@ -146,7 +146,12 @@ class OnnxTokenClassificationPipeline:
         """Run one or more inputs without importing a Torch runtime."""
         threshold = float(kwargs.pop("threshold", 0.0))
         max_length = kwargs.pop("max_length", None)
-        kwargs.pop("batch_size", None)
+        batch_size = kwargs.pop("batch_size", 8)
+        if batch_size is None:
+            batch_size = 8
+        max_batch_tokens = kwargs.pop("max_batch_tokens", 4096)
+        max_windows = kwargs.pop("max_windows", 4096)
+        stride = kwargs.pop("stride", None)
         kwargs.pop("num_workers", None)
         if kwargs:
             logger.debug(
@@ -155,6 +160,15 @@ class OnnxTokenClassificationPipeline:
 
         single = isinstance(inputs, str)
         texts = [inputs] if single else list(inputs)
+        batches = self.model.predict_batch(
+            texts,
+            threshold=threshold,
+            max_length=max_length,
+            stride=stride,
+            batch_size=batch_size,
+            max_batch_tokens=max_batch_tokens,
+            max_windows=max_windows,
+        )
         predictions = [
             [
                 {
@@ -164,13 +178,9 @@ class OnnxTokenClassificationPipeline:
                     "start": entity.start,
                     "end": entity.end,
                 }
-                for entity in self.model.predict(
-                    text,
-                    threshold=threshold,
-                    max_length=max_length,
-                )
+                for entity in entities
             ]
-            for text in texts
+            for entities in batches
         ]
         return predictions[0] if single else predictions
 
@@ -230,12 +240,46 @@ class OnnxBackend:
         return OnnxTokenClassificationPipeline(model)
 
 
+class RemoteInferenceBackend:
+    """Backend using a user-operated KServe V2 or Triton endpoint."""
+
+    def __init__(self, config: Any = None) -> None:
+        self._config = config
+
+    def is_available(self) -> bool:
+        from openmed.service.backends.remote_inference import (
+            remote_inference_dependencies_available,
+        )
+
+        return remote_inference_dependencies_available(self._config)
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Callable:
+        from openmed.service.backends.remote_inference import (
+            create_remote_inference_pipeline,
+        )
+
+        return create_remote_inference_pipeline(
+            model_name,
+            config=self._config,
+            task=task,
+            aggregation_strategy=aggregation_strategy,
+            **kwargs,
+        )
+
+
 # -- Backend registry and auto-detection ------------------------------------
 
 _BACKENDS: Dict[str, type] = {
     "hf": HuggingFaceBackend,
     "mlx": MLXBackend,
     "onnx": OnnxBackend,
+    "remote": RemoteInferenceBackend,
 }
 
 
@@ -246,7 +290,8 @@ def get_backend(
     """Return the requested backend, or auto-detect the best available one.
 
     Args:
-        name: ``"hf"``, ``"mlx"``, ``"onnx"``, or ``None`` for auto-detect.
+        name: ``"hf"``, ``"mlx"``, ``"onnx"``, ``"remote"``, or ``None``
+            for auto-detect.
         config: OpenMedConfig to pass to the backend.
 
     Auto-detection order:
@@ -270,6 +315,11 @@ def get_backend(
                     "Backend 'onnx' is not available. Install the CPU runtime "
                     "with: pip install 'openmed[onnx-runtime]'. The low_resource "
                     "profile does not fall back to a Torch backend."
+                )
+            if name == "remote":
+                raise RuntimeError(
+                    "Backend 'remote' is not available. Install its client-only "
+                    "dependencies with: pip install 'openmed[triton]'."
                 )
             raise RuntimeError(
                 f"Backend {name!r} is not available. Install its dependencies first."

@@ -263,6 +263,12 @@ class VocabularyRouter:
 
         return tuple(self.route_span(span) for span in spans)
 
+    def concept_record(self, concept_id: int) -> Mapping[str, Any] | None:
+        """Return a copy of a caller-supplied Athena concept record by ID."""
+
+        record = self._by_concept_id.get(int(concept_id))
+        return dict(record) if record is not None else None
+
     def _source_record(self, source_vocab: str, code: str) -> Mapping[str, Any] | None:
         if not code:
             return None

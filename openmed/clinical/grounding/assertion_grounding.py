@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from openmed.core.audit import stable_hash
 
@@ -53,14 +53,12 @@ from ..context import (
     PATIENT_EXPERIENCER,
     RECENT,
     ClinicalAssertion,
+    ClinicalContextResult,
     resolve_span_context,
     scan_context_cues,
 )
 from ..experiencer import resolve_experiencer
-from .types import Candidate
-
-if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an exporter import cycle
-    from ..exporters.codeable_concept import GroundedSpan
+from .types import Candidate, GroundedSpan
 
 __all__ = [
     "ASSERTION_GROUNDING_ADVISORY",
@@ -180,7 +178,7 @@ class AssertionGroundingStatus:
 
 
 def assertion_grounding_status(
-    assertion: ClinicalAssertion,
+    assertion: ClinicalAssertion | ClinicalContextResult,
 ) -> AssertionGroundingStatus:
     """Derive the code-level grounding status from composed ConText axes.
 
@@ -191,7 +189,12 @@ def assertion_grounding_status(
     not the patient's or refuted can never be resolved to ``present``.
     """
 
-    status = _dominant_status(assertion)
+    normalized = (
+        assertion.to_assertion()
+        if isinstance(assertion, ClinicalContextResult)
+        else assertion
+    )
+    status = _dominant_status(normalized)
     verification, clinical, patient = _STATUS_MAP[status]
     return AssertionGroundingStatus(
         status=status,

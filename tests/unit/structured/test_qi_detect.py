@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from openmed.risk import kanon_report
+from openmed.risk import kanon_report, risk_report
 from openmed.structured import (
     ROLE_DIRECT_ID,
     ROLE_FREE_TEXT,
@@ -24,75 +24,23 @@ from openmed.structured import (
     scan_table,
     write_table,
 )
+from openmed.structured.qi_detect import _risk_key_bytes
 
 QI_COLUMNS = {"age", "zip_code", "admission_date", "diagnosis"}
+FIXTURE_PATH = (
+    Path(__file__).parents[2]
+    / "fixtures"
+    / "structured"
+    / "quasi_identifier_rare_singleton.csv"
+)
 
-ROWS = [
-    {
-        "record_id": "peer-1",
-        "age": "94",
-        "zip_code": "02139",
-        "admission_date": "2025-04-01",
-        "diagnosis": "routine-follow-up",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "target",
-        "age": "94",
-        "zip_code": "02139",
-        "admission_date": "2025-04-09",
-        "diagnosis": "rare-alpha-syndrome",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "peer-2",
-        "age": "94",
-        "zip_code": "30301",
-        "admission_date": "2025-04-09",
-        "diagnosis": "routine-follow-up",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "peer-3",
-        "age": "72",
-        "zip_code": "02139",
-        "admission_date": "2025-04-09",
-        "diagnosis": "rare-alpha-syndrome",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "peer-4",
-        "age": "72",
-        "zip_code": "30301",
-        "admission_date": "2025-04-01",
-        "diagnosis": "routine-follow-up",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "peer-5",
-        "age": "72",
-        "zip_code": "30301",
-        "admission_date": "2025-04-01",
-        "diagnosis": "rare-alpha-syndrome",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "peer-6",
-        "age": "65",
-        "zip_code": "02139",
-        "admission_date": "2025-04-01",
-        "diagnosis": "routine-follow-up",
-        "department": "cardiology",
-    },
-    {
-        "record_id": "peer-7",
-        "age": "65",
-        "zip_code": "30301",
-        "admission_date": "2025-04-09",
-        "diagnosis": "routine-follow-up",
-        "department": "cardiology",
-    },
-]
+
+def _read_golden_rows() -> list[dict[str, str]]:
+    with FIXTURE_PATH.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+ROWS = _read_golden_rows()
 
 
 def test_scan_table_surfaces_planted_singleton_qi_set(tmp_path: Path) -> None:
@@ -146,6 +94,30 @@ def test_detected_qi_class_sizes_match_explicit_kanon_report(
     assert qi_set["min_equivalence_class_size"] == report["k"]
     assert qi_set["singleton_count"] == sum(
         item["size"] for item in report["equivalence_classes"] if item["size"] == 1
+    )
+
+
+def test_detected_qi_keys_are_byte_identical_to_risk_report(
+    tmp_path: Path,
+) -> None:
+    csv_path = _write_csv(tmp_path / "risk-keys.csv", ROWS)
+    manifest = scan_table(csv_path)
+    qi_set = next(
+        item
+        for item in manifest["quasi_identifier_sets"]
+        if QI_COLUMNS <= set(item["columns"])
+    )
+    report = risk_report(
+        ROWS,
+        quasi_identifier_fields=qi_set["columns"],
+    )
+    target = next(row for row in ROWS if row["record_id"] == "target")
+    singleton = next(
+        item for item in report["singleton_records"] if item["record_id"] == "target"
+    )
+
+    assert _risk_key_bytes(target, qi_set["columns"]) == _canonical_json_bytes(
+        singleton["quasi_identifier_key"]
     )
 
 

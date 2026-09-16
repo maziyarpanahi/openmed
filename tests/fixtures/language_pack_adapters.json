@@ -10,6 +10,7 @@
     "el": "OpenMed/privacy-filter-multilingual",
     "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
+    "fa": "OpenMed/privacy-filter-multilingual",
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
     "he": "OpenMed/privacy-filter-multilingual",
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
@@ -26,11 +27,12 @@
     "ru": "OpenMed/privacy-filter-multilingual",
     "sv": "OpenMed/privacy-filter-multilingual",
     "sw": "OpenMed/privacy-filter-multilingual",
-    "ta": "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+    "ta": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
     "uk": "OpenMed/privacy-filter-multilingual",
+    "vi": "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1",
     "xh": "OpenMed/privacy-filter-multilingual",
     "zh": "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
     "zu": "OpenMed/privacy-filter-multilingual"
@@ -49,6 +51,7 @@
     "en": "en_US",
     "es": "es_ES",
     "et": "et_EE",
+    "fa": "fa_IR",
     "fi": "fi_FI",
     "fr": "fr_FR",
     "gu": "gu_IN",
@@ -67,6 +70,7 @@
     "ml": "ml_IN",
     "mr": "mr_IN",
     "ms": "ms_MY",
+    "ne": "ne_NP",
     "nl": "nl_NL",
     "no": "no_NO",
     "or": "or_IN",
@@ -110,7 +114,6 @@
     "sr",
     "tl",
     "ur",
-    "vi",
     "yo"
   ],
   "national_id_providers": {
@@ -129,6 +132,10 @@
     "bg": [
       "bg_BG",
       "egn"
+    ],
+    "bn": [
+      "bn_BD",
+      "bangladesh_nid"
     ],
     "cs": [
       "cs_CZ",
@@ -157,6 +164,10 @@
     "et": [
       "et_EE",
       "isikukood"
+    ],
+    "fa": [
+      "fa_IR",
+      "iran_national_id"
     ],
     "fi": [
       "fi_FI",
@@ -197,6 +208,10 @@
     "it": [
       "it_IT",
       "ssn"
+    ],
+    "ja": [
+      "ja_JP",
+      "my_number"
     ],
     "ko": [
       "ko_KR",
@@ -314,6 +329,7 @@
   "script_language_hints": {
     "Arabic": [
       "ar",
+      "fa",
       "ha",
       "ur"
     ],
@@ -404,6 +420,7 @@
     "el",
     "en",
     "es",
+    "fa",
     "fr",
     "he",
     "hi",
@@ -425,6 +442,7 @@
     "th",
     "tr",
     "uk",
+    "vi",
     "xh",
     "zh",
     "zu"

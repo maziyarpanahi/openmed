@@ -19,6 +19,7 @@ from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_bangladesh_nid,
     validate_chinese_resident_id,
     validate_czech_rodne_cislo,
     validate_danish_cpr,
@@ -28,8 +29,10 @@ from openmed.core.pii_i18n import (
     validate_german_steuer_id,
     validate_greek_amka,
     validate_indonesian_nik,
+    validate_iran_national_id,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_japanese_my_number,
     validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_marathi_aadhaar,
@@ -43,6 +46,7 @@ from openmed.core.pii_i18n import (
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_ukrainian_rnokpp,
+    validate_vietnamese_cccd,
     validate_za_id_number,
 )
 
@@ -67,6 +71,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "am",
     "pt",
     "ar",
+    "fa",
     "he",
     "ja",
     "tr",
@@ -85,6 +90,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "uk",
     "cs",
     "el",
+    "vi",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -298,6 +304,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u0645\u0648\u0639\u062f \u0627\u0644\u0645\u062a\u0627\u0628\u0639\u0629 ",
         ".",
     ),
+    "fa": (
+        "یادداشت بالینی: بیمار ",
+        " متولد ",
+        ". کد ملی بیمار ",
+        ". تلفن ",
+        ". نشانی ",
+        ". تاریخ پیگیری ",
+        ".",
+    ),
     "he": (
         "\u05d4\u05e2\u05e8\u05d4 \u05e7\u05dc\u05d9\u05e0\u05d9\u05ea: \u05de\u05d8\u05d5\u05e4\u05dc ",
         " \u05e0\u05d5\u05dc\u05d3 \u05d1\u05ea\u05d0\u05e8\u05d9\u05da ",
@@ -460,6 +475,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Ημερομηνία επανελέγχου ",
         ".",
     ),
+    "vi": (
+        "Ghi chú lâm sàng: bệnh nhân ",
+        " sinh ngày ",
+        ". CCCD ",
+        ". Điện thoại ",
+        ". Địa chỉ ",
+        ". Ngày tái khám ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -471,6 +495,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
     "as": validate_aadhaar,
+    "bn": validate_bangladesh_nid,
     "hi": validate_aadhaar,
     "mr": validate_marathi_aadhaar,
     "or": validate_aadhaar,
@@ -478,8 +503,10 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
+    "fa": validate_iran_national_id,
     "he": validate_israeli_teudat_zehut,
     "id": validate_indonesian_nik,
+    "ja": validate_japanese_my_number,
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
@@ -494,6 +521,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "uk": validate_ukrainian_rnokpp,
     "cs": validate_czech_rodne_cislo,
     "el": validate_greek_amka,
+    "vi": validate_vietnamese_cccd,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -505,6 +533,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "es": "pii_i18n.validate_spanish_nie",
     "nl": "pii_i18n.validate_dutch_bsn",
     "as": "pii_i18n.validate_aadhaar",
+    "bn": "pii_i18n.validate_bangladesh_nid",
     "hi": "pii_i18n.validate_aadhaar",
     "mr": "pii_i18n.validate_marathi_aadhaar",
     "or": "pii_i18n.validate_aadhaar",
@@ -512,8 +541,10 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "te": "pii_i18n.validate_aadhaar",
     "pt": "pii_i18n.validate_portuguese_cpf",
     "tr": "pii_i18n.validate_turkish_tckn",
+    "fa": "pii_i18n.validate_iran_national_id",
     "he": "pii_i18n.validate_israeli_teudat_zehut",
     "id": "pii_i18n.validate_indonesian_nik",
+    "ja": "pii_i18n.validate_japanese_my_number",
     "th": "pii_i18n.validate_thai_national_id",
     "ko": "pii_i18n.validate_korean_rrn",
     "ro": "pii_i18n.validate_romanian_cnp",
@@ -528,6 +559,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "uk": "pii_i18n.validate_ukrainian_rnokpp",
     "cs": "pii_i18n.validate_czech_rodne_cislo",
     "el": "pii_i18n.validate_greek_amka",
+    "vi": "pii_i18n.validate_vietnamese_cccd",
 }
 
 

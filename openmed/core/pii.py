@@ -36,6 +36,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
+from ..processing.text import validate_pii_input
+from .budget import BudgetClock, RequestBudget, coerce_budget
+from .capabilities import MissingOptionalDependencyError
+from .capabilities import install_hint as _optional_dependency_install_instruction
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -46,8 +50,17 @@ from .custom_recognizer import (
 from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
+    stable_offset_from_seed,
 )
 from .decoding import iter_grapheme_cluster_spans, remap_normalized_span
+from .errors import (
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    ModelLoadError,
+    redact_detail,
+)
 from .offline import network_blocked_if_offline
 from .script_detect import (
     DetectionNormalization,
@@ -86,37 +99,6 @@ DeidentificationMethod = Literal[
     "shift_dates",
     "format_preserve",
 ]
-
-
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
-
-    def __init__(
-        self,
-        *,
-        package: str,
-        feature: str,
-        extra: str | None = None,
-    ) -> None:
-        instruction = _optional_dependency_install_instruction(package, extra)
-        super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
-        )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
-
-
-def _optional_dependency_install_instruction(
-    package: str,
-    extra: str | None = None,
-) -> str:
-    if extra:
-        return (
-            f"Install it with `pip install openmed[{extra}]` "
-            f"or `pip install {package}`."
-        )
-    return f"Install it with `pip install {package}`."
 
 
 def _optional_dependency_status(
@@ -285,14 +267,17 @@ class DeidentificationResult:
             ``confidence``, ``action``, and ``result_id``.
 
         Raises:
-            ImportError: If pandas is not installed.
+            MissingExtraError: If pandas is not installed. This remains an
+                :class:`ImportError` for compatibility.
         """
         try:
             import pandas as pd
         except ImportError as exc:
-            raise ImportError(
+            raise MissingExtraError(
                 "pandas is required to use DeidentificationResult.to_dataframe(). "
-                "Install it with `pip install pandas`."
+                "Install it with `pip install pandas`.",
+                package="pandas",
+                feature="DeidentificationResult.to_dataframe()",
             ) from exc
 
         columns = [
@@ -362,6 +347,7 @@ _DAY_FIRST_LANGS = frozenset(
         "sv",
         "da",
         "no",
+        "vi",
     }
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
@@ -524,9 +510,15 @@ def _coerce_batched_raw_outputs(
                 normalized.append(list(item) if item else [])
         return normalized
 
-    raise ValueError(
-        "Privacy-filter batch output length did not match input length "
-        f"({expected_count})"
+    actual_count = len(raw_outputs) if isinstance(raw_outputs, list) else 1
+    raise InferenceError(
+        "Privacy-filter inference returned a batch with an unexpected length. "
+        "Retry with a supported backend; if the mismatch persists, report the "
+        "model and backend identifiers.",
+        details={
+            "expected_count": expected_count,
+            "actual_count": actual_count,
+        },
     )
 
 
@@ -593,34 +585,66 @@ def _strip_accents(text: str) -> str:
 
 def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     """Validate language and resolve language-specific default PII model."""
+    from ..utils.gateway import validate_language
     from .model_registry import get_default_pii_model
     from .pii_i18n import (
         INDIC_NER_LANGUAGES,
         INDIC_NER_MODEL_ENV,
         NATIONAL_ID_ONLY_LANGUAGES,
+        OPTIONAL_PII_MODEL,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+        USER_SUPPLIED_PII_MODEL,
     )
 
     accepted_languages = (
-        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
-    if lang not in accepted_languages:
-        raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(accepted_languages)}"
+    lang = validate_language(lang, supported=accepted_languages)
+
+    # Registry placeholders published by discovery surfaces such as
+    # ``openmed_list_pii_languages``. They are not loadable repositories, so
+    # echoing one back must fail with the same actionable guidance as omitting
+    # ``model_name`` rather than with a namespaced download error.
+    placeholder_models = {OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL}
+
+    def _no_model_error() -> ModelLoadError:
+        # Only ``ne`` and ``ur`` reach the first branch; the optional Indic NER
+        # routes have an env-var path and are named in the third branch instead.
+        no_weights = sorted(USER_SUPPLIED_MODEL_LANGUAGES - INDIC_NER_LANGUAGES)
+        if lang in no_weights:
+            return ModelLoadError(
+                f"Language '{lang}' has no bundled OpenMed PII model; pass an "
+                "explicit model_name (user-supplied-model languages: "
+                f"{', '.join(no_weights)})."
+            )
+        if lang in NATIONAL_ID_ONLY_LANGUAGES:
+            return ModelLoadError(
+                f"Language '{lang}' has deterministic pattern-only support; "
+                "pass an explicit model_name for model-backed inference."
+            )
+        return ModelLoadError(
+            f"Language '{lang}' uses optional Indic NER weights; pass an "
+            f"explicit model_name or set {INDIC_NER_MODEL_ENV}."
         )
+
+    if model_name in placeholder_models:
+        if get_default_pii_model(lang) is not None:
+            raise InputError(
+                f"'{model_name}' is a registry placeholder, not a loadable "
+                "model; omit model_name to use the default for language "
+                f"'{lang}', or pass an explicit model repository or local path.",
+                details={"argument": "model_name", "language": lang},
+            )
+        raise _no_model_error()
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)
         if resolved is None:
-            if lang in NATIONAL_ID_ONLY_LANGUAGES:
-                raise ValueError(
-                    f"Language '{lang}' has deterministic pattern-only support; "
-                    "pass an explicit model_name for model-backed inference"
-                )
-            raise ValueError(
-                f"Language '{lang}' uses optional Indic NER weights; pass an "
-                f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
-            )
+            raise _no_model_error()
         return resolved
     return model_name
 
@@ -657,7 +681,7 @@ def _prepare_pii_text(
             config.chinese_target_script if config is not None else None
         ),
     )
-    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() == "ar":
+    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() in {"ar", "fa"}:
         from .pii_i18n import normalize_arabic_indic_digits
 
         normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)
@@ -833,7 +857,10 @@ def _extract_india_clinical_via_script_windows(
 
     windows = india_clinical_script_windows(text, lang)
     if not windows:
-        raise ValueError("India clinical routing requires mixed Latin/Indic text")
+        raise InputError(
+            "India clinical routing requires mixed Latin/Indic text. Pass a "
+            "mixed-script note or disable the India clinical route."
+        )
 
     route = get_india_clinical_model_route(lang)
     # Keep the analyzer injection boundary usable in core-only installs. The
@@ -880,7 +907,11 @@ def _extract_india_clinical_via_script_windows(
             start = base_offset + local_start
             end = base_offset + local_end
             if start < 0 or end < start or end > len(text):
-                raise ValueError("India clinical model returned an invalid span")
+                raise InferenceError(
+                    "India clinical inference returned an invalid span. Retry "
+                    "with a compatible model; if it persists, report the model "
+                    "identifier and span offsets."
+                )
             metadata = dict(entity.metadata or {})
             metadata["india_clinical_route"] = {
                 "core_end": window.core_end,
@@ -912,7 +943,11 @@ def _extract_india_clinical_via_script_windows(
         )
 
     if not routed_results:
-        raise RuntimeError("India clinical routing produced no inference requests")
+        raise InternalError(
+            "India clinical routing produced no inference requests. Retry with a "
+            "supported language route; if it persists, report the language and "
+            "model identifiers."
+        )
 
     base_result = routed_results[0]
     metadata = dict(getattr(base_result, "metadata", None) or {})
@@ -1002,7 +1037,10 @@ def _apply_pii_smart_merging(
 
     if code_mixed:
         if token_language_tags is None:
-            raise ValueError("code_mixed=True requires token_language_tags")
+            raise InputError(
+                "code_mixed=True requires token_language_tags or a configured "
+                "token language-ID fallback. Supply tags or configure lid_model."
+            )
         lang_patterns = get_patterns_for_code_mixed_tags(
             result.text,
             token_language_tags,
@@ -1061,6 +1099,8 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return structured metadata retained from semantic/clinical merging."""
 
     metadata: dict[str, Any] = {}
+    if entity.get("detector_sources"):
+        metadata["detector_sources"] = list(entity["detector_sources"])
     if entity.get("source_labels"):
         metadata["semantic_merge"] = {
             "source_labels": list(entity.get("source_labels", ())),
@@ -1088,9 +1128,15 @@ def _resolve_code_mixed_token_tags(
     """Return caller-supplied or locally inferred offset-only language tags."""
     if not code_mixed:
         if token_language_tags is not None:
-            raise ValueError("token_language_tags requires code_mixed=True")
+            raise InputError(
+                "token_language_tags requires code_mixed=True. Enable code_mixed "
+                "or remove token_language_tags."
+            )
         if lid_model is not None:
-            raise ValueError("lid_model requires code_mixed=True")
+            raise InputError(
+                "lid_model requires code_mixed=True. Enable code_mixed or remove "
+                "lid_model."
+            )
         return None
     if token_language_tags is not None:
         return tuple(token_language_tags)
@@ -1099,7 +1145,10 @@ def _resolve_code_mixed_token_tags(
 
     inferred = identify_token_languages(text, model=lid_model)
     if not inferred:
-        raise ValueError("code-mixed text must contain at least one token")
+        raise InputError(
+            "Code-mixed text must contain at least one token. Pass non-empty text "
+            "or disable code-mixed routing."
+        )
     return tuple(inferred)
 
 
@@ -1122,11 +1171,23 @@ def _extract_pii_batch(
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
+    budget_clock: Optional[BudgetClock] = None,
     **pipeline_kwargs: Any,
 ) -> list[Any]:
     """Extract PII for multiple texts while reusing the same backend resources."""
+    if budget_clock is not None:
+        for text in texts:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="extract_pii.input_guard",
+            )
+        budget_clock.check("extract_pii.prepare")
+
     if code_mixed and len(texts) != 1:
-        raise ValueError("code-mixed token tags currently require one input text")
+        raise InputError(
+            "Code-mixed token tags currently support one input text. Submit one "
+            "text per request or omit explicit token tags."
+        )
     effective_model = _resolve_effective_pii_model(model_name, lang)
     prepared = [
         _prepare_pii_text(
@@ -1161,6 +1222,8 @@ def _extract_pii_batch(
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
 
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.backend_setup")
         if privacy_filter_pipeline is not None:
             pipeline = privacy_filter_pipeline
         elif config is None:
@@ -1173,8 +1236,12 @@ def _extract_pii_batch(
             for key in ("batch_size", "num_workers")
             if key in pipeline_kwargs and pipeline_kwargs[key] is not None
         }
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.privacy_filter_batch")
         with network_blocked_if_offline(config):
             raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.privacy_filter_batch_complete")
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
             _prediction_result_from_privacy_filter_raw(
@@ -1191,11 +1258,15 @@ def _extract_pii_batch(
         from .. import analyze_text
         from .models import ModelLoader
 
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.backend_setup")
         shared_loader = loader
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
         for item, india_clinical in zip(prepared, india_clinical_flags):
+            if budget_clock is not None:
+                budget_clock.check("extract_pii.batch_item")
             if india_clinical:
                 result = _extract_india_clinical_via_script_windows(
                     item.inference_text,
@@ -1219,6 +1290,8 @@ def _extract_pii_batch(
                     group_entities=True,
                     **pipeline_kwargs,
                 )
+            if budget_clock is not None:
+                budget_clock.check("extract_pii.batch_item_complete")
             result = _mutable_prediction_result(result)
             results.append(result)
 
@@ -1291,11 +1364,13 @@ def _extract_pii_batch(
     for result in results:
         validate_entity_spans(result.entities, result.text)
 
+    if budget_clock is not None:
+        budget_clock.check("extract_pii.complete")
     return results
 
 
 def extract_pii(
-    text: str,
+    text: str | bytes | bytearray | memoryview,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.5,
     config: Optional[OpenMedConfig] = None,
@@ -1316,6 +1391,7 @@ def extract_pii(
     token_language_tags: Optional[Sequence[Any]] = None,
     lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
+    budget: Optional[RequestBudget] = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -1372,9 +1448,18 @@ def extract_pii(
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
+        budget: Optional per-request wall-time and input-character budget.
+            ``None`` means unlimited. Deadline checks are cooperative, and an
+            over-length input is rejected before model inference.
 
     Returns:
         PredictionResult with detected PII entities
+
+    Raises:
+        InputError: If text or request options are malformed or unsupported.
+        CapabilityError: If the selected model or optional runtime is unavailable.
+        BudgetExceededError: If the request exceeds its configured budget.
+        InternalError: If inference violates a result or span invariant.
 
     Example:
         >>> from unittest.mock import patch
@@ -1403,8 +1488,20 @@ def extract_pii(
         >>> next((entity.text, entity.label) for entity in result.entities)
         ('Casey Example', 'NAME')
     """
+    text = validate_pii_input(text)
+    resolved_budget = coerce_budget(budget)
+    if resolved_budget is not None:
+        resolved_budget.check_input_length(
+            len(text),
+            checkpoint="extract_pii.input_guard",
+        )
     if cache_results:
         params = dict(locals())
+        params.pop("resolved_budget")
+        if resolved_budget is None:
+            params.pop("budget")
+        else:
+            params["budget"] = resolved_budget
         cache_key = make_cache_key("extract_pii", params)
         cache = get_result_cache(max_entries=max_cache_entries)
         final_result = cache.get(cache_key)
@@ -1415,6 +1512,7 @@ def extract_pii(
         runtime_kwargs["batch_size"] = batch_size
     if num_workers is not None:
         runtime_kwargs["num_workers"] = num_workers
+    budget_clock = resolved_budget.start() if resolved_budget is not None else None
     final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
@@ -1432,6 +1530,7 @@ def extract_pii(
         token_language_tags=token_language_tags,
         lid_model=lid_model,
         transliterated_name_config=transliterated_name_config,
+        budget_clock=budget_clock,
         **runtime_kwargs,
     )[0]
     if cache_results:
@@ -1453,22 +1552,51 @@ def _resolve_deidentification_method(
     if shift_dates is True and method != "shift_dates":
         effective_method = "shift_dates"
     elif shift_dates is False and method == "shift_dates":
-        raise ValueError("shift_dates=false conflicts with method='shift_dates'")
+        raise InputError(
+            "shift_dates=false conflicts with method='shift_dates'. Remove the "
+            "shift_dates argument or choose a non-date method."
+        )
 
     if date_shift_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_days requires method='shift_dates'")
+        raise InputError(
+            "date_shift_days requires method='shift_dates'. Select shift_dates "
+            "or remove date_shift_days."
+        )
     if patient_key is not None and effective_method != "shift_dates":
-        raise ValueError("patient_key requires method='shift_dates'")
+        raise InputError(
+            "patient_key requires method='shift_dates'. Select shift_dates or "
+            "remove patient_key."
+        )
     if date_shift_max_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_max_days requires method='shift_dates'")
+        raise InputError(
+            "date_shift_max_days requires method='shift_dates'. Select "
+            "shift_dates or remove date_shift_max_days."
+        )
     if date_shift_secret is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_secret requires method='shift_dates'")
+        raise InputError(
+            "date_shift_secret requires method='shift_dates'. Select shift_dates "
+            "or remove date_shift_secret."
+        )
     if date_shift_secret is not None and patient_key is None:
-        raise ValueError("date_shift_secret requires patient_key")
+        raise InputError(
+            "date_shift_secret requires patient_key. Supply patient_key for a "
+            "stable offset or remove date_shift_secret."
+        )
     if patient_key is not None and date_shift_secret is None:
-        raise ValueError("patient_key requires date_shift_secret")
+        raise InputError(
+            "patient_key requires date_shift_secret. Supply HMAC key material or "
+            "remove patient_key for a non-keyed offset."
+        )
     if effective_method not in DEIDENTIFICATION_METHODS:
-        raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
+        raise InputError(
+            "Unsupported de-identification method. Pass one of the documented "
+            f"methods: {list(DEIDENTIFICATION_METHODS)}.",
+            details={
+                "argument": "method",
+                "method": redact_detail(effective_method),
+                "supported": list(DEIDENTIFICATION_METHODS),
+            },
+        )
 
     return effective_method
 
@@ -1495,7 +1623,7 @@ def _apply_safety_sweep_to_result(
         safety_sweep,
     )
 
-    before_count = len(pii_result.entities)
+    before_entity_ids = {id(entity) for entity in pii_result.entities}
     entities = safety_sweep(
         text,
         pii_result.entities,
@@ -1503,7 +1631,14 @@ def _apply_safety_sweep_to_result(
         locale=locale,
         patterns=patterns,
     )
-    added_count = len(entities) - before_count
+    # Overlap resolution may remove model spans, so a list-length delta does
+    # not measure the sweep's independent recall contribution.
+    added_count = sum(
+        id(entity) not in before_entity_ids
+        and (getattr(entity, "metadata", None) or {}).get("source")
+        == SAFETY_SWEEP_SOURCE
+        for entity in entities
+    )
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
     metadata["safety_sweep"] = {
@@ -1560,6 +1695,12 @@ def _entity_sources(entity: Any) -> list[str]:
         return ["safety_sweep"]
     if source == "locale_rule":
         return ["locale_rule"]
+    detector_sources = metadata.get("detector_sources")
+    if isinstance(detector_sources, (list, tuple)):
+        recorded = {str(item).strip() for item in detector_sources if str(item).strip()}
+        ordered = [item for item in ("ml", "locale_rule") if item in recorded]
+        if ordered:
+            return ordered
     return ["ml"]
 
 
@@ -1598,6 +1739,7 @@ def _detector_infos(
     pii_result: Any,
     *,
     model_name: str,
+    lang: str,
     use_safety_sweep: bool,
 ) -> list[Any]:
     from .audit import DetectorInfo
@@ -1613,6 +1755,19 @@ def _detector_infos(
             commit=metadata.get("model_commit"),
         )
     ]
+    if any(
+        "locale_rule" in _entity_sources(entity)
+        for entity in getattr(pii_result, "entities", ())
+    ):
+        detectors.append(
+            DetectorInfo(
+                source="locale_rule",
+                model_id=f"locale_rules:{lang}",
+                model_format="rules",
+                commit=None,
+                metadata={"language": lang},
+            )
+        )
     if use_safety_sweep:
         detectors.append(
             DetectorInfo(
@@ -1943,6 +2098,7 @@ def _build_audit_report(
         detectors=_detector_infos(
             pii_result,
             model_name=model_name,
+            lang=lang,
             use_safety_sweep=use_safety_sweep,
         ),
         safety_sweep=sweep_metadata,
@@ -2040,6 +2196,7 @@ def _build_deidentification_result(
             patient_key=patient_key,
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
+            seed=seed,
         )
 
     anonymizer = None
@@ -2303,9 +2460,18 @@ def _deidentify_batch(
     surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
+    budget_clock: Optional[BudgetClock] = None,
     **pipeline_kwargs: Any,
 ) -> list[DeidentificationResult]:
     """De-identify multiple texts after one batched PII extraction pass."""
+    if budget_clock is not None:
+        for text in texts:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="deidentify.input_guard",
+            )
+        budget_clock.check("deidentify.prepare")
+
     effective_method = _resolve_deidentification_method(
         method,
         shift_dates,
@@ -2316,7 +2482,10 @@ def _deidentify_batch(
     )
     source_texts = [text if preserve_whitespace else text.strip() for text in texts]
     if code_mixed and len(source_texts) != 1:
-        raise ValueError("code-mixed token tags currently require one input text")
+        raise InputError(
+            "Code-mixed token tags currently support one input text. Submit one "
+            "text per request or omit explicit token tags."
+        )
     resolved_token_language_tags = (
         _resolve_code_mixed_token_tags(
             source_texts[0],
@@ -2351,16 +2520,22 @@ def _deidentify_batch(
         transliterated_name_config=transliterated_name_config,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
+        budget_clock=budget_clock,
         **pipeline_kwargs,
     )
 
     if use_safety_sweep:
         swept_results = []
         for source_text, pii_result in zip(source_texts, pii_results):
+            if budget_clock is not None:
+                budget_clock.check("deidentify.safety_sweep_item")
             sweep_patterns = None
             if code_mixed:
                 if resolved_token_language_tags is None:
-                    raise ValueError("code-mixed routing requires token language tags")
+                    raise InputError(
+                        "Code-mixed routing requires token language tags. Supply "
+                        "token_language_tags or configure lid_model."
+                    )
                 from .pii_i18n import get_patterns_for_code_mixed_tags
 
                 sweep_patterns = get_patterns_for_code_mixed_tags(
@@ -2384,37 +2559,45 @@ def _deidentify_batch(
             )
             _suppress_custom_allowed_entities(source_text, pii_result, recognizer)
             swept_results.append(pii_result)
+            if budget_clock is not None:
+                budget_clock.check("deidentify.safety_sweep_item_complete")
         pii_results = swept_results
 
-    return [
-        _build_deidentification_result(
-            text,
-            pii_result,
-            effective_method=effective_method,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days,
-            patient_key=patient_key,
-            date_shift_max_days=date_shift_max_days,
-            date_shift_secret=date_shift_secret,
-            keep_mapping=keep_mapping,
-            lang=lang,
-            normalize_accents=normalize_accents,
-            use_smart_merging=use_smart_merging,
-            use_safety_sweep=use_safety_sweep,
-            consistent=consistent,
-            seed=seed,
-            locale=locale,
-            surrogate_vault=surrogate_vault,
-            policy=policy or "hipaa_safe_harbor",
+    results: list[DeidentificationResult] = []
+    for text, pii_result in zip(source_texts, pii_results):
+        if budget_clock is not None:
+            budget_clock.check("deidentify.build_item")
+        results.append(
+            _build_deidentification_result(
+                text,
+                pii_result,
+                effective_method=effective_method,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                keep_year=keep_year,
+                date_shift_days=date_shift_days,
+                patient_key=patient_key,
+                date_shift_max_days=date_shift_max_days,
+                date_shift_secret=date_shift_secret,
+                keep_mapping=keep_mapping,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                use_smart_merging=use_smart_merging,
+                use_safety_sweep=use_safety_sweep,
+                consistent=consistent,
+                seed=seed,
+                locale=locale,
+                surrogate_vault=surrogate_vault,
+                policy=policy or "hipaa_safe_harbor",
+            )
         )
-        for text, pii_result in zip(source_texts, pii_results)
-    ]
+        if budget_clock is not None:
+            budget_clock.check("deidentify.build_item_complete")
+    return results
 
 
 def deidentify(
-    text: str,
+    text: str | bytes | bytearray | memoryview,
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
@@ -2447,6 +2630,7 @@ def deidentify(
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
+    budget: Optional[RequestBudget] = None,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -2486,9 +2670,10 @@ def deidentify(
         patient_key: Optional stable patient identifier used only to derive a
             deterministic HMAC date-shift offset. Raw keys are not logged,
             persisted, or returned.
-        date_shift_max_days: Maximum absolute offset for random or
+        date_shift_max_days: Maximum absolute offset for random, seeded, or
             patient-keyed date shifting. Defaults to 365 when ``patient_key``
-            is supplied and neither this nor ``date_shift_days`` is set.
+            or ``seed`` is supplied and neither this nor ``date_shift_days``
+            is set.
         date_shift_secret: Required HMAC key material for patient-keyed
             offsets. Reuse the same value across sessions to keep offsets
             stable.
@@ -2510,8 +2695,11 @@ def deidentify(
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
-        seed: Optional integer seed for cross-run reproducibility of
-            ``consistent=True`` replacements. Implies ``consistent=True``.
+        seed: Optional request-scoped integer seed for cross-run
+            reproducibility of replacements and automatic date shifting.
+            Implies ``consistent=True`` for replacement methods. Explicit
+            ``date_shift_days`` and patient-keyed offsets still take
+            precedence for ``method="shift_dates"``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
@@ -2547,10 +2735,21 @@ def deidentify(
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
+        budget: Optional per-request wall-time and input-character budget.
+            ``None`` means unlimited. Deadline checks are cooperative, and an
+            over-length input is rejected before model inference.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
         AuditReport when ``audit=True``.
+
+    Raises:
+        InputError: If text or de-identification options are malformed.
+        PolicyError: If the selected privacy policy is invalid or disallows the
+            requested operation.
+        CapabilityError: If the selected model or optional runtime is unavailable.
+        BudgetExceededError: If the request exceeds its configured budget.
+        InternalError: If inference or redaction violates an internal invariant.
 
     Example:
         >>> from datetime import datetime
@@ -2593,8 +2792,20 @@ def deidentify(
         {'[NAME]': 'Casey Example'}
     """
 
+    text = validate_pii_input(text)
+    resolved_budget = coerce_budget(budget)
+    if resolved_budget is not None:
+        resolved_budget.check_input_length(
+            len(text),
+            checkpoint="deidentify.input_guard",
+        )
     if cache_results:
         params = dict(locals())
+        params.pop("resolved_budget")
+        if resolved_budget is None:
+            params.pop("budget")
+        else:
+            params["budget"] = resolved_budget
         cache_key = make_cache_key("deidentify", params)
         cache = get_result_cache(max_entries=max_cache_entries)
         final_result = cache.get(cache_key)
@@ -2649,6 +2860,7 @@ def deidentify(
         locale=locale,
         surrogate_vault=surrogate_vault,
         audit=audit,
+        budget=resolved_budget,
     )
 
     if audit and result.deidentification_result.audit_report is not None:
@@ -3100,9 +3312,17 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
         A non-zero integer day offset within the range.
     """
     if low > high:
-        raise ValueError("low must be less than or equal to high")
+        raise InputError(
+            "low must be less than or equal to high. Correct the date-shift "
+            "range before retrying.",
+            details={"argument": "date_shift_range"},
+        )
     if low == high == 0:
-        raise ValueError("range must contain at least one non-zero shift")
+        raise InputError(
+            "The range must contain at least one non-zero shift. Expand the "
+            "date-shift range before retrying.",
+            details={"argument": "date_shift_range"},
+        )
 
     while True:
         shift_days = random.randint(low, high)
@@ -3112,9 +3332,14 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
 
 def _validate_date_shift_max_days(max_days: int) -> int:
     if isinstance(max_days, bool) or not isinstance(max_days, int):
-        raise TypeError("date_shift_max_days must be an integer")
+        raise InputError(
+            "date_shift_max_days must be an integer. Pass a positive whole "
+            "number of days."
+        )
     if max_days <= 0:
-        raise ValueError("date_shift_max_days must be positive")
+        raise InputError(
+            "date_shift_max_days must be positive. Pass an integer greater than zero."
+        )
     return max_days
 
 
@@ -3146,6 +3371,7 @@ def _resolve_date_shift_days(
     patient_key: Optional[str | bytes],
     date_shift_max_days: Optional[int],
     date_shift_secret: Optional[str | bytes],
+    seed: Optional[int] = None,
 ) -> int:
     if patient_key is not None:
         return _stable_date_shift_days(
@@ -3157,6 +3383,14 @@ def _resolve_date_shift_days(
 
     if date_shift_days is not None:
         return date_shift_days
+
+    if seed is not None:
+        max_days = (
+            _validate_date_shift_max_days(date_shift_max_days)
+            if date_shift_max_days is not None
+            else DEFAULT_DATE_SHIFT_MAX_DAYS
+        )
+        return stable_offset_from_seed(seed, max_days=max_days)
 
     if date_shift_max_days is not None:
         max_days = _validate_date_shift_max_days(date_shift_max_days)
@@ -3432,6 +3666,10 @@ def reidentify(
     Returns:
         Re-identified text with original PII restored
 
+    Raises:
+        InputError: If the text or mapping does not use the documented string
+            types.
+
     Example:
         >>> from openmed.core.pii import reidentify
         >>> reidentify(
@@ -3444,10 +3682,36 @@ def reidentify(
         Only works if keep_mapping=True was used during de-identification.
         Requires proper authorization and audit logging in production.
     """
+    if not isinstance(deidentified_text, str):
+        raise InputError(
+            "deidentified_text must be a string. Pass the text returned by "
+            "deidentify(...).",
+            details={
+                "argument": "deidentified_text",
+                "type": type(deidentified_text).__name__,
+            },
+        )
+    if not isinstance(mapping, Mapping):
+        raise InputError(
+            "mapping must map redacted strings to original strings. Pass the "
+            "mapping returned by deidentify(..., keep_mapping=True).",
+            details={"argument": "mapping", "type": type(mapping).__name__},
+        )
+
+    validated_mapping: list[tuple[str, str]] = []
+    for index, (redacted, original) in enumerate(mapping.items()):
+        if not isinstance(redacted, str) or not isinstance(original, str):
+            raise InputError(
+                "mapping keys and values must be strings. Rebuild the mapping "
+                "from deidentify(..., keep_mapping=True) before retrying.",
+                details={"argument": "mapping", "entry_index": index},
+            )
+        validated_mapping.append((redacted, original))
+
     result = deidentified_text
     regular_mapping: dict[str, str] = {}
     occurrence_mapping: dict[str, list[tuple[int, str]]] = {}
-    for redacted, original in mapping.items():
+    for redacted, original in validated_mapping:
         parsed = _parse_occurrence_mapping_key(redacted)
         if parsed is None:
             regular_mapping[redacted] = original

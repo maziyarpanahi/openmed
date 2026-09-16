@@ -19,8 +19,8 @@ arithmetic), so they can run without importing the runtime package or optional
 heavy dependencies. A separate pytest parity test imports ``openmed`` and
 compares the live runtime surface with this static inventory. The checker:
 
-1. Parses ``openmed/__init__.py`` to read ``__all__`` and the ``from .module
-   import name`` bindings that back each exported name.
+1. Parses ``openmed/__init__.py`` to read ``__all__`` and the eager-import or
+   literal lazy-import bindings that back each exported name.
 2. Resolves each binding to its defining source file purely from the filesystem
    layout of the ``openmed`` package (no imports are executed).
 3. Parses that source file with ``ast`` and inspects the ``class``/``def`` node
@@ -217,6 +217,48 @@ def _collect_import_bindings(tree: ast.Module, current_package: str) -> Dict[str
     return bindings
 
 
+def _collect_lazy_import_bindings(
+    tree: ast.Module, current_package: str
+) -> Dict[str, str]:
+    """Map names in a literal ``_LAZY_IMPORTS`` dictionary to dotted modules."""
+
+    bindings: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [target for target in node.targets if isinstance(target, ast.Name)]
+        if not any(target.id == "_LAZY_IMPORTS" for target in targets):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if not (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+            ):
+                continue
+            module = value.value
+            if module.startswith("."):
+                level = len(module) - len(module.lstrip("."))
+                module = _resolve_relative_module(
+                    module[level:] or None,
+                    level,
+                    current_package,
+                )
+            bindings[key.value] = module
+    return bindings
+
+
+def _collect_export_bindings(tree: ast.Module, current_package: str) -> Dict[str, str]:
+    """Collect eager and literal lazy re-export bindings from a module."""
+
+    bindings = _collect_import_bindings(tree, current_package)
+    bindings.update(_collect_lazy_import_bindings(tree, current_package))
+    return bindings
+
+
 def _index_definitions(tree: ast.Module) -> Dict[str, ast.AST]:
     """Index top-level ``def``/``class`` definitions by name in a module."""
     definitions: Dict[str, ast.AST] = {}
@@ -318,7 +360,7 @@ def _resolve_symbol(name: str, module: str) -> SymbolReport:
             current_package = current_module
         else:
             current_package = _module_package(current_module)
-        bindings = _collect_import_bindings(tree, current_package)
+        bindings = _collect_export_bindings(tree, current_package)
         next_module = bindings.get(name)
         if next_module is None or next_module == current_module:
             break
@@ -375,7 +417,7 @@ def measure_public_api_docstrings(
     """
     init_tree = _parse_source(PACKAGE_INIT)
     names = _collect_all_names(init_tree)
-    bindings = _collect_import_bindings(init_tree, "openmed")
+    bindings = _collect_export_bindings(init_tree, "openmed")
 
     report = CoverageReport(min_coverage=min_coverage)
     for name in names:

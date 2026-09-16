@@ -6,7 +6,7 @@ candidate-generation lives in :mod:`.base`.
 
 from __future__ import annotations
 
-from openmed.core.labels import MEDICATION
+from openmed.core.labels import DRUG, MEDICATION
 
 from ..registry import register_linker
 from .base import VocabLinker
@@ -18,6 +18,7 @@ class RxNormLinker(VocabLinker):
     system = "RXNORM"
     key = "rxnorm"
     required_label = MEDICATION
+    compatible_labels = frozenset({DRUG})
 
 
 register_linker("rxnorm", RxNormLinker)

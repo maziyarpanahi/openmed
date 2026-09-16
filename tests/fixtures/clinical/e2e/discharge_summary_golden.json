@@ -1,0 +1,108 @@
+{
+  "note_id": "synthetic-discharge-001",
+  "disclaimer": "Synthetic data only. Advisory pipeline output for engineering regression testing; not a medical device and not for clinical decision-making.",
+  "redacted_pii_labels": [
+    "date",
+    "phone_number",
+    "email",
+    "medical_record_number",
+    "ssn"
+  ],
+  "phi_surface_strings": [
+    "1975-04-03",
+    "212-555-0198",
+    "demo.patient@example.test",
+    "00123456",
+    "123-45-6789"
+  ],
+  "expected_entities": [
+    {
+      "text": "type 2 diabetes",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "historical",
+      "certainty": "certain",
+      "grounding_system": "icd10cm",
+      "expected_code": "E11.9",
+      "expected_display": "Type 2 diabetes mellitus without complications",
+      "fhir_resource_type": "Condition"
+    },
+    {
+      "text": "hypertension",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "icd10cm",
+      "expected_code": "I10",
+      "expected_display": "Essential (primary) hypertension",
+      "fhir_resource_type": "Condition"
+    },
+    {
+      "text": "pneumonia",
+      "ner_label": "CONDITION",
+      "negation": "negated",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "icd10cm",
+      "expected_code": "J18.9",
+      "expected_display": "Pneumonia, unspecified organism",
+      "fhir_resource_type": "Condition"
+    },
+    {
+      "text": "metformin",
+      "ner_label": "MEDICATION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "rxnorm",
+      "expected_code": "6809",
+      "expected_display": "metformin",
+      "fhir_resource_type": "MedicationStatement"
+    },
+    {
+      "text": "lisinopril",
+      "ner_label": "MEDICATION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "rxnorm",
+      "expected_code": "29046",
+      "expected_display": "lisinopril",
+      "fhir_resource_type": "MedicationStatement"
+    },
+    {
+      "text": "headache",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "hpo",
+      "expected_code": "HP:0002315",
+      "expected_display": "Headache",
+      "fhir_resource_type": "Observation"
+    },
+    {
+      "text": "fever",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "hpo",
+      "expected_code": "HP:0001945",
+      "expected_display": "Fever",
+      "fhir_resource_type": "Observation"
+    },
+    {
+      "text": "seizure",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "historical",
+      "certainty": "certain",
+      "grounding_system": "hpo",
+      "expected_code": "HP:0001250",
+      "expected_display": "Seizure",
+      "fhir_resource_type": "Observation"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from openmed.core.date_shift import stable_offset_for
+from openmed.core.date_shift import stable_offset_for, stable_offset_from_seed
 from openmed.core.pipeline import Pipeline
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
@@ -69,6 +69,21 @@ def test_stable_offset_for_is_repeatable_bounded_and_nonzero():
     assert first != 0
 
 
+def test_stable_offset_from_seed_is_repeatable_bounded_and_nonzero():
+    first = stable_offset_from_seed(822, max_days=30)
+    second = stable_offset_from_seed(822, max_days=30)
+
+    assert first == second
+    assert -30 <= first <= 30
+    assert first != 0
+
+
+@pytest.mark.parametrize("seed", [True, 8.22, "822"])
+def test_stable_offset_from_seed_requires_an_integer(seed):
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        stable_offset_from_seed(seed, max_days=30)
+
+
 def test_stable_offset_for_rejects_empty_patient_key_without_echoing_value():
     with pytest.raises(ValueError, match="patient_key must be non-empty"):
         stable_offset_for("", max_days=30, secret=HMAC_TEST_MATERIAL)
@@ -117,6 +132,33 @@ def test_patient_keyed_shift_dates_are_stable_across_documents():
     shifted_start = datetime.strptime(first_start, "%m/%d/%Y")
     shifted_end = datetime.strptime(first_end, "%m/%d/%Y")
     assert shifted_end - shifted_start == timedelta(days=10)
+
+
+def test_request_seed_controls_automatic_date_shift():
+    text = "Admit 01/10/2020 discharge 01/20/2020"
+    seed = 822
+    offset = stable_offset_from_seed(seed, max_days=30)
+
+    first = _deidentify_with_entities(
+        text,
+        _date_entity(text, "01/10/2020"),
+        _date_entity(text, "01/20/2020"),
+        seed=seed,
+        date_shift_max_days=30,
+    )
+    second = _deidentify_with_entities(
+        text,
+        _date_entity(text, "01/10/2020"),
+        _date_entity(text, "01/20/2020"),
+        seed=seed,
+        date_shift_max_days=30,
+    )
+
+    assert first.deidentified_text == second.deidentified_text
+    assert first.deidentified_text == (
+        f"Admit {_shift_mmddyyyy('01/10/2020', offset)} "
+        f"discharge {_shift_mmddyyyy('01/20/2020', offset)}"
+    )
 
 
 def test_different_patient_keys_can_produce_different_offsets():

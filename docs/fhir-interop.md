@@ -115,6 +115,24 @@ OpenMed emits R4 `issue.expression` for element paths. It accepts legacy
 
 ## Bundles
 
+Use `to_fhir()` when the inputs are grounded clinical spans. The facade routes
+supported canonical labels, assembles their resources through `to_bundle()`,
+and leaves unknown labels out of the Bundle with counts in a PHI-free sidecar:
+
+```python
+from openmed.clinical.exporters.fhir import to_fhir
+
+bundle = to_fhir(grounded_spans, doc_id="note-123")
+print(bundle.summary.exported_by_label)
+print(bundle.summary.unmapped_by_label)
+```
+
+The sidecar is available as `bundle.summary` but is not a key in the FHIR
+mapping, so `json.dumps(bundle)` contains only the R4 Bundle. The facade does
+not synthesize a Patient resource. It emits `Condition`, `Observation`,
+`MedicationStatement`, and `Procedure` for their supported canonical labels;
+labels whose standalone exporters have not shipped are counted as unmapped.
+
 Use `to_bundle()` to assemble standalone FHIR resources into a deterministic R4
 `Bundle`.
 
@@ -144,6 +162,138 @@ The helper assigns stable `urn:uuid` `fullUrl` values and rewrites internal
 references that point to resources present in the bundle. It does not synthesize
 missing resources and does not validate external FHIR profiles.
 
+## Ground, then export
+
+`examples/ground_then_export_fhir.py` is a runnable, fully offline composition
+of the privacy and interoperability stages. It de-identifies a synthetic note
+first, runs a deterministic local NER fixture over the de-identified text,
+grounds 30 mentions across RxNorm, LOINC, and ICD-10-CM, maps each selected
+candidate to a FHIR `CodeableConcept`, and assembles the resources with
+`to_bundle()`:
+
+```bash
+python3 -m examples.ground_then_export_fhir
+```
+
+The example uses in-memory synthetic vocabulary indexes and a no-download PII
+loader. Each emitted `Coding` carries its canonical vocabulary URI, snapshot
+version, linker, score, and source offsets through the grounding provenance
+extension. The adapter accepts the checked-in `GroundedSpan` result shape and
+the one-system grounded-concept attributes used by newer grounding callers.
+Grounding remains assist-only and requires human verification; it is not an
+autonomous clinical coding, diagnosis, treatment, or billing decision.
+
+When a caller knows the expected source vocabulary, the local conformance helper
+can assert its URI as well as the CodeableConcept shape:
+
+```python
+from openmed.clinical.exporters import check_codeable_concept
+
+findings = check_codeable_concept(
+    concept,
+    expected_system="http://loinc.org",
+)
+assert findings == []
+```
+
 For an opt-in, offline check of profiles declared in `meta.profile`, including
 post-de-identification comparison, see
 [WHO SMART Guidelines Profile Checks](./fhir-smart-guidelines.md).
+
+## Base R4 Structural Validation
+
+Use `validate_resource()` or `validate_bundle()` before handing an OpenMed
+export to a FHIR server. Both functions run entirely offline against a bundled,
+minimal table of base FHIR R4 (4.0.1) cardinalities, datatypes, and small fixed
+required bindings:
+
+```python
+from openmed.clinical.exporters.fhir import validate_bundle, validate_resource
+
+resource_result = validate_resource(
+    {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": {"text": "synthetic measurement"},
+    }
+)
+assert resource_result.is_valid
+
+bundle_result = validate_bundle(
+    {
+        "resourceType": "Bundle",
+        "type": "collection",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "code": {"text": "synthetic measurement"},
+                }
+            }
+        ],
+    }
+)
+assert bundle_result.errors[0].location == "Bundle.entry[0].resource.status"
+```
+
+`ValidationResult.errors` and `.warnings` contain immutable
+`ValidationFinding` objects with `severity`, `location`, `message`, and a FHIR
+issue `code`. Messages describe structure only and never quote resource values.
+Results also expose `.issues`, so `from_validation_result(result)` can render a
+standard R4 `OperationOutcome`.
+
+The bundled subset covers the resources OpenMed emits: `Condition`,
+`Observation`, `MedicationRequest`, `MedicationStatement`, `Procedure`,
+`DiagnosticReport`, `AllergyIntolerance`, `Immunization`, and `Encounter`. A
+different resource type produces a `not-supported` warning rather than a false
+conformance claim. The constraint table contains only OpenMed's compact
+derivation of CC0-licensed base R4 structure and fixed code-system metadata; it
+does not include clinical terminology content, proprietary profiles, or
+implementation-guide packages.
+
+## US Core STU9 Conformance
+
+Use `check_us_core()` for the bundled US Core 9.0.0 subset covering exported
+`Condition`, laboratory `Observation`, `MedicationRequest`, and
+`AllergyIntolerance` resources. It always runs base R4 validation first, reports
+missing must-support elements as warnings, and reports required cardinality or
+locally enumerable binding violations as errors:
+
+```python
+from openmed.clinical.exporters.fhir import check_us_core
+
+result = check_us_core(
+    {
+        "resourceType": "Condition",
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": (
+                            "http://terminology.hl7.org/CodeSystem/condition-category"
+                        ),
+                        "code": "problem-list-item",
+                    }
+                ]
+            }
+        ],
+        "code": {"text": "synthetic condition"},
+        "subject": {"reference": "Patient/synthetic"},
+    }
+)
+assert result.is_valid
+```
+
+Pass a supported canonical URL or StructureDefinition id as `profile` to select
+the encounter-diagnosis `Condition` profile or override the resource default.
+The checker resolves supported `meta.profile` declarations as well. Its compact
+constraint table is OpenMed-authored from the
+[US Core STU9 definitions](https://hl7.org/fhir/us/core/STU9/) and does not
+bundle clinical terminology expansions. Use the full HL7 validator or the
+receiving server for complete invariants and terminology validation.
+
+This base validator is intentionally distinct from `check_bundle()`. The latter
+loads caller-supplied `StructureDefinition` and `ValueSet` resources to check
+declared implementation-guide profiles. Neither checker contacts a terminology
+server or replaces the complete HL7 validator for invariants, extensions, and
+full profile conformance.

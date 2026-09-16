@@ -1,0 +1,58 @@
+/* OpenMed shared surface, radius, spacing, and motion tokens. */
+
+:root {
+  --om-radius-card: 10px;
+  --om-radius-control: 6px;
+  --om-radius-tag: 4px;
+  --om-radius-badge: 3px;
+
+  --om-space-1: 4px;
+  --om-space-2: 8px;
+  --om-space-3: 12px;
+  --om-space-4: 16px;
+  --om-space-5: 20px;
+  --om-space-6: 24px;
+  --om-space-8: 32px;
+  --om-space-10: 40px;
+  --om-space-12: 48px;
+  --om-space-16: 64px;
+
+  --om-border: 1px solid var(--om-line);
+  --om-rule-strong: 2px solid var(--om-ink);
+  --om-focus-color: var(--om-accent-strong);
+  --om-focus-width: 3px;
+  --om-focus-offset: 3px;
+  --om-focus-outline: var(--om-focus-width) solid var(--om-focus-color);
+
+  /* Elevation is flat by default. Only terminal surfaces use a shadow. */
+  --om-elevation-none: none;
+  --om-elevation-terminal: var(--om-term-shadow);
+
+  --om-page-max: 1240px;
+  --om-gutter: 40px;
+  --om-section-pad: 64px;
+  --om-gap-card: 20px;
+  --om-gap-col: 40px;
+  --om-bp-mobile: 900px;
+
+  --om-motion-duration-fast: 160ms;
+  --om-motion-duration-standard: 250ms;
+  --om-motion-duration-type: 350ms;
+  --om-motion-ease-standard: ease;
+  --om-transition:
+    background-color var(--om-motion-duration-standard)
+      var(--om-motion-ease-standard),
+    border-color var(--om-motion-duration-standard)
+      var(--om-motion-ease-standard),
+    color var(--om-motion-duration-standard) var(--om-motion-ease-standard);
+  --om-type-in:
+    om-fade var(--om-motion-duration-type) var(--om-motion-ease-standard)
+      forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --om-transition: none;
+    --om-type-in: none;
+  }
+}

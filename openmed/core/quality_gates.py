@@ -15,7 +15,7 @@ import warnings
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, List, Mapping, Sequence, Tuple, TypeVar
 
-from .labels import normalize_label
+from .labels import normalize_label, risk_level_for
 
 if TYPE_CHECKING:
     from openmed.processing.outputs import EntityPrediction
@@ -35,36 +35,9 @@ _RISK_LEVEL_RANKS = {
     "severe": 4,
 }
 
-_HIGH_RISK_LABEL_RANKS = {
-    "PERSON": 2,
-    "FIRST_NAME": 2,
-    "LAST_NAME": 2,
-    "MIDDLE_NAME": 2,
-    "USERNAME": 2,
-    "EMAIL": 2,
-    "PHONE": 2,
-    "STREET_ADDRESS": 2,
-    "GPS_COORDINATES": 2,
-    "DATE_OF_BIRTH": 3,
-    "ID_NUM": 3,
-    "SSN": 4,
-    "ACCOUNT_NUMBER": 3,
-    "PASSWORD": 4,
-    "PIN": 4,
-    "API_KEY": 4,
-    "CREDIT_CARD": 4,
-    "CVV": 4,
-    "IBAN": 3,
-    "BIC": 3,
-    "BITCOIN_ADDRESS": 3,
-    "ETHEREUM_ADDRESS": 3,
-    "LITECOIN_ADDRESS": 3,
-    "IP_ADDRESS": 3,
-    "MAC_ADDRESS": 3,
-    "VIN": 3,
-    "VEHICLE_REGISTRATION": 3,
-    "IMEI": 3,
-}
+_CRITICAL_LABELS = frozenset(
+    {"SSN", "PASSWORD", "PIN", "API_KEY", "CREDIT_CARD", "CVV"}
+)
 
 
 class SpanValidationWarning(UserWarning):
@@ -193,10 +166,10 @@ def _entity_risk_rank(entity: Any) -> int:
         _risk_rank_from_value(metadata.get("risk")),
         _risk_rank_from_value(metadata.get("severity")),
     )
-    label_rank = _HIGH_RISK_LABEL_RANKS.get(
-        normalize_label(_entity_label(entity)),
-        0,
-    )
+    label = normalize_label(_entity_label(entity))
+    label_rank = _risk_rank_from_value(risk_level_for(label))
+    if label in _CRITICAL_LABELS:
+        label_rank = _RISK_LEVEL_RANKS["critical"]
     return max(metadata_rank, label_rank)
 
 

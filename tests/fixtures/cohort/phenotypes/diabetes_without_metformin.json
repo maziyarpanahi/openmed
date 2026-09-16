@@ -1,0 +1,48 @@
+{
+  "schema_version": "openmed.cohort.phenotype.v1",
+  "id": "diabetes-without-metformin",
+  "name": "Diabetes without metformin evidence",
+  "description": "Example AND and NOT phenotype over public OMOP concept ids.",
+  "concept_sets": [
+    {
+      "id": "diabetes",
+      "vocabulary": "OMOP",
+      "concept_ids": [201826],
+      "include_descendants": true
+    },
+    {
+      "id": "metformin",
+      "vocabulary": "OMOP",
+      "concept_ids": [1503297],
+      "include_descendants": false
+    }
+  ],
+  "expression": {
+    "operator": "and",
+    "children": [
+      {
+        "operator": "criterion",
+        "criterion": {
+          "id": "has-diabetes",
+          "concept_set": "diabetes",
+          "occurrence": {"minimum": 1},
+          "assertion": {"negation": ["affirmed"]}
+        }
+      },
+      {
+        "operator": "not",
+        "children": [
+          {
+            "operator": "criterion",
+            "criterion": {
+              "id": "has-metformin",
+              "concept_set": "metformin",
+              "occurrence": {"minimum": 1},
+              "assertion": {"negation": ["affirmed"]}
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

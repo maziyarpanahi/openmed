@@ -21,12 +21,16 @@ SUMMARY_FILENAME = "summary.txt"
 GOLD_QUALITY_REPORT_ARTIFACT = "gold_quality_report"
 
 G1_G8 = ("G1a", "G1b", "G2", "G3", "G4", "G5", "G6", "G7", "G8")
+G10 = ("G10",)
+G15 = ("G15",)
 _GATE_ORDER = (
     "policy_profile",
     "thresholds_matrix",
     "manifest_coherence",
     "calibration_present",
     *G1_G8,
+    *G10,
+    *G15,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,7 +49,13 @@ _DEFAULT_GATES_BY_ARTIFACT: dict[str, tuple[str, ...]] = {
     "calibration_thresholds": ("calibration_present", "G1a", "G1b", "G2"),
     "calibration_report": ("calibration_present",),
     "eval_set": ("G1a", "G1b", "G2", "G7"),
+    "faithfulness_report": G10,
+    "pipeline_attribution_report": G15,
+    "pipeline_eval_report": G15,
     "leakage_fixtures": ("G3", "G7"),
+    "rollout_audit": ("G7",),
+    "rollout_state": ("G7",),
+    "shadow_comparison": ("G1a", "G2", "G7"),
     "quant_recall_delta": ("G4",),
     "performance_report": ("G5", "G6"),
     "resource_report": ("G5",),
@@ -69,6 +79,8 @@ _PATH_ALIASES: dict[str, str] = {
     "eval_set_path": "eval_set",
     "fixture_path": "span_fixtures",
     "fixtures_path": "span_fixtures",
+    "faithfulness_path": "faithfulness_report",
+    "faithfulness_report_path": "faithfulness_report",
     "g8_fixture_path": "span_fixtures",
     "g8_span_fixture_path": "span_fixtures",
     "last_green_baseline_path": "baseline_store",
@@ -79,6 +91,9 @@ _PATH_ALIASES: dict[str, str] = {
     "model_datasheet_path": "model_datasheet",
     "models_manifest_path": "model_manifest",
     "performance_report_path": "performance_report",
+    "pipeline_attribution_path": "pipeline_attribution_report",
+    "pipeline_attribution_report_path": "pipeline_attribution_report",
+    "pipeline_eval_report_path": "pipeline_eval_report",
     "policy_path": "policy_profile",
     "policy_profile_path": "policy_profile",
     "quant_delta_path": "quant_recall_delta",
@@ -87,6 +102,9 @@ _PATH_ALIASES: dict[str, str] = {
     "datasheet_path": "model_datasheet",
     "readme_path": "readme",
     "resource_report_path": "resource_report",
+    "rollout_audit_path": "rollout_audit",
+    "rollout_state_path": "rollout_state",
+    "shadow_comparison_path": "shadow_comparison",
     "span_fixture_path": "span_fixtures",
     "span_fixtures_path": "span_fixtures",
     "threshold_matrix_path": "thresholds_matrix",
@@ -132,6 +150,7 @@ def bundle_gate_evidence(
     extra_artifacts: Mapping[str, str | Path] | Sequence[Mapping[str, Any]] = (),
     manifest_name: str = MANIFEST_FILENAME,
     extraction_fairness: Mapping[str, Any] | Any | None = None,
+    pipeline_attribution: Mapping[str, Any] | Any | None = None,
 ) -> EvidenceBundleResult:
     """Collect evidence referenced by *gate_report* into *output_dir*.
 
@@ -155,6 +174,7 @@ def bundle_gate_evidence(
         payload,
         artifacts,
         extraction_fairness=_extraction_fairness_section(extraction_fairness),
+        pipeline_attribution=_pipeline_attribution_section(pipeline_attribution),
     )
     summary = _render_summary(manifest)
 
@@ -559,13 +579,37 @@ def _extraction_fairness_section(
     return json.loads(json.dumps(source, sort_keys=True))
 
 
+def _pipeline_attribution_section(
+    pipeline_attribution: Mapping[str, Any] | Any | None,
+) -> dict[str, Any] | None:
+    """Return an optional raw-text-free G15 attribution report section."""
+
+    if pipeline_attribution is None:
+        return None
+    source = pipeline_attribution
+    if hasattr(source, "to_dict") and callable(source.to_dict):
+        source = source.to_dict()
+    if not isinstance(source, Mapping):
+        raise TypeError("pipeline_attribution must be a mapping or expose to_dict()")
+    return json.loads(json.dumps(source, sort_keys=True))
+
+
 def _build_manifest(
     payload: Mapping[str, Any],
     artifacts: Sequence[Mapping[str, Any]],
     *,
     extraction_fairness: Mapping[str, Any] | None = None,
+    pipeline_attribution: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     gate_summary = _gate_summary(payload, artifacts)
+    if pipeline_attribution is not None:
+        g15 = gate_summary.setdefault(
+            "G15",
+            {"status": "not_referenced", "artifacts": [], "missing_artifacts": []},
+        )
+        if not g15["missing_artifacts"]:
+            g15["status"] = "covered"
+            g15["artifacts"] = sorted({*g15["artifacts"], "pipeline_attribution"})
     stability_summary = _stability_summary(payload)
     missing_required = [
         entry
@@ -611,6 +655,8 @@ def _build_manifest(
     }
     if extraction_fairness is not None:
         manifest["extraction_fairness"] = extraction_fairness
+    if pipeline_attribution is not None:
+        manifest["pipeline_attribution"] = pipeline_attribution
     return manifest
 
 

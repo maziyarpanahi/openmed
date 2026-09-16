@@ -1,6 +1,6 @@
 # भारत के उपयोगकर्ताओं के लिए OpenMed ऑनबोर्डिंग
 
-[English version](../../onboarding-india/)
+[English version](/docs/onboarding-india/)
 
 यह गाइड भारत के लिए लोकल-फर्स्ट डी-आइडेंटिफिकेशन सेटअप दिखाती है: आज उपलब्ध
 OpenMed पॉलिसी से शुरू करें, सिंथेटिक Aadhaar और ABHA फ़ॉर्मैट पहचानकर्ताओं को
@@ -153,8 +153,8 @@ target अधिकतम 350 MB resident RAM है। मौजूदा token
 44M checkpoint Devanagari समर्थित है। नया passing script audit न हो तो 33M और
 66M checkpoints को Devanagari notes के लिए न चुनें। Memory target को हर Python
 environment की guarantee न मानें; अपनी deployment machine और वास्तविक input
-lengths पर peak RSS मापें। [Device Tiers and SLOs](tiers.md) और
-[Tokenizer Script Coverage](model-tokenizer-script-coverage.md) देखें।
+lengths पर peak RSS मापें। [Device Tiers and SLOs](/docs/tiers/) और
+[Tokenizer Script Coverage](/docs/model-tokenizer-script-coverage/) देखें।
 
 कम संसाधन वाले clinic workstation या startup VM पर:
 
@@ -174,7 +174,61 @@ lengths पर peak RSS मापें। [Device Tiers and SLOs](tiers.md) औ
 
 कई छोटे notes के लिए `BatchProcessor(operation="deidentify")` document
 `batch_size` control देता है और underlying loader reuse करता है। API के लिए
-[Batch Processing](batch-processing.md) देखें।
+[Batch Processing](/docs/batch-processing/) देखें।
+
+## India clinical evaluation suite चलाएँ
+
+India clinical de-identification suite standard eval harness में registered है,
+इसलिए यह किसी भी अन्य suite की तरह discover होती है और अलग caller wiring की
+ज़रूरत नहीं है:
+
+```python
+from openmed.eval.suites import load_suite_fixtures, suite_metadata
+
+fixtures = load_suite_fixtures("india_surrogate_consistency")
+metadata = suite_metadata("india_surrogate_consistency")
+```
+
+एक ही combined report DPDP per-label policy coverage, residual zero-leak verdict
+और cross-document surrogate-consistency verdict दिखाती है:
+
+```python
+from openmed.eval import run_india_clinical_suite_report
+
+report = run_india_clinical_suite_report()
+print(report.to_dict()["passed"])
+```
+
+Report में केवल counts, canonical labels, offsets और HMAC hashes होते हैं; यह
+कभी भी raw identifier या नाम की surface दोबारा नहीं दिखाती।
+
+Surrogate consistency का अर्थ है कि एक ही synthetic व्यक्ति के सभी declared
+aliases documents और Latin, Devanagari तथा Tamil scripts के पार एक ही surrogate
+identity पर पहुँचें, rendered surrogate source script में ही रहे, और कई documents
+में दोहराया गया identifier एक ही checksum-valid surrogate रखे।
+
+दो व्यवहार gate नहीं किए गए, केवल record किए गए हैं; passing verdict को इसी अर्थ
+में पढ़ें:
+
+- Opt-in `transliteration_aware_name_matching` path corpus के aliases को एक
+  identity में नहीं मिलाता, क्योंकि Devanagari का अंतर्निहित स्वर और Tamil
+  surname rendering अलग Latin keys पर fold होते हैं। Gated verdict default
+  matching path को कवर करता है, जो shipped default है।
+- व्यक्तिगत नामों की key language normalize होती है, पर structured identifiers
+  की vault key में document language बनी रहती है। इसलिए एक ही Aadhaar को Hindi
+  note और Tamil note में दो अलग surrogates मिलते हैं। यदि code-mixed record set
+  में हर identifier के लिए एक ही surrogate चाहिए, तो identifier labels के लिए
+  भेजी जाने वाली language normalize करें।
+
+### सुरक्षा सीमा
+
+- Corpus केवल synthetic है। इसमें कोई real PHI, production data,
+  DUA-restricted content या real hospital data नहीं है।
+- Identifier values algorithmically generate होती हैं और local shape तथा
+  checksum validators से जाँची जाती हैं; ये जारी किए गए identifiers नहीं हैं।
+- Suite assist-only और non-decisional है। यह clinical ground truth नहीं है और
+  patient-care निर्णयों के लिए उपयोग नहीं होनी चाहिए।
+- Execution local, offline और deterministic है।
 
 ## Production checklist
 

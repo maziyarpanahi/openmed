@@ -1,9 +1,10 @@
 """Declarative generalization hierarchies for tabular quasi-identifiers.
 
 Exposes a monotone, versioned family of generalization levels per column type
-(age, ZIP/postcode, date) plus the :func:`generalize_value` leaf transform and
-level introspection helpers. The ordering is the stable typed contract a
-sibling lattice search composes to reach a target k-anonymity.
+(age, ZIP/postcode, date, and caller-populated clinical codes) plus the
+:func:`generalize_value` leaf transform and level introspection helpers. The
+ordering is the stable typed contract a lattice search composes to reach a
+target privacy policy.
 """
 
 from .functions import (
@@ -13,6 +14,7 @@ from .functions import (
     AGE_TOP_BAND,
     AGE_TOP_THRESHOLD,
     COLUMN_TYPE_AGE,
+    COLUMN_TYPE_CLINICAL_CODE,
     COLUMN_TYPE_DATE,
     COLUMN_TYPE_ZIP,
     HIERARCHY_SCHEMA_VERSION,
@@ -37,6 +39,7 @@ __all__ = [
     "AGE_TOP_BAND",
     "AGE_TOP_THRESHOLD",
     "COLUMN_TYPE_AGE",
+    "COLUMN_TYPE_CLINICAL_CODE",
     "COLUMN_TYPE_DATE",
     "COLUMN_TYPE_ZIP",
     "GeneralizationLevel",

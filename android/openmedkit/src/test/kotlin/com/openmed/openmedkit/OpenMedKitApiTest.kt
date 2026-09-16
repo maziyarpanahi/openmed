@@ -9,7 +9,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class OpenMedKitApiTest {
     @Test
     fun aggregatesBioTokensAcrossWhitespace() {
@@ -155,6 +160,16 @@ class OpenMedKitApiTest {
         assertEquals(File("/models/openmed/model.onnx"), backend.modelFile)
         assertEquals(File("/models/openmed/tokenizer.json"), backend.tokenizerJson)
         assertEquals("PERSON", backend.id2Label[1])
+        assertTrue(
+            OpenMedBackend::class.java.constructors.any { constructor ->
+                !constructor.isSynthetic && constructor.parameterCount == 6
+            }
+        )
+        assertTrue(
+            BackendOnnxTokenClassifier::class.java.constructors.any { constructor ->
+                !constructor.isSynthetic && constructor.parameterCount == 1
+            }
+        )
     }
 
     private class StaticClassifier(

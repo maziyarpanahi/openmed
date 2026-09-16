@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://openmed.life/sitemap.xml
+Sitemap: https://openmed.life/docs/sitemap.xml

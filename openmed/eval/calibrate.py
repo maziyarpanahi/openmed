@@ -1,4 +1,4 @@
-"""Fit and load held-out decision thresholds for PII release artifacts."""
+"""Fit and load held-out probability and decision-threshold artifacts."""
 
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ SCHEMA_VERSION = 1
 THRESHOLDS_ARTIFACT = "openmed.calibration.thresholds"
 REPORT_ARTIFACT = "openmed.calibration.report"
 UNDER_SHIFT_REPORT_ARTIFACT = "openmed.calibration.under_shift"
+RELATION_REPORT_ARTIFACT = "openmed.calibration.relation_report"
+RELATION_REPORT_SCHEMA_VERSION = 1
 WILDCARD_LANGUAGE = "*"
 DEFAULT_CONFORMAL_ALPHA = 0.05
 DEFAULT_COVERAGE_TOLERANCE = 0.01
@@ -192,6 +194,41 @@ class TemperatureScalingReport:
 
 
 @dataclass(frozen=True)
+class IsotonicCalibrationModel:
+    """Reusable weighted piecewise-constant probability calibrator."""
+
+    knots: tuple[tuple[float, float], ...]
+    sample_count: int
+    positive_count: int
+    total_weight: float
+
+    def predict(self, score: float) -> float:
+        """Map a raw score to its fitted monotonic probability."""
+
+        value = _bounded_float(score, "score")
+        if not self.knots:
+            return 0.0
+        for max_score, probability in self.knots:
+            if value <= max_score:
+                return probability
+        return self.knots[-1][1]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-compatible model payload."""
+
+        return {
+            "method": "isotonic",
+            "knots": [
+                {"max_score": score, "probability": probability}
+                for score, probability in self.knots
+            ],
+            "sample_count": self.sample_count,
+            "positive_count": self.positive_count,
+            "total_weight": self.total_weight,
+        }
+
+
+@dataclass(frozen=True)
 class DistributionShiftEstimate:
     """Score-histogram shift estimate used to widen conformal bands."""
 
@@ -339,6 +376,7 @@ class CalibrationArtifactPaths:
     thresholds_path: Path
     report_path: Path
     under_shift_report_path: Path | None = None
+    relation_report_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -952,8 +990,9 @@ def write_calibration_artifacts(
     membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
+    relation_report: Mapping[str, Any] | None = None,
 ) -> CalibrationArtifactPaths:
-    """Fit and write calibration artifacts."""
+    """Fit and write calibration artifacts, optionally including relations."""
 
     report = fit_calibration_thresholds(
         samples,
@@ -977,6 +1016,11 @@ def write_calibration_artifacts(
         if report.conformal is not None
         else None
     )
+    relation_report_path = (
+        output_dir / "relation_calibration_report.json"
+        if relation_report is not None
+        else None
+    )
     thresholds_path.write_text(
         json.dumps(build_thresholds_payload(report), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -990,12 +1034,35 @@ def write_calibration_artifacts(
             json.dumps(report.conformal.to_dict(), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+    if relation_report_path is not None and relation_report is not None:
+        relation_payload = _validate_relation_report_payload(relation_report)
+        relation_report_path.write_text(
+            json.dumps(relation_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     return CalibrationArtifactPaths(
         artifact_dir=output_dir,
         thresholds_path=thresholds_path,
         report_path=report_path,
         under_shift_report_path=under_shift_report_path,
+        relation_report_path=relation_report_path,
     )
+
+
+def _validate_relation_report_payload(
+    report: Mapping[str, Any],
+) -> dict[str, Any]:
+    payload = dict(report)
+    if payload.get("artifact_type") != RELATION_REPORT_ARTIFACT:
+        raise ValueError(
+            f"relation report artifact_type must be {RELATION_REPORT_ARTIFACT!r}"
+        )
+    if payload.get("schema_version") != RELATION_REPORT_SCHEMA_VERSION:
+        raise ValueError(
+            "unsupported relation calibration report schema version: "
+            f"{payload.get('schema_version')!r}"
+        )
+    return payload
 
 
 def load_calibration_samples(
@@ -1278,6 +1345,109 @@ def select_risk_controlled_abstention_threshold(
         abstention_rate=abstention_rate,
         total_weight=total_weight,
     )
+
+
+def fit_isotonic_probability_calibrator(
+    samples: Sequence[Mapping[str, Any] | CalibrationSample],
+    *,
+    default_model_id: str = "probability-calibration",
+) -> IsotonicCalibrationModel:
+    """Fit a deterministic weighted isotonic probability mapping.
+
+    The pool-adjacent-violators fit groups equal raw scores before enforcing a
+    non-decreasing empirical probability. This generic implementation is used
+    by relation calibration without coupling relation code into the evaluator.
+    """
+
+    normalized = [
+        sample
+        if isinstance(sample, CalibrationSample)
+        else CalibrationSample.from_mapping(
+            sample,
+            default_model_id=default_model_id,
+        )
+        for sample in samples
+    ]
+    if not normalized:
+        raise ValueError("isotonic calibration requires at least one sample")
+
+    buckets: dict[float, list[float]] = {}
+    for sample in normalized:
+        bucket = buckets.setdefault(sample.score, [0.0, 0.0])
+        bucket[0] += sample.weight
+        bucket[1] += sample.weight if sample.target else 0.0
+
+    blocks: list[dict[str, float]] = []
+    for score, (total_weight, positive_weight) in sorted(buckets.items()):
+        blocks.append(
+            {
+                "max_score": score,
+                "total_weight": total_weight,
+                "positive_weight": positive_weight,
+            }
+        )
+        while len(blocks) >= 2 and _isotonic_probability(
+            blocks[-2]
+        ) > _isotonic_probability(blocks[-1]):
+            left = blocks[-2]
+            right = blocks[-1]
+            blocks[-2:] = [
+                {
+                    "max_score": right["max_score"],
+                    "total_weight": left["total_weight"] + right["total_weight"],
+                    "positive_weight": left["positive_weight"]
+                    + right["positive_weight"],
+                }
+            ]
+
+    return IsotonicCalibrationModel(
+        knots=tuple(
+            (block["max_score"], _isotonic_probability(block)) for block in blocks
+        ),
+        sample_count=len(normalized),
+        positive_count=sum(1 for sample in normalized if sample.target),
+        total_weight=sum(sample.weight for sample in normalized),
+    )
+
+
+def fit_temperature_scaling(
+    samples: Sequence[Mapping[str, Any] | CalibrationSample],
+    *,
+    n_bins: int = DEFAULT_TEMPERATURE_BINS,
+    default_model_id: str = "probability-calibration",
+) -> TemperatureScalingReport:
+    """Fit the evaluator's deterministic scalar-temperature calibrator."""
+
+    if n_bins < 1:
+        raise ValueError("n_bins must be at least 1")
+    normalized = [
+        sample
+        if isinstance(sample, CalibrationSample)
+        else CalibrationSample.from_mapping(
+            sample,
+            default_model_id=default_model_id,
+        )
+        for sample in samples
+    ]
+    if not normalized:
+        raise ValueError("temperature scaling requires at least one sample")
+    return _fit_temperature_scaling(normalized, n_bins=n_bins)
+
+
+def temperature_scale_probability(score: float, temperature: float) -> float:
+    """Apply a fitted scalar temperature to one bounded probability."""
+
+    _bounded_float(score, "score")
+    if not math.isfinite(float(temperature)) or float(temperature) <= 0.0:
+        raise ValueError("temperature must be positive and finite")
+    return _scaled_score(score, temperature)
+
+
+def _isotonic_probability(block: Mapping[str, float]) -> float:
+    total_weight = float(block["total_weight"])
+    if total_weight <= 0.0:
+        return 0.0
+    return float(block["positive_weight"]) / total_weight
 
 
 def _fit_temperature_scaling(
@@ -1691,6 +1861,24 @@ def _slug(value: str) -> str:
     return slug or "artifact"
 
 
+def calibrate_grounding(*args: Any, **kwargs: Any) -> Any:
+    """Fit grounding calibration using the clinical grounding calibrator."""
+
+    from openmed.clinical.grounding.calibration import calibrate_grounding as _fit
+
+    return _fit(*args, **kwargs)
+
+
+def grounding_calibration_report(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Build a grounding calibration report with reliability diagrams."""
+
+    from openmed.clinical.grounding.calibration import (
+        grounding_calibration_report as _report,
+    )
+
+    return _report(*args, **kwargs)
+
+
 _DEFAULT_CRITICAL_LABELS = frozenset(
     {
         "SSN",
@@ -1718,19 +1906,27 @@ __all__ = [
     "CalibrationThresholdSet",
     "DEFAULT_CONFORMAL_ALPHA",
     "DistributionShiftEstimate",
+    "IsotonicCalibrationModel",
+    "RELATION_REPORT_ARTIFACT",
+    "RELATION_REPORT_SCHEMA_VERSION",
     "RiskControlledAbstentionThreshold",
     "SpanNonconformityScore",
     "TemperatureScalingReport",
     "UNDER_SHIFT_REPORT_ARTIFACT",
     "artifact_dir_for",
     "build_thresholds_payload",
+    "calibrate_grounding",
     "coerce_calibration_thresholds",
     "default_suite_calibration_samples",
     "fit_calibration_under_shift",
     "fit_calibration_thresholds",
+    "fit_isotonic_probability_calibrator",
+    "fit_temperature_scaling",
+    "grounding_calibration_report",
     "load_calibration_samples",
     "load_calibration_thresholds",
     "score_span_nonconformity",
     "select_risk_controlled_abstention_threshold",
+    "temperature_scale_probability",
     "write_calibration_artifacts",
 ]

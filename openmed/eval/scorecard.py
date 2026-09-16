@@ -255,6 +255,38 @@ class ModelScorecard:
                 f"{_format_number_or_placeholder(row['peak_rss_mb'], self.placeholder)} | "
                 f"{_format_number_or_placeholder(row['model_size_mb'], self.placeholder)} |"
             )
+        radiology_rows = [
+            (row["device_tier"], row["radiology_entity_relation"])
+            for row in payload["device_tiers"]
+            if row["radiology_entity_relation"] is not None
+        ]
+        if radiology_rows:
+            lines.extend(
+                [
+                    "",
+                    "## Radiology Entity-and-Relation Evaluation",
+                    "",
+                    (
+                        "| Device Tier | Strict Entity F1 | Relaxed Entity F1 | "
+                        "Strict Relation F1 | Relaxed Relation F1 | "
+                        "Uncertainty Accuracy | Per-Relation-Type F1 | "
+                        "Per-Uncertainty-Class Accuracy |"
+                    ),
+                    "|---|---:|---:|---:|---:|---:|---|---|",
+                ]
+            )
+            for device, radiology in radiology_rows:
+                lines.append(
+                    "| "
+                    f"`{device}` | "
+                    f"{_format_percent_or_placeholder(radiology['entity_strict_f1'], self.placeholder)} | "
+                    f"{_format_percent_or_placeholder(radiology['entity_relaxed_f1'], self.placeholder)} | "
+                    f"{_format_percent_or_placeholder(radiology['relation_strict_f1'], self.placeholder)} | "
+                    f"{_format_percent_or_placeholder(radiology['relation_relaxed_f1'], self.placeholder)} | "
+                    f"{_format_percent_or_placeholder(radiology['uncertainty_accuracy'], self.placeholder)} | "
+                    f"{_format_relation_type_f1(radiology['per_relation_type'], self.placeholder)} | "
+                    f"{_format_uncertainty_class_accuracy(radiology['per_uncertainty_class'], self.placeholder)} |"
+                )
         lines.extend(["", "## Per-Script Leakage and Recall", ""])
         script_rows = [
             (row["device_tier"], script, values)
@@ -355,6 +387,7 @@ class ModelScorecard:
             "peak_rss_mb": _aggregate_peak_rss_mb(reports, self.manifest_row, device),
             "per_script": _aggregate_per_script(reports),
             "recall": _aggregate_recall(reports),
+            "radiology_entity_relation": _aggregate_radiology_entity_relation(reports),
             "relation_per_language_f1": _aggregate_relation_per_language_f1(reports),
             "relation_per_type_f1": _aggregate_relation_per_type_f1(reports),
             "relation_relaxed_f1": _aggregate_relation_f1(reports, "relaxed"),
@@ -630,6 +663,116 @@ def _aggregate_relation_per_language_f1(
     }
 
 
+def _aggregate_radiology_entity_relation(
+    reports: Sequence[BenchmarkReport],
+) -> dict[str, Any] | None:
+    evidence = [
+        source
+        for report in reports
+        if (
+            source := _nested_get(
+                _plain(report.metrics),
+                "radiology_entity_relation",
+            )
+        )
+        and isinstance(source, Mapping)
+    ]
+    if not evidence:
+        return None
+
+    entity_strict: list[Mapping[str, Any]] = []
+    entity_relaxed: list[Mapping[str, Any]] = []
+    relation_strict: list[Mapping[str, Any]] = []
+    relation_relaxed: list[Mapping[str, Any]] = []
+    uncertainty: list[Mapping[str, Any]] = []
+    relation_by_type: dict[str, dict[str, list[Mapping[str, Any]]]] = {}
+    uncertainty_by_class: dict[str, list[Mapping[str, Any]]] = {}
+
+    for source in evidence:
+        entity = source.get("entity")
+        relation = source.get("relation")
+        uncertainty_payload = source.get("uncertainty")
+        if isinstance(entity, Mapping):
+            _append_mapping(entity_strict, entity.get("strict"))
+            _append_mapping(entity_relaxed, entity.get("relaxed"))
+        if isinstance(relation, Mapping):
+            _append_mapping(relation_strict, relation.get("strict"))
+            _append_mapping(relation_relaxed, relation.get("relaxed"))
+            per_type = relation.get("per_relation_type")
+            if isinstance(per_type, Mapping):
+                for relation_type, payload in per_type.items():
+                    if not isinstance(payload, Mapping):
+                        continue
+                    bucket = relation_by_type.setdefault(
+                        str(relation_type),
+                        {"relaxed": [], "strict": []},
+                    )
+                    _append_mapping(bucket["strict"], payload.get("strict"))
+                    _append_mapping(bucket["relaxed"], payload.get("relaxed"))
+        if isinstance(uncertainty_payload, Mapping):
+            uncertainty.append(uncertainty_payload)
+            per_class = uncertainty_payload.get("per_class")
+            if isinstance(per_class, Mapping):
+                for uncertainty_class, payload in per_class.items():
+                    if isinstance(payload, Mapping):
+                        uncertainty_by_class.setdefault(
+                            str(uncertainty_class), []
+                        ).append(payload)
+
+    uncertainty_summary = _aggregate_accuracy_metrics(uncertainty)
+    return {
+        "entity_relaxed_f1": _aggregate_f1_metrics(entity_relaxed),
+        "entity_strict_f1": _aggregate_f1_metrics(entity_strict),
+        "per_relation_type": {
+            relation_type: {
+                "relaxed": _aggregate_f1_metrics(values["relaxed"]),
+                "strict": _aggregate_f1_metrics(values["strict"]),
+            }
+            for relation_type, values in sorted(relation_by_type.items())
+        },
+        "per_uncertainty_class": {
+            uncertainty_class: _aggregate_accuracy_metrics(values)
+            for uncertainty_class, values in sorted(uncertainty_by_class.items())
+        },
+        "relation_relaxed_f1": _aggregate_f1_metrics(relation_relaxed),
+        "relation_strict_f1": _aggregate_f1_metrics(relation_strict),
+        "uncertainty_accuracy": uncertainty_summary["accuracy"],
+    }
+
+
+def _append_mapping(target: list[Mapping[str, Any]], value: Any) -> None:
+    if isinstance(value, Mapping):
+        target.append(value)
+
+
+def _aggregate_accuracy_metrics(
+    metrics: Sequence[Mapping[str, Any]],
+) -> dict[str, int | float | None]:
+    correct = 0
+    total = 0
+    values: list[float] = []
+    has_counts = False
+    for metric in metrics:
+        metric_correct = _number_at(metric, "correct")
+        metric_total = _number_at(metric, "total")
+        if metric_correct is not None and metric_total is not None:
+            correct += int(metric_correct)
+            total += int(metric_total)
+            has_counts = True
+            continue
+        accuracy = _number_at(metric, "accuracy")
+        if accuracy is not None:
+            values.append(accuracy)
+    if has_counts:
+        accuracy = _safe_ratio(correct, total, zero_denominator=1.0)
+        return {"accuracy": accuracy, "correct": correct, "total": total}
+    return {
+        "accuracy": _mean_or_none(values),
+        "correct": None,
+        "total": None,
+    }
+
+
 def _aggregate_rate(
     reports: Sequence[BenchmarkReport],
     *,
@@ -866,6 +1009,21 @@ def _format_relation_type_f1(value: Any, placeholder: str) -> str:
         strict_text = _format_percent_or_placeholder(strict, placeholder)
         relaxed_text = _format_percent_or_placeholder(relaxed, placeholder)
         parts.append(f"{relation_type}: strict {strict_text}, relaxed {relaxed_text}")
+    return "; ".join(parts) if parts else placeholder
+
+
+def _format_uncertainty_class_accuracy(value: Any, placeholder: str) -> str:
+    if not isinstance(value, Mapping) or not value:
+        return placeholder
+    parts: list[str] = []
+    for uncertainty_class, metrics in value.items():
+        if not isinstance(metrics, Mapping):
+            continue
+        accuracy = _format_percent_or_placeholder(
+            metrics.get("accuracy"),
+            placeholder,
+        )
+        parts.append(f"{uncertainty_class}: {accuracy}")
     return "; ".join(parts) if parts else placeholder
 
 

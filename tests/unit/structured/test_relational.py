@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -10,10 +11,13 @@ import pytest
 from openmed.core.surrogate_vault import SurrogateVault
 from openmed.structured.relational import (
     ColumnRef,
+    CrossTableLinkageWarning,
     DanglingForeignKeyError,
     DateColumn,
     ForeignKey,
     KeySpace,
+    QuasiIdentifier,
+    RelationalPrivacyError,
     RelationalSchema,
     RelationalSchemaError,
     _namespaced_source,
@@ -51,6 +55,7 @@ def build_fixture(n_patients: int = 5):
             {
                 "patient_id": pid,
                 "sex": "MF"[patient % 2],
+                "age": 30 + 20 * (patient // 2),
                 "birth_date": date(1950 + patient, 3, 14).isoformat(),
             }
         )
@@ -63,6 +68,7 @@ def build_fixture(n_patients: int = 5):
                 {
                     "encounter_id": eid,
                     "patient_id": pid,
+                    "postal_code": "11111" if patient % 2 == 0 else "22222",
                     "admission_date": admission.isoformat(),
                     "discharge_date": discharge.isoformat(),
                 }
@@ -114,6 +120,22 @@ def build_schema() -> RelationalSchema:
             DateColumn("encounters", "admission_date", "patient_id"),
             DateColumn("encounters", "discharge_date", "patient_id"),
             DateColumn("labs", "collected_date", "patient_id"),
+        ),
+    )
+
+
+def build_linkage_schema() -> RelationalSchema:
+    """Return the fixture schema with QIs that are safe only in isolation."""
+
+    base = build_schema()
+    return RelationalSchema(
+        key_spaces=base.key_spaces,
+        subject_key_space=base.subject_key_space,
+        foreign_keys=base.foreign_keys,
+        date_columns=base.date_columns,
+        quasi_identifiers=(
+            QuasiIdentifier("demographics", "age", "age"),
+            QuasiIdentifier("encounters", "postal_code", "zip"),
         ),
     )
 
@@ -247,6 +269,140 @@ def test_transformation_is_deterministic_across_runs():
     _, _, first = _deidentify(tables=tables, vault=_vault())
     _, _, second = _deidentify(tables=tables, vault=_vault())
     assert first.tables == second.tables
+
+
+# ---------------------------------------------------------------------------
+# Joined-view leakage gate — risks hidden in individual tables are coordinated
+# ---------------------------------------------------------------------------
+
+
+def _deidentify_linkage_fixture(tables=None, **kwargs):
+    source = build_fixture(n_patients=4) if tables is None else tables
+    target_k = kwargs.pop("target_k", 2)
+    return deidentify_linked_tables(
+        source,
+        build_linkage_schema(),
+        vault=_vault(),
+        date_shift_secret=DATE_SECRET,
+        target_k=target_k,
+        **kwargs,
+    )
+
+
+def test_join_only_singletons_are_flagged_and_coordinated_to_target_k(caplog):
+    tables = build_fixture(n_patients=4)
+    with pytest.warns(CrossTableLinkageWarning) as emitted:
+        result = _deidentify_linkage_fixture(tables)
+
+    risk = result.manifest.linkage_risk
+    assert risk is not None
+    assert risk.cross_table_risk_detected is True
+    assert risk.cross_table_risk_subject_count == 4
+    assert risk.joined_singleton_subject_count == 4
+    assert risk.initial_joined_k == 1
+    assert risk.achieved_joined_k >= 2
+    assert risk.per_table_initial_k == {"demographics": 2, "encounters": 2}
+    assert all(value >= 2 for value in risk.per_table_achieved_k.values())
+    assert any(level > 0 for level in risk.generalization_levels.values())
+    assert risk.suppressed_subject_count == 0
+
+    ages = {row["patient_id"]: row["age"] for row in result.tables["demographics"]}
+    postal_codes: dict[str, set[str]] = {}
+    for row in result.tables["encounters"]:
+        postal_codes.setdefault(row["patient_id"], set()).add(row["postal_code"])
+    assert all(len(values) == 1 for values in postal_codes.values())
+    joined_classes = Counter(
+        (ages[subject], next(iter(values))) for subject, values in postal_codes.items()
+    )
+    assert min(joined_classes.values()) >= 2
+
+    warning_text = " ".join(str(item.message) for item in emitted)
+    manifest_text = json.dumps(result.manifest.to_dict())
+    for raw_value in ("P000", "11111", "22222"):
+        assert raw_value not in warning_text
+        assert raw_value not in caplog.text
+        assert raw_value not in manifest_text
+
+
+def test_joined_policy_keeps_dates_and_foreign_keys_consistent():
+    tables = build_fixture(n_patients=4)
+    with pytest.warns(CrossTableLinkageWarning):
+        result = _deidentify_linkage_fixture(tables)
+
+    assert result.manifest.orphaned_foreign_keys == 0
+    parent_patients = {row["patient_id"] for row in result.tables["demographics"]}
+    assert {row["patient_id"] for row in result.tables["encounters"]} <= parent_patients
+    encounter_ids = {row["encounter_id"] for row in result.tables["encounters"]}
+    assert {row["encounter_id"] for row in result.tables["labs"]} <= encounter_ids
+
+    for original, released in zip(tables["encounters"], result.tables["encounters"]):
+        original_interval = date.fromisoformat(
+            original["discharge_date"]
+        ) - date.fromisoformat(original["admission_date"])
+        released_interval = date.fromisoformat(
+            released["discharge_date"]
+        ) - date.fromisoformat(released["admission_date"])
+        assert released_interval == original_interval
+        assert released["admission_date"] != original["admission_date"]
+        assert released["discharge_date"] != original["discharge_date"]
+
+
+def test_joined_policy_is_deterministic_for_same_secrets():
+    tables = build_fixture(n_patients=4)
+    with pytest.warns(CrossTableLinkageWarning):
+        first = _deidentify_linkage_fixture(tables)
+    with pytest.warns(CrossTableLinkageWarning):
+        second = _deidentify_linkage_fixture(tables)
+    assert first.tables == second.tables
+    assert first.manifest.to_dict() == second.manifest.to_dict()
+
+
+def test_subject_suppression_is_applied_across_every_linked_table():
+    tables = build_fixture(n_patients=3)
+    base = build_schema()
+    schema = RelationalSchema(
+        key_spaces=base.key_spaces,
+        subject_key_space=base.subject_key_space,
+        foreign_keys=base.foreign_keys,
+        date_columns=base.date_columns,
+        quasi_identifiers=(QuasiIdentifier("demographics", "age", "age"),),
+    )
+    result = deidentify_linked_tables(
+        tables,
+        schema,
+        vault=_vault(),
+        date_shift_secret=DATE_SECRET,
+        target_k=2,
+        suppression_limit=1,
+    )
+
+    risk = result.manifest.linkage_risk
+    assert risk is not None
+    assert risk.suppressed_subject_count == 1
+    assert risk.achieved_joined_k == 2
+    retained = {row["patient_id"] for row in result.tables["demographics"]}
+    assert len(retained) == 2
+    assert {row["patient_id"] for row in result.tables["encounters"]} == retained
+    assert {row["patient_id"] for row in result.tables["labs"]} == retained
+    assert result.manifest.orphaned_foreign_keys == 0
+
+
+def test_subject_varying_relational_qi_is_rejected_without_echoing_values():
+    tables = build_fixture(n_patients=4)
+    second_subject_encounters = [
+        row for row in tables["encounters"] if row["patient_id"] == "P0001"
+    ]
+    second_subject_encounters[-1]["postal_code"] = "99999"
+    with pytest.raises(RelationalSchemaError) as exc_info:
+        _deidentify_linkage_fixture(tables)
+    assert "subject-stable" in str(exc_info.value)
+    assert "P0001" not in str(exc_info.value)
+    assert "99999" not in str(exc_info.value)
+
+
+def test_joined_policy_fails_closed_when_target_is_infeasible():
+    with pytest.raises(RelationalPrivacyError, match="could not be enforced"):
+        _deidentify_linkage_fixture(target_k=5)
 
 
 # ---------------------------------------------------------------------------

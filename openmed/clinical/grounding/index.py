@@ -16,6 +16,9 @@ Key properties:
   vocabulary editions and the encoder id. On load, a drift in any input changes
   the key and forces a rebuild, so a stale terminology edition is never served
   silently.
+* **Incremental.** Each vocabulary system is stored as a separate embedding
+  shard. Edition deltas rebuild only the affected shards, additions reuse every
+  unchanged shard, and removals prune only the departed systems.
 * **Optional ANN backend.** An HNSW backend (``hnswlib``) is used when
   available; otherwise a pure brute-force cosine search returns exact neighbors.
 * **Graceful fallback.** When no encoder weights are present, :func:`build_index`
@@ -25,13 +28,14 @@ Key properties:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from openmed.clinical.normalization.cache import make_index_cache_key
+from openmed.clinical.normalization.cache import IndexBoundCache, make_index_cache_key
 
 from .embeddings import AliasEncoder
 from .registry import register_linker
@@ -42,6 +46,7 @@ __all__ = [
     "AliasEmbeddingIndex",
     "DenseCandidateGenerator",
     "IndexBackendUnavailableError",
+    "IndexUpdateSummary",
     "brute_force_neighbors",
     "build_index",
     "build_or_load_index",
@@ -55,18 +60,32 @@ DENSE_SOURCE = "dense"
 DENSE_MATCH_KIND = "dense"
 #: Registry key the dense generator registers under.
 DENSE_LINKER_KEY = "dense"
-#: Persisted payload schema version.
-INDEX_SCHEMA_VERSION = 1
+#: Persisted manifest schema version.
+INDEX_SCHEMA_VERSION = 2
 #: Persisted payload filename inside a cache directory.
 INDEX_FILENAME = "alias_index.json"
+#: Directory containing independently replaceable vocabulary shards.
+INDEX_SHARD_DIRECTORY = "shards"
+#: Persisted shard schema version.
+INDEX_SHARD_SCHEMA_VERSION = 1
 
 _DEFAULT_TOP_K = 10
 _HNSW_EF_CONSTRUCTION = 200
 _HNSW_M = 16
+_NO_INDEX_KEY = "grounding-index:none"
 
 
 class IndexBackendUnavailableError(RuntimeError):
     """Raised when an ANN backend is required but not installed."""
+
+
+@dataclass(frozen=True)
+class IndexUpdateSummary:
+    """Vocabulary shards reused, rebuilt, and removed by an index update."""
+
+    reused_shards: tuple[str, ...] = ()
+    rebuilt_shards: tuple[str, ...] = ()
+    removed_shards: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -122,6 +141,10 @@ class AliasEmbeddingIndex:
         vocab_versions: dict[str, str],
         records: Sequence[_AliasRecord],
         vectors: Sequence[Sequence[float]],
+        system_order: Sequence[str] | None = None,
+        update_summary: IndexUpdateSummary | None = None,
+        storage_schema_version: int = INDEX_SCHEMA_VERSION,
+        anns: dict[str, object | None] | None = None,
     ) -> None:
         self.encoder_id = encoder_id
         self.dimension = dimension
@@ -132,13 +155,60 @@ class AliasEmbeddingIndex:
         self._vectors = tuple(
             tuple(float(value) for value in vector) for vector in vectors
         )
-        self._ann = _maybe_build_ann(backend, dimension, self._vectors)
+        record_systems = tuple(dict.fromkeys(record.system for record in self._records))
+        requested_order = tuple(system.upper() for system in (system_order or ()))
+        self._system_order = tuple(
+            dict.fromkeys((*requested_order, *record_systems, *self.vocab_versions))
+        )
+        self._update_summary = update_summary or IndexUpdateSummary(
+            reused_shards=self._system_order
+        )
+        self._storage_schema_version = storage_schema_version
+        provided_anns = anns or {}
+        self._anns: dict[str, object | None] = {}
+        for system in self.systems:
+            if backend != "hnsw":
+                self._anns[system] = None
+            elif system in provided_anns:
+                self._anns[system] = provided_anns[system]
+            else:
+                self._anns[system] = _maybe_build_ann(
+                    backend,
+                    dimension,
+                    self._shard_data(system)[1],
+                )
 
     @property
     def record_count(self) -> int:
         """Number of embedded (concept, alias) rows in the index."""
 
         return len(self._records)
+
+    @property
+    def systems(self) -> tuple[str, ...]:
+        """Vocabulary systems represented by independently persisted shards."""
+
+        return self._system_order
+
+    @property
+    def update_summary(self) -> IndexUpdateSummary:
+        """Shard-level work performed while constructing this instance."""
+
+        return self._update_summary
+
+    @property
+    def shard_keys(self) -> dict[str, str]:
+        """Content-addressed keys for the independently persisted shards."""
+
+        return {
+            system: _shard_key(
+                system,
+                self.vocab_versions[system],
+                encoder_id=self.encoder_id,
+                dimension=self.dimension,
+            )
+            for system in self.systems
+        }
 
     @property
     def provenance(self) -> dict[str, object]:
@@ -152,7 +222,37 @@ class AliasEmbeddingIndex:
             "vocab_versions": dict(self.vocab_versions),
             "record_count": self.record_count,
             "source": DENSE_SOURCE,
+            "shards": {
+                system: {
+                    "shard_key": self.shard_keys[system],
+                    "vocab_version": self.vocab_versions[system],
+                    "record_count": len(self._shard_data(system)[0]),
+                }
+                for system in self.systems
+            },
         }
+
+    def _shard_data(
+        self, system: str
+    ) -> tuple[tuple[_AliasRecord, ...], tuple[tuple[float, ...], ...]]:
+        """Return records and vectors belonging to one vocabulary system."""
+
+        pairs = [
+            (self._records[index], self._vectors[index])
+            for index in self._shard_positions(system)
+        ]
+        return (
+            tuple(record for record, _ in pairs),
+            tuple(vector for _, vector in pairs),
+        )
+
+    def _shard_positions(self, system: str) -> tuple[int, ...]:
+        resolved = system.upper()
+        return tuple(
+            index
+            for index, record in enumerate(self._records)
+            if record.system == resolved
+        )
 
     def query(
         self,
@@ -223,16 +323,34 @@ class AliasEmbeddingIndex:
     def _neighbors(
         self, vector: Sequence[float], fetch: int
     ) -> list[tuple[int, float]]:
-        if self._ann is not None:
-            return self._ann_neighbors(vector, fetch)
-        return brute_force_neighbors(self._vectors, vector, fetch)
+        neighbors: list[tuple[int, float]] = []
+        for system in self.systems:
+            positions = self._shard_positions(system)
+            if not positions:
+                continue
+            shard_fetch = min(len(positions), fetch)
+            ann = self._anns[system]
+            if ann is None:
+                local_neighbors = brute_force_neighbors(
+                    tuple(self._vectors[position] for position in positions),
+                    vector,
+                    shard_fetch,
+                )
+            else:
+                local_neighbors = self._ann_neighbors(ann, vector, shard_fetch)
+            neighbors.extend(
+                (positions[local_row], similarity)
+                for local_row, similarity in local_neighbors
+            )
+        neighbors.sort(key=lambda item: (-item[1], item[0]))
+        return neighbors[:fetch]
 
     def _ann_neighbors(
-        self, vector: Sequence[float], fetch: int
+        self, ann: object, vector: Sequence[float], fetch: int
     ) -> list[tuple[int, float]]:  # pragma: no cover - exercised only with hnswlib
         import numpy as np
 
-        labels, distances = self._ann.knn_query(
+        labels, distances = ann.knn_query(  # type: ignore[attr-defined]
             np.asarray([list(vector)], dtype="float32"), k=fetch
         )
         return [
@@ -241,69 +359,323 @@ class AliasEmbeddingIndex:
         ]
 
     def save(self, directory: str | Path) -> Path:
-        """Persist the index and its provenance under ``directory``.
+        """Persist every vocabulary shard and the deterministic manifest."""
 
-        Returns the payload path. The payload is deterministic JSON so an
-        unchanged vocabulary and encoder round-trip byte-for-byte.
+        return self._save(directory, shard_systems=None)
+
+    def _save(
+        self,
+        directory: str | Path,
+        *,
+        shard_systems: Sequence[str] | None = None,
+    ) -> Path:
+        """Persist a manifest and independently replaceable vocabulary shards.
+
+        Args:
+            directory: Local index cache directory.
+            shard_systems: Systems whose shard files must be rewritten. When
+                omitted, every shard is written. Existing valid shard files for
+                other systems are left byte-for-byte untouched, while files for
+                removed systems are deleted.
+
+        Returns:
+            Path to the deterministic index manifest.
         """
 
         target_dir = Path(directory).expanduser()
-        target_dir.mkdir(parents=True, exist_ok=True)
-        payload = {
+        shard_dir = target_dir / INDEX_SHARD_DIRECTORY
+        shard_dir.mkdir(parents=True, exist_ok=True)
+        requested = (
+            set(self.systems)
+            if shard_systems is None
+            else {system.upper() for system in shard_systems}
+        )
+
+        descriptors: dict[str, dict[str, object]] = {}
+        expected_files: set[str] = set()
+        for system in self.systems:
+            records, vectors = self._shard_data(system)
+            filename = _shard_filename(system, self.shard_keys[system])
+            expected_files.add(filename)
+            shard_path = shard_dir / filename
+            if system in requested or not shard_path.exists():
+                payload = {
+                    "schema_version": INDEX_SHARD_SCHEMA_VERSION,
+                    "system": system,
+                    "encoder_id": self.encoder_id,
+                    "dimension": self.dimension,
+                    "shard_key": self.shard_keys[system],
+                    "vocab_version": self.vocab_versions[system],
+                    "records": [_record_payload(record) for record in records],
+                    "vectors": [list(vector) for vector in vectors],
+                }
+                shard_path.write_text(
+                    json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+                    encoding="utf-8",
+                )
+            descriptors[system] = {
+                "file": f"{INDEX_SHARD_DIRECTORY}/{filename}",
+                "shard_key": self.shard_keys[system],
+                "vocab_version": self.vocab_versions[system],
+                "record_count": len(records),
+            }
+            ann = self._anns[system]
+            if ann is not None:
+                ann_filename = _ann_filename(system, self.shard_keys[system])
+                expected_files.add(ann_filename)
+                ann_path = shard_dir / ann_filename
+                if system in requested or not ann_path.exists():
+                    ann.save_index(str(ann_path))  # type: ignore[attr-defined]
+                descriptors[system]["ann_file"] = (
+                    f"{INDEX_SHARD_DIRECTORY}/{ann_filename}"
+                )
+
+        manifest = {
             "schema_version": INDEX_SCHEMA_VERSION,
             "provenance": self.provenance,
-            "records": [
-                {
-                    "system": record.system,
-                    "code": record.code,
-                    "display": record.display,
-                    "matched_alias": record.matched_alias,
-                    "vocab_version": record.vocab_version,
-                }
-                for record in self._records
-            ],
-            "vectors": [list(vector) for vector in self._vectors],
+            "system_order": list(self.systems),
+            "shards": descriptors,
         }
         path = target_dir / INDEX_FILENAME
         path.write_text(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
             encoding="utf-8",
         )
+        for pattern in ("*.json", "*.hnsw"):
+            for stale_path in shard_dir.glob(pattern):
+                if stale_path.name not in expected_files:
+                    stale_path.unlink()
+        self._storage_schema_version = INDEX_SCHEMA_VERSION
         return path
 
     @classmethod
-    def from_payload(cls, payload: dict[str, object]) -> "AliasEmbeddingIndex":
-        """Rebuild an index from a persisted payload mapping."""
+    def from_payload(
+        cls,
+        payload: dict[str, object],
+        *,
+        directory: str | Path | None = None,
+    ) -> "AliasEmbeddingIndex":
+        """Rebuild an index from a manifest or legacy monolithic payload."""
 
-        provenance = payload["provenance"]  # type: ignore[index]
-        records = [
-            _AliasRecord(
-                system=str(row["system"]),
-                code=str(row["code"]),
-                display=str(row["display"]),
-                matched_alias=str(row["matched_alias"]),
-                vocab_version=str(row["vocab_version"]),
-            )
-            for row in payload["records"]  # type: ignore[union-attr]
-        ]
-        vectors = [
-            tuple(float(value) for value in vector)
-            for vector in payload["vectors"]  # type: ignore[union-attr]
-        ]
+        schema_version = int(payload.get("schema_version", 1))
+        provenance = _mapping(payload, "provenance")
+        vocab_versions = {
+            str(system): str(version)
+            for system, version in _mapping(provenance, "vocab_versions").items()
+        }
+        expected_index_key = _index_key_for_identity(
+            vocab_versions,
+            encoder_id=str(provenance["encoder_id"]),
+            dimension=int(provenance["dimension"]),
+            schema_version=schema_version,
+        )
+        if str(provenance["index_key"]) != expected_index_key:
+            raise ValueError("persisted grounding index key failed validation")
+        loaded_anns: dict[str, object | None] = {}
+
+        if schema_version == 1:
+            records = [
+                _record_from_payload(row)
+                for row in _mapping_sequence(payload, "records")
+            ]
+            vectors = [
+                tuple(float(value) for value in vector)
+                for vector in _sequence(payload, "vectors")
+            ]
+            system_order = tuple(dict.fromkeys(record.system for record in records))
+        elif schema_version == INDEX_SCHEMA_VERSION:
+            if directory is None:
+                raise ValueError("directory is required to load a sharded index")
+            root = Path(directory).expanduser()
+            descriptors = _mapping(payload, "shards")
+            raw_order = payload.get("system_order", tuple(descriptors))
+            if not isinstance(raw_order, (list, tuple)):
+                raise ValueError("index system_order must be a list")
+            system_order = tuple(str(system).upper() for system in raw_order)
+            if (
+                len(system_order) != len(set(system_order))
+                or set(system_order) != set(vocab_versions)
+                or set(system_order) != set(descriptors)
+            ):
+                raise ValueError("index manifest systems do not match provenance")
+            records = []
+            vectors = []
+            for system in system_order:
+                descriptor = _mapping(descriptors, system)
+                relative_path = Path(str(descriptor["file"]))
+                expected_shard_key = _shard_key(
+                    system,
+                    vocab_versions[system],
+                    encoder_id=str(provenance["encoder_id"]),
+                    dimension=int(provenance["dimension"]),
+                )
+                if (
+                    str(descriptor["vocab_version"]) != vocab_versions[system]
+                    or str(descriptor["shard_key"]) != expected_shard_key
+                ):
+                    raise ValueError(
+                        f"index shard descriptor {system!r} failed validation"
+                    )
+                if (
+                    relative_path.is_absolute()
+                    or len(relative_path.parts) != 2
+                    or relative_path.parts[0] != INDEX_SHARD_DIRECTORY
+                    or relative_path.name != _shard_filename(system, expected_shard_key)
+                ):
+                    raise ValueError(
+                        "index shard path must stay inside cache directory"
+                    )
+                shard_payload = json.loads(
+                    (root / relative_path).read_text(encoding="utf-8")
+                )
+                _validate_shard_payload(
+                    shard_payload,
+                    system=system,
+                    descriptor=descriptor,
+                    encoder_id=str(provenance["encoder_id"]),
+                    dimension=int(provenance["dimension"]),
+                )
+                shard_records = [
+                    _record_from_payload(row)
+                    for row in _mapping_sequence(shard_payload, "records")
+                ]
+                shard_vectors = [
+                    tuple(float(value) for value in vector)
+                    for vector in _sequence(shard_payload, "vectors")
+                ]
+                records.extend(shard_records)
+                vectors.extend(shard_vectors)
+                if str(provenance["backend"]) == "hnsw" and shard_vectors:
+                    ann_relative = Path(str(descriptor.get("ann_file", "")))
+                    if (
+                        ann_relative.is_absolute()
+                        or len(ann_relative.parts) != 2
+                        or ann_relative.parts[0] != INDEX_SHARD_DIRECTORY
+                        or ann_relative.name
+                        != _ann_filename(system, expected_shard_key)
+                    ):
+                        raise ValueError(
+                            f"index ANN shard path {system!r} failed validation"
+                        )
+                    loaded_anns[system] = _load_ann(
+                        root / ann_relative,
+                        dimension=int(provenance["dimension"]),
+                        record_count=len(shard_vectors),
+                    )
+        else:
+            raise ValueError(f"unsupported grounding index schema {schema_version}")
+
+        if int(provenance["record_count"]) != len(records):
+            raise ValueError("persisted grounding index record count is invalid")
+        if schema_version == INDEX_SCHEMA_VERSION:
+            provenance_shards = _mapping(provenance, "shards")
+            for system in system_order:
+                descriptor = _mapping(descriptors, system)
+                shard_provenance = _mapping(provenance_shards, system)
+                for field in ("shard_key", "vocab_version", "record_count"):
+                    if shard_provenance.get(field) != descriptor.get(field):
+                        raise ValueError(
+                            f"persisted grounding provenance {system!r} is invalid"
+                        )
+
         return cls(
-            encoder_id=str(provenance["encoder_id"]),  # type: ignore[index]
-            dimension=int(provenance["dimension"]),  # type: ignore[index]
-            backend=str(provenance["backend"]),  # type: ignore[index]
-            index_key=str(provenance["index_key"]),  # type: ignore[index]
-            vocab_versions={
-                str(system): str(version)
-                for system, version in dict(
-                    provenance["vocab_versions"]  # type: ignore[index]
-                ).items()
-            },
+            encoder_id=str(provenance["encoder_id"]),
+            dimension=int(provenance["dimension"]),
+            backend=str(provenance["backend"]),
+            index_key=str(provenance["index_key"]),
+            vocab_versions=vocab_versions,
             records=records,
             vectors=vectors,
+            system_order=system_order,
+            update_summary=IndexUpdateSummary(reused_shards=system_order),
+            storage_schema_version=schema_version,
+            anns=loaded_anns,
         )
+
+
+def _mapping(payload: object, key: str) -> dict[str, object]:
+    if not isinstance(payload, dict) or not isinstance(payload.get(key), dict):
+        raise ValueError(f"index payload field {key!r} must be a mapping")
+    return payload[key]  # type: ignore[return-value]
+
+
+def _sequence(payload: object, key: str) -> list[object]:
+    if not isinstance(payload, dict) or not isinstance(payload.get(key), list):
+        raise ValueError(f"index payload field {key!r} must be a list")
+    return payload[key]  # type: ignore[return-value]
+
+
+def _mapping_sequence(payload: object, key: str) -> list[dict[str, object]]:
+    values = _sequence(payload, key)
+    if not all(isinstance(value, dict) for value in values):
+        raise ValueError(f"index payload field {key!r} must contain mappings")
+    return values  # type: ignore[return-value]
+
+
+def _record_payload(record: _AliasRecord) -> dict[str, str]:
+    return {
+        "system": record.system,
+        "code": record.code,
+        "display": record.display,
+        "matched_alias": record.matched_alias,
+        "vocab_version": record.vocab_version,
+    }
+
+
+def _record_from_payload(row: dict[str, object]) -> _AliasRecord:
+    return _AliasRecord(
+        system=str(row["system"]),
+        code=str(row["code"]),
+        display=str(row["display"]),
+        matched_alias=str(row["matched_alias"]),
+        vocab_version=str(row["vocab_version"]),
+    )
+
+
+def _validate_shard_payload(
+    payload: object,
+    *,
+    system: str,
+    descriptor: dict[str, object],
+    encoder_id: str,
+    dimension: int,
+) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError("index shard payload must be a mapping")
+    expected = {
+        "schema_version": INDEX_SHARD_SCHEMA_VERSION,
+        "system": system,
+        "encoder_id": encoder_id,
+        "dimension": dimension,
+        "shard_key": str(descriptor["shard_key"]),
+        "vocab_version": str(descriptor["vocab_version"]),
+    }
+    actual = {key: payload.get(key) for key in expected}
+    if actual != expected:
+        raise ValueError(f"persisted grounding shard {system!r} failed validation")
+    records = _mapping_sequence(payload, "records")
+    vectors = _sequence(payload, "vectors")
+    if len(records) != len(vectors) or len(records) != int(descriptor["record_count"]):
+        raise ValueError(f"persisted grounding shard {system!r} has invalid rows")
+    if any(
+        not isinstance(vector, list) or len(vector) != dimension for vector in vectors
+    ):
+        raise ValueError(f"persisted grounding shard {system!r} has invalid vectors")
+    if any(
+        str(record.get("system", "")).upper() != system
+        or str(record.get("vocab_version", "")) != str(descriptor["vocab_version"])
+        for record in records
+    ):
+        raise ValueError(f"persisted grounding shard {system!r} has invalid records")
+
+
+def _shard_filename(system: str, shard_key: str) -> str:
+    digest = hashlib.sha256(shard_key.encode("utf-8")).hexdigest()[:16]
+    return f"{system.casefold()}-{digest}.json"
+
+
+def _ann_filename(system: str, shard_key: str) -> str:
+    return Path(_shard_filename(system, shard_key)).with_suffix(".hnsw").name
 
 
 def _maybe_build_ann(
@@ -325,6 +697,17 @@ def _maybe_build_ann(
         list(range(len(vectors))),
     )
     ann.set_ef(max(_HNSW_EF_CONSTRUCTION, len(vectors)))
+    return ann
+
+
+def _load_ann(
+    path: Path, *, dimension: int, record_count: int
+):  # pragma: no cover - exercised only with hnswlib installed
+    import hnswlib
+
+    ann = hnswlib.Index(space="cosine", dim=dimension)
+    ann.load_index(str(path), max_elements=record_count)
+    ann.set_ef(max(_HNSW_EF_CONSTRUCTION, record_count))
     return ann
 
 
@@ -376,17 +759,16 @@ def _collect_records(
     return records, surfaces
 
 
-def _collect_index_inputs(
+def _resolve_vocab_indexes(
     vocab: VocabLoader, systems: Sequence[str] | None
-) -> tuple[list[_AliasRecord], list[str], dict[str, str]]:
-    """Collect alias records/surfaces and per-system content hashes (no encoding)."""
+) -> tuple[VocabularyIndex, ...]:
+    """Resolve requested vocabulary indexes without encoding their aliases."""
 
     from .vocab import FREE_VOCAB_SYSTEMS, VocabLoaderError
 
     requested = tuple(systems) if systems is not None else FREE_VOCAB_SYSTEMS
-    records: list[_AliasRecord] = []
-    surfaces: list[str] = []
-    vocab_versions: dict[str, str] = {}
+    indexes: list[VocabularyIndex] = []
+    seen: set[str] = set()
     for system in requested:
         try:
             index = vocab.get_index(system)
@@ -394,20 +776,133 @@ def _collect_index_inputs(
             if systems is not None:
                 raise
             continue
-        system_records, system_surfaces = _collect_records(index)
-        records.extend(system_records)
-        surfaces.extend(system_surfaces)
-        vocab_versions[index.system.upper()] = index.content_hash
-    return records, surfaces, vocab_versions
+        normalized_system = index.system.upper()
+        if normalized_system in seen:
+            continue
+        seen.add(normalized_system)
+        indexes.append(index)
+    return tuple(indexes)
 
 
 def _index_key(vocab_versions: dict[str, str], encoder: AliasEncoder) -> str:
     """Content-address an index from vocab editions + encoder identity (no encoding)."""
 
+    return _index_key_for_identity(
+        vocab_versions,
+        encoder_id=encoder.encoder_id,
+        dimension=encoder.dimension,
+        schema_version=INDEX_SCHEMA_VERSION,
+    )
+
+
+def _index_key_for_identity(
+    vocab_versions: dict[str, str],
+    *,
+    encoder_id: str,
+    dimension: int,
+    schema_version: int,
+) -> str:
+    """Content-address an index from explicit persisted identity fields."""
+
     return make_index_cache_key(
         vocab_versions,
-        encoder.encoder_id,
-        params={"dimension": encoder.dimension, "schema_version": INDEX_SCHEMA_VERSION},
+        encoder_id,
+        params={"dimension": dimension, "schema_version": schema_version},
+    )
+
+
+def _shard_key(
+    system: str,
+    vocab_version: str,
+    *,
+    encoder_id: str,
+    dimension: int,
+) -> str:
+    """Content-address one independently persisted vocabulary shard."""
+
+    return make_index_cache_key(
+        {system: vocab_version},
+        encoder_id,
+        params={
+            "dimension": dimension,
+            "schema_version": INDEX_SHARD_SCHEMA_VERSION,
+            "shard": system,
+        },
+    )
+
+
+def _encode_surfaces(
+    encoder: AliasEncoder, surfaces: Sequence[str]
+) -> tuple[tuple[float, ...], ...]:
+    vectors = tuple(encoder.encode(surfaces)) if surfaces else ()
+    if len(vectors) != len(surfaces):
+        raise ValueError("encoder must return one vector per alias")
+    if any(len(vector) != encoder.dimension for vector in vectors):
+        raise ValueError(
+            f"encoder vectors must have configured dimension {encoder.dimension}"
+        )
+    return vectors
+
+
+def _build_from_indexes(
+    indexes: Sequence[VocabularyIndex],
+    encoder: AliasEncoder,
+    *,
+    backend: str,
+    cached: AliasEmbeddingIndex | None = None,
+) -> AliasEmbeddingIndex:
+    """Build an index, reusing unchanged per-system embedding shards."""
+
+    records: list[_AliasRecord] = []
+    vectors: list[tuple[float, ...]] = []
+    vocab_versions = {index.system.upper(): index.content_hash for index in indexes}
+    system_order = tuple(index.system.upper() for index in indexes)
+    reusable = (
+        cached is not None
+        and cached.encoder_id == encoder.encoder_id
+        and cached.dimension == encoder.dimension
+    )
+    reused_shards: list[str] = []
+    rebuilt_shards: list[str] = []
+    reused_anns: dict[str, object | None] = {}
+
+    for index in indexes:
+        system = index.system.upper()
+        if reusable and cached.vocab_versions.get(system) == index.content_hash:
+            shard_records, shard_vectors = cached._shard_data(system)
+            records.extend(shard_records)
+            vectors.extend(shard_vectors)
+            reused_shards.append(system)
+            if cached.backend == backend:
+                reused_anns[system] = cached._anns[system]
+            continue
+
+        shard_records, surfaces = _collect_records(index)
+        shard_vectors = _encode_surfaces(encoder, surfaces)
+        records.extend(shard_records)
+        vectors.extend(shard_vectors)
+        rebuilt_shards.append(system)
+
+    removed_shards = tuple(
+        system
+        for system in (cached.systems if cached is not None else ())
+        if system not in vocab_versions
+    )
+    return AliasEmbeddingIndex(
+        encoder_id=encoder.encoder_id,
+        dimension=encoder.dimension,
+        backend=backend,
+        index_key=_index_key(vocab_versions, encoder),
+        vocab_versions=vocab_versions,
+        records=records,
+        vectors=vectors,
+        system_order=system_order,
+        update_summary=IndexUpdateSummary(
+            reused_shards=tuple(reused_shards),
+            rebuilt_shards=tuple(rebuilt_shards),
+            removed_shards=removed_shards,
+        ),
+        anns=reused_anns,
     )
 
 
@@ -438,16 +933,11 @@ def build_index(
         return None
 
     resolved_backend = _resolve_backend(backend)
-    records, surfaces, vocab_versions = _collect_index_inputs(vocab, systems)
-    vectors = list(encoder.encode(surfaces)) if surfaces else []
-    return AliasEmbeddingIndex(
-        encoder_id=encoder.encoder_id,
-        dimension=encoder.dimension,
+    indexes = _resolve_vocab_indexes(vocab, systems)
+    return _build_from_indexes(
+        indexes,
+        encoder,
         backend=resolved_backend,
-        index_key=_index_key(vocab_versions, encoder),
-        vocab_versions=vocab_versions,
-        records=records,
-        vectors=vectors,
     )
 
 
@@ -470,11 +960,12 @@ def query_index(
 def load_index(directory: str | Path) -> AliasEmbeddingIndex | None:
     """Load a persisted index from ``directory``, or ``None`` when absent."""
 
-    path = Path(directory).expanduser() / INDEX_FILENAME
+    root = Path(directory).expanduser()
+    path = root / INDEX_FILENAME
     if not path.exists():
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
-    return AliasEmbeddingIndex.from_payload(payload)
+    return AliasEmbeddingIndex.from_payload(payload, directory=root)
 
 
 def build_or_load_index(
@@ -484,30 +975,53 @@ def build_or_load_index(
     cache_dir: str | Path,
     systems: Sequence[str] | None = None,
     backend: str = "auto",
+    dependent_caches: Sequence[IndexBoundCache] = (),
 ) -> AliasEmbeddingIndex | None:
-    """Return a version-validated index, rebuilding on vocabulary drift.
+    """Return a version-validated index, updating only changed vocab shards.
 
     A persisted index under ``cache_dir`` is reused only when its ``index_key``
     matches the key recomputed from the current vocabulary editions and encoder;
-    any drift forces a rebuild and overwrites the stale payload. Returns ``None``
+    any drift re-encodes new or changed vocabulary shards, reuses byte-identical
+    unchanged shards, and removes shards no longer requested. Index-bound
+    candidate/rerank caches are evicted when that key changes. Returns ``None``
     when ``encoder`` is ``None`` (sparse-only fallback).
     """
 
     if encoder is None:
+        for dependent_cache in dependent_caches:
+            dependent_cache.bind_index(_NO_INDEX_KEY)
         return None
 
-    # Compute the content-addressed key from vocabulary editions + encoder
-    # identity WITHOUT encoding, so a cache hit skips re-encoding entirely.
-    cached = load_index(cache_dir)
-    if cached is not None:
-        _, _, vocab_versions = _collect_index_inputs(vocab, systems)
-        if cached.index_key == _index_key(vocab_versions, encoder):
-            return cached
+    resolved_backend = _resolve_backend(backend)
+    indexes = _resolve_vocab_indexes(vocab, systems)
+    vocab_versions = {index.system.upper(): index.content_hash for index in indexes}
+    expected_key = _index_key(vocab_versions, encoder)
+    for dependent_cache in dependent_caches:
+        dependent_cache.bind_index(expected_key)
 
-    fresh = build_index(vocab, encoder, systems=systems, backend=backend)
-    if fresh is None:  # pragma: no cover - encoder is not None here
-        return None
-    fresh.save(cache_dir)
+    try:
+        cached = load_index(cache_dir)
+    except (ImportError, OSError, KeyError, RuntimeError, TypeError, ValueError):
+        cached = None
+    if (
+        cached is not None
+        and cached.index_key == expected_key
+        and cached.backend == resolved_backend
+    ):
+        return cached
+
+    fresh = _build_from_indexes(
+        indexes,
+        encoder,
+        backend=resolved_backend,
+        cached=cached,
+    )
+    rewrite_shards: Sequence[str] | None
+    if cached is None or cached._storage_schema_version != INDEX_SCHEMA_VERSION:
+        rewrite_shards = None
+    else:
+        rewrite_shards = fresh.update_summary.rebuilt_shards
+    fresh._save(cache_dir, shard_systems=rewrite_shards)
     return fresh
 
 

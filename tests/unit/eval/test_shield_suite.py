@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 from typing import Mapping
 
 import pytest
@@ -18,8 +20,19 @@ from openmed.core.labels import (
     PHONE,
     URL,
 )
+from openmed.eval.datasets import (
+    CLINICAL_PHI_MANIFEST_ID,
+    CLINICAL_PHI_MANIFEST_REF,
+    CLINICAL_PRIVACY_MODEL_ID,
+    clinical_phi_manifest_hash,
+)
 from openmed.eval.harness import run_benchmark
-from openmed.eval.suites import SHIELD, load_suite_fixtures, suite_metadata
+from openmed.eval.suites import (
+    SHIELD,
+    load_suite_fixtures,
+    run_clinical_phi_shield_benchmark,
+    suite_metadata,
+)
 from openmed.eval.suites.shield import (
     IS_HIGH_RECALL_GATE_TARGET,
     PUBLIC_SAMPLE_NOTES_CONFIG,
@@ -145,6 +158,99 @@ def test_shield_report_contains_per_label_leakage_and_recall() -> None:
     assert data["metrics"]["recall_slices"]["by_label"][PHONE] == 0.0
 
 
+def test_clinical_phi_flagship_report_binds_comparison_evidence() -> None:
+    note, spans = _synthetic_shield_rows()
+    fixture = fixtures_from_rows([note], spans)[0]
+    checkpoint = _synthetic_checkpoint_manifest()
+
+    def runner(fixture, model_name, device):
+        assert model_name == CLINICAL_PRIVACY_MODEL_ID
+        assert device == "cpu"
+        return [
+            {"start": span.start, "end": span.end, "label": span.label}
+            for span in fixture.gold_spans
+            if span.label in {PERSON, AGE}
+        ]
+
+    report = run_clinical_phi_shield_benchmark(
+        [fixture],
+        checkpoint_manifest=checkpoint,
+        checkpoint_manifest_ref=("models.jsonl#OpenMed/OpenMed-ClinicalPrivacy-tier0"),
+        runner=runner,
+        generated_at="2026-08-01T00:00:00Z",
+    )
+
+    data = report.to_dict()
+    comparison = data["metrics"]["shield_comparison"]
+    assert data["model_name"] == CLINICAL_PRIVACY_MODEL_ID
+    assert comparison["evidence_role"] == "comparison"
+    assert comparison["high_recall_release_gate"] is False
+    assert (
+        comparison["aggregate"]["recall"] == data["metrics"]["recall_slices"]["overall"]
+    )
+    assert comparison["aggregate"]["leakage"] == data["metrics"]["leakage"]["overall"]
+    assert comparison["by_label"][PERSON] == {
+        "leakage": 0.0,
+        "recall": 1.0,
+    }
+    assert comparison["by_label"][PHONE] == {
+        "leakage": 1.0,
+        "recall": 0.0,
+    }
+
+    metadata = data["metadata"]
+    assert metadata["comparison_evidence_only"] is True
+    assert metadata["gate_target"] is False
+    assert metadata["checkpoint_manifest"]["model_id"] == (CLINICAL_PRIVACY_MODEL_ID)
+    assert (
+        metadata["checkpoint_manifest"]["reproducibility_hash"]
+        == (checkpoint["reproducibility_hash"])
+    )
+    assert metadata["checkpoint_manifest"]["source_revision"] == "a" * 40
+    assert re.fullmatch(
+        r"sha256:[0-9a-f]{64}",
+        metadata["checkpoint_manifest"]["manifest_content_hash"],
+    )
+    assert metadata["dataset_manifest"] == {
+        "manifest_hash": clinical_phi_manifest_hash(),
+        "manifest_id": CLINICAL_PHI_MANIFEST_ID,
+        "manifest_ref": CLINICAL_PHI_MANIFEST_REF,
+    }
+    assert metadata["public_corpus_reference"]["source_url"].endswith(
+        PUBLIC_SAMPLE_REPOSITORY
+    )
+    assert metadata["public_corpus_reference"]["redistribution"] == ("reference-only")
+    assert metadata["fixture_ids"] != ["note-x"]
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", metadata["fixture_ids"][0])
+    assert re.fullmatch(
+        r"sha256:[0-9a-f]{64}",
+        metadata["reproducibility"]["fixture_set_hash"],
+    )
+    assert re.fullmatch(
+        r"sha256:[0-9a-f]{64}",
+        metadata["reproducibility"]["eval_code_hash"],
+    )
+    serialized = json.dumps(data, sort_keys=True)
+    for raw_value in ("note-x", "John Doe", "MRN-98765", "555-0123", "123 Main St"):
+        assert raw_value not in serialized
+
+
+def test_clinical_phi_flagship_report_rejects_other_checkpoint() -> None:
+    note, spans = _synthetic_shield_rows()
+    fixture = fixtures_from_rows([note], spans)[0]
+
+    with pytest.raises(ValueError, match="exactly one"):
+        run_clinical_phi_shield_benchmark(
+            [fixture],
+            checkpoint_manifest={
+                "repo_id": "OpenMed/another-model",
+                "reproducibility_hash": "sha256:" + "0" * 64,
+            },
+            checkpoint_manifest_ref="models.jsonl#OpenMed/another-model",
+            runner=lambda fixture, model_name, device: (),
+        )
+
+
 def test_cli_benchmark_pii_emits_shield_benchmark_report(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -180,6 +286,76 @@ def test_cli_benchmark_pii_emits_shield_benchmark_report(
     assert output["metadata"]["license"] == VERIFIED_LICENSE
     assert output["metrics"]["leakage"]["by_label"][PERSON] == 0.0
     assert output["metrics"]["recall_slices"]["by_label"][PERSON] == 1.0
+
+
+def test_cli_benchmark_pii_emits_manifest_linked_flagship_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    from openmed.cli import main_module
+    from openmed.eval import harness, suites
+
+    note, spans = _synthetic_shield_rows()
+    fixtures = fixtures_from_rows([note], spans)
+    checkpoint_path = tmp_path / "checkpoint.jsonl"
+    checkpoint_path.write_text(
+        "\n".join(
+            (
+                json.dumps({"repo_id": "OpenMed/unrelated-model"}),
+                json.dumps(_synthetic_checkpoint_manifest()),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        suites,
+        "load_shield_fixtures",
+        lambda **kwargs: fixtures,
+    )
+    monkeypatch.setattr(
+        harness,
+        "default_model_runner",
+        lambda fixture, model_name, device: [
+            {"start": span.start, "end": span.end, "label": span.label}
+            for span in fixture.gold_spans
+        ],
+    )
+
+    result = main_module.main(
+        [
+            "benchmark",
+            "pii",
+            "--suite",
+            "shield",
+            "--models",
+            CLINICAL_PRIVACY_MODEL_ID,
+            "--checkpoint-manifest",
+            str(checkpoint_path),
+            "--checkpoint-manifest-ref",
+            "models.jsonl#OpenMed/OpenMed-ClinicalPrivacy-tier0",
+        ]
+    )
+
+    assert result == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["model_name"] == CLINICAL_PRIVACY_MODEL_ID
+    assert output["metadata"]["checkpoint_manifest"]["manifest_ref"].startswith(
+        "models.jsonl#"
+    )
+    assert output["metrics"]["shield_comparison"]["aggregate"]["recall"] == 1.0
+    assert output["metrics"]["shield_comparison"]["high_recall_release_gate"] is False
+
+
+def _synthetic_checkpoint_manifest() -> dict[str, object]:
+    return {
+        "repo_id": CLINICAL_PRIVACY_MODEL_ID,
+        "family": "ClinicalPrivacy",
+        "reproducibility_hash": "sha256:" + "1" * 64,
+        "provenance": {"source_revision": "a" * 40},
+    }
 
 
 def _synthetic_shield_rows() -> tuple[dict[str, object], list[dict[str, object]]]:

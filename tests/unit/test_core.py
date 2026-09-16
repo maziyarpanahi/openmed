@@ -179,8 +179,8 @@ class TestModelLoader:
         kwargs = mock_pipeline.call_args.kwargs
         assert kwargs["model"] == str(model_dir)
         assert "local_files_only" not in kwargs
-        assert kwargs["model_kwargs"]["local_files_only"] is True
         assert kwargs["model_kwargs"]["cache_dir"] == loader.config.cache_dir
+        assert "local_files_only" not in kwargs["model_kwargs"]
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
     @patch("openmed.core.models.AutoTokenizer")
@@ -299,6 +299,51 @@ class TestAnalyzeTextBehaviour:
             use_fast_tokenizer=True,
         )
         assert result.model_name == str(model_dir)
+
+    def test_analyze_text_context_stage_is_explicit_and_attaches_all_axes(self):
+        text = "No evidence of pneumonia."
+        start = text.index("pneumonia")
+        loader = Mock()
+        loader.config = OpenMedConfig(use_medical_tokenizer=False)
+        pipeline = Mock(
+            return_value=[
+                {
+                    "entity_group": "CONDITION",
+                    "score": 0.99,
+                    "start": start,
+                    "end": start + len("pneumonia"),
+                    "word": "pneumonia",
+                }
+            ]
+        )
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 128
+
+        from openmed import analyze_text
+
+        plain = analyze_text(
+            text,
+            model_name="model",
+            loader=loader,
+            sentence_detection=False,
+        )
+        contextualized = analyze_text(
+            text,
+            model_name="model",
+            loader=loader,
+            sentence_detection=False,
+            assert_context=True,
+        )
+
+        assert "clinical_context" not in plain.entities[0].metadata
+        assert contextualized.entities[0].metadata["clinical_context"] == {
+            "negation": "negated",
+            "uncertainty": "certain",
+            "experiencer": "patient",
+            "temporality": "recent",
+        }
+        assert "assert_context" not in loader.create_pipeline.call_args.kwargs
 
     def test_analyze_text_rejects_model_name_and_model_id_together(self):
         """Ambiguous model selection should fail before loading anything."""
@@ -438,6 +483,84 @@ class TestAnalyzeTextBehaviour:
         assert result.metadata["sentence_count"] == 2
         assert result.metadata["sentence_detection"] is True
         assert pipeline.tokenizer.model_max_length == 384
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_forwards_explicit_sentence_backend(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.return_value = [SentenceSpan("sample text", 0, 11)]
+
+        from openmed import analyze_text
+
+        analyze_text(
+            "sample text",
+            model_name="model",
+            sentence_backend="yasbd",
+        )
+
+        mock_segment_text.assert_called_once_with(
+            "sample text",
+            language="en",
+            clean=False,
+            segmenter=None,
+            backend="yasbd",
+        )
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_explicit_yasbd_missing_dependency_fails_clearly(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.side_effect = ImportError(
+            "Install the optional extra with `pip install 'openmed[yasbd]'`."
+        )
+
+        from openmed import analyze_text
+
+        with pytest.raises(ImportError, match=r"openmed\[yasbd\]"):
+            analyze_text(
+                "sample text",
+                model_name="model",
+                sentence_backend="yasbd",
+            )
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_auto_keeps_optional_sentence_fallback(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.side_effect = ImportError("pySBD unavailable")
+
+        from openmed import analyze_text
+
+        result = analyze_text("sample text", model_name="model")
+
+        assert result.metadata["sentence_detection"] is False
 
     @pytest.mark.parametrize("use_medical_tokenizer", [False, True])
     @patch("openmed.processing.sentences.segment_text")

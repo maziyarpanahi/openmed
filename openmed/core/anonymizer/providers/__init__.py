@@ -6,6 +6,11 @@ and produce values that pass the existing checksum validators in
 :mod:`openmed.core.pii_i18n`.
 """
 
+from __future__ import annotations
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
 from .clinical_ids import (
     KENYA_MFL_SYNTHETIC_MAX,
     KENYA_MFL_SYNTHETIC_MIN,
@@ -14,6 +19,8 @@ from .clinical_ids import (
     AadhaarProvider,
     ABDMProvider,
     AfricanPhoneProvider,
+    BangladeshNIDProvider,
+    BelgianRRNProvider,
     BulgarianEgnProvider,
     ChineseIdentifierProvider,
     ChineseNameProvider,
@@ -28,10 +35,15 @@ from .clinical_ids import (
     IndianIdentifierProvider,
     IndiaSurrogateProvider,
     IndonesianNIKProvider,
+    IranNationalIDProvider,
+    IrishPPSProvider,
     IsraeliTeudatZehutProvider,
+    JapaneseMyNumberProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MedicalRecordNumberProvider,
+    MexicanCURPProvider,
+    MexicanRFCProvider,
     MobileMoneyProvider,
     MpesaProvider,
     NPIProvider,
@@ -41,12 +53,15 @@ from .clinical_ids import (
     RomanianCNPProvider,
     SerbianJmbgProvider,
     SpanishDNIProvider,
+    SwissAHVProvider,
     UkrainianRnokppProvider,
     VietnameseIdProvider,
     generate_abha,
     generate_abha_address,
     generate_abha_number,
     generate_african_phone,
+    generate_bangladesh_nid,
+    generate_belgian_rrn,
     generate_bic,
     generate_bulgarian_egn,
     generate_chinese_bank_card,
@@ -69,9 +84,14 @@ from .clinical_ids import (
     generate_indian_pin,
     generate_indian_ration_card,
     generate_indonesian_nik,
+    generate_iran_national_id,
+    generate_irish_pps,
+    generate_japanese_my_number,
     generate_jmbg,
     generate_korean_rrn,
     generate_latvian_personas_kods,
+    generate_mexican_curp,
+    generate_mexican_rfc,
     generate_mpesa_transaction_code,
     generate_pan,
     generate_pesel,
@@ -80,6 +100,7 @@ from .clinical_ids import (
     generate_portuguese_nif,
     generate_romanian_cnp,
     generate_rwanda_id,
+    generate_swiss_ahv,
     generate_taiwan_compatriot_permit,
     generate_tanzania_nida,
     generate_teudat_zehut,
@@ -98,15 +119,8 @@ from .clinical_ids import (
     validate_gstin,
     validate_indian_phone,
     validate_indian_pin,
+    validate_mrn,
     validate_pan,
-)
-from .registry_ids import (
-    AUXILIARY_FAKER_PROVIDER_CLASSES,
-    ID_PROVIDER_REGISTRY,
-    NationalIdSpec,
-    clinical_faker_provider_classes,
-    get_national_id,
-    register_national_id,
 )
 from .script_names import (
     DEVANAGARI_LANGUAGE_PACK,
@@ -118,11 +132,50 @@ from .script_names import (
     generate_telugu_name,
 )
 
+if TYPE_CHECKING:
+    from .registry_ids import (
+        AUXILIARY_FAKER_PROVIDER_CLASSES,
+        ID_PROVIDER_REGISTRY,
+        NationalIdSpec,
+        clinical_faker_provider_classes,
+        get_national_id,
+        register_national_id,
+    )
+
+_LAZY_IMPORTS = {
+    "AUXILIARY_FAKER_PROVIDER_CLASSES": ".registry_ids",
+    "ID_PROVIDER_REGISTRY": ".registry_ids",
+    "NationalIdSpec": ".registry_ids",
+    "clinical_faker_provider_classes": ".registry_ids",
+    "get_national_id": ".registry_ids",
+    "register_national_id": ".registry_ids",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve registry-backed provider exports without creating an import cycle."""
+
+    module_name = _LAZY_IMPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module_name, __name__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Return eager and lazy provider exports for interactive discovery."""
+
+    return sorted(set(globals()) | set(_LAZY_IMPORTS))
+
+
 __all__ = [
     "ABDMProvider",
     "AadhaarProvider",
+    "BelgianRRNProvider",
     "AfricanPhoneProvider",
     "AUXILIARY_FAKER_PROVIDER_CLASSES",
+    "BangladeshNIDProvider",
     "BulgarianEgnProvider",
     "ChineseIdentifierProvider",
     "ChineseNameProvider",
@@ -137,15 +190,20 @@ __all__ = [
     "IndiaHealthIdProvider",
     "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
+    "IrishPPSProvider",
     "HAN_LANGUAGE_PACK",
     "ID_PROVIDER_REGISTRY",
     "IndonesianNIKProvider",
+    "IranNationalIDProvider",
     "IsraeliTeudatZehutProvider",
+    "JapaneseMyNumberProvider",
     "KoreanRRNProvider",
     "KENYA_MFL_SYNTHETIC_MAX",
     "KENYA_MFL_SYNTHETIC_MIN",
     "LatvianPersonasKodsProvider",
     "MedicalRecordNumberProvider",
+    "MexicanCURPProvider",
+    "MexicanRFCProvider",
     "MobileMoneyProvider",
     "MpesaProvider",
     "NPIProvider",
@@ -159,15 +217,18 @@ __all__ = [
     "SerbianJmbgProvider",
     "SCRIPT_NAME_PACKS",
     "SpanishDNIProvider",
+    "SwissAHVProvider",
     "TELUGU_LANGUAGE_PACK",
     "UkrainianRnokppProvider",
     "VietnameseIdProvider",
     "clinical_faker_provider_classes",
     "generate_abha",
     "generate_bic",
+    "generate_belgian_rrn",
     "generate_abha_address",
     "generate_abha_number",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bulgarian_egn",
     "generate_chinese_bank_card",
     "generate_chinese_given_name",
@@ -190,6 +251,9 @@ __all__ = [
     "generate_indian_driving_licence",
     "generate_indian_passport",
     "generate_indonesian_nik",
+    "generate_iran_national_id",
+    "generate_irish_pps",
+    "generate_japanese_my_number",
     "generate_indian_ration_card",
     "generate_jmbg",
     "generate_tanzania_nida",
@@ -205,6 +269,8 @@ __all__ = [
     "generate_voter_id_epic",
     "generate_korean_rrn",
     "generate_latvian_personas_kods",
+    "generate_mexican_curp",
+    "generate_mexican_rfc",
     "generate_mpesa_transaction_code",
     "generate_philhealth_pin",
     "generate_philsys_psn",
@@ -213,6 +279,7 @@ __all__ = [
     "generate_portuguese_nif",
     "generate_rwanda_id",
     "generate_romanian_cnp",
+    "generate_swiss_ahv",
     "get_national_id",
     "register_clinical_providers",
     "register_national_id",
@@ -223,5 +290,6 @@ __all__ = [
     "validate_gstin",
     "validate_indian_phone",
     "validate_indian_pin",
+    "validate_mrn",
     "validate_pan",
 ]

@@ -1,0 +1,235 @@
+{
+  "schema_version": 2,
+  "policy": "Canonical, hash-pinned TTF inputs support repository browser consumers. Approved social exports are immutable raster inputs and do not use repository fonts. Browser consumers receive deterministic WOFF2 outputs only. IBM Plex remains complete for documentation and localized fallback coverage; Newsreader is a website-only editorial subset.",
+  "conversion": {
+    "tool": "fontTools 4.61.1",
+    "version": "4.61.1",
+    "brotli_transform": "fonttools-default",
+    "ibm_plex_subsetting": "none",
+    "ibm_plex_full_font_justification": "Documentation and localized consumer surfaces require broad Latin, Cyrillic, and combining-mark coverage; full IBM Plex inputs avoid locale-dependent network or system-font fallback.",
+    "newsreader_subset": {
+      "name": "openmed_latin",
+      "scope": "OpenMed.life editorial numerals and selected display copy.",
+      "unicode_ranges": [
+        "U+0020-007E",
+        "U+00A0",
+        "U+00B7",
+        "U+00D7",
+        "U+2010",
+        "U+2013-2014",
+        "U+2018-2019",
+        "U+201C-201D",
+        "U+2022",
+        "U+2026",
+        "U+2032",
+        "U+2212",
+        "U+2264-2265"
+      ],
+      "pyftsubset_equivalent": "--unicodes=U+0020-007E,U+00A0,U+00B7,U+00D7,U+2010,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026,U+2032,U+2212,U+2264-2265 --flavor=woff2 --layout-features=* --name-IDs=* --name-legacy --name-languages=* --glyph-names --symbol-cmap --legacy-cmap --notdef-glyph --notdef-outline --recommended-glyphs --hinting --canonical-order --no-recalc-timestamp",
+      "coverage_sources": [
+        "docs/website/index.html"
+      ]
+    }
+  },
+  "files": [
+    {
+      "file": "IBMPlexSans-Regular.ttf",
+      "family": "IBM Plex Sans",
+      "style": "normal",
+      "weight": 400,
+      "sha256": "89995da1fd64592c2aa46925f238babeff584f379cdabce4ca7eff82cce2ffa5",
+      "web_file": "IBMPlexSans-Regular.woff2",
+      "web_sha256": "a40989b89e2c80751ad436b61f8ad07a3a3130fb0bb1400c85df1068524ed4ab",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Sans/IBMPlexSans-Regular.ttf",
+        "postscript_name": "IBMPlexSans",
+        "font_version": "3.1",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "IBMPlexSans-Medium.ttf",
+      "family": "IBM Plex Sans",
+      "style": "normal",
+      "weight": 500,
+      "sha256": "785c2548abca33f1fcd189cee45eed85ab5a1d3ef973d9d8fd6fd2cac67a37b4",
+      "web_file": "IBMPlexSans-Medium.woff2",
+      "web_sha256": "8616ac647815fe069afa64ea256669cabcba80b780c13e02b5c6a6e6bccdcb41",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Sans/IBMPlexSans-Medium.ttf",
+        "postscript_name": "IBMPlexSans-Medium",
+        "font_version": "3.1",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "IBMPlexSans-SemiBold.ttf",
+      "family": "IBM Plex Sans",
+      "style": "normal",
+      "weight": 600,
+      "sha256": "12e61bdcc06b19cbc57287312af0280e69ed9fe6ab2b7470f1bf4b2cdba6a013",
+      "web_file": "IBMPlexSans-SemiBold.woff2",
+      "web_sha256": "ee711b15202d9f05d8b51eab4f73b2f1832d9d0504082d5aeaeca55108c5ec52",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Sans/IBMPlexSans-SemiBold.ttf",
+        "postscript_name": "IBMPlexSans-SemiBold",
+        "font_version": "3.1",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "IBMPlexSans-Bold.ttf",
+      "family": "IBM Plex Sans",
+      "style": "normal",
+      "weight": 700,
+      "sha256": "0faab60abe29757e7aa689892f0dcdffe8ff68c5e2aeba1af83562a74e7dd85b",
+      "web_file": "IBMPlexSans-Bold.woff2",
+      "web_sha256": "36b74f1eb2da82595b5037e8d67389a0ab6bdcab7358bfb8b7aca148cdcf27b3",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Sans/IBMPlexSans-Bold.ttf",
+        "postscript_name": "IBMPlexSans-Bold",
+        "font_version": "3.1",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "IBMPlexMono-Regular.ttf",
+      "family": "IBM Plex Mono",
+      "style": "normal",
+      "weight": 400,
+      "sha256": "fe068226e163685a9f34b046dea8d049fc9802fdf54d3bdf9b1d3247860c7175",
+      "web_file": "IBMPlexMono-Regular.woff2",
+      "web_sha256": "7dc604a2ed157d42ca477198c9cde29cfe96476065af30294f887534dd51c257",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Mono/IBMPlexMono-Regular.ttf",
+        "postscript_name": "IBMPlexMono",
+        "font_version": "2.000",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "IBMPlexMono-Medium.ttf",
+      "family": "IBM Plex Mono",
+      "style": "normal",
+      "weight": 500,
+      "sha256": "fa3b0b77cde670838e4e85958a4e00b0ace08fde87a1e09324348e67a23b2d14",
+      "web_file": "IBMPlexMono-Medium.woff2",
+      "web_sha256": "403c826c3b9ef757e9d657c704f279e87f06824dfd5e18e9a86beb1b40d1dbf7",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Mono/IBMPlexMono-Medium.ttf",
+        "postscript_name": "IBMPlexMono-Medium",
+        "font_version": "2.000",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "IBMPlexMono-SemiBold.ttf",
+      "family": "IBM Plex Mono",
+      "style": "normal",
+      "weight": 600,
+      "sha256": "1b137a9e116ea3eaa51b94405391c775c7912d928c2a8607c8a9f272e2c0f3f9",
+      "web_file": "IBMPlexMono-SemiBold.woff2",
+      "web_sha256": "f9646f0df18f79398785b3859eae690f731aa0815a015f8efe6fafd3115b7a99",
+      "consumers": ["docs", "website"],
+      "source": {
+        "project": "https://github.com/IBM/plex",
+        "release": "v1.2.3",
+        "archive": "https://github.com/IBM/plex/releases/download/v1.2.3/TrueType.zip",
+        "archive_sha256": "fe4ff7bd12c3dbbe0d62f3380661e506f81c9bcb30bcf86ec044140b4c09f8a8",
+        "upstream_path": "TrueType/IBM-Plex-Mono/IBMPlexMono-SemiBold.ttf",
+        "postscript_name": "IBMPlexMono-SemiBold",
+        "font_version": "2.000",
+        "relationship": "Google Fonts-normalized static derivative of the named upstream release; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "Newsreader-Medium.ttf",
+      "family": "Newsreader",
+      "style": "normal",
+      "weight": 500,
+      "sha256": "68c4493c7c6c9aaff48defeeb6408e7ce705efc4c33363de4d9d6f5e07775064",
+      "web_file": "Newsreader-Medium.woff2",
+      "web_sha256": "19e16a51f30de57276f8c6ca81a8e8ce471a8701e44ea40653d9ccbf5c5d4f82",
+      "consumers": ["website"],
+      "web_subset": "openmed_latin",
+      "source": {
+        "project": "https://github.com/productiontype/Newsreader",
+        "distribution": "Google Fonts family revision v26",
+        "url": "https://fonts.gstatic.com/s/newsreader/v26/cY9qfjOCX1hbuyalUrK49dLac06G1ZGsZBtoBCzBDXXD9JVF438wSo_ADA.ttf",
+        "postscript_name": "Newsreader-Medium",
+        "font_version": "1.003",
+        "relationship": "Byte-identical upstream static TTF; the checked-in SHA-256 is authoritative."
+      }
+    },
+    {
+      "file": "Newsreader-MediumItalic.ttf",
+      "family": "Newsreader",
+      "style": "italic",
+      "weight": 500,
+      "sha256": "5f4c8787a65ca5ec7595b8146c7366e436097aab682e5764db67177fb20584d3",
+      "web_file": "Newsreader-MediumItalic.woff2",
+      "web_sha256": "9deec6bedd16fc69775a9748c21f4ad7a1a77933752cecb78874f6f7320789f0",
+      "consumers": ["website"],
+      "web_subset": "openmed_latin",
+      "source": {
+        "project": "https://github.com/productiontype/Newsreader",
+        "distribution": "Google Fonts family revision v26",
+        "url": "https://fonts.gstatic.com/s/newsreader/v26/cY9kfjOCX1hbuyalUrK439vogqC9yFZCYg7oRZaLP4obnf7fTXglsMwaT-ZA.ttf",
+        "postscript_name": "Newsreader-MediumItalic",
+        "font_version": "1.003",
+        "relationship": "Byte-identical upstream static TTF; the checked-in SHA-256 is authoritative."
+      }
+    }
+  ],
+  "licenses": [
+    {
+      "file": "IBM-Plex-OFL.txt",
+      "sha256": "d741e57d5f865e294df801f96b7b5161a88b211df65887e4358d271c9fc5fb4f",
+      "spdx": "OFL-1.1",
+      "applies_to": ["IBM Plex Sans", "IBM Plex Mono"],
+      "source": "https://github.com/IBM/plex/blob/v1.2.3/LICENSE.txt"
+    },
+    {
+      "file": "Newsreader-OFL.txt",
+      "sha256": "865f0949b59fab5925506f80102dff3d12e8666412daf52d212db969d40adc25",
+      "spdx": "OFL-1.1",
+      "applies_to": ["Newsreader"],
+      "source": "https://github.com/google/fonts/blob/main/ofl/newsreader/OFL.txt"
+    }
+  ],
+  "budgets": {
+    "docs_woff2_bytes_max": 350000,
+    "website_woff2_bytes_max": 450000,
+    "combined_published_woff2_bytes_max": 800000
+  }
+}

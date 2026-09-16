@@ -5,6 +5,12 @@ from __future__ import annotations
 import re
 from typing import Literal, TypedDict
 
+from openmed.clinical.lexicons.clinical_norm import (
+    normalize_language,
+    parse_locale_number,
+    split_measurement_text,
+)
+
 from .ucum import (
     MEASUREMENT_NORMALIZATION_ADVISORY,
     Dimension,
@@ -69,16 +75,25 @@ def _base_result(
 def _coerce_measurement_parts(
     value: object,
     unit: object | None,
+    *,
+    language: object | None = None,
 ) -> tuple[float | None, object | None, str]:
     if unit is not None:
-        return finite_float(value), unit, "value_unit_pair"
+        return parse_locale_number(value, language=language), unit, "value_unit_pair"
+    if language is not None and (parts := split_measurement_text(value)) is not None:
+        value_text, unit_text = parts
+        return (
+            parse_locale_number(value_text, language=language),
+            unit_text,
+            "localized_measurement_string",
+        )
     if isinstance(value, str) and (match := _MEASUREMENT_RE.fullmatch(value)):
         return (
-            finite_float(match.group("value")),
+            parse_locale_number(match.group("value"), language=language),
             match.group("unit").strip(),
             "measurement_string",
         )
-    return finite_float(value), unit, "value_without_unit"
+    return parse_locale_number(value, language=language), unit, "value_without_unit"
 
 
 def _status_from_unit_status(status: str) -> ConversionStatus:
@@ -115,6 +130,8 @@ def _requires_analyte_context(source: Dimension, target: Dimension) -> bool:
 def parse_measurement(
     value: object,
     unit: object | None = None,
+    *,
+    language: object | None = None,
 ) -> MeasurementNormalization:
     """Parse and normalize a value/unit pair into canonical units.
 
@@ -122,27 +139,34 @@ def parse_measurement(
         value: Numeric magnitude or a string such as ``"5 mg/dL"``.
         unit: Optional unit string. When omitted, ``value`` must contain both
             the number and unit.
+        language: Optional source-language code for localized decimal
+            punctuation, Unicode digits, and unit aliases.
 
     Returns:
         A structured result containing canonical magnitude, dimension,
         provenance, advisory text, and an explicit status.
     """
 
-    numeric_value, parsed_unit, input_form = _coerce_measurement_parts(value, unit)
+    numeric_value, parsed_unit, input_form = _coerce_measurement_parts(
+        value,
+        unit,
+        language=language,
+    )
+    language_provenance = _language_provenance(language)
     if numeric_value is None:
         return _base_result(
             "unknown",
             "measurement value is not finite numeric",
-            provenance={"input_form": input_form},
+            provenance={"input_form": input_form, **language_provenance},
         )
     if parsed_unit is None:
         return _base_result(
             "unknown",
             "measurement unit is required",
-            provenance={"input_form": input_form},
+            provenance={"input_form": input_form, **language_provenance},
         )
 
-    unit_parse = _parse_unit_expression(parsed_unit)
+    unit_parse = _parse_unit_expression(parsed_unit, language=language)
     if unit_parse.expression is None:
         return _base_result(
             _status_from_unit_status(unit_parse.status),
@@ -152,6 +176,7 @@ def parse_measurement(
                 "input_unit": parsed_unit,
                 "unit": unit_parse.provenance,
                 "input_form": input_form,
+                **language_provenance,
             },
         )
 
@@ -172,6 +197,7 @@ def parse_measurement(
             "input_unit": parsed_unit,
             "input_form": input_form,
             "unit": expression.provenance,
+            **language_provenance,
         },
     }
 
@@ -180,6 +206,10 @@ def normalize_to(
     value: object,
     from_unit: object,
     to_unit: object,
+    *,
+    language: object | None = None,
+    from_language: object | None = None,
+    to_language: object | None = None,
 ) -> MeasurementNormalization:
     """Convert ``value`` from ``from_unit`` to ``to_unit`` if dimensions match.
 
@@ -187,7 +217,10 @@ def normalize_to(
     return explicit refusal statuses and never fabricate a numeric result.
     """
 
-    numeric_value = finite_float(value)
+    source_language = from_language if from_language is not None else language
+    target_language = to_language if to_language is not None else language
+    language_provenance = _language_provenance(language)
+    numeric_value = parse_locale_number(value, language=source_language)
     if numeric_value is None:
         return _base_result(
             "unknown",
@@ -196,11 +229,12 @@ def normalize_to(
                 "input_value": value,
                 "from_unit": from_unit,
                 "to_unit": to_unit,
+                **language_provenance,
             },
         )
 
-    source = _parse_unit_expression(from_unit)
-    target = _parse_unit_expression(to_unit)
+    source = _parse_unit_expression(from_unit, language=source_language)
+    target = _parse_unit_expression(to_unit, language=target_language)
     provenance: dict[str, object] = {
         "input_value": value,
         "from_unit": from_unit,
@@ -209,6 +243,7 @@ def normalize_to(
         "target_unit": target.provenance,
         "round_trip_relative_tolerance": ROUND_TRIP_REL_TOLERANCE,
         "round_trip_absolute_tolerance": ROUND_TRIP_ABS_TOLERANCE,
+        **language_provenance,
     }
 
     if source.expression is None:
@@ -268,6 +303,12 @@ def unit_provenance(result: MeasurementNormalization) -> UnitProvenance | None:
     if isinstance(unit, dict):
         return unit
     return None
+
+
+def _language_provenance(language: object | None) -> dict[str, object]:
+    if language is None:
+        return {}
+    return {"source_language": normalize_language(language)}
 
 
 __all__ = [

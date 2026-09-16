@@ -1,0 +1,88 @@
+"""Third-party extension SDK for OpenMed plugin components.
+
+Importing this package exposes contracts and registry types but does not run
+entry-point discovery. Call :func:`discover_plugins` explicitly when a process
+is ready to load locally installed plugin code.
+"""
+
+from __future__ import annotations
+
+from .protocols import (
+    COMPONENT_ANONYMIZER_PROVIDER,
+    COMPONENT_EXPORTER,
+    COMPONENT_INTEROP_ADAPTER,
+    COMPONENT_LANGUAGE_PACK,
+    COMPONENT_RECOGNIZER,
+    PLUGIN_COMPONENT_KINDS,
+    PLUGIN_SDK_MAJOR,
+    PLUGIN_SDK_VERSION,
+    AnonymizerProviderPlugin,
+    ExporterPlugin,
+    InteropAdapterPlugin,
+    LanguagePackPlugin,
+    PluginComponent,
+    PluginComponentMetadata,
+    RecognizerPlugin,
+)
+from .registry import (
+    PERMISSIVE_LICENSES,
+    PLUGIN_ENTRY_POINT_GROUP,
+    REASON_DUPLICATE_COMPONENT,
+    REASON_ENTRY_POINT_ENUMERATION_FAILED,
+    REASON_INVALID_LABEL,
+    REASON_INVALID_METADATA,
+    REASON_LOAD_ERROR,
+    REASON_MISSING_LABELS,
+    REASON_NETWORK_EGRESS_OPT_IN_REQUIRED,
+    REASON_NON_PERMISSIVE_LICENSE_OPT_IN_REQUIRED,
+    REASON_PROTOCOL_VERSION_MISMATCH,
+    REASON_UNKNOWN_COMPONENT_KIND,
+    PluginDiscoveryPolicy,
+    PluginDiscoveryResult,
+    PluginQuarantineRecord,
+    PluginRegistration,
+    PluginRegistry,
+    discover_plugins,
+    is_permissive_license,
+    iter_plugins,
+    quarantined_plugins,
+)
+
+__all__ = [
+    "COMPONENT_ANONYMIZER_PROVIDER",
+    "COMPONENT_EXPORTER",
+    "COMPONENT_INTEROP_ADAPTER",
+    "COMPONENT_LANGUAGE_PACK",
+    "COMPONENT_RECOGNIZER",
+    "PERMISSIVE_LICENSES",
+    "PLUGIN_COMPONENT_KINDS",
+    "PLUGIN_ENTRY_POINT_GROUP",
+    "PLUGIN_SDK_MAJOR",
+    "PLUGIN_SDK_VERSION",
+    "REASON_DUPLICATE_COMPONENT",
+    "REASON_ENTRY_POINT_ENUMERATION_FAILED",
+    "REASON_INVALID_LABEL",
+    "REASON_INVALID_METADATA",
+    "REASON_LOAD_ERROR",
+    "REASON_MISSING_LABELS",
+    "REASON_NETWORK_EGRESS_OPT_IN_REQUIRED",
+    "REASON_NON_PERMISSIVE_LICENSE_OPT_IN_REQUIRED",
+    "REASON_PROTOCOL_VERSION_MISMATCH",
+    "REASON_UNKNOWN_COMPONENT_KIND",
+    "AnonymizerProviderPlugin",
+    "ExporterPlugin",
+    "InteropAdapterPlugin",
+    "LanguagePackPlugin",
+    "PluginComponent",
+    "PluginComponentMetadata",
+    "PluginDiscoveryPolicy",
+    "PluginDiscoveryResult",
+    "PluginQuarantineRecord",
+    "PluginRegistration",
+    "PluginRegistry",
+    "RecognizerPlugin",
+    "discover_plugins",
+    "is_permissive_license",
+    "iter_plugins",
+    "quarantined_plugins",
+]

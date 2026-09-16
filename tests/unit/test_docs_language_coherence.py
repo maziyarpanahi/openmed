@@ -19,6 +19,7 @@ from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,7 +54,9 @@ def _heading_codes(text: str) -> set[str]:
 
 def test_languages_doc_table_matches_supported_languages() -> None:
     rows = _table_rows(DOC.read_text(encoding="utf-8"))
-    documented_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    documented_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     assert set(rows) == documented_languages
 
@@ -66,7 +69,9 @@ def test_languages_doc_table_matches_supported_languages() -> None:
 
 def test_languages_doc_has_a_worked_example_per_language() -> None:
     text = DOC.read_text(encoding="utf-8")
-    documented_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    documented_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     assert _heading_codes(text) == documented_languages
     # Each worked example shows a before/after de-identification.

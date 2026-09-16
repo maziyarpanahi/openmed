@@ -18,10 +18,11 @@ from openmed.core.pii_i18n import (
     LANGUAGE_NAMES,
     OPTIONAL_PII_MODEL,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_PII_MODEL,
 )
 
 MULTILINGUAL_DEFAULT_LANGUAGES = {"as", "he", "id", "mr", "or", "ro", "th"}
-V2_REGISTRY_LANGUAGES = {"bn", "ta", "zh"}
+V2_REGISTRY_LANGUAGES = {"bn", "zh"}
 OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - SUPPORTED_LANGUAGES
 
 
@@ -57,7 +58,10 @@ class TestRegistryCompleteness:
     def test_default_models_are_registered(self):
         registry_model_ids = {info.model_id for info in OPENMED_MODELS.values()}
         for lang, model_id in DEFAULT_PII_MODELS.items():
-            if model_id == OPTIONAL_PII_MODEL:
+            # Sentinels, not repository identifiers: the optional Indic NER
+            # route resolves from an env var and user-supplied routes require
+            # an explicit model_name.
+            if model_id in {OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL}:
                 continue
             assert model_id in registry_model_ids, (
                 f"Default model for {lang} ({model_id}) not found in registry"
@@ -139,12 +143,17 @@ class TestModelNaming:
         ("lang", "expected_key"),
         (
             ("bn", "pii_bn_msuperclinical_large"),
-            ("ta", "pii_ta_msuperclinical_large"),
             ("zh", "pii_zh_bigmed_large"),
         ),
     )
     def test_v2_language_compatibility_aliases_are_stable(self, lang, expected_key):
         assert expected_key in get_pii_models_by_language(lang)
+
+    def test_tamil_compatibility_alias_resolves_only_as_a_placeholder(self):
+        alias = OPENMED_MODELS["pii_ta_msuperclinical_large"]
+
+        assert alias.model_id == "OpenMed/privacy-filter-multilingual"
+        assert get_pii_models_by_language("ta") == {}
 
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_bucket_keys_use_language_prefix_when_specific(self, lang):

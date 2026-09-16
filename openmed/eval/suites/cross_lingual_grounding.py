@@ -332,6 +332,45 @@ def run_cross_lingual_grounding(
     )
 
 
+def assert_cross_lingual_grounding_gate(
+    *,
+    cases: Sequence[CrossLingualGroundingCase] | None = None,
+    grounder: Grounder | None = None,
+    path: str | Path | None = None,
+    floor: float = NON_ENGLISH_TOP1_FLOOR,
+) -> CrossLingualGroundingReport:
+    """Return a passing report or raise with raw-mention-free diagnostics.
+
+    This is the capstone acceptance gate for cross-lingual grounding. It uses
+    :func:`run_cross_lingual_grounding` so the English baseline, every
+    non-English accuracy floor, synthetic provenance, and restricted-corpus
+    leakage boundary are evaluated together. Failure details contain only
+    aggregate scores, language codes, and known restricted-marker names.
+    """
+
+    report = run_cross_lingual_grounding(
+        cases=cases,
+        grounder=grounder,
+        path=path,
+        floor=floor,
+    )
+    if report.passed:
+        return report
+
+    failures: list[str] = []
+    if not report.english_baseline_intact:
+        failures.append(f"english_top1={report.english_top1:.3f}<1.000")
+    for language in NON_ENGLISH_LANGUAGES:
+        accuracy = report.per_language_top1[language]
+        if accuracy < floor:
+            failures.append(f"{language}_top1={accuracy:.3f}<{floor:.3f}")
+    if not report.synthetic_provenance:
+        failures.append("synthetic_provenance=false")
+    if report.restricted_markers:
+        failures.append("restricted_markers=" + ",".join(report.restricted_markers))
+    raise AssertionError("Cross-lingual grounding gate failed: " + "; ".join(failures))
+
+
 def cross_lingual_grounding_metadata(
     *, path: str | Path | None = None
 ) -> dict[str, Any]:
@@ -367,6 +406,7 @@ __all__ = [
     "CrossLingualGroundingCase",
     "CrossLingualGroundingReport",
     "Grounder",
+    "assert_cross_lingual_grounding_gate",
     "build_fixture_grounder",
     "cross_lingual_grounding_metadata",
     "load_cross_lingual_grounding_fixtures",

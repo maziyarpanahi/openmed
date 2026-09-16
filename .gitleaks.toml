@@ -32,6 +32,14 @@ regexes = ['''\("secret", "(VIOLET-WINDSOR-1944|KRONEN-29-ALPHA|silver-maple-lun
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
+description = "Synthetic patient key in the determinism regression fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''openmed/eval/determinism\.py$''']
+regexes = ['''patient_key="synthetic-patient-0001"''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
 description = "Swift demo note describes tokenization, not a token value"
 condition = "AND"
 regexTarget = "line"
@@ -45,3 +53,19 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''docs/website/index\.html$''']
 regexes = ['''data-cf-beacon=.*"token": "[0-9a-f]{32}"''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic dataset marker in the guard regression fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/guard/test_dataset\.py$''']
+regexes = ['''SYNTHETIC_(TOKEN|MARKER) = "SYNTHETIC_SUBJECT_001"''']
+
+[[allowlists]]
+targetRules = ["aws-access-token"]
+description = "Synthetic AWS-shaped credential in the privacy scanner unit test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/test_privacy_scan_action\.py$''']
+regexes = ['''key: AKIA(?:ABCDEFGHIJKLMNOP)''']

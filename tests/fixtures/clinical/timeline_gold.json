@@ -1,6 +1,44 @@
 {
   "version": 1,
   "synthetic": true,
+  "event_anchor_cases": [
+    {
+      "id": "event-anchor-absolute-date",
+      "document_creation_time": "2026-06-15",
+      "text": "Symptoms resolved on 2026-06-01.",
+      "event_span": [9, 17],
+      "timex_spans": [[21, 31]],
+      "expected": {
+        "anchor_source": "timex",
+        "anchor_value": "2026-06-01",
+        "dct_position": "before"
+      }
+    },
+    {
+      "id": "event-anchor-relative-date",
+      "document_creation_time": "2026-06-15",
+      "text": "Fever started 3 days ago.",
+      "event_span": [6, 13],
+      "timex_spans": [[14, 24]],
+      "expected": {
+        "anchor_source": "timex",
+        "anchor_value": "2026-06-12",
+        "dct_position": "before"
+      }
+    },
+    {
+      "id": "event-anchor-dct-fallback",
+      "document_creation_time": "2026-06-15",
+      "text": "Cough worsened.",
+      "event_span": [6, 14],
+      "timex_spans": [],
+      "expected": {
+        "anchor_source": "dct_fallback",
+        "anchor_value": "2026-06-15",
+        "dct_position": "overlap"
+      }
+    }
+  ],
   "cases": [
     {
       "id": "timeline-surgery-postop",

@@ -32,6 +32,8 @@ from openmed.core.decoding.spans import (
     iter_grapheme_clusters,
 )
 
+from .text import InputError, validate_pii_input
+
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizer
 
@@ -193,10 +195,17 @@ class UserDictionaryEntry:
     pos: str | None = None
 
 
-class DictionaryIngestionError(ValueError):
+_OPAQUE_EXCEPTION_SIGNATURE = object()
+
+
+class DictionaryIngestionError(InputError):
     """Base class for fail-closed dictionary ingestion errors."""
 
     reason = "dictionary_rejected"
+    # These legacy ValueError subclasses had no inspectable constructor. Keep
+    # that introspection contract even though InputError now has structured
+    # keyword fields; instances still receive code/message/details normally.
+    __signature__ = _OPAQUE_EXCEPTION_SIGNATURE
 
 
 class DictionarySourceError(DictionaryIngestionError):
@@ -227,6 +236,7 @@ class DictionaryEntryLimitError(DictionaryIngestionError):
     """Raised as soon as a dictionary crosses its entry-count cap."""
 
     reason = "entry_limit"
+    __signature__ = None
 
     def __init__(self, observed_count: int) -> None:
         self.observed_count = observed_count
@@ -237,6 +247,7 @@ class DictionaryRecordLimitError(DictionaryIngestionError):
     """Raised as soon as physical dictionary records cross their cap."""
 
     reason = "record_limit"
+    __signature__ = None
 
     def __init__(self, observed_count: int) -> None:
         self.observed_count = observed_count
@@ -253,6 +264,7 @@ class DictionaryEntryValidationError(DictionaryIngestionError):
     """Raised when one entry violates a named validation rule."""
 
     reason = "entry_validation"
+    __signature__ = None
 
     def __init__(self, rule: str, line_number: int) -> None:
         self.rule = rule
@@ -328,7 +340,7 @@ def validate_user_dictionary_entry(
     """Validate one dictionary line without logging its content."""
 
     if not isinstance(line, str):
-        raise TypeError("Dictionary entry must be text")
+        raise InputError("Dictionary entry must be text")
     if line_number <= 0:
         raise ValueError("line_number must be positive")
 
@@ -688,6 +700,7 @@ def grapheme_tokenize(text: str) -> List[SpanToken]:
         Non-whitespace tokens with exact source code-point offsets.
     """
 
+    text = validate_pii_input(text)
     return [
         SpanToken(text[start:end], start, end)
         for start, end in iter_grapheme_clusters(text)
@@ -737,6 +750,7 @@ def indic_word_tokenize(text: str) -> List[SpanToken]:
     boundary. Returned spans always index ``text`` exactly.
     """
 
+    text = validate_pii_input(text)
     clusters = list(iter_grapheme_clusters(text))
     tokens: List[SpanToken] = []
     token_start: Optional[int] = None
@@ -1068,6 +1082,7 @@ class ResourceSegmenter:
         used for Han runs; it is imported lazily and is never required.
         """
 
+        text = validate_pii_input(text)
         if not text:
             return []
         han_tokenizer = self._load_optional_jieba() if use_accelerated else None
@@ -1286,6 +1301,7 @@ def medical_tokenize(
     user-facing token boundaries and to remap model predictions back onto medical-friendly
     spans.
     """
+    text = validate_pii_input(text)
     exceptions_set = {e for e in (exceptions or []) if e}
     if not exceptions_set:
         return _medical_tokens_in_segment(text)

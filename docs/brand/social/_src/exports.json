@@ -1,0 +1,261 @@
+{
+  "schema_version": 3,
+  "authority": "OpenMed Branding and Websites July 2026 social exports",
+  "source_readme": "docs/brand/social/exports/README.md",
+  "export_scale": 2,
+  "native_scale": 1,
+  "color_profile": "source-preserved",
+  "animation_state": "disabled",
+  "network": "forbidden",
+  "derivative_policy": "Exact approved master copies and deterministic LANCZOS size derivatives only; no visual reconstruction.",
+  "preview_ids": [
+    "github-social",
+    "x-header",
+    "hugging-face-card",
+    "linkedin-banner"
+  ],
+  "assets": [
+    {
+      "id": "website-og",
+      "source": "docs/brand/social/exports/og-website-2x.png",
+      "master": "docs/brand/social/og-2x.png",
+      "native": "docs/brand/social/og.png",
+      "size": [
+        1200,
+        630
+      ],
+      "role": "Website Open Graph and X card",
+      "assignment": "Approved website social card",
+      "safe_zone": [
+        64,
+        54,
+        1136,
+        576
+      ],
+      "copy_to": [
+        "docs/website/og.png"
+      ]
+    },
+    {
+      "id": "github-social",
+      "source": "docs/brand/social/exports/github-social-2x.png",
+      "master": "docs/brand/social/github-social-2x.png",
+      "native": "docs/brand/social/github-social.png",
+      "size": [
+        1280,
+        640
+      ],
+      "role": "GitHub repository social preview",
+      "assignment": "Approved GitHub repository card",
+      "safe_zone": [
+        64,
+        56,
+        1216,
+        584
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "x-header",
+      "source": "docs/brand/social/exports/x-header-2x.png",
+      "master": "docs/brand/social/x-header-2x.png",
+      "native": "docs/brand/social/x-header.png",
+      "size": [
+        1500,
+        500
+      ],
+      "role": "X profile header",
+      "assignment": "Approved type-only, right-aligned header; avatar overlaps bottom-left",
+      "safe_zone": [
+        360,
+        52,
+        1440,
+        448
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "hugging-face-card",
+      "source": "docs/brand/social/exports/hf-org-2x.png",
+      "master": "docs/brand/social/hf-card-2x.png",
+      "native": "docs/brand/social/hf-card.png",
+      "size": [
+        1200,
+        630
+      ],
+      "role": "Hugging Face OpenMed organization card",
+      "assignment": "Approved Hugging Face organization card",
+      "safe_zone": [
+        64,
+        54,
+        1136,
+        576
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "readme-banner",
+      "source": "docs/brand/social/exports/readme-banner-2x.png",
+      "master": "docs/brand/social/readme-banner-2x.png",
+      "native": "docs/brand/social/readme-banner.png",
+      "size": [
+        1280,
+        320
+      ],
+      "role": "Repository README banner",
+      "assignment": "Approved README banner",
+      "safe_zone": [
+        28,
+        28,
+        1240,
+        292
+      ],
+      "copy_to": [
+        "docs/brand/openmed-readme-banner.png"
+      ]
+    },
+    {
+      "id": "linkedin-banner",
+      "source": "docs/brand/social/exports/linkedin-banner-2x.png",
+      "master": "docs/brand/social/linkedin-banner-2x.png",
+      "native": "docs/brand/social/linkedin-banner.png",
+      "size": [
+        1128,
+        191
+      ],
+      "role": "LinkedIn company cover",
+      "assignment": "Approved LinkedIn banner; left 300 pixels kept clear for logo tile",
+      "safe_zone": [
+        300,
+        20,
+        1100,
+        171
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "hugging-face-avatar",
+      "source": "docs/brand/social/exports/avatar-cat-2x.png",
+      "master": "docs/brand/social/avatar-cat-2x.png",
+      "native": "docs/brand/social/avatar-square-512.png",
+      "size": [
+        512,
+        512
+      ],
+      "role": "Hugging Face OpenMed organization avatar",
+      "assignment": "Approved cat avatar",
+      "safe_zone": [
+        48,
+        48,
+        464,
+        464
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "x-avatar",
+      "source": "docs/brand/social/exports/avatar-x-circle-2x.png",
+      "master": "docs/brand/social/avatar-x-circle-2x.png",
+      "native": "docs/brand/social/avatar-circle-400.png",
+      "size": [
+        400,
+        400
+      ],
+      "role": "X avatar",
+      "assignment": "Approved circular X avatar",
+      "safe_zone": [
+        42,
+        42,
+        358,
+        358
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "linkedin-company-tile",
+      "source": "docs/brand/social/exports/avatar-linkedin-2x.png",
+      "master": "docs/brand/social/avatar-linkedin-2x.png",
+      "native": "docs/brand/social/avatar-linkedin-300.png",
+      "size": [
+        300,
+        300
+      ],
+      "role": "LinkedIn company logo tile",
+      "assignment": "Approved LinkedIn logo tile",
+      "safe_zone": [
+        28,
+        28,
+        272,
+        272
+      ],
+      "copy_to": []
+    },
+    {
+      "id": "favicon",
+      "source": "docs/brand/social/exports/favicon-2x.png",
+      "master": "docs/brand/social/favicon-2x.png",
+      "native": "docs/brand/social/favicon-64.png",
+      "size": [
+        64,
+        64
+      ],
+      "role": "Raster favicon fallback",
+      "assignment": "Approved favicon",
+      "safe_zone": [
+        2,
+        2,
+        62,
+        62
+      ],
+      "copy_to": [
+        "docs/website/favicon-64.png"
+      ]
+    }
+  ],
+  "derived": [
+    {
+      "id": "apple-touch",
+      "kind": "resize",
+      "source": "docs/brand/social/exports/favicon-2x.png",
+      "output": "docs/brand/social/apple-touch-180.png",
+      "size": [
+        180,
+        180
+      ],
+      "role": "Apple touch icon",
+      "assignment": "Size derivative of the approved favicon",
+      "copy_to": [
+        "docs/website/apple-touch-icon.png"
+      ]
+    },
+    {
+      "id": "favicon-ico",
+      "kind": "favicon_ico",
+      "source": "docs/brand/social/favicon-64.png",
+      "output": "docs/brand/social/favicon.ico",
+      "sizes": [
+        [
+          16,
+          16
+        ],
+        [
+          32,
+          32
+        ],
+        [
+          48,
+          48
+        ],
+        [
+          64,
+          64
+        ]
+      ],
+      "role": "Auto-discovered browser favicon fallback",
+      "assignment": "Multi-size derivative of the approved favicon",
+      "copy_to": [
+        "docs/website/favicon.ico"
+      ]
+    }
+  ]
+}

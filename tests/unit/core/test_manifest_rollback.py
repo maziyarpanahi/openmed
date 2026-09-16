@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -106,6 +107,7 @@ def test_rollback_flips_manifest_pointer_and_retains_prior_version(
 ) -> None:
     manifest, baseline, card_dir, status_path, tracking_log = _write_fixture(tmp_path)
 
+    started_at = time.perf_counter()
     result = rollback_manifest_pointer(
         family="PII",
         tier="Small",
@@ -117,6 +119,7 @@ def test_rollback_flips_manifest_pointer_and_retains_prior_version(
         tracking_log_path=tracking_log,
         reason="fixture regression",
     )
+    elapsed_seconds = time.perf_counter() - started_at
 
     rows = load_manifest_rows(manifest)
     active = rows[0]
@@ -145,6 +148,7 @@ def test_rollback_flips_manifest_pointer_and_retains_prior_version(
     assert records[-1]["from_repo_id"] == result.previous_repo_id
     assert records[-1]["to_repo_id"] == result.active_repo_id
     assert records[-1]["operation"] == "manifest-pointer-flip"
+    assert elapsed_seconds < 10 * 60
 
 
 def test_release_rollback_cli_uses_fixture_paths(

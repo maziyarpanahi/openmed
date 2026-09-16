@@ -54,6 +54,7 @@ import logging
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from importlib import import_module
 from threading import RLock
 from typing import Any, Callable
 
@@ -216,7 +217,7 @@ def register_detector(spec: DetectorSpec) -> DetectorSpec:
         raise TypeError("register_detector expects a DetectorSpec")
 
     with _DISCOVERY_LOCK:
-        DETECTOR_REGISTRY.setdefault(spec.stage, {})[spec.name] = spec
+        DETECTOR_REGISTRY.setdefault(spec.stage, {})[detector_provenance(spec)] = spec
     return spec
 
 
@@ -391,7 +392,7 @@ def iter_detector_capabilities(
 
 
 def discover_detectors() -> None:
-    """Discover ``openmed.detectors`` entry points once."""
+    """Discover legacy detectors and validated SDK recognizers once."""
 
     global _DISCOVERY_COMPLETE
 
@@ -407,7 +408,7 @@ def discover_detectors() -> None:
             "Failed to enumerate OpenMed detector plugins: %s",
             exc.__class__.__name__,
         )
-        return
+        entry_points = ()
 
     for entry_point in entry_points:
         entry_name = str(getattr(entry_point, "name", "<unknown>"))
@@ -422,11 +423,111 @@ def discover_detectors() -> None:
                 exc.__class__.__name__,
             )
 
+    discover_recognizer_plugins()
+
+
+def discover_recognizer_plugins(
+    *,
+    allow_network_egress: bool = False,
+    allow_non_permissive_licenses: bool = False,
+    opt_in_plugins: Sequence[str] = (),
+) -> tuple[DetectorSpec, ...]:
+    """Discover validated SDK recognizers and register detector adapters.
+
+    The SDK registry owns compatibility and policy validation. This runtime
+    bridge forwards explicit opt-ins and only adapts registrations the SDK has
+    accepted. Importing this module does not import or discover SDK plugins.
+
+    Args:
+        allow_network_egress: Allow SDK plugins declaring network access.
+        allow_non_permissive_licenses: Allow restricted plugin licenses.
+        opt_in_plugins: Plugin or qualified component ids explicitly enabled.
+
+    Returns:
+        Detector specs registered for accepted recognizer components.
+    """
+
+    try:
+        registrations = _iter_sdk_plugins(
+            "recognizer",
+            allow_network_egress=allow_network_egress,
+            allow_non_permissive_licenses=allow_non_permissive_licenses,
+            opt_in_plugins=opt_in_plugins,
+        )
+    except Exception as exc:  # pragma: no cover - defensive SDK boundary
+        logger.warning(
+            "Failed to discover OpenMed SDK recognizers: %s",
+            exc.__class__.__name__,
+        )
+        return ()
+    return register_plugin_recognizers(registrations)
+
+
+def register_plugin_recognizers(
+    registrations: Iterable[Any],
+) -> tuple[DetectorSpec, ...]:
+    """Adapt accepted SDK recognizer registrations to detector specs.
+
+    Args:
+        registrations: Validated ``PluginRegistration`` objects from the SDK.
+
+    Returns:
+        Detector specs registered with the privacy pipeline.
+    """
+
+    registered: list[DetectorSpec] = []
+    for registration in registrations:
+        try:
+            metadata = registration.metadata
+            if metadata.kind != "recognizer":
+                continue
+            runtime_metadata = metadata.metadata
+            stage = str(runtime_metadata.get("stage") or "fast_pii")
+            spec = DetectorSpec(
+                name=metadata.component_id,
+                stage=stage,
+                languages=metadata.languages,
+                detect=registration.component.recognize,
+                provenance_prefix=f"plugin:{metadata.plugin_id}",
+                covered_labels=metadata.labels,
+            )
+            register_detector(spec)
+        except Exception as exc:
+            qualified_id = _safe_registration_id(registration)
+            logger.warning(
+                "Failed to wire OpenMed SDK recognizer %s: %s",
+                qualified_id,
+                exc.__class__.__name__,
+            )
+            continue
+        registered.append(spec)
+    return tuple(registered)
+
 
 def detector_provenance(spec: DetectorSpec) -> str:
     """Return the detector provenance string recorded on plugin spans."""
 
     return f"{spec.provenance_prefix}:{spec.name}"
+
+
+def _iter_sdk_plugins(kind: str, **policy: Any) -> tuple[Any, ...]:
+    """Return SDK registrations without importing the SDK during bare imports."""
+
+    try:
+        registry = import_module("openmed.plugins.registry")
+    except ModuleNotFoundError as exc:
+        if exc.name in {"openmed.plugins.protocols", "openmed.plugins.registry"}:
+            return ()
+        raise
+    return tuple(registry.iter_plugins(kind, **policy))
+
+
+def _safe_registration_id(registration: Any) -> str:
+    try:
+        value = registration.metadata.qualified_id
+    except Exception:
+        return "<unknown>"
+    return value if isinstance(value, str) and value else "<unknown>"
 
 
 def _entry_points_for_group(group: str) -> Sequence[Any]:
@@ -538,7 +639,9 @@ __all__ = [
     "detect_indian_identifiers",
     "detector_provenance",
     "discover_detectors",
+    "discover_recognizer_plugins",
     "iter_detector_capabilities",
     "iter_detectors",
     "register_detector",
+    "register_plugin_recognizers",
 ]

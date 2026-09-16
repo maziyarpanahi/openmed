@@ -3,12 +3,221 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Callable
 
-from openmed.core.labels import normalize_label
+from openmed.core.labels import normalize_label, policy_label_for
 from openmed.core.pii import PIIEntity
+from openmed.core.pipeline import DEFAULT_HASH_SECRET
+from openmed.core.schemas import OpenMedSpan, hmac_text_hash
+from openmed.core.schemas.span import ACTION_VALUES
+from openmed.core.surrogate_vault import SurrogateSource, SurrogateVault
 
 Merger = Callable[..., list[dict[str, Any]]]
+
+
+@dataclass(frozen=True)
+class CanonicalRedaction:
+    """Dependency-light redaction result shared by orchestration adapters."""
+
+    redacted_text: str
+    mapping: Mapping[str, str]
+    spans: tuple[OpenMedSpan, ...]
+
+
+def canonical_redaction(
+    result: Any,
+    *,
+    source_text: str,
+    doc_id: str,
+    lang: str = "en",
+    method: str = "mask",
+    hash_secret: str | bytes = DEFAULT_HASH_SECRET,
+) -> CanonicalRedaction:
+    """Project a de-identification result onto the canonical span contract.
+
+    The public de-identification API returns ``PIIEntity`` records, while
+    graph and search pipelines exchange :class:`OpenMedSpan` artifacts. This
+    bridge keeps only offsets, hashes, labels, and safe provenance; source
+    surfaces never enter the canonical records.
+    """
+
+    redacted_text = value(result, "deidentified_text")
+    if not isinstance(redacted_text, str):
+        raise TypeError("deidentifier must return deidentified_text as a string")
+
+    raw_mapping = value(result, "mapping", {}) or {}
+    if not isinstance(raw_mapping, Mapping):
+        raise TypeError("deidentifier mapping must be a mapping")
+    mapping = {str(key): str(original) for key, original in raw_mapping.items()}
+
+    supplied_spans = value(result, "spans")
+    if supplied_spans is not None:
+        if not isinstance(supplied_spans, Sequence) or isinstance(
+            supplied_spans, (str, bytes)
+        ):
+            raise TypeError("deidentifier spans must be a sequence")
+        spans = tuple(_coerce_openmed_span(span) for span in supplied_spans)
+    else:
+        raw_entities = value(result, "pii_entities", ()) or ()
+        if not isinstance(raw_entities, Sequence) or isinstance(
+            raw_entities, (str, bytes)
+        ):
+            raise TypeError("deidentifier pii_entities must be a sequence")
+        spans = tuple(
+            _entity_to_openmed_span(
+                entity,
+                source_text=source_text,
+                doc_id=doc_id,
+                lang=lang,
+                method=method,
+                hash_secret=hash_secret,
+            )
+            for entity in raw_entities
+        )
+
+    return CanonicalRedaction(
+        redacted_text=redacted_text,
+        mapping=mapping,
+        spans=spans,
+    )
+
+
+def _coerce_openmed_span(span: Any) -> OpenMedSpan:
+    if isinstance(span, OpenMedSpan):
+        return span
+    if isinstance(span, Mapping):
+        return OpenMedSpan.from_dict(span)
+    raise TypeError("deidentifier spans must contain OpenMedSpan values or mappings")
+
+
+def _entity_to_openmed_span(
+    entity: Any,
+    *,
+    source_text: str,
+    doc_id: str,
+    lang: str,
+    method: str,
+    hash_secret: str | bytes,
+) -> OpenMedSpan:
+    start = coerce_int(value(entity, "start"), field="start")
+    end = coerce_int(value(entity, "end"), field="end")
+    if start < 0 or end < start or end > len(source_text):
+        raise ValueError("deidentifier entity offsets are outside the source text")
+
+    raw_label = str(value(entity, ("entity_type", "label"), "OTHER") or "OTHER")
+    canonical = normalize_label(
+        str(value(entity, "canonical_label") or raw_label),
+        lang,
+    )
+    raw_action = str(value(entity, "action") or method)
+    action = raw_action if raw_action in ACTION_VALUES else "redact"
+    raw_sources = value(entity, "sources", ()) or ()
+    if isinstance(raw_sources, str):
+        sources = (raw_sources,)
+    else:
+        sources = tuple(str(source) for source in raw_sources)
+    detector = sources[0] if sources else "openmed"
+    evidence: dict[str, Any] = {}
+    if sources:
+        evidence["sources"] = list(sources)
+    threshold = value(entity, "threshold")
+    if threshold is not None:
+        evidence["threshold"] = float(threshold)
+
+    score = value(entity, ("confidence", "score"))
+    return OpenMedSpan(
+        doc_id=doc_id,
+        start=start,
+        end=end,
+        text_hash=hmac_text_hash(source_text[start:end], hash_secret),
+        entity_type=raw_label,
+        canonical_label=canonical,
+        policy_label=policy_label_for(canonical, lang),
+        score=float(score) if score is not None else None,
+        detector=detector,
+        evidence=evidence,
+        action=action,
+        replacement=(
+            str(replacement)
+            if (replacement := value(entity, "redacted_text")) is not None
+            else None
+        ),
+        reversible_id=(
+            str(reversible_id)
+            if (reversible_id := value(entity, "reversible_id")) is not None
+            else None
+        ),
+        metadata={"adapter": "openmed"},
+    )
+
+
+def subject_identifier_sources(
+    detected_identifiers: Sequence[PIIEntity | Mapping[str, Any]],
+    *,
+    lang: str = "en",
+) -> tuple[SurrogateSource, ...]:
+    """Convert caller-confirmed note identifiers into in-memory vault aliases.
+
+    This helper performs no subject matching. Callers must pass only detected
+    identifiers that they have already reconciled to the same structured
+    subject. The returned raw surfaces are intended for immediate in-memory use
+    by :meth:`SurrogateVault.resolve_subject` and must not be logged or audited.
+    """
+
+    sources: list[SurrogateSource] = []
+    seen: set[tuple[str, str, str]] = set()
+    for identifier in detected_identifiers:
+        if not isinstance(identifier, (PIIEntity, Mapping)):
+            raise TypeError("detected identifiers must be PII entities or mappings")
+        surface = value(identifier, "original_text") or value(identifier, "text")
+        source_label = next(
+            (
+                candidate
+                for field in ("canonical_label", "entity_type", "label")
+                if (candidate := value(identifier, field))
+            ),
+            None,
+        )
+        source_lang = str(value(identifier, "lang", lang) or lang)
+        if surface is None or not str(surface) or source_label is None:
+            raise ValueError("detected identifiers must include text and a label")
+        item = (
+            str(surface),
+            normalize_label(str(source_label), source_lang),
+            source_lang,
+        )
+        if item in seen:
+            continue
+        seen.add(item)
+        sources.append(
+            SurrogateSource(
+                source_text=item[0],
+                label=item[1],
+                lang=item[2],
+            )
+        )
+    return tuple(sources)
+
+
+def resolve_subject_surrogate(
+    detected_identifiers: Sequence[PIIEntity | Mapping[str, Any]],
+    *,
+    structured_identifier: str,
+    vault: SurrogateVault,
+    lang: str = "en",
+) -> str:
+    """Bind confirmed note identifiers to a structured subject surrogate.
+
+    Seeding the ordinary PERSON or ID_NUM vault keys before text replacement
+    means a later ``deidentify(..., surrogate_vault=vault)`` call reuses the
+    same surrogate emitted for the structured subject column.
+    """
+
+    return vault.resolve_subject(
+        structured_identifier,
+        aliases=subject_identifier_sources(detected_identifiers, lang=lang),
+    )
 
 
 def value(result: Any, names: str | Sequence[str], default: Any = None) -> Any:

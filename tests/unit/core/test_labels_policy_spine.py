@@ -4,6 +4,7 @@ from collections import Counter
 
 from openmed.core.labels import (
     AGE,
+    BIOMEDICAL_LABELS,
     CANONICAL_LABELS,
     CHINESE_DRUG,
     CHINESE_ICD_10,
@@ -16,6 +17,7 @@ from openmed.core.labels import (
     HIPAA_SAFE_HARBOR_CLASSES,
     LABEL_METADATA,
     LABEL_TO_HIPAA,
+    LABEL_TO_POPIA,
     MEDICATION,
     NDPA_RACE_OR_ETHNIC_ORIGIN,
     OTHER,
@@ -40,11 +42,73 @@ ALLOWED_SYSTEM_HINTS = set(CLINICAL_SYSTEM_HINTS) | {
     CHINESE_ICD_10,
 }
 
+POLICY_SPINE_BASELINE_LABELS = frozenset(
+    {
+        "PERSON",
+        "FIRST_NAME",
+        "LAST_NAME",
+        "MIDDLE_NAME",
+        "PREFIX",
+        "USERNAME",
+        "EMAIL",
+        "PHONE",
+        "URL",
+        "LOCATION",
+        "STREET_ADDRESS",
+        "BUILDING_NUMBER",
+        "ZIPCODE",
+        "GPS_COORDINATES",
+        "ORDINAL_DIRECTION",
+        "DATE",
+        "DATE_OF_BIRTH",
+        "TIME",
+        "AGE",
+        "ID_NUM",
+        "SSN",
+        "ACCOUNT_NUMBER",
+        "PASSWORD",
+        "PIN",
+        "API_KEY",
+        "CREDIT_CARD",
+        "CREDIT_CARD_ISSUER",
+        "CVV",
+        "IBAN",
+        "BIC",
+        "AMOUNT",
+        "CURRENCY",
+        "BITCOIN_ADDRESS",
+        "ETHEREUM_ADDRESS",
+        "LITECOIN_ADDRESS",
+        "MASKED_NUMBER",
+        "GENDER",
+        "ETHNICITY",
+        "EYE_COLOR",
+        "HEIGHT",
+        "ORGANIZATION",
+        "JOB_TITLE",
+        "JOB_DEPARTMENT",
+        "OCCUPATION",
+        "IP_ADDRESS",
+        "MAC_ADDRESS",
+        "USER_AGENT",
+        "VIN",
+        "VEHICLE_REGISTRATION",
+        "IMEI",
+    }
+)
+BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS = BIOMEDICAL_LABELS - {CONDITION}
+
 
 def test_metadata_tables_cover_canonical_labels_exactly():
-    assert len(CANONICAL_LABELS) == 101
+    assert len(POLICY_SPINE_BASELINE_LABELS) == 50
+    assert POLICY_SPINE_BASELINE_LABELS <= CANONICAL_LABELS
     assert set(LABEL_METADATA) == CANONICAL_LABELS
-    assert set(LABEL_TO_HIPAA) == CANONICAL_LABELS
+    assert set(LABEL_TO_HIPAA) == (
+        CANONICAL_LABELS - BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS
+    )
+    assert set(LABEL_TO_POPIA) == (
+        CANONICAL_LABELS - BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS
+    )
 
 
 def test_every_label_resolves_policy_risk_hipaa_and_hints():
@@ -56,7 +120,10 @@ def test_every_label_resolves_policy_risk_hipaa_and_hints():
 
         assert policy_label in POLICY_LABELS
         assert risk_level in RISK_LEVELS
-        assert hipaa_class in HIPAA_SAFE_HARBOR_CLASSES
+        if label in BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS:
+            assert hipaa_class is None
+        else:
+            assert hipaa_class in HIPAA_SAFE_HARBOR_CLASSES
         assert isinstance(system_hints, tuple)
 
         if policy_label == CLINICAL_CONCEPT:

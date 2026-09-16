@@ -77,6 +77,21 @@ def test_deny_term_and_regex_emit_custom_provenance_without_raw_metadata():
         assert entity.text not in repr(metadata)
 
 
+def test_biomedical_deny_span_has_no_identifier_regulatory_tag():
+    recognizer = CustomRecognizer.from_config(
+        {"deny_terms": [{"term": "pneumonia", "label": "DISEASE"}]}
+    )
+
+    (span,) = recognizer.detect_spans(
+        "Pneumonia",
+        doc_id="synthetic-doc",
+        hmac_secret="test-secret",
+    )
+
+    assert span.canonical_label == "DISEASE"
+    assert span.regulatory_tags == ()
+
+
 def test_extract_pii_adds_custom_deny_and_allow_suppresses_model(monkeypatch):
     import openmed
 

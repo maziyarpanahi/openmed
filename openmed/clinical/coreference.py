@@ -1,10 +1,9 @@
 """Deterministic span-native clinical coreference resolution.
 
-The resolver links already-detected :class:`~openmed.core.schemas.OpenMedSpan`
-mentions within one document.  It uses only local lexical and structural
-features: mention form, head noun, entity type, section, sentence distance, and
-experiencer.  It never performs network or model calls and does not log source
-text.
+The resolver preserves its span-native API for already-detected
+:class:`~openmed.core.schemas.OpenMedSpan` mentions and also dispatches the
+event-candidate API when ``document_text`` is provided. Both modes use only
+local lexical and structural features and never log source text.
 """
 
 from __future__ import annotations
@@ -23,7 +22,15 @@ from openmed.core.labels import (
 from openmed.core.schemas import OpenMedSpan
 
 from .context import FAMILY_EXPERIENCER, PATIENT_EXPERIENCER
-from .coref import canonicalize_text
+from .coref import (
+    DEFAULT_DOCUMENT_ID,
+    DEFAULT_LINK_THRESHOLD,
+    ResolvedCoreferenceResult,
+    canonicalize_text,
+)
+from .coref import (
+    resolve_coreference as resolve_event_coreference,
+)
 from .experiencer import resolve_experiencer
 
 SpanChainKey = tuple[str, tuple[int, int]]
@@ -215,38 +222,78 @@ class _Mention:
 
 
 def resolve_coreference(
-    spans: Iterable[OpenMedSpan],
-    text: str,
+    spans: Iterable[OpenMedSpan] | Iterable[object] | None = None,
+    text: str | None = None,
     *,
-    threshold: float = DEFAULT_COREFERENCE_THRESHOLD,
-) -> tuple[tuple[CoreferenceChain, ...], dict[SpanChainKey, str]]:
-    """Resolve clinical mention coreference within ``text``.
+    threshold: float | None = None,
+    document_text: str | None = None,
+    document_id: str = DEFAULT_DOCUMENT_ID,
+    include_anaphora: bool = True,
+    abbreviation_expansions: Mapping[str, str] | None = None,
+    canonical_aliases: Mapping[str, str] | None = None,
+    hash_secret: str | bytes | None = None,
+) -> (
+    tuple[tuple[CoreferenceChain, ...], dict[SpanChainKey, str]]
+    | ResolvedCoreferenceResult
+):
+    """Resolve clinical coreference using the span or event-candidate API.
+
+    The established ``resolve_coreference(spans, text)`` form returns span
+    chains and an offset index. The event-specific
+    ``resolve_coreference(mentions, document_text=...)`` form detects
+    PROBLEM/TEST/TREATMENT anaphora and returns sanitized clusters containing
+    no raw mention text.
 
     Args:
-        spans: ``OpenMedSpan`` mentions whose offsets index ``text``. Pronoun and
-            nominal spans may use ``canonical_label=OTHER``; the resolver infers
-            compatible antecedent types from their surface form when possible.
-        text: Source text for the single-document resolution pass.
-        threshold: Minimum deterministic compatibility score for a link.
+        spans: Existing ``OpenMedSpan`` mentions in span mode, or typed event
+            seed mentions in event mode.
+        text: Positional source text for the established span-native mode.
+        threshold: Optional minimum deterministic compatibility score. Each
+            mode uses its own stable default when omitted.
+        document_text: Keyword-only source text selecting event-candidate mode.
+        document_id: Fallback id for event seeds without a document id.
+        include_anaphora: Whether event mode detects definite NPs and pronouns.
+        abbreviation_expansions: Optional event-mode abbreviation overrides.
+        canonical_aliases: Optional event-mode canonical aliases.
+        hash_secret: Optional HMAC key for event-mode content hashes.
 
     Returns:
-        ``(chains, span_to_chain)``. The index maps
-        ``(doc_id, (start, end))`` to a stable chain id, keeping raw source text
-        out of the index and preserving offsets for review UIs.
+        Span mode returns ``(chains, span_to_chain)``. Event mode returns a
+        :class:`ResolvedCoreferenceResult` containing only privacy-safe cluster
+        metadata, source offsets, and hashes.
 
     Raises:
-        TypeError: If ``text`` or a span has the wrong type.
+        TypeError: If source text or a span has the wrong type.
         ValueError: If offsets are invalid, duplicate span keys are supplied,
             spans refer to more than one document, or ``threshold`` is outside
             ``[0, 1]``.
     """
+
+    if document_text is not None:
+        if text is not None:
+            raise ValueError("pass either text or document_text, not both")
+        return resolve_event_coreference(
+            spans,
+            document_text=document_text,
+            document_id=document_id,
+            include_anaphora=include_anaphora,
+            abbreviation_expansions=abbreviation_expansions,
+            canonical_aliases=canonical_aliases,
+            threshold=DEFAULT_LINK_THRESHOLD if threshold is None else threshold,
+            hash_secret=hash_secret,
+        )
+
+    if text is None:
+        raise TypeError("text is required for span-native coreference")
+    if threshold is None:
+        threshold = DEFAULT_COREFERENCE_THRESHOLD
 
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("coreference threshold must be between 0 and 1")
 
-    span_list = list(spans)
+    span_list = list(() if spans is None else spans)
     if not span_list:
         return (), {}
 

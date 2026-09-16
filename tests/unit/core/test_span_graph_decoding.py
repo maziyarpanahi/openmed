@@ -90,6 +90,38 @@ def test_decode_span_graph_is_stable_under_input_reordering() -> None:
         assert graph.edge_keys() == expected
 
 
+def test_decode_span_graph_emits_transitive_reduction_with_provenance() -> None:
+    nodes = [
+        _node("event-a", 0, "event"),
+        _node("event-b", 10, "event"),
+        _node("event-c", 20, "event"),
+    ]
+    edges = [
+        SpanEdge("event-a", "event-b", "before", 0.95),
+        SpanEdge("event-b", "event-c", "before", 0.90),
+        SpanEdge("event-a", "event-c", "before", 0.85),
+    ]
+    constraints = SpanGraphConstraints(
+        acyclic_edge_labels=("before",),
+        transitive_reduction_edge_labels=("before",),
+    )
+
+    graph = decode_span_graph(nodes, edges, constraints=constraints)
+
+    assert graph.edge_keys() == (
+        ("before", "event-a", "event-b"),
+        ("before", "event-b", "event-c"),
+    )
+    redundant = next(
+        decision
+        for decision in graph.decisions
+        if decision.edge.head == "event-a" and decision.edge.tail == "event-c"
+    )
+    assert redundant.status == "pruned"
+    assert redundant.constraint == "transitive_reduction:before"
+    assert "implied" in redundant.reason
+
+
 def test_synthetic_graph_gate_prevents_violations_and_meets_edge_f1() -> None:
     constraints = SpanGraphConstraints(
         type_compatibility={

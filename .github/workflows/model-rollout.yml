@@ -1,0 +1,225 @@
+name: Model Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Rollout phase whose synthetic fixtures are being evaluated.
+        required: true
+        type: choice
+        options:
+          - shadow
+          - canary
+      family:
+        description: Model family rollout coordinate.
+        required: true
+      tier:
+        description: Model tier rollout coordinate.
+        required: true
+      format:
+        description: Model format rollout coordinate.
+        required: true
+      challenger:
+        description: Challenger model id or staged local model path.
+        required: true
+      champion:
+        description: Last-green champion model id or staged local model path.
+        required: true
+      gate_report:
+        description: Signed ReleaseGate report for this phase.
+        required: true
+      staged_manifest:
+        description: Manifest containing both the champion and challenger rows.
+        required: true
+        default: artifacts/staged-models.jsonl
+      golden_fixture:
+        description: Synthetic golden fixture JSONL used during SHADOW.
+        required: true
+      shield_fixture:
+        description: Synthetic public SHIELD fixture JSONL used during SHADOW.
+        required: true
+
+concurrency:
+  group: model-rollout-${{ inputs.family }}-${{ inputs.tier }}-${{ inputs.format }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    env:
+      ROLLOUT_CHALLENGER: ${{ inputs.challenger }}
+      ROLLOUT_CHAMPION: ${{ inputs.champion }}
+      ROLLOUT_FAMILY: ${{ inputs.family }}
+      ROLLOUT_FORMAT: ${{ inputs.format }}
+      ROLLOUT_GATE_REPORT: ${{ inputs.gate_report }}
+      ROLLOUT_GOLDEN_FIXTURE: ${{ inputs.golden_fixture }}
+      ROLLOUT_SHIELD_FIXTURE: ${{ inputs.shield_fixture }}
+      ROLLOUT_STAGED_MANIFEST: ${{ inputs.staged_manifest }}
+      ROLLOUT_TIER: ${{ inputs.tier }}
+      ROLLOUT_AUDIT: artifacts/model-rollout/rollout-audit.json
+      ROLLOUT_RESULT: artifacts/model-rollout/result.json
+      ROLLOUT_STATE: artifacts/model-rollout/rollout-state.json
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install offline rollout runtime
+        run: python -m pip install -e .
+
+      - name: Prepare committed rollout state
+        run: |
+          mkdir -p artifacts/model-rollout
+          cp gates/rollout_state.json "$ROLLOUT_STATE"
+
+      - name: Seed challenger in shadow without changing latest
+        if: inputs.phase == 'shadow'
+        run: |
+          python scripts/release/rollout_state.py \
+            --state "$ROLLOUT_STATE" seed \
+            --family "$ROLLOUT_FAMILY" \
+            --tier "$ROLLOUT_TIER" \
+            --format "$ROLLOUT_FORMAT" \
+            --target "$ROLLOUT_CHALLENGER" \
+            --last-green "$ROLLOUT_CHAMPION"
+
+      - name: Run shared synthetic shadow comparison
+        if: inputs.phase == 'shadow'
+        run: |
+          python scripts/release/rollout_state.py shadow \
+            --champion "$ROLLOUT_CHAMPION" \
+            --challenger "$ROLLOUT_CHALLENGER" \
+            --family "$ROLLOUT_FAMILY" \
+            --tier "$ROLLOUT_TIER" \
+            --format "$ROLLOUT_FORMAT" \
+            --golden-fixture "$ROLLOUT_GOLDEN_FIXTURE" \
+            --shield-fixture "$ROLLOUT_SHIELD_FIXTURE" \
+            --baseline gates/baseline.json \
+            --output artifacts/model-rollout/shadow-comparison.json
+
+      - name: Apply phase gate and pointer action
+        id: apply
+        continue-on-error: true
+        run: |
+          python scripts/release/rollout_state.py \
+            --state "$ROLLOUT_STATE" apply-gate \
+            --family "$ROLLOUT_FAMILY" \
+            --tier "$ROLLOUT_TIER" \
+            --format "$ROLLOUT_FORMAT" \
+            --gate-report "$ROLLOUT_GATE_REPORT" \
+            --manifest models.jsonl \
+            --staged-manifest "$ROLLOUT_STAGED_MANIFEST" \
+            --baseline gates/baseline.json \
+            --card-dir artifacts/model-rollout/model-cards \
+            --status-path artifacts/model-rollout/release-status.json \
+            --tracking-log artifacts/model-rollout/rollback-log.jsonl \
+            --audit-output "$ROLLOUT_AUDIT" \
+            --result-output "$ROLLOUT_RESULT"
+
+      - name: Read fail-closed rollout result
+        id: result
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result_path = Path(os.environ["ROLLOUT_RESULT"])
+          action = "error"
+          if result_path.is_file():
+              action = str(json.loads(result_path.read_text())["action"])
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"action={action}\n")
+          PY
+
+      - name: Bundle rollout transition evidence
+        if: always() && hashFiles('artifacts/model-rollout/rollout-audit.json') != ''
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from openmed.eval.evidence_bundle import bundle_gate_evidence
+          from openmed.eval.release_gates import GateReport
+
+          gate = GateReport.from_json(
+              Path(os.environ["ROLLOUT_GATE_REPORT"]).read_text()
+          )
+          extras = {
+              "rollout_audit": Path(os.environ["ROLLOUT_AUDIT"]),
+              "rollout_state": Path(os.environ["ROLLOUT_STATE"]),
+          }
+          shadow = Path("artifacts/model-rollout/shadow-comparison.json")
+          if shadow.is_file():
+              extras["shadow_comparison"] = shadow
+          bundle_gate_evidence(
+              gate,
+              "artifacts/model-rollout/evidence",
+              extra_artifacts=extras,
+          )
+          PY
+
+      - name: Prepare rollback tracking issue
+        if: >-
+          always() &&
+          (steps.result.outputs.action == 'rolled_back' ||
+           steps.result.outputs.action == 'rolled_back_late')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = json.loads(Path(os.environ["ROLLOUT_RESULT"]).read_text())
+          audit = result["audit"]
+          body = "\n".join(
+              [
+                  "Automated canary rollback tracking record.",
+                  "",
+                  f"- Rollout key: `{audit['key']}`",
+                  f"- Gate report hash: `{audit['gate_report_hash']}`",
+                  f"- Restored pointer: `{audit['pointer_target']}`",
+                  f"- Rollback latency seconds: `{audit['rollback_latency_seconds']}`",
+                  "",
+                  "The evidence bundle contains the reconstructable transition record.",
+              ]
+          )
+          Path("artifacts/model-rollout/tracking-issue.md").write_text(
+              body + "\n", encoding="utf-8"
+          )
+          PY
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "Canary rollback: ${ROLLOUT_FAMILY}/${ROLLOUT_TIER}/${ROLLOUT_FORMAT}" \
+            --body-file artifacts/model-rollout/tracking-issue.md
+
+      - name: Upload reconstructable rollout evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: model-rollout-${{ inputs.family }}-${{ inputs.tier }}-${{ inputs.format }}
+          if-no-files-found: error
+          path: |
+            artifacts/model-rollout/
+            models.jsonl
+
+      - name: Fail closed on held, rolled-back, late, or invalid gates
+        if: >-
+          always() &&
+          (steps.apply.outcome != 'success' ||
+           steps.result.outputs.action == 'hold' ||
+           steps.result.outputs.action == 'rolled_back' ||
+           steps.result.outputs.action == 'rolled_back_late' ||
+           steps.result.outputs.action == 'error')
+        run: exit 1

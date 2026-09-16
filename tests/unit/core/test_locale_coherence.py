@@ -34,6 +34,7 @@ from openmed.core.anonymizer.locales import (
     resolve_faker_backend_locale,
     resolve_locale,
 )
+from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.language_pack import get_language_pack
@@ -48,6 +49,7 @@ from openmed.core.pii_i18n import (
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     validate_aadhaar,
     validate_marathi_aadhaar,
 )
@@ -80,7 +82,10 @@ KNOWN_PROVIDERLESS_VALIDATORS = set()
 SAMPLE_SIZE = 40
 
 REPORT_LANGUAGES = (
-    SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    SUPPORTED_LANGUAGES
+    | NATIONAL_ID_ONLY_LANGUAGES
+    | INDIC_NER_LANGUAGES
+    | USER_SUPPLIED_MODEL_LANGUAGES
 )
 
 CONCEPTUAL_BACKENDS = {
@@ -303,12 +308,9 @@ class TestLocaleResolution:
         assert female_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
         assert male_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
 
-    def test_tamil_pack_uses_native_locale_model_and_aadhaar_provider(self):
+    def test_tamil_pack_uses_public_placeholder_locale_and_aadhaar_provider(self):
         assert "ta" in SUPPORTED_LANGUAGES
-        assert (
-            DEFAULT_PII_MODELS["ta"]
-            == "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1"
-        )
+        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
         assert LANG_TO_LOCALE["ta"] == "ta_IN"
         assert NATIONAL_ID_PROVIDERS["ta"] == ("ta_IN", "aadhaar")
         assert "ta_IN" in AVAILABLE_LOCALES
@@ -386,6 +388,30 @@ class TestNationalIdRoundTrip:
                 f"failed every registered validator "
                 f"{[v.__name__ for v in validators]}"
             )
+
+    @pytest.mark.parametrize(
+        ("lang", "locale", "id_type", "method"),
+        [
+            ("nl", "nl_BE", "rrn", "belgian_rrn"),
+            ("de", "de_CH", "ahv", "swiss_ahv"),
+        ],
+    )
+    def test_regional_national_id_surrogates_round_trip(
+        self,
+        lang,
+        locale,
+        id_type,
+        method,
+    ):
+        spec = get_national_id(locale, id_type)
+        assert spec is not None
+        assert spec.faker_method == method
+        assert _LOCALE_ID_METHODS[locale] == method
+
+        anon = Anonymizer(lang=lang, consistent=True, seed=42)
+        surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
+
+        assert spec.validate(surrogate)
 
 
 class TestApproximateLocaleWarnings:

@@ -2,7 +2,9 @@
 
 यह गाइड आपको कुछ ही मिनटों में खाली वर्कस्टेशन से दस्तावेज़ के परिणाम चलाने और कॉपी करने तक ले जाता है। यह डिपेंडेंसी प्रबंधन के लिए [uv](https://github.com/astral-sh/uv) का उपयोग करता है, लेकिन कोई भी Python 3.11+ वातावरण काम करेगा।
 
-यदि आप रुक-रुककर मिलने वाली connectivity, offline clinics, OpenMRS या DHIS2 के साथ काम कर रहे हैं, तो low-bandwidth model setup, local-only inference, privacy-profile guidance और FHIR integration recipes के लिए [African developer onboarding guide](africa-onboarding.md) का उपयोग करें।
+यदि आप रुक-रुककर मिलने वाली connectivity, offline clinics, OpenMRS या DHIS2 के साथ काम कर रहे हैं, तो low-bandwidth model setup, local-only inference, privacy-profile guidance और FHIR integration recipes के लिए [African developer onboarding guide](/docs/africa-onboarding/) का उपयोग करें।
+
+संस्थागत proxy या package mirror के पीछे install करने, या metered/offline deployment तैयार करने के लिए [low-bandwidth, mirror और proxy installation guide](/docs/low-bandwidth-install/) देखें। इसमें pip, `HF_ENDPOINT`, shared model cache और diagnostics की configuration दी गई है।
 
 ## 1. वातावरण तैयार करें
 
@@ -101,7 +103,7 @@ print(result.deidentified_text)
 # Patient [first_name] [last_name], DOB [date]
 ```
 
-`deidentify()` पाँच विधियों (`mask`, `remove`, `replace`, `hash`, `shift_dates`) का समर्थन करता है। प्रत्येक का चलने योग्य उदाहरण और `reidentify()` से परिणाम वापस पाने का तरीका [अनामिकरण त्वरित शुरुआत](anonymization.md#quickstart-choosing-a-method) में देखें।
+`deidentify()` पाँच विधियों (`mask`, `remove`, `replace`, `hash`, `shift_dates`) का समर्थन करता है। प्रत्येक का चलने योग्य उदाहरण और `reidentify()` से परिणाम वापस पाने का तरीका [अनामिकरण त्वरित शुरुआत](/docs/anonymization/#quickstart-choosing-a-method) में देखें।
 
 ## 4. Offline उपयोग के लिए model को विश्वसनीय तरीके से pull करें
 

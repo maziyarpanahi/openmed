@@ -86,6 +86,13 @@ def test_target_repo_id_adds_version_before_8bit_variant():
     )
 
 
+def test_target_repo_id_adds_version_before_2bit_variant():
+    assert (
+        target_repo_id("OpenMed/test-model", "mlx-2bit", version=2)
+        == "OpenMed/test-model-v2-mlx-2bit"
+    )
+
+
 def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(
     tmp_path, monkeypatch
 ):
@@ -142,6 +149,14 @@ def test_manifest_row_can_record_multiple_runtime_formats(tmp_path):
 
 def test_publish_artifact_skips_existing_repo_without_upload(tmp_path, monkeypatch):
     artifact = _write_mlx_artifact(tmp_path)
+    manifest = tmp_path / "models.jsonl"
+    baseline = tmp_path / "baseline.json"
+    existing_manifest = (
+        '{"repo_id":"OpenMed/test-model-v1-coreml",'
+        '"formats":["coreml"],'
+        '"reproducibility_hash":"sha256:published"}\n'
+    )
+    manifest.write_text(existing_manifest, encoding="utf-8")
     fake_api = FakeApi(exists=True)
     monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
 
@@ -149,6 +164,8 @@ def test_publish_artifact_skips_existing_repo_without_upload(tmp_path, monkeypat
         artifact_dir=artifact,
         source_model_id="OpenMed/test-model",
         format_name="coreml",
+        manifest_path=manifest,
+        baseline_path=baseline,
         api=fake_api,
     )
 
@@ -157,6 +174,8 @@ def test_publish_artifact_skips_existing_repo_without_upload(tmp_path, monkeypat
     assert fake_api.uploaded == []
     assert (artifact / "README.md").exists()
     assert result.repo_id == "OpenMed/test-model-v1-coreml"
+    assert manifest.read_text(encoding="utf-8") == existing_manifest
+    assert not baseline.exists()
 
 
 def test_publish_artifact_blocks_stale_gate_card_before_hf_write(

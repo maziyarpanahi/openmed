@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openmed-example-plugin"
+version = "0.1.0"
+description = "Local-first example recognizer and exporter for the OpenMed plugin SDK"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = ["openmed>=2.0.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.entry-points."openmed.plugins"]
+example = "openmed_example_plugin:plugin_components"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openmed_example_plugin"]

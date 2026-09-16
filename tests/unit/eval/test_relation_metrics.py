@@ -197,6 +197,19 @@ def test_relation_fixture_schema_rejects_bad_references_and_traps():
     with pytest.raises(ValueError, match="unknown relation ids"):
         RelationFixture.from_mapping(bad_trap)
 
+    nonzero_tolerance = _fixture_row("nonzero-tolerance")
+    nonzero_tolerance["traps"] = [
+        {
+            "id": "trap-nonzero",
+            "kind": "assertion",
+            "relation_ids": ["rel-aspirin-fever"],
+            "zero_tolerance": False,
+        }
+    ]
+
+    with pytest.raises(ValueError, match="zero_tolerance must be true"):
+        RelationFixture.from_mapping(nonzero_tolerance)
+
 
 def _relation(
     relation_type: str,

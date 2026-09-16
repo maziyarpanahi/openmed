@@ -26,10 +26,10 @@ UNROUTED_SCRIPT = "Unrouted"
 
 REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 
-# These built-in routes intentionally use a named fallback until a dedicated
-# PII model is published. They must not be represented as trained/model-backed
-# languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
+# These built-in routes intentionally use a named fallback until dedicated
+# public PII weights are available. They must not be represented as
+# trained/model-backed languages in release claims.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -144,11 +144,12 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "bn_BD",
         ("Bengali",),
+        national_id_provider=("bn_BD", "bangladesh_nid"),
     ),
     TELUGU_LANGUAGE_PACK,
     _pack(
         "ta",
-        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+        "OpenMed/privacy-filter-multilingual",
         "ta_IN",
         ("Tamil",),
         national_id_provider=("ta_IN", "aadhaar"),
@@ -174,6 +175,22 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Arabic",),
     ),
     _pack(
+        "fa",
+        "OpenMed/privacy-filter-multilingual",
+        "fa_IR",
+        ("Arabic",),
+        national_id_provider=("fa_IR", "iran_national_id"),
+        routing_markers=(
+            "بیمار",
+            "کد ملی",
+            "خیابان",
+            "کوچه",
+            "پلاک",
+            "فروردین",
+            "اسفند",
+        ),
+    ),
+    _pack(
         "he",
         "OpenMed/privacy-filter-multilingual",
         "he_IL",
@@ -186,6 +203,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
         context_scripts=("Hiragana/Katakana",),
+        national_id_provider=("ja_JP", "my_number"),
     ),
     CHINESE_LANGUAGE_PACK,
     _pack(
@@ -293,6 +311,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("no_NO", "ssn"),
     ),
+    _pack(
+        "vi",
+        "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1",
+        "vi_VN",
+        ("Latin",),
+        national_id_provider=("vi_VN", "vietnamese_cccd"),
+    ),
 )
 
 
@@ -320,7 +345,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "hr": NationalIdOnlyCapability("hr_HR", ("hr_HR", "ssn")),
     "bg": NationalIdOnlyCapability("bg_BG", ("bg_BG", "egn")),
     "fi": NationalIdOnlyCapability("fi_FI", ("fi_FI", "ssn")),
-    "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
     "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
     "rw": NationalIdOnlyCapability("rw_RW", ("rw_RW", "rwanda_id")),
 }
@@ -330,6 +354,9 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
+    # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
+    # approximation entry and no conceptual backend mapping.
+    "ne": "ne_NP",
     "pa": "pa_IN",
 }
 
@@ -389,7 +416,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
         "zu",
         "xh",
     ),
-    "Arabic": ("ar", "ha", "ur"),
+    "Arabic": ("ar", "fa", "ha", "ur"),
     "Cyrillic": ("ru", "uk"),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
@@ -413,6 +440,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "mr",
+    "ne",
     "or",
     "as",
     "bn",
@@ -421,6 +449,7 @@ _LOCALE_ORDER = (
     "am",
     "pt",
     "ar",
+    "fa",
     "he",
     "ja",
     "zh",
@@ -470,6 +499,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "ta",
     "am",
     "pt",
+    "fa",
     "tr",
     "he",
     "id",
