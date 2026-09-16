@@ -24,6 +24,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from openmed.core.pii import DeidentificationResult
+
 SUMMARY_ENVELOPE_SCHEMA_VERSION = 1
 
 SUMMARY_SAFETY_DISCLAIMER = (
@@ -318,6 +320,8 @@ class VerifiedDeidentifiedArtifact:
         copied into this artifact.
         """
 
+        if not isinstance(result, DeidentificationResult):
+            raise SummaryEnvelopeError("de-identification result is not verifiable")
         deidentified_text = _extract_deidentified_text(result)
         method = _field(result, "method")
         if not isinstance(method, str) or not _SAFE_IDENTIFIER.fullmatch(method):

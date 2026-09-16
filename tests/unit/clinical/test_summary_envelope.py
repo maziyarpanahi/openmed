@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Literal, get_type_hints
 
@@ -21,14 +22,16 @@ from openmed.clinical.summary_envelope import (
     validate_summary_envelope,
     verify_deidentified_artifact,
 )
+from openmed.core.pii import DeidentificationResult
 
 
-def _synthetic_result() -> SimpleNamespace:
-    return SimpleNamespace(
+def _synthetic_result() -> DeidentificationResult:
+    return DeidentificationResult(
         original_text="ORIGINAL_ONLY_MARKER",
         deidentified_text="Clinical note [NAME] has [LAB_VALUE].",
-        pii_entities=[{"text": "ORIGINAL_ONLY_MARKER", "label": "NAME"}],
+        pii_entities=[],
         method="mask",
+        timestamp=datetime(2026, 1, 1),
         metadata={"pipeline": "synthetic-local"},
     )
 
@@ -78,6 +81,17 @@ def test_audit_hash_is_verified_without_copying_audit_content():
 def test_raw_text_cannot_be_used_as_a_verified_input():
     with pytest.raises(SummaryEnvelopeError, match="not verifiable"):
         verify_deidentified_artifact("ORIGINAL_ONLY_MARKER")
+
+
+def test_lookalike_result_cannot_mint_a_verified_artifact():
+    lookalike = SimpleNamespace(
+        deidentified_text="Clinical note [NAME].",
+        method="mask",
+        metadata={},
+    )
+
+    with pytest.raises(SummaryEnvelopeError, match="not verifiable"):
+        verify_deidentified_artifact(lookalike)
 
 
 def test_raw_metadata_and_reserved_traceability_fields_are_rejected():
