@@ -1,0 +1,69 @@
+{
+  "schema": [
+    {
+      "linkId": "patient_name",
+      "text": "Patient name",
+      "type": "string"
+    },
+    {
+      "linkId": "record_id",
+      "text": "Record ID",
+      "type": "string"
+    },
+    {
+      "linkId": "contact_phone",
+      "text": "Contact phone",
+      "type": "string"
+    },
+    {
+      "linkId": "condition",
+      "text": "Condition",
+      "type": "string"
+    },
+    {
+      "linkId": "a1c_value",
+      "text": "A1c value",
+      "type": "decimal"
+    }
+  ],
+  "source": {
+    "format": "synthetic-ocr",
+    "pages": [
+      {
+        "page": 0,
+        "blocks": [
+          {
+            "text": "Patient name: Cedar Example",
+            "page": 0,
+            "bbox": [40, 20, 360, 40]
+          },
+          {
+            "text": "Record ID: SYN-V22-2200",
+            "page": 0,
+            "bbox": [40, 50, 360, 70]
+          },
+          {
+            "text": "Contact phone: +1-555-010-2200",
+            "page": 0,
+            "bbox": [40, 80, 360, 100]
+          },
+          {
+            "text": "Condition: type 2 diabetes",
+            "page": 0,
+            "bbox": [40, 110, 360, 130]
+          },
+          {
+            "text": "A1c value: 7.2",
+            "page": 0,
+            "bbox": [40, 140, 360, 160]
+          }
+        ]
+      }
+    ]
+  },
+  "synthetic_direct_identifiers": [
+    "Cedar Example",
+    "SYN-V22-2200",
+    "+1-555-010-2200"
+  ]
+}
