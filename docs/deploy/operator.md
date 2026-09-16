@@ -52,9 +52,9 @@ image; it is also available through the `operator` Python extra.
 ```bash
 docker build \
   -f deploy/operator/Dockerfile \
-  -t registry.example/openmed-operator:v2.3.0 \
+  -t registry.example/openmed-operator:v2.5.0 \
   .
-docker push registry.example/openmed-operator:v2.3.0
+docker push registry.example/openmed-operator:v2.5.0
 ```
 
 Set the image in `deploy/operator/deployment.yaml` (or with a Kustomize image
