@@ -355,15 +355,15 @@
     {
       "id": "golden-per-language-id-trap-ja",
       "language": "ja",
-      "text": "合成メモ: マイナンバー 1234 5678 9012 有効、1234/5678/9012 無効（形式不正）テスト患者。",
+      "text": "合成メモ: マイナンバー 1234 5678 9018 有効、1234 5678 9012 無効（チェックサム不正）テスト患者。",
       "gold_spans": [
         {
           "start": 13,
           "end": 27,
           "label": "ID_NUM",
-          "text": "1234 5678 9012",
+          "text": "1234 5678 9018",
           "metadata": {
-            "checksum_status": "not_validated",
+            "checksum_status": "valid",
             "identifier_type": "my_number"
           }
         }
@@ -376,14 +376,14 @@
           {
             "start": 31,
             "end": 45,
-            "text": "1234/5678/9012",
+            "text": "1234 5678 9012",
             "identifier_type": "my_number",
-            "reason": "format_mismatch"
+            "reason": "fails_checksum"
           }
         ],
         "expected_output": {
           "method": "mask",
-          "text": "合成メモ: マイナンバー [ID_NUM] 有効、1234/5678/9012 無効（形式不正）テスト患者。"
+          "text": "合成メモ: マイナンバー [ID_NUM] 有効、1234 5678 9012 無効（チェックサム不正）テスト患者。"
         }
       }
     },
