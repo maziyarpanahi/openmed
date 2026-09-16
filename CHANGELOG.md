@@ -5,6 +5,13 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Raise typed client errors for unfollowed non-2xx responses, including redirects in
+  JSON and streaming requests.
+
 ## [2.5.0] - 2026-09-14
 
 OpenMed 2.5 adds clinical privacy and extraction previews, local privacy
