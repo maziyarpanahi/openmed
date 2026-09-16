@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
 
 import pytest
 
@@ -127,3 +128,37 @@ def test_empty_input_has_zero_safe_rates_and_stable_markdown():
     assert report.by_relation_class["TREATS"].to_dict()["deferred_rate"] == 0.0
     markdown = report.to_markdown()
     assert "| `Overall` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.000000 | 0.000000 |" in markdown
+
+
+def test_unreadable_input_never_echoes_sensitive_exception_text():
+    sensitive_value = "synthetic-sensitive-identifier"
+
+    class _UnreadableMapping(Mapping[str, object]):
+        def __getitem__(self, key: str) -> object:
+            raise RuntimeError(sensitive_value)
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(("relation_class",))
+
+        def __len__(self) -> int:
+            return 1
+
+    with pytest.raises(RelationReviewYieldError, match="field is unreadable") as error:
+        compute_relation_review_yield([_UnreadableMapping()])
+    assert sensitive_value not in str(error.value)
+
+    def _unreadable_records() -> Iterator[object]:
+        yield {"relation_class": "TREATS", "disposition": "accepted"}
+        raise RuntimeError(sensitive_value)
+
+    with pytest.raises(RelationReviewYieldError, match="input is unreadable") as error:
+        compute_relation_review_yield(_unreadable_records())
+    assert sensitive_value not in str(error.value)
+
+    def _unreadable_classes() -> Iterator[str]:
+        yield "TREATS"
+        raise RuntimeError(sensitive_value)
+
+    with pytest.raises(RelationReviewYieldError, match="input is unreadable") as error:
+        compute_relation_review_yield([], relation_classes=_unreadable_classes())
+    assert sensitive_value not in str(error.value)

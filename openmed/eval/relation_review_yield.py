@@ -318,8 +318,32 @@ class RelationReviewYieldReport:
             raise RelationReviewYieldError("unsupported review-yield schema version")
         if self.disclaimer != REVIEW_YIELD_DISCLAIMER:
             raise RelationReviewYieldError("review-yield disclaimer cannot be changed")
+        if not isinstance(self.overall, RelationReviewYieldMetrics):
+            raise RelationReviewYieldError("overall review-yield metrics are invalid")
+        if not isinstance(self.by_relation_class, Mapping):
+            raise RelationReviewYieldError("relation-class metrics must be a mapping")
+        try:
+            items = iter(self.by_relation_class.items())
+        except Exception:
+            raise RelationReviewYieldError(
+                "relation-class metrics are unreadable"
+            ) from None
         ordered: dict[str, RelationReviewYieldMetrics] = {}
-        for relation_class, metrics in self.by_relation_class.items():
+        while True:
+            try:
+                item = next(items)
+            except StopIteration:
+                break
+            except Exception:
+                raise RelationReviewYieldError(
+                    "relation-class metrics are unreadable"
+                ) from None
+            try:
+                relation_class, metrics = item
+            except Exception:
+                raise RelationReviewYieldError(
+                    "relation-class metrics are unreadable"
+                ) from None
             normalized_class = _normalize_relation_class(relation_class)
             if not isinstance(metrics, RelationReviewYieldMetrics):
                 raise RelationReviewYieldError("relation-class metrics are invalid")
@@ -542,13 +566,21 @@ def compute_relation_review_yield(
         raise RelationReviewYieldError("candidates must be an iterable of records")
     try:
         iterator = iter(candidates)
-    except TypeError:
+    except Exception:
         raise RelationReviewYieldError(
             "candidates must be an iterable of records"
         ) from None
 
     counters: dict[str, Counter[str]] = {}
-    for candidate in iterator:
+    while True:
+        try:
+            candidate = next(iterator)
+        except StopIteration:
+            break
+        except Exception:
+            raise RelationReviewYieldError(
+                "review candidate input is unreadable"
+            ) from None
         normalized = normalize_relation_review_candidate(candidate)
         counter = counters.setdefault(normalized.relation_class, Counter())
         counter[normalized.disposition] += 1
@@ -560,11 +592,19 @@ def compute_relation_review_yield(
             )
         try:
             declared_classes = iter(relation_classes)
-        except TypeError:
+        except Exception:
             raise RelationReviewYieldError(
                 "relation_classes must be an iterable of class labels"
             ) from None
-        for relation_class in declared_classes:
+        while True:
+            try:
+                relation_class = next(declared_classes)
+            except StopIteration:
+                break
+            except Exception:
+                raise RelationReviewYieldError(
+                    "relation_classes input is unreadable"
+                ) from None
             normalized_class = _normalize_relation_class(relation_class)
             counters.setdefault(normalized_class, Counter())
 
@@ -611,13 +651,23 @@ def _metrics_from_counter(
 
 def _read_field(candidate: Any, keys: tuple[str, ...]) -> Any:
     if isinstance(candidate, Mapping):
-        for key in keys:
-            if key in candidate:
-                return candidate[key]
+        try:
+            for key in keys:
+                if key in candidate:
+                    return candidate[key]
+        except Exception:
+            raise RelationReviewYieldError(
+                "review candidate field is unreadable"
+            ) from None
         return _MISSING
     if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
-        if len(candidate) == 2:
-            return candidate[0] if keys[0].startswith("relation") else candidate[1]
+        try:
+            if len(candidate) == 2:
+                return candidate[0] if keys[0].startswith("relation") else candidate[1]
+        except Exception:
+            raise RelationReviewYieldError(
+                "review candidate field is unreadable"
+            ) from None
         return _MISSING
     for key in keys:
         try:
@@ -634,7 +684,10 @@ def _read_field(candidate: Any, keys: tuple[str, ...]) -> Any:
 def _normalize_relation_class(value: Any) -> str:
     if not isinstance(value, str):
         raise RelationReviewYieldError("relation class must be a controlled string")
-    normalized = re.sub(r"[-\s]+", "_", value.strip().upper())
+    try:
+        normalized = re.sub(r"[-\s]+", "_", value.strip().upper())
+    except Exception:
+        raise RelationReviewYieldError("relation class is unreadable") from None
     if not _RELATION_CLASS_RE.fullmatch(normalized):
         raise RelationReviewYieldError("relation class must be a safe identifier")
     return normalized
@@ -645,7 +698,10 @@ def _normalize_disposition(value: Any) -> str:
         return value.value
     if not isinstance(value, str):
         raise RelationReviewYieldError("review disposition must be controlled")
-    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    try:
+        normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    except Exception:
+        raise RelationReviewYieldError("review disposition is unreadable") from None
     aliases = {
         "accept": REVIEW_ACCEPTED,
         "correct": REVIEW_CORRECTED,
