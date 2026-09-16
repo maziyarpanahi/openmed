@@ -587,6 +587,15 @@ from .summary_card import (
     ClinicalSummaryCard,
     build_summary_card,
 )
+from .summary_output_normalizer import (
+    SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES,
+    SUMMARY_OUTPUT_NORMALIZATION_SCHEMA_VERSION,
+    SummaryOutputNormalization,
+    SummaryOutputNormalizationError,
+    SummaryOutputNormalizer,
+    normalize_summary_output,
+    normalize_summary_text,
+)
 from .temporal_normalizer import NormalizedTimex, normalize_temporal
 from .timeline import (
     CLINICAL_EVENT_TIMELINE_ADVISORY,
@@ -856,6 +865,13 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES",
+    "SUMMARY_OUTPUT_NORMALIZATION_SCHEMA_VERSION",
+    "SummaryOutputNormalization",
+    "SummaryOutputNormalizationError",
+    "SummaryOutputNormalizer",
+    "normalize_summary_output",
+    "normalize_summary_text",
     "NormalizedTimex",
     "normalize_temporal",
     "EVENT_ANCHORING_ADVISORY",

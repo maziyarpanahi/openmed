@@ -112,6 +112,7 @@ nav:
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
+      - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
