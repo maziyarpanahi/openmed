@@ -53,6 +53,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "invalid_credentials",
     "not_ready",
     "offline_snapshot_unavailable",
+    "payload_too_large",
     "privacy_gateway_blocked",
     "privacy_gateway_error",
     "privacy_gateway_not_configured",

@@ -112,6 +112,9 @@ def _tool_handler(
             runtime_provider=runtime_provider,
         ),
         "openmed_ground": lambda **kwargs: mcp_server.openmed_ground(**kwargs),
+        "openmed_ground_concepts": (
+            lambda **kwargs: mcp_server.openmed_ground_concepts(**kwargs)
+        ),
         "openmed_export_fhir": lambda **kwargs: mcp_server.openmed_export_fhir(
             **kwargs
         ),
