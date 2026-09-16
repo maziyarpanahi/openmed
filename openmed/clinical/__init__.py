@@ -241,6 +241,17 @@ from .genomics import (
     HgvsMention,
     parse_hgvs,
 )
+from .lab_measurements import (
+    LAB_MEASUREMENT_ADVISORY,
+    LabMeasurement,
+    LabMeasurementStatus,
+    LabRangeStatus,
+    LabReferenceRange,
+    LabUnitStatus,
+    SourceOffsets,
+    normalize_lab_measurement,
+    normalize_lab_measurements,
+)
 from .lab_values import (
     LAB_FLAG_ADVISORY,
     AbnormalFlag,
@@ -692,6 +703,15 @@ __all__ = [
     "ReferenceRange",
     "ClinicalNormLexicon",
     "LAB_FLAG_ADVISORY",
+    "LAB_MEASUREMENT_ADVISORY",
+    "LabMeasurement",
+    "LabMeasurementStatus",
+    "LabRangeStatus",
+    "LabReferenceRange",
+    "LabUnitStatus",
+    "SourceOffsets",
+    "normalize_lab_measurement",
+    "normalize_lab_measurements",
     "abbreviation_expansion",
     "abbreviation_surfaces",
     "abnormal_flag_alias",
