@@ -79,6 +79,11 @@ from openmed.eval.datasets.naamapadam import (
 from openmed.eval.datasets.naamapadam import (
     naamapadam_suite_metadata as naamapadam_corpus_suite_metadata,
 )
+from openmed.eval.domain_coverage import (
+    CLINICAL_DOMAIN_COVERAGE,
+    domain_coverage_metadata,
+    run_domain_coverage,
+)
 from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
 from openmed.eval.report import BenchmarkReport
@@ -332,14 +337,17 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIA_SURROGATE_CONSISTENCY,
 )
 SUPPORTED_SUITES: tuple[str, ...] = (
-    DEFAULT_SUITES + PROMOTION_ONLY_RELATION_SUITES + (GROUNDING_CALIBRATION,)
+    DEFAULT_SUITES
+    + PROMOTION_ONLY_RELATION_SUITES
+    + (GROUNDING_CALIBRATION, CLINICAL_DOMAIN_COVERAGE)
 )
+REGISTERED_EVAL_SUITES: tuple[str, ...] = SUPPORTED_SUITES
 
 
 def validate_suite_name(name: str) -> str:
     """Return *name* if it is one of the scaffolded benchmark suites."""
-    if name not in SUPPORTED_SUITES:
-        allowed = ", ".join(SUPPORTED_SUITES)
+    if name not in REGISTERED_EVAL_SUITES:
+        allowed = ", ".join(REGISTERED_EVAL_SUITES)
         raise ValueError(
             f"unknown benchmark suite {name!r}; expected one of: {allowed}"
         )
@@ -349,6 +357,11 @@ def validate_suite_name(name: str) -> str:
 def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     """Load benchmark fixtures for a named suite."""
     suite = validate_suite_name(name)
+    if suite == CLINICAL_DOMAIN_COVERAGE:
+        raise ValueError(
+            "clinical domain coverage is an aggregate gate; "
+            "call run_domain_coverage instead of loading model fixtures"
+        )
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
     if suite == OPENMED_SYNTH:
@@ -433,6 +446,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
 def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
+    if suite == CLINICAL_DOMAIN_COVERAGE:
+        return domain_coverage_metadata()
     if suite == I2B2:
         metadata = i2b2_suite_metadata()
         metadata["path_config"] = kwargs.get("path_config", I2B2_PATH_ENV)
@@ -660,6 +675,8 @@ __all__ = [
     "scan_restricted_corpus_markers",
     "DEFAULT_SUITES",
     "SUPPORTED_SUITES",
+    "REGISTERED_EVAL_SUITES",
+    "CLINICAL_DOMAIN_COVERAGE",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
@@ -668,6 +685,7 @@ __all__ = [
     "openmed_synth_reference_runner",
     "openmed_synth_suite_metadata",
     "run_openmed_synth_benchmark",
+    "run_domain_coverage",
     "run_comparator_matrix",
     "run_indic_encoder_recall_delta",
     "evaluate_chinese_terminology_leakage",

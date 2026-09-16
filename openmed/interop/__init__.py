@@ -48,6 +48,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "airflow": AdapterSpec(
+        name="airflow",
+        module="openmed.interop.airflow",
+        extra="airflow",
+        description="Airflow operator for bounded local redaction",
+    ),
     "beam": AdapterSpec(
         name="beam",
         module="openmed.interop.beam_transform",
@@ -180,6 +186,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="spark",
         description="PySpark pandas_udf for batch column de-identification",
     ),
+    "snowflake": AdapterSpec(
+        name="snowflake",
+        module="openmed.interop.snowflake_udf",
+        extra="snowflake",
+        description="Snowpark Python UDF for in-warehouse de-identification",
+    ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",
         module="openmed.interop.gliner_biomed",
@@ -221,6 +233,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.openmrs",
         extra="openmrs",
         description="Local-first OpenMRS REST and FHIR2 de-identification adapter",
+    ),
+    "opensearch": AdapterSpec(
+        name="opensearch",
+        module="openmed.interop.opensearch",
+        extra="",
+        description="Local-first OpenSearch ingest redaction processor",
+    ),
+    "fhir_server": AdapterSpec(
+        name="fhir_server",
+        module="openmed.interop.fhir_server",
+        extra="fhir",
+        description="FHIR R4 server narrative de-identification connector",
     ),
 }
 

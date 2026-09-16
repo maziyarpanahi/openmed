@@ -1,0 +1,107 @@
+name: Feature request
+description: Suggest an improvement or new capability for OpenMed
+title: "[FEATURE] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement.
+
+        **Do not include protected health information (PHI), personally identifiable information (PII), secrets, or real patient data.** Use only synthetic or fully de-identified examples. Report security vulnerabilities privately through [GitHub Security Advisories](https://github.com/maziyarpanahi/openmed/security/advisories/new).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or limitation
+      description: Describe the problem this feature would solve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or capability you would like.
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Explain the workflow this feature would enable and who benefits.
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal_workflow
+    attributes:
+      label: Minimal example or workflow
+      description: Show the smallest synthetic example of how the feature would be used.
+      placeholder: Describe the current steps and the proposed steps, or include a small synthetic code example.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any workarounds or alternative solutions you considered.
+
+  - type: input
+    id: openmed_version
+    attributes:
+      label: OpenMed version
+      description: Enter the version you currently use, or `N/A` if this is not version-specific.
+      placeholder: e.g. 2.1.0 or N/A
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      description: Enter the relevant OS, or `N/A` if this is not platform-specific.
+      placeholder: e.g. Windows 11, Ubuntu 24.04, macOS 15, or N/A
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      description: Enter the relevant Python version, or `N/A` if it does not apply.
+      placeholder: e.g. 3.12.4 or N/A
+    validations:
+      required: true
+
+  - type: input
+    id: model_id
+    attributes:
+      label: Model ID
+      description: Provide the relevant model ID, or enter `N/A` if no model is involved.
+      placeholder: e.g. OpenMed/... or N/A
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation_suggestions
+    attributes:
+      label: Implementation suggestions
+      description: Share any API, design, or implementation ideas you have.
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add any other relevant, non-sensitive details.
+
+  - type: checkboxes
+    id: privacy_confirmation
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I confirm that this issue contains no PHI, PII, secrets, or real patient data.
+          required: true
