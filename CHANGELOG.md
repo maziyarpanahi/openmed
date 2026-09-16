@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added bounded classic TIFF header preflight for both byte orders, with an
+  allowlisted first-IFD tag set, overflow-checked counts, offset bounds and
+  cycle detection inside a loaded prefix, value-free errors, and synthetic
+  plus Pillow-written file-level regression tests (#3046).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
