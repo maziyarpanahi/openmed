@@ -356,8 +356,9 @@ def detect_legacy_encoding(
 ) -> LegacyEncoding:
     """Conservatively detect ISCII or a supplied ASCII-remapped font.
 
-    A Devanagari ISCII attribute sequence is definitive. Otherwise at least
-    two valid high bytes, including a core ISCII consonant, are required. A
+    A Devanagari ISCII attribute prefix or a dense run containing at least
+    four core ISCII consonants identifies a candidate. The complete candidate
+    must also decode as strict ISCII; malformed candidates remain Unicode. A
     legacy-font candidate needs a dense run of at least three mapped bytes and
     must produce Devanagari letters. These gates intentionally prefer a false
     negative over corrupting an ordinary Latin clinical note.
@@ -368,13 +369,10 @@ def detect_legacy_encoding(
         return "unicode"
     if _is_non_ascii_utf8(raw):
         return "unicode"
-    if raw.startswith(b"\xef\x42"):
-        return "iscii"
-
     content_bytes = [byte for byte in raw if byte not in _LEGACY_GAP_BYTES]
     high_bytes = [byte for byte in content_bytes if byte >= 0xA0]
     valid_high = [byte for byte in high_bytes if byte in _ISCII_TO_UNICODE]
-    if (
+    if raw.startswith(b"\xef\x42") or (
         len(valid_high) >= _MIN_AUTO_ISCII_CORE_LETTERS
         and len(valid_high) / max(1, len(high_bytes)) >= 0.8
         and len(valid_high) / max(1, len(content_bytes)) >= _MIN_AUTO_ISCII_DENSITY
@@ -383,6 +381,13 @@ def detect_legacy_encoding(
         and not any(0x80 <= byte <= 0x9F for byte in raw)
         and not any(byte in _ISCII_UNDEFINED for byte in high_bytes)
     ):
+        # Frequency gates and a valid prefix cannot validate contextual control
+        # sequences. Use the decoder itself so auto-detection never selects
+        # ISCII for input that strict conversion would reject.
+        try:
+            iscii_to_unicode(raw, errors="strict")
+        except UnicodeDecodeError:
+            return "unicode"
         return "iscii"
 
     if legacy_font_map is not None and _legacy_font_candidate_runs(
