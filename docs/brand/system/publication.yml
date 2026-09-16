@@ -260,6 +260,7 @@ classification:
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
+    - clinical/nli-cascade.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
