@@ -2,6 +2,19 @@
 
 from importlib import import_module
 
+from .ade import (
+    ADE_RELATION_DISCLAIMER,
+    ADE_RELATION_SCHEMA_VERSION,
+    DRUG_TO_ADE,
+    DRUG_TO_REASON,
+    ADEAssertionStatus,
+    ADERelation,
+    ADERelationType,
+    DrugProtRelationHead,
+    MedicationADERecord,
+    extract_ade_relations,
+    reconstruct_medication_ade_records,
+)
 from .assertion_filter import (
     ASSERTION_FILTER_ADVISORY,
     RELATION_ASSERTION_STATUSES,
@@ -111,6 +124,17 @@ from .temporal import (
 )
 
 __all__ = [
+    "ADE_RELATION_DISCLAIMER",
+    "ADE_RELATION_SCHEMA_VERSION",
+    "DRUG_TO_ADE",
+    "DRUG_TO_REASON",
+    "ADEAssertionStatus",
+    "ADERelation",
+    "ADERelationType",
+    "DrugProtRelationHead",
+    "MedicationADERecord",
+    "extract_ade_relations",
+    "reconstruct_medication_ade_records",
     "ASSERTION_FILTER_ADVISORY",
     "RELATION_ASSERTION_STATUSES",
     "RELATION_CONFIRMED",
