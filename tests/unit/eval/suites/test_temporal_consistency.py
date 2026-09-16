@@ -11,6 +11,7 @@ from openmed.eval.golden import (
     list_fixture_paths,
     load_golden_fixtures,
 )
+from openmed.eval.harness import run_suite
 from openmed.eval.report import BenchmarkReport
 from openmed.eval.suites import (
     DEFAULT_SUITES,
@@ -115,6 +116,18 @@ def test_registry_selects_temporal_consistency_suite() -> None:
         load_temporal_consistency_fixtures()
     )
     assert suite_metadata(TEMPORAL_CONSISTENCY) == temporal_consistency_metadata()
+
+
+def test_shared_harness_runs_temporal_consistency_suite() -> None:
+    report = run_suite(
+        TEMPORAL_CONSISTENCY_FIXTURE_PATH,
+        suite=TEMPORAL_CONSISTENCY,
+        model_name="deterministic-context",
+    )
+
+    assert report.suite == TEMPORAL_CONSISTENCY
+    assert report.metrics["temporality_accuracy"] == 1.0
+    assert report.metrics["uncertainty_accuracy"] == 1.0
 
 
 def test_metadata_declares_schema_and_synthetic_provenance() -> None:
