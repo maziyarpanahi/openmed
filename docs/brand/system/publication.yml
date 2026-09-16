@@ -172,6 +172,7 @@ classification:
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
+    - clinical/section-provenance.md
     - clinical/concept-grounding.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md
