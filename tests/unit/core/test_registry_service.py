@@ -15,16 +15,18 @@ from pathlib import Path
 import pytest
 
 from openmed.core.baseline import write_baseline_store
-from openmed.core.registry_service import (
+from openmed.core.registry_slots import (
     RegistryGateError,
     RegistryMigrationError,
-    RegistryService,
     RegistryStateError,
     load_registry_state,
     migrate_registry_state,
     migrate_registry_state_file,
     registry_state_errors,
     semantic_version,
+)
+from openmed.core.registry_slots import (
+    SlotRegistryService as RegistryService,
 )
 
 _PII_MLX = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
@@ -485,3 +487,54 @@ def _ner_gate(repo_id: str, *, decision: str = "RELEASABLE") -> dict[str, object
         format_name="pytorch",
         decision=decision,
     )
+
+
+def test_released_family_api_reads_and_updates_v2_without_downgrading(
+    tmp_path: Path,
+) -> None:
+    from openmed.core.registry_service import RegistryService as FamilyRegistryService
+
+    manifest = _write_manifest(tmp_path)
+    state_path = _write_v2_state(tmp_path)
+    original = state_path.read_bytes()
+    family = FamilyRegistryService(manifest_path=manifest, state_path=state_path)
+    assert state_path.read_bytes() == original
+    assert family.state["schema_version"] == 1
+    assert set(family.pointers()) == {"PII", "NER"}
+    assert family.pointers(family="NER")["latest"] == _NER_A
+    assert family.lineage(family="NER") == []
+    family.flip_pointer(
+        family="NER", name="canary", target=_NER_B, gate_report=_ner_gate(_NER_B)
+    )
+    persisted = json.loads(state_path.read_text())
+    assert persisted["schema_version"] == 2
+    assert persisted["slots"][_NER_SLOT]["pointers"]["canary"] == _NER_B
+    before_bad_gate = state_path.read_bytes()
+    with pytest.raises(RegistryGateError):
+        family.flip_pointer(
+            family="NER",
+            name="latest",
+            target=_NER_B,
+            gate_report=_gate(_NER_B, family="NER", tier=None, format_name="mlx-fp"),
+        )
+    assert state_path.read_bytes() == before_bad_gate
+    family.promote(_NER_B, gate_report=_ner_gate(_NER_B))
+    family.rollback(family="NER", gate_report=_ner_gate(_NER_A))
+    assert family.pointers(family="NER")["latest"] == _NER_A
+    assert family.lineage(family="NER")[-1]["relation"] == "rolled-back-from"
+    family.save()
+    assert json.loads(state_path.read_text())["schema_version"] == 2
+
+
+def test_family_adapter_refuses_ambiguous_slots_without_writing(tmp_path: Path) -> None:
+    from openmed.core.registry_service import RegistryService as FamilyRegistryService
+
+    manifest = _write_manifest(tmp_path)
+    state_path = _write_v2_state(tmp_path)
+    payload = json.loads(state_path.read_text())
+    payload["slots"]["pii::small::pytorch"] = payload["slots"][_PII_SLOT]
+    state_path.write_text(json.dumps(payload))
+    original = state_path.read_bytes()
+    with pytest.raises(RegistryStateError, match="multiple registry slots"):
+        FamilyRegistryService(manifest_path=manifest, state_path=state_path)
+    assert state_path.read_bytes() == original
