@@ -314,23 +314,23 @@ def extract_clinical_entities(
     if not text:
         return []
 
-    loader: Any = None
+    loader = ModelLoader()
     try:
-        loader = ModelLoader()
         classifier = loader.create_pipeline(
             selected_model_id,
             task="token-classification",
             aggregation_strategy="simple",
         )
-        predictions = classifier(text)
     except Exception as exc:
-        if is_local_only(getattr(loader, "config", None)):
+        if is_local_only(loader.config):
             raise OfflineModeError(
                 f"Clinical model {selected_model_id!r} is not available in the "
                 f"local cache; {OFFLINE_ENV_VAR}/local_only=True blocks loading. "
                 f"Cache the model before offline use or unset {OFFLINE_ENV_VAR}."
             ) from exc
         raise
+
+    predictions = classifier(text)
 
     return [
         span

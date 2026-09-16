@@ -127,3 +127,24 @@ def test_offline_uncached_model_has_actionable_error(monkeypatch):
             "Synthetic note: diabetes",
             model_id="OpenMed/synthetic-uncached-model",
         )
+
+
+def test_offline_inference_error_is_not_misreported_as_cache_miss(monkeypatch):
+    class FailingClassifierLoader:
+        def __init__(self):
+            self.config = SimpleNamespace(local_only=False)
+
+        def create_pipeline(self, _model_name, **_kwargs):
+            def classify(_text):
+                raise RuntimeError("synthetic inference failure")
+
+            return classify
+
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+    monkeypatch.setattr(advanced_ner, "ModelLoader", FailingClassifierLoader)
+
+    with pytest.raises(RuntimeError, match="synthetic inference failure"):
+        advanced_ner.extract_clinical_entities(
+            "Synthetic note: diabetes",
+            model_id="OpenMed/synthetic-cached-model",
+        )
