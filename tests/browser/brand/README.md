@@ -7,9 +7,10 @@ deploy anything.
 The pinned Playwright suite covers Chromium, Firefox, and WebKit across the
 marketing site, documentation, real Chinese and Hindi routes, generated
 leaderboard, browser demo, and the non-indexed synthetic RTL fixture. The
-matrix exercises light and dark, including both OS-resolved first-visit states,
-mobile, landscape, desktop, print, a 400% zoom proxy, no-JavaScript,
-reduced-motion, text-spacing, keyboard-focus, and forced-colors states.
+matrix exercises light and dark across distinct mobile, landscape, tablet, and
+desktop breakpoints. Focused cases cover both OS-resolved first-visit states,
+print, a 400% zoom proxy, no-JavaScript, reduced-motion, text-spacing,
+keyboard-focus, and forced-colors states.
 
 Run the complete gate from the repository root:
 
@@ -22,14 +23,19 @@ checks the raw URL, body, headers, and method of every request (including
 same-origin requests) before routing. It disables trace, video, and screenshots,
 stores only URL hashes, and recursively checks its JSON attachment before
 writing it. A separate innocuous synthetic phrase drives the error-state visual
-baseline. Initial page loads must make no external requests.
+baseline. Optional GitHub metadata requests are fulfilled deterministically with
+the site's offline response in tests, so initial page loads make no uncontrolled
+external network requests.
 
 Failure screenshots, videos, traces, console/network evidence, and the HTML
 report are written below `output/playwright/` and uploaded by the Pages
 workflow for 14 days. Reviewed baselines live under
-`snapshots/<platform>/<project>/`. The normal matrix first exercises default
-motion, then switches the website to its reduced-motion state for deterministic
-goldens; a separate clock-controlled test advances every rotating word.
+`snapshots/<platform>/<project>/`. Representative renderer, breakpoint, and
+interaction states have visual baselines; the broader matrix uses DOM,
+accessibility, focus, overflow, privacy, and network assertions without
+content-wide screenshots. The normal matrix uses reduced motion from page load
+for deterministic accessibility scans and goldens; a separate clock-controlled
+test advances every rotating word.
 Refresh only after reviewing an intentional visual change:
 
 ```sh

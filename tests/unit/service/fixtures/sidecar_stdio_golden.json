@@ -1,0 +1,45 @@
+{
+  "protocol_version": 1,
+  "request": {
+    "id": "golden-1",
+    "operation": "deidentify",
+    "text": "Callback 425-555-0100 or email rowan@example.test.",
+    "options": {
+      "deterministic_only": true,
+      "doc_id": "synthetic-tauri-golden",
+      "policy": "hipaa_safe_harbor"
+    }
+  },
+  "expected": {
+    "deidentified_text": "Callback [phone_number] or email [email].",
+    "score_tolerance": 0.000001,
+    "spans": [
+      {
+        "schema_version": 1,
+        "doc_id": "synthetic-tauri-golden",
+        "start": 9,
+        "end": 21,
+        "text_hash": "hmac-sha256:8d355eab997d7de347c526fdc51fa4fec06853b9fb892726e36587776ffc9271",
+        "entity_type": "phone_number",
+        "canonical_label": "PHONE",
+        "policy_label": "DIRECT_IDENTIFIER",
+        "score": 0.85,
+        "action": "mask",
+        "replacement": "[phone_number]"
+      },
+      {
+        "schema_version": 1,
+        "doc_id": "synthetic-tauri-golden",
+        "start": 31,
+        "end": 49,
+        "text_hash": "hmac-sha256:57fe19d554a6a763ea4da70ce4a5ce066e4f09a20209e489c0598fa490c46bf9",
+        "entity_type": "email",
+        "canonical_label": "EMAIL",
+        "policy_label": "DIRECT_IDENTIFIER",
+        "score": 1.0,
+        "action": "mask",
+        "replacement": "[email]"
+      }
+    ]
+  }
+}
