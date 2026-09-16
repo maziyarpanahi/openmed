@@ -108,6 +108,7 @@ classification:
     - agent/artifact-references.md
     - agent/governance-identifiers.md
     - agent/event-correlation.md
+    - agent/event-sequences.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
     - agent/timing-metadata.md
