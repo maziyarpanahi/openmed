@@ -71,6 +71,26 @@ def test_uncertainty_axis_is_carried_to_the_relation() -> None:
     assert relation.certainty == UNCERTAIN
 
 
+def test_uncertainty_is_scoped_to_each_relative_clause() -> None:
+    text = "mother may have breast cancer, father has myocardial infarction"
+
+    relations = extract_family_history_relations(
+        text,
+        [
+            _span(text, "breast cancer", "CONDITION"),
+            _span(text, "myocardial infarction", "CONDITION"),
+        ],
+    )
+
+    assert [
+        (relation.relative.text, relation.condition.text, relation.certainty)
+        for relation in relations
+    ] == [
+        ("mother", "breast cancer", UNCERTAIN),
+        ("father", "myocardial infarction", CERTAIN),
+    ]
+
+
 def test_explicit_uncertainty_and_family_section_are_supported() -> None:
     text = "Family History:\nMother has diabetes.\nAssessment:\nPatient has asthma."
     diabetes = _span(text, "diabetes", "CONDITION")

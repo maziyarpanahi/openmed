@@ -710,7 +710,7 @@ def _condition_certainty(
 ) -> str:
     if condition.explicit_certainty is not None:
         return condition.explicit_certainty
-    scoped_text = _mask_outside_condition_section(text, condition, sections)
+    scoped_text = _mask_outside_condition_clause(text, condition, sections)
     return resolve_uncertainty(
         {
             "text": text[condition.reference.start : condition.reference.end],
@@ -721,7 +721,7 @@ def _condition_certainty(
     )
 
 
-def _mask_outside_condition_section(
+def _mask_outside_condition_clause(
     text: str,
     condition: _InputSpan,
     sections: Sequence[_Section],
@@ -732,13 +732,21 @@ def _mask_outside_condition_section(
         if section.start <= condition.reference.start
         and condition.reference.end <= section.end
     ]
-    if not containing:
-        return text
-    section = min(containing, key=lambda item: item.end - item.start)
+    if containing:
+        section = min(containing, key=lambda item: item.end - item.start)
+        scope_start, scope_end = section.start, section.end
+    else:
+        scope_start, scope_end = 0, len(text)
+
+    for boundary in _CLAUSE_BOUNDARY_RE.finditer(
+        text, scope_start, condition.reference.start
+    ):
+        scope_start = boundary.end()
+    boundary = _CLAUSE_BOUNDARY_RE.search(text, condition.reference.end, scope_end)
+    if boundary is not None:
+        scope_end = boundary.start()
     return (
-        " " * section.start
-        + text[section.start : section.end]
-        + " " * (len(text) - section.end)
+        " " * scope_start + text[scope_start:scope_end] + " " * (len(text) - scope_end)
     )
 
 
