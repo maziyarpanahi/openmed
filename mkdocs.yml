@@ -196,6 +196,10 @@ nav:
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
       - Conservative Temporal Intervals: clinical/temporal-intervals.md
+      - Section-aware note routing: clinical/note-routing.md
+      - Radiology Finding Profile: clinical/radiology-profile.md
+      - Pathology result profile: clinical/pathology-profile.md
+      - Structured discharge-summary profile: clinical/discharge-profile.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
