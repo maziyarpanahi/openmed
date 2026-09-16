@@ -5,6 +5,9 @@ metadata. It composes deterministic ConText-style axes, section priors, scoped
 modifier hits, and lightweight normalization helpers so downstream exporters can
 keep clinical text extraction transparent.
 
+For a bounded composition of sections, source-aligned entities, assertions, and
+cue evidence, see the [clinical context analysis API](context-analysis.md).
+
 !!! warning "Advisory annotations only"
     Context and extraction-depth outputs are advisory annotations for review,
     quality checks, and downstream processing. They must not automatically
@@ -350,6 +353,56 @@ def condition_status_for_context(text: str, modifiers: list[str]) -> dict[str, s
 
 print(condition_status_for_context("pneumonia", ["possible"]))
 print(condition_status_for_context("pneumonia", ["no evidence of"]))
+```
+
+## Patient-Record Span Filter
+
+`filter_patient_record(spans, assertions)` is the shared guarded filter that
+applies the documented inclusion policy to per-span `ClinicalAssertion` records
+and partitions them into patient-record eligible and excluded sets. It prevents
+every grounding/export consumer from re-implementing the "drop non-patient,
+mark negated as refuted" policy independently.
+
+The policy is hard at the experiencer boundary:
+
+* `experiencer` must be `patient` (or unset) for a span to be included.
+  Both `family` and `other` experiencers are excluded with
+  `exclusion_reason='non-patient experiencer'`.
+* `temporality=hypothetical` spans are excluded with
+  `exclusion_reason='hypothetical'` (not asserted as present).
+* `negation=negated` patient spans are **kept** and marked
+  `record_status='refuted'` so downstream grounding can emit
+  `verificationStatus=refuted`.
+* All other patient spans are included with `record_status='recorded'`.
+
+Every input span appears in exactly one output set with an auditable reason or
+status; no span is silently dropped. The filter is a deterministic
+record-construction aid, not a clinical determination.
+
+```python
+from openmed.clinical import (
+    AFFIRMED,
+    CERTAIN,
+    NEGATED,
+    OTHER_EXPERIENCER,
+    PATIENT_EXPERIENCER,
+    RECENT,
+    ClinicalAssertion,
+    filter_patient_record,
+)
+
+spans = [
+    {"text": "diabetes", "start": 0, "end": 8, "label": "CONDITION"},
+    {"text": "mother cancer", "start": 10, "end": 23, "label": "CONDITION"},
+]
+assertions = [
+    ClinicalAssertion(temporality=RECENT, certainty=CERTAIN, negation=AFFIRMED, experiencer=PATIENT_EXPERIENCER),
+    ClinicalAssertion(temporality=RECENT, certainty=CERTAIN, negation=AFFIRMED, experiencer=OTHER_EXPERIENCER),
+]
+
+included, excluded = filter_patient_record(spans, assertions)
+# included:  [PatientRecordSpan(span=spans[0], record_status='recorded')]
+# excluded:  [PatientRecordSpan(span=spans[1], exclusion_reason='non-patient experiencer')]
 ```
 
 ## Timeline, Relation, And Normalization Helpers

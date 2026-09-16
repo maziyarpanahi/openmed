@@ -5,10 +5,17 @@ from __future__ import annotations
 import pytest
 from faker import Faker
 
+from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import FAKER_BACKEND_LOCALE
 from openmed.core.anonymizer.providers import registry_ids
 from openmed.core.anonymizer.providers.clinical_ids import (
     AfricanPhoneProvider,
+    BangladeshNIDProvider,
+    IranNationalIDProvider,
+    IrishPPSProvider,
+    JapaneseMyNumberProvider,
+    MexicanCURPProvider,
+    MexicanRFCProvider,
     register_clinical_providers,
 )
 from openmed.core.anonymizer.providers.registry_ids import (
@@ -17,6 +24,15 @@ from openmed.core.anonymizer.providers.registry_ids import (
     clinical_faker_provider_classes,
     get_national_id,
     register_national_id,
+)
+from openmed.core.pii_i18n import (
+    validate_bangladesh_nid,
+    validate_bengali_aadhaar,
+    validate_iran_national_id,
+    validate_irish_pps,
+    validate_japanese_my_number,
+    validate_mexican_curp,
+    validate_mexican_rfc,
 )
 
 
@@ -37,8 +53,13 @@ EXPECTED_VALIDATOR_KEYS = (
     ("it", "codice_fiscale"),
     ("es", "dni"),
     ("es", "nie"),
+    ("es", "curp"),
+    ("es", "rfc"),
     ("nl", "bsn"),
+    ("en_IE", "pps"),
+    ("ja", "my_number"),
     ("in", "aadhaar"),
+    ("ir", "iran_national_id"),
     ("zh", "resident_id"),
     ("in", "pan"),
     ("in", "gstin"),
@@ -92,8 +113,13 @@ ROUND_TRIP_CASES = (
     ("it", "codice_fiscale", "it_IT"),
     ("es", "dni", "es_ES"),
     ("es", "nie", "es_ES"),
+    ("es", "curp", "es_MX"),
+    ("es", "rfc", "es_MX"),
     ("nl", "bsn", "nl_NL"),
+    ("en_IE", "pps", "en_IE"),
+    ("ja", "my_number", "ja_JP"),
     ("in", "aadhaar", "en_IN"),
+    ("ir", "iran_national_id", "fa_IR"),
     ("zh", "resident_id", "zh_CN"),
     ("in", "pan", "en_IN"),
     ("in", "gstin", "en_IN"),
@@ -168,6 +194,138 @@ class TestNationalIdRegistry:
                 f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
             )
 
+    def test_mexican_curp_and_rfc_aliases_generate_valid_surrogates(self):
+        faker = Faker("es_MX")
+        register_clinical_providers(faker)
+        faker.seed_instance(826)
+
+        curp_spec = get_national_id("ES-mx", "CURP")
+        rfc_spec = get_national_id("mx", "RFC")
+        assert curp_spec is not None
+        assert rfc_spec is not None
+        assert curp_spec.validate is validate_mexican_curp
+        assert rfc_spec.validate is validate_mexican_rfc
+
+        curp = getattr(faker, curp_spec.faker_method)("MOBI851113MSPMTP95")
+        person_rfc = getattr(faker, rfc_spec.faker_method)("MYNB630325659")
+        company_rfc = getattr(faker, rfc_spec.faker_method)("MYN430819Q64")
+
+        assert curp != "MOBI851113MSPMTP95"
+        assert validate_mexican_curp(curp)
+        assert len(person_rfc) == 13
+        assert len(company_rfc) == 12
+        assert validate_mexican_rfc(person_rfc)
+        assert validate_mexican_rfc(company_rfc)
+        assert clinical_faker_provider_classes().count(MexicanCURPProvider) == 1
+        assert clinical_faker_provider_classes().count(MexicanRFCProvider) == 1
+
+    @pytest.mark.parametrize(
+        ("source", "validator", "length"),
+        (
+            ("MOBI851113MSPMTP95", validate_mexican_curp, 18),
+            ("MYNB630325659", validate_mexican_rfc, 13),
+            ("MYN430819Q64", validate_mexican_rfc, 12),
+        ),
+    )
+    def test_es_mx_anonymizer_dispatch_preserves_identifier_form(
+        self,
+        source,
+        validator,
+        length,
+    ):
+        surrogate = Anonymizer(
+            lang="es",
+            locale="es_MX",
+            consistent=True,
+            seed=826,
+        ).surrogate(source, "national_id")
+
+        assert surrogate != source
+        assert len(surrogate) == length
+        assert validator(surrogate)
+
+    def test_bengali_id_aliases_resolve_and_generate(self):
+        faker = Faker("bn_BD")
+        register_clinical_providers(faker)
+        faker.seed_instance(292)
+
+        for alias in ("bn", "bn_BD"):
+            aadhaar_spec = get_national_id(alias, "aadhaar")
+            assert aadhaar_spec is not None
+            assert aadhaar_spec.validate(faker.aadhaar())
+
+        for alias in ("bd", "bn", "bn_BD"):
+            nid_spec = get_national_id(alias, "bangladesh_nid")
+            assert nid_spec is not None
+            assert nid_spec.validate(faker.bangladesh_nid())
+
+        assert clinical_faker_provider_classes().count(BangladeshNIDProvider) == 1
+
+    def test_bengali_anonymizer_dispatches_aadhaar_and_bangladesh_nid(self):
+        anonymizer = Anonymizer(lang="bn", consistent=True, seed=292)
+
+        aadhaar = anonymizer.surrogate(
+            "২৪৬৭ ৭৮৩২ ৫৪৮৪",
+            "national_id",
+        )
+        nid = anonymizer.surrogate(
+            "১২৩৪৫৬৭৮৯০",
+            "national_id",
+        )
+
+        assert validate_bengali_aadhaar(aadhaar)
+        assert validate_bangladesh_nid(nid)
+        assert len(nid) == 10
+
+    @pytest.mark.parametrize("length", (10, 13, 17))
+    def test_bangladesh_nid_provider_preserves_length(self, length):
+        faker = Faker("bn_BD")
+        register_clinical_providers(faker)
+        faker.seed_instance(length)
+
+        original = "1" + ("0" * (length - 1))
+        surrogate = faker.bangladesh_nid(original)
+        spec = get_national_id("bn_BD", "bangladesh_nid")
+
+        assert spec is not None
+        assert surrogate != original
+        assert len(surrogate) == length
+        assert spec.validate(surrogate)
+
+    def test_iran_national_id_aliases_resolve_and_generate(self):
+        faker = Faker("fa_IR")
+        register_clinical_providers(faker)
+        faker.seed_instance(295)
+
+        for alias in ("ir", "fa", "fa_IR"):
+            spec = get_national_id(alias, "iran_national_id")
+            assert spec is not None
+            assert spec.validate(faker.iran_national_id())
+
+        assert clinical_faker_provider_classes().count(IranNationalIDProvider) == 1
+
+    @pytest.mark.parametrize(
+        "original",
+        ("1234567891", "۱۲۳۴۵۶۷۸۹۱", "١٢٣٤٥٦٧٨٩١"),
+    )
+    def test_iran_national_id_provider_returns_distinct_valid_id(self, original):
+        faker = Faker("fa_IR")
+        register_clinical_providers(faker)
+        faker.seed_instance(295)
+
+        surrogate = faker.iran_national_id(original)
+
+        assert surrogate != "1234567891"
+        assert validate_iran_national_id(surrogate)
+
+    def test_persian_anonymizer_dispatches_iran_national_id(self):
+        anonymizer = Anonymizer(lang="fa", consistent=True, seed=295)
+
+        surrogate = anonymizer.surrogate("۱۲۳۴۵۶۷۸۹۱", "national_id")
+
+        assert surrogate != "1234567891"
+        assert validate_iran_national_id(surrogate)
+
     @pytest.mark.parametrize(("lang", "id_type"), EXPECTED_VALIDATOR_KEYS)
     def test_pre_existing_validators_are_reachable(self, lang, id_type):
         spec = get_national_id(lang, id_type)
@@ -193,6 +351,40 @@ class TestNationalIdRegistry:
         assert spec.validate(surrogate), (
             f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
         )
+
+    def test_checksum_provider_specs_use_the_new_validators(self):
+        pps_spec = get_national_id("en_IE", "pps")
+        my_number_spec = get_national_id("ja", "my_number")
+
+        assert pps_spec is not None
+        assert pps_spec.validate is validate_irish_pps
+        assert pps_spec.faker_provider is IrishPPSProvider
+        assert my_number_spec is not None
+        assert my_number_spec.validate is validate_japanese_my_number
+        assert my_number_spec.faker_provider is JapaneseMyNumberProvider
+
+    @pytest.mark.parametrize(
+        ("language", "locale", "validator"),
+        (
+            ("en", "en_IE", validate_irish_pps),
+            ("ja", "ja_JP", validate_japanese_my_number),
+        ),
+    )
+    def test_checksum_locale_dispatch_generates_valid_surrogates(
+        self,
+        language,
+        locale,
+        validator,
+    ):
+        anonymizer = Anonymizer(lang=language, consistent=True, seed=827)
+
+        surrogate = anonymizer.surrogate(
+            "synthetic-id",
+            "national_id",
+            locale=locale,
+        )
+
+        assert validator(surrogate)
 
     def test_lookup_normalizes_case_hyphens_and_locale(self):
         assert get_national_id("IT-it", "Codice Fiscale") == get_national_id(
