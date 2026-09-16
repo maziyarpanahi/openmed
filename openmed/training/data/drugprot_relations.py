@@ -52,8 +52,9 @@ class DrugProtRelationExample:
     """One positive or hard-negative example for the joint relation head.
 
     ``head_span``, ``tail_span``, and ``relation_type`` are the training view.
-    The ``head``, ``tail``, and ``type`` aliases expose the section 5.4
-    ``Relation(head, type, tail)`` shape used by the clinical relation API.
+    The ``head``, ``tail``, ``type``, and ``score`` aliases expose the section
+    5.4 ``Relation(head, type, tail, score)`` shape used by the clinical
+    relation API.
     ``relation_type`` is ``None`` for a no-relation negative, matching the
     joint-head span-pair convention.
     """
@@ -102,16 +103,22 @@ class DrugProtRelationExample:
         return self.relation_type
 
     @property
+    def score(self) -> float:
+        """Return the binary gold score used by the relation-shape view."""
+        return 0.0 if self.is_negative else 1.0
+
+    @property
     def is_negative(self) -> bool:
         """Return whether this is a sampled no-relation pair."""
         return self.relation_type is None
 
     def to_relation_dict(self) -> dict[str, Any]:
-        """Return the clinical ``Relation(head, type, tail)`` shape."""
+        """Return the clinical ``Relation(head, type, tail, score)`` shape."""
         return {
             "head": self.head_span.to_dict(),
             "type": self.relation_type,
             "tail": self.tail_span.to_dict(),
+            "score": self.score,
         }
 
     def to_dict(self) -> dict[str, Any]:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from openmed.clinical.relations import Relation
 from openmed.eval.datasets import DRUGPROT, DRUGPROT_RELATION_TYPES, license_for
 from openmed.training.data import (
     DRUGPROT_RELATION_LABELS,
@@ -57,6 +58,7 @@ def test_positive_examples_match_joint_and_clinical_relation_shapes() -> None:
     assert first.head is first.head_span
     assert first.tail is first.tail_span
     assert first.type == "inhibitor"
+    assert first.score == 1.0
     assert first.head_span.to_dict() == {
         "text": "Aspirin",
         "label": "chemical",
@@ -75,7 +77,15 @@ def test_positive_examples_match_joint_and_clinical_relation_shapes() -> None:
         "head": first.head_span.to_dict(),
         "type": "inhibitor",
         "tail": first.tail_span.to_dict(),
+        "score": 1.0,
     }
+    runtime_relation = Relation(
+        head=first.head_span,
+        type="dose",
+        tail=first.tail_span,
+        score=1.0,
+    )
+    assert set(first.to_relation_dict()) == set(runtime_relation.to_dict())
     assert set(first.to_dict()) == {
         "text",
         "head_span",
@@ -129,6 +139,7 @@ def test_hard_negatives_are_deterministic_cooccurring_unrelated_pairs() -> None:
         for example in negatives
     } == {("T1", "T4"), ("T3", "T2")}
     assert all(example.relation_type is None for example in negatives)
+    assert all(example.score == 0.0 for example in negatives)
     assert all(example.metadata["is_negative"] is True for example in negatives)
     assert all(example.metadata["source_pmid"] == "DP1" for example in negatives)
     assert all(example.head_span.label == "chemical" for example in negatives)
