@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, privacy-safe diffs of agent run summaries with sorted
+  added and removed workflow identifiers and artifact digests, signed outcome,
+  tool-call, and duration deltas, and byte-stable JSON and Markdown output
+  (#3040).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).

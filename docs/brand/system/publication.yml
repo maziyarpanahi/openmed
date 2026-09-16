@@ -110,6 +110,7 @@ classification:
     - agent/event-correlation.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
+    - agent/run-diffs.md
     - agent/timing-metadata.md
     - agent-skills/install.md
     - agent-skills/validation.md

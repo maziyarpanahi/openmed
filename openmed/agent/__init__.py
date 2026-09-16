@@ -35,6 +35,12 @@ from .outcomes import (
     WorkflowOutcome,
     allowed_reason_codes,
 )
+from .run_diff import (
+    RUN_DIFF_SCHEMA_VERSION,
+    RunDiffError,
+    RunSummaryDiff,
+    diff_run_summaries,
+)
 from .run_summary import (
     MAX_RUN_SUMMARY_JSON_BYTES,
     RUN_SUMMARY_SCHEMA_VERSION,
@@ -65,10 +71,13 @@ __all__ = [
     "OutcomeError",
     "MAX_ARTIFACT_BYTE_SIZE",
     "MAX_RUN_SUMMARY_JSON_BYTES",
+    "RUN_DIFF_SCHEMA_VERSION",
+    "RunDiffError",
     "RunEvent",
     "RUN_SUMMARY_SCHEMA_VERSION",
     "RunSummary",
     "RunSummaryError",
+    "RunSummaryDiff",
     "RunSummaryPrivacyError",
     "RunTiming",
     "RUN_ID_PREFIX",
@@ -80,6 +89,7 @@ __all__ = [
     "WorkflowOutcome",
     "WorkflowId",
     "allowed_reason_codes",
+    "diff_run_summaries",
     "security",
     "validate_artifact_references",
 ]
