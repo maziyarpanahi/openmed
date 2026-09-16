@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added PHI-safe categorical error envelopes for agent execution, mapping
+  the documented public failure classes onto stable codes, validated
+  class/stage combinations and derived retryability, with no free-text
+  field and no exception message, argument or traceback retained (#2995).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
