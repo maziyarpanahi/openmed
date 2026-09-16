@@ -46,6 +46,7 @@ from .candidate import (
     build_relation_candidates,
     enumerate_joint_span_candidates,
     enumerate_span_pair_candidates,
+    generate_relation_candidates,
     sample_negative_span_pairs,
     split_sentence_offsets,
 )
@@ -186,6 +187,7 @@ __all__ = [
     "extract_problem_relations",
     "enumerate_joint_span_candidates",
     "enumerate_span_pair_candidates",
+    "generate_relation_candidates",
     "link_medication_attributes",
     "reconstruct_medication_statements",
     "CMEIE_ENTITY_TYPES",
