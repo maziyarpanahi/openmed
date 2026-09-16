@@ -11,6 +11,7 @@ from openmed.core.registry_service import (
     REGISTRY_STATE_PATH,
     RegistryError,
     RegistryService,
+    SlotRegistryService,
 )
 
 from ._output import EXIT_ERROR, CliError, emit
@@ -27,7 +28,11 @@ def add_registry_command(subparsers: argparse._SubParsersAction) -> None:
 
     list_parser = commands.add_parser("list", help="List named registry pointers.")
     _add_local_state_arguments(list_parser)
-    list_parser.add_argument(
+    selectors = list_parser.add_mutually_exclusive_group()
+    selectors.add_argument(
+        "--family", default=None, help="Limit output to one model family."
+    )
+    selectors.add_argument(
         "--slot", default=None, help="Limit output to one family::tier::format slot."
     )
     list_parser.set_defaults(handler=_handle_list)
@@ -70,9 +75,13 @@ def _add_local_state_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _service(args: argparse.Namespace) -> RegistryService:
+def _service(args: argparse.Namespace) -> RegistryService | SlotRegistryService:
     try:
-        return RegistryService(manifest_path=args.manifest, state_path=args.state)
+        selector = getattr(args, "slot", None)
+        service_type = (
+            SlotRegistryService if selector and "::" in selector else RegistryService
+        )
+        return service_type(manifest_path=args.manifest, state_path=args.state)
     except RegistryError as exc:
         raise CliError(
             f"Failed to load registry state: {exc}",
@@ -83,12 +92,16 @@ def _service(args: argparse.Namespace) -> RegistryService:
 
 def _handle_list(args: argparse.Namespace) -> int:
     service = _service(args)
-    pointers = service.pointers(args.slot)
+    selector = args.slot or args.family
+    pointers = service.pointers(selector)
     if args.slot is not None:
         payload = {"slot": args.slot, "pointers": pointers}
         human = _format_pointer_set(args.slot, pointers)
+    elif args.family is not None:
+        payload = {"family": args.family, "pointers": pointers}
+        human = _format_pointer_set(args.family, pointers)
     else:
-        payload = {"slots": pointers}
+        payload = {"families": pointers}
         human = "\n".join(
             _format_pointer_set(slot, slot_pointers)
             for slot, slot_pointers in pointers.items()
@@ -111,7 +124,7 @@ def _handle_lineage(args: argparse.Namespace) -> int:
     )
     return emit(
         args,
-        {"slot": args.slot, "lineage": lineage},
+        {("slot" if "::" in args.slot else "family"): args.slot, "lineage": lineage},
         human=human,
     )
 
@@ -136,7 +149,7 @@ def _handle_rollback(args: argparse.Namespace) -> int:
     return emit(
         args,
         {
-            "slot": args.slot,
+            ("slot" if "::" in args.slot else "family"): args.slot,
             "pointers": pointers,
             "lineage_edge": lineage[-1] if lineage else None,
         },

@@ -210,6 +210,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
         context_scripts=("Hiragana/Katakana",),
+        national_id_provider=("ja_JP", "my_number"),
     ),
     LanguagePack(
         code="zh",
