@@ -188,6 +188,9 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/review-override-reasons.md
+    - clinical/review-packet-privacy.md
+    - clinical/review-packet-migrations.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
@@ -467,9 +470,6 @@ classification:
     - api-reference.md
   link_only:
     - clinical/context-analysis.md
-    - clinical/review-override-reasons.md
-    - clinical/review-packet-privacy.md
-    - clinical/review-packet-migrations.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md
     - clinical-domains.md
