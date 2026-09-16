@@ -272,6 +272,7 @@ classification:
     - export-gguf.md
     - clinical/note-routing.md
     - clinical/radiology-profile.md
+    - clinical/pathology-profile.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md

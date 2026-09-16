@@ -360,6 +360,17 @@ from .oncotree import (
     load_oncotree,
     map_tumor_type,
 )
+from .pathology_profile import (
+    PATHOLOGY_FIELD_NAMES,
+    PATHOLOGY_RESULT_ADVISORY,
+    PathologyBiomarker,
+    PathologyEvidenceSpan,
+    PathologyField,
+    PathologyFieldName,
+    PathologyResult,
+    extract_pathology_profile,
+    extract_pathology_result,
+)
 from .problem_list import (
     ACTIVE,
     INACTIVE,
@@ -920,6 +931,15 @@ __all__ = [
     "extract_radiology_finding_profile",
     "extract_radiology_profile",
     "parse_radiology_finding_profile",
+    "PATHOLOGY_FIELD_NAMES",
+    "PATHOLOGY_RESULT_ADVISORY",
+    "PathologyBiomarker",
+    "PathologyEvidenceSpan",
+    "PathologyField",
+    "PathologyFieldName",
+    "PathologyResult",
+    "extract_pathology_profile",
+    "extract_pathology_result",
     "GENERIC_NOTE_TYPE_PROFILE",
     "GENERIC_PROFILE",
     "PATHOLOGY_NOTE_TYPE_PROFILE",
