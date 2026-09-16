@@ -4516,6 +4516,48 @@ def radiology_finding_tuple_f1(
     )
 
 
+_BIOMARKER_RESULT_TUPLE_FIELDS = (
+    "gene",
+    "variant_or_finding",
+    "result_value",
+    "method",
+    "result_polarity",
+)
+
+
+def _biomarker_result_tuple(item: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Return the exact evaluation key for one biomarker result."""
+
+    return tuple(item.get(field) for field in _BIOMARKER_RESULT_TUPLE_FIELDS)
+
+
+def biomarker_result_tuple_f1(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> F1Metrics:
+    """Compute exact multiset tuple F1 for linked biomarker results.
+
+    A match requires equality of gene, variant/finding, result value, normalized
+    method, and normalized polarity. Advisory text and byte provenance are
+    excluded from tuple identity and are validated separately by callers.
+    """
+
+    predicted_counts: Counter[tuple[Any, ...]] = Counter(
+        _biomarker_result_tuple(item) for item in predicted
+    )
+    gold_counts: Counter[tuple[Any, ...]] = Counter(
+        _biomarker_result_tuple(item) for item in gold
+    )
+    true_positives = sum(
+        min(count, gold_counts.get(key, 0)) for key, count in predicted_counts.items()
+    )
+    return _f1_from_counts(
+        true_positives,
+        sum(predicted_counts.values()),
+        sum(gold_counts.values()),
+    )
+
+
 HGVS_FIELDS: tuple[str, ...] = (
     "reference_sequence",
     "coordinate_type",
@@ -5871,6 +5913,7 @@ __all__ = [
     "extract_clinical_facts",
     "summary_faithfulness_metrics",
     "build_summary_faithfulness_report",
+    "biomarker_result_tuple_f1",
     "merge_faithfulness_metrics",
     "normalize_radiology_entity",
     "normalize_radiology_entities",
