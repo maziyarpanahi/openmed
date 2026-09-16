@@ -124,7 +124,9 @@ IMAGING_MODALITY: Final = "IMAGING_MODALITY"
 LATERALITY: Final = "LATERALITY"
 MEASUREMENT: Final = "MEASUREMENT"
 
-#: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO)
+#: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO).
+#: Laboratory labels expose only future coding-system intent; no UMLS or LOINC
+#: vocabulary is bundled with OpenMed.
 CONDITION: Final = "CONDITION"
 MEDICATION: Final = "MEDICATION"
 LAB_TEST: Final = "LAB_TEST"
@@ -132,11 +134,6 @@ PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
 #: Procedure-record device concepts (issue #313)
 DEVICE: Final = "DEVICE"
-#: Immunology, mental-health, and dentistry domain concepts (issue #2358)
-ALLERGEN: Final = "ALLERGEN"
-IMMUNIZATION: Final = "IMMUNIZATION"
-PSYCH_SYMPTOM: Final = "PSYCH_SYMPTOM"
-TOOTH: Final = "TOOTH"
 
 #: Canonical non-identifier labels shared by the biomedical NER families.
 BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
@@ -171,7 +168,9 @@ _BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS: Final[FrozenSet[str]] = BIOMEDICAL_LABELS -
     CONDITION
 }
 
-#: Relation-extraction head and attribute concepts (issue #252)
+#: Relation-extraction and laboratory measurement concepts (issues #252/#2353).
+#: ``LOINC`` in the metadata below documents the intended future linkage for
+#: lab observations; it does not ship a vocabulary or perform grounding.
 PROBLEM: Final = "PROBLEM"
 SEVERITY: Final = "SEVERITY"
 DOSAGE: Final = "DOSAGE"
@@ -185,6 +184,7 @@ LAB_VALUE: Final = "LAB_VALUE"
 UNIT: Final = "UNIT"
 REFERENCE_RANGE: Final = "REFERENCE_RANGE"
 ABNORMAL_FLAG: Final = "ABNORMAL_FLAG"
+SPECIMEN: Final = "SPECIMEN"
 
 #: Stable relation-extraction vocabulary for clinical heads and attributes.
 #: ``MEDICATION`` and ``BODY_SITE`` pre-date issue #252 but belong to the same
@@ -228,11 +228,23 @@ ADMINISTRATION_ROUTE: Final = "ADMINISTRATION_ROUTE"
 VACCINE_LOT: Final = "VACCINE_LOT"
 VACCINE_SERIES: Final = "VACCINE_SERIES"
 
+#: Allergy and intolerance concepts (issue #865)
+ALLERGEN: Final = "ALLERGEN"
+REACTION_MANIFESTATION: Final = "REACTION_MANIFESTATION"
+REACTION_SEVERITY: Final = "REACTION_SEVERITY"
+ALLERGY_CRITICALITY: Final = "ALLERGY_CRITICALITY"
+
 #: Nursing-care observation concepts (issue #910)
 INTAKE_OUTPUT: Final = "INTAKE_OUTPUT"
 LINE_DRAIN_TUBE: Final = "LINE_DRAIN_TUBE"
 NURSING_RISK_SCORE: Final = "NURSING_RISK_SCORE"
 CARE_INTERVENTION: Final = "CARE_INTERVENTION"
+
+#: Functional-status and activities-of-daily-living concepts (issue #911)
+ADL_ACTIVITY: Final = "ADL_ACTIVITY"
+ASSISTANCE_LEVEL: Final = "ASSISTANCE_LEVEL"
+MOBILITY_ABILITY: Final = "MOBILITY_ABILITY"
+FUNCTIONAL_SCALE: Final = "FUNCTIONAL_SCALE"
 
 #: Clinical-genomics variant-mention concepts (issue #906)
 GENE_SYMBOL: Final = "GENE_SYMBOL"
@@ -269,6 +281,26 @@ DYSPNEA_GRADE: Final = "DYSPNEA_GRADE"
 GROWTH_PARAMETER: Final = "GROWTH_PARAMETER"
 GROWTH_PERCENTILE: Final = "GROWTH_PERCENTILE"
 DEVELOPMENTAL_MILESTONE: Final = "DEVELOPMENTAL_MILESTONE"
+
+#: Obstetrics and gynecology concepts (issue #907)
+GRAVIDITY_PARITY: Final = "GRAVIDITY_PARITY"
+GESTATIONAL_AGE: Final = "GESTATIONAL_AGE"
+FETAL_FINDING: Final = "FETAL_FINDING"
+OBSTETRIC_EVENT: Final = "OBSTETRIC_EVENT"
+
+#: Pathology and histology concepts (issue #903)
+HISTOLOGIC_FINDING: Final = "HISTOLOGIC_FINDING"
+HISTOLOGIC_GRADE: Final = "HISTOLOGIC_GRADE"
+MARGIN_STATUS: Final = "MARGIN_STATUS"
+IHC_STAIN: Final = "IHC_STAIN"
+SPECIMEN_TYPE: Final = "SPECIMEN_TYPE"
+#: Oncology TNM staging and tumor-descriptor concepts (issue #864)
+TNM_T: Final = "TNM_T"
+TNM_N: Final = "TNM_N"
+TNM_M: Final = "TNM_M"
+STAGE_GROUP: Final = "STAGE_GROUP"
+TUMOR_GRADE: Final = "TUMOR_GRADE"
+RECEPTOR_STATUS: Final = "RECEPTOR_STATUS"
 
 #: Catch-all
 OTHER: Final = "OTHER"
@@ -416,13 +448,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         CONDITION,
         MEDICATION,
         LAB_TEST,
+        SPECIMEN,
         PROCEDURE,
         BODY_SITE,
         DEVICE,
-        ALLERGEN,
-        IMMUNIZATION,
-        PSYCH_SYMPTOM,
-        TOOTH,
         PROBLEM,
         SEVERITY,
         DOSAGE,
@@ -449,10 +478,18 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         ADMINISTRATION_ROUTE,
         VACCINE_LOT,
         VACCINE_SERIES,
+        ALLERGEN,
+        REACTION_MANIFESTATION,
+        REACTION_SEVERITY,
+        ALLERGY_CRITICALITY,
         INTAKE_OUTPUT,
         LINE_DRAIN_TUBE,
         NURSING_RISK_SCORE,
         CARE_INTERVENTION,
+        ADL_ACTIVITY,
+        ASSISTANCE_LEVEL,
+        MOBILITY_ABILITY,
+        FUNCTIONAL_SCALE,
         GENE_SYMBOL,
         CKD_STAGE,
         DIALYSIS_MODALITY,
@@ -465,6 +502,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GROWTH_PARAMETER,
         GROWTH_PERCENTILE,
         DEVELOPMENTAL_MILESTONE,
+        GRAVIDITY_PARITY,
+        GESTATIONAL_AGE,
+        FETAL_FINDING,
+        OBSTETRIC_EVENT,
         VARIANT_DESCRIPTOR,
         PROTEIN_CHANGE,
         ZYGOSITY,
@@ -477,6 +518,17 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GI_SYMPTOM,
         GI_SCORE,
         POLYP_DESCRIPTOR,
+        HISTOLOGIC_FINDING,
+        HISTOLOGIC_GRADE,
+        MARGIN_STATUS,
+        IHC_STAIN,
+        SPECIMEN_TYPE,
+        TNM_T,
+        TNM_N,
+        TNM_M,
+        STAGE_GROUP,
+        TUMOR_GRADE,
+        RECEPTOR_STATUS,
         OTHER,
     }
 )
@@ -697,6 +749,7 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             CONDITION,
             MEDICATION,
             LAB_TEST,
+            SPECIMEN,
             PROCEDURE,
             BODY_SITE,
             DEVICE,
@@ -730,6 +783,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             LINE_DRAIN_TUBE,
             NURSING_RISK_SCORE,
             CARE_INTERVENTION,
+            ADL_ACTIVITY,
+            ASSISTANCE_LEVEL,
+            MOBILITY_ABILITY,
+            FUNCTIONAL_SCALE,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -754,10 +811,21 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
-            ALLERGEN,
-            IMMUNIZATION,
-            PSYCH_SYMPTOM,
-            TOOTH,
+            GRAVIDITY_PARITY,
+            GESTATIONAL_AGE,
+            FETAL_FINDING,
+            OBSTETRIC_EVENT,
+            HISTOLOGIC_FINDING,
+            HISTOLOGIC_GRADE,
+            MARGIN_STATUS,
+            IHC_STAIN,
+            SPECIMEN_TYPE,
+            TNM_T,
+            TNM_N,
+            TNM_M,
+            STAGE_GROUP,
+            TUMOR_GRADE,
+            RECEPTOR_STATUS,
         }
     ),
     NDPA_SEX_LIFE: frozenset({GENDER, OTHER}),
@@ -885,19 +953,10 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         (RXNORM, CHINESE_DRUG, SNOMED),
     ),
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    SPECIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
-    # Immunology, mental-health, and dentistry concepts (issue #2358). Mental
-    # health symptoms carry high residual-risk metadata for redaction review.
-    ALLERGEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
-    IMMUNIZATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
-    PSYCH_SYMPTOM: _label_metadata(
-        CLINICAL_CONCEPT,
-        RISK_HIGH,
-        (SNOMED, HPO),
-    ),
-    TOOTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Relation-extraction heads and attributes (issue #252). Free-text
     # problem/indication text and result values remain medium-risk so rare
     # conditions and distinctive measurements are visible to risk tooling,
@@ -951,11 +1010,28 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ADMINISTRATION_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VACCINE_LOT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VACCINE_SERIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Allergy and intolerance concepts (issue #865). These hints support the
+    # planned FHIR AllergyIntolerance projection without bundling terminology.
+    ALLERGEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    REACTION_MANIFESTATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    REACTION_SEVERITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ALLERGY_CRITICALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Nursing-care observation concepts (issue #910)
     INTAKE_OUTPUT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     LINE_DRAIN_TUBE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NURSING_RISK_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     CARE_INTERVENTION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Functional-status and activities-of-daily-living concepts (issue #911).
+    # These labels describe documented function only; they do not score a
+    # scale, infer care needs, or recommend a disposition.
+    ADL_ACTIVITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ASSISTANCE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MOBILITY_ABILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FUNCTIONAL_SCALE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (SNOMED, LOINC),
+    ),
     # Clinical genomics
     GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1018,6 +1094,34 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
             SNOMED,
             LOINC,
         ),
+    ),
+    # Obstetrics and gynecology concepts (issue #907)
+    GRAVIDITY_PARITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    GESTATIONAL_AGE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (SNOMED, LOINC),
+    ),
+    FETAL_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    OBSTETRIC_EVENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Pathology and histology concepts (issue #903)
+    HISTOLOGIC_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HISTOLOGIC_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MARGIN_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IHC_STAIN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    SPECIMEN_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Oncology TNM staging and tumor-descriptor concepts (issue #864). These
+    # are descriptive extraction labels; coding hints do not imply stage
+    # computation, prognosis, or treatment logic.
+    TNM_T: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TNM_N: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TNM_M: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    STAGE_GROUP: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TUMOR_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    RECEPTOR_STATUS: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        CLINICAL_SYSTEM_HINTS,
     ),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -1090,13 +1194,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     CONDITION: HIPAA_UNIQUE_IDENTIFIER,
     MEDICATION: HIPAA_UNIQUE_IDENTIFIER,
     LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN: HIPAA_UNIQUE_IDENTIFIER,
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     DEVICE: HIPAA_UNIQUE_IDENTIFIER,
-    ALLERGEN: HIPAA_UNIQUE_IDENTIFIER,
-    IMMUNIZATION: HIPAA_UNIQUE_IDENTIFIER,
-    PSYCH_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
-    TOOTH: HIPAA_UNIQUE_IDENTIFIER,
     PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
     SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
     DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1126,11 +1227,21 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     ADMINISTRATION_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     VACCINE_LOT: HIPAA_UNIQUE_IDENTIFIER,
     VACCINE_SERIES: HIPAA_UNIQUE_IDENTIFIER,
+    # Allergy and intolerance concepts
+    ALLERGEN: HIPAA_UNIQUE_IDENTIFIER,
+    REACTION_MANIFESTATION: HIPAA_UNIQUE_IDENTIFIER,
+    REACTION_SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
+    ALLERGY_CRITICALITY: HIPAA_UNIQUE_IDENTIFIER,
     # Nursing-care observation concepts
     INTAKE_OUTPUT: HIPAA_UNIQUE_IDENTIFIER,
     LINE_DRAIN_TUBE: HIPAA_UNIQUE_IDENTIFIER,
     NURSING_RISK_SCORE: HIPAA_UNIQUE_IDENTIFIER,
     CARE_INTERVENTION: HIPAA_UNIQUE_IDENTIFIER,
+    # Functional-status and activities-of-daily-living concepts
+    ADL_ACTIVITY: HIPAA_UNIQUE_IDENTIFIER,
+    ASSISTANCE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    MOBILITY_ABILITY: HIPAA_UNIQUE_IDENTIFIER,
+    FUNCTIONAL_SCALE: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical genomics
     GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
     VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
@@ -1161,6 +1272,23 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GROWTH_PARAMETER: HIPAA_UNIQUE_IDENTIFIER,
     GROWTH_PERCENTILE: HIPAA_UNIQUE_IDENTIFIER,
     DEVELOPMENTAL_MILESTONE: HIPAA_UNIQUE_IDENTIFIER,
+    GRAVIDITY_PARITY: HIPAA_UNIQUE_IDENTIFIER,
+    GESTATIONAL_AGE: HIPAA_UNIQUE_IDENTIFIER,
+    FETAL_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    OBSTETRIC_EVENT: HIPAA_UNIQUE_IDENTIFIER,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    HISTOLOGIC_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    MARGIN_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    IHC_STAIN: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    # Oncology TNM staging and tumor-descriptor concepts
+    TNM_T: HIPAA_UNIQUE_IDENTIFIER,
+    TNM_N: HIPAA_UNIQUE_IDENTIFIER,
+    TNM_M: HIPAA_UNIQUE_IDENTIFIER,
+    STAGE_GROUP: HIPAA_UNIQUE_IDENTIFIER,
+    TUMOR_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    RECEPTOR_STATUS: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -1232,13 +1360,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     CONDITION: POPIA_HEALTH_INFORMATION,
     MEDICATION: POPIA_HEALTH_INFORMATION,
     LAB_TEST: POPIA_HEALTH_INFORMATION,
+    SPECIMEN: POPIA_HEALTH_INFORMATION,
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
     DEVICE: POPIA_HEALTH_INFORMATION,
-    ALLERGEN: POPIA_HEALTH_INFORMATION,
-    IMMUNIZATION: POPIA_HEALTH_INFORMATION,
-    PSYCH_SYMPTOM: POPIA_HEALTH_INFORMATION,
-    TOOTH: POPIA_HEALTH_INFORMATION,
     PROBLEM: POPIA_HEALTH_INFORMATION,
     SEVERITY: POPIA_HEALTH_INFORMATION,
     DOSAGE: POPIA_HEALTH_INFORMATION,
@@ -1265,10 +1390,18 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     ADMINISTRATION_ROUTE: POPIA_HEALTH_INFORMATION,
     VACCINE_LOT: POPIA_HEALTH_INFORMATION,
     VACCINE_SERIES: POPIA_HEALTH_INFORMATION,
+    ALLERGEN: POPIA_HEALTH_INFORMATION,
+    REACTION_MANIFESTATION: POPIA_HEALTH_INFORMATION,
+    REACTION_SEVERITY: POPIA_HEALTH_INFORMATION,
+    ALLERGY_CRITICALITY: POPIA_HEALTH_INFORMATION,
     INTAKE_OUTPUT: POPIA_HEALTH_INFORMATION,
     LINE_DRAIN_TUBE: POPIA_HEALTH_INFORMATION,
     NURSING_RISK_SCORE: POPIA_HEALTH_INFORMATION,
     CARE_INTERVENTION: POPIA_HEALTH_INFORMATION,
+    ADL_ACTIVITY: POPIA_HEALTH_INFORMATION,
+    ASSISTANCE_LEVEL: POPIA_HEALTH_INFORMATION,
+    MOBILITY_ABILITY: POPIA_HEALTH_INFORMATION,
+    FUNCTIONAL_SCALE: POPIA_HEALTH_INFORMATION,
     GENE_SYMBOL: POPIA_HEALTH_INFORMATION,
     VARIANT_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
     PROTEIN_CHANGE: POPIA_HEALTH_INFORMATION,
@@ -1293,6 +1426,23 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     GROWTH_PARAMETER: POPIA_HEALTH_INFORMATION,
     GROWTH_PERCENTILE: POPIA_HEALTH_INFORMATION,
     DEVELOPMENTAL_MILESTONE: POPIA_HEALTH_INFORMATION,
+    GRAVIDITY_PARITY: POPIA_HEALTH_INFORMATION,
+    GESTATIONAL_AGE: POPIA_HEALTH_INFORMATION,
+    FETAL_FINDING: POPIA_HEALTH_INFORMATION,
+    OBSTETRIC_EVENT: POPIA_HEALTH_INFORMATION,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: POPIA_HEALTH_INFORMATION,
+    HISTOLOGIC_GRADE: POPIA_HEALTH_INFORMATION,
+    MARGIN_STATUS: POPIA_HEALTH_INFORMATION,
+    IHC_STAIN: POPIA_HEALTH_INFORMATION,
+    SPECIMEN_TYPE: POPIA_HEALTH_INFORMATION,
+    # Oncology TNM staging and tumor-descriptor concepts
+    TNM_T: POPIA_HEALTH_INFORMATION,
+    TNM_N: POPIA_HEALTH_INFORMATION,
+    TNM_M: POPIA_HEALTH_INFORMATION,
+    STAGE_GROUP: POPIA_HEALTH_INFORMATION,
+    TUMOR_GRADE: POPIA_HEALTH_INFORMATION,
+    RECEPTOR_STATUS: POPIA_HEALTH_INFORMATION,
     # Catch-all for special personal information without a dedicated label
     OTHER: POPIA_OTHER_SPECIAL_INFORMATION,
 }
@@ -1645,6 +1795,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "test": LAB_TEST,
     "lab": LAB_TEST,
     "analyte": LAB_TEST,
+    "specimen": SPECIMEN,
+    "specimensource": SPECIMEN,
     "procedure": PROCEDURE,
     "surgery": PROCEDURE,
     "operation": PROCEDURE,
@@ -1696,19 +1848,13 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vaccinationseries": VACCINE_SERIES,
     "administrationdate": DATE,
     "administrationsite": BODY_SITE,
-    # Immunology, mental-health, and dentistry concepts (issue #2358)
+    # Allergy and intolerance concepts
     "allergen": ALLERGEN,
-    "allergy": ALLERGEN,
-    "allergies": ALLERGEN,
-    "allergicreaction": FINDING,
-    "immunization": IMMUNIZATION,
-    "antibody": PROTEIN,
-    "psychiatricsymptom": PSYCH_SYMPTOM,
-    "therapy": PROCEDURE,
-    "tooth": TOOTH,
-    "dentalcondition": CONDITION,
-    "dentalprocedure": PROCEDURE,
-    "restoration": PROCEDURE,
+    "reactionmanifestation": REACTION_MANIFESTATION,
+    "reactionseverity": REACTION_SEVERITY,
+    "criticality": ALLERGY_CRITICALITY,
+    "allergytype": OTHER,
+    "onsetcontext": OTHER,
     # Relation-extraction heads and attributes (issue #252)
     "dx": PROBLEM,
     "problemlist": PROBLEM,
@@ -1763,6 +1909,29 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "mobilitystatus": OTHER,
     "painscore": OTHER,
     "skinassessment": BODY_SITE,
+    # Functional-status and activities-of-daily-living concepts
+    "adlactivity": ADL_ACTIVITY,
+    "activityofdailyliving": ADL_ACTIVITY,
+    "feeding": ADL_ACTIVITY,
+    "bathing": ADL_ACTIVITY,
+    "assistancelevel": ASSISTANCE_LEVEL,
+    "assistance": ASSISTANCE_LEVEL,
+    "independent": ASSISTANCE_LEVEL,
+    "requiresassistance": ASSISTANCE_LEVEL,
+    "minimalassistance": ASSISTANCE_LEVEL,
+    "mobilityability": MOBILITY_ABILITY,
+    "mobility": MOBILITY_ABILITY,
+    "ambulation": MOBILITY_ABILITY,
+    "transferability": MOBILITY_ABILITY,
+    "transfers": MOBILITY_ABILITY,
+    "assistivedevice": DEVICE,
+    "walkeraid": DEVICE,
+    "functionalscale": FUNCTIONAL_SCALE,
+    "barthel": FUNCTIONAL_SCALE,
+    "barthelindex": FUNCTIONAL_SCALE,
+    "katz": FUNCTIONAL_SCALE,
+    "katzindex": FUNCTIONAL_SCALE,
+    "cognitivestatus": OTHER,
     # Clinical genomics
     "genesymbol": GENE_SYMBOL,
     "genename": GENE_SYMBOL,
@@ -1861,6 +2030,50 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "developmentalmilestone": DEVELOPMENTAL_MILESTONE,
     "milestone": DEVELOPMENTAL_MILESTONE,
     "motordevelopment": DEVELOPMENTAL_MILESTONE,
+    # Obstetrics and gynecology concepts (issue #907)
+    "gravidityparity": GRAVIDITY_PARITY,
+    "gravidity": GRAVIDITY_PARITY,
+    "parity": GRAVIDITY_PARITY,
+    "gxp": GRAVIDITY_PARITY,
+    "gestationalage": GESTATIONAL_AGE,
+    "gestationalageweeks": GESTATIONAL_AGE,
+    "gestation": GESTATIONAL_AGE,
+    "fetalfinding": FETAL_FINDING,
+    "fetalstatus": FETAL_FINDING,
+    "obstetricevent": OBSTETRIC_EVENT,
+    "obstetricevents": OBSTETRIC_EVENT,
+    "menstrualhistory": OTHER,
+    "menstrual": OTHER,
+    "gynecologicfinding": CONDITION,
+    "gynaecologicfinding": CONDITION,
+    "deliverymode": PROCEDURE,
+    "modeofdelivery": PROCEDURE,
+    # Oncology TNM staging and tumor-descriptor concepts
+    "tnmt": TNM_T,
+    "tumorcategory": TNM_T,
+    "tumourcategory": TNM_T,
+    "tcategory": TNM_T,
+    "tnmn": TNM_N,
+    "nodecategory": TNM_N,
+    "ncategory": TNM_N,
+    "tnmm": TNM_M,
+    "metastasiscategory": TNM_M,
+    "mcategory": TNM_M,
+    "stagegroup": STAGE_GROUP,
+    "overallstage": STAGE_GROUP,
+    "overallstagegroup": STAGE_GROUP,
+    "tumorgrade": TUMOR_GRADE,
+    "tumourgrade": TUMOR_GRADE,
+    "grade": TUMOR_GRADE,
+    "tumorsize": MEASUREMENT,
+    "tumoursize": MEASUREMENT,
+    "receptorstatus": RECEPTOR_STATUS,
+    "receptor": RECEPTOR_STATUS,
+    "hormonereceptorstatus": RECEPTOR_STATUS,
+    "responseassessment": OTHER,
+    "treatmentresponse": OTHER,
+    "primarysite": BODY_SITE,
+    "primarytumorsite": BODY_SITE,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -1868,6 +2081,21 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "airwaydevice": AIRWAY_MANAGEMENT,
     "feedinghistory": NUTRITIONAL_STATUS,
     "pediatricfinding": CONDITION,
+    # Pathology and histology concepts
+    "specimentype": SPECIMEN_TYPE,
+    "grossdescription": OTHER,
+    "histologicfinding": HISTOLOGIC_FINDING,
+    "histologicalfinding": HISTOLOGIC_FINDING,
+    "histologicgrade": HISTOLOGIC_GRADE,
+    "histologicalgrade": HISTOLOGIC_GRADE,
+    "marginstatus": MARGIN_STATUS,
+    "ihc": IHC_STAIN,
+    "ihcstain": IHC_STAIN,
+    "immunohistochemistry": IHC_STAIN,
+    "immunohistochemistrystain": IHC_STAIN,
+    "mitoticcount": MEASUREMENT,
+    "mitoticindex": MEASUREMENT,
+    "tissuesite": BODY_SITE,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 # CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
@@ -2023,6 +2251,27 @@ def normalize_label(label: str, lang: str = "en") -> str:
     return OTHER
 
 
+def is_recognized_label(label: str, lang: str = "en") -> bool:
+    """Return whether ``label`` resolves to a real member of the taxonomy.
+
+    :func:`normalize_label` sends anything it does not recognise to ``OTHER``,
+    which is itself a canonical label — so ``normalize_label(x) in
+    CANONICAL_LABELS`` is ``True`` for *every* string and cannot gate anything.
+    This predicate is ``True`` only when ``label`` resolves through an explicit
+    path (a CMeEE mapping, the alias map, or a direct canonical match) and
+    ``False`` when it would fall through to the ``OTHER`` default. Use it to
+    check a manifest or config column against the taxonomy.
+    """
+
+    if not label or not _key(label):
+        return False
+    if normalize_label(label, lang=lang) != OTHER:
+        return True
+    # Reached OTHER: accept only labels that legitimately ARE OTHER — the literal
+    # canonical label or an explicit alias to it — never the fallthrough default.
+    return _key(label) == _key(OTHER) or _key(label) in _ALIAS_MAP
+
+
 def supports_name_boundary_refinement(label: str, lang: str = "en") -> bool:
     """Return whether ``label`` is eligible for conservative name stemming."""
 
@@ -2095,6 +2344,7 @@ __all__ = [
     "CLINICAL_CONCEPT_LABELS",
     "NAME_BOUNDARY_REFINEMENT_LABELS",
     "normalize_label",
+    "is_recognized_label",
     "canonical_label_for_column_semantic",
     "supports_name_boundary_refinement",
     "CMEEE_LABEL_TO_CANONICAL",
@@ -2234,13 +2484,10 @@ __all__ = [
     "CONDITION",
     "MEDICATION",
     "LAB_TEST",
+    "SPECIMEN",
     "PROCEDURE",
     "BODY_SITE",
     "DEVICE",
-    "ALLERGEN",
-    "IMMUNIZATION",
-    "PSYCH_SYMPTOM",
-    "TOOTH",
     "PROBLEM",
     "SEVERITY",
     "DOSAGE",
@@ -2267,10 +2514,18 @@ __all__ = [
     "ADMINISTRATION_ROUTE",
     "VACCINE_LOT",
     "VACCINE_SERIES",
+    "ALLERGEN",
+    "REACTION_MANIFESTATION",
+    "REACTION_SEVERITY",
+    "ALLERGY_CRITICALITY",
     "INTAKE_OUTPUT",
     "LINE_DRAIN_TUBE",
     "NURSING_RISK_SCORE",
     "CARE_INTERVENTION",
+    "ADL_ACTIVITY",
+    "ASSISTANCE_LEVEL",
+    "MOBILITY_ABILITY",
+    "FUNCTIONAL_SCALE",
     "GENE_SYMBOL",
     "VARIANT_DESCRIPTOR",
     "PROTEIN_CHANGE",
@@ -2292,4 +2547,19 @@ __all__ = [
     "GROWTH_PARAMETER",
     "GROWTH_PERCENTILE",
     "DEVELOPMENTAL_MILESTONE",
+    "GRAVIDITY_PARITY",
+    "GESTATIONAL_AGE",
+    "FETAL_FINDING",
+    "OBSTETRIC_EVENT",
+    "HISTOLOGIC_FINDING",
+    "HISTOLOGIC_GRADE",
+    "MARGIN_STATUS",
+    "IHC_STAIN",
+    "SPECIMEN_TYPE",
+    "TNM_T",
+    "TNM_N",
+    "TNM_M",
+    "STAGE_GROUP",
+    "TUMOR_GRADE",
+    "RECEPTOR_STATUS",
 ]

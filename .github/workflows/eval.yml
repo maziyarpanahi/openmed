@@ -1,0 +1,66 @@
+name: Clinical domain evaluation
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/eval.yml"
+      - "openmed/cli/main.py"
+      - "openmed/core/labels.py"
+      - "openmed/eval/**"
+      - "openmed/ner/labels.py"
+      - "openmed/zero_shot/data/label_maps/defaults.json"
+      - "tests/fixtures/clinical/**"
+      - "tests/unit/eval/test_domain_coverage.py"
+      - "docs/clinical-domains.md"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/eval.yml"
+      - "openmed/cli/main.py"
+      - "openmed/core/labels.py"
+      - "openmed/eval/**"
+      - "openmed/ner/labels.py"
+      - "openmed/zero_shot/data/label_maps/defaults.json"
+      - "tests/fixtures/clinical/**"
+      - "tests/unit/eval/test_domain_coverage.py"
+      - "docs/clinical-domains.md"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clinical-domain-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install offline evaluation dependencies
+        run: uv sync --frozen --extra dev --python 3.11
+
+      - name: Run clinical domain coverage gate
+        run: >-
+          uv run openmed benchmark domain-coverage
+          --json
+          --output clinical-domain-coverage.json
+
+      - name: Upload aggregate coverage evidence
+        if: always() && hashFiles('clinical-domain-coverage.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: clinical-domain-coverage
+          path: clinical-domain-coverage.json

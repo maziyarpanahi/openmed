@@ -21,10 +21,10 @@ UNROUTED_SCRIPT = "Unrouted"
 
 REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 
-# These built-in routes intentionally use a named fallback until a dedicated
-# PII model is published. They must not be represented as trained/model-backed
-# languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
+# These built-in routes intentionally use a named fallback until dedicated
+# public PII weights are available. They must not be represented as
+# trained/model-backed languages in release claims.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -145,6 +145,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "bn_BD",
         ("Bengali",),
+        national_id_provider=("bn_BD", "bangladesh_nid"),
     ),
     _pack(
         "te",
@@ -155,7 +156,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
     ),
     _pack(
         "ta",
-        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+        "OpenMed/privacy-filter-multilingual",
         "ta_IN",
         ("Tamil",),
         national_id_provider=("ta_IN", "aadhaar"),
@@ -181,6 +182,22 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Arabic",),
     ),
     _pack(
+        "fa",
+        "OpenMed/privacy-filter-multilingual",
+        "fa_IR",
+        ("Arabic",),
+        national_id_provider=("fa_IR", "iran_national_id"),
+        routing_markers=(
+            "بیمار",
+            "کد ملی",
+            "خیابان",
+            "کوچه",
+            "پلاک",
+            "فروردین",
+            "اسفند",
+        ),
+    ),
+    _pack(
         "he",
         "OpenMed/privacy-filter-multilingual",
         "he_IL",
@@ -193,6 +210,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
         context_scripts=("Hiragana/Katakana",),
+        national_id_provider=("ja_JP", "my_number"),
     ),
     LanguagePack(
         code="zh",
@@ -413,7 +431,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
         "zu",
         "xh",
     ),
-    "Arabic": ("ar", "ha", "ur"),
+    "Arabic": ("ar", "fa", "ha", "ur"),
     "Cyrillic": ("ru", "uk"),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
@@ -446,6 +464,7 @@ _LOCALE_ORDER = (
     "am",
     "pt",
     "ar",
+    "fa",
     "he",
     "ja",
     "zh",
@@ -495,6 +514,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "ta",
     "am",
     "pt",
+    "fa",
     "tr",
     "he",
     "id",
