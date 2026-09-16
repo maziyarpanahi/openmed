@@ -302,6 +302,7 @@ classification:
     - security/secret-detection.md
     - guides/in-place-redaction.md
     - privacy/trace-recovery.md
+    - security/preflight-phi-gate.md
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
     - security/redaction-diff.md
