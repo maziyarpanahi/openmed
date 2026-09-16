@@ -240,6 +240,36 @@ def test_gated_loaders_refuse_repository_paths_before_reading() -> None:
         load_mednli(repository_root)
 
 
+@pytest.mark.parametrize(
+    "loader",
+    (load_cegs_ngrid, load_shac, load_thyme, load_mednli, load_mimic_iv_bhc),
+)
+def test_gated_loaders_refuse_repository_file_symlinks(
+    loader,
+    tmp_path: Path,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    source = tmp_path / "credentialed"
+    source.mkdir()
+    (source / "payload.json").symlink_to(repository_root / "docs/api/openapi.json")
+
+    with pytest.raises(DUACredentialRequired, match="repository"):
+        loader(source)
+
+
+def test_cegs_ngrid_refuses_paired_text_symlink_into_repository(
+    tmp_path: Path,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    source = tmp_path / "credentialed"
+    source.mkdir()
+    (source / "record.txt").symlink_to(repository_root / "README.md")
+    (source / "record.ann").write_text("T1\tNAME 0 1\t#", encoding="utf-8")
+
+    with pytest.raises(DUACredentialRequired, match="repository"):
+        load_cegs_ngrid(source)
+
+
 def test_licenses_and_payload_guard_cover_all_five_datasets(tmp_path: Path) -> None:
     for dataset in (CEGS_NGRID, SHAC, THYME, MEDNLI, MIMIC_IV_BHC):
         license_metadata = license_for(dataset)

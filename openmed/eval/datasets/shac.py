@@ -14,7 +14,9 @@ from ._dua import (
     fixture_id,
     load_json_rows,
     require_credentialed_path,
+    source_files,
     source_path_hash,
+    validate_source_path,
 )
 from ._task_fixtures import RelationTaskFixture
 from .dua_stubs import DUACredentialRequired
@@ -227,6 +229,18 @@ def _fixture_from_brat(
     *,
     root: Path,
 ) -> RelationTaskFixture:
+    text_path = validate_source_path(
+        text_path,
+        root,
+        dataset=SHAC,
+        authority=SHAC_AUTHORITY,
+    )
+    annotation_path = validate_source_path(
+        annotation_path,
+        root,
+        dataset=SHAC,
+        authority=SHAC_AUTHORITY,
+    )
     with text_path.open("r", encoding="utf-8", newline="") as handle:
         text = handle.read()
     entities: dict[str, EvalSpan] = {}
@@ -649,13 +663,12 @@ def _entity_rows(value: Any) -> list[Mapping[str, Any]]:
 
 
 def _files(root: Path, suffixes: set[str] | frozenset[str]) -> tuple[Path, ...]:
-    wanted = {suffix.casefold() for suffix in suffixes}
-    if root.is_file():
-        return (root,) if root.suffix.casefold() in wanted else tuple()
-    return tuple(
-        path
-        for path in sorted(root.rglob("*"))
-        if path.is_file() and path.suffix.casefold() in wanted
+    return source_files(
+        root,
+        suffixes,
+        dataset=SHAC,
+        authority=SHAC_AUTHORITY,
+        required=False,
     )
 
 

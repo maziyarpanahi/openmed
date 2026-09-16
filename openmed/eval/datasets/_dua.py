@@ -11,6 +11,7 @@ from typing import Any
 from .dua_stubs import DUACredentialRequired, require_credentialed_path
 
 _JSON_SUFFIXES = frozenset({".json", ".jsonl", ".ndjson"})
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _ROW_CONTAINER_KEYS = (
     "records",
     "documents",
@@ -52,6 +53,7 @@ def source_files(
     *,
     dataset: str,
     authority: str,
+    required: bool = True,
 ) -> tuple[Path, ...]:
     """Return deterministic files below an already validated path."""
 
@@ -64,13 +66,53 @@ def source_files(
             for path in sorted(root.rglob("*"))
             if path.is_file() and path.suffix.casefold() in normalized_suffixes
         )
-    if not files:
+    if not files and required:
         allowed = ", ".join(sorted(normalized_suffixes))
         raise DUACredentialRequired(
             f"{authority} credentialed {dataset} path contains no supported "
             f"files ({allowed}); no corpus rows were loaded"
         )
-    return files
+    if not files:
+        return tuple()
+    return tuple(
+        validate_source_path(
+            path,
+            root,
+            dataset=dataset,
+            authority=authority,
+        )
+        for path in files
+    )
+
+
+def validate_source_path(
+    source: Path,
+    root: Path,
+    *,
+    dataset: str,
+    authority: str,
+) -> Path:
+    """Confine a corpus source to its credentialed root and outside the repo."""
+
+    resolved_source = source.resolve(strict=False)
+    resolved_root = root.resolve(strict=False)
+    if _is_relative_to(resolved_source, _REPOSITORY_ROOT):
+        raise DUACredentialRequired(
+            f"{authority} data for {dataset} must stay outside the repository "
+            f"tree; refusing to read {resolved_source}. No corpus rows were loaded."
+        )
+    if resolved_root.is_dir() and not _is_relative_to(resolved_source, resolved_root):
+        raise DUACredentialRequired(
+            f"{authority} data for {dataset} must stay within the configured "
+            "credentialed path; refusing a source outside that path. "
+            "No corpus rows were loaded."
+        )
+    if not resolved_source.is_file():
+        raise DUACredentialRequired(
+            f"{authority} credentialed {dataset} source is not a readable file; "
+            "no corpus rows were loaded"
+        )
+    return resolved_source
 
 
 def load_json_rows(
@@ -167,10 +209,19 @@ def _relative_source_path(source: Path, root: Path) -> str:
         return source.name
 
 
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
 __all__ = [
     "fixture_id",
     "load_json_rows",
     "require_credentialed_path",
     "source_files",
     "source_path_hash",
+    "validate_source_path",
 ]

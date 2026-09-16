@@ -36,7 +36,9 @@ from ._dua import (
     fixture_id,
     load_json_rows,
     require_credentialed_path,
+    source_files,
     source_path_hash,
+    validate_source_path,
 )
 from .dua_stubs import DUACredentialRequired
 from .licenses import license_for
@@ -255,6 +257,18 @@ def _fixture_from_brat(
     *,
     root: Path,
 ) -> BenchmarkFixture:
+    text_path = validate_source_path(
+        text_path,
+        root,
+        dataset=CEGS_NGRID,
+        authority=CEGS_NGRID_AUTHORITY,
+    )
+    annotation_path = validate_source_path(
+        annotation_path,
+        root,
+        dataset=CEGS_NGRID,
+        authority=CEGS_NGRID_AUTHORITY,
+    )
     with text_path.open("r", encoding="utf-8", newline="") as handle:
         text = handle.read()
     spans: list[EvalSpan] = []
@@ -494,13 +508,12 @@ def _has_offsets(attributes: Mapping[str, Any]) -> bool:
 
 
 def _files(root: Path, suffixes: set[str] | frozenset[str]) -> tuple[Path, ...]:
-    wanted = {suffix.casefold() for suffix in suffixes}
-    if root.is_file():
-        return (root,) if root.suffix.casefold() in wanted else tuple()
-    return tuple(
-        path
-        for path in sorted(root.rglob("*"))
-        if path.is_file() and path.suffix.casefold() in wanted
+    return source_files(
+        root,
+        suffixes,
+        dataset=CEGS_NGRID,
+        authority=CEGS_NGRID_AUTHORITY,
+        required=False,
     )
 
 

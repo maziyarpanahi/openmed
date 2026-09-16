@@ -9,6 +9,7 @@ from ._dua import (
     fixture_id,
     load_json_rows,
     require_credentialed_path,
+    source_files,
     source_path_hash,
 )
 from ._task_fixtures import DocumentSummaryFixture
@@ -155,13 +156,12 @@ def _record_id(row: Mapping[str, Any], *, fallback: str) -> str:
 
 
 def _files(root: Path) -> tuple[Path, ...]:
-    wanted = {suffix.casefold() for suffix in _JSON_SUFFIXES}
-    if root.is_file():
-        return (root,) if root.suffix.casefold() in wanted else tuple()
-    return tuple(
-        path
-        for path in sorted(root.rglob("*"))
-        if path.is_file() and path.suffix.casefold() in wanted
+    return source_files(
+        root,
+        _JSON_SUFFIXES,
+        dataset=MIMIC_IV_BHC,
+        authority=MIMIC_IV_BHC_AUTHORITY,
+        required=False,
     )
 
 
