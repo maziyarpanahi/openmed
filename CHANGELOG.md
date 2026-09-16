@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic half-open window planning for offline streaming
+  audio, with integer-millisecond offsets, real per-window overlap,
+  keep/merge/drop tail policies, arithmetic window-count bounds, and
+  value-free rejection of boolean, negative and overflowing input (#3005).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
