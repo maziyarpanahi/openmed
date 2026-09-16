@@ -15,8 +15,10 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import openmed
 from openmed.core.errors import (
@@ -43,10 +45,12 @@ from .batcher import (
 from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
+from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
     service_log_config_from_env,
+    set_access_log_grounding,
     set_access_log_model_name,
 )
 from .metrics import (
@@ -85,6 +89,7 @@ from .schemas import (
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
     GroundRequest,
+    GroundResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
     PIIDeidentifyRequest,
@@ -121,6 +126,7 @@ _MODEL_BACKED_PATHS = frozenset(
     {
         "/graphql",
         "/analyze",
+        "/ground",
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
@@ -138,6 +144,8 @@ _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
 _GROUNDING_CACHE_ENV_VAR = "OPENMED_GROUNDING_CACHE_DIR"
+_REQUEST_BODY_ENCODING_MULTIPLIER = 12
+_REQUEST_BODY_OVERHEAD_BYTES = 65_536
 
 
 @dataclass(frozen=True)
@@ -158,6 +166,85 @@ class ServiceTimeoutError(RuntimeError):
         super().__init__(
             f"Request exceeded configured timeout of {self.timeout_seconds:g} seconds"
         )
+
+
+class _BoundedRequestBodyMiddleware:
+    """Reject oversized model-backed request bodies before JSON parsing."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        limited_paths: Sequence[str],
+    ) -> None:
+        if max_bytes < 1:
+            raise ValueError("max request body bytes must be positive")
+        self.app = app
+        self.max_bytes = int(max_bytes)
+        self.limited_paths = frozenset(limited_paths)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] != "http"
+            or scope.get("method") not in {"POST", "PUT", "PATCH"}
+            or scope.get("path") not in self.limited_paths
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        content_length = Headers(scope=scope).get("content-length")
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length < 0:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length > self.max_bytes:
+                await _error_response(
+                    413,
+                    "payload_too_large",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+
+        messages: list[Message] = []
+        received_bytes = 0
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            received_bytes += len(message.get("body", b""))
+            if received_bytes > self.max_bytes:
+                await _error_response(
+                    413,
+                    "payload_too_large",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        async def replay() -> Message:
+            if messages:
+                return messages.pop(0)
+            return await receive()
+
+        await self.app(scope, replay, send)
 
 
 def _result_to_dict(result: Any) -> Dict[str, Any]:
@@ -265,7 +352,7 @@ def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
         systems=payload.systems,
         loader=loader,
         config=RankingConfig(k=payload.top_k),
-        source_language=payload.source_language,
+        source_language=payload.lang,
         offline=payload.offline,
     )
 
@@ -597,7 +684,7 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app() -> FastAPI:
+def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
@@ -1217,12 +1304,27 @@ def create_app() -> FastAPI:
         ):
             return await run_in_threadpool(_omop_load_summary, payload)
 
-    @app.post("/ground")
+    @app.post("/ground", response_model=GroundResponse)
     async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
         """Ground text or pre-extracted entities against local snapshots."""
 
+        input_count = len(payload.entities) if payload.entities is not None else 1
+        set_access_log_grounding(
+            request,
+            input_count=input_count,
+            systems=payload.systems,
+            lang=payload.lang,
+        )
         try:
-            return await run_in_threadpool(_ground_summary, payload)
+            response = await run_in_threadpool(_ground_summary, payload)
+            set_access_log_grounding(
+                request,
+                input_count=input_count,
+                result_count=len(response["results"]),
+                systems=payload.systems,
+                lang=payload.lang,
+            )
+            return response
         except Exception as exc:
             from openmed.clinical.grounding import (
                 RestrictedVocabularyError,
@@ -1464,6 +1566,19 @@ def create_app() -> FastAPI:
             OpenTelemetryMiddleware,
             tracing=app.state.tracing,
         )
+    body_limit = (
+        int(max_request_body_bytes)
+        if max_request_body_bytes is not None
+        else (
+            get_max_text_length() * _REQUEST_BODY_ENCODING_MULTIPLIER
+            + _REQUEST_BODY_OVERHEAD_BYTES
+        )
+    )
+    app.add_middleware(
+        _BoundedRequestBodyMiddleware,
+        max_bytes=body_limit,
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),
