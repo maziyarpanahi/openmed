@@ -71,7 +71,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          pip install build twine 'hatchling==1.31.0'
 
       - name: Clean package cache
         run: |
@@ -136,9 +136,77 @@ jobs:
             exit 1
           fi
 
+      - name: Verify API compatibility and migration guide
+        if: inputs.release-tag != '' || github.ref_type == 'tag'
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${RELEASE_COMMIT}^")
+          BASE_VERSION=${PREVIOUS_TAG#v}
+          RELEASE_VERSION=${RELEASE_TAG#v}
+          BASE_SERIES=${BASE_VERSION%.*}
+          RELEASE_SERIES=${RELEASE_VERSION%.*}
+          API_ARGS=(
+            "$PREVIOUS_TAG"
+            "$RELEASE_COMMIT"
+            --json "$RUNNER_TEMP/api-surface-diff.json"
+          )
+          if [ "$BASE_SERIES" != "$RELEASE_SERIES" ]; then
+            MIGRATION_GUIDE="docs/migration/${BASE_SERIES}-to-${RELEASE_SERIES}.md"
+            API_ARGS+=(--check "$MIGRATION_GUIDE")
+          fi
+          python scripts/release/api_surface_diff.py "${API_ARGS[@]}"
+
       - name: Build package
         run: |
-          python -m build
+          python -m build --no-isolation
+
+      - name: Verify distribution metadata compatibility
+        run: |
+          python - <<'PY'
+          from email.parser import BytesParser
+          from pathlib import Path
+          import tarfile
+          import zipfile
+
+          expected_metadata_version = "2.4"
+          wheels = list(Path("dist").glob("*.whl"))
+          sdists = list(Path("dist").glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              raise SystemExit("Expected exactly one wheel and one source distribution.")
+
+          with zipfile.ZipFile(wheels[0]) as archive:
+              metadata_files = [
+                  name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+              ]
+              if len(metadata_files) != 1:
+                  raise SystemExit("Expected exactly one wheel METADATA file.")
+              wheel_metadata = BytesParser().parsebytes(archive.read(metadata_files[0]))
+
+          with tarfile.open(sdists[0], "r:gz") as archive:
+              metadata_members = [
+                  member
+                  for member in archive.getmembers()
+                  if member.isfile() and member.name.endswith("/PKG-INFO")
+              ]
+              if len(metadata_members) != 1:
+                  raise SystemExit("Expected exactly one sdist PKG-INFO file.")
+              metadata_file = archive.extractfile(metadata_members[0])
+              if metadata_file is None:
+                  raise SystemExit("Could not read sdist PKG-INFO.")
+              sdist_metadata = BytesParser().parsebytes(metadata_file.read())
+
+          versions = {
+              "wheel": wheel_metadata["Metadata-Version"],
+              "sdist": sdist_metadata["Metadata-Version"],
+          }
+          if set(versions.values()) != {expected_metadata_version}:
+              raise SystemExit(f"Unsupported distribution metadata versions: {versions}")
+          print(f"Distribution metadata version: {expected_metadata_version}")
+          PY
 
       - name: Check package
         run: |

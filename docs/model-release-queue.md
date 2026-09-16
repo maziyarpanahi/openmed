@@ -1,10 +1,29 @@
-# Model Release Queue
+# Local Model Release Queue
 
-The scheduled model release workflow reads `recipes/queue.yaml`. The queue is
-the small, reviewable control plane for daily model publication: each row names
-one model, the weekday theme it belongs to, which artifact formats to build,
-and whether the artifact should be published after conversion. The workflow
-runs at 06:17 UTC every weekday and keeps the manual single-model dispatch.
+`recipes/queue.yaml` is an optional, reviewable input for a maintainer-run local
+model release. GitHub Actions does not run this queue automatically. The
+weekday fields preserve dependency ordering and grouping; they do not define a
+cron schedule.
+
+Before running any conversion or publication command, validate and inspect the
+selected rows locally:
+
+```bash
+python scripts/release/dispatch_batch.py validate --queue recipes/queue.yaml
+python scripts/release/dispatch_batch.py plan \
+  --queue recipes/queue.yaml \
+  --weekday monday
+python scripts/release/dispatch_batch.py run-batch \
+  --queue recipes/queue.yaml \
+  --weekday monday \
+  --dry-run
+```
+
+An actual run must be initiated explicitly on maintainer-controlled hardware
+after the dry-run commands, target repositories, gate commands, and available
+resources have been reviewed. Rows with `publish: true` require the local token
+and evidence controls in the [manual Hugging Face publication
+policy](security/hf-token-policy.md).
 
 ## Queue Format
 
@@ -28,41 +47,34 @@ items:
 
 Required item fields:
 
-- `id`: stable lowercase queue key used in workflow matrix entries and artifact
-  names. It may contain letters, digits, `.`, `_`, and `-`.
+- `id`: stable lowercase queue key used in local reports and artifact names. It
+  may contain letters, digits, `.`, `_`, and `-`.
 - `weekday`: one of `monday`, `tuesday`, `wednesday`, `thursday`, or `friday`.
-- `theme`: the weekly release theme for that row. It must match the
-  `weekly_themes` value for the selected weekday.
+- `theme`: the release theme for that row. It must match the `weekly_themes`
+  value for the selected weekday.
 - `model_id`: source model repository to convert.
 - `formats`: one or more of `mlx-fp`, `mlx-8bit`, `mlx-4bit`, or `coreml`.
-- `publish`: a YAML boolean controlling whether the converted artifact is pushed
-  after conversion and gates.
+- `publish`: a YAML boolean controlling whether an explicitly invoked local run
+  attempts publication after conversion and gates.
 
 Optional fields:
 
 - `depends_on_green_parent`: queue item ids that must precede an edge artifact
-  by at least one day. Each parent must be a published, non-edge artifact for
+  by at least one day. Each parent must be a reviewed, non-edge artifact for
   the same source model.
-- `gate_command`: an argument list to run after conversion and before publish
-  when a gate exists. Use a YAML list, not a shell command string.
+- `gate_command`: an argument list to run after conversion and before publish.
+  Use a YAML list, not a shell command string.
 
-## Weekly Ordering
+## Local Ordering
 
-The scheduled workflow selects the queue rows for the current UTC weekday.
-Monday and Tuesday rows publish parent artifacts first. Wednesday rows are
-reserved for edge artifacts such as MLX 8-bit and CoreML and must declare
-`depends_on_green_parent`, pointing at Monday or Tuesday parent rows. Queue
-curators add an edge row only after its referenced parent has passed the
-available gates. Before creating the matrix, the dispatcher fails closed unless
-each referenced parent exists, is published, uses the same `model_id`, is a
-non-edge artifact, and precedes the edge row by at least one day.
+Monday and Tuesday rows list parent artifacts first. Wednesday rows are
+reserved for edge artifacts such as MLX 8-bit and Core ML and must declare
+`depends_on_green_parent`, pointing at an earlier parent row. The dispatcher
+fails closed unless each referenced parent exists, is marked for publication,
+uses the same `model_id`, is a non-edge artifact, and precedes the edge row by
+at least one day.
 
-Thursday maps to benchmark refreshes and Friday maps to the SDK release train.
-Those themes may have no model-conversion rows; an empty day produces a skipped
-batch rather than inventing work outside the reviewed queue.
-
-Each queued model runs as an independent matrix item with `fail-fast: false`.
-Conversion runs first, then `gate_command` when configured, then the existing HF
-publish path. The write token is removed from conversion and gate environments.
-A failed model therefore does not cancel the rest of the batch, but its named
-matrix job still fails and surfaces the queue `id` in the workflow result.
+Thursday and Friday remain grouping labels for benchmark and SDK work. An empty
+selection performs no work. The local dispatcher records each selected model
+independently so one failure remains visible, but it does not substitute for a
+maintainer reviewing the complete batch before any upload.

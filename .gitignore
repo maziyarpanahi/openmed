@@ -131,6 +131,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.pixi/
 .env
 .venv
 .venv*/
@@ -252,6 +253,10 @@ docs/website/_build/
 docs/api/_build/
 output/playwright/
 .playwright-cli/
+
+# Local browser-demo model and runtime payloads
+/docs/demo/web/models/
+/docs/demo/web/vendor/
 
 .pypirc
 

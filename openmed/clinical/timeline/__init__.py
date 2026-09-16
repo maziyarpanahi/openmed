@@ -1,5 +1,15 @@
 """Clinical timeline normalization public API."""
 
+from openmed.clinical.timeline.assembler import (
+    CLINICAL_EVENT_TIMELINE_ADVISORY,
+    CLINICAL_EVENT_TIMELINE_SCHEMA_VERSION,
+    AssembledTimeline,
+    ClinicalEvent,
+    ClinicalEventTimeline,
+    ClinicalTimeline,
+    EventTimeline,
+    assemble_timeline,
+)
 from openmed.clinical.timeline.longitudinal import (
     LinkedDocumentTimeline,
     LinkedTimelineDocument,
@@ -66,14 +76,22 @@ __all__ = [
     "TimelineRelationKind",
     "TimexAnchorReference",
     "anchor_events",
+    "AssembledTimeline",
+    "CLINICAL_EVENT_TIMELINE_ADVISORY",
+    "CLINICAL_EVENT_TIMELINE_SCHEMA_VERSION",
+    "ClinicalEvent",
+    "ClinicalEventTimeline",
+    "ClinicalTimeline",
     "build_linked_document_timeline",
     "TimexType",
     "detect_timexes",
     "duration_value",
     "extract_timex",
     "evaluate_timeline_gold",
+    "EventTimeline",
     "normalize_unit",
     "order_events",
     "parse_number",
     "resolve_timeline",
+    "assemble_timeline",
 ]

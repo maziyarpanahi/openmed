@@ -315,6 +315,8 @@ def run_perf_benchmark(
     )
     budget = lookup_tier_budget(tier)
     report_metadata = {
+        "chars_per_document": sum(len(document.text) for document in documents)
+        / len(documents),
         "document_ids": [document.document_id for document in documents],
         "workload": str(DEFAULT_PERF_WORKLOAD_PATH),
     }
