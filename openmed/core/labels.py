@@ -248,7 +248,9 @@ FUNCTIONAL_SCALE: Final = "FUNCTIONAL_SCALE"
 
 #: Structured substance-use history concepts (issue #912). These labels
 #: describe explicit note spans that can feed ``openmed.clinical.sdoh``;
-#: they do not replace its determinant classification or normalization.
+#: callers can normalize status spans with
+#: ``openmed.clinical.status_vocab.normalize_substance_status``. They do not
+#: replace SDOH determinant classification or normalization.
 SUBSTANCE: Final = "SUBSTANCE"
 USE_STATUS: Final = "USE_STATUS"
 USE_QUANTITY: Final = "USE_QUANTITY"
