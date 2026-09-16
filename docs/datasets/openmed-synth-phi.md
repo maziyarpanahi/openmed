@@ -2,7 +2,7 @@
 
 This card describes the public `openmed-synth` benchmark suite. The corpus is
 generated locally by
-[`scripts/eval/build_openmed_synth_corpus.py`](../../scripts/eval/build_openmed_synth_corpus.py)
+[`scripts/eval/build_openmed_synth_corpus.py`](https://github.com/maziyarpanahi/openmed/blob/master/scripts/eval/build_openmed_synth_corpus.py)
 and loaded through the OpenMed golden-fixture machinery. No network access or
 credential is needed.
 
