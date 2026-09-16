@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added immutable local ASR input profiles and a metadata-only
+  compatibility check over privacy-safe WAV headers, returning compatible,
+  resample, downmix, review or incompatible with ordered reason codes and
+  closed, bounded, sorted-unique profile validation (#3050).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).

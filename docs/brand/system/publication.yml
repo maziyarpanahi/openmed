@@ -242,6 +242,7 @@ classification:
     - multimodal/provider-results.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
+    - multimodal/asr-audio-profiles.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
