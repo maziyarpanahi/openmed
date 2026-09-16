@@ -20,6 +20,19 @@ from .correlation import (
     CorrelationIdError,
     RunId,
 )
+from .event_attributes import (
+    ALLOWED_ATTRIBUTES,
+    EVENT_ATTRIBUTES_SCHEMA_VERSION,
+    EXECUTION_STAGES,
+    MAX_ATTRIBUTE_COUNT,
+    MAX_ATTRIBUTE_JSON_BYTES,
+    MAX_COUNT_VALUE,
+    MAX_DURATION_MS,
+    AttributeKind,
+    EventAttributeError,
+    EventAttributes,
+    validate_event_attributes,
+)
 from .identifiers import (
     CapabilityId,
     GovernanceIdError,
@@ -46,7 +59,9 @@ from .run_summary import (
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 
 __all__ = [
+    "ALLOWED_ATTRIBUTES",
     "ARTIFACT_REFERENCE_VERSION",
+    "AttributeKind",
     "ActionTiming",
     "AgentRunTiming",
     "ACTION_ID_PREFIX",
@@ -59,11 +74,19 @@ __all__ = [
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
     "CorrelationIdError",
+    "EVENT_ATTRIBUTES_SCHEMA_VERSION",
+    "EXECUTION_STAGES",
+    "EventAttributeError",
+    "EventAttributes",
     "GovernanceIdError",
     "OUTCOME_SCHEMA_VERSION",
     "OutcomeClass",
     "OutcomeError",
     "MAX_ARTIFACT_BYTE_SIZE",
+    "MAX_ATTRIBUTE_COUNT",
+    "MAX_ATTRIBUTE_JSON_BYTES",
+    "MAX_COUNT_VALUE",
+    "MAX_DURATION_MS",
     "MAX_RUN_SUMMARY_JSON_BYTES",
     "RunEvent",
     "RUN_SUMMARY_SCHEMA_VERSION",
@@ -82,4 +105,5 @@ __all__ = [
     "allowed_reason_codes",
     "security",
     "validate_artifact_references",
+    "validate_event_attributes",
 ]
