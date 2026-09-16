@@ -1,0 +1,134 @@
+{
+  "format": "openmed-agent-skill-compatibility",
+  "schema_version": 1,
+  "hosts": {
+    "agents": {
+      "display_name": "Shared Agent Skills directory",
+      "skills_dir": "~/.agents/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    },
+    "claude": {
+      "display_name": "Claude Code",
+      "skills_dir": "~/.claude/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    },
+    "codex": {
+      "display_name": "OpenAI Codex",
+      "skills_dir": "~/.codex/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    },
+    "opencode": {
+      "display_name": "OpenCode",
+      "skills_dir": "~/.config/opencode/skills",
+      "capabilities": {
+        "archive_formats": [
+          "zip",
+          "tar.gz"
+        ],
+        "directory_layout": "skills/<skill>/",
+        "symlinks": false
+      }
+    }
+  },
+  "packs": {
+    "coding": {
+      "version": "1.0.0",
+      "description": "Clinical terminology, coding, normalization, and structured cohort-mapping workflows.",
+      "skills": [
+        "coding-hcc-risk-adjustment",
+        "coding-icd10",
+        "etl-to-omop-cdm",
+        "linking-umls-concepts",
+        "mapping-loinc",
+        "mapping-to-snomed",
+        "normalizing-rxnorm",
+        "parsing-lab-values",
+        "querying-terminology-service"
+      ]
+    },
+    "evaluation": {
+      "version": "1.0.0",
+      "description": "Offline evaluation, model selection, leakage gates, and quality evidence for OpenMed skills.",
+      "skills": [
+        "auditing-subgroup-fairness",
+        "authoring-model-cards",
+        "benchmark-pii-recall",
+        "benchmarking-clinical-ner",
+        "building-gold-corpus",
+        "evaluating-with-leakage-gates",
+        "gating-deid-leakage",
+        "pick-a-pii-model"
+      ]
+    },
+    "interoperability": {
+      "version": "1.0.0",
+      "description": "Local document intake, FHIR exchange, and standards-based interoperability workflows.",
+      "skills": [
+        "assembling-fhir-bundles",
+        "bridging-presidio-and-spacy",
+        "exporting-bulk-fhir",
+        "exporting-to-fhir",
+        "extracting-dicom-metadata",
+        "fetching-fhir-resources",
+        "ingesting-clinical-documents",
+        "parsing-ccda-documents",
+        "parsing-hl7v2-messages",
+        "scaffolding-smart-on-fhir",
+        "validating-us-core"
+      ]
+    },
+    "privacy": {
+      "version": "1.0.0",
+      "description": "Privacy-first de-identification, audit, policy, and risk workflows for local clinical data.",
+      "skills": [
+        "auditing-deid-leakage",
+        "auditing-deidentification-runs",
+        "auditing-safe-harbor-checklist",
+        "checking-hipaa-compliance",
+        "configuring-privacy-policies",
+        "deidentifying-clinical-text",
+        "extracting-pii-entities",
+        "generating-synthetic-surrogates",
+        "pseudonymizing-for-gdpr",
+        "reviewing-reidentification-risk",
+        "shifting-clinical-dates"
+      ]
+    },
+    "research": {
+      "version": "1.0.0",
+      "description": "Synthetic-data, biomedical research, clinical-trial, and longitudinal analysis workflows.",
+      "skills": [
+        "annotating-variants",
+        "building-patient-timelines",
+        "computing-ecqms",
+        "defining-cohort-phenotypes",
+        "extracting-lab-tables",
+        "generating-synthea-data",
+        "mining-pubmed-literature",
+        "parsing-trial-eligibility",
+        "searching-clinicaltrials"
+      ]
+    }
+  }
+}
