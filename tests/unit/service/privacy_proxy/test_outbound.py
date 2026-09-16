@@ -7,11 +7,13 @@ from typing import Any
 
 import pytest
 
+from openmed.service.privacy_proxy.inbound import InboundPlaceholderRestorer
 from openmed.service.privacy_proxy.outbound import (
     OutboundRequestPrivacyFilter,
     RedactionError,
     RedactionResult,
     RedactorRequiredError,
+    ReplacementStateError,
     ReplacementStateLimitError,
     RequestStateStore,
     UnsupportedContentTypeError,
@@ -20,8 +22,8 @@ from openmed.service.privacy_proxy.outbound import (
 
 SYNTHETIC_NAME = "Synthetic Patient"
 SYNTHETIC_PHONE = "555-0101"
-NAME_TOKEN = "<NAME>"
-PHONE_TOKEN = "<PHONE>"
+NAME_TOKEN = "<<OPENMED_PHI_NAME_A1B2C3D4_000001>>"
+PHONE_TOKEN = "<<OPENMED_PHI_PHONE_A1B2C3D4_000002>>"
 
 
 def synthetic_redactor(text: str) -> RedactionResult:
@@ -231,6 +233,56 @@ def test_state_store_is_bounded_and_state_can_be_consumed_once() -> None:
     state = privacy_filter.consume_state("first-request")
     assert state.request_id == "first-request"
     assert not store.contains("first-request")
+
+
+def test_state_hands_off_to_the_established_inbound_restorer() -> None:
+    privacy_filter = OutboundRequestPrivacyFilter(synthetic_redactor)
+    prepared = privacy_filter.transform(
+        {"messages": [{"role": "user", "content": SYNTHETIC_NAME}]},
+        request_id="restoration-handoff",
+    )
+
+    inbound_state = prepared.state.to_inbound_state()
+
+    with InboundPlaceholderRestorer(inbound_state) as restorer:
+        assert restorer.restore_text(f"The contact is {NAME_TOKEN}.") == (
+            f"The contact is {SYNTHETIC_NAME}."
+        )
+
+
+def test_invalid_restoration_placeholder_fails_closed_without_state() -> None:
+    def incompatible_redactor(text: str) -> RedactionResult:
+        return RedactionResult(
+            text.replace(SYNTHETIC_NAME, "<NAME>"), {"<NAME>": SYNTHETIC_NAME}
+        )
+
+    privacy_filter = OutboundRequestPrivacyFilter(incompatible_redactor)
+
+    with pytest.raises(ReplacementStateError) as exc_info:
+        privacy_filter.transform(
+            {"messages": [{"role": "user", "content": SYNTHETIC_NAME}]},
+            request_id="invalid-restoration-token",
+        )
+
+    assert SYNTHETIC_NAME not in str(exc_info.value)
+    assert len(privacy_filter.state_store) == 0
+
+
+def test_duplicate_request_id_fails_closed_and_preserves_original_state() -> None:
+    privacy_filter = OutboundRequestPrivacyFilter(synthetic_redactor)
+    first = privacy_filter.transform(
+        {"messages": [{"role": "user", "content": SYNTHETIC_NAME}]},
+        request_id="active-request",
+    )
+
+    with pytest.raises(ReplacementStateError) as exc_info:
+        privacy_filter.transform(
+            {"messages": [{"role": "user", "content": SYNTHETIC_PHONE}]},
+            request_id="active-request",
+        )
+
+    assert SYNTHETIC_PHONE not in str(exc_info.value)
+    assert privacy_filter.get_state("active-request") == first.state
 
 
 def test_missing_redactor_is_rejected_before_request_processing() -> None:

@@ -21,7 +21,7 @@ from openmed.service.privacy_proxy.outbound import (
 
 def redact_locally(text: str) -> RedactionResult:
     original = "Synthetic Patient"
-    token = "<NAME>"
+    token = "<<OPENMED_PHI_NAME_A1B2C3D4_000001>>"
     if original not in text:
         return RedactionResult(text)
     return RedactionResult(text.replace(original, token), {token: original})
@@ -44,13 +44,22 @@ remote_body = prepared.body
 # Keep the state local for the response-restoration stage.
 replacement_state = privacy_filter.get_state(prepared.request_id)
 replacement_map = replacement_state.replacements
+
+# The state is validated for the established local inbound restorer.
+inbound_state = replacement_state.to_inbound_state()
 ```
 
 `replacement_map` is read-only and has a PHI-safe string representation, but
 its values remain available to a local restoration stage. Call
 `discard_state()` after restoration, or `consume_state()` when the handoff is
 one-time. The in-memory state store is bounded and rejects new requests when
-its configured capacity is reached.
+its configured capacity is reached. Reusing an active request ID is also
+rejected rather than replacing another request's mapping.
+
+Replacement keys must use the `OPENMED_PHI` placeholder format accepted by
+`openmed.service.privacy_proxy.inbound`. The outbound boundary validates this
+contract before it stores state or returns a transformed body, so a caller can
+hand `to_inbound_state()` directly to the local response restorer.
 
 ## Supported request shapes
 

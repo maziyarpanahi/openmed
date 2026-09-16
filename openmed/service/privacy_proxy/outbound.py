@@ -24,6 +24,8 @@ from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from .inbound import InboundRestorationError, InboundRestorationState
+
 DEFAULT_CONTENT_TYPE = "application/json"
 SUPPORTED_CONTENT_TYPES = frozenset({DEFAULT_CONTENT_TYPE})
 DEFAULT_MAX_STATES = 1024
@@ -187,6 +189,19 @@ class RequestReplacementState:
         """Compatibility alias for callers that use the explicit map name."""
         return self.replacements
 
+    def to_inbound_state(self) -> InboundRestorationState:
+        """Build the validated state consumed by local response restoration."""
+        try:
+            return InboundRestorationState(
+                request_id=self.request_id,
+                mapping=self.replacements,
+            )
+        except InboundRestorationError:
+            raise ReplacementStateError(
+                "Outbound replacement state is incompatible with local restoration",
+                reason_code="invalid_replacement_state",
+            ) from None
+
     def to_metadata(self) -> dict[str, Any]:
         """Return PHI-free state metadata for logs or reports."""
         return {
@@ -262,12 +277,14 @@ class RequestStateStore:
         self._lock = threading.RLock()
 
     def save(self, state: RequestReplacementState) -> None:
-        """Save state, refusing new entries when the bounded store is full."""
+        """Save state without replacing another active request's mapping."""
         with self._lock:
-            if (
-                state.request_id not in self._states
-                and len(self._states) >= self.max_entries
-            ):
+            if state.request_id in self._states:
+                raise ReplacementStateError(
+                    "Outbound replacement state already exists for this request",
+                    reason_code="duplicate_request_state",
+                )
+            if len(self._states) >= self.max_entries:
                 raise ReplacementStateLimitError(
                     "Outbound replacement state capacity has been reached"
                 )
@@ -387,6 +404,7 @@ class OutboundRequestPrivacyFilter:
             message_count=message_count,
             redacted_field_count=redacted_field_count,
         )
+        state.to_inbound_state()
         self.state_store.save(state)
         return PreparedOutboundRequest(
             request_id=active_request_id,
