@@ -188,6 +188,11 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/sdoh-evidence-deduplication.md
+    - clinical/sdoh-longitudinal-resolution.md
+    - clinical/sdoh-sensitive-use-labels.md
+    - clinical/sdoh-review-routing.md
+    - clinical/sdoh-category-completeness.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
