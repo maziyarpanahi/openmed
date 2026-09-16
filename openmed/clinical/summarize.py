@@ -252,13 +252,10 @@ def _normalize_mode(mode: str) -> str:
     return normalized
 
 
-def _require_deidentification_result(value: object) -> Any:
+def _require_deidentification_result(value: object) -> DeidentificationResult:
     """Validate the guarded-stage input without accepting a raw string."""
 
-    if isinstance(value, str) or not all(
-        hasattr(value, attribute)
-        for attribute in ("original_text", "deidentified_text", "pii_entities")
-    ):
+    if not isinstance(value, DeidentificationResult):
         raise SummarizationOrderError(
             "summarization requires a de-identification result; "
             "call summarize() with raw text or deidentify() first"

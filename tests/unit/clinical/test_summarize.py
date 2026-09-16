@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from importlib import import_module
+from types import SimpleNamespace
 
 import pytest
 
@@ -94,6 +95,17 @@ def test_default_stub_summary_contains_no_original_phi(monkeypatch):
 def test_ordering_guard_rejects_raw_input():
     with pytest.raises(SummarizationOrderError, match="requires a de-identification"):
         summarize_deidentified(SYNTHETIC_NOTE)  # type: ignore[arg-type]
+
+
+def test_ordering_guard_rejects_lookalike_input():
+    lookalike = SimpleNamespace(
+        original_text="synthetic source",
+        deidentified_text="synthetic output",
+        pii_entities=[],
+    )
+
+    with pytest.raises(SummarizationOrderError, match="requires a de-identification"):
+        summarize_deidentified(lookalike)  # type: ignore[arg-type]
 
 
 def test_leakage_guard_rejects_backend_reemission_without_exposing_token():
