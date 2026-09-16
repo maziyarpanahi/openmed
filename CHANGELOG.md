@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added offline lifetime and audience validation for agent capability
+  grants, with caller-supplied evaluation instants, symmetric clock-skew
+  tolerance, an optional lifetime ceiling, ordered reason codes, and
+  byte-stable reports that carry no grant payload (#3080).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
