@@ -11,7 +11,8 @@ import sys
 
 import pytest
 
-from openmed.eval.adversarial_perturbations import (
+from openmed.eval.harness import BenchmarkFixture
+from openmed.eval.robustness import (
     DEFAULT_ADVERSARIAL_PERTURBATIONS,
     AdversarialPerturbationGateError,
     adversarial_perturbation_report,
@@ -20,7 +21,6 @@ from openmed.eval.adversarial_perturbations import (
     homoglyph_substitution_perturbation,
     zero_width_injection_perturbation,
 )
-from openmed.eval.harness import BenchmarkFixture
 
 _ALL_OPERATORS = [
     homoglyph_substitution_perturbation(probability=1.0),
@@ -110,7 +110,7 @@ def test_operators_are_byte_identical_across_processes(name):
         snippet = (
             "import json, random;"
             "from openmed.eval.harness import BenchmarkFixture;"
-            "from openmed.eval.adversarial_perturbations import"
+            "from openmed.eval.robustness import"
             " DEFAULT_ADVERSARIAL_PERTURBATIONS as P;"
             "fixture=BenchmarkFixture.from_mapping("
             "{'id':'synthetic-note-1',"
