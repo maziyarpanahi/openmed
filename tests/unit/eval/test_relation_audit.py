@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
+
+import pytest
 
 from openmed.eval.relation_audit import (
     ACCEPTED_FILTERING_REASON,
@@ -157,3 +160,24 @@ def test_empty_input_is_a_valid_deterministic_report() -> None:
     assert report.by_relation_family == {}
     assert report.by_section == {}
     assert report.by_filtering_reason == {}
+
+
+def test_unreadable_input_never_echoes_sensitive_exception_text() -> None:
+    sensitive_value = "synthetic-sensitive-identifier"
+
+    class _UnreadableCandidate:
+        @property
+        def relation_type(self) -> str:
+            raise RuntimeError(sensitive_value)
+
+    report = audit_relation_candidates([_UnreadableCandidate()])
+    assert sensitive_value not in report.to_json()
+    assert report.by_relation_family == {"unknown": 1}
+
+    def _unreadable_records() -> Iterator[object]:
+        yield {"relation_family": "drug"}
+        raise RuntimeError(sensitive_value)
+
+    with pytest.raises(ValueError, match="input is unreadable") as error:
+        audit_relation_candidates(_unreadable_records())
+    assert sensitive_value not in str(error.value)

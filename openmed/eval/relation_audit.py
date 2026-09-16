@@ -56,7 +56,10 @@ def _normalise_category(value: Any, fallback: str) -> str:
 
     if not isinstance(value, str):
         return fallback
-    normalized = value.strip().casefold()
+    try:
+        normalized = value.strip().casefold()
+    except Exception:
+        return fallback
     if not normalized:
         return fallback
     normalized = _SEPARATOR_RE.sub("_", normalized)
@@ -98,7 +101,7 @@ def _value(source: Any, keys: Sequence[str]) -> Any:
         for key in keys:
             try:
                 value = source.get(key)
-            except (AttributeError, KeyError, TypeError, ValueError):
+            except Exception:
                 continue
             if value is not None:
                 return value
@@ -107,7 +110,7 @@ def _value(source: Any, keys: Sequence[str]) -> Any:
     for key in keys:
         try:
             value = getattr(source, key)
-        except (AttributeError, KeyError, TypeError, ValueError):
+        except Exception:
             continue
         if value is not None and not callable(value):
             return value
@@ -222,12 +225,15 @@ def _coerce_record(
         return candidate
 
     if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
-        if len(candidate) >= 3:
-            return RelationCandidateAuditRecord(
-                relation_family=candidate[0] or default_relation_family,
-                section=candidate[1] or default_section,
-                filtering_reason=candidate[2] or default_filtering_reason,
-            )
+        try:
+            if len(candidate) >= 3:
+                return RelationCandidateAuditRecord(
+                    relation_family=candidate[0] or default_relation_family,
+                    section=candidate[1] or default_section,
+                    filtering_reason=candidate[2] or default_filtering_reason,
+                )
+        except Exception:
+            raise ValueError("relation candidate sequence is unreadable") from None
 
     relation_family = _derive_relation_family(candidate, default_relation_family)
     section = _normalise_category(
@@ -566,11 +572,22 @@ def audit_relation_candidates(
     else:
         records = candidates
 
+    try:
+        iterator = iter(records)
+    except Exception:
+        raise ValueError("relation candidates must be an iterable of records") from None
+
     family_counts: Counter[str] = Counter()
     section_counts: Counter[str] = Counter()
     reason_counts: Counter[str] = Counter()
     candidate_count = 0
-    for candidate in records:
+    while True:
+        try:
+            candidate = next(iterator)
+        except StopIteration:
+            break
+        except Exception:
+            raise ValueError("relation candidate input is unreadable") from None
         record = _coerce_record(
             candidate,
             default_relation_family=family_default,
