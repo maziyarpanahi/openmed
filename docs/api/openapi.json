@@ -99,6 +99,19 @@
         "additionalProperties": false,
         "description": "Request schema for in-memory ``POST /cohort/resolve``.",
         "properties": {
+          "completeness_floor": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completeness Floor"
+          },
           "concept_ancestors": {
             "items": {
               "$ref": "#/components/schemas/ConceptAncestorRequest"
@@ -114,6 +127,13 @@
           "records_jsonl": {
             "title": "Records Jsonl",
             "type": "string"
+          },
+          "required_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Fields",
+            "type": "array"
           }
         },
         "required": [
@@ -486,9 +506,29 @@
         "additionalProperties": false,
         "description": "Request schema for /omop/load.",
         "properties": {
+          "completeness_floor": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completeness Floor"
+          },
           "records_jsonl": {
             "title": "Records Jsonl",
             "type": "string"
+          },
+          "required_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Fields",
+            "type": "array"
           },
           "validate_constraints": {
             "default": false,
@@ -1232,6 +1272,47 @@
           "text"
         ],
         "title": "PrivacyGatewayRequest",
+        "type": "object"
+      },
+      "ProfileRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for the PHI-free quality profile route.",
+        "properties": {
+          "athena_index": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Athena Index"
+          },
+          "completeness_floor": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Completeness Floor",
+            "type": "number"
+          },
+          "records_jsonl": {
+            "title": "Records Jsonl",
+            "type": "string"
+          },
+          "required_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "records_jsonl"
+        ],
+        "title": "ProfileRequest",
         "type": "object"
       },
       "SMARTBackendIngestionRequest": {
@@ -2149,6 +2230,47 @@
           }
         },
         "summary": "Privacy Gateway Complete"
+      }
+    },
+    "/profile": {
+      "post": {
+        "description": "Profile extracted output without returning note text or values.",
+        "operationId": "profile_route_profile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Profile Route Profile Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile Route"
       }
     },
     "/readyz": {
