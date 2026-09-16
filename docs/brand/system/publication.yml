@@ -274,6 +274,7 @@ classification:
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
     - clinical/discharge-profile.md
+    - clinical/summary-omission-budgets.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
