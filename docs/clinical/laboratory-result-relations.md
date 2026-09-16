@@ -35,4 +35,3 @@ multiple values, all bounded candidates are preserved with
 output contains offsets, hashes, normalized unit dimensions, and controlled
 metadata—not raw analyte names or values. It is deterministic, offline, and
 always requires human review.
-

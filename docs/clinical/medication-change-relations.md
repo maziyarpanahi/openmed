@@ -24,4 +24,3 @@ surfaces. Invalid offsets and unsupported inputs fail with value-free messages.
 Every candidate has `review_required=True` and `prescribing_action=False`.
 Candidates never create an order, treatment plan, or recommendation. The API is
 deterministic, performs no network call, and requires upstream medication spans.
-

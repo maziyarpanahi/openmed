@@ -29,4 +29,3 @@ Every output has `review_required=True`, `treatment_recommendation=False`, and
 `treatment_evaluated=False`. The API does not recommend or assess treatment,
 copies no source surfaces into serialization, is deterministic, and performs no
 network call.
-

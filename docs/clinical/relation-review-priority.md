@@ -27,4 +27,3 @@ treatments, or measurement values.
 Applications can provide an immutable `ReviewPriorityPolicy` with local integer
 weights and thresholds. Identical metadata and policy produce identical output;
 the implementation is local and performs no network call.
-

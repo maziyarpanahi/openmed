@@ -23,4 +23,3 @@ cue, plus the indication's controlled assertion axes. It never serializes the
 source surfaces. Every candidate has `confirmation_required=True` and
 `appropriateness_assessed=False`; no appropriateness or clinical-value judgment
 is made. Candidate generation is deterministic and performs no network call.
-
