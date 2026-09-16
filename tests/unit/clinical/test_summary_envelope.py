@@ -32,7 +32,10 @@ def _synthetic_result() -> DeidentificationResult:
         pii_entities=[],
         method="mask",
         timestamp=datetime(2026, 1, 1),
-        metadata={"pipeline": "synthetic-local"},
+        metadata={
+            "pipeline": "synthetic-local",
+            "safety_sweep": {"enabled": True, "spans_added": 1},
+        },
     )
 
 
@@ -49,6 +52,10 @@ def test_verification_factory_discards_original_content_and_keeps_hash_traceabil
     assert artifact.is_verified is True
     assert artifact.to_dict()["artifact_id"] == "synthetic-note-001"
     assert artifact.to_dict()["content_hash"].startswith("sha256:")
+    assert artifact.provenance == {
+        "pipeline": "synthetic-local",
+        "policy": "offline-synthetic",
+    }
     assert "ORIGINAL_ONLY_MARKER" not in repr(artifact)
     assert "ORIGINAL_ONLY_MARKER" not in str(artifact.to_dict())
 

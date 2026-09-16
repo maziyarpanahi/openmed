@@ -155,7 +155,23 @@ def _metadata_from_result(result: object) -> dict[str, Any]:
         return {}
     if not isinstance(metadata, Mapping):
         raise SummaryEnvelopeError("de-identification metadata is not safe")
-    return _safe_additional_provenance(metadata)
+
+    safe_metadata: dict[str, Any] = {}
+    for key, item in metadata.items():
+        if not isinstance(key, str) or not _SAFE_IDENTIFIER.fullmatch(key):
+            raise SummaryEnvelopeError("de-identification metadata is not safe")
+        if key in _RESERVED_PROVENANCE:
+            raise SummaryEnvelopeError("provenance contains reserved metadata")
+        if key in _RAW_PROVENANCE_KEYS:
+            raise SummaryEnvelopeError("provenance contains source content")
+        try:
+            safe_metadata.update(_safe_provenance({key: item}))
+        except SummaryEnvelopeError:
+            # Normal de-identification results can carry nested operational
+            # metadata. It is not needed to prove this boundary and must not be
+            # copied into summary provenance.
+            continue
+    return safe_metadata
 
 
 def _audit_value(report: object, name: str) -> object | None:

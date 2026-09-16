@@ -6,7 +6,8 @@ create a `VerifiedDeidentifiedArtifact` from a structured de-identification
 result. The artifact retains only the de-identified payload, a content hash,
 source hash, safe identifiers, and verification metadata. Original text,
 detected entities, and re-identification mappings are not copied into summary
-provenance.
+provenance. Safe scalar metadata may be retained; nested operational metadata
+is deliberately omitted from the summary envelope.
 
 The stage also requires an explicit human-review mode. If either gate is
 missing, it returns a refusal envelope and does not invoke the summary
