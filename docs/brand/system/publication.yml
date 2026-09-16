@@ -157,6 +157,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - models/bundled-offline.md
+    - models/clinical-slm-manifest.md
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md

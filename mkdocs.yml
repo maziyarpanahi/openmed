@@ -82,6 +82,7 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Clinical SLM Artifact Manifest: models/clinical-slm-manifest.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
