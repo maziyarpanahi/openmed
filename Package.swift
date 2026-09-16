@@ -14,12 +14,24 @@ let package = Package(
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        )
+        ),
+        .library(
+            name: "OpenMedExtensionSupport",
+            targets: ["OpenMedExtensionSupport"]
+        ),
+        .library(
+            name: "OpenMedShareExtension",
+            targets: ["OpenMedShareExtension"]
+        ),
+        .library(
+            name: "OpenMedActionExtension",
+            targets: ["OpenMedActionExtension"]
+        ),
     ],
     dependencies: [
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
-            from: "0.1.12"
+            exact: "0.1.24"
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
@@ -60,10 +72,35 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .target(
+            name: "OpenMedExtensionSupport",
+            dependencies: ["OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/OpenMedExtensionSupport"
+        ),
+        .target(
+            name: "OpenMedShareExtension",
+            dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/ShareExtension"
+        ),
+        .target(
+            name: "OpenMedActionExtension",
+            dependencies: ["OpenMedExtensionSupport"],
+            path: "swift/OpenMedKit/Sources/ActionExtension"
+        ),
         .testTarget(
             name: "OpenMedKitTests",
             dependencies: ["OpenMedKit"],
             path: "swift/OpenMedKit/Tests/OpenMedKitTests"
+        ),
+        .testTarget(
+            name: "ExtensionTests",
+            dependencies: [
+                "OpenMedKit",
+                "OpenMedExtensionSupport",
+                "OpenMedShareExtension",
+                "OpenMedActionExtension",
+            ],
+            path: "swift/OpenMedKit/Tests/ExtensionTests"
         ),
     ]
 )

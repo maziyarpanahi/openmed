@@ -23,9 +23,11 @@ make grpc-proto
 
 ## Contract
 
-The source protobuf contract is committed at
-`openmed/service/proto/openmed.proto`. Generated Python modules are committed
-under `openmed/service/proto/generated/`.
+The OpenMed service contract is committed at
+`openmed/service/proto/openmed.proto`. The client-only KServe V2 wire subset
+used by the [remote inference backend](kserve-triton.md) is committed at
+`openmed/service/proto/kserve_v2.proto`. Generated Python modules for both are
+committed under `openmed/service/proto/generated/`.
 
 The `OpenMedService` exposes:
 
