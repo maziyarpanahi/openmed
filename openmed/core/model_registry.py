@@ -1401,7 +1401,7 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "MentalHealth",
         "Contains mental-health terms",
     ),
-    "caries|extraction|crown|periodontal|tooth\s*#": (
+    r"caries|extraction|crown|periodontal|tooth\s*#": (
         "Dentistry",
         "Contains dentistry/oral-health terms",
     ),
