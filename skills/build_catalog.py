@@ -55,6 +55,7 @@ CATEGORY_ORDER = [
     "analytics-reporting",
     "deployment-ops",
 ]
+CATALOG_HELPER_DIRS = {"packs"}
 CATEGORY_TITLES = {
     "openmed-core": "OpenMed core — build with OpenMed directly",
     "data-ingestion": "Data ingestion — feed clinical text into OpenMed",
@@ -109,7 +110,11 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
 def load_skills() -> tuple[list[dict], list[str]]:
     skills, errors = [], []
     for path in sorted(SKILLS_DIR.iterdir()):
-        if not path.is_dir() or path.name.startswith((".", "_")):
+        if (
+            not path.is_dir()
+            or path.name.startswith((".", "_"))
+            or path.name in CATALOG_HELPER_DIRS
+        ):
             continue
         skill_md = path / "SKILL.md"
         if not skill_md.exists():
