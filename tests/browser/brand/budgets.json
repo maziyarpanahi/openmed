@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 531,
-    "maximum_total_bytes": 50038623,
-    "maximum_unique_payload_bytes": 49701044,
+    "maximum_files": 533,
+    "maximum_total_bytes": 50364866,
+    "maximum_unique_payload_bytes": 50027287,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -32,9 +32,9 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits are based on the exact staged v2.3 schema candidate plus the audited documentation, federated metrics, and manifest-backed catalog surfaces, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The audited current-master candidate plus the clinical privacy, clinical context analysis, and streamed OCR guides contains 531 files, 49927873 total bytes, 49590294 unique payload bytes, and 337579 duplicate payload bytes.",
-    "The 49701044-byte unique-payload ceiling and 50038623-byte total-payload ceiling retain 110750 bytes of bounded documentation headroom.",
+    "Artifact limits cover the exact staged v2.5 SDK candidate, including its release and migration pages, with the existing 110750 bytes of documentation headroom.",
+    "The audited candidate contains 533 files, 50254116 total bytes, 49916537 unique payload bytes, and 337579 duplicate payload bytes. The two new release documents add two files; updated navigation and documentation account for the measured payload growth.",
+    "The 50027287-byte unique-payload ceiling and 50364866-byte total-payload ceiling retain the previous 110750 bytes of headroom. Per-file, route, duplicate, source-map, and page-metric limits remain unchanged.",
     "The clinical guides remain searchable. The measured search index is 3435851 bytes; its JSON ceiling is 3473408 bytes. Other per-file caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets are unchanged.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
