@@ -16,6 +16,10 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added a metadata-only image orientation preflight that compares all eight
+  EXIF orientations with declared mirror and rotation transforms and optional
+  dimensions, returning aligned, transform-required, ambiguous, or invalid
+  verdicts with stable reason codes and deterministic JSON (#3090).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
