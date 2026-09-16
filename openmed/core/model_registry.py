@@ -6,7 +6,7 @@ import importlib.util
 import json
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
@@ -14,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from . import labels as label_taxonomy
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
-from .registry_service import (
+from .registry_slots import (
     load_registry_state,
     pointer_targets,
     semantic_version,
@@ -437,6 +437,16 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.DISEASE,
         label_taxonomy.CELL,
     ],
+    # Forward metadata for future lab-value models; no dedicated Lab model is
+    # registered today. LOINC grounding remains an external follow-up.
+    "Lab": [
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.LAB_VALUE,
+        label_taxonomy.UNIT,
+        label_taxonomy.REFERENCE_RANGE,
+        label_taxonomy.ABNORMAL_FLAG,
+        label_taxonomy.SPECIMEN,
+    ],
     # Forward metadata for future Cardiology models; no Cardiology model is
     # registered today (see issue #317).
     "Cardiology": [
@@ -582,6 +592,10 @@ _LEGACY_MODEL_ALIASES = {
     ],
     "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+    # The former dedicated Tamil checkpoint is no longer in the public Hub
+    # catalog. Keep its registry key as a compatibility alias for the explicit
+    # multilingual placeholder while callers migrate to qualified weights.
+    "OpenMed/privacy-filter-multilingual": ["pii_ta_msuperclinical_large"],
 }
 
 
@@ -902,7 +916,9 @@ def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
         return None
 
     formats = set(row.get("formats") or ())
-    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+    if "mlx-2bit" in formats:
+        bytes_per_parameter = 0.30
+    elif formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
         bytes_per_parameter = 0.55
     elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
         bytes_per_parameter = 1.05
@@ -1115,12 +1131,28 @@ def _add_pointer_aliases(
     registry_state: Mapping[str, Any],
 ) -> None:
     by_repo_id = {model.model_id: model for model in registry.values()}
-    for family, pointers in pointer_targets(registry_state).items():
+    slots = registry_state.get("slots", {})
+    pointer_sets = pointer_targets(registry_state)
+    family_counts: dict[str, int] = {}
+    for key in pointer_sets:
+        family = key.split("::", 1)[0]
+        family_counts[family] = family_counts.get(family, 0) + 1
+    for slot, pointers in pointer_sets.items():
+        checkpoints = slots.get(slot, {}).get("checkpoints", {})
         for pointer_name, repo_id in pointers.items():
             if repo_id is None:
                 continue
             model = by_repo_id.get(repo_id)
-            if model is not None:
+            if model is None:
+                continue
+            # Pointer aliases carry the slot's assigned registry version, not
+            # the display version parsed from the repo name.
+            assigned = checkpoints.get(repo_id)
+            if isinstance(assigned, str) and assigned:
+                model = replace(model, semantic_version=assigned)
+            registry[_slug(f"{slot}_{pointer_name}")] = model
+            family = slot.split("::", 1)[0]
+            if family_counts[family] == 1:
                 registry[_slug(f"{family}_{pointer_name}")] = model
 
 
@@ -1363,6 +1395,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "blood|lymph|leukemia|lymphoma": (
         "Hematology",
         "Contains hematological terms",
+    ),
+    "\\blab\\b|mmol\\s*/\\s*l\\b|mg\\s*/\\s*dl\\b|\\bwbc\\b|hemoglobin|creatinine|reference\\s+range|elevated|abnormal|\\bpanel\\b": (
+        "Lab",
+        "Contains laboratory measurement terms",
     ),
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",
