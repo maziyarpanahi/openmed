@@ -46,56 +46,14 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any, Optional
 
+from .errors import BudgetExceededError, InputError
+
 __all__ = [
     "BudgetClock",
     "BudgetExceededError",
     "RequestBudget",
     "coerce_budget",
 ]
-
-
-class BudgetExceededError(RuntimeError):
-    """Raised when a per-request resource or time budget is exceeded.
-
-    The error is intentionally PHI-free: it exposes the budget ``kind`` that was
-    exceeded, the configured ``limit``, the ``observed`` value, and the
-    ``checkpoint`` name where the breach was detected. It never contains the
-    input text, spans, or any identifier surface.
-
-    Attributes:
-        kind: Which budget was exceeded (``"wall_time"`` or ``"input_chars"``).
-        limit: The configured budget limit (seconds or characters).
-        observed: The observed value that breached the limit.
-        checkpoint: Name of the safe checkpoint where the breach was detected.
-    """
-
-    def __init__(
-        self,
-        *,
-        kind: str,
-        limit: float,
-        observed: float,
-        checkpoint: Optional[str] = None,
-    ) -> None:
-        self.kind = kind
-        self.limit = limit
-        self.observed = observed
-        self.checkpoint = checkpoint
-
-        if kind == "wall_time":
-            detail = f"wall-time budget of {limit:g}s exceeded (elapsed {observed:g}s)"
-        elif kind == "input_chars":
-            detail = (
-                f"input-length budget of {int(limit)} characters exceeded "
-                f"(input has {int(observed)} characters)"
-            )
-        else:  # pragma: no cover - defensive; kind is set by this module
-            detail = f"budget '{kind}' exceeded (limit {limit}, observed {observed})"
-
-        if checkpoint:
-            detail = f"{detail} at checkpoint '{checkpoint}'"
-
-        super().__init__(f"Request budget exceeded: {detail}")
 
 
 def _validate_positive_number(
@@ -106,10 +64,17 @@ def _validate_positive_number(
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise TypeError(f"{name} must be a number or None")
+        raise InputError(
+            f"{name} must be a number or None. Pass a positive finite number "
+            "or omit the limit.",
+            details={"argument": name, "expected": "positive finite number or null"},
+        )
     normalized = float(value)
     if not isfinite(normalized) or normalized <= 0:
-        raise ValueError(f"{name} must be positive and finite")
+        raise InputError(
+            f"{name} must be positive and finite. Pass a value greater than zero.",
+            details={"argument": name, "constraint": "positive_finite"},
+        )
     return normalized
 
 
@@ -121,9 +86,16 @@ def _validate_positive_int(
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{name} must be an int or None")
+        raise InputError(
+            f"{name} must be an integer or None. Pass a positive integer or "
+            "omit the limit.",
+            details={"argument": name, "expected": "positive integer or null"},
+        )
     if value <= 0:
-        raise ValueError(f"{name} must be positive")
+        raise InputError(
+            f"{name} must be positive. Pass an integer greater than zero.",
+            details={"argument": name, "constraint": "positive"},
+        )
     return int(value)
 
 
@@ -280,7 +252,8 @@ def coerce_budget(
             max_input_chars=budget.get("max_input_chars"),
         )
         return None if coerced.is_unlimited else coerced
-    raise TypeError(
-        "budget must be a RequestBudget, a mapping, or None; "
-        f"got {type(budget).__name__}"
+    raise InputError(
+        "budget must be a RequestBudget, a mapping, or None. Pass a validated "
+        "RequestBudget, a mapping of budget fields, or omit the argument.",
+        details={"argument": "budget", "type": type(budget).__name__},
     )

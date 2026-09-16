@@ -2,6 +2,9 @@
 
 OpenMed provides batch processing capabilities for efficiently analyzing multiple texts or files with progress reporting and result aggregation.
 
+For task-oriented CSV, directory, and progress-callback examples, see the
+[Batch Processing How-To](batch-howto.md). This page remains the API reference.
+
 ## Quick Start
 
 ```python
@@ -607,3 +610,10 @@ with open("results.json", "w") as f:
 # Export summary only
 summary = result.summary()
 ```
+## Clinical privacy batches
+
+The [clinical-preserving privacy processor](privacy/clinical-preserve.md) combines
+ONNX tensor batches with per-document language, role/category policy and output
+methods. Its preview contract reports unqualified or uncertain routes as
+review-required and keeps processing completeness separate from clinical
+qualification.

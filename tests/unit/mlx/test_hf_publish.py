@@ -86,6 +86,13 @@ def test_target_repo_id_adds_version_before_8bit_variant():
     )
 
 
+def test_target_repo_id_adds_version_before_2bit_variant():
+    assert (
+        target_repo_id("OpenMed/test-model", "mlx-2bit", version=2)
+        == "OpenMed/test-model-v2-mlx-2bit"
+    )
+
+
 def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(
     tmp_path, monkeypatch
 ):
