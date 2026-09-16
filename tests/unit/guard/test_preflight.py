@@ -9,6 +9,7 @@ import pytest
 from openmed.guard import (
     REDACT_THEN_CONTINUE_POLICY,
     PreflightBlockedError,
+    PreflightInputError,
     PreflightScanError,
     inspect_context,
     preflight_context,
@@ -42,7 +43,7 @@ def test_fail_closed_returns_safe_offsets_and_does_not_echo_source() -> None:
         context["messages"][0].index(email) + len(email),
     )
     assert finding.channel == "context"
-    assert finding.payload_index == 0
+    assert finding.payload_index == 1
     assert email not in str(error)
     assert email not in json.dumps(report, sort_keys=True)
     assert report["finding_categories"] == ["EMAIL"]
@@ -141,3 +142,47 @@ def test_scanner_failures_are_generic_and_do_not_echo_input() -> None:
         preflight_context(marker, scanner=scanner)
 
     assert marker not in str(raised.value)
+
+
+def test_mapping_keys_are_scanned_and_redacted() -> None:
+    email = _synthetic_email()
+
+    result = preflight_context({email: "safe"}, policy="redact")
+
+    assert result.context == {"[OPENMED_REDACTED_EMAIL]": "safe"}
+    assert result.findings[0].payload_index == 0
+    assert email not in json.dumps(result.context, sort_keys=True)
+    assert email not in json.dumps(result.to_dict(), sort_keys=True)
+
+
+def test_redacted_mapping_key_collisions_fail_closed() -> None:
+    first_email = _synthetic_email()
+    second_email = "second-" + "example" + "@example.invalid"
+
+    with pytest.raises(PreflightInputError) as raised:
+        preflight_context(
+            {first_email: "first", second_email: "second"},
+            policy="redact",
+        )
+
+    assert first_email not in str(raised.value)
+    assert second_email not in str(raised.value)
+
+
+def test_unsupported_payload_values_fail_closed_without_echoing() -> None:
+    marker = "SYNTHETIC_IDENTIFIER"
+
+    with pytest.raises(PreflightInputError) as raised:
+        preflight_context({"content": {marker}})
+
+    assert marker not in str(raised.value)
+
+
+def test_allowed_payload_is_a_stable_snapshot_for_dispatch() -> None:
+    context = {"messages": ["safe synthetic content"]}
+
+    result = preflight_context(context)
+    context["messages"][0] = _synthetic_email()
+
+    assert result.context == {"messages": ["safe synthetic content"]}
+    assert _synthetic_email() not in repr(result)

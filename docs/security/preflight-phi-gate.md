@@ -32,7 +32,9 @@ Use `inspect_context` when a caller needs a non-raising result with
 ## Redact and continue
 
 `redact_then_continue` replaces each detected span with a stable token and
-returns the same nested shape for mappings, lists, and tuples:
+returns the same nested shape for mappings, lists, and tuples. Mapping keys and
+values are both scanned. If key redaction would create a duplicate key, the
+gate fails closed:
 
 ```python
 from openmed.guard import preflight_context
@@ -49,7 +51,10 @@ audit_log(result.report.to_dict())
 The report never includes the redacted payload. Offsets refer to the original
 string leaf and are zero-based, end-exclusive. `channel` is either `context`
 or `tool_output`; `payload_index` identifies the leaf within that channel's
-deterministic traversal.
+deterministic traversal. The returned payload is a stable snapshot of supported
+built-in values, so callers should dispatch the result rather than the original
+mutable input. Unsupported values, recursive structures, and invalid mapping
+keys fail closed with content-free errors.
 
 ## Custom local scanners
 

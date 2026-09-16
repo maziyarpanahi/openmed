@@ -299,6 +299,64 @@ class _TextLeaf:
     text: str
 
 
+def _snapshot_payload(payload: Any) -> Any:
+    """Copy a bounded payload into stable built-in containers before scanning."""
+
+    active: set[int] = set()
+
+    def visit(value: Any, depth: int) -> Any:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes):
+            return bytes(value)
+        if isinstance(value, bytearray):
+            return bytearray(value)
+        if isinstance(value, memoryview):
+            return memoryview(bytes(value))
+        if value is None or isinstance(value, (bool, int, float, complex)):
+            return value
+        if not isinstance(value, (Mapping, list, tuple)):
+            raise PreflightInputError("agent payload contains an unsupported value")
+        if depth >= _MAX_PAYLOAD_DEPTH:
+            raise PreflightInputError(
+                "agent payload exceeds the configured nesting limit"
+            )
+
+        object_id = id(value)
+        if object_id in active:
+            raise PreflightInputError("agent payload contains a recursive structure")
+        active.add(object_id)
+        try:
+            if isinstance(value, Mapping):
+                snapshot: dict[Any, Any] = {}
+                for key, item in value.items():
+                    copied_key = visit(key, depth + 1)
+                    try:
+                        if copied_key in snapshot:
+                            raise PreflightInputError(
+                                "agent payload contains duplicate mapping keys"
+                            )
+                        snapshot[copied_key] = visit(item, depth + 1)
+                    except PreflightError:
+                        raise
+                    except Exception:
+                        raise PreflightInputError(
+                            "agent payload contains an invalid mapping key"
+                        ) from None
+                return snapshot
+            if isinstance(value, list):
+                return [visit(item, depth + 1) for item in value]
+            return tuple(visit(item, depth + 1) for item in value)
+        except PreflightError:
+            raise
+        except Exception:
+            raise PreflightInputError("agent payload cannot be traversed") from None
+        finally:
+            active.remove(object_id)
+
+    return visit(payload, 0)
+
+
 def _collect_text_leaves(payload: Any) -> tuple[_TextLeaf, ...]:
     leaves: list[_TextLeaf] = []
     active: set[int] = set()
@@ -329,7 +387,7 @@ def _collect_text_leaves(payload: Any) -> tuple[_TextLeaf, ...]:
         if value is None or isinstance(value, (bool, int, float, complex)):
             return
         if not isinstance(value, (Mapping, list, tuple)):
-            return
+            raise PreflightInputError("agent payload contains an unsupported value")
         if depth >= _MAX_PAYLOAD_DEPTH:
             raise PreflightInputError(
                 "agent payload exceeds the configured nesting limit"
@@ -341,7 +399,8 @@ def _collect_text_leaves(payload: Any) -> tuple[_TextLeaf, ...]:
         try:
             if isinstance(value, Mapping):
                 items = value.items()
-                for _, item in items:
+                for key, item in items:
+                    visit(key, depth + 1)
                     visit(item, depth + 1)
             else:
                 for item in value:
@@ -547,7 +606,22 @@ def _redact_payload(
         active.add(object_id)
         try:
             if isinstance(value, Mapping):
-                return {key: visit(item, depth + 1) for key, item in value.items()}
+                redacted_mapping: dict[Any, Any] = {}
+                for key, item in value.items():
+                    redacted_key = visit(key, depth + 1)
+                    try:
+                        if redacted_key in redacted_mapping:
+                            raise PreflightInputError(
+                                "agent payload redaction produced duplicate mapping keys"
+                            )
+                        redacted_mapping[redacted_key] = visit(item, depth + 1)
+                    except PreflightError:
+                        raise
+                    except Exception:
+                        raise PreflightInputError(
+                            "agent payload contains an invalid mapping key"
+                        ) from None
+                return redacted_mapping
             if isinstance(value, list):
                 return [visit(item, depth + 1) for item in value]
             return tuple(visit(item, depth + 1) for item in value)
@@ -603,13 +677,16 @@ def preflight_context(
     if not callable(selected_scanner):
         raise ValueError("preflight scanner is invalid")
 
+    context_snapshot = _snapshot_payload(context)
+    output_snapshot = _snapshot_payload(tool_outputs)
+
     context_findings, context_count = _scan_payload(
-        context,
+        context_snapshot,
         channel="context",
         scanner=selected_scanner,
     )
     output_findings, output_count = _scan_payload(
-        tool_outputs,
+        output_snapshot,
         channel="tool_output",
         scanner=selected_scanner,
     )
@@ -629,8 +706,8 @@ def preflight_context(
     blocked = normalized_policy == FAIL_CLOSED_POLICY and has_findings
     redacted = normalized_policy == REDACT_THEN_CONTINUE_POLICY and has_findings
 
-    sanitized_context = context
-    sanitized_tool_outputs = tool_outputs
+    sanitized_context = context_snapshot
+    sanitized_tool_outputs = output_snapshot
     if redacted:
         context_by_index: dict[int, list[PreflightFinding]] = defaultdict(list)
         output_by_index: dict[int, list[PreflightFinding]] = defaultdict(list)
@@ -638,8 +715,8 @@ def preflight_context(
             context_by_index[finding.payload_index].append(finding)
         for finding in output_findings:
             output_by_index[finding.payload_index].append(finding)
-        sanitized_context = _redact_payload(context, context_by_index)
-        sanitized_tool_outputs = _redact_payload(tool_outputs, output_by_index)
+        sanitized_context = _redact_payload(context_snapshot, context_by_index)
+        sanitized_tool_outputs = _redact_payload(output_snapshot, output_by_index)
     elif blocked:
         sanitized_context = None
         sanitized_tool_outputs = None
