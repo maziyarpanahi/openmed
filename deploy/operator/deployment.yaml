@@ -27,7 +27,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: operator
-          image: ghcr.io/maziyarpanahi/openmed-operator:v2.3.0
+          image: ghcr.io/maziyarpanahi/openmed-operator:v2.5.0
           imagePullPolicy: IfNotPresent
           command:
             - kopf
