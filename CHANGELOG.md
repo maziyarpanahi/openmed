@@ -16,6 +16,11 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added a bounded, dependency-free PDF page geometry preflight that reads the
+  version, page count, and inherited media box, crop box, and rotation for
+  each page, including FlateDecode object streams, and reports numbers and
+  stable reason codes only while rejecting encrypted or over-limit files
+  (#3088).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
