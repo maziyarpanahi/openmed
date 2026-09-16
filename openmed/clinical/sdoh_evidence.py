@@ -17,7 +17,7 @@ import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, cast
 
 SDOH_EVIDENCE_SCHEMA_VERSION = 1
 
@@ -283,7 +283,7 @@ class SDOHEvidence:
     def span(self) -> SpanOffset:
         """Return the offset pair under the legacy ``span`` name."""
 
-        return self.source_span
+        return cast(SpanOffset, self.source_span)
 
     @property
     def evidence(self) -> "SDOHEvidence":
@@ -298,7 +298,7 @@ class SDOHEvidence:
             "evidence_type": self.evidence_type,
             "assertion": self.assertion,
             "source_section": self.source_section,
-            "source_span": list(self.source_span),
+            "source_span": list(cast(SpanOffset, self.source_span)),
             "review_status": self.review_status,
         }
         if self.determinant is not None:
@@ -363,17 +363,21 @@ class SDOHEvidence:
             determinant = None
 
         return cls(
-            evidence_type=evidence_type,
-            assertion=_nested_value(assertion, "status"),
-            source_section=_nested_value(
-                source_section,
-                "name",
-                "label",
-                "section",
+            evidence_type=cast(EvidenceType, evidence_type),
+            assertion=cast(
+                AssertionStatus,
+                _nested_value(assertion, "status"),
             ),
-            source_span=source_span,
-            review_status=_nested_value(review_status, "status"),
-            determinant=determinant,
+            source_section=cast(
+                SourceSection,
+                _nested_value(source_section, "name", "label", "section"),
+            ),
+            source_span=cast(SpanOffset | SDOHSourceSpan, source_span),
+            review_status=cast(
+                ReviewStatus,
+                _nested_value(review_status, "status"),
+            ),
+            determinant=cast(str | None, determinant),
         )
 
     @classmethod
@@ -515,9 +519,9 @@ def evidence_from_sdoh_finding(
         evidence_type=evidence_type,
         assertion=resolved_assertion,
         source_section=source_section,
-        source_span=source_span,
+        source_span=cast(SpanOffset | SDOHSourceSpan, source_span),
         review_status=review_status,
-        determinant=None if category is _MISSING else category,
+        determinant=None if category is _MISSING else cast(str, category),
     )
 
 
