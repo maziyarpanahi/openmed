@@ -1,0 +1,24 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@drawable/ic_maple_app"
+        android:label="Maple Clinical Studio"
+        android:largeHeap="true"
+        android:roundIcon="@drawable/ic_maple_app"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OpenMedMapleDemo"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="s">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

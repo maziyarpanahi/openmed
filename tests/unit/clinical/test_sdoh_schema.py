@@ -47,6 +47,14 @@ def test_extract_sdoh_without_matching_cues_returns_empty() -> None:
     assert extract_sdoh("Synthetic Social History note.", spans=[]) == []
 
 
+def test_substance_extractors_are_registered_by_default() -> None:
+    available = available_determinant_extractors()
+
+    assert "tobacco" in available
+    assert "alcohol" in available
+    assert "drug" in available
+
+
 def test_registered_extractor_is_scoped_to_social_history_section() -> None:
     text = (
         "Assessment: Synthetic dummy-marker mention.\n"
@@ -67,6 +75,7 @@ def test_registered_extractor_is_scoped_to_social_history_section() -> None:
     ) -> list[SDOHFinding]:
         assert source_text is text
         received_spans.append(candidate_spans)
+
         return [
             SDOHFinding(
                 category="synthetic",
@@ -81,6 +90,7 @@ def test_registered_extractor_is_scoped_to_social_history_section() -> None:
         ]
 
     register_determinant_extractor("synthetic-dummy", dummy_extractor)
+
     try:
         findings = extract_sdoh(
             text,
@@ -95,14 +105,27 @@ def test_registered_extractor_is_scoped_to_social_history_section() -> None:
         for section in detect_sections(text)
         if section["label"] == "social_history"
     )
+
     assert len(received_spans) == 1
     assert received_spans[0] == (all_spans[1],)
-    assert [finding.span for finding in findings] == [
+
+    synthetic_findings = [
+        finding for finding in findings if finding.category == "synthetic"
+    ]
+
+    assert [finding.span for finding in synthetic_findings] == [
         (all_spans[1]["start"], all_spans[1]["end"])
     ]
-    assert social_section["start"] <= findings[0].span[0]
-    assert findings[0].span[1] <= social_section["end"]
-    assert available_determinant_extractors() == registered_before
+    assert social_section["start"] <= synthetic_findings[0].span[0]
+    assert synthetic_findings[0].span[1] <= social_section["end"]
+
+    available = available_determinant_extractors()
+
+    assert _SOCIAL_EXTRACTORS <= set(available)
+    assert "tobacco" in available
+    assert "alcohol" in available
+    assert "drug" in available
+    assert available == registered_before
 
 
 def _substring_offsets(text: str, substring: str) -> list[int]:

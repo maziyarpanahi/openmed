@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 import OpenMedKit
 import os.log
 
@@ -27,6 +27,7 @@ public final class ModelDownloadManager: ObservableObject {
     @Published public private(set) var activeDownloadID: ScanModelID?
 
     private var tasks: [ScanModelID: Task<Void, Never>] = [:]
+    private var rateSamples: [ScanModelID: (bytes: Int64, date: Date)] = [:]
     private let log = Logger(subsystem: "com.openmed.scan", category: "downloads")
 
     public init() {
@@ -63,8 +64,11 @@ public final class ModelDownloadManager: ObservableObject {
                 entry.state = .partial(bytesOnDisk: bytes, bytesExpected: entry.bytesEstimatedTotal)
             }
         case .missing:
-            if case .downloading = entry.state { /* keep */ }
-            else { entry.state = .missing }
+            if case .downloading = entry.state {
+                // Don't clobber an in-flight state.
+            } else {
+                entry.state = .missing
+            }
         }
         entry.bytesOnDisk = bytes
         entries[id] = entry
@@ -77,33 +81,41 @@ public final class ModelDownloadManager: ObservableObject {
 
         let startingBytes = entries[id]?.bytesOnDisk ?? 0
         let totalEstimate = entries[id]?.bytesEstimatedTotal
-        markState(id, .downloading(
-            bytesDownloaded: startingBytes,
-            bytesExpected: totalEstimate,
-            bytesPerSecond: nil
-        ))
+        markState(
+            id,
+            .downloading(
+                bytesDownloaded: startingBytes,
+                bytesExpected: totalEstimate,
+                bytesPerSecond: nil
+            ))
         activeDownloadID = id
+        rateSamples[id] = (startingBytes, Date())
         HapticsCenter.impact(.soft)
 
         let task = Task { [weak self] in
             guard let self else { return }
             let repoID = id.artifactRepoID
-            var lastAggregate: Int64 = startingBytes
-            var lastTimestamp = Date()
 
             do {
                 try await StreamingModelDownloader.shared.prepare(
                     repoID: repoID,
-                    revision: "main",
+                    revision: id.revision,
                     progress: { [weak self] _, _, fileTotal, aggregate in
-                        let now = Date()
-                        let dt = now.timeIntervalSince(lastTimestamp)
-                        let rate: Double? = dt > 0.2 ? Double(aggregate - lastAggregate) / dt : nil
                         let committed = aggregate
                         let fileTotalCaptured = fileTotal
                         Task { @MainActor in
                             guard let self else { return }
                             guard var entry = self.entries[id], case .downloading = entry.state else { return }
+                            let now = Date()
+                            let previous = self.rateSamples[id]
+                            let elapsed = previous.map { now.timeIntervalSince($0.date) } ?? 0
+                            let rate = previous.flatMap { sample -> Double? in
+                                guard elapsed > 0.2, committed >= sample.bytes else { return nil }
+                                return Double(committed - sample.bytes) / elapsed
+                            }
+                            if elapsed > 0.2 || previous?.date == nil {
+                                self.rateSamples[id] = (committed, now)
+                            }
                             let total = entry.bytesEstimatedTotal
                             entry.bytesOnDisk = max(entry.bytesOnDisk, committed)
                             entry.state = .downloading(
@@ -113,8 +125,6 @@ public final class ModelDownloadManager: ObservableObject {
                             )
                             self.entries[id] = entry
                         }
-                        lastAggregate = committed
-                        lastTimestamp = now
                     }
                 )
                 await MainActor.run {
@@ -140,6 +150,7 @@ public final class ModelDownloadManager: ObservableObject {
     public func cancel(_ id: ScanModelID) {
         tasks[id]?.cancel()
         tasks[id] = nil
+        rateSamples[id] = nil
         markState(id, .cancelled)
         if activeDownloadID == id { activeDownloadID = nil }
         Task {
@@ -160,6 +171,7 @@ public final class ModelDownloadManager: ObservableObject {
 
     private func finish(_ id: ScanModelID, success: Bool, cancelled: Bool = false, error: String? = nil) {
         tasks[id] = nil
+        rateSamples[id] = nil
         if activeDownloadID == id { activeDownloadID = nil }
 
         if success {
@@ -182,17 +194,29 @@ public final class ModelDownloadManager: ObservableObject {
     }
 
     private func currentCacheState(for id: ScanModelID) -> OpenMedMLXModelCacheState {
-        (try? OpenMedModelStore.mlxModelCacheState(
-            repoID: id.artifactRepoID,
-            revision: "main"
-        )) ?? .missing
+        if id == .maplePreview,
+            let directory = try? OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: id.artifactRepoID,
+                revision: id.revision
+            )
+        {
+            if OpenMedMaple.isModelDirectoryReady(directory) { return .ready }
+            return directoryBytes(for: id) > 0 ? .partial : .missing
+        }
+        return
+            (try? OpenMedModelStore.mlxModelCacheState(
+                repoID: id.artifactRepoID,
+                revision: id.revision
+            )) ?? .missing
     }
 
     private func directoryBytes(for id: ScanModelID) -> Int64 {
-        guard let dir = try? OpenMedModelStore.cachedMLXModelDirectory(
-            repoID: id.artifactRepoID,
-            revision: "main"
-        ) else { return 0 }
+        guard
+            let dir = try? OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: id.artifactRepoID,
+                revision: id.revision
+            )
+        else { return 0 }
         guard FileManager.default.fileExists(atPath: dir.path) else { return 0 }
         let enumerator = FileManager.default.enumerator(
             at: dir,
@@ -209,25 +233,35 @@ public final class ModelDownloadManager: ObservableObject {
     }
 }
 
-public extension ScanModelID {
+extension ScanModelID {
     /// Hugging Face repo-id for this model's MLX artifact.
-    var artifactRepoID: String {
+    public var artifactRepoID: String {
         switch self {
-        case .piiLiteClinical:     return "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
+        case .piiLiteClinical: return "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
         case .openaiPrivacyFilter: return "OpenMed/privacy-filter-nemotron-mlx-8bit"
         case .multilingualPrivacyFilter: return "OpenMed/privacy-filter-multilingual-mlx-8bit"
-        case .glinerRelex:         return "OpenMed/gliner-relex-base-v1.0-mlx"
+        case .glinerRelex: return "OpenMed/gliner-relex-base-v1.0-mlx"
+        case .maplePreview: return OpenMedMaple.repositoryID
+        }
+    }
+
+    /// Immutable model revision used for reproducible local inference.
+    public var revision: String {
+        switch self {
+        case .maplePreview: return OpenMedMaple.pinnedRevision
+        default: return "main"
         }
     }
 
     /// Conservative upper bound for the progress bar. The real total comes
     /// in from the HTTP headers during download and overrides this estimate.
-    var conservativeTotalBytes: Int64 {
+    public var conservativeTotalBytes: Int64 {
         switch self {
-        case .piiLiteClinical:     return 278 * 1024 * 1024
+        case .piiLiteClinical: return 278 * 1024 * 1024
         case .openaiPrivacyFilter: return 1_550 * 1024 * 1024
         case .multilingualPrivacyFilter: return 1_550 * 1024 * 1024
-        case .glinerRelex:         return 230 * 1024 * 1024
+        case .glinerRelex: return 230 * 1024 * 1024
+        case .maplePreview: return OpenMedMaple.estimatedDownloadBytes
         }
     }
 }
