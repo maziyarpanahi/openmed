@@ -226,6 +226,7 @@ classification:
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
+    - multimodal/image-header-preflight.md
     - multimodal/webp-header-preflight.md
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
