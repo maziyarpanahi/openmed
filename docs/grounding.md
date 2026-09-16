@@ -67,18 +67,64 @@ loader = VocabLoader(
     },
 )
 
-results = ground(
+result = ground(
     "type 2 diabetes",
     systems=["icd10cm"],
     loader=loader,
     offline=True,
 )
-print(results[0].to_dict())
-print(to_codeable_concept(results[0]))
+print(result.concepts[0].to_dict())
+print(to_codeable_concept(result[0]))
 ```
 
 The repository's `examples/offline_grounding.py` runs this same path with
 synthetic text. Its output is deterministic for the same snapshot bytes.
+
+`openmed.ground()` also accepts pre-extracted entities and can dispatch one
+call across multiple local systems. The `lang` and `top_k` arguments are routed
+to the local alias indexes and ranked candidates:
+
+```python
+from openmed import ground
+
+entity_result = ground(
+    [{"text": "type 2 diabetes", "start": 0, "end": 15, "label": "condition"}],
+    systems=["icd10cm"],
+    lang="en",
+    top_k=1,
+    snapshot=loader,
+)
+
+multi_loader = VocabLoader(
+    cache_dir=Path(".openmed-grounding-multi-demo"),
+    local_only=True,
+    registry={
+        system: VocabSource(
+            system=system,
+            path=fixture,
+            sha256=digest,
+            version="synthetic-fixture-1",
+        )
+        for system in ("rxnorm", "loinc", "icd10cm")
+    },
+)
+multi_system_result = ground(
+    "metformin 500 mg and type 2 diabetes",
+    systems=["rxnorm", "loinc", "icd10cm"],
+    lang="en",
+    snapshot=multi_loader,
+)
+for concept in multi_system_result.concepts:
+    print(concept.span.start, concept.span.end, concept.system, concept.code)
+```
+
+Raw text uses a deterministic vocabulary-backed local entity pass; it does not
+download or initialize a model. `GroundingResult` remains sequence-compatible
+with the established `GroundedSpan` exporters, while `result.concepts` exposes
+typed `GroundedConcept` records with `top_k` alternatives and release
+provenance. Grounding suggestions are assistive and require qualified human
+review; they are not autonomous clinical coding, diagnosis, treatment, or
+billing decisions.
 
 ## REST and CLI
 
@@ -101,6 +147,8 @@ openmed ground \
 
 UMLS, SNOMED CT, CPT, and other restricted systems are never bundled or
 downloaded. A request without an explicitly configured user-supplied
-out-of-process terminology endpoint fails with a typed configuration error
-before any network operation. License credentials belong to that caller-owned
-endpoint and are never accepted by the REST or CLI payloads.
+out-of-process terminology endpoint fails with `GroundingConfigError` before
+any network operation. Pass a caller-owned bridge through
+`terminology_bridge=` (or the `restricted_endpoint=` alias). License
+credentials belong to that endpoint and are never accepted by the REST or CLI
+payloads.
