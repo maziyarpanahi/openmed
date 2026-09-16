@@ -69,6 +69,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "joint_entity_relation.jsonl",
         "relation_calibration.jsonl",
         "relation_assertion.jsonl",
+        "relation_candidates.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",
         "relations_zh.jsonl",
