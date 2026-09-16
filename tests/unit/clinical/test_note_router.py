@@ -144,6 +144,21 @@ def test_custom_profiles_require_a_complete_non_overlapping_partition() -> None:
         )
 
 
+def test_callable_profile_mapping_uses_deterministic_wildcard_dispatch() -> None:
+    text = "CUSTOM SECTION: Synthetic observation."
+    calls: list[tuple[int, int]] = []
+
+    def extract(section) -> str:
+        calls.append(section.offset)
+        return section.text
+
+    result = NoteRouter(profiles={"custom": extract}).extract(text)
+
+    assert [route.profile for route in result.routing.routes] == ["custom"]
+    assert calls == [(0, len(text))]
+    assert result.extractions[0].result == text
+
+
 def test_extractors_marked_as_network_capable_are_refused() -> None:
     class NetworkExtractor:
         allows_network = True

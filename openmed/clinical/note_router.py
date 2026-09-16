@@ -46,6 +46,8 @@ def _label_key(value: object) -> str:
     if not isinstance(value, str):
         raise TypeError("section labels must be strings")
     normalized = unicodedata.normalize("NFKC", value).strip().casefold()
+    if normalized == "*":
+        return normalized
     normalized = re.sub(r"[^\w]+", "_", normalized, flags=re.UNICODE)
     return normalized.strip("_")
 
