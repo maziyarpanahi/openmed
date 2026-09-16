@@ -176,6 +176,30 @@ class GroundedSpan:
         return self.score
 
     @property
+    def surface(self) -> str:
+        """Return the source surface using the facade's terminology."""
+
+        return self.text
+
+    @property
+    def surface_text(self) -> str:
+        """Return the source surface using the typed-result field name."""
+
+        return self.text
+
+    @property
+    def system(self) -> str | None:
+        """Return the normalized system of the highest-ranked candidate."""
+
+        return self.candidates[0].system.casefold() if self.candidates else None
+
+    @property
+    def top_k(self) -> tuple[Candidate, ...]:
+        """Return selected and alternative candidates in rank order."""
+
+        return (*self.candidates, *self.alternatives)
+
+    @property
     def system_uri(self) -> str | None:
         """Return the URI of the highest-ranked selected candidate."""
 
