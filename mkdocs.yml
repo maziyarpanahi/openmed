@@ -195,6 +195,7 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical event contradiction reports: clinical/event-contradictions.md
       - Section-aware note routing: clinical/note-routing.md
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md

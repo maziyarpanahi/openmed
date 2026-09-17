@@ -1,9 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 537,
-    "maximum_total_bytes": 51036799,
-    "maximum_unique_payload_bytes": 50699220,
+    "maximum_total_bytes": 51203101,
+    "maximum_unique_payload_bytes": 50865522,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -32,9 +31,9 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits cover the exact staged v2.5 SDK candidate, including its release, migration, and four clinical routing/profile pages, with the existing 110750 bytes of documentation headroom.",
-    "The audited candidate contains 537 files, 50926049 total bytes, 50588470 unique payload bytes, and 337579 duplicate payload bytes. The four clinical guides add four files; updated navigation and search data account for the measured payload growth.",
-    "The 50699220-byte unique-payload ceiling and 51036799-byte total-payload ceiling retain the previous 110750 bytes of headroom. Per-file non-JSON caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "Artifact limits cover the exact staged v2.5 SDK candidate, including its release, migration, four clinical routing/profile pages, and the event-contradiction guide, with the existing 110750 bytes of documentation headroom.",
+    "The audited candidate contains 538 files, 51092351 total bytes, 50754772 unique payload bytes, and 337579 duplicate payload bytes. The five clinical guides add five files; updated navigation and search data account for the measured payload growth.",
+    "The 50865522-byte unique-payload ceiling and 51203101-byte total-payload ceiling retain the previous 110750 bytes of headroom. Per-file non-JSON caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
     "The clinical guides remain searchable. The measured search index is 3474237 bytes; its 3511794-byte JSON ceiling retains the previous 37557 bytes of headroom. Other per-file caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets are unchanged.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
