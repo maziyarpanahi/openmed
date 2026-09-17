@@ -108,6 +108,26 @@ from .temporal import (
     decode_tlink_candidates,
     extract_tlink_candidates,
 )
+from .unit_compatibility import (
+    QUANTITATIVE_RELATION_KINDS,
+    UNIT_COMPATIBILITY_ADVISORY,
+    UNIT_COMPATIBILITY_SCHEMA_VERSION,
+    UNIT_COMPATIBLE,
+    UNIT_INCOMPATIBLE,
+    UNIT_UNKNOWN,
+    QuantitativeRelationKind,
+    UnitCompatibilityReport,
+    UnitCompatibilityResult,
+    UnitCompatibilityStatus,
+    check_quantitative_relation,
+    check_quantitative_relations,
+    check_relation_unit_compatibility,
+    check_unit_compatibility,
+    validate_quantitative_relation,
+    validate_quantitative_relations,
+    validate_relation_candidate_units,
+    validate_relation_units,
+)
 
 __all__ = [
     "ASSERTION_FILTER_ADVISORY",
@@ -225,6 +245,24 @@ __all__ = [
     "fit_relation_calibrator",
     "relation_calibration_report",
     "select_relation_operating_points",
+    "QUANTITATIVE_RELATION_KINDS",
+    "UNIT_COMPATIBILITY_ADVISORY",
+    "UNIT_COMPATIBILITY_SCHEMA_VERSION",
+    "UNIT_COMPATIBLE",
+    "UNIT_INCOMPATIBLE",
+    "UNIT_UNKNOWN",
+    "QuantitativeRelationKind",
+    "UnitCompatibilityReport",
+    "UnitCompatibilityResult",
+    "UnitCompatibilityStatus",
+    "check_quantitative_relation",
+    "check_quantitative_relations",
+    "check_relation_unit_compatibility",
+    "check_unit_compatibility",
+    "validate_quantitative_relation",
+    "validate_quantitative_relations",
+    "validate_relation_candidate_units",
+    "validate_relation_units",
 ]
 
 _CALIBRATION_EXPORTS = frozenset(

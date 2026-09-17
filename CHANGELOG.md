@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, local unit-dimension compatibility checks for dose, rate,
+  concentration, and laboratory relation candidates, with explicit review
+  findings for incompatible or unknown units and value-free reports (#2738).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
