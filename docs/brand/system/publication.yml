@@ -188,10 +188,13 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/relation-evidence-binding.md
     - clinical/relation-deduplication.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
+    - clinical/relation-directionality.md
+    - clinical/relation-unit-compatibility.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
     - indic-normalization.md

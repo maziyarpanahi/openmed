@@ -113,10 +113,13 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Relation Evidence Binding: clinical/relation-evidence-binding.md
       - Clinical Relation Duplicate Collapse: clinical/relation-deduplication.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
+      - Guarded Relation Directionality: clinical/relation-directionality.md
+      - Quantitative Relation Unit Compatibility: clinical/relation-unit-compatibility.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
