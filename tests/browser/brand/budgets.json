@@ -1,7 +1,6 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 537,
     "maximum_total_bytes": 51036799,
     "maximum_unique_payload_bytes": 50699220,
     "maximum_duplicate_payload_bytes": 458752,
