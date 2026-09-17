@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, privacy-safe directionality validation for guarded
+  causal, treatment, procedure-indication, and medication-indication relations,
+  with typed fail-closed endpoint and direction errors (#2737).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
