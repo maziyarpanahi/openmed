@@ -226,8 +226,6 @@ def _coerce_negation_fields(
 
 
 def _certainty_from_raw(value: object, *, field_name: str) -> AssertionCertainty:
-    if type(value) is bool:
-        return UNCERTAIN if value else CERTAIN
     return cast(
         AssertionCertainty,
         _normalize_enum(

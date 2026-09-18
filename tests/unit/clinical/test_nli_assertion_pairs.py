@@ -15,6 +15,7 @@ from openmed.clinical import (
     NLI_ASSERTION_PAIR_ADVISORY,
     RECENT,
     UNCERTAIN,
+    AssertionMetadata,
     ClinicalAssertion,
     InconsistentAssertionMetadataError,
     MissingAssertionMetadataError,
@@ -278,3 +279,15 @@ def test_historical_hypothetical_conflict_is_rejected() -> None:
             },
             hypothesis_assertion=_assertion(),
         )
+
+
+@pytest.mark.parametrize("value", [False, True])
+def test_certainty_booleans_require_explicit_uncertainty_alias(value: bool) -> None:
+    with pytest.raises(ValueError):
+        AssertionMetadata.from_value(
+            {"negation": "affirmed", "certainty": value, "temporality": "recent"}
+        )
+    assertion = AssertionMetadata.from_value(
+        {"negation": "affirmed", "uncertainty": value, "temporality": "recent"}
+    )
+    assert assertion.uncertain is value
