@@ -197,6 +197,7 @@ nav:
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
+      - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Section-aware note routing: clinical/note-routing.md
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
