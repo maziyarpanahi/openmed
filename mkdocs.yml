@@ -104,6 +104,7 @@ nav:
       - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+      - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
@@ -218,6 +219,7 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Language Pack Plugins: language-packs.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
