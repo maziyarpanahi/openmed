@@ -43,6 +43,8 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "pathology_histology": "tests/fixtures/clinical/pathology_histology.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
+    "wound_assessment": "tests/fixtures/clinical/wound_assessment.jsonl",
+    "medical_device": "tests/fixtures/clinical/medical_device.jsonl",
     "obstetrics_gynecology": "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
     "substance_use_history": ("tests/fixtures/clinical/substance_use_history.jsonl"),
 }
@@ -64,6 +66,27 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "AdministrationDate to occurrence[x], and VaccineSeries to "
         "protocolApplied.series. This is extraction metadata only; it does not "
         "create exporter, recommendation, dosing, or scheduling logic."
+    ),
+    "wound_assessment": (
+        "This map is intentionally distinct from the dermatology lesion map: it "
+        "captures wound-care descriptors as written for nursing and surgical "
+        "review. It does not infer wound staging, predict healing, recommend "
+        "treatment, or make clinical decisions."
+    ),
+    "medical_device": (
+        "The display labels are descriptive extraction metadata for a planned "
+        "FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, "
+        "ModelNumber, ImplantSite, and DeviceStatus describe device mentions "
+        "without UDI lookup or decoding or contacting GUDID or any other network "
+        "service. DeviceIdentifier remains a HIPAA device identifier and "
+        "requires human review; this catalog is not clinical guidance and does "
+        "not make device, treatment, or safety decisions."
+    ),
+    "mental_health": (
+        "Substance-use and SDOH (social-determinants-of-health) entities are "
+        "out of scope for this domain and remain owned by OM-056. Mental-health "
+        "spans are high-sensitivity content for redaction review; this catalog "
+        "is extraction metadata only and does not make clinical decisions."
     ),
     "functional_status": (
         "This map captures documented activities of daily living, assistance, "

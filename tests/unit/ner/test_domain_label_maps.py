@@ -25,9 +25,14 @@ from openmed.core.labels import (
     CONDITION,
     DATE,
     DEVELOPMENTAL_MILESTONE,
+    DEVICE_IDENTIFIER,
+    DEVICE_MODEL,
+    DEVICE_TYPE,
     DIALYSIS_MODALITY,
     DURATION,
+    DRESSING_TYPE,
     DYSPNEA_GRADE,
+    EXUDATE_DESCRIPTOR,
     FETAL_FINDING,
     FREQUENCY,
     FUNCTIONAL_SCALE,
@@ -37,9 +42,11 @@ from openmed.core.labels import (
     GRAVIDITY_PARITY,
     GROWTH_PARAMETER,
     GROWTH_PERCENTILE,
+    HIPAA_DEVICE_IDENTIFIER,
     HISTOLOGIC_FINDING,
     HISTOLOGIC_GRADE,
     IHC_STAIN,
+    IMPLANT_SITE,
     MARGIN_STATUS,
     MEASUREMENT,
     MOBILITY_ABILITY,
@@ -55,6 +62,7 @@ from openmed.core.labels import (
     RECEPTOR_STATUS,
     RENAL_FUNCTION_MEASURE,
     RESPIRATORY_FINDING,
+    RISK_HIGH,
     SPECIMEN_TYPE,
     SPIROMETRY_MEASURE,
     STAGE_GROUP,
@@ -67,6 +75,8 @@ from openmed.core.labels import (
     USE_QUANTITY,
     USE_STATUS,
     VARIANT_DESCRIPTOR,
+    WOUND_STAGE,
+    WOUND_TYPE,
     ZYGOSITY,
     hipaa_class_for,
     normalize_label,
@@ -295,6 +305,13 @@ ALLERGY_INTOLERANCE_FIXTURE = (
     / "allergy_intolerance.jsonl"
 )
 
+MEDICAL_DEVICE_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "medical_device.jsonl"
+)
+
 
 PATHOLOGY_HISTOLOGY_FIXTURE = (
     Path(__file__).resolve().parents[2]
@@ -393,6 +410,111 @@ class TestAllergyIntoleranceDomain:
                 assert document.offset_map.normalized_span_to_original_offsets(
                     ns, ne
                 ) == (entity["start"], entity["end"])
+
+
+class TestMedicalDeviceDomain:
+    """FHIR Device-aligned mentions with a privacy guard for synthetic UDI text."""
+
+    EXPECTED_LABELS = [
+        "DeviceType",
+        "DeviceIdentifier",
+        "Manufacturer",
+        "ModelNumber",
+        "ImplantSite",
+        "DeviceStatus",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "DeviceType": DEVICE_TYPE,
+        "DeviceIdentifier": DEVICE_IDENTIFIER,
+        "Manufacturer": "ORGANIZATION",
+        "ModelNumber": DEVICE_MODEL,
+        "ImplantSite": IMPLANT_SITE,
+        "DeviceStatus": "OTHER",
+    }
+    EXPECTED_ENTITIES = [
+        ("DeviceType", 2, 24, "dual-chamber pacemaker"),
+        ("DeviceIdentifier", 26, 40, "UDI-DI-SYN-001"),
+        ("ModelNumber", 49, 54, "AB123"),
+        ("Manufacturer", 58, 70, "Acme Medical"),
+        ("ImplantSite", 93, 109, "right subclavian"),
+        ("DeviceStatus", 122, 128, "active"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in MEDICAL_DEVICE_FIXTURE.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves(self):
+        assert "medical_device" in available_domains()
+        assert get_default_labels("medical_device") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert hipaa_class_for(expected)
+
+        if label == "DeviceIdentifier":
+            assert policy_label_for(expected) == "DIRECT_IDENTIFIER"
+            assert risk_level_for(expected) == RISK_HIGH
+            assert hipaa_class_for(expected) == HIPAA_DEVICE_IDENTIFIER
+            assert system_hints_for(expected) == ()
+        else:
+            assert policy_label_for(expected) in {CLINICAL_CONCEPT, "QUASI_IDENTIFIER"}
+            assert system_hints_for(expected) or expected in {"ORGANIZATION", "OTHER"}
+
+    def test_synthetic_udi_like_span_keeps_privacy_metadata(self):
+        row = self._fixtures()[0]
+        identifier = next(
+            entity
+            for entity in row["entities"]
+            if entity["label"] == "DeviceIdentifier"
+        )
+
+        assert identifier["text"] == "UDI-DI-SYN-001"
+        assert normalize_label(identifier["label"]) == DEVICE_IDENTIFIER
+        assert risk_level_for(identifier["label"]) == RISK_HIGH
+        assert hipaa_class_for(identifier["label"]) == HIPAA_DEVICE_IDENTIFIER
+
+    def test_fixture_reports_per_label_coverage_and_disclaimer(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "no UDI lookup or decoding" in disclaimer
+        assert {entity["label"] for entity in row["entities"]} == set(
+            self.EXPECTED_LABELS
+        )
+
+    def test_fixture_entities_match_expected_and_offsets_are_stable(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        pipeline = Pipeline()
+        document = pipeline.stage1_normalize(row["text"])
+        for entity in row["entities"]:
+            assert row["text"][entity["start"] : entity["end"]] == entity["text"]
+            ns, ne = document.offset_map.original_span_to_normalized(
+                entity["start"], entity["end"]
+            )
+            assert document.normalized_text[ns:ne] == entity["text"]
+            assert document.offset_map.normalized_span_to_original_offsets(ns, ne) == (
+                entity["start"],
+                entity["end"],
+            )
 
 
 class TestPediatricsGrowthDomain:
@@ -985,3 +1107,109 @@ class TestOncologyStagingDomain:
                 assert document.offset_map.normalized_span_to_original_offsets(
                     ns, ne
                 ) == (entity["start"], entity["end"])
+
+
+WOUND_ASSESSMENT_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "wound_assessment.jsonl"
+)
+
+
+class TestWoundAssessmentDomain:
+    """Wound-care assessment labels are distinct from dermatology lesions."""
+
+    EXPECTED_LABELS = [
+        "WoundType",
+        "WoundLocation",
+        "WoundStage",
+        "WoundDimension",
+        "ExudateDescriptor",
+        "TissueType",
+        "DressingType",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "WoundType": WOUND_TYPE,
+        "WoundLocation": "BODY_SITE",
+        "WoundStage": WOUND_STAGE,
+        "WoundDimension": "MEASUREMENT",
+        "ExudateDescriptor": EXUDATE_DESCRIPTOR,
+        "TissueType": "TISSUE",
+        "DressingType": DRESSING_TYPE,
+    }
+    EXPECTED_ENTITIES = [
+        ("WoundStage", 0, 7, "Stage 3"),
+        ("WoundLocation", 8, 14, "sacral"),
+        ("WoundType", 15, 30, "pressure injury"),
+        ("WoundDimension", 40, 45, "4x3cm"),
+        ("ExudateDescriptor", 51, 74, "moderate serous exudate"),
+        ("TissueType", 79, 101, "60% granulation tissue"),
+        ("DressingType", 118, 131, "foam dressing"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in WOUND_ASSESSMENT_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves_separately_from_dermatology(self):
+        assert "wound_assessment" in available_domains()
+        assert get_default_labels("wound_assessment") == self.EXPECTED_LABELS
+        assert set(self.EXPECTED_LABELS).isdisjoint(get_default_labels("dermatology"))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == CLINICAL_CONCEPT
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+        if expected in {
+            WOUND_TYPE,
+            WOUND_STAGE,
+            EXUDATE_DESCRIPTOR,
+            DRESSING_TYPE,
+        }:
+            assert hipaa_class_for(expected)
+
+    def test_fixture_reports_all_labels_and_disclaimer(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not infer wound staging" in disclaimer
+        assert {entity["label"] for entity in row["entities"]} == set(
+            self.EXPECTED_LABELS
+        )
+
+    def test_fixture_entities_match_expected_and_offsets_are_stable(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        pipeline = Pipeline()
+        document = pipeline.stage1_normalize(row["text"])
+        for entity in row["entities"]:
+            assert row["text"][entity["start"] : entity["end"]] == entity["text"]
+            ns, ne = document.offset_map.original_span_to_normalized(
+                entity["start"], entity["end"]
+            )
+            assert document.normalized_text[ns:ne] == entity["text"]
+            assert document.offset_map.normalized_span_to_original_offsets(ns, ne) == (
+                entity["start"],
+                entity["end"],
+            )
