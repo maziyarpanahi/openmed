@@ -840,7 +840,7 @@ def _bounded_score(value: Any, field_name: str) -> float:
         raise ValueError(f"{field_name} must be between 0.0 and 1.0")
     try:
         result = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} must be between 0.0 and 1.0") from exc
     if not math.isfinite(result) or not 0.0 <= result <= 1.0:
         raise ValueError(f"{field_name} must be between 0.0 and 1.0")

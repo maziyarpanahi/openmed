@@ -170,3 +170,21 @@ def test_invalid_fixture_errors_do_not_echo_raw_text() -> None:
         )
 
     assert secret not in str(raised.value)
+
+
+@pytest.mark.parametrize("field", ["score", "threshold", "precision_floor"])
+@pytest.mark.parametrize("value", [10**400, -(10**400)])
+def test_oversized_numbers_raise_stable_validation_errors(field, value) -> None:
+    fixtures = _fixtures()
+    kwargs = {}
+    if field == "score":
+        fixtures[0]["score"] = value
+    elif field == "threshold":
+        kwargs["thresholds"] = [value]
+    else:
+        kwargs[field] = value
+    message = (
+        "invalid NLI calibration fixture" if field == "score" else "between 0.0 and 1.0"
+    )
+    with pytest.raises(ValueError, match=message):
+        calibrate_nli_thresholds(fixtures, **kwargs)
