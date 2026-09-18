@@ -173,6 +173,7 @@ classification:
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/nli-label-contract.md
+    - clinical/nli-assertion-pairs.md
     - clinical/concept-grounding.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md

@@ -98,6 +98,7 @@ nav:
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Clinical NLI Label Contract: clinical/nli-label-contract.md
+      - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
       - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
