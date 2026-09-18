@@ -470,10 +470,7 @@ def _inventory_from_payload(
             raise ValueError("sense inventory short forms must be non-empty")
         if short_form in raw_keys:
             # Without this the later key silently replaced the earlier one's senses.
-            raise ValueError(
-                f"sense inventory short forms {raw_keys[short_form]!r} and "
-                f"{raw_short_form!r} both normalize to {short_form!r}"
-            )
+            raise ValueError("sense inventory short forms collide after normalization")
         raw_keys[short_form] = str(raw_short_form)
         if not _is_nonstring_sequence(raw_definitions) or not raw_definitions:
             raise ValueError(f"sense inventory entry {short_form!r} needs candidates")
@@ -512,11 +509,11 @@ def _reject_duplicate_senses(
         first_position, first_source = first
         if source == first_source:
             raise ValueError(
-                f"sense inventory entry {short_form!r} repeats candidate "
+                "sense inventory entry repeats candidate "
                 f"{first_position} as candidate {position}"
             )
         raise ValueError(
-            f"sense inventory entry {short_form!r} has conflicting candidates "
+            "sense inventory entry has conflicting candidates "
             f"{first_position} and {position}: same long form and semantic type, "
             "different source"
         )
@@ -528,7 +525,7 @@ def _reject_repeated_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError(f"sense inventory JSON repeats the key {key!r}")
+            raise ValueError("sense inventory JSON repeats a key")
         result[key] = value
     return result
 

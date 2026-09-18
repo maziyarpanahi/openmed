@@ -274,7 +274,7 @@ def test_equivalent_duplicate_senses_are_rejected(
 ) -> None:
     path = _write_inventory(tmp_path, {"MS": [first, second]})
 
-    with pytest.raises(ValueError, match=r"'MS' repeats candidate 1 as candidate 2"):
+    with pytest.raises(ValueError, match=r"repeats candidate 1 as candidate 2"):
         load_sense_inventory(path, include_starter=False)
 
 
@@ -360,7 +360,7 @@ def test_short_forms_that_normalize_together_are_rejected(
         },
     )
 
-    with pytest.raises(ValueError, match="both normalize to 'BP'"):
+    with pytest.raises(ValueError, match="collide after normalization"):
         load_sense_inventory(path, include_starter=False)
 
 
@@ -375,7 +375,7 @@ def test_repeated_json_key_is_rejected_instead_of_silently_dropped(
         f'"senses": {{"BP": {first}, "BP": {second}}}}}',
     )
 
-    with pytest.raises(ValueError, match="repeats the key 'BP'"):
+    with pytest.raises(ValueError, match="repeats a key"):
         load_sense_inventory(path, include_starter=False)
 
 
@@ -383,3 +383,28 @@ def test_starter_inventory_has_no_duplicate_or_conflicting_senses() -> None:
     inventory = load_sense_inventory()
 
     assert set(inventory) >= {"MS", "PT", "RA", "CA"}
+
+
+def test_collision_errors_do_not_echo_inventory_keys(tmp_path: Path) -> None:
+    marker = "synthetic-private-5550199"
+    path = _write_inventory(
+        tmp_path,
+        {
+            marker: [_candidate("alpha", "finding")],
+            marker.upper(): [_candidate("beta", "finding")],
+        },
+    )
+    with pytest.raises(ValueError) as caught:
+        load_sense_inventory(path, include_starter=False)
+    assert marker.casefold() not in str(caught.value).casefold()
+
+
+def test_repeated_json_key_error_does_not_echo_key(tmp_path: Path) -> None:
+    marker = "synthetic-private-5550199"
+    path = _write_inventory(
+        tmp_path,
+        '{"schema_version": 1, "' + marker + '": 1, "' + marker + '": 2}',
+    )
+    with pytest.raises(ValueError) as caught:
+        load_sense_inventory(path, include_starter=False)
+    assert marker not in str(caught.value)
