@@ -205,3 +205,34 @@ def test_report_writes_json_and_markdown_without_network_access(tmp_path) -> Non
 
     assert json_path.read_text(encoding="utf-8") == report.to_json() + "\n"
     assert markdown_path.read_text(encoding="utf-8") == report.to_markdown()
+
+
+def test_report_rejects_misattributed_slice() -> None:
+    report = build_nli_error_slice_report(_records())
+    with pytest.raises(ValueError, match="slice name must match"):
+        NLIErrorSliceReport(
+            slices={"negation": report.slices["numbers"]},
+            provenance=report.provenance,
+        )
+
+
+@pytest.mark.parametrize("target", ["phenomena", "records"])
+def test_invalid_iterable_errors_do_not_expose_source(target: str) -> None:
+    import traceback
+
+    class PrivateIterable:
+        def __iter__(self):
+            raise TypeError("synthetic-private-5550199")
+
+    with pytest.raises((ValueError, TypeError)) as caught:
+        if target == "phenomena":
+            NLIErrorSliceCase(
+                fixture_id="synthetic-case",
+                phenomena=PrivateIterable(),
+                gold_label="entailment",
+                predicted_label="neutral",
+            )
+        else:
+            build_nli_error_slice_report(PrivateIterable())
+    formatted = "".join(traceback.format_exception(caught.value))
+    assert "synthetic-private-5550199" not in formatted

@@ -169,10 +169,10 @@ def _normalise_phenomena(value: Any) -> tuple[str, ...]:
     else:
         try:
             raw_values = tuple(value)
-        except TypeError as exc:
+        except TypeError:
             raise ValueError(
                 "a case must declare one or more clinical phenomena"
-            ) from exc
+            ) from None
 
     normalized_values = {_normalise_phenomenon(item) for item in raw_values}
     if not normalized_values:
@@ -528,6 +528,8 @@ class NLIErrorSliceReport:
                 )
             if not isinstance(slice_report, NLIErrorSlice):
                 raise TypeError("slices must contain NLIErrorSlice values")
+            if slice_report.name != name:
+                raise ValueError("slice name must match its report key")
             normalized[name] = slice_report
         if not isinstance(self.provenance, NLIErrorSliceProvenance):
             raise TypeError("provenance must be NLIErrorSliceProvenance")
@@ -777,10 +779,10 @@ def build_nli_error_slice_report(
             raise TypeError("records must be an iterable of NLI error-slice cases")
         try:
             raw_records = tuple(records)
-        except TypeError as exc:
+        except TypeError:
             raise TypeError(
                 "records must be an iterable of NLI error-slice cases"
-            ) from exc
+            ) from None
 
     cases = tuple(
         sorted(
