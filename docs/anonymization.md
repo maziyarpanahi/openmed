@@ -229,6 +229,11 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+For Mexican Spanish records, pass `locale="es_MX"`. The deterministic safety
+sweep recognizes context-labelled CURP and RFC values, and replacement uses
+checksum-valid synthetic surrogates while preserving whether an RFC is the
+12-character company form or 13-character individual form.
+
 Country-aware African French and Portuguese surrogates are available through
 conceptual locale overrides. `fr_SN`, `fr_CI`, and `fr_CM` use curated names,
 cities, addresses, and country-code phone formats while keeping the French PII
@@ -350,6 +355,8 @@ so every surrogate ID passes the same validator that detection uses:
 | `fr_FR` | NIR                 | Faker built-in (`fr_FR.ssn`)                           |
 | `it_IT` | Codice Fiscale      | Faker built-in (`it_IT.ssn`)                           |
 | `es_ES` | NIE                 | Faker built-in (`es_ES.nie`)                           |
+| `es_MX` | CURP                | OpenMed `MexicanCURPProvider` (modulo-10)              |
+| `es_MX` | RFC                 | OpenMed `MexicanRFCProvider` (modulo-11)               |
 | `en_IN` | Aadhaar (Verhoeff)  | OpenMed `AadhaarProvider` (Faker's built-in is invalid) |
 | `de_DE` | Steuer-ID           | OpenMed `GermanSteuerIdProvider` (Faker's `de_DE.ssn` is US-style) |
 | any     | NPI (Luhn over 80840) | OpenMed `NPIProvider`                                 |
@@ -447,6 +454,10 @@ Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale
 uses Faker's installed `en_PK` backend for general surrogate data while CNIC
 generation remains provider-backed and format-valid.
+The Irish `en_IE` overlay validates PPS numbers with their weighted modulo-23
+check letter, and the Japanese `ja_JP` path validates My Numbers with their
+modulo-11 check digit; both paths generate synthetic, checksum-valid
+surrogates locally.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 
