@@ -30,6 +30,7 @@ from openmed.core.pii_i18n import (
     get_patterns_for_language,
     normalize_bengali_assamese_digits,
     normalize_gujarati_digits,
+    normalize_kannada_digits,
     normalize_odia_digits,
     validate_aadhaar,
     validate_assam_pin,
@@ -48,6 +49,9 @@ from openmed.core.pii_i18n import (
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_japanese_my_number,
+    validate_kannada_aadhaar,
+    validate_kannada_indian_phone,
+    validate_karnataka_pin,
     validate_latvian_personas_kods,
     validate_maharashtra_pin,
     validate_malaysian_mykad,
@@ -636,6 +640,116 @@ def test_gujarati_fixtures_pass_zero_leakage_release_gate_offline():
     gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
     assert gate.passed is True
     assert gate.details["evaluated"] == {"gu": 0.0}
+
+
+def test_kannada_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
+    fixtures = _i18n_fixtures("kn")
+
+    assert len(fixtures) == 2
+    assert {fixture.metadata["digit_set"] for fixture in fixtures} == {
+        "ascii",
+        "kannada",
+    }
+
+    names = []
+    aadhaar_values = []
+    phone_values = []
+    pin_values = []
+    for fixture in fixtures:
+        person_spans = [span for span in fixture.gold_spans if span.label == "PERSON"]
+        assert len(person_spans) == 1
+        person = person_spans[0]
+        names.append(person.text)
+        assert "ಅವರು" not in person.text
+        assert fixture.text[person.end :].startswith(" ಅವರು")
+
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert fixture.text[span.start : span.end] == span.text
+            if span.label == "ID_NUM":
+                aadhaar_values.append(span.text)
+            elif span.label == "PHONE":
+                phone_values.append(span.text)
+            elif span.label == "ZIPCODE":
+                pin_values.append(span.text)
+
+    assert "್" in names[0]
+    assert "ಿ" in names[0]
+    assert all(validate_kannada_aadhaar(value) for value in aadhaar_values)
+    assert all(validate_kannada_indian_phone(value) for value in phone_values)
+    assert all(validate_karnataka_pin(value) for value in pin_values)
+    assert len({normalize_kannada_digits(value) for value in aadhaar_values}) == 1
+    assert len({normalize_kannada_digits(value) for value in phone_values}) == 1
+    assert len({normalize_kannada_digits(value) for value in pin_values}) == 2
+
+
+def test_kannada_fixtures_pass_zero_leakage_release_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = _i18n_fixtures("kn")
+    predictions = {}
+
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-09-14T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="kn",
+            locale="kn_IN",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "kn"))
+            for entity in swept_result.entities
+        }
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="kn",
+            consistent=False,
+            seed=None,
+            locale="kn_IN",
+            use_safety_sweep=True,
+        )
+        assert "ಅವರು" in result.deidentified_text
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-kannada",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-09-14T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["overall"] == 0.0
+    assert report.metrics["leakage"]["by_language"]["kn"] == 0.0
+
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"kn": 0.0}
 
 
 def test_marathi_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
