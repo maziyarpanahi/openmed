@@ -725,3 +725,27 @@ class TestAfricanFrenchPortugueseSurrogates:
         protected_values.extend(sweep_values)
         assert added_count == len(sweep_values)
         assert all(value not in result.deidentified_text for value in protected_values)
+
+
+@pytest.mark.parametrize(
+    ("source", "method", "stem", "expected"),
+    [
+        ("નરેશભાઈ", "first_name_male", "વિજય", "વિજયભાઈ"),
+        ("રમીલાબેન", "first_name_female", "કવિતા", "કવિતાબેન"),
+        ("નરેશ પટેલભાઈ", "name_male", "વિજય શાહ", "વિજય શાહભાઈ"),
+        ("રમીલા પટેલબેન", "name_female", "કવિતા શાહ", "કવિતા શાહબેન"),
+    ],
+)
+def test_gujarati_surrogates_choose_gender_aligned_native_names(
+    source, method, stem, expected
+):
+    from unittest.mock import Mock
+
+    from openmed.core.anonymizer.providers.script_names import generate_gujarati_name
+
+    faker = Mock()
+    getattr(faker, method).return_value = stem
+    assert generate_gujarati_name(faker, source, locale="gu_IN") == expected
+    getattr(faker, method).assert_called_once_with()
+    faker.name.assert_not_called()
+    faker.first_name.assert_not_called()

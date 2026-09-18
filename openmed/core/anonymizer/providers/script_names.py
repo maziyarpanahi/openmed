@@ -162,8 +162,13 @@ def generate_gujarati_name(faker, original: str, *, locale: str) -> str:
     )
     source_stem = stem[: -len(suffix)] if suffix else stem
 
+    method = "name" if " " in source_stem else "first_name"
+    if suffix:
+        gender = "male" if suffix == "ભાઈ" else "female"
+        method = f"{method}_{gender}"
+
     for _ in range(20):
-        candidate = str(faker.name() if " " in source_stem else faker.first_name())
+        candidate = str(getattr(faker, method)())
         candidate = candidate.strip()
         for candidate_honorific in _GUJARATI_HONORIFICS:
             candidate_prefix = f"{candidate_honorific} "
