@@ -210,13 +210,13 @@
       "it_IT",
       "ssn"
     ],
-    "kn": [
-      "kn_IN",
-      "aadhaar"
-    ],
     "ja": [
       "ja_JP",
       "my_number"
+    ],
+    "kn": [
+      "kn_IN",
+      "aadhaar"
     ],
     "ko": [
       "ko_KR",
