@@ -117,6 +117,7 @@ DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING = 0.0
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "as": 0.0,
     "gu": 0.0,
+    "kn": 0.0,
     "mr": 0.0,
     "or": 0.0,
     "ta": 0.0,
