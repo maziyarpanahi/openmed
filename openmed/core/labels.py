@@ -135,6 +135,12 @@ BODY_SITE: Final = "BODY_SITE"
 #: Procedure-record device concepts (issue #313)
 DEVICE: Final = "DEVICE"
 
+#: Medical-device and UDI mention concepts (issue #908)
+DEVICE_TYPE: Final = "DEVICE_TYPE"
+DEVICE_IDENTIFIER: Final = "DEVICE_IDENTIFIER"
+DEVICE_MODEL: Final = "DEVICE_MODEL"
+IMPLANT_SITE: Final = "IMPLANT_SITE"
+
 #: Canonical non-identifier labels shared by the biomedical NER families.
 BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
     {
@@ -233,6 +239,11 @@ ALLERGEN: Final = "ALLERGEN"
 REACTION_MANIFESTATION: Final = "REACTION_MANIFESTATION"
 REACTION_SEVERITY: Final = "REACTION_SEVERITY"
 ALLERGY_CRITICALITY: Final = "ALLERGY_CRITICALITY"
+
+#: Immunology, mental-health, and dentistry domain concepts (issue #2358)
+IMMUNIZATION: Final = "IMMUNIZATION"
+PSYCH_SYMPTOM: Final = "PSYCH_SYMPTOM"
+TOOTH: Final = "TOOTH"
 
 #: Nursing-care observation concepts (issue #910)
 INTAKE_OUTPUT: Final = "INTAKE_OUTPUT"
@@ -457,6 +468,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         PROCEDURE,
         BODY_SITE,
         DEVICE,
+        DEVICE_TYPE,
+        DEVICE_IDENTIFIER,
+        DEVICE_MODEL,
+        IMPLANT_SITE,
         PROBLEM,
         SEVERITY,
         DOSAGE,
@@ -487,6 +502,9 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         REACTION_MANIFESTATION,
         REACTION_SEVERITY,
         ALLERGY_CRITICALITY,
+        IMMUNIZATION,
+        PSYCH_SYMPTOM,
+        TOOTH,
         INTAKE_OUTPUT,
         LINE_DRAIN_TUBE,
         NURSING_RISK_SCORE,
@@ -762,6 +780,14 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             PROCEDURE,
             BODY_SITE,
             DEVICE,
+            DEVICE_TYPE,
+            DEVICE_IDENTIFIER,
+            DEVICE_MODEL,
+            IMPLANT_SITE,
+            ALLERGEN,
+            IMMUNIZATION,
+            PSYCH_SYMPTOM,
+            TOOTH,
             PROBLEM,
             SEVERITY,
             DOSAGE,
@@ -970,6 +996,13 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Medical-device and UDI mention concepts (issue #908). UDI-like values
+    # remain direct identifiers with the dedicated HIPAA device-identifier
+    # cross-reference; no lookup, decoding, or network access is implied.
+    DEVICE_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DEVICE_IDENTIFIER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    DEVICE_MODEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IMPLANT_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Relation-extraction heads and attributes (issue #252). Free-text
     # problem/indication text and result values remain medium-risk so rare
     # conditions and distinctive measurements are visible to risk tooling,
@@ -1029,6 +1062,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     REACTION_MANIFESTATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
     REACTION_SEVERITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     ALLERGY_CRITICALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Specialty concepts added by issue #2358. Psychiatric symptoms carry
+    # high residual-risk metadata for redaction review.
+    IMMUNIZATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PSYCH_SYMPTOM: _label_metadata(CLINICAL_CONCEPT, RISK_HIGH, (SNOMED, HPO)),
+    TOOTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Nursing-care observation concepts (issue #910)
     INTAKE_OUTPUT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     LINE_DRAIN_TUBE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1217,6 +1255,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     DEVICE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE_IDENTIFIER: HIPAA_DEVICE_IDENTIFIER,
+    DEVICE_MODEL: HIPAA_UNIQUE_IDENTIFIER,
+    IMPLANT_SITE: HIPAA_UNIQUE_IDENTIFIER,
     PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
     SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
     DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1251,6 +1293,9 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     REACTION_MANIFESTATION: HIPAA_UNIQUE_IDENTIFIER,
     REACTION_SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
     ALLERGY_CRITICALITY: HIPAA_UNIQUE_IDENTIFIER,
+    IMMUNIZATION: HIPAA_UNIQUE_IDENTIFIER,
+    PSYCH_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
+    TOOTH: HIPAA_UNIQUE_IDENTIFIER,
     # Nursing-care observation concepts
     INTAKE_OUTPUT: HIPAA_UNIQUE_IDENTIFIER,
     LINE_DRAIN_TUBE: HIPAA_UNIQUE_IDENTIFIER,
@@ -1388,6 +1433,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
     DEVICE: POPIA_HEALTH_INFORMATION,
+    DEVICE_TYPE: POPIA_HEALTH_INFORMATION,
+    DEVICE_IDENTIFIER: POPIA_IDENTIFYING_NUMBER,
+    DEVICE_MODEL: POPIA_HEALTH_INFORMATION,
+    IMPLANT_SITE: POPIA_HEALTH_INFORMATION,
     PROBLEM: POPIA_HEALTH_INFORMATION,
     SEVERITY: POPIA_HEALTH_INFORMATION,
     DOSAGE: POPIA_HEALTH_INFORMATION,
@@ -1418,6 +1467,9 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     REACTION_MANIFESTATION: POPIA_HEALTH_INFORMATION,
     REACTION_SEVERITY: POPIA_HEALTH_INFORMATION,
     ALLERGY_CRITICALITY: POPIA_HEALTH_INFORMATION,
+    IMMUNIZATION: POPIA_HEALTH_INFORMATION,
+    PSYCH_SYMPTOM: POPIA_HEALTH_INFORMATION,
+    TOOTH: POPIA_HEALTH_INFORMATION,
     INTAKE_OUTPUT: POPIA_HEALTH_INFORMATION,
     LINE_DRAIN_TUBE: POPIA_HEALTH_INFORMATION,
     NURSING_RISK_SCORE: POPIA_HEALTH_INFORMATION,
@@ -1842,6 +1894,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "medicaldevice": DEVICE,
     "implant": DEVICE,
     "catheter": DEVICE,
+    # Medical-device and UDI mention concepts (issue #908)
+    "devicetype": DEVICE_TYPE,
+    "deviceidentifier": DEVICE_IDENTIFIER,
+    "udi": DEVICE_IDENTIFIER,
+    "udidi": DEVICE_IDENTIFIER,
+    "devicemodel": DEVICE_MODEL,
+    "modelnumber": DEVICE_MODEL,
+    "manufacturer": ORGANIZATION,
+    "implantsite": IMPLANT_SITE,
+    "implantlocation": IMPLANT_SITE,
+    "devicestatus": OTHER,
     # Anesthesia-record concepts
     "anesthesiatype": ANESTHESIA_TYPE,
     "anesthesia": ANESTHESIA_TYPE,
@@ -1883,6 +1946,18 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "criticality": ALLERGY_CRITICALITY,
     "allergytype": OTHER,
     "onsetcontext": OTHER,
+    # Immunology, mental-health, and dentistry concepts (issue #2358)
+    "allergy": ALLERGEN,
+    "allergies": ALLERGEN,
+    "allergicreaction": FINDING,
+    "immunization": IMMUNIZATION,
+    "antibody": PROTEIN,
+    "psychiatricsymptom": PSYCH_SYMPTOM,
+    "therapy": PROCEDURE,
+    "tooth": TOOTH,
+    "dentalcondition": CONDITION,
+    "dentalprocedure": PROCEDURE,
+    "restoration": PROCEDURE,
     # Relation-extraction heads and attributes (issue #252)
     "dx": PROBLEM,
     "problemlist": PROBLEM,
@@ -2540,6 +2615,10 @@ __all__ = [
     "PROCEDURE",
     "BODY_SITE",
     "DEVICE",
+    "DEVICE_TYPE",
+    "DEVICE_IDENTIFIER",
+    "DEVICE_MODEL",
+    "IMPLANT_SITE",
     "PROBLEM",
     "SEVERITY",
     "DOSAGE",
@@ -2570,6 +2649,9 @@ __all__ = [
     "REACTION_MANIFESTATION",
     "REACTION_SEVERITY",
     "ALLERGY_CRITICALITY",
+    "IMMUNIZATION",
+    "PSYCH_SYMPTOM",
+    "TOOTH",
     "INTAKE_OUTPUT",
     "LINE_DRAIN_TUBE",
     "NURSING_RISK_SCORE",
