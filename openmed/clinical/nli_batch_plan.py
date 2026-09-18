@@ -66,6 +66,12 @@ class NliPairCost:
     def __post_init__(self) -> None:
         if type(self.pair_id) is not str or not self.pair_id.strip():
             raise NliBatchPlanningError("pair identifier must be a non-empty string")
+        try:
+            self.pair_id.encode("utf-8")
+        except UnicodeEncodeError:
+            raise NliBatchPlanningError(
+                "pair identifier must be valid Unicode"
+            ) from None
         _require_positive_int(self.token_count, "pair token count")
 
     def __repr__(self) -> str:

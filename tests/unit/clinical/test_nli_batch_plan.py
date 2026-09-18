@@ -207,3 +207,13 @@ def test_inputs_and_results_are_immutable() -> None:
         pair.token_count = 2  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         plan.deferred_pair_ids = ()  # type: ignore[misc]
+
+
+def test_unencodable_pair_id_is_rejected_before_audit() -> None:
+    with pytest.raises(
+        NliBatchPlanningError, match="pair identifier must be valid Unicode"
+    ):
+        plan_nli_batches(
+            [{"pair_id": "pair-\ud800", "token_count": 1}],
+            NliRuntimeProfile(max_tokens_per_batch=4, max_pairs_per_batch=1),
+        )
