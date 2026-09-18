@@ -256,6 +256,7 @@ classification:
     - evaluation/comparator-harness.md
     - evaluation/privacy-corpus.md
     - clinical-validation-protocol.md
+    - clinical/summary-safety.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md

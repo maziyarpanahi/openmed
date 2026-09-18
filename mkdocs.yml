@@ -181,6 +181,7 @@ nav:
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
+      - Clinical Summary Safety Envelope: clinical/summary-safety.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
