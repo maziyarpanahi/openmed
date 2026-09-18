@@ -166,3 +166,43 @@ assert blocked == [], blocked
     )
 
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("offset", [True, 1.5, "1"])
+def test_offsets_are_not_silently_truncated(offset):
+    doc = {"text": "abc", "ents": [{"start_char": offset, "end_char": 2}]}
+    with pytest.raises(ValueError, match="offsets must be integers"):
+        medspacy_context.to_canonical(doc)
+
+
+def test_explicit_text_must_match_processed_doc():
+    doc = StubDoc("alpha", (_span("alpha", "alpha"),))
+    with pytest.raises(ValueError, match="must match"):
+        medspacy_context.to_canonical(doc, text="bravo")
+
+
+def test_same_offsets_on_different_existing_text_do_not_attach_context():
+    doc = StubDoc("alpha", (_span("alpha", "alpha", is_negated=True),))
+    span = {"start": 0, "end": 5, "text": "bravo"}
+    with pytest.raises(ValueError, match="must match"):
+        medspacy_context.to_canonical(doc, spans=[span])
+
+
+def test_pipeline_failure_traceback_does_not_echo_source(monkeypatch):
+    import traceback
+
+    monkeypatch.setattr(medspacy_context, "_require_runtime_dependencies", lambda: None)
+
+    def pipeline(text):
+        raise RuntimeError("synthetic-private-5550199")
+
+    with pytest.raises(ValueError) as caught:
+        medspacy_context.process_to_canonical("synthetic", nlp=pipeline)
+    assert "synthetic-private-5550199" not in "".join(
+        traceback.format_exception(caught.value)
+    )
+
+
+def test_oversized_default_confidence_is_rejected_cleanly():
+    with pytest.raises(ValueError):
+        medspacy_context.MedspacyContextAdapterConfig(default_confidence=10**400)

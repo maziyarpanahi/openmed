@@ -3,7 +3,9 @@
 The adapter consumes a processed medspaCy/spaCy ``Doc`` and never constructs a
 pipeline or downloads a model. A caller may therefore keep medspaCy entirely
 outside the OpenMed core and pass the resulting document to
-:func:`to_canonical`.
+:func:`to_canonical`. The runtime extra requires Python 3.12 or newer because
+medspaCy on older Python versions pins spaCy below the supported security floor.
+Processed document conversion remains available on Python 3.10 or newer.
 
 medspaCy and spaCy character offsets are Python string, half-open offsets:
 ``[start_char, end_char)``. The alignment contract is intentionally exact: an
@@ -56,9 +58,13 @@ class MedspacyContextAdapterConfig:
     preserve_context_flags: bool = True
 
     def __post_init__(self) -> None:
-        if not self.source.strip():
+        if not isinstance(self.source, str) or not self.source.strip():
             raise ValueError("source must be a non-empty string")
-        if not 0.0 <= float(self.default_confidence) <= 1.0:
+        if (
+            isinstance(self.default_confidence, bool)
+            or not isinstance(self.default_confidence, int | float)
+            or not 0 <= self.default_confidence <= 1
+        ):
             raise ValueError("default_confidence must be between 0.0 and 1.0")
 
 
@@ -148,8 +154,12 @@ def process_to_canonical(
     if not callable(nlp):
         raise TypeError("nlp must be a callable, configured medspaCy pipeline")
     _require_runtime_dependencies()
+    try:
+        doc = nlp(text)
+    except Exception:
+        raise ValueError("configured medspaCy pipeline failed") from None
     return to_canonical(
-        nlp(text),
+        doc,
         text=text,
         openmed_spans=openmed_spans,
         config=config,
@@ -243,6 +253,8 @@ def _attach_records(
             attached.append(_copy_without_context(span))
             continue
 
+        if text is not None:
+            _span_surface(span, text=text, start=offsets[0], end=offsets[1])
         flags = _merge_flags(record["flags"] for record in matched)
         metadata = _context_metadata(
             flags=flags,
@@ -332,6 +344,10 @@ def _document_text(doc: Any, *, explicit_text: str | None) -> str | None:
     if explicit_text is not None:
         if not isinstance(explicit_text, str):
             raise TypeError("text must be a string")
+        if not _has_offsets(doc):
+            document_text = _value(doc, ("text", "document_text", "full_text"))
+            if isinstance(document_text, str) and document_text != explicit_text:
+                raise ValueError("explicit text must match the processed document")
         return explicit_text
     if _has_offsets(doc):
         return None
@@ -344,11 +360,9 @@ def _span_offsets(span: Any, *, text: str | None) -> tuple[int, int]:
     end = _value(span, ("end_char", "end"))
     if start is _MISSING or end is _MISSING:
         raise ValueError("medspaCy span must provide start_char and end_char")
-    try:
-        start_int = int(start)
-        end_int = int(end)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("medspaCy span offsets must be integers") from exc
+    if type(start) is not int or type(end) is not int:
+        raise ValueError("medspaCy span offsets must be integers")
+    start_int, end_int = start, end
     if start_int < 0 or end_int < start_int:
         raise ValueError("medspaCy span offsets must be non-negative and half-open")
     if text is not None and end_int > len(text):
@@ -361,10 +375,9 @@ def _existing_offsets(span: Any) -> tuple[int, int] | None:
     end = _value(span, ("end", "end_char"))
     if start is _MISSING or end is _MISSING:
         return None
-    try:
-        return int(start), int(end)
-    except (TypeError, ValueError):
+    if type(start) is not int or type(end) is not int:
         return None
+    return start, end
 
 
 def _span_label(span: Any) -> str:
@@ -382,7 +395,7 @@ def _span_confidence(span: Any, *, default: float) -> float:
         return float(default)
     try:
         confidence = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return float(default)
     return confidence if 0.0 <= confidence <= 1.0 else float(default)
 
@@ -396,7 +409,11 @@ def _span_surface(
 ) -> str:
     surface = _value(span, ("text", "surface", "word"))
     if surface is not _MISSING and surface is not None:
-        return str(surface)
+        if not isinstance(surface, str):
+            raise ValueError("span text must be a string")
+        if text is not None and surface != text[start:end]:
+            raise ValueError("span text must match its document offsets")
+        return surface
     if text is not None:
         return text[start:end]
     return ""
