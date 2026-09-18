@@ -321,6 +321,14 @@
     "PainScore",
     "SkinAssessment"
   ],
+  "medical_device": [
+    "DeviceType",
+    "DeviceIdentifier",
+    "Manufacturer",
+    "ModelNumber",
+    "ImplantSite",
+    "DeviceStatus"
+  ],
   "functional_status": [
     "ADLActivity",
     "AssistanceLevel",
@@ -337,5 +345,23 @@
     "ObstetricEvent",
     "GynecologicFinding",
     "DeliveryMode"
+  ],
+  "immunology": [
+    "Allergen",
+    "AllergicReaction",
+    "Immunization",
+    "Antibody"
+  ],
+  "mental_health": [
+    "PsychiatricSymptom",
+    "Diagnosis",
+    "Medication",
+    "Therapy"
+  ],
+  "dentistry": [
+    "Tooth",
+    "DentalCondition",
+    "DentalProcedure",
+    "Restoration"
   ]
 }
