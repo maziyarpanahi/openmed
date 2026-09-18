@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>2,266 إدخالاً في البيان</b> &nbsp;·&nbsp; <b>34 لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 إدخالاً في البيان</b> &nbsp;·&nbsp; <b>35 لغة PII مدعومة بالنماذج</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -329,7 +329,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII متعدد اللغات (37 مسارًا مدعومًا؛ 34 مدعومًا بالنماذج)
+## PII متعدد اللغات (38 مسارًا مدعومًا؛ 35 مدعومًا بالنماذج)
 
 الاستخراج وإزالة الهوية في `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و`tr`، **فهرس نماذج PII المسجّل** إجمالاً.
 
