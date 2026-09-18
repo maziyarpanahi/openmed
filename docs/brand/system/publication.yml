@@ -172,6 +172,7 @@ classification:
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
+    - clinical/nli-label-contract.md
     - clinical/concept-grounding.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md
@@ -190,6 +191,8 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/nli-premise-windows.md
+    - clinical/nli-hypothesis-guard.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
