@@ -209,3 +209,23 @@ def test_infer_biomedical_uses_defaults_threshold_and_canonical_labels(
     assert response.meta["model_id"] == GLINER_BIOMED_MODEL_ID
     assert response.meta["domain_used"] == "biomedical"
     assert convenience_response.meta["model_id"] == GLINER_BIOMED_MODEL_ID
+
+
+def test_malformed_gliner_offset_error_does_not_echo_entity_text() -> None:
+    import traceback
+
+    with pytest.raises(KeyError) as caught:
+        infer_module._convert_gliner_entity(
+            {"text": "synthetic-private-5550199", "label": "Drug", "score": 0.9}
+        )
+    assert "synthetic-private-5550199" not in "".join(
+        traceback.format_exception(caught.value)
+    )
+
+
+@pytest.mark.parametrize("offset", [True, 1.5, "private-offset", -1])
+def test_gliner_offsets_are_not_silently_coerced(offset) -> None:
+    with pytest.raises(ValueError, match="offsets must"):
+        infer_module._convert_gliner_entity(
+            {"text": "synthetic", "start": offset, "end": 4, "label": "Drug"}
+        )

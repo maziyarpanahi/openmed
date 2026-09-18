@@ -276,18 +276,24 @@ def _convert_gliner_entity(item: Any) -> Entity:
 def _normalise_gliner_label(label: Any) -> str:
     """Return a canonical label while retaining unknown zero-shot labels."""
 
-    source_label = str(label)
+    if not isinstance(label, str):
+        raise ValueError("GLiNER entity labels must be strings")
+    source_label = label
     canonical_label = normalize_label(source_label)
     return source_label if canonical_label == "OTHER" else canonical_label
 
 
 def _extract_position(item: Dict[str, Any], key: str, span_index: int) -> int:
     if key in item:
-        return int(item[key])
-    span = item.get("span")
-    if isinstance(span, (list, tuple)) and len(span) > span_index:
-        return int(span[span_index])
-    raise KeyError(f"Missing '{key}' in GLiNER entity: {item}")
+        value = item[key]
+    else:
+        span = item.get("span")
+        if not isinstance(span, (list, tuple)) or len(span) <= span_index:
+            raise KeyError(f"Missing '{key}' in GLiNER entity")
+        value = span[span_index]
+    if type(value) is not int or value < 0:
+        raise ValueError("GLiNER entity offsets must be non-negative integers")
+    return value
 
 
 def _run_other_inference(
