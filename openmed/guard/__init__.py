@@ -36,6 +36,26 @@ from .dataset import (
     scan_dataset_files,
     scan_text,
 )
+from .preflight import (
+    FAIL_CLOSED,
+    FAIL_CLOSED_POLICY,
+    REDACT_THEN_CONTINUE,
+    REDACT_THEN_CONTINUE_POLICY,
+    PreflightBlockedError,
+    PreflightError,
+    PreflightFinding,
+    PreflightGate,
+    PreflightInputError,
+    PreflightPolicy,
+    PreflightReport,
+    PreflightResult,
+    PreflightScanError,
+    PreflightScanner,
+    inspect_context,
+    preflight,
+    preflight_context,
+    scan_context,
+)
 
 __all__ = [
     "SessionScrubResult",
@@ -70,6 +90,24 @@ __all__ = [
     "redact_text",
     "scan_dataset_files",
     "scan_text",
+    "FAIL_CLOSED",
+    "FAIL_CLOSED_POLICY",
+    "REDACT_THEN_CONTINUE",
+    "REDACT_THEN_CONTINUE_POLICY",
+    "PreflightBlockedError",
+    "PreflightError",
+    "PreflightFinding",
+    "PreflightGate",
+    "PreflightInputError",
+    "PreflightPolicy",
+    "PreflightReport",
+    "PreflightResult",
+    "PreflightScanError",
+    "PreflightScanner",
+    "inspect_context",
+    "preflight",
+    "preflight_context",
+    "scan_context",
 ]
 
 
