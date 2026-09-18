@@ -24,7 +24,7 @@ OpenMed の中核ローカルランタイムは、必要なモデル成果物が
 </p>
 
 <p>
-  <b>マニフェスト登録 2,266 件</b> &nbsp;·&nbsp; <b>モデル対応 PII 言語 34 種</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>マニフェスト登録 2,266 件</b> &nbsp;·&nbsp; <b>モデル対応 PII 言語 35 種</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTo
 
 ---
 
-## 多言語 PII（対応ルート 37、モデル対応 34）
+## 多言語 PII（対応ルート 38、モデル対応 35）
 
 `en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化：合計 **登録済み PII モデルカタログ**。
 
