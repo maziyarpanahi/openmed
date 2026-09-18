@@ -63,6 +63,7 @@ a dependency also declared in another extra.
 | `llama-index-core` | `agents, llamaindex` | `MIT` |
 | `markdown-it-py` | `multimodal` | `MIT` |
 | `mcp` | `mcp` | `MIT` |
+| `medspacy` | `medspacy` | `MIT` |
 | `mkdocs` | `docs` | `BSD-2-Clause` |
 | `mkdocs-git-revision-date-localized-plugin` | `docs` | `MIT` |
 | `mkdocs-llmstxt` | `docs` | `ISC` |
