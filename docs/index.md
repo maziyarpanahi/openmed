@@ -24,7 +24,7 @@ workflows, broad multilingual PII coverage, and fail-closed release evidence:
 - **37 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu,
   he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr,
   uk, vi, xh, zh, and zu**, with Russian using a documented multilingual default-model
-  placeholder and Bengali, Chinese, Gujarati, and Tamil using dedicated registry
+  placeholder and Bengali, Chinese, and Tamil using dedicated registry
   entries, plus locale-aware validation and surrogate generation. A user-configured
   Indic NER adapter adds three optional routes and can also serve Assamese,
   Bengali, Gujarati, Hindi, Marathi, Odia, Tamil, and Telugu. Additional validator-backed national-ID
