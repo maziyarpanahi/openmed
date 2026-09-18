@@ -804,8 +804,10 @@ def _required_token(value: Any, field_name: str) -> str:
 def _probability(value: Any, field_name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"{field_name} must be numeric")
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{field_name} must be finite and between 0 and 1")
     probability = float(value)
-    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+    if not math.isfinite(probability):
         raise ValueError(f"{field_name} must be finite and between 0 and 1")
     return probability
 

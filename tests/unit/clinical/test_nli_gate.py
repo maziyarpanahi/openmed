@@ -160,3 +160,12 @@ def test_raw_text_is_hashed_and_not_retained_by_evidence_link() -> None:
     payload = json.dumps(link.to_dict(), sort_keys=True)
     assert "sensitive-looking" not in payload
     assert link.source_hash != link.claim_hash
+
+
+@pytest.mark.parametrize("value", [10**400, -(10**400), float("nan"), float("inf")])
+def test_invalid_probabilities_fail_with_stable_errors(value) -> None:
+    with pytest.raises(ValueError, match="must be finite and between 0 and 1"):
+        evaluate_nli({"entailment": value}, _link(), thresholds=_thresholds())
+
+    with pytest.raises(ValueError, match="must be finite and between 0 and 1"):
+        NLIThresholds(entailment=value)
