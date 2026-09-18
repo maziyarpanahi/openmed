@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "09c1e4f0fa4b7c88a2d765358c54df3cf43ef00053bf7ff39a530cf1bdc86f72",
+          "source_sha256": "bec0df1adf6a3c27b5f56af2e289ae7beb382d35db63c622bad320e4a925d234",
           "translation_heading": "__preamble__",
-          "translation_sha256": "8de41d31497706ed32695a111e4278eb561cb5c892e0ba33d67352f93f018877"
+          "translation_sha256": "50546e40f8e75d8e123547119d67129eb7e77e12cd6fb3040e62a121cd317a52"
         },
         {
           "source_heading": "See it in action",
@@ -77,9 +77,9 @@
           "translation_sha256": "903ecbd112324deef7821e67ce8f0dd96a4e683e0cf24322fb43df777d43d8b9"
         },
         {
-          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
-          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
-          "translation_heading": "बहुभाषी PII (36 समर्थित रूट; 33 मॉडल-समर्थित)",
+          "source_heading": "Multilingual PII (37 supported routes; 34 model-backed)",
+          "source_sha256": "173cf3f8a13f1de26312c0f7a0ed5231349eae7b0db080ab17361a7580501ada",
+          "translation_heading": "बहुभाषी PII (37 समर्थित रूट; 34 मॉडल-समर्थित)",
           "translation_sha256": "9b4ae308b42172af074bfadc0832269aef34510e5c10893543b00f6eafdf9f0d"
         },
         {
@@ -142,9 +142,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "09c1e4f0fa4b7c88a2d765358c54df3cf43ef00053bf7ff39a530cf1bdc86f72",
+          "source_sha256": "bec0df1adf6a3c27b5f56af2e289ae7beb382d35db63c622bad320e4a925d234",
           "translation_heading": "__preamble__",
-          "translation_sha256": "454f43065f599195215d52ce94a53028f04896b33f31ec7026ec7519f4b34eba"
+          "translation_sha256": "0980e5e4080a9a28e10d4caef3d08dff0fa35403a301d64a61170adf0289568d"
         },
         {
           "source_heading": "See it in action",
@@ -213,9 +213,9 @@
           "translation_sha256": "2c16671646ed5d5c9392578dfc826f21b79a7536cef01b40645a6327a851563e"
         },
         {
-          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
-          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
-          "translation_heading": "PII ya lugha nyingi (njia 36 zinazotumika; 33 zikitumia modeli)",
+          "source_heading": "Multilingual PII (37 supported routes; 34 model-backed)",
+          "source_sha256": "173cf3f8a13f1de26312c0f7a0ed5231349eae7b0db080ab17361a7580501ada",
+          "translation_heading": "PII ya lugha nyingi (njia 37 zinazotumika; 34 zikitumia modeli)",
           "translation_sha256": "cdc7bd9aba12b767116b23428013ae57bd1dc887a01e8b4c96269fb651ad0765"
         },
         {
@@ -278,9 +278,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "09c1e4f0fa4b7c88a2d765358c54df3cf43ef00053bf7ff39a530cf1bdc86f72",
+          "source_sha256": "bec0df1adf6a3c27b5f56af2e289ae7beb382d35db63c622bad320e4a925d234",
           "translation_heading": "__preamble__",
-          "translation_sha256": "46eea0f62e599cfdcd238ce54f67816114f3c35372fef4b2769ba53022522aba"
+          "translation_sha256": "8f79fd99abf60c90a54631bec556d393978dbfd91e0fcc236b7593af0e2e32c0"
         },
         {
           "source_heading": "See it in action",
@@ -349,9 +349,9 @@
           "translation_sha256": "c86a5f3b107cd56cf58f72bb771934b1b1afc021d24f07f85d5325b14d45b62e"
         },
         {
-          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
-          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
-          "translation_heading": "多语言 PII（36 条支持的路由；33 条由模型支持）",
+          "source_heading": "Multilingual PII (37 supported routes; 34 model-backed)",
+          "source_sha256": "173cf3f8a13f1de26312c0f7a0ed5231349eae7b0db080ab17361a7580501ada",
+          "translation_heading": "多语言 PII（37 条支持的路由；34 条由模型支持）",
           "translation_sha256": "f8323da192e3830334567dfe802aa94f114673a68a6744c78628a6489754b8a1"
         },
         {
