@@ -1038,9 +1038,7 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     # extraction labels only; they do not infer staging or treatment.
     WOUND_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, ICD_10_CM)),
     WOUND_STAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
-    EXUDATE_DESCRIPTOR: _label_metadata(
-        CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)
-    ),
+    EXUDATE_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     # Functional-status and activities-of-daily-living concepts (issue #911).
     # These labels describe documented function only; they do not score a
     # scale, infer care needs, or recommend a disposition.

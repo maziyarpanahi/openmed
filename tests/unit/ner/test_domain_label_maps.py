@@ -12,11 +12,6 @@ from pathlib import Path
 import pytest
 
 from openmed.core.labels import (
-    DRESSING_TYPE,
-    EXUDATE_DESCRIPTOR,
-    WOUND_STAGE,
-    WOUND_TYPE,
-
     ADL_ACTIVITY,
     AIRWAY_MANAGEMENT,
     ALLERGEN,
@@ -30,7 +25,9 @@ from openmed.core.labels import (
     CONDITION,
     DEVELOPMENTAL_MILESTONE,
     DIALYSIS_MODALITY,
+    DRESSING_TYPE,
     DYSPNEA_GRADE,
+    EXUDATE_DESCRIPTOR,
     FETAL_FINDING,
     FUNCTIONAL_SCALE,
     GENE,
@@ -65,6 +62,8 @@ from openmed.core.labels import (
     TUMOR_GRADE,
     URINE_FINDING,
     VARIANT_DESCRIPTOR,
+    WOUND_STAGE,
+    WOUND_TYPE,
     ZYGOSITY,
     hipaa_class_for,
     normalize_label,
@@ -884,6 +883,7 @@ WOUND_ASSESSMENT_FIXTURE = (
     / "clinical"
     / "wound_assessment.jsonl"
 )
+
 
 class TestWoundAssessmentDomain:
     """Wound-care assessment labels are distinct from dermatology lesions."""
