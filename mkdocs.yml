@@ -98,6 +98,8 @@ nav:
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Clinical NLI Label Contract: clinical/nli-label-contract.md
+      - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
+      - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
       - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
@@ -108,6 +110,7 @@ nav:
       - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
