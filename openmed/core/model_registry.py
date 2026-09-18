@@ -14,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from . import labels as label_taxonomy
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
-from .registry_service import (
+from .registry_slots import (
     load_registry_state,
     pointer_targets,
     semantic_version,
@@ -436,6 +436,16 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.CANCER,
         label_taxonomy.DISEASE,
         label_taxonomy.CELL,
+    ],
+    # Forward metadata for future lab-value models; no dedicated Lab model is
+    # registered today. LOINC grounding remains an external follow-up.
+    "Lab": [
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.LAB_VALUE,
+        label_taxonomy.UNIT,
+        label_taxonomy.REFERENCE_RANGE,
+        label_taxonomy.ABNORMAL_FLAG,
+        label_taxonomy.SPECIMEN,
     ],
     # Forward metadata for future Cardiology models; no Cardiology model is
     # registered today (see issue #317).
@@ -1077,7 +1087,12 @@ def _add_pointer_aliases(
 ) -> None:
     by_repo_id = {model.model_id: model for model in registry.values()}
     slots = registry_state.get("slots", {})
-    for slot, pointers in pointer_targets(registry_state).items():
+    pointer_sets = pointer_targets(registry_state)
+    family_counts: dict[str, int] = {}
+    for key in pointer_sets:
+        family = key.split("::", 1)[0]
+        family_counts[family] = family_counts.get(family, 0) + 1
+    for slot, pointers in pointer_sets.items():
         checkpoints = slots.get(slot, {}).get("checkpoints", {})
         for pointer_name, repo_id in pointers.items():
             if repo_id is None:
@@ -1091,6 +1106,9 @@ def _add_pointer_aliases(
             if isinstance(assigned, str) and assigned:
                 model = replace(model, semantic_version=assigned)
             registry[_slug(f"{slot}_{pointer_name}")] = model
+            family = slot.split("::", 1)[0]
+            if family_counts[family] == 1:
+                registry[_slug(f"{family}_{pointer_name}")] = model
 
 
 def _build_registry(
@@ -1332,6 +1350,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "blood|lymph|leukemia|lymphoma": (
         "Hematology",
         "Contains hematological terms",
+    ),
+    "\\blab\\b|mmol\\s*/\\s*l\\b|mg\\s*/\\s*dl\\b|\\bwbc\\b|hemoglobin|creatinine|reference\\s+range|elevated|abnormal|\\bpanel\\b": (
+        "Lab",
+        "Contains laboratory measurement terms",
     ),
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",

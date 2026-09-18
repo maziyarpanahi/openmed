@@ -70,6 +70,93 @@ def test_medical_device_reports_per_label_coverage() -> None:
     assert all(coverage.span_count == 1 for coverage in domain.per_label)
 
 
+def test_functional_status_reports_per_label_coverage() -> None:
+    report = assert_domain_coverage_gate(domains=("functional_status",))
+
+    domain = report.per_domain[0]
+    assert domain.domain == "functional_status"
+    assert [coverage.label for coverage in domain.per_label] == [
+        "ADLActivity",
+        "AssistanceLevel",
+        "MobilityAbility",
+        "AssistiveDevice",
+        "FunctionalScale",
+        "CognitiveStatus",
+    ]
+    assert [coverage.canonical_label for coverage in domain.per_label] == [
+        "ADL_ACTIVITY",
+        "ASSISTANCE_LEVEL",
+        "MOBILITY_ABILITY",
+        "DEVICE",
+        "FUNCTIONAL_SCALE",
+        "OTHER",
+    ]
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+    assert all(coverage.offsets for coverage in domain.per_label)
+
+
+def test_obstetrics_gynecology_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("obstetrics_gynecology",))
+
+    assert report.passed is True
+    assert report.missing_fixtures == ()
+    assert report.orphan_labels == ()
+    assert report.missing_labels == ()
+    domain = report.per_domain[0]
+    assert domain.fixture == "obstetrics_gynecology.jsonl"
+    assert domain.fixture_count == 1
+    assert {coverage.label for coverage in domain.per_label} == {
+        "GravidityParity",
+        "GestationalAge",
+        "FetalFinding",
+        "MenstrualHistory",
+        "ObstetricEvent",
+        "GynecologicFinding",
+        "DeliveryMode",
+    }
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+    assert all(coverage.fixture_count == 1 for coverage in domain.per_label)
+
+
+def test_pathology_histology_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("pathology_histology",))
+
+    domain = report.per_domain[0]
+    assert domain.fixture == "pathology_histology.jsonl"
+    assert domain.fixture_count == 1
+    assert {coverage.label for coverage in domain.per_label} == {
+        "SpecimenType",
+        "GrossDescription",
+        "HistologicFinding",
+        "HistologicGrade",
+        "MarginStatus",
+        "ImmunohistochemistryStain",
+        "MitoticCount",
+        "TissueSite",
+    }
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+
+
+def test_oncology_staging_reports_per_label_coverage_offline() -> None:
+    report = assert_domain_coverage_gate(domains=("oncology_staging",))
+
+    domain = report.per_domain[0]
+    assert domain.fixture == "oncology_staging.jsonl"
+    assert domain.fixture_count == 1
+    assert {coverage.label for coverage in domain.per_label} == {
+        "TumorCategory",
+        "NodeCategory",
+        "MetastasisCategory",
+        "StageGroup",
+        "TumorGrade",
+        "TumorSize",
+        "ReceptorStatus",
+        "ResponseAssessment",
+        "PrimarySite",
+    }
+    assert all(coverage.span_count > 0 for coverage in domain.per_label)
+
+
 def test_missing_fixture_fails_with_domain_only_evidence(tmp_path: Path) -> None:
     report = run_domain_coverage(
         label_map={"missing_domain": ["Problem"]},

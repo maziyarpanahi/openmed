@@ -1,7 +1,7 @@
-"""Genomic-variant domain and HGVS offset-stability tests (issue #906).
+"""Clinical-domain label-map and offset-stability tests.
 
-No ClinVar/HGMD/dbSNP/COSMIC or any restricted variant database is bundled;
-the fixture is synthetic HGVS-style text only.
+No restricted clinical or variant database is bundled; fixtures are synthetic
+text used only for label-map and offset coverage.
 """
 
 from __future__ import annotations
@@ -12,9 +12,12 @@ from pathlib import Path
 import pytest
 
 from openmed.core.labels import (
+    ADL_ACTIVITY,
     AIRWAY_MANAGEMENT,
     ALLERGEN,
     ALLERGY_CRITICALITY,
+    ASSISTANCE_LEVEL,
+    BODY_SITE,
     CANONICAL_LABELS,
     CKD_STAGE,
     CLINICAL_CONCEPT,
@@ -26,21 +29,41 @@ from openmed.core.labels import (
     DEVICE_TYPE,
     DIALYSIS_MODALITY,
     DYSPNEA_GRADE,
+    FETAL_FINDING,
+    FUNCTIONAL_SCALE,
     GENE,
     GENE_SYMBOL,
+    GESTATIONAL_AGE,
+    GRAVIDITY_PARITY,
     GROWTH_PARAMETER,
     GROWTH_PERCENTILE,
     HIPAA_DEVICE_IDENTIFIER,
     IMPLANT_SITE,
+    HISTOLOGIC_FINDING,
+    HISTOLOGIC_GRADE,
+    IHC_STAIN,
+    MARGIN_STATUS,
+    MEASUREMENT,
+    MOBILITY_ABILITY,
     NUTRITIONAL_STATUS,
+    OBSTETRIC_EVENT,
+    OTHER,
     OXYGEN_SUPPORT,
+    PROCEDURE,
     PROTEIN_CHANGE,
     REACTION_MANIFESTATION,
     REACTION_SEVERITY,
+    RECEPTOR_STATUS,
     RENAL_FUNCTION_MEASURE,
     RESPIRATORY_FINDING,
     RISK_HIGH,
+    SPECIMEN_TYPE,
     SPIROMETRY_MEASURE,
+    STAGE_GROUP,
+    TNM_M,
+    TNM_N,
+    TNM_T,
+    TUMOR_GRADE,
     URINE_FINDING,
     VARIANT_DESCRIPTOR,
     ZYGOSITY,
@@ -156,6 +179,14 @@ PULMONOLOGY_FIXTURE = (
 )
 
 
+FUNCTIONAL_STATUS_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "functional_status.jsonl"
+)
+
+
 class TestPulmonologyDomain:
     def test_domain_resolves(self):
         assert "pulmonology" in available_domains()
@@ -240,6 +271,14 @@ PEDIATRICS_GROWTH_FIXTURE = (
 )
 
 
+ONCOLOGY_STAGING_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "oncology_staging.jsonl"
+)
+
+
 ALLERGY_INTOLERANCE_FIXTURE = (
     Path(__file__).resolve().parents[2]
     / "fixtures"
@@ -252,6 +291,14 @@ MEDICAL_DEVICE_FIXTURE = (
     / "fixtures"
     / "clinical"
     / "medical_device.jsonl"
+)
+
+
+PATHOLOGY_HISTOLOGY_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "pathology_histology.jsonl"
 )
 
 
@@ -536,6 +583,405 @@ class TestPediatricsGrowthDomain:
                 assert row["text"][entity["start"] : entity["end"]] == entity["text"], (
                     entity
                 )
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
+
+
+class TestFunctionalStatusDomain:
+    """Functional-status and ADL label coverage (issue #911)."""
+
+    EXPECTED_LABELS = [
+        "ADLActivity",
+        "AssistanceLevel",
+        "MobilityAbility",
+        "AssistiveDevice",
+        "FunctionalScale",
+        "CognitiveStatus",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "ADLActivity": ADL_ACTIVITY,
+        "AssistanceLevel": ASSISTANCE_LEVEL,
+        "MobilityAbility": MOBILITY_ABILITY,
+        "AssistiveDevice": "DEVICE",
+        "FunctionalScale": FUNCTIONAL_SCALE,
+        "CognitiveStatus": OTHER,
+    }
+    EXPECTED_ENTITIES = [
+        ("AssistanceLevel", 0, 11, "Independent"),
+        ("ADLActivity", 17, 24, "feeding"),
+        ("AssistanceLevel", 26, 45, "requires assistance"),
+        ("ADLActivity", 51, 58, "bathing"),
+        ("MobilityAbility", 60, 69, "transfers"),
+        ("AssistanceLevel", 75, 87, "minimal help"),
+        ("AssistiveDevice", 96, 102, "walker"),
+        ("FunctionalScale", 104, 120, "Barthel Index 75"),
+        ("CognitiveStatus", 122, 139, "cognitively alert"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in FUNCTIONAL_STATUS_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves(self):
+        assert "functional_status" in available_domains()
+        assert get_default_labels("functional_status") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_label(label) == expected
+
+    def test_new_labels_have_complete_metadata(self):
+        for label in (
+            ADL_ACTIVITY,
+            ASSISTANCE_LEVEL,
+            MOBILITY_ABILITY,
+            FUNCTIONAL_SCALE,
+        ):
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert risk_level_for(label) == "low"
+            assert system_hints_for(label)
+            assert hipaa_class_for(label)
+
+    def test_fixture_reports_offline_per_label_coverage(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not score functional scales" in disclaimer
+        assert {entity["label"] for entity in row["entities"]} == set(
+            self.EXPECTED_LABELS
+        )
+
+    def test_fixture_entities_match_expected(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"], (
+                    entity
+                )
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
+
+
+OBSTETRICS_GYNECOLOGY_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "obstetrics_gynecology.jsonl"
+)
+
+
+class TestObstetricsGynecologyDomain:
+    """Synthetic obstetrics and gynecology coverage for issue #907."""
+
+    EXPECTED_LABELS = [
+        "GravidityParity",
+        "GestationalAge",
+        "FetalFinding",
+        "MenstrualHistory",
+        "ObstetricEvent",
+        "GynecologicFinding",
+        "DeliveryMode",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "GravidityParity": GRAVIDITY_PARITY,
+        "GestationalAge": GESTATIONAL_AGE,
+        "FetalFinding": FETAL_FINDING,
+        "MenstrualHistory": OTHER,
+        "ObstetricEvent": OBSTETRIC_EVENT,
+        "GynecologicFinding": CONDITION,
+        "DeliveryMode": PROCEDURE,
+    }
+    EXPECTED_ENTITIES = [
+        ("GravidityParity", 12, 16, "G3P2"),
+        ("GestationalAge", 18, 26, "34 weeks"),
+        ("FetalFinding", 28, 47, "cephalic, EFW 2200g"),
+        ("MenstrualHistory", 68, 82, "regular cycles"),
+        ("ObstetricEvent", 101, 124, "prior cesarean delivery"),
+        ("GynecologicFinding", 147, 162, "uterine fibroid"),
+        ("DeliveryMode", 179, 195, "vaginal delivery"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in OBSTETRICS_GYNECOLOGY_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves_with_exact_labels(self):
+        assert "obstetrics_gynecology" in available_domains()
+        assert get_default_labels("obstetrics_gynecology") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == CLINICAL_CONCEPT
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+        assert hipaa_class_for(expected)
+
+    def test_fixture_loads_with_human_review_disclaimer(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not compute gestational age" in disclaimer
+        assert "risk" in disclaimer
+        assert "human review" in disclaimer
+
+    def test_fixture_entities_match_expected(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+        assert {entity["label"] for entity in row["entities"]} == set(
+            self.EXPECTED_LABELS
+        )
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"], (
+                    entity
+                )
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
+
+
+class TestPathologyHistologyDomain:
+    """Synthetic pathology and histology label coverage for issue #903."""
+
+    EXPECTED_LABELS = [
+        "SpecimenType",
+        "GrossDescription",
+        "HistologicFinding",
+        "HistologicGrade",
+        "MarginStatus",
+        "ImmunohistochemistryStain",
+        "MitoticCount",
+        "TissueSite",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "SpecimenType": SPECIMEN_TYPE,
+        "GrossDescription": OTHER,
+        "HistologicFinding": HISTOLOGIC_FINDING,
+        "HistologicGrade": HISTOLOGIC_GRADE,
+        "MarginStatus": MARGIN_STATUS,
+        "ImmunohistochemistryStain": IHC_STAIN,
+        "MitoticCount": MEASUREMENT,
+        "TissueSite": BODY_SITE,
+    }
+    EXPECTED_ENTITIES = [
+        ("SpecimenType", 15, 32, "skin punch biopsy"),
+        ("GrossDescription", 53, 71, "tan-white fragment"),
+        ("HistologicFinding", 93, 116, "nests of atypical cells"),
+        ("HistologicGrade", 136, 148, "intermediate"),
+        ("MarginStatus", 165, 173, "negative"),
+        ("ImmunohistochemistryStain", 203, 215, "CK7 positive"),
+        ("MitoticCount", 232, 244, "3 per 10 HPF"),
+        ("TissueSite", 259, 263, "skin"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in PATHOLOGY_HISTOLOGY_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves_and_generic_fallback_remains_available(self):
+        assert "pathology_histology" in available_domains()
+        assert get_default_labels("pathology_histology") == self.EXPECTED_LABELS
+        assert get_default_labels("unknown_pathology_domain") == get_default_labels(
+            "generic"
+        )
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_have_complete_clinical_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == CLINICAL_CONCEPT
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+
+    def test_fixture_covers_every_label_with_valid_offsets(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "human review" in disclaimer
+        assert "not clinical guidance" in disclaimer
+        assert "medical decision" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+        assert {entity[0] for entity in actual_entities} == set(self.EXPECTED_LABELS)
+
+        for label, start, end, entity_text in actual_entities:
+            assert row["text"][start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
+
+
+class TestOncologyStagingDomain:
+    """TNM and tumor-descriptor domain coverage for issue #864."""
+
+    EXPECTED_LABELS = [
+        "TumorCategory",
+        "NodeCategory",
+        "MetastasisCategory",
+        "StageGroup",
+        "TumorGrade",
+        "TumorSize",
+        "ReceptorStatus",
+        "ResponseAssessment",
+        "PrimarySite",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "TumorCategory": TNM_T,
+        "NodeCategory": TNM_N,
+        "MetastasisCategory": TNM_M,
+        "StageGroup": STAGE_GROUP,
+        "TumorGrade": TUMOR_GRADE,
+        "TumorSize": MEASUREMENT,
+        "ReceptorStatus": RECEPTOR_STATUS,
+        "ResponseAssessment": OTHER,
+        "PrimarySite": BODY_SITE,
+    }
+    EXPECTED_ENTITIES = [
+        ("TumorCategory", 25, 28, "pT2"),
+        ("NodeCategory", 29, 31, "N0"),
+        ("MetastasisCategory", 32, 34, "M0"),
+        ("StageGroup", 36, 45, "Stage IIA"),
+        ("TumorGrade", 47, 60, "tumor grade 2"),
+        ("TumorSize", 73, 79, "3.4 cm"),
+        ("ReceptorStatus", 81, 92, "ER-positive"),
+        ("ResponseAssessment", 94, 110, "partial response"),
+        ("PrimarySite", 125, 131, "breast"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in ONCOLOGY_STAGING_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves_with_all_display_labels(self):
+        assert "oncology_staging" in available_domains()
+        assert get_default_labels("oncology_staging") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_have_canonical_policy_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == CLINICAL_CONCEPT
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+
+    def test_fixture_covers_every_label_and_stage_group_offsets(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "descriptive" in disclaimer
+        assert "human review" in disclaimer
+        assert "medical decisions" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+        assert {entity[0] for entity in actual_entities} == set(self.EXPECTED_LABELS)
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
                 ns, ne = document.offset_map.original_span_to_normalized(
                     entity["start"], entity["end"]
                 )

@@ -87,6 +87,26 @@ evidence. When those pointers are unchanged, the SDK tag uses the retained
 last-green model evidence and the tag-driven package, platform, and repository
 gates.
 
+## SDK readiness evidence
+
+For an SDK candidate that retains model targets, use the explicit SDK stream:
+
+```bash
+python -m openmed.eval.release_readiness --sdk-baseline v2.3.0 \
+  --migration-guide docs/migration/2.3-to-2.5.md \
+  --api-compat-report api-surface-diff.json \
+  --e2e-report e2e-golden-report.json --version 2.5.0 \
+  --output release-readiness-report.json --json
+```
+
+This mode verifies the baseline is an ancestor stable tag, requires exact
+`models.jsonl` and retained `gates/baseline.json` contents, and compares every
+model pointer target across registry schema representations. Changed or
+missing evidence fails closed. It does not claim new model qualification.
+Model candidates use `--gate-report` with signed evaluation evidence; the two
+CLI modes cannot be combined. Both streams require API, documentation,
+disclaimer, and golden-suite checks, and emit signed readiness reports.
+
 ## Manual Model Orchestration
 
 OpenMed does not build, convert, evaluate, or publish models on a GitHub Actions
