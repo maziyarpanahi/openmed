@@ -192,6 +192,7 @@ classification:
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
+    - clinical/summarization.md
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
