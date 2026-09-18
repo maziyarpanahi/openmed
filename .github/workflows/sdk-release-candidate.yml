@@ -1,0 +1,99 @@
+name: SDK Release Candidate
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/sdk-release-candidate.yml'
+      - 'openmed/__about__.py'
+      - 'openmed/eval/release_readiness.py'
+      - 'docs/release/v2.5.0.md'
+      - 'docs/migration/2.3-to-2.5.md'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable SDK version to prepare.
+        required: true
+        default: 2.5.0
+      api_base_ref:
+        description: Previous stable SDK tag.
+        required: true
+        default: v2.3.0
+      migration_guide:
+        description: Reviewed migration guide for this SDK candidate.
+        required: true
+        default: docs/migration/2.3-to-2.5.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RELEASE_VERSION: ${{ inputs.version || '2.5.0' }}
+      API_BASE_REF: ${{ inputs.api_base_ref || 'v2.3.0' }}
+      MIGRATION_GUIDE: ${{ inputs.migration_guide || 'docs/migration/2.3-to-2.5.md' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ env.CANDIDATE_SHA }}
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          version: "0.11.28"
+      - name: Install locked gate dependencies
+        run: uv sync --frozen --extra dev --python 3.11
+      - name: Check version and API compatibility
+        run: |
+          uv run --frozen python scripts/release/check_release_version.py --version "$RELEASE_VERSION"
+          mkdir -p artifacts/sdk-readiness
+          uv run --frozen python scripts/release/api_surface_diff.py \
+            "$API_BASE_REF" "$CANDIDATE_SHA" \
+            --json artifacts/sdk-readiness/api-compat.json \
+            --check "$MIGRATION_GUIDE"
+      - name: Run end-to-end golden suite
+        run: |
+          uv run --frozen pytest \
+            tests/integration/test_end_to_end.py \
+            tests/unit/eval/test_golden_fixtures.py \
+            tests/unit/eval/test_i18n_golden_fixtures.py \
+            --junitxml=artifacts/sdk-readiness/golden.xml -q
+          uv run --frozen python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          root = ElementTree.parse("artifacts/sdk-readiness/golden.xml").getroot()
+          cases = list(root.iter("testcase"))
+          failed = any(case.find("failure") is not None or case.find("error") is not None for case in cases)
+          executed = sum(case.find("skipped") is None for case in cases)
+          if failed or executed == 0:
+              raise SystemExit("golden suite has failures or no executed tests")
+          Path("artifacts/sdk-readiness/e2e.json").write_text(json.dumps({
+              "passed": True, "suite": "golden_v2", "executed": executed,
+              "head_sha": os.environ["CANDIDATE_SHA"],
+          }, indent=2) + "\n")
+          PY
+      - name: Verify SDK readiness without model promotion
+        run: |
+          uv run --frozen python -m openmed.eval.release_readiness \
+            --sdk-baseline "$API_BASE_REF" \
+            --migration-guide "$MIGRATION_GUIDE" \
+            --api-compat-report artifacts/sdk-readiness/api-compat.json \
+            --e2e-report artifacts/sdk-readiness/e2e.json \
+            --version "$RELEASE_VERSION" \
+            --output artifacts/sdk-readiness/readiness.json --json
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-release-readiness
+          if-no-files-found: error
+          path: artifacts/sdk-readiness/

@@ -239,3 +239,29 @@ def test_grapheme_break_checker_agrees_with_full_segmentation():
         expected.add(0)
         for index in range(len(text) + 1):
             assert starts_cluster(index) == (index in expected), (text, index)
+
+
+def test_privacy_span_refinement_builds_boundary_state_once(monkeypatch):
+    text = "  alice@example.test and  "
+    calls: list[str] = []
+    original_factory = grapheme_spans.grapheme_break_checker
+
+    def counted_factory(value: str):
+        calls.append(value)
+        return original_factory(value)
+
+    monkeypatch.setattr(
+        grapheme_spans,
+        "grapheme_break_checker",
+        counted_factory,
+    )
+
+    start, end = refine_privacy_filter_span(
+        "private_email",
+        0,
+        len(text),
+        text,
+    )
+
+    assert text[start:end] == "alice@example.test"
+    assert calls == [text]

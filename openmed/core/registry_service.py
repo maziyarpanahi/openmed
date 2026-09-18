@@ -13,6 +13,15 @@ from pathlib import Path
 from typing import Any
 
 from .audit import stable_hash
+from .registry_errors import (
+    RegistryError as RegistryError,
+)
+from .registry_errors import (
+    RegistryGateError as RegistryGateError,
+)
+from .registry_errors import (
+    RegistryStateError as RegistryStateError,
+)
 
 REGISTRY_STATE_SCHEMA_VERSION = 1
 REGISTRY_STATE_PATH = (
@@ -27,18 +36,6 @@ _SEMVER_RE = re.compile(
     r"(?:\.(?P<minor>\d+)(?:\.(?P<patch>\d+))?)?(?=-|$)",
     re.IGNORECASE,
 )
-
-
-class RegistryError(RuntimeError):
-    """Base error for offline registry operations."""
-
-
-class RegistryStateError(RegistryError):
-    """Raised when committed registry state is invalid or incoherent."""
-
-
-class RegistryGateError(RegistryError):
-    """Raised when a pointer target lacks matching releasable gate evidence."""
 
 
 Clock = Callable[[], datetime]
@@ -91,6 +88,13 @@ def load_registry_state(
     if not isinstance(payload, Mapping):
         raise RegistryStateError("registry state must be a JSON object")
     state = copy.deepcopy(dict(payload))
+    if state.get("schema_version") == 2:
+        from .registry_slots import load_registry_state as load_slots
+
+        raw = load_slots(state_path)
+        return _slot_family_view(
+            raw, _rows_by_repo(_load_manifest_rows(MODEL_MANIFEST_PATH))
+        )
     _validate_state_shape(state)
     return state
 
@@ -225,6 +229,21 @@ class RegistryService:
         self._rows_by_repo = _rows_by_repo(self._rows)
         self._gate_reports = dict(gate_reports or {})
         self._clock = clock
+        self._slot_service: SlotRegistryService | None = None
+        if self.state_path.is_file():
+            try:
+                raw = json.loads(self.state_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RegistryStateError("could not load registry state") from exc
+            if isinstance(raw, Mapping) and raw.get("schema_version") == 2:
+                self._slot_service = SlotRegistryService(
+                    manifest_path=self.manifest_path,
+                    state_path=self.state_path,
+                    gate_reports=self._gate_reports,
+                    clock=self._clock,
+                )
+                self._sync_slot_view()
+                return
         self._state = load_registry_state(self.state_path, missing_ok=True)
         self._validate_coherence(self._state)
 
@@ -259,6 +278,16 @@ class RegistryService:
 
         row = self._require_manifest_row(repo_id)
         family = str(row["family"])
+        if self._slot_service is not None:
+            _, target_slot = self._slot_service._require_releasable_gate(
+                repo_id, gate_report
+            )
+            matches = self._family_slots(family)
+            if matches and matches != [target_slot]:
+                raise RegistryStateError("family operation cannot create a second slot")
+            self._slot_service.promote(repo_id, gate_report=gate_report)
+            self._sync_slot_view()
+            return self.state
         report = self._require_releasable_gate(repo_id, family, gate_report)
         candidate = copy.deepcopy(self._state)
         entry = _ensure_family_entry(candidate, family)
@@ -293,6 +322,16 @@ class RegistryService:
         gate_report: Any | None = None,
     ) -> dict[str, Any]:
         """Move one named pointer to a manifest checkpoint with a releasable gate."""
+
+        if self._slot_service is not None:
+            self._slot_service.flip_pointer(
+                self._family_slot(family),
+                name,
+                target,
+                gate_report=gate_report,
+            )
+            self._sync_slot_view()
+            return self.state
 
         if name not in REGISTRY_POINTER_NAMES:
             raise RegistryStateError(
@@ -334,6 +373,13 @@ class RegistryService:
     ) -> dict[str, Any]:
         """Repoint ``latest`` to ``last_green`` and record rollback lineage."""
 
+        if self._slot_service is not None:
+            self._slot_service.rollback(
+                self._family_slot(family), gate_report=gate_report
+            )
+            self._sync_slot_view()
+            return self.state
+
         canonical = self._canonical_family(family, required=False)
         current_entry = self._state["families"].get(canonical)
         if current_entry is None:
@@ -370,8 +416,29 @@ class RegistryService:
     def save(self) -> Path:
         """Persist current validated state with canonical stable formatting."""
 
+        if self._slot_service is not None:
+            return self._slot_service.save()
         self._validate_coherence(self._state)
         return _write_state_atomic(self.state_path, self._state)
+
+    def _sync_slot_view(self) -> None:
+        assert self._slot_service is not None
+        self._state = _slot_family_view(self._slot_service.state, self._rows_by_repo)
+        self._validate_coherence(self._state)
+
+    def _family_slots(self, family: str) -> list[str]:
+        assert self._slot_service is not None
+        return sorted(
+            slot
+            for slot in self._slot_service.state["slots"]
+            if slot.split("::", 1)[0].casefold() == family.casefold()
+        )
+
+    def _family_slot(self, family: str) -> str:
+        matches = self._family_slots(family)
+        if len(matches) != 1:
+            raise RegistryStateError("family must resolve to exactly one registry slot")
+        return matches[0]
 
     def _canonical_family(self, family: str, *, required: bool = True) -> str:
         candidates = {
@@ -636,3 +703,49 @@ def _write_state_atomic(path: Path, state: Mapping[str, Any]) -> Path:
             temporary.unlink(missing_ok=True)
         raise
     return path
+
+
+def _slot_family_view(
+    state: Mapping[str, Any],
+    rows_by_repo: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Project a uniquely mapped slot state onto the released family contract."""
+
+    from .registry_slots import registry_state_errors as slot_errors
+
+    errors = slot_errors(list(rows_by_repo.values()), state)
+    if errors:
+        raise RegistryStateError("; ".join(errors))
+    result = empty_registry_state()
+    for slot, entry in state["slots"].items():
+        repo_id = next(iter(entry["checkpoints"]))
+        family = str(rows_by_repo[repo_id]["family"])
+        if family in result["families"]:
+            raise RegistryStateError(
+                "multiple registry slots require SlotRegistryService"
+            )
+        result["families"][family] = {
+            "versions": {repo: semantic_version(repo) for repo in entry["checkpoints"]},
+            "pointers": copy.deepcopy(entry["pointers"]),
+            "lineage": copy.deepcopy(entry["lineage"]),
+        }
+    return result
+
+
+# Slot-based registry operations are an explicit additive API. Import after the
+# family implementation so both services share the established exception types.
+from .registry_slots import (  # noqa: E402
+    RegistryMigrationError as RegistryMigrationError,
+)
+from .registry_slots import (
+    SlotRegistryService as SlotRegistryService,
+)
+from .registry_slots import (
+    migrate_registry_state as migrate_registry_state,
+)
+from .registry_slots import (
+    migrate_registry_state_file as migrate_registry_state_file,
+)
+from .registry_slots import (
+    registry_slot_key as registry_slot_key,
+)
