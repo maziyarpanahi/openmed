@@ -24,7 +24,7 @@ El entorno local principal de OpenMed realiza la extracción y la desidentificac
 </p>
 
 <p>
-  <b>2,266 entradas del manifiesto</b> &nbsp;·&nbsp; <b>34 idiomas PII respaldados por modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 entradas del manifiesto</b> &nbsp;·&nbsp; <b>35 idiomas PII respaldados por modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ En hosts que no son Apple Silicon, los nombres de modelo MLX se sustituyen autom
 
 ---
 
-## PII multilingüe (37 rutas admitidas; 34 respaldadas por modelos)
+## PII multilingüe (38 rutas admitidas; 35 respaldadas por modelos)
 
 Extracción y des-identificación en `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` y `tr`: **el catálogo registrado de modelos PII** en total.
 
