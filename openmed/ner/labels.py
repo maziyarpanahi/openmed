@@ -74,6 +74,12 @@ _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
         "requires human review; this catalog is not clinical guidance and does "
         "not make device, treatment, or safety decisions."
     ),
+    "mental_health": (
+        "Substance-use and SDOH (social-determinants-of-health) entities are "
+        "out of scope for this domain and remain owned by OM-056. Mental-health "
+        "spans are high-sensitivity content for redaction review; this catalog "
+        "is extraction metadata only and does not make clinical decisions."
+    ),
     "functional_status": (
         "This map captures documented activities of daily living, assistance, "
         "mobility, assistive-device mentions, functional-scale references, and "

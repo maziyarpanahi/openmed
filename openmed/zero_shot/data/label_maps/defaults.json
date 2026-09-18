@@ -345,5 +345,23 @@
     "ObstetricEvent",
     "GynecologicFinding",
     "DeliveryMode"
+  ],
+  "immunology": [
+    "Allergen",
+    "AllergicReaction",
+    "Immunization",
+    "Antibody"
+  ],
+  "mental_health": [
+    "PsychiatricSymptom",
+    "Diagnosis",
+    "Medication",
+    "Therapy"
+  ],
+  "dentistry": [
+    "Tooth",
+    "DentalCondition",
+    "DentalProcedure",
+    "Restoration"
   ]
 }
