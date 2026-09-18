@@ -16,6 +16,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added duplicate-cue validation for status vocabularies: cues that collide after the
+  existing Unicode, case, and whitespace normalization are rejected on load, both
+  within one status and across statuses, with value-free errors (#3104).
 - Added duplicate and conflicting sense validation for abbreviation inventories: equivalent
   candidates, short forms that normalize together, and repeated JSON keys now fail on load
   instead of being silently dropped, and one long form under distinct semantic types is kept
