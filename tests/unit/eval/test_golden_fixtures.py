@@ -47,6 +47,7 @@ from openmed.core.pii_i18n import (
     validate_kannada_aadhaar,
     validate_kannada_indian_phone,
     validate_karnataka_pin,
+    validate_japanese_my_number,
     validate_latvian_personas_kods,
     validate_maharashtra_pin,
     validate_malaysian_mykad,
@@ -1684,6 +1685,7 @@ _ID_TRAP_VALIDATORS: dict[str, tuple[Callable[[str], bool], ...]] = {
     "te": (validate_aadhaar,),
     "pt": (validate_portuguese_cpf,),
     "ar": (validate_egyptian_national_id,),
+    "ja": (validate_japanese_my_number,),
     "tr": (validate_turkish_tckn,),
 }
 
@@ -1757,10 +1759,7 @@ def test_per_language_date_traps_cover_all_wired_languages():
 
 def test_per_language_id_traps_invalid_ids_fail_validators():
     """Valid IDs pass their language's checksum validator; invalid hard
-    negatives fail it.  For ``ja`` there is no My Number checksum validator
-    in the repository, so the fixture explicitly uses
-    ``checksum_status="not_validated"`` with a ``format_mismatch`` hard
-    negative instead of a checksum failure.
+    negatives fail it.
     """
     for fixture in _id_trap_fixtures():
         lang = fixture.language
@@ -1768,11 +1767,6 @@ def test_per_language_id_traps_invalid_ids_fail_validators():
         valid_id = valid_span.text
         hn = fixture.metadata["hard_negatives"][0]
         invalid_id = hn["text"]
-
-        if lang == "ja":
-            assert valid_span.metadata["checksum_status"] == "not_validated"
-            assert hn["reason"] == "format_mismatch"
-            continue
 
         validators = _ID_TRAP_VALIDATORS[lang]
         assert any(v(valid_id) for v in validators), (
