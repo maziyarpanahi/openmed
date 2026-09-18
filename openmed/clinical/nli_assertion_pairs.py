@@ -302,7 +302,11 @@ def _coerce_temporality_fields(
         raw_value = source.get(key, _MISSING)
         if raw_value is not _MISSING:
             normalized = _normalize_bool(raw_value, field_name=key)
-            values.append(HYPOTHETICAL if normalized else RECENT)
+            if raw_temporality is not _MISSING:
+                if normalized != (values[0] == HYPOTHETICAL):
+                    raise _inconsistent("temporality/hypothetical")
+            else:
+                values.append(HYPOTHETICAL if normalized else RECENT)
 
     if not values:
         return None

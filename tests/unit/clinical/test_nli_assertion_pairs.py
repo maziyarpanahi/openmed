@@ -9,6 +9,7 @@ import pytest
 from openmed.clinical import (
     AFFIRMED,
     CERTAIN,
+    HISTORICAL,
     HYPOTHETICAL,
     NEGATED,
     NLI_ASSERTION_PAIR_ADVISORY,
@@ -247,3 +248,33 @@ def test_invalid_offsets_fail_without_echoing_text() -> None:
 def test_pair_disclaimer_requires_human_review() -> None:
     assert "human review" in NLI_ASSERTION_PAIR_ADVISORY
     assert "autonomous clinical decision" in NLI_ASSERTION_PAIR_ADVISORY
+
+
+@pytest.mark.parametrize("flag", ["hypothetical", "is_hypothetical"])
+def test_historical_nonhypothetical_metadata_round_trips(flag: str) -> None:
+    pair = build_nli_pair(
+        SYNTHETIC_PREMISE,
+        SYNTHETIC_HYPOTHESIS,
+        premise_assertion={**_assertion(temporality=HISTORICAL), flag: False},
+        hypothesis_assertion=_assertion(),
+    )
+    rebuilt = build_nli_pair(
+        SYNTHETIC_PREMISE,
+        SYNTHETIC_HYPOTHESIS,
+        premise_assertion=pair.premise_assertion.to_dict(),
+        hypothesis_assertion=pair.hypothesis_assertion.to_dict(),
+    )
+    assert rebuilt == pair
+
+
+def test_historical_hypothetical_conflict_is_rejected() -> None:
+    with pytest.raises(InconsistentAssertionMetadataError):
+        build_nli_pair(
+            SYNTHETIC_PREMISE,
+            SYNTHETIC_HYPOTHESIS,
+            premise_assertion={
+                **_assertion(temporality=HISTORICAL),
+                "hypothetical": True,
+            },
+            hypothesis_assertion=_assertion(),
+        )
