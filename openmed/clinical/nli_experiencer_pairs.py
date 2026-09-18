@@ -391,6 +391,20 @@ def _parse_metadata_source(value: object) -> "ExperiencerMetadata | None":
     experiencer: NliExperiencerClass = UNKNOWN_EXPERIENCER
     if raw_class is not _MISSING and raw_class is not None:
         experiencer = _normalize_class(raw_class)
+    classes = {
+        UNKNOWN_EXPERIENCER if mapping[key] is None else _normalize_class(mapping[key])
+        for key in _EXPERIENCER_KEYS
+        if key in mapping
+    }
+    if len(classes) > 1:
+        raise _inconsistent("experiencer")
+    resolved_flags = {
+        _coerce_bool(mapping[key], field_name="experiencer resolved")
+        for key in _RESOLVED_KEYS
+        if key in mapping and mapping[key] is not None
+    }
+    if len(resolved_flags) > 1:
+        raise _inconsistent("experiencer resolved")
     if resolved_value is _MISSING or resolved_value is None:
         resolved: bool | None = None
     else:
@@ -592,6 +606,8 @@ def _normalize_score(value: object) -> float | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int | float):
+        raise _invalid("NLI score")
+    if not 0.0 <= value <= 1.0:
         raise _invalid("NLI score")
     score = float(value)
     if not math.isfinite(score) or not 0.0 <= score <= 1.0:

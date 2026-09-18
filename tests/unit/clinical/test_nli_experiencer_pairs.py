@@ -294,3 +294,31 @@ def test_invalid_experiencer_does_not_echo_sensitive_value() -> None:
 def test_advisory_requires_human_review() -> None:
     assert "qualified human review" in NLI_EXPERIENCER_PAIR_ADVISORY
     assert "autonomous clinical decision" in NLI_EXPERIENCER_PAIR_ADVISORY
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"experiencer": "patient", "subject": "family"},
+        {"experiencer": "patient", "resolved": True, "is_resolved": False},
+    ],
+)
+def test_conflicting_direct_aliases_cannot_pass_entailment_gate(
+    metadata: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="inconsistent"):
+        build_experiencer_nli_pair(
+            "synthetic premise",
+            "synthetic hypothesis",
+            premise_experiencer=metadata,
+            hypothesis_experiencer="patient",
+            predicted_label="entailment",
+        )
+
+
+@pytest.mark.parametrize("score", [10**400, -(10**400)])
+def test_oversized_scores_have_controlled_error(score: int) -> None:
+    with pytest.raises(ValueError, match="NLI score is invalid"):
+        build_experiencer_nli_pair(
+            "synthetic premise", "synthetic hypothesis", predicted_score=score
+        )
