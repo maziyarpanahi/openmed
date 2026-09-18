@@ -179,6 +179,7 @@ classification:
     - clinical/code-crosswalk.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
+    - clinical/nli-verification.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/medication-reconciliation.md
@@ -293,6 +294,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - language-packs.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
