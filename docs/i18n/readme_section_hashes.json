@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "09c1e4f0fa4b7c88a2d765358c54df3cf43ef00053bf7ff39a530cf1bdc86f72",
+          "source_sha256": "bec0df1adf6a3c27b5f56af2e289ae7beb382d35db63c622bad320e4a925d234",
           "translation_heading": "__preamble__",
-          "translation_sha256": "8de41d31497706ed32695a111e4278eb561cb5c892e0ba33d67352f93f018877"
+          "translation_sha256": "50546e40f8e75d8e123547119d67129eb7e77e12cd6fb3040e62a121cd317a52"
         },
         {
           "source_heading": "See it in action",
@@ -36,15 +36,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "e7d394dcec81e746a211bcdf9052b670ddf82262f7ed6a016b773f84a0aa737b",
+          "source_sha256": "f6f0910147b3b13cae6ca3b8f807002f595f4c06be9fd303f0848527b6e0691c",
           "translation_heading": "Apple डिवाइस पर: Swift, MLX और iOS",
-          "translation_sha256": "71c2c5f152572df69c90e2a87d88ab610fbb0c9225d12a06ce3604c25d77baa3"
+          "translation_sha256": "a97adadb5cf320d8f41d96fc010bc7a9ac92b764b380d592c8e746218104a00e"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "1a55067fcca8a152cce0f43e051c15c4279b90b1ae27875147a30f6cc5711e3d",
+          "source_sha256": "bcb7fb1d78d175c5289f041e6be0a0cc62b9bd72e09152ae07528ac953787805",
           "translation_heading": "Android डिवाइस पर — Kotlin और ONNX Runtime Mobile",
-          "translation_sha256": "b93eafe71ee57e295142e329e8ebc74faf8aca4056200cb059f5744daf16e176"
+          "translation_sha256": "2e0fc2c6bbe568f636baee73b16e7f3e643b115a4f37d27238e04623a29b7991"
         },
         {
           "source_heading": "How it works",
@@ -77,9 +77,9 @@
           "translation_sha256": "903ecbd112324deef7821e67ce8f0dd96a4e683e0cf24322fb43df777d43d8b9"
         },
         {
-          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
-          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
-          "translation_heading": "बहुभाषी PII (36 समर्थित रूट; 33 मॉडल-समर्थित)",
+          "source_heading": "Multilingual PII (37 supported routes; 34 model-backed)",
+          "source_sha256": "173cf3f8a13f1de26312c0f7a0ed5231349eae7b0db080ab17361a7580501ada",
+          "translation_heading": "बहुभाषी PII (37 समर्थित रूट; 34 मॉडल-समर्थित)",
           "translation_sha256": "9b4ae308b42172af074bfadc0832269aef34510e5c10893543b00f6eafdf9f0d"
         },
         {
@@ -90,9 +90,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "8cf2824e08f2bbb569430d02087c4a89b06f149bf0c74b058a5b96e93f42bb91",
+          "source_sha256": "998e1106ecd1a649bc94289d46a307d165ceb77aa7ab4b180fae102737360437",
           "translation_heading": "दस्तावेज़ीकरण",
-          "translation_sha256": "7499e3f2f830c6a6a02e8898869953dbbfd9419a68f792064880bed8647e40bc"
+          "translation_sha256": "79a4f06e4f8f484743ad2e2ae973e692bc6ad315b500088f668d0788bc990853"
         },
         {
           "source_heading": "Meet the mascot",
@@ -142,9 +142,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "09c1e4f0fa4b7c88a2d765358c54df3cf43ef00053bf7ff39a530cf1bdc86f72",
+          "source_sha256": "bec0df1adf6a3c27b5f56af2e289ae7beb382d35db63c622bad320e4a925d234",
           "translation_heading": "__preamble__",
-          "translation_sha256": "454f43065f599195215d52ce94a53028f04896b33f31ec7026ec7519f4b34eba"
+          "translation_sha256": "0980e5e4080a9a28e10d4caef3d08dff0fa35403a301d64a61170adf0289568d"
         },
         {
           "source_heading": "See it in action",
@@ -172,15 +172,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "e7d394dcec81e746a211bcdf9052b670ddf82262f7ed6a016b773f84a0aa737b",
+          "source_sha256": "f6f0910147b3b13cae6ca3b8f807002f595f4c06be9fd303f0848527b6e0691c",
           "translation_heading": "Kwenye kifaa cha Apple: Swift, MLX na iOS",
-          "translation_sha256": "d154fa30a286e3593568e17021dfdeef5ca9e9c1296c82ae93f6b9725c1c917d"
+          "translation_sha256": "7fccb58ae21874bd9817f86c1a6a6919d455b0bf545625e382bf03e9c1b2dbcd"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "1a55067fcca8a152cce0f43e051c15c4279b90b1ae27875147a30f6cc5711e3d",
+          "source_sha256": "bcb7fb1d78d175c5289f041e6be0a0cc62b9bd72e09152ae07528ac953787805",
           "translation_heading": "Kwenye kifaa cha Android — Kotlin na ONNX Runtime Mobile",
-          "translation_sha256": "a95830b65b8873646b451443daa8b76eafe914fefb84a2675f2ee71e7f6f76d3"
+          "translation_sha256": "eb5579417375a9bb4fb007ac16225c6508daeacf92e840ab352a3ba1fed6ca1b"
         },
         {
           "source_heading": "How it works",
@@ -213,9 +213,9 @@
           "translation_sha256": "2c16671646ed5d5c9392578dfc826f21b79a7536cef01b40645a6327a851563e"
         },
         {
-          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
-          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
-          "translation_heading": "PII ya lugha nyingi (njia 36 zinazotumika; 33 zikitumia modeli)",
+          "source_heading": "Multilingual PII (37 supported routes; 34 model-backed)",
+          "source_sha256": "173cf3f8a13f1de26312c0f7a0ed5231349eae7b0db080ab17361a7580501ada",
+          "translation_heading": "PII ya lugha nyingi (njia 37 zinazotumika; 34 zikitumia modeli)",
           "translation_sha256": "cdc7bd9aba12b767116b23428013ae57bd1dc887a01e8b4c96269fb651ad0765"
         },
         {
@@ -226,9 +226,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "8cf2824e08f2bbb569430d02087c4a89b06f149bf0c74b058a5b96e93f42bb91",
+          "source_sha256": "998e1106ecd1a649bc94289d46a307d165ceb77aa7ab4b180fae102737360437",
           "translation_heading": "Nyaraka",
-          "translation_sha256": "65a320d11163847714345fad4240ca32fa1cb5741c446c2eec4b779acbf66144"
+          "translation_sha256": "4a21720f593b46ed57c4f56ca38920be8e21585fe64158f038f0adf3cf5ffe6d"
         },
         {
           "source_heading": "Meet the mascot",
@@ -278,9 +278,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "09c1e4f0fa4b7c88a2d765358c54df3cf43ef00053bf7ff39a530cf1bdc86f72",
+          "source_sha256": "bec0df1adf6a3c27b5f56af2e289ae7beb382d35db63c622bad320e4a925d234",
           "translation_heading": "__preamble__",
-          "translation_sha256": "46eea0f62e599cfdcd238ce54f67816114f3c35372fef4b2769ba53022522aba"
+          "translation_sha256": "8f79fd99abf60c90a54631bec556d393978dbfd91e0fcc236b7593af0e2e32c0"
         },
         {
           "source_heading": "See it in action",
@@ -308,15 +308,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "e7d394dcec81e746a211bcdf9052b670ddf82262f7ed6a016b773f84a0aa737b",
+          "source_sha256": "f6f0910147b3b13cae6ca3b8f807002f595f4c06be9fd303f0848527b6e0691c",
           "translation_heading": "在 Apple 设备上本地运行：Swift、MLX 与 iOS",
-          "translation_sha256": "e50f420ed0110e09e4472a44709d787ca753f1c447ec2ec19e96a4010ca47262"
+          "translation_sha256": "0a1e8d9a84d9dd24aeccc5a409d540c59bad04a75a8f34ef83253838320710d2"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "1a55067fcca8a152cce0f43e051c15c4279b90b1ae27875147a30f6cc5711e3d",
+          "source_sha256": "bcb7fb1d78d175c5289f041e6be0a0cc62b9bd72e09152ae07528ac953787805",
           "translation_heading": "在 Android 设备上本地运行：Kotlin 与 ONNX Runtime Mobile",
-          "translation_sha256": "fa3dccd8091275d3d2b89001d34fe915071e26de39410fb9fbeec1fa08e6c371"
+          "translation_sha256": "e0f045da7709844013a479e6198fec5a8369398734ee0f2404bd2a6c2a2b32da"
         },
         {
           "source_heading": "How it works",
@@ -349,9 +349,9 @@
           "translation_sha256": "c86a5f3b107cd56cf58f72bb771934b1b1afc021d24f07f85d5325b14d45b62e"
         },
         {
-          "source_heading": "Multilingual PII (36 supported routes; 33 model-backed)",
-          "source_sha256": "81836d380e8e4632f05d70bf6be67af7c626f2161ae290d036aadee7f99f1c19",
-          "translation_heading": "多语言 PII（36 条支持的路由；33 条由模型支持）",
+          "source_heading": "Multilingual PII (37 supported routes; 34 model-backed)",
+          "source_sha256": "173cf3f8a13f1de26312c0f7a0ed5231349eae7b0db080ab17361a7580501ada",
+          "translation_heading": "多语言 PII（37 条支持的路由；34 条由模型支持）",
           "translation_sha256": "f8323da192e3830334567dfe802aa94f114673a68a6744c78628a6489754b8a1"
         },
         {
@@ -362,9 +362,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "8cf2824e08f2bbb569430d02087c4a89b06f149bf0c74b058a5b96e93f42bb91",
+          "source_sha256": "998e1106ecd1a649bc94289d46a307d165ceb77aa7ab4b180fae102737360437",
           "translation_heading": "文档",
-          "translation_sha256": "f6a6765959b182f318ea2c747711b4fee0fd5a40578dda58605228e62db72faf"
+          "translation_sha256": "10bafea334c4e5758c0c601430c7c3b5fd96430a9a869f6a2ccd6b0b2b03bdbe"
         },
         {
           "source_heading": "Meet the mascot",
