@@ -90,6 +90,7 @@ from openmed.core.labels import (
     IHC_STAIN,
     IMAGING_MODALITY,
     IMEI,
+    IMMUNIZATION,
     INDICATION,
     INSULIN_REGIMEN,
     INTAKE_OUTPUT,
@@ -137,6 +138,7 @@ from openmed.core.labels import (
     PROCEDURE,
     PROTEIN,
     PROTEIN_CHANGE,
+    PSYCH_SYMPTOM,
     REACTION_MANIFESTATION,
     REACTION_SEVERITY,
     RECEPTOR_STATUS,
@@ -161,6 +163,7 @@ from openmed.core.labels import (
     TNM_M,
     TNM_N,
     TNM_T,
+    TOOTH,
     TUMOR_GRADE,
     UNIT,
     URINE_FINDING,
@@ -1055,6 +1058,9 @@ class TestClinicalLabelsAreAdditive:
             ASSISTANCE_LEVEL,
             MOBILITY_ABILITY,
             FUNCTIONAL_SCALE,
+            IMMUNIZATION,
+            PSYCH_SYMPTOM,
+            TOOTH,
         }
     )
 
