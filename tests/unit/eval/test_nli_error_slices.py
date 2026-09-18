@@ -236,3 +236,10 @@ def test_invalid_iterable_errors_do_not_expose_source(target: str) -> None:
             build_nli_error_slice_report(PrivateIterable())
     formatted = "".join(traceback.format_exception(caught.value))
     assert "synthetic-private-5550199" not in formatted
+
+
+def test_report_loader_rejects_unsupported_slice() -> None:
+    payload = build_nli_error_slice_report(_records()).to_dict()
+    payload["slices"]["unsupported"] = payload["slices"]["negation"]
+    with pytest.raises(ValueError, match="unsupported clinical slice"):
+        NLIErrorSliceReport.from_dict(payload)

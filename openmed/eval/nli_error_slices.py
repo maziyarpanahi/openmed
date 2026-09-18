@@ -597,6 +597,8 @@ class NLIErrorSliceReport:
         raw_slices = payload.get("slices")
         if not isinstance(raw_slices, Mapping):
             raise ValueError("NLI error-slice reports require slice mappings")
+        if set(raw_slices) - set(CLINICAL_NLI_PHENOMENA):
+            raise ValueError("report contains an unsupported clinical slice")
         provenance = NLIErrorSliceProvenance.from_mapping(
             _plain_mapping(payload.get("provenance", {}), field_name="provenance")
         )
