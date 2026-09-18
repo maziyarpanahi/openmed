@@ -805,9 +805,12 @@ def _size_category(row: Dict[str, Any]) -> str:
 
 def _languages_from_row(row: Dict[str, Any]) -> List[str]:
     """Return manifest languages, inferring Portuguese for tagged NER repos."""
+    languages = list(row.get("languages") or [])
+    if languages:
+        return languages
     if _portuguese_ner_category_from_row(row) is not None:
         return ["pt"]
-    return list(row.get("languages") or [])
+    return languages
 
 
 def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:

@@ -270,6 +270,18 @@ class TestPortugueseNerRegistry:
         assert info.category == "Anatomy"
         assert info.languages == ["pt"]
 
+    @pytest.mark.parametrize("languages", (["pt", "en"], ["en"]))
+    def test_explicit_manifest_languages_are_preserved(self, monkeypatch, languages):
+        row = {**PT_ANATOMY_NER_MANIFEST_ROW, "languages": languages}
+        registry = build_registry([row])
+        info = next(iter(registry.values()))
+        monkeypatch.setattr(model_registry, "OPENMED_MODELS", registry)
+
+        assert info.category == "Anatomy"
+        assert info.languages == languages
+        assert bool(get_ner_models_by_language("pt")) == ("pt" in languages)
+        assert get_ner_models_by_language("en")
+
     def test_ner_models_by_language_excludes_english_models(self, monkeypatch):
         registry = build_registry(
             [PT_ANATOMY_NER_MANIFEST_ROW, EN_ANATOMY_NER_MANIFEST_ROW]
