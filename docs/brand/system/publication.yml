@@ -185,6 +185,8 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/medication-reconciliation.md
+    - clinical/nli-numeric-precheck.md
+    - clinical/nli-medication-status.md
     - clinical/event-timeline.md
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
