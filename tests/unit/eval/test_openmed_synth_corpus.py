@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
+
+import pytest
 
 from openmed.cli.main import main
 from openmed.core.labels import CANONICAL_LABELS
@@ -30,6 +34,36 @@ def test_generation_is_deterministic_and_seed_sensitive() -> None:
     assert first != different
     assert corpus_content_hash(first) == corpus_content_hash(second)
     assert corpus_content_hash(first) != corpus_content_hash(different)
+
+
+def test_generation_is_timezone_invariant() -> None:
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset is unavailable on this platform")
+
+    original_timezone = os.environ.get("TZ")
+    hashes: set[str] = set()
+    try:
+        for timezone in ("UTC", "Europe/Paris", "America/Los_Angeles"):
+            os.environ["TZ"] = timezone
+            time.tzset()
+            hashes.add(
+                corpus_content_hash(
+                    generate_corpus(
+                        seed=DEFAULT_SEED,
+                        size=DEFAULT_CORPUS_SIZE,
+                    )
+                )
+            )
+    finally:
+        if original_timezone is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = original_timezone
+        time.tzset()
+
+    assert hashes == {
+        "sha256:a2d87fc9b40789b40b1d4bb753711b0c6bab7ac681fb319fdf92480f29cdae28"
+    }
 
 
 def test_generated_rows_have_valid_canonical_spans_and_expected_output() -> None:

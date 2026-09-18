@@ -8,7 +8,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -125,12 +125,12 @@ def _single_line(value: Any) -> str:
 def _build_values(faker: Faker) -> dict[str, str]:
     """Generate one record's locale-aware synthetic PHI values."""
 
+    birth_date = _DATE_START + timedelta(
+        days=faker.random_int(min=0, max=(_DATE_END - _DATE_START).days)
+    )
     return {
         PERSON: _single_line(faker.name()),
-        DATE_OF_BIRTH: faker.date_between_dates(
-            date_start=_DATE_START,
-            date_end=_DATE_END,
-        ).isoformat(),
+        DATE_OF_BIRTH: birth_date.isoformat(),
         PHONE: _single_line(faker.phone_number()),
         ID_NUM: _single_line(faker.medical_record_number()),
         STREET_ADDRESS: _single_line(faker.street_address()),
