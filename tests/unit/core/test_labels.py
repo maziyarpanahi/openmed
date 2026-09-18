@@ -5,6 +5,7 @@ import pytest
 from openmed.core.labels import (
     ABNORMAL_FLAG,
     ACCOUNT_NUMBER,
+    ADL_ACTIVITY,
     ADMINISTRATION_ROUTE,
     AGE,
     AIRWAY_MANAGEMENT,
@@ -17,6 +18,7 @@ from openmed.core.labels import (
     ANTIBIOTIC,
     API_KEY,
     ASA_CLASS,
+    ASSISTANCE_LEVEL,
     BIC,
     BIOMARKER,
     BIOMEDICAL_LABEL_KIND,
@@ -56,22 +58,28 @@ from openmed.core.labels import (
     ETHNICITY,
     EYE_COLOR,
     FEEDING_ROUTE,
+    FETAL_FINDING,
     FINDING,
     FIRST_NAME,
     FORM,
     FREQUENCY,
+    FUNCTIONAL_SCALE,
     GENDER,
     GENE,
     GENE_OR_GENE_PRODUCT,
     GENE_SYMBOL,
+    GESTATIONAL_AGE,
     GI_SCORE,
     GI_SYMPTOM,
     GLYCEMIC_MEASURE,
     GPS_COORDINATES,
+    GRAVIDITY_PARITY,
     GROWTH_PARAMETER,
     GROWTH_PERCENTILE,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
+    HISTOLOGIC_FINDING,
+    HISTOLOGIC_GRADE,
     HORMONE_LEVEL,
     IBAN,
     ID_NUM,
@@ -79,6 +87,7 @@ from openmed.core.labels import (
     ID_SUBTYPE_NATIONAL_ID,
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
+    IHC_STAIN,
     IMAGING_MODALITY,
     IMEI,
     INDICATION,
@@ -98,14 +107,17 @@ from openmed.core.labels import (
     LITECOIN_ADDRESS,
     LOCATION,
     MAC_ADDRESS,
+    MARGIN_STATUS,
     MASKED_NUMBER,
     MEASUREMENT,
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
+    MOBILITY_ABILITY,
     NURSING_RISK_SCORE,
     NUTRITION_TARGET,
     NUTRITIONAL_STATUS,
+    OBSTETRIC_EVENT,
     OCCUPATION,
     ORDINAL_DIRECTION,
     ORGAN,
@@ -127,6 +139,7 @@ from openmed.core.labels import (
     PROTEIN_CHANGE,
     REACTION_MANIFESTATION,
     REACTION_SEVERITY,
+    RECEPTOR_STATUS,
     REFERENCE_RANGE,
     RENAL_FUNCTION_MEASURE,
     RESPIRATORY_FINDING,
@@ -134,14 +147,21 @@ from openmed.core.labels import (
     ROUTE,
     SEVERITY,
     SPECIES,
+    SPECIMEN,
+    SPECIMEN_TYPE,
     SPIROMETRY_MEASURE,
     SSN,
+    STAGE_GROUP,
     STREET_ADDRESS,
     STRENGTH,
     SUSCEPTIBILITY,
     THYROID_MEASURE,
     TIME,
     TISSUE,
+    TNM_M,
+    TNM_N,
+    TNM_T,
+    TUMOR_GRADE,
     UNIT,
     URINE_FINDING,
     URL,
@@ -843,6 +863,49 @@ class TestNursingObservationConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestFunctionalStatusConceptLabels:
+    """Functional-status and activities-of-daily-living labels (issue #911)."""
+
+    NEW_LABELS = (
+        ADL_ACTIVITY,
+        ASSISTANCE_LEVEL,
+        MOBILITY_ABILITY,
+        FUNCTIONAL_SCALE,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("ADL activity", ADL_ACTIVITY),
+            ("activity of daily living", ADL_ACTIVITY),
+            ("assistance level", ASSISTANCE_LEVEL),
+            ("independent", ASSISTANCE_LEVEL),
+            ("requires assistance", ASSISTANCE_LEVEL),
+            ("mobility ability", MOBILITY_ABILITY),
+            ("ambulation", MOBILITY_ABILITY),
+            ("transfer ability", MOBILITY_ABILITY),
+            ("assistive device", DEVICE),
+            ("functional scale", FUNCTIONAL_SCALE),
+            ("Barthel Index", FUNCTIONAL_SCALE),
+            ("Katz", FUNCTIONAL_SCALE),
+            ("cognitive status", OTHER),
+        ],
+    )
+    def test_functional_status_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_functional_status_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_functional_status_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -910,6 +973,7 @@ class TestClinicalLabelsAreAdditive:
             CONDITION,
             MEDICATION,
             LAB_TEST,
+            SPECIMEN,
             PROCEDURE,
             BODY_SITE,
             DEVICE,
@@ -967,11 +1031,30 @@ class TestClinicalLabelsAreAdditive:
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
+            GRAVIDITY_PARITY,
+            GESTATIONAL_AGE,
+            FETAL_FINDING,
+            OBSTETRIC_EVENT,
+            HISTOLOGIC_FINDING,
+            HISTOLOGIC_GRADE,
+            MARGIN_STATUS,
+            IHC_STAIN,
+            SPECIMEN_TYPE,
+            TNM_T,
+            TNM_N,
+            TNM_M,
+            STAGE_GROUP,
+            TUMOR_GRADE,
+            RECEPTOR_STATUS,
             ETHNICITY,
             INTAKE_OUTPUT,
             LINE_DRAIN_TUBE,
             NURSING_RISK_SCORE,
             CARE_INTERVENTION,
+            ADL_ACTIVITY,
+            ASSISTANCE_LEVEL,
+            MOBILITY_ABILITY,
+            FUNCTIONAL_SCALE,
         }
     )
 
