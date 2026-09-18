@@ -62,7 +62,7 @@ def test_generation_is_timezone_invariant() -> None:
         time.tzset()
 
     assert hashes == {
-        "sha256:a2d87fc9b40789b40b1d4bb753711b0c6bab7ac681fb319fdf92480f29cdae28"
+        "sha256:56f7bab49f18143fb4acedaac701eab9b3d43856b79b634a0f4d330285d4fb54"
     }
 
 

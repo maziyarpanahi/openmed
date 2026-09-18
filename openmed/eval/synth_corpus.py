@@ -122,7 +122,26 @@ def _single_line(value: Any) -> str:
     return " ".join(str(value).split())
 
 
-def _build_values(faker: Faker) -> dict[str, str]:
+def _stable_postcode(faker: Faker, locale: str) -> str:
+    """Generate a locale-shaped postcode from Faker's seeded integer stream."""
+
+    if locale == "pt_PT":
+        digits = f"{faker.random_int(min=1_000_000, max=9_999_999):07d}"
+        return f"{digits[:4]}-{digits[4:]}"
+
+    bounds = {
+        "de_DE": (1_000, 99_999, 5),
+        "en_US": (10_000, 99_999, 5),
+        "es_ES": (1_000, 52_999, 5),
+        "fr_FR": (1_000, 98_999, 5),
+        "hi_IN": (110_000, 999_999, 6),
+        "zh_CN": (100_000, 999_999, 6),
+    }
+    minimum, maximum, width = bounds[locale]
+    return f"{faker.random_int(min=minimum, max=maximum):0{width}d}"
+
+
+def _build_values(faker: Faker, *, locale: str) -> dict[str, str]:
     """Generate one record's locale-aware synthetic PHI values."""
 
     birth_date = _DATE_START + timedelta(
@@ -134,7 +153,7 @@ def _build_values(faker: Faker) -> dict[str, str]:
         PHONE: _single_line(faker.phone_number()),
         ID_NUM: _single_line(faker.medical_record_number()),
         STREET_ADDRESS: _single_line(faker.street_address()),
-        ZIPCODE: _single_line(faker.postcode()),
+        ZIPCODE: _stable_postcode(faker, locale),
         LOCATION: _single_line(faker.city()),
         EMAIL: _single_line(faker.email()),
     }
@@ -247,7 +266,7 @@ def generate_corpus(
         register_clinical_providers(faker)
         row_seed = seed + (index * 1_000_003)
         faker.seed_instance(row_seed)
-        values = _build_values(faker)
+        values = _build_values(faker, locale=profile.locale)
         rows.append(
             _render_record(
                 profile,

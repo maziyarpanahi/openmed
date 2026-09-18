@@ -14,10 +14,10 @@ credential is needed.
 | Labels | `DATE_OF_BIRTH`, `EMAIL`, `ID_NUM`, `LOCATION`, `PERSON`, `PHONE`, `STREET_ADDRESS`, `ZIPCODE` |
 | Label distribution | 14 spans per label; 112 spans total |
 | Languages | `de`, `en`, `es`, `fr`, `hi`, `pt`, `zh` |
-| Generation method | Seeded Faker locales plus OpenMed `clinical_ids.py` providers; gold offsets and mask outputs are computed from the rendered segments |
+| Generation method | Seeded Faker locales plus OpenMed `clinical_ids.py` providers; dates and locale-shaped postcodes use stable seeded integer draws; gold offsets and mask outputs are computed from the rendered segments |
 | Default seed | 2352 |
 | License | Apache-2.0 |
-| Content hash | sha256:a2d87fc9b40789b40b1d4bb753711b0c6bab7ac681fb319fdf92480f29cdae28 |
+| Content hash | sha256:56f7bab49f18143fb4acedaac701eab9b3d43856b79b634a0f4d330285d4fb54 |
 
 The content hash is the SHA-256 digest of the canonical JSONL emitted for the
 default seed and size. Re-running the generator with the same inputs must
