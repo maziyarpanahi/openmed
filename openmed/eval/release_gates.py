@@ -2446,8 +2446,10 @@ def _gold_agreement_kappa_evidence(
 def _agreement_kappa(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
+    if not -1.0 <= value <= 1.0:
+        return None
     result = float(value)
-    if not math.isfinite(result) or not -1.0 <= result <= 1.0:
+    if not math.isfinite(result):
         return None
     return result
 
