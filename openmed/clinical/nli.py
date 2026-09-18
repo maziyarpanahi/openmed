@@ -233,13 +233,15 @@ def _normalize_result(result: Mapping[str, Any]) -> NLIResult:
     normalized_label = label.strip().casefold()
     if normalized_label not in NLI_LABELS:
         allowed = ", ".join(NLI_LABELS)
-        raise ValueError(f"NLI backend returned {label!r}; expected {allowed}")
+        raise ValueError(f"NLI backend returned an invalid label; expected {allowed}")
 
     score = result.get("score")
     if isinstance(score, bool) or not isinstance(score, int | float):
         raise TypeError("NLI backend result score must be a number")
+    if not 0.0 <= score <= 1.0:
+        raise ValueError("NLI backend result score must be finite and in [0, 1]")
     normalized_score = float(score)
-    if not math.isfinite(normalized_score) or not 0.0 <= normalized_score <= 1.0:
+    if not math.isfinite(normalized_score):
         raise ValueError("NLI backend result score must be finite and in [0, 1]")
     return {
         "label": normalized_label,  # type: ignore[typeddict-item]
@@ -289,12 +291,12 @@ def _classify_pair(premise: str, hypothesis: str) -> NLIResult:
     if not premise_tokens or not hypothesis_tokens:
         return {"label": "neutral", "score": 0.5}
 
-    if _has_opposite_terms(premise_tokens, hypothesis_tokens):
-        return {"label": "contradiction", "score": 0.95}
-
     shared = premise_tokens & hypothesis_tokens
     if not shared:
         return {"label": "neutral", "score": 0.5}
+
+    if _has_opposite_terms(premise_tokens, hypothesis_tokens):
+        return {"label": "contradiction", "score": 0.95}
 
     premise_polarity = _polarity(premise)
     hypothesis_polarity = _polarity(hypothesis)
