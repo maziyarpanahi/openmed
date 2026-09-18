@@ -173,6 +173,7 @@ classification:
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
     - clinical/nli-label-contract.md
+    - clinical/nli-assertion-pairs.md
     - clinical/nli-experiencer-pairs.md
     - clinical/concept-grounding.md
     - grounding.md
@@ -184,6 +185,7 @@ classification:
     - clinical/nli-verification.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/nli-temporal-pairs.md
     - clinical/medication-reconciliation.md
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
