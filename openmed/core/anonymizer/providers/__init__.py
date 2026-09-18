@@ -19,6 +19,7 @@ from .clinical_ids import (
     AadhaarProvider,
     ABDMProvider,
     AfricanPhoneProvider,
+    BangladeshNIDProvider,
     BelgianRRNProvider,
     BulgarianEgnProvider,
     ChineseIdentifierProvider,
@@ -34,10 +35,15 @@ from .clinical_ids import (
     IndianIdentifierProvider,
     IndiaSurrogateProvider,
     IndonesianNIKProvider,
+    IranNationalIDProvider,
+    IrishPPSProvider,
     IsraeliTeudatZehutProvider,
+    JapaneseMyNumberProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MedicalRecordNumberProvider,
+    MexicanCURPProvider,
+    MexicanRFCProvider,
     MobileMoneyProvider,
     MpesaProvider,
     NPIProvider,
@@ -54,6 +60,7 @@ from .clinical_ids import (
     generate_abha_address,
     generate_abha_number,
     generate_african_phone,
+    generate_bangladesh_nid,
     generate_belgian_rrn,
     generate_bic,
     generate_bulgarian_egn,
@@ -77,9 +84,14 @@ from .clinical_ids import (
     generate_indian_pin,
     generate_indian_ration_card,
     generate_indonesian_nik,
+    generate_iran_national_id,
+    generate_irish_pps,
+    generate_japanese_my_number,
     generate_jmbg,
     generate_korean_rrn,
     generate_latvian_personas_kods,
+    generate_mexican_curp,
+    generate_mexican_rfc,
     generate_mpesa_transaction_code,
     generate_pan,
     generate_pesel,
@@ -112,11 +124,15 @@ from .clinical_ids import (
 )
 from .script_names import (
     DEVANAGARI_LANGUAGE_PACK,
+    GUJARATI_LANGUAGE_PACK,
     HAN_LANGUAGE_PACK,
+    KANNADA_LANGUAGE_PACK,
     SCRIPT_NAME_PACKS,
     TELUGU_LANGUAGE_PACK,
     generate_devanagari_name,
+    generate_gujarati_name,
     generate_han_name,
+    generate_kannada_name,
     generate_telugu_name,
 )
 
@@ -130,24 +146,23 @@ if TYPE_CHECKING:
         register_national_id,
     )
 
-_LAZY_REGISTRY_EXPORTS = frozenset(
-    {
-        "AUXILIARY_FAKER_PROVIDER_CLASSES",
-        "ID_PROVIDER_REGISTRY",
-        "NationalIdSpec",
-        "clinical_faker_provider_classes",
-        "get_national_id",
-        "register_national_id",
-    }
-)
+_LAZY_IMPORTS = {
+    "AUXILIARY_FAKER_PROVIDER_CLASSES": ".registry_ids",
+    "ID_PROVIDER_REGISTRY": ".registry_ids",
+    "NationalIdSpec": ".registry_ids",
+    "clinical_faker_provider_classes": ".registry_ids",
+    "get_national_id": ".registry_ids",
+    "register_national_id": ".registry_ids",
+}
 
 
 def __getattr__(name: str) -> Any:
     """Resolve registry-backed provider exports without creating an import cycle."""
 
-    if name not in _LAZY_REGISTRY_EXPORTS:
+    module_name = _LAZY_IMPORTS.get(name)
+    if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    value = getattr(import_module(".registry_ids", __name__), name)
+    value = getattr(import_module(module_name, __name__), name)
     globals()[name] = value
     return value
 
@@ -155,7 +170,7 @@ def __getattr__(name: str) -> Any:
 def __dir__() -> list[str]:
     """Return eager and lazy provider exports for interactive discovery."""
 
-    return sorted(set(globals()) | set(_LAZY_REGISTRY_EXPORTS))
+    return sorted(set(globals()) | set(_LAZY_IMPORTS))
 
 
 __all__ = [
@@ -164,11 +179,13 @@ __all__ = [
     "BelgianRRNProvider",
     "AfricanPhoneProvider",
     "AUXILIARY_FAKER_PROVIDER_CLASSES",
+    "BangladeshNIDProvider",
     "BulgarianEgnProvider",
     "ChineseIdentifierProvider",
     "ChineseNameProvider",
     "DanishCPRProvider",
     "DEVANAGARI_LANGUAGE_PACK",
+    "GUJARATI_LANGUAGE_PACK",
     "EastAfricanIdProvider",
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
@@ -178,15 +195,21 @@ __all__ = [
     "IndiaHealthIdProvider",
     "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
+    "IrishPPSProvider",
     "HAN_LANGUAGE_PACK",
+    "KANNADA_LANGUAGE_PACK",
     "ID_PROVIDER_REGISTRY",
     "IndonesianNIKProvider",
+    "IranNationalIDProvider",
     "IsraeliTeudatZehutProvider",
+    "JapaneseMyNumberProvider",
     "KoreanRRNProvider",
     "KENYA_MFL_SYNTHETIC_MAX",
     "KENYA_MFL_SYNTHETIC_MIN",
     "LatvianPersonasKodsProvider",
     "MedicalRecordNumberProvider",
+    "MexicanCURPProvider",
+    "MexicanRFCProvider",
     "MobileMoneyProvider",
     "MpesaProvider",
     "NPIProvider",
@@ -211,6 +234,7 @@ __all__ = [
     "generate_abha_address",
     "generate_abha_number",
     "generate_african_phone",
+    "generate_bangladesh_nid",
     "generate_bulgarian_egn",
     "generate_chinese_bank_card",
     "generate_chinese_given_name",
@@ -220,11 +244,13 @@ __all__ = [
     "generate_chinese_surname",
     "generate_danish_cpr",
     "generate_devanagari_name",
+    "generate_gujarati_name",
     "generate_hungarian_taj",
     "generate_gstin",
     "generate_ifsc",
     "generate_hong_kong_macau_permit",
     "generate_han_name",
+    "generate_kannada_name",
     "generate_estonian_isikukood",
     "generate_ethiopia_fayda",
     "generate_iban",
@@ -233,6 +259,9 @@ __all__ = [
     "generate_indian_driving_licence",
     "generate_indian_passport",
     "generate_indonesian_nik",
+    "generate_iran_national_id",
+    "generate_irish_pps",
+    "generate_japanese_my_number",
     "generate_indian_ration_card",
     "generate_jmbg",
     "generate_tanzania_nida",
@@ -248,6 +277,8 @@ __all__ = [
     "generate_voter_id_epic",
     "generate_korean_rrn",
     "generate_latvian_personas_kods",
+    "generate_mexican_curp",
+    "generate_mexican_rfc",
     "generate_mpesa_transaction_code",
     "generate_philhealth_pin",
     "generate_philsys_psn",

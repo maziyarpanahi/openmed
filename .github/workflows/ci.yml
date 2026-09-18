@@ -21,6 +21,15 @@ jobs:
       with:
         python-version: "3.11"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Detect CJK and Indic test changes
       id: i18n_changes
       env:
@@ -59,8 +68,7 @@ jobs:
 
     - name: Assert built wheel contains no restricted vocabulary data
       run: |
-        python -m pip install build
-        python -m build --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
+        uv build --wheel --out-dir "$RUNNER_TEMP/openmed-wheel"
         python scripts/release/check_license_policy.py \
           --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
 
@@ -124,6 +132,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -131,7 +140,7 @@ jobs:
 
     - name: Install validation dependencies
       run: |
-        uv sync --frozen --extra dev --python 3.11
+        uv sync --frozen --extra dev --extra grounding-validate --python 3.11
 
     - name: Fetch pinned HL7 FHIR validator
       run: |
@@ -145,14 +154,17 @@ jobs:
       run: |
         uv run python -m openmed.eval.suites.grounding_export \
           --validator-jar "$RUNNER_TEMP/validator_cli.jar" \
-          --output grounding-export-validation.json
+          --output grounding-export-validation.json \
+          --markdown-output grounding-export-validation.md
 
     - name: Upload grounding export validation report
       if: always() && hashFiles('grounding-export-validation.json') != ''
       uses: actions/upload-artifact@v7
       with:
         name: grounding-export-validation
-        path: grounding-export-validation.json
+        path: |
+          grounding-export-validation.json
+          grounding-export-validation.md
 
   lockfile-drift:
     runs-on: ubuntu-latest
@@ -162,6 +174,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -188,6 +201,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -238,6 +252,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -281,6 +296,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -329,6 +345,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -360,23 +377,47 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-spacy-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-spacy-
-          ${{ runner.os }}-pip-
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install spaCy test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,spacy]"
+        uv sync --frozen --extra dev --extra spacy --python 3.11
 
     - name: Run spaCy adapter tests
       run: |
-        pytest tests/unit/interop/test_spacy_component.py -q
+        uv run pytest tests/unit/interop/test_spacy_component.py -q
+
+  browser-extension:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/extension/package-lock.json
+
+    - name: Install extension dependencies
+      working-directory: web/extension
+      run: npm ci
+
+    - name: Install headless Chromium
+      working-directory: web/extension
+      run: npx playwright install --with-deps chromium
+
+    - name: Test browser extension
+      working-directory: web/extension
+      run: npm test
 
   yasbd-integration:
     needs: [repo-policy, lint]
@@ -395,6 +436,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -421,27 +463,26 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-i18n-cjk-indic-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-i18n-cjk-indic-
-          ${{ runner.os }}-pip-
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install CJK and Indic test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,zh,indic]"
+        uv sync --frozen --extra dev --extra zh --extra indic --python 3.11
 
     - name: Run CJK and Indic fixture tests
       run: |
-        pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
+        uv run pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
 
     - name: Trust-CI no-raw-PHI logging guard
       run: |
-        pytest tests/unit/test_no_raw_text_logging.py -q
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
   build:
     needs:
@@ -452,6 +493,7 @@ jobs:
     - spacy-integration
     - yasbd-integration
     - i18n-cjk-indic
+    - browser-extension
     if: >-
       always() &&
       needs.repo-policy.result == 'success' &&
@@ -460,6 +502,7 @@ jobs:
       needs.security.result == 'success' &&
       needs.spacy-integration.result == 'success' &&
       needs.yasbd-integration.result == 'success' &&
+      needs.browser-extension.result == 'success' &&
       (
         needs.i18n-cjk-indic.result == 'success' ||
         needs.i18n-cjk-indic.result == 'skipped'
@@ -476,6 +519,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -483,7 +527,7 @@ jobs:
 
     - name: Build package
       run: |
-        uv run --with build python -m build
+        uv build
 
     - name: Enforce wheel size budget and record language-extra footprints
       run: |

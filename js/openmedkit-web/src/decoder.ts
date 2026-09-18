@@ -1,8 +1,11 @@
+import { alignTokenOffsets } from "./offsets";
 import {
   CANONICAL_LABELS,
   type CanonicalLabel,
   type DecodedEntitySpan,
   type PolicyLabel,
+  type RawTokenClassificationEntity,
+  type RawTokenClassificationOutput,
   type TokenClassificationEntity,
   type TokenClassificationOutput,
 } from "./types";
@@ -227,11 +230,11 @@ export function policyLabelFor(label: string): PolicyLabel {
 
 export function decodeBioTokenSpans(
   text: string,
-  output: TokenClassificationOutput,
+  output: RawTokenClassificationOutput,
   options: { threshold?: number } = {},
 ): DecodedEntitySpan[] {
   const threshold = options.threshold ?? 0;
-  const tokens = flattenTokenClassificationOutput(output)
+  const tokens = alignTokenOffsets(text, flattenTokenClassificationOutput(output))
     .map((token, fallbackIndex) => prepareToken(token, fallbackIndex))
     .filter((token): token is PreparedToken => token !== null)
     .sort((left, right) => left.index - right.index || left.start - right.start);
@@ -304,15 +307,21 @@ export function decodeBioTokenSpans(
 
 export function flattenTokenClassificationOutput(
   output: TokenClassificationOutput,
-): TokenClassificationEntity[] {
+): TokenClassificationEntity[];
+export function flattenTokenClassificationOutput(
+  output: RawTokenClassificationOutput,
+): RawTokenClassificationEntity[];
+export function flattenTokenClassificationOutput(
+  output: RawTokenClassificationOutput,
+): RawTokenClassificationEntity[] {
   if (output.length === 0) {
     return [];
   }
   const first = output[0];
   if (Array.isArray(first)) {
-    return (output as TokenClassificationEntity[][]).flat();
+    return (output as RawTokenClassificationEntity[][]).flat();
   }
-  return output as TokenClassificationEntity[];
+  return output as RawTokenClassificationEntity[];
 }
 
 export function trimSpanWhitespace(

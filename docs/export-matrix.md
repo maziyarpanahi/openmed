@@ -34,8 +34,8 @@ when a new family is added to the code.
 | RoBERTa | `roberta` | ✅ (via bert) | ✅ | ⚠️ INT4-if-recall-holds | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ backbone only |
 | XLM-RoBERTa | `xlm-roberta`, `xlm_roberta` | ✅ (via bert) | ✅ | ⚠️ INT4-if-recall-holds | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ backbone only |
 | DeBERTa-v2 | `deberta`, `deberta-v2` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ backbone only |
-| ModernBERT | — | ❌ family not in MLX allowlist | ❌ | ❌ | ❌ family not in CoreML allowlist | ❌ | ⚠️ upstream ONNX support required | ⚠️ same as ONNX (default) | ⚠️ same as ONNX (default) | ❌ |
-| Longformer | — | ❌ family not in MLX allowlist | ❌ | ❌ | ❌ family not in CoreML allowlist | ❌ | ⚠️ upstream ONNX support required | ⚠️ same as ONNX (default) | ⚠️ same as ONNX (default) | ❌ |
+| ModernBERT | `modernbert`, `modern-bert` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ⚠️ upstream ONNX support required | ⚠️ same as ONNX (default) | ⚠️ same as ONNX (default) | ❌ |
+| Longformer | `longformer` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ⚠️ upstream ONNX support required | ⚠️ same as ONNX (default) | ⚠️ same as ONNX (default) | ❌ |
 | OpenAI Privacy Filter | `openai-privacy-filter`, `privacy-filter`, `privacy-filter-nemotron`, `nemotron-privacy-filter`, `privacy-filter-multilingual`, `multilingual-privacy-filter` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ❌ no ONNX converter path today | ❌ | ❌ | ❌ |
 | GLiNER (span) | `gliner-uni-encoder-span` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | GLiClass | `gliclass-uni-encoder` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -59,10 +59,11 @@ truth is the backend code, but the essentials are:
   Any other architecture fails before tracing with an error that lists the
   supported families. See [CoreML Packaging](coreml-export.md).
 - **MLX enforces a family allowlist.** The MLX dispatcher resolves architectures
-  through `_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES` (BERT-family and
-  DeBERTa-v2) plus the MLX-custom set (`gliner-uni-encoder-span`,
-  `gliclass-uni-encoder`, `gliner-uni-encoder-token-relex`) and the privacy
-  filter family. Architectures outside the allowlist raise a clear
+  through `_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES` (BERT-family,
+  DeBERTa-v2, ModernBERT, and Longformer) plus the MLX-custom set
+  (`gliner-uni-encoder-span`, `gliclass-uni-encoder`,
+  `gliner-uni-encoder-token-relex`) and the privacy filter family.
+  Architectures outside the allowlist raise a clear
   "unsupported family" error rather than falling through silently. See
   [MLX Backend](mlx-backend.md).
 - **INT4 is certified only when recall holds.** `openmed.mlx.convert`
