@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from .code_provenance import (
     CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL,
+    GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
+    GROUNDING_CODE_PROVENANCE_EXTENSION_URL,
     USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER,
     USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL,
     UserSuppliedTerminologyProvenance,
     stamp_coding_provenance,
+    stamp_grounding_provenance,
     stamp_user_supplied_terminology_provenance,
 )
 from .codeable_concept import (
@@ -26,7 +29,10 @@ from .codeable_concept_check import (
 from .codeable_concept_simple import (
     codeable_concept_from_document_classification,
     codeable_concept_from_document_type,
+    codeable_concept_from_grounded_concept,
+    codeable_concept_from_grounded_span,
     document_type_codeable_concept,
+    grounded_concept_to_codeable_concept,
 )
 from .dhis2 import (
     DEFAULT_GENERALIZATION_LEVEL,
@@ -123,6 +129,8 @@ from .valueset import (
 
 __all__ = [
     "CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL",
+    "GROUNDING_CODE_PROVENANCE_EXTENSION_URL",
+    "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER",
     "USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL",
     "CONCEPT_NORMALIZATION_PROVENANCE_EXTENSION_URL",
@@ -165,6 +173,8 @@ __all__ = [
     "OpenEHRTemplate",
     "OpenEHRValidationResult",
     "build_reverse_index",
+    "codeable_concept_from_grounded_concept",
+    "codeable_concept_from_grounded_span",
     "build_clinical_document",
     "build_fhir_document",
     "build_ipa_patient_access",
@@ -189,9 +199,11 @@ __all__ = [
     "parse_operational_template",
     "postcoordinated_codeable_concept",
     "stamp_coding_provenance",
+    "stamp_grounding_provenance",
     "stamp_postcoordination_provenance",
     "stamp_user_supplied_terminology_provenance",
     "to_codeable_concept",
+    "grounded_concept_to_codeable_concept",
     "to_condition_occurrence",
     "document_type_codeable_concept",
     "to_csv",

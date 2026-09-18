@@ -674,6 +674,7 @@ _LOCALE_ID_METHODS = {
     "fr_MA": "moroccan_cin",
     "it_IT": "ssn",
     "es_ES": "nie",
+    "es_MX": "mexican_curp",
     "nl_NL": "ssn",
     "as_IN": "aadhaar",
     "en_IN": "aadhaar",
@@ -686,6 +687,7 @@ _LOCALE_ID_METHODS = {
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "nino",
+    "en_IE": "pps",
     "en_ET": "ethiopia_fayda",
     "en_TZ": "tanzania_nida",
     "en_UG": "uganda_nin",
@@ -698,6 +700,7 @@ _LOCALE_ID_METHODS = {
     "pl_PL": "pesel",
     "lv_LV": "personas_kods",
     "ko_KR": "korean_rrn",
+    "ja_JP": "my_number",
     "sv_SE": "ssn",
     "no_NO": "ssn",
     "th_TH": "thai_national_id",
@@ -900,6 +903,21 @@ def _india_health_id_surrogate(faker, original):
     return None
 
 
+def _mexican_id_surrogate(faker, original, *, locale):
+    """Return a type-preserving CURP/RFC surrogate for ``es_MX``."""
+    if locale != "es_MX" or not isinstance(original, str) or not original:
+        return None
+
+    from openmed.core.pii_i18n import validate_mexican_curp, validate_mexican_rfc
+
+    candidate = original.strip()
+    if validate_mexican_curp(candidate) and hasattr(faker, "mexican_curp"):
+        return faker.mexican_curp(candidate)
+    if validate_mexican_rfc(candidate) and hasattr(faker, "mexican_rfc"):
+        return faker.mexican_rfc(candidate)
+    return None
+
+
 def _gen_id_num(faker, original, *, locale):
     method = _LOCALE_ID_METHODS.get(locale)
     if locale == "bn_BD" and original:
@@ -918,6 +936,9 @@ def _gen_id_num(faker, original, *, locale):
     uscc = _uscc_surrogate(faker, original)
     if uscc is not None:
         return uscc
+    mexican_id = _mexican_id_surrogate(faker, original, locale=locale)
+    if mexican_id is not None:
+        return mexican_id
     mpesa = _mpesa_surrogate(faker, original)
     if mpesa is not None:
         return mpesa

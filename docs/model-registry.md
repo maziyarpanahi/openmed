@@ -9,6 +9,16 @@ OpenMed ships a manifest-backed registry (`openmed.core.model_registry.OPENMED_M
 checkpoint with metadata such as category, specialization, recommended confidence, Hugging Face IDs, device fit, and
 benchmark summaries. Use it to pick the right model, surface dropdowns in UIs, or validate incoming requests.
 
+## Family API compatibility
+
+`RegistryService` retains the v2.3 family-based signatures and schema-v1
+return values. Caller-owned v1 files remain usable without migration. The
+committed v2 state is exposed through a read-only family view when every
+family has one unambiguous slot; mutations retain the stored v2 schema and
+its coordinate checks. Multi-slot applications explicitly use
+`SlotRegistryService` and `openmed.core.registry_slots` helpers. See the
+[2.3-to-2.5 migration guide](migration/2.3-to-2.5.md) for both contracts.
+
 ## Exploring the registry
 
 ```python

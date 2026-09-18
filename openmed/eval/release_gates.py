@@ -29,7 +29,7 @@ from openmed.core.pii_i18n import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     SUPPORTED_LANGUAGES,
 )
-from openmed.core.registry_service import (
+from openmed.core.registry_slots import (
     REGISTRY_STATE_PATH,
     RegistryStateError,
     load_registry_state,
