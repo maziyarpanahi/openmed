@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,6 +25,7 @@ DEFAULT_SYNTHETIC_RADIOLOGY_PATH = (
 
 DUA_GATED_CORPORA: tuple[str, ...] = (
     "biored",
+    "cegs-ngrid",
     "i2b2",
     "n2c2",
     "n2c2-2018",
@@ -33,13 +35,19 @@ DUA_GATED_CORPORA: tuple[str, ...] = (
     "mednli",
     "made",
     "mimic",
+    "mimic-iv-bhc",
     RADGRAPH,
 )
 
 DUA_PATH_REMEDIATION: Mapping[str, str] = {
     "biored": "pass path=... or set OPENMED_BIORED_PATH",
+    "cegs-ngrid": "pass path=... or set OPENMED_CEGS_NGRID_PATH",
     "n2c2-2018": "pass path=... or set OPENMED_N2C2_2018_PATH",
     "n2c2-2022": "pass path=... or set OPENMED_N2C2_2022_PATH",
+    "shac": "pass path=... or set OPENMED_SHAC_PATH",
+    "thyme": "pass path=... or set OPENMED_THYME_PATH",
+    "mednli": "pass path=... or set OPENMED_MEDNLI_PATH",
+    "mimic-iv-bhc": "pass path=... or set OPENMED_MIMIC_IV_BHC_PATH",
 }
 
 
@@ -186,7 +194,7 @@ class DUACorpusStub:
 
 
 def dua_stub_for(name: str) -> DUACorpusStub:
-    key = name.lower()
+    key = name.strip().casefold().replace("_", "-")
     if key not in DUA_GATED_CORPORA:
         raise ValueError(f"unknown gated corpus: {name}")
     return DUACorpusStub(key)
@@ -200,6 +208,52 @@ def load_dua_corpus(
 
 def all_dua_stubs() -> Mapping[str, DUACorpusStub]:
     return {name: DUACorpusStub(name) for name in DUA_GATED_CORPORA}
+
+
+def require_credentialed_path(
+    path: str | Path | None,
+    *,
+    dataset: str,
+    authority: str,
+    env_var: str,
+) -> Path:
+    """Resolve one explicit local path without scanning the repository tree."""
+
+    raw_path = path if path is not None and str(path).strip() else None
+    if raw_path is None:
+        raw_path = os.environ.get(env_var)
+    if raw_path is None or not str(raw_path).strip():
+        raise DUACredentialRequired(
+            f"{authority} credentialed local path is required for {dataset}; "
+            f"pass path=... or set {env_var}. No corpus rows were loaded."
+        )
+
+    candidate = Path(raw_path).expanduser().resolve(strict=False)
+    repository_root = Path(__file__).resolve().parents[3]
+    if _is_relative_to(candidate, repository_root):
+        raise DUACredentialRequired(
+            f"{authority} data for {dataset} must stay outside the repository "
+            f"tree; refusing to read {candidate}. No corpus rows were loaded."
+        )
+    if not candidate.exists():
+        raise DUACredentialRequired(
+            f"{authority} credentialed path for {dataset} does not exist: "
+            f"{candidate}. No corpus rows were loaded."
+        )
+    if not candidate.is_file() and not candidate.is_dir():
+        raise DUACredentialRequired(
+            f"{authority} credentialed path for {dataset} must be a file or "
+            f"directory: {candidate}. No corpus rows were loaded."
+        )
+    return candidate
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
 
 def load_radgraph_fixtures(
@@ -427,4 +481,5 @@ __all__ = [
     "load_dua_corpus",
     "load_radgraph_fixtures",
     "load_synthetic_radiology_fixtures",
+    "require_credentialed_path",
 ]
