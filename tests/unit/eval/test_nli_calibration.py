@@ -169,7 +169,10 @@ def test_invalid_fixture_errors_do_not_echo_raw_text() -> None:
             ]
         )
 
+    import traceback
+
     assert secret not in str(raised.value)
+    assert secret not in "".join(traceback.format_exception(raised.value))
 
 
 @pytest.mark.parametrize("field", ["score", "threshold", "precision_floor"])

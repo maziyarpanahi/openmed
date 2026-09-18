@@ -798,10 +798,10 @@ def _normalise_gold_label(value: Any) -> str:
     }
     try:
         return aliases[normalized]
-    except KeyError as exc:
+    except KeyError:
         raise ValueError(
             "NLI calibration fixture has an unsupported gold label"
-        ) from exc
+        ) from None
 
 
 def _first_present(payload: Mapping[str, Any], *keys: str) -> Any:
