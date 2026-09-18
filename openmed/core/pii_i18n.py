@@ -550,6 +550,7 @@ _BENGALI_ASSAMESE_DIGIT_TRANSLATION = str.maketrans(
     "০১২৩৪৫৬৭৮৯",
     "0123456789",
 )
+_GUJARATI_DIGIT_TRANSLATION = str.maketrans("૦૧૨૩૪૫૬૭૮૯", "0123456789")
 _ODIA_DIGIT_TRANSLATION = str.maketrans("୦୧୨୩୪୫୬୭୮୯", "0123456789")
 _TAMIL_DIGIT_TRANSLATION = str.maketrans("௦௧௨௩௪௫௬௭௮௯", "0123456789")
 
@@ -593,6 +594,18 @@ def normalize_bengali_assamese_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_BENGALI_ASSAMESE_DIGIT_TRANSLATION)
+
+
+def normalize_gujarati_digits(text: str) -> str:
+    """Fold Gujarati decimal digits to ASCII without changing offsets.
+
+    Gujarati digits U+0AE6-U+0AEF are mapped one code point at a time;
+    non-digit characters remain unchanged.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_GUJARATI_DIGIT_TRANSLATION)
 
 
 def normalize_odia_digits(text: str) -> str:
@@ -1508,6 +1521,33 @@ def validate_assam_pin(text: str) -> bool:
         return False
     normalized = normalize_bengali_assamese_digits(text).strip()
     return validate_indian_pin(normalized) and 780_000 <= int(normalized) <= 789_999
+
+
+def validate_gujarati_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Gujarati decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_gujarati_digits(text))
+
+
+def validate_gujarati_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Gujarati digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_gujarati_digits(text)
+    )
+
+
+def validate_gujarat_daman_diu_pin(text: str) -> bool:
+    """Validate a Gujarat or Daman and Diu PIN in the 36xxxx-39xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_gujarati_digits(text).strip()
+    return validate_indian_pin(normalized) and 360_000 <= int(normalized) <= 399_999
+
+
+# Short alias retained for callers that refer to the allocation by state only.
+validate_gujarat_pin = validate_gujarat_daman_diu_pin
 
 
 def validate_bengali_aadhaar(text: str) -> bool:
@@ -6413,6 +6453,188 @@ _MARATHI_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_GUJARATI_DIGIT_CLASS = r"0-9\u0AE6-\u0AEF"
+_GUJARATI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0AEC-\u0AEF"
+_GUJARATI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0AE8-\u0AEF"
+_GUJARATI_BASE_LETTER = r"[\u0A85-\u0AB9]"
+_GUJARATI_NON_VIRAMA_MARK = (
+    r"[\u0A81-\u0A83\u0ABC\u0ABE-\u0AC5\u0AC7-\u0AC9"
+    r"\u0ACB-\u0ACC\u0AE2-\u0AE3]"
+)
+_GUJARATI_GRAPHEME = (
+    rf"{_GUJARATI_BASE_LETTER}{_GUJARATI_NON_VIRAMA_MARK}*"
+    rf"(?:\u0ACD[\u200C\u200D]?{_GUJARATI_BASE_LETTER}"
+    rf"{_GUJARATI_NON_VIRAMA_MARK}*)*"
+)
+_GUJARATI_NAME_STEM = rf"(?:{_GUJARATI_GRAPHEME}){{2,}}"
+_GUJARATI_FUSED_NAME = rf"{_GUJARATI_NAME_STEM}(?:ભાઈ|બેન)"
+_GUJARATI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["gu"]
+)
+
+_GUJARATI_NAME_CONTEXT = [
+    "શ્રી",
+    "શ્રીમતી",
+    "નામ",
+    "દર્દી",
+    "રોગી",
+    "patient",
+    "name",
+]
+_GUJARATI_DATE_CONTEXT = [
+    "જન્મ",
+    "જન્મ તારીખ",
+    "તારીખ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_GUJARATI_PHONE_CONTEXT = ["ફોન", "મોબાઇલ", "ફોન નંબર", "phone", "mobile"]
+_GUJARATI_AADHAAR_CONTEXT = [
+    "આધાર",
+    "આધાર નંબર",
+    "ઓળખ",
+    "aadhaar",
+    "aadhar",
+    "uidai",
+]
+_GUJARATI_PIN_CONTEXT = [
+    "પિન",
+    "પિન કોડ",
+    "ડાક",
+    "સરનામું",
+    "pin",
+    "postcode",
+    "postal",
+]
+_GUJARATI_ADDRESS_CONTEXT = ["સરનામું", "રસ્તો", "રોડ", "માર્ગ", "address"]
+
+_GUJARATI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<=શ્રી ){_GUJARATI_FUSED_NAME}(?![\w\u0A80-\u0AFF])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_GUJARATI_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<=શ્રીમતી ){_GUJARATI_FUSED_NAME}(?![\w\u0A80-\u0AFF])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_GUJARATI_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![\w\u0A80-\u0AFF]){_GUJARATI_FUSED_NAME}"
+        rf"(?![\w\u0A80-\u0AFF])",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_GUJARATI_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_GUJARATI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_GUJARATI_MONTH_PATTERN})\s+"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_GUJARATI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0AEF][1\u0AE7][\s-]?)?"
+        rf"[{_GUJARATI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_GUJARATI_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_GUJARATI_DIGIT_CLASS}]"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_GUJARATI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_gujarati_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[{_GUJARATI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{3}}"
+        rf"(?P<gu_aadhaar_sep>[ -])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?P=gu_aadhaar_sep)"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "national_id",
+        priority=14,
+        base_score=0.6,
+        context_words=_GUJARATI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_gujarati_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[3\u0AE9][6-9\u0AEC-\u0AEF]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "postcode",
+        priority=11,
+        base_score=0.45,
+        context_words=_GUJARATI_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_gujarat_daman_diu_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![\w\u0A80-\u0AFF])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,5}}[ \t]+"
+        rf"(?:(?:{_GUJARATI_GRAPHEME})+[ \t]+){{1,4}}"
+        rf"(?:રસ્તો|રોડ|માર્ગ|શેરી)"
+        rf"(?![\w\u0A80-\u0AFF])",
+        "street_address",
+        priority=8,
+        base_score=0.75,
+        context_words=_GUJARATI_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _BENGALI_ASSAMESE_DIGIT_CLASS = r"0-9\u09E6-\u09EF"
 _ASSAMESE_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u09EC-\u09EF"
 _ASSAMESE_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u09E8-\u09EF"
@@ -10658,6 +10880,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     ],
     "as": [
         *_ASSAMESE_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "gu": [
+        *_GUJARATI_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "bn": [
