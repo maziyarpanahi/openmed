@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from numbers import Real
 from types import MappingProxyType
 from typing import Literal, TypedDict
 
@@ -197,7 +198,11 @@ def normalize_result_polarity(
     """
 
     if explicit is not None:
-        if explicit not in {"detected", "not_detected", "equivocal"}:
+        if not isinstance(explicit, str) or explicit not in {
+            "detected",
+            "not_detected",
+            "equivocal",
+        }:
             raise ValueError(
                 "result polarity must be detected, not_detected, or equivocal"
             )
@@ -206,11 +211,11 @@ def normalize_result_polarity(
     normalized = " ".join(value.strip(_TRIM_RESULT_PUNCTUATION).split()).casefold()
     try:
         return BIOMARKER_RESULT_POLARITY_LEXICON[normalized]
-    except KeyError as exc:
+    except KeyError:
         raise ValueError(
-            f"no documented biomarker result polarity for {value!r}; "
+            "no documented biomarker result polarity; "
             "provide an explicit polarity on the result mention"
-        ) from exc
+        ) from None
 
 
 def assemble_biomarker_results(
@@ -246,6 +251,8 @@ def assemble_biomarker_results(
 
     if not isinstance(text, str):
         raise TypeError("text must be a string")
+    if isinstance(max_distance, bool) or not isinstance(max_distance, int):
+        raise TypeError("max_distance must be an integer")
     if max_distance < 0:
         raise ValueError("max_distance must be non-negative")
 
@@ -253,6 +260,8 @@ def assemble_biomarker_results(
     mentions_by_id: dict[str, Mapping[str, object]] = {}
     for index, raw_mention in enumerate(mentions):
         node, normalized_mention = _coerce_mention(text, raw_mention, index)
+        if node.node_id in mentions_by_id:
+            raise ValueError("biomarker mention ids must be unique")
         nodes.append(node)
         mentions_by_id[node.node_id] = normalized_mention
 
@@ -311,6 +320,10 @@ def _coerce_mention(
 
     node_id = str(raw_mention.get("id") or f"{role}:{start}:{end}:{index}")
     score = raw_mention.get("score")
+    if score is not None and (
+        isinstance(score, bool) or not isinstance(score, Real) or not 0 <= score <= 1
+    ):
+        raise ValueError("biomarker mention confidence must be between zero and one")
     text_hash = raw_mention.get("text_hash")
     normalized_mention = dict(raw_mention)
     normalized_mention["role"] = role
@@ -330,8 +343,8 @@ def _coerce_mention(
 def _required_offset(mention: Mapping[str, object], field: str) -> int:
     try:
         value = mention[field]
-    except KeyError as exc:
-        raise KeyError(f"biomarker mentions require {field} offsets") from exc
+    except KeyError:
+        raise KeyError(f"biomarker mentions require {field} offsets") from None
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"biomarker mention {field} must be an integer")
     return value
@@ -343,11 +356,11 @@ def _normalize_role(raw_role: object) -> BiomarkerMentionRole:
     normalized = raw_role.strip().casefold().replace("-", "_").replace(" ", "_")
     try:
         return _ROLE_ALIASES[normalized]
-    except KeyError as exc:
+    except KeyError:
         allowed = "gene, variant_or_finding, result_value, method"
         raise ValueError(
-            f"unknown biomarker mention role {raw_role!r}; expected {allowed}"
-        ) from exc
+            f"unknown biomarker mention role; expected {allowed}"
+        ) from None
 
 
 def _candidate_edges(

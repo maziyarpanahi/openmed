@@ -4528,7 +4528,22 @@ _BIOMARKER_RESULT_TUPLE_FIELDS = (
 def _biomarker_result_tuple(item: Mapping[str, Any]) -> tuple[Any, ...]:
     """Return the exact evaluation key for one biomarker result."""
 
-    return tuple(item.get(field) for field in _BIOMARKER_RESULT_TUPLE_FIELDS)
+    if not isinstance(item, Mapping):
+        raise ValueError("biomarker result records must be mappings")
+    values = tuple(item.get(field) for field in _BIOMARKER_RESULT_TUPLE_FIELDS)
+    if any(value is not None and not isinstance(value, str) for value in values):
+        raise ValueError("biomarker result fields must be strings or null")
+    gene, finding, result, _method, polarity = values
+    if (
+        not (gene or finding)
+        or not result
+        or not result.strip()
+        or polarity not in {"detected", "not_detected", "equivocal"}
+    ):
+        raise ValueError(
+            "biomarker result requires an anchor, value and valid polarity"
+        )
+    return values
 
 
 def biomarker_result_tuple_f1(
