@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from calendar import monthrange
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -61,6 +62,21 @@ TEMPORAL_NLI_LABELS: Final = (
     "neutral",
     "abstention",
     "review_required",
+)
+_SAFE_TEMPORAL_PRECISIONS = frozenset(
+    {
+        "unknown",
+        "year",
+        "month",
+        "week",
+        "day",
+        "hour",
+        "minute",
+        "second",
+        "part_of_day",
+        "part_of_month",
+        "interval",
+    }
 )
 _SAFE_TEMPORAL_SOURCES = frozenset(
     {"supplied", "interval", "context", "timeline", "reference", "inferred"}
@@ -405,6 +421,8 @@ def _normalize_score(value: object) -> float | None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise _invalid("NLI score")
+    if not 0.0 <= value <= 1.0:
+        raise _invalid("NLI score")
     normalized = float(value)
     if normalized != normalized or normalized in (float("inf"), float("-inf")):
         raise _invalid("NLI score")
@@ -414,9 +432,7 @@ def _normalize_score(value: object) -> float | None:
 
 
 def _days_in_month(year: int, month: int) -> int:
-    if month == 12:
-        return (date(year + 1, 1, 1) - date(year, month, 1)).days
-    return (date(year, month + 1, 1) - date(year, month, 1)).days
+    return monthrange(year, month)[1]
 
 
 def _interval_from_value(
@@ -471,10 +487,7 @@ def _interval_from_value(
     # TIMEX duration/set values do not describe a single event interval.
     if candidate.startswith(("P", "R")):
         return None
-    if any(
-        str(flag).casefold() in {"ambiguous", "unanchored", "approximate", "uncertain"}
-        for flag in flags
-    ):
+    if _flags_unresolved(flags):
         return None
     return None
 
@@ -490,6 +503,13 @@ def _precision_for_value(value: str) -> str:
     if "/" in candidate:
         return "day"
     return "day"
+
+
+def _timex_value_text(value: object, *, field_name: str) -> str:
+    try:
+        return value if isinstance(value, str) else str(value)
+    except Exception:
+        raise _invalid(field_name) from None
 
 
 def _normalized_timex_interval(
@@ -558,7 +578,7 @@ def _normalized_timex_interval(
             if type(resolved_value) is not bool:
                 raise _invalid(field_name)
             parsed = _interval_from_value(
-                raw_value if isinstance(raw_value, str) else str(raw_value),
+                _timex_value_text(raw_value, field_name=field_name),
                 field_name=field_name,
                 flags=flags
                 if isinstance(flags, Iterable) and not isinstance(flags, (str, bytes))
@@ -580,7 +600,7 @@ def _normalized_timex_interval(
                 precision=mapping.get(
                     "precision",
                     _precision_for_value(
-                        raw_value if isinstance(raw_value, str) else str(raw_value)
+                        _timex_value_text(raw_value, field_name=field_name)
                     ),
                 ),
                 resolved=(resolved_value and not _flags_unresolved(flags)),
@@ -637,12 +657,18 @@ def _normalized_timex_interval(
 
 
 def _flags_unresolved(flags: object) -> bool:
-    if isinstance(flags, str) or not isinstance(flags, Iterable):
+    if isinstance(flags, str):
+        flags = (flags,)
+    if not isinstance(flags, Iterable):
         return False
-    return any(
-        str(flag).casefold() in {"ambiguous", "unanchored", "approximate", "uncertain"}
-        for flag in flags
-    )
+    try:
+        return any(
+            str(flag).casefold()
+            in {"ambiguous", "unanchored", "approximate", "uncertain"}
+            for flag in flags
+        )
+    except Exception:
+        raise _invalid("interval flags") from None
 
 
 def _coerce_interval(
@@ -711,6 +737,8 @@ class TemporalInterval:
         if type(precision) is not str or not precision.strip():
             raise _invalid("interval precision")
         precision = precision.strip().casefold()
+        if precision not in _SAFE_TEMPORAL_PRECISIONS:
+            raise _invalid("interval precision")
         lower = (
             start
             if self.lower_bound is None and start is not None

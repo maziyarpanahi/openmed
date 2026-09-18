@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from datetime import date
 
 import pytest
@@ -473,3 +474,46 @@ def test_temporal_metadata_accepts_clinical_assertion_objects() -> None:
 
     assert metadata.temporal_status == HISTORICAL
     assert metadata.resolved is False
+
+
+@pytest.mark.parametrize("score", [10**400, -(10**400)])
+def test_oversized_scores_have_controlled_error(score: int) -> None:
+    with pytest.raises(ValueError, match="NLI score is invalid"):
+        build_temporal_nli_pair(
+            "synthetic premise", "synthetic hypothesis", predicted_score=score
+        )
+
+
+def test_final_supported_calendar_month_normalizes() -> None:
+    interval = TemporalInterval.from_value("9999-12")
+    assert interval.start == date(9999, 12, 1)
+    assert interval.end == date(9999, 12, 31)
+
+
+def test_arbitrary_precision_is_not_retained_in_reports() -> None:
+    sentinel = "SYNTHETIC_PRIVATE_PRECISION"
+    with pytest.raises(ValueError, match="interval precision is invalid") as caught:
+        TemporalInterval("2024-01-01", "2024-01-01", precision=sentinel)
+    assert sentinel not in str(caught.value)
+
+
+def test_single_uncertain_flag_remains_review_required() -> None:
+    interval = TemporalInterval.from_value(
+        {"value": "2024-01-01", "granularity_flags": "uncertain"}
+    )
+    assert not interval.is_resolved
+
+
+@pytest.mark.parametrize("field", ["value", "granularity_flags"])
+def test_temporal_conversion_callback_errors_hide_values(field: str) -> None:
+    sentinel = "SYNTHETIC_PRIVATE_TIMEX"
+
+    class InvalidValue:
+        def __str__(self) -> str:
+            raise ValueError(sentinel)
+
+    record = {"value": "2024-01-01"}
+    record[field] = [InvalidValue()] if field == "granularity_flags" else InvalidValue()
+    with pytest.raises(ValueError, match="is invalid") as caught:
+        TemporalInterval.from_value(record)
+    assert sentinel not in "".join(traceback.format_exception(caught.value))
