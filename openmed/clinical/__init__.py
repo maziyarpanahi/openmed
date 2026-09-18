@@ -331,6 +331,21 @@ from .negation_scope import (
     detect_negation_scopes,
     negated_spans,
 )
+from .nli import (
+    DEFAULT_NLI_BACKEND,
+    HEURISTIC_NLI_BACKEND,
+    MEDNLI_DATA_POLICY,
+    NLI_ADVISORY,
+    NLI_LABELS,
+    HeuristicNLIBackend,
+    NLIBackend,
+    NLIResult,
+    VerificationResult,
+    get_default_backend,
+    nli,
+    set_default_backend,
+    verify,
+)
 from .nli_labels import (
     BACKEND_NLI_LABEL_MAP,
     CANONICAL_NLI_LABEL_MAPPING,
@@ -351,7 +366,6 @@ from .nli_labels import (
     NliLabelMapping,
     NliLabelResult,
     NliLabelValidationError,
-    NLIResult,
     NliResult,
     NliScoreValidationError,
     NLIState,
@@ -361,21 +375,6 @@ from .nli_labels import (
     normalize_nli_label,
     validate_backend_label_mapping,
     validate_nli_result,
-)
-from .nli import (
-    DEFAULT_NLI_BACKEND,
-    HEURISTIC_NLI_BACKEND,
-    MEDNLI_DATA_POLICY,
-    NLI_ADVISORY,
-    NLI_LABELS,
-    HeuristicNLIBackend,
-    NLIBackend,
-    NLIResult,
-    VerificationResult,
-    get_default_backend,
-    nli,
-    set_default_backend,
-    verify,
 )
 from .normalization import (
     CHINESE_DRUG_SYSTEM,
@@ -1260,7 +1259,6 @@ __all__ = [
     "NLI_LABEL_MAPPING",
     "NLI_LABEL_SCHEMA_VERSION",
     "NLI_LABELS",
-    "NLIResult",
     "NLIState",
     "NliLabel",
     "NliLabelContractError",

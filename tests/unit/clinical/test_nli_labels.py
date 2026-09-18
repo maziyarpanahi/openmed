@@ -139,7 +139,7 @@ def test_result_serialization_is_deterministic_and_round_trips():
 
 @pytest.mark.parametrize(
     "bad_score",
-    [-0.01, 1.01, math.nan, math.inf, -math.inf, True, "0.5"],
+    [-0.01, 1.01, math.nan, math.inf, -math.inf, True, "0.5", 10**400, -(10**400)],
 )
 def test_scores_reject_non_finite_or_out_of_range_values(bad_score):
     with pytest.raises((TypeError, NliScoreValidationError)):
@@ -178,3 +178,19 @@ def test_result_validation_does_not_retain_sensitive_input_text():
     serialized = json.dumps(result.to_dict())
     assert source_text not in serialized
     assert source_text not in repr(result)
+
+
+def test_unknown_label_traceback_does_not_echo_caller_value():
+    import traceback
+
+    opaque_label = "synthetic-sensitive-555-0199"
+    with pytest.raises(UnknownNliLabelError) as error:
+        _backend_mapping().resolve(opaque_label)
+    assert opaque_label not in "".join(traceback.format_exception(error.value))
+
+
+def test_public_nli_result_preserves_verifier_api():
+    from openmed.clinical import NLIResult
+    from openmed.clinical.nli import NLIResult as VerifierResult
+
+    assert NLIResult is VerifierResult

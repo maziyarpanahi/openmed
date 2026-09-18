@@ -158,8 +158,10 @@ def _bounded_score(value: object, *, field_name: str = "score") -> float:
 
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"{field_name} must be numeric")
+    if not 0 <= value <= 1:
+        raise NliScoreValidationError(f"{field_name} must be finite and in [0, 1]")
     number = float(value)
-    if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+    if not math.isfinite(number):
         raise NliScoreValidationError(f"{field_name} must be finite and in [0, 1]")
     return number
 
@@ -351,8 +353,8 @@ class BackendLabelMapping(Mapping[str, NliLabel]):
             raise _unknown_label() from exc
         try:
             return self.labels[key]
-        except KeyError as exc:
-            raise _unknown_label() from exc
+        except KeyError:
+            raise _unknown_label() from None
 
     map_label = resolve
 
