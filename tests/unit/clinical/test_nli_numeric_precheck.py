@@ -219,3 +219,41 @@ def test_result_and_claim_are_immutable() -> None:
         claim.value = 2  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         result.status = NumericPrecheckStatus.CONTRADICTION  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "unit"),
+    [(0, 5e-13, None), (1e-13, 2e-13, None), (1e-10, 2e-10, "g")],
+)
+def test_distinct_tiny_values_are_not_hidden_by_absolute_tolerance(left, right, unit):
+    result = numeric_contradiction_precheck(
+        {"value": left, "unit": unit}, {"value": right, "unit": unit}
+    )
+    assert result.status is NumericPrecheckStatus.CONTRADICTION
+    assert result.evidence[0].reason is NumericPrecheckReason.VALUE_MISMATCH
+
+
+@pytest.mark.parametrize("unit", [None, "g"])
+def test_oversized_magnitudes_require_review(unit):
+    result = numeric_contradiction_precheck(
+        {"value": 10**400, "unit": unit}, {"value": 1, "unit": unit}
+    )
+    assert result.status is NumericPrecheckStatus.REVIEW_REQUIRED
+    assert not result.inference_allowed
+
+
+def test_invalid_value_callbacks_do_not_echo_content_in_tracebacks():
+    import traceback
+
+    secret = "synthetic-sensitive-555-0199"
+
+    class BrokenValue:
+        def __float__(self):
+            raise RuntimeError(secret)
+
+        def __str__(self):
+            raise RuntimeError(secret)
+
+    with pytest.raises(NumericPrecheckError) as error:
+        numeric_contradiction_precheck({"value": BrokenValue()}, {"value": 1})
+    assert secret not in "".join(traceback.format_exception(error.value))

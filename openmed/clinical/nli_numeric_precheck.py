@@ -20,7 +20,7 @@ from openmed.clinical.units import parse_measurement
 
 NLI_NUMERIC_PRECHECK_SCHEMA_VERSION: Final[int] = 1
 _REL_TOLERANCE: Final[float] = 1e-12
-_ABS_TOLERANCE: Final[float] = 1e-12
+_ABS_TOLERANCE: Final[float] = 0.0
 
 
 class NumericPrecheckError(ValueError):
@@ -477,7 +477,10 @@ def _normalize_number(value: object | None, unit: str | None) -> _NormalizedNumb
             return _NormalizedNumber(status="unknown")
         return _NormalizedNumber(status="ok", magnitude=numeric)
 
-    result = parse_measurement(value, unit)
+    try:
+        result = parse_measurement(value, unit)
+    except Exception:
+        return _NormalizedNumber(status="unknown")
     if result["status"] != "ok":
         return _NormalizedNumber(status=str(result["status"]))
     magnitude = result.get("canonical_magnitude")
@@ -578,14 +581,20 @@ def _fingerprint(claim: NumericClaim) -> str:
         "measurement_key": claim.measurement_key,
         "source_span": claim.source_span,
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    try:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    except (TypeError, ValueError, OverflowError):
+        raise NumericPrecheckError("invalid numeric claim fingerprint input") from None
     return hashlib.sha256(b"openmed:nli-numeric-precheck:v1\0" + encoded).hexdigest()
 
 
 def _stable_value(value: object | None) -> object:
     if value is None or type(value) in {str, int, float, bool}:
         return value
-    return str(value)
+    try:
+        return str(value)
+    except Exception:
+        raise NumericPrecheckError("invalid numeric claim value") from None
 
 
 def _finite_float(value: object) -> float | None:
@@ -593,7 +602,7 @@ def _finite_float(value: object) -> float | None:
         return None
     try:
         numeric = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError, OverflowError):
+    except Exception:
         return None
     return numeric if math.isfinite(numeric) else None
 
