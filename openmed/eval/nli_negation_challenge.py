@@ -248,6 +248,27 @@ class NliNegationPatternMetrics:
     non_entailment_case_count: int
     false_entailment_count: int
 
+    def __post_init__(self) -> None:
+        """Validate bounded aggregate counts and controlled pattern names."""
+
+        if self.pattern not in NEGATION_PATTERNS:
+            raise NliNegationChallengeError("unsupported negation report pattern")
+        for value in (
+            self.case_count,
+            self.correct_count,
+            self.abstention_count,
+            self.non_entailment_case_count,
+            self.false_entailment_count,
+        ):
+            _validate_count(value)
+        if (
+            self.correct_count + self.abstention_count > self.case_count
+            or self.non_entailment_case_count > self.case_count
+            or self.false_entailment_count > self.non_entailment_case_count
+            or self.correct_count + self.false_entailment_count > self.case_count
+        ):
+            raise NliNegationChallengeError("negation report counts are inconsistent")
+
     @property
     def aggregate_accuracy(self) -> float:
         """Return accuracy over all cases, counting abstention as incorrect."""
@@ -293,6 +314,26 @@ class NliNegationGateResult:
     max_false_entailment_rate: float
     false_entailment_gate_passed: bool
     passed: bool
+
+    def __post_init__(self) -> None:
+        """Validate gate evidence and decisions independently."""
+
+        accuracy = _validate_rate(self.aggregate_accuracy, "accuracy")
+        false_rate = _validate_rate(self.false_entailment_rate, "false rate")
+        ceiling = _validate_rate(self.max_false_entailment_rate, "ceiling")
+        floor = _validate_optional_rate(self.minimum_aggregate_accuracy, "floor")
+        expected_accuracy = floor is None or accuracy >= floor
+        expected_false = false_rate <= ceiling
+        decisions = (
+            (self.aggregate_accuracy_gate_passed, expected_accuracy),
+            (self.false_entailment_gate_passed, expected_false),
+            (self.passed, expected_accuracy and expected_false),
+        )
+        if any(
+            type(actual) is not bool or actual != expected
+            for actual, expected in decisions
+        ):
+            raise NliNegationChallengeError("negation gate decisions are inconsistent")
 
     @property
     def accuracy_gate_passed(self) -> bool:
@@ -366,6 +407,47 @@ class NliNegationReport:
             raise NliNegationChallengeError(
                 "negation report pattern metrics are invalid"
             )
+        if set(self.by_pattern) != set(NEGATION_PATTERNS):
+            raise NliNegationChallengeError("unsupported negation report pattern")
+        if any(metrics.pattern != pattern for pattern, metrics in ordered.items()):
+            raise NliNegationChallengeError("negation pattern name must match its key")
+        for digest in (self.fixture_set_hash, self.prediction_hash):
+            if type(digest) is not str or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", digest
+            ):
+                raise NliNegationChallengeError("negation provenance must be a digest")
+        for field in (
+            "case_count",
+            "correct_count",
+            "abstention_count",
+            "false_entailment_count",
+        ):
+            value = getattr(self, field)
+            _validate_count(value)
+            if value != sum(getattr(metrics, field) for metrics in ordered.values()):
+                raise NliNegationChallengeError(
+                    "negation report totals are inconsistent"
+                )
+        _validate_count(self.false_entailment_case_count)
+        if (
+            self.false_entailment_case_count
+            != sum(metrics.non_entailment_case_count for metrics in ordered.values())
+            or not self.case_count
+        ):
+            raise NliNegationChallengeError("negation report totals are inconsistent")
+        accuracy = _validate_rate(self.aggregate_accuracy, "accuracy")
+        false_rate = _validate_rate(self.false_entailment_rate, "false rate")
+        if accuracy != _rate(
+            self.correct_count, self.case_count
+        ) or false_rate != _rate(
+            self.false_entailment_count, self.false_entailment_case_count
+        ):
+            raise NliNegationChallengeError("negation report rates are inconsistent")
+        if not isinstance(self.gate, NliNegationGateResult) or (
+            self.gate.aggregate_accuracy != accuracy
+            or self.gate.false_entailment_rate != false_rate
+        ):
+            raise NliNegationChallengeError("negation gate evidence is inconsistent")
         object.__setattr__(self, "by_pattern", MappingProxyType(ordered))
 
     @property
@@ -1034,6 +1116,13 @@ def _first_present(
             if key in source:
                 return source[key]
     return None
+
+
+def _validate_count(value: Any) -> None:
+    if type(value) is not int or not 0 <= value <= MAX_NEGATION_CASES:
+        raise NliNegationChallengeError(
+            "negation report counts must be bounded integers"
+        )
 
 
 def _validate_rate(value: Any, field_name: str) -> float:

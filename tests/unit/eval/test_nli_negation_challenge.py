@@ -318,3 +318,39 @@ def test_public_negation_labels_are_qualified() -> None:
         "neutral",
         "abstention",
     )
+
+
+@pytest.mark.parametrize(
+    "field", ["fixture_set_hash", "case_count", "aggregate_accuracy"]
+)
+def test_report_rejects_uncontrolled_or_inconsistent_evidence(field: str) -> None:
+    from dataclasses import replace
+
+    report = run_nli_negation_challenge(
+        predictions=_gold_predictions(default_nli_negation_cases())
+    )
+    value = 0.0 if field == "aggregate_accuracy" else "synthetic-private-5550199"
+    with pytest.raises(NliNegationChallengeError):
+        replace(report, **{field: value})
+
+
+def test_report_rejects_misattributed_pattern() -> None:
+    from dataclasses import replace
+
+    report = run_nli_negation_challenge(
+        predictions=_gold_predictions(default_nli_negation_cases())
+    )
+    patterns = dict(report.by_pattern)
+    patterns["simple"] = report.by_pattern["double"]
+    with pytest.raises(NliNegationChallengeError):
+        replace(report, by_pattern=patterns)
+
+
+def test_gate_rejects_forged_decision() -> None:
+    from dataclasses import replace
+
+    report = run_nli_negation_challenge(
+        predictions=_gold_predictions(default_nli_negation_cases())
+    )
+    with pytest.raises(NliNegationChallengeError):
+        replace(report.gate, false_entailment_gate_passed=False)
