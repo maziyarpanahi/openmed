@@ -980,9 +980,9 @@ def _metadata_from_source(
     reference_date: date | None,
     field_name: str,
     infer_status: bool = True,
-) -> tuple[TemporalInterval, TemporalStatus, str] | None:
+) -> tuple[TemporalInterval, TemporalStatus, str, bool] | None:
     if isinstance(value, TemporalMetadata):
-        return value.interval, value.status, value.source
+        return value.interval, value.status, value.source, True
     mapping = _mapping_from_object(value)
     if mapping is None:
         if isinstance(value, (TemporalInterval, date, datetime, str)):
@@ -995,6 +995,7 @@ def _metadata_from_source(
                 interval,
                 _infer_status(interval, reference_date) if infer_status else "unknown",
                 "interval",
+                True,
             )
         return None
     reference_date = _mapping_reference_date(
@@ -1016,12 +1017,17 @@ def _metadata_from_source(
     ):
         raw_interval_values.append(mapping)
     interval = TemporalInterval.unresolved()
+    resolution_states: set[bool] = set()
     for raw_interval in raw_interval_values:
         candidate_interval = _coerce_interval(
             raw_interval,
             reference_date=reference_date,
             field_name=field_name,
         )
+        if raw_interval is not None:
+            resolution_states.add(candidate_interval.is_resolved)
+        if len(resolution_states) > 1:
+            raise _inconsistent(field_name)
         if not candidate_interval.is_resolved:
             continue
         if interval.is_resolved and interval != candidate_interval:
@@ -1043,7 +1049,12 @@ def _metadata_from_source(
     normalized_source = source.strip().casefold()
     if normalized_source not in _SAFE_TEMPORAL_SOURCES:
         normalized_source = "supplied"
-    return interval, status, normalized_source
+    return (
+        interval,
+        status,
+        normalized_source,
+        any(value is not None for value in raw_interval_values),
+    )
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -1123,7 +1134,17 @@ class TemporalMetadata:
         explicit_status: TemporalStatus | None = (
             explicit_statuses[0] if explicit_statuses else None
         )
-        for candidate_interval, candidate_status, candidate_source in parsed:
+        resolution_states: set[bool] = set()
+        for (
+            candidate_interval,
+            candidate_status,
+            candidate_source,
+            has_interval,
+        ) in parsed:
+            if has_interval:
+                resolution_states.add(candidate_interval.is_resolved)
+            if len(resolution_states) > 1:
+                raise _inconsistent(field_name)
             if candidate_interval.is_resolved:
                 if interval.is_resolved and interval != candidate_interval:
                     raise _inconsistent(field_name)

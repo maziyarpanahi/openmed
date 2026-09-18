@@ -517,3 +517,34 @@ def test_temporal_conversion_callback_errors_hide_values(field: str) -> None:
     with pytest.raises(ValueError, match="is invalid") as caught:
         TemporalInterval.from_value(record)
     assert sentinel not in "".join(traceback.format_exception(caught.value))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_unresolved_interval_alias_cannot_be_overridden(reverse: bool) -> None:
+    values = [
+        {"value": "2024-01-01", "resolved": False},
+        "2024-01-01",
+    ]
+    if reverse:
+        values.reverse()
+    with pytest.raises(ValueError):
+        TemporalMetadata.from_value(
+            {
+                "interval": values[0],
+                "normalized_time": values[1],
+                "temporality": "historical",
+            }
+        )
+
+
+def test_nested_unresolved_interval_cannot_be_overridden() -> None:
+    with pytest.raises(ValueError):
+        TemporalMetadata.from_value(
+            {
+                "temporal": {
+                    "interval": {"value": "2024-01-01", "resolved": False},
+                    "temporality": "historical",
+                },
+                "normalized_time": "2024-01-01",
+            }
+        )
