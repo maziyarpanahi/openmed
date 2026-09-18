@@ -267,6 +267,7 @@ classification:
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
+    - clinical/nli-cascade.md
     - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - runtimes/gguf-grounding.md
