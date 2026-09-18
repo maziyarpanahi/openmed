@@ -148,3 +148,53 @@ def test_offline_inference_error_is_not_misreported_as_cache_miss(monkeypatch):
             "Synthetic note: diabetes",
             model_id="OpenMed/synthetic-cached-model",
         )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"start": True},
+        {"start": 16.5},
+        {"start": "16"},
+        {"score": float("nan")},
+        {"score": float("inf")},
+        {"score": -0.1},
+        {"score": 1.1},
+        {"score": 10**1000},
+    ],
+)
+def test_malformed_spans_are_not_coerced(monkeypatch, overrides):
+    monkeypatch.setattr(advanced_ner, "ModelLoader", _FakeLoader)
+    monkeypatch.setattr(
+        _FakeLoader, "predictions", [{**_FakeLoader.predictions[0], **overrides}]
+    )
+    assert (
+        advanced_ner.extract_clinical_entities(
+            "Synthetic note: diabetes", model_id="synthetic"
+        )
+        == []
+    )
+
+
+def test_returned_text_matches_source_offsets(monkeypatch):
+    monkeypatch.setattr(advanced_ner, "ModelLoader", _FakeLoader)
+    monkeypatch.setattr(
+        _FakeLoader, "predictions", [{**_FakeLoader.predictions[0], "word": "stale"}]
+    )
+    spans = advanced_ner.extract_clinical_entities(
+        "Synthetic note: diabetes", model_id="synthetic"
+    )
+    assert spans[0].text == "diabetes"
+
+
+def test_missing_offsets_do_not_guess_between_repeated_mentions(monkeypatch):
+    monkeypatch.setattr(advanced_ner, "ModelLoader", _FakeLoader)
+    monkeypatch.setattr(
+        _FakeLoader, "predictions", [{"word": "diabetes", "entity": "DISEASE"}]
+    )
+    assert (
+        advanced_ner.extract_clinical_entities(
+            "diabetes then diabetes", model_id="synthetic"
+        )
+        == []
+    )

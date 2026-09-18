@@ -14,6 +14,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import dataclass
+from numbers import Integral, Real
 from typing import Any, Dict, List
 
 from openmed.core.decoding import (
@@ -241,35 +242,39 @@ def _clinical_span_from_prediction(
     """Convert one model prediction into a canonical, offset-safe span."""
 
     raw_text = prediction.get("text", prediction.get("word"))
-    span_text = str(raw_text) if raw_text is not None else ""
-    try:
-        start_value = prediction.get("start")
-        end_value = prediction.get("end")
-        if start_value is None or end_value is None:
-            if not span_text:
-                return None
-            start_value = source_text.find(span_text)
-            end_value = start_value + len(span_text)
-        start = int(start_value)
-        end = int(end_value)
-        if not span_text and 0 <= start <= end <= len(source_text):
-            span_text = source_text[start:end]
-        score_value = prediction.get("score", prediction.get("confidence", 1.0))
-        score = float(1.0 if score_value is None else score_value)
-    except (TypeError, ValueError, OverflowError):
+    start = prediction.get("start")
+    end = prediction.get("end")
+    if start is None or end is None:
+        if not isinstance(raw_text, str) or not raw_text:
+            return None
+        start = source_text.find(raw_text)
+        if start < 0 or source_text.find(raw_text, start + 1) >= 0:
+            return None
+        end = start + len(raw_text)
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, Integral)
+        or not isinstance(end, Integral)
+        or not 0 <= start < end <= len(source_text)
+    ):
         return None
-
-    if not (0 <= start < end <= len(source_text)):
+    score = prediction.get("score", prediction.get("confidence", 1.0))
+    if score is None:
+        score = 1.0
+    if isinstance(score, bool) or not isinstance(score, Real) or not 0 <= score <= 1:
         return None
     raw_label = prediction.get("label")
     if raw_label in (None, ""):
         raw_label = prediction.get("entity_group", prediction.get("entity", ""))
+    if not isinstance(raw_label, str):
+        return None
     return EntitySpan(
-        text=span_text or source_text[start:end],
-        label=normalize_label(str(raw_label)),
-        start=start,
-        end=end,
-        score=score,
+        text=source_text[start:end],
+        label=normalize_label(raw_label),
+        start=int(start),
+        end=int(end),
+        score=float(score),
     )
 
 
