@@ -905,8 +905,6 @@ def _resolve_predictions(
             try:
                 output = _invoke_runner(runner, case)
                 resolved.append(_normalize_prediction(output))
-            except NliNegationChallengeError:
-                raise
             except Exception as exc:
                 del exc
                 raise NliNegationChallengeError("local NLI predictor failed") from None
@@ -930,7 +928,7 @@ def _resolve_predictions(
 
     try:
         values = list(predictions) if predictions is not None else []
-    except (TypeError, ValueError) as exc:
+    except Exception as exc:
         del exc
         raise NliNegationChallengeError("predictions must be iterable") from None
     if len(values) != len(cases):
@@ -1042,8 +1040,10 @@ def _validate_rate(value: Any, field_name: str) -> float:
     del field_name
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise NliNegationChallengeError("gate thresholds must be finite numbers")
+    if not 0 <= value <= 1:
+        raise NliNegationChallengeError("gate thresholds must be between zero and one")
     normalized = float(value)
-    if not math.isfinite(normalized) or not 0.0 <= normalized <= 1.0:
+    if not math.isfinite(normalized):
         raise NliNegationChallengeError("gate thresholds must be between zero and one")
     return normalized
 

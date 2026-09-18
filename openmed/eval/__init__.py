@@ -691,7 +691,6 @@ from openmed.eval.nli_negation_challenge import (
     DEFAULT_MAX_FALSE_ENTAILMENT_RATE,
     DEFAULT_NLI_NEGATION_CASES,
     NEGATION_PATTERNS,
-    NLI_LABELS,
     NLI_NEGATION_CHALLENGE,
     NLI_NEGATION_CHALLENGE_SCHEMA_VERSION,
     NLI_NEGATION_FIXTURE_SCHEMA_VERSION,
@@ -715,6 +714,9 @@ from openmed.eval.nli_negation_challenge import (
     render_nli_negation_report_markdown,
     run_nli_negation_challenge,
     write_nli_negation_report,
+)
+from openmed.eval.nli_negation_challenge import (
+    NLI_LABELS as NLI_NEGATION_LABELS,
 )
 from openmed.eval.normalization import (
     DEFAULT_MULTILINGUAL_NORM_FIXTURE,
@@ -1439,7 +1441,7 @@ __all__ = [
     "DEFAULT_MAX_FALSE_ENTAILMENT_RATE",
     "DEFAULT_NLI_NEGATION_CASES",
     "NEGATION_PATTERNS",
-    "NLI_LABELS",
+    "NLI_NEGATION_LABELS",
     "NLI_NEGATION_CHALLENGE",
     "NLI_NEGATION_CHALLENGE_SCHEMA_VERSION",
     "NLI_NEGATION_FIXTURE_SCHEMA_VERSION",

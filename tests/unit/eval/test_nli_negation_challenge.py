@@ -284,3 +284,37 @@ def test_report_rendering_and_file_writes_are_stable(tmp_path: Path) -> None:
     assert report.to_json() == report.to_json()
     assert report.to_markdown().startswith("# Clinical NLI Negation Challenge\n")
     assert "False-entailment gate" in report.to_markdown()
+
+
+@pytest.mark.parametrize("value", [10**400, -(10**400)])
+def test_oversized_gate_thresholds_fail_cleanly(value: int) -> None:
+    with pytest.raises(NliNegationChallengeError):
+        run_nli_negation_challenge(
+            predictions=_gold_predictions(default_nli_negation_cases()),
+            max_false_entailment_rate=value,
+        )
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, NliNegationChallengeError])
+def test_predictor_tracebacks_suppress_all_source_exceptions(error_type) -> None:
+    import traceback
+
+    def runner(case):
+        raise error_type("synthetic-private-5550199")
+
+    with pytest.raises(NliNegationChallengeError) as caught:
+        run_nli_negation_challenge(runner=runner)
+    assert "synthetic-private-5550199" not in "".join(
+        traceback.format_exception(caught.value)
+    )
+
+
+def test_public_negation_labels_are_qualified() -> None:
+    from openmed.eval import NLI_NEGATION_LABELS
+
+    assert NLI_NEGATION_LABELS == (
+        "entailment",
+        "contradiction",
+        "neutral",
+        "abstention",
+    )
