@@ -143,8 +143,8 @@ class LocalNliModelOutput:
             if (
                 isinstance(self.score, bool)
                 or not isinstance(self.score, int | float)
+                or not 0.0 <= self.score <= 1.0
                 or not math.isfinite(float(self.score))
-                or not 0.0 <= float(self.score) <= 1.0
             ):
                 raise NliCascadeError("model score must be finite and in [0, 1]")
             object.__setattr__(self, "score", float(self.score))
@@ -206,15 +206,17 @@ class NliCascadeResult:
             raise NliCascadeError("deciding cascade stage is invalid")
         if type(self.model_invoked) is not bool:
             raise NliCascadeError("model invocation flag is invalid")
-        if not _IDENTIFIER_RE.fullmatch(self.reason_code):
+        if type(self.reason_code) is not str or not _IDENTIFIER_RE.fullmatch(
+            self.reason_code
+        ):
             raise NliCascadeError("cascade reason code is invalid")
         if self.model_invoked != (self.deciding_stage is NliCascadeStage.MODEL):
             raise NliCascadeError("model invocation flag disagrees with cascade stage")
         if self.score is not None and (
             isinstance(self.score, bool)
             or not isinstance(self.score, int | float)
+            or not 0.0 <= self.score <= 1.0
             or not math.isfinite(float(self.score))
-            or not 0.0 <= float(self.score) <= 1.0
         ):
             raise NliCascadeError("model score must be finite and in [0, 1]")
         if self.backend_id is not None and (
@@ -320,6 +322,10 @@ def _normalize_label(value: object) -> str:
 def _validate_pair_id(value: object) -> None:
     if type(value) is not str or not value.strip():
         raise NliCascadeError("pair identifier must be a non-empty string")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise NliCascadeError("pair identifier must be valid Unicode") from None
 
 
 def _fingerprint(pair_id: str) -> str:

@@ -9,6 +9,7 @@ from openmed.clinical.nli_cascade import (
     LocalNliModelOutput,
     NliCascadeError,
     NliCascadePair,
+    NliCascadeResult,
     NliCascadeStage,
     NliRuleStatus,
     evaluate_nli_pair,
@@ -227,3 +228,30 @@ def test_pair_result_and_model_output_are_immutable() -> None:
         output.label = "entailment"  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         result.label = "entailment"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("score", [10**400, -(10**400)])
+def test_oversized_model_scores_fail_with_controlled_error(score: int) -> None:
+    with pytest.raises(NliCascadeError, match="model score"):
+        LocalNliModelOutput("entailment", score=score)
+    with pytest.raises(NliCascadeError, match="model score"):
+        NliCascadeResult(
+            "pair-a",
+            "entailment",
+            NliCascadeStage.MODEL,
+            True,
+            "model_decision",
+            score=score,
+        )
+
+
+def test_invalid_reason_code_has_controlled_error() -> None:
+    with pytest.raises(NliCascadeError, match="cascade reason code"):
+        NliCascadeResult(
+            "pair-a", "contradiction", NliCascadeStage.NUMERIC, False, None
+        )
+
+
+def test_unencodable_pair_id_fails_before_model_dispatch() -> None:
+    with pytest.raises(NliCascadeError, match="pair identifier must be valid Unicode"):
+        NliCascadePair("pair-\ud800", "synthetic premise", "synthetic hypothesis")
