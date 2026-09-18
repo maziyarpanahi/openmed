@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import traceback
 from dataclasses import FrozenInstanceError
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -252,3 +254,57 @@ def test_result_and_claim_are_immutable() -> None:
         claim.status = "stopped"  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         result.status = MedicationStatusPrecheckStatus.CONTRADICTION  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("error_type", [ValueError, RuntimeError])
+def test_event_time_callback_errors_do_not_echo_values(
+    error_type: type[Exception],
+) -> None:
+    sentinel = "SYNTHETIC_PRIVATE_TIMESTAMP"
+
+    class InvalidTimestamp:
+        @property
+        def value(self) -> object:
+            raise error_type(sentinel)
+
+    with pytest.raises(
+        MedicationStatusPrecheckError, match="invalid medication event time"
+    ) as caught:
+        medication_status_contradiction_precheck(
+            {"status": "continued", "event_time": InvalidTimestamp()},
+            {"status": "stopped", "event_time": "2026-01-02"},
+        )
+
+    assert sentinel not in "".join(traceback.format_exception(caught.value))
+
+
+def test_out_of_range_utc_event_time_has_controlled_error() -> None:
+    event_time = datetime(1, 1, 1, tzinfo=timezone(timedelta(hours=1)))
+    with pytest.raises(
+        MedicationStatusPrecheckError, match="invalid medication event time"
+    ):
+        medication_status_contradiction_precheck(
+            {"status": "continued", "event_time": event_time},
+            {"status": "stopped", "event_time": "2026-01-02"},
+        )
+
+
+def test_fingerprint_callback_errors_do_not_echo_values() -> None:
+    sentinel = "SYNTHETIC_PRIVATE_PROVENANCE"
+
+    class InvalidProvenance:
+        def __str__(self) -> str:
+            raise ValueError(sentinel)
+
+    with pytest.raises(
+        MedicationStatusPrecheckError, match="invalid medication provenance"
+    ) as caught:
+        medication_status_contradiction_precheck(
+            {
+                "status": "continued",
+                "event_time": {"value": "2026-01-02", "extra": InvalidProvenance()},
+            },
+            {"status": "stopped", "event_time": "2026-01-02"},
+        )
+
+    assert sentinel not in "".join(traceback.format_exception(caught.value))

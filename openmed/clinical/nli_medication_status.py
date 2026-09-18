@@ -439,9 +439,9 @@ def _prepare_claim(claim: MedicationStatusClaim) -> _PreparedClaim:
     status = normalize_nli_medication_status(claim.status)
     try:
         event_time = normalize_medication_timestamp(claim.event_time)
-    except (TypeError, ValueError) as exc:
-        raise MedicationStatusPrecheckError("invalid medication event time") from exc
-    sortable_time = _sortable_timestamp(event_time)
+        sortable_time = _sortable_timestamp(event_time)
+    except Exception:
+        raise MedicationStatusPrecheckError("invalid medication event time") from None
     return _PreparedClaim(
         raw=claim,
         status=status,
@@ -516,13 +516,16 @@ def _finding_result(
 
 
 def _fingerprint(claim: MedicationStatusClaim) -> str:
-    payload = {
-        "status": _stable_value(claim.status),
-        "event_time": _stable_value(claim.event_time),
-        "medication_key": claim.medication_key,
-        "source_span": claim.source_span,
-    }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    try:
+        payload = {
+            "status": _stable_value(claim.status),
+            "event_time": _stable_value(claim.event_time),
+            "medication_key": claim.medication_key,
+            "source_span": claim.source_span,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    except Exception:
+        raise MedicationStatusPrecheckError("invalid medication provenance") from None
     return hashlib.sha256(b"openmed:nli-medication-status:v1\0" + encoded).hexdigest()
 
 
