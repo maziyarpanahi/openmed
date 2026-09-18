@@ -292,6 +292,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - language-packs.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
