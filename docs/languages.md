@@ -5,8 +5,8 @@ language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
 Terminology maintainers and translators should also use the
 [localization glossary](i18n/glossary.md) for stable product and privacy terms.
-The optional Indic family adds three user-configured routes and can also serve
-the built-in Assamese, Bengali, Gujarati, Hindi, Marathi, Odia, Tamil, and
+The optional Indic family adds two user-configured routes and can also serve
+the built-in Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and
 Telugu codes.
 Every code documented here wires
 up:
@@ -92,7 +92,7 @@ routing is first requested, and do not download or bundle model weights.
 | `id`   | Indonesian | `OpenMed/privacy-filter-multilingual`                      | `id_ID`      | Served by the multilingual privacy filter; NIK-aware.        |
 | `it`   | Italian    | `OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1`   | `it_IT`      | Codice Fiscale surrogates via `it_IT.ssn`.                   |
 | `ja`   | Japanese   | `OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1`        | `ja_JP`      | Family-name-first `PERSON` spans.                            |
-| `kn`   | Kannada    | `env:OPENMED_INDIC_NER_MODEL`                               | `kn_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `kn`   | Kannada    | `OpenMed/privacy-filter-multilingual`                       | `kn_IN`      | Karnataka PIN/Aadhaar patterns; `en_IN` approximation warns once; initial-led names keep `ಅವರು` outside the span. |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
 | `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `mr`   | Marathi    | `OpenMed/privacy-filter-multilingual`                       | `mr_IN`      | Three-part names; `hi_IN` Faker approximation warns once.    |
@@ -120,7 +120,7 @@ routing is first requested, and do not download or bundle model weights.
 Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
-`user-supplied` (`kn`, `ml`, `pa`, `ne`, and `ur`) ship no bundled
+`user-supplied` (`ml`, `pa`, `ne`, and `ur`) ship no bundled
 weights and require a caller-supplied model. Russian and Tamil retain explicit
 public placeholder routes for compatibility, but neither placeholder is a
 claim of dedicated trained weights. Codes absent from the table entirely (for
@@ -132,17 +132,17 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The three optional Indic language packs never download a default checkpoint.
+The two optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
 
-`openmed.core.pii_i18n.USER_SUPPLIED_MODEL_LANGUAGES` holds the five codes that
+`openmed.core.pii_i18n.USER_SUPPLIED_MODEL_LANGUAGES` holds the four codes that
 are registered for script routing, surrogate locales, deterministic patterns,
 and the public REST/MCP enums while claiming no bundled default model. It splits
 into two groups with different model columns and different errors:
 
-- `kn`, `ml`, and `pa` read `env:OPENMED_INDIC_NER_MODEL`. They resolve
+- `ml` and `pa` read `env:OPENMED_INDIC_NER_MODEL`. They resolve
   through the optional Indic NER adapter, so omitting `model_name` raises
   `ValueError: Language '<code>' uses optional Indic NER weights; pass an
   explicit model_name or set OPENMED_INDIC_NER_MODEL`.
@@ -154,7 +154,7 @@ into two groups with different model columns and different errors:
 Both column values are registry placeholders rather than loadable repositories.
 Passing one back as `model_name` raises the same error as omitting it, so a
 value copied from `openmed_list_pii_languages` never becomes a download attempt.
-`SUPPORTED_LANGUAGES` deliberately stays model-backed-only, so none of these six
+`SUPPORTED_LANGUAGES` deliberately stays model-backed-only, so none of these four
 codes appear in model-backed language counts.
 
 ## Indian-English and code-mixed clinical notes
@@ -354,11 +354,11 @@ After:  રોગી શ્રી [PERSON]. પિન કોડ [ZIPCODE]. આ�
 
 ### Kannada — `kn`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `kn_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `kn_IN` (`en_IN` Faker backend)
 
 ```text
-Before: ಅರುಣ್ ಬೆಂಗಳೂರಿನಲ್ಲಿ ಕಾವೇರಿ ಆಸ್ಪತ್ರೆಗೆ ಹೋದರು.
-After:  [PERSON] [LOCATION] [ORGANIZATION] ಹೋದರು.
+Before: ಕೃತಕ ಟಿಪ್ಪಣಿ: ಶ್ರೀ ಕೆ. ಎಸ್. ರವಿ ಅವರು, ಆಧಾರ್ ೨೪೬೭ ೭೮೩೨ ೫೪೮೪.
+After:  ಕೃತಕ ಟಿಪ್ಪಣಿ: ಶ್ರೀ [PERSON] ಅವರು, ಆಧಾರ್ [ID_NUM].
 ```
 
 ### Malayalam — `ml`
