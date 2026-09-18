@@ -12,7 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
-      - OpenMed 2.3.0 Release Notes: release/v2.3.0.md
+      - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
       - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
@@ -105,6 +105,7 @@ nav:
       - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+      - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
@@ -196,6 +197,12 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical NLI abstention gate: clinical/nli-abstention.md
+      - Clinical NLI threshold calibration: evaluation/nli-calibration.md
+      - Section-aware note routing: clinical/note-routing.md
+      - Radiology Finding Profile: clinical/radiology-profile.md
+      - Pathology result profile: clinical/pathology-profile.md
+      - Structured discharge-summary profile: clinical/discharge-profile.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
@@ -214,6 +221,7 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Language Pack Plugins: language-packs.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
@@ -376,12 +384,14 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 2.3 to 2.5: migration/2.3-to-2.5.md
       - Migrate from 2.2 to 2.3: migration/2.2-to-2.3.md
       - Migrate from 2.1 to 2.2: migration/2.1-to-2.2.md
       - Migrate from 2.0 to 2.1: migration/2.0-to-2.1.md
       - Migrate from 1.9 to 2.0: migration/1.9-to-2.0.md
       - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
+      - OpenMed 2.3.0 Release Notes: release/v2.3.0.md
       - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
       - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md

@@ -3,7 +3,9 @@
 The generators use Unicode letter inventories rather than real-name lists, so
 no source or demographic dictionary is bundled. Every output code point is
 selected outside the source surface's code-point set. Han output also preserves
-the number of Han characters in the detected name.
+the number of Han characters in the detected name. Gujarati uses Faker's
+native ``gu_IN`` name provider and preserves the language-specific ``ભાઈ`` /
+``બેન`` suffix when the source contains one.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ def _require_language_pack(code: str) -> LanguagePack:
 HAN_LANGUAGE_PACK: Final = _require_language_pack("zh")
 DEVANAGARI_LANGUAGE_PACK: Final = _require_language_pack("hi")
 TELUGU_LANGUAGE_PACK: Final = _require_language_pack("te")
+GUJARATI_LANGUAGE_PACK: Final = _require_language_pack("gu")
 
 
 def _unicode_letters(start: int, end: int, name_prefix: str) -> tuple[str, ...]:
@@ -65,6 +68,13 @@ _TELUGU_LETTERS: Final[Sequence[str]] = _unicode_letters(
     0x0C39,
     "TELUGU LETTER",
 )
+_GUJARATI_LETTERS: Final[Sequence[str]] = _unicode_letters(
+    0x0A85,
+    0x0AB9,
+    "GUJARATI LETTER",
+)
+_GUJARATI_SUFFIXES: Final = ("ભાઈ", "બેન")
+_GUJARATI_HONORIFICS: Final = ("શ્રીમતી", "શ્રી")
 
 
 def _script_length(
@@ -127,19 +137,78 @@ def generate_telugu_name(faker, original: str, *, locale: str) -> str:
     )
 
 
+def generate_gujarati_name(faker, original: str, *, locale: str) -> str:
+    """Return a native Gujarati surrogate while preserving a gender suffix.
+
+    ``ભાઈ`` is the masculine and ``બેન`` the feminine fused suffix used in
+    Gujarati records.  The suffix carries useful grammatical information but
+    is not the person's identifying stem, so only that suffix is retained.
+    The base name is drawn from Faker's installed ``gu_IN`` provider.
+    """
+
+    source = str(original).strip()
+    honorific = ""
+    stem = source
+    for candidate in _GUJARATI_HONORIFICS:
+        prefix = f"{candidate} "
+        if source.startswith(prefix):
+            honorific = prefix
+            stem = source[len(prefix) :]
+            break
+
+    suffix = next(
+        (candidate for candidate in _GUJARATI_SUFFIXES if stem.endswith(candidate)),
+        "",
+    )
+    source_stem = stem[: -len(suffix)] if suffix else stem
+
+    method = "name" if " " in source_stem else "first_name"
+    if suffix:
+        gender = "male" if suffix == "ભાઈ" else "female"
+        method = f"{method}_{gender}"
+
+    for _ in range(20):
+        candidate = str(getattr(faker, method)())
+        candidate = candidate.strip()
+        for candidate_honorific in _GUJARATI_HONORIFICS:
+            candidate_prefix = f"{candidate_honorific} "
+            if candidate.startswith(candidate_prefix):
+                candidate = candidate[len(candidate_prefix) :]
+                break
+        for candidate_suffix in _GUJARATI_SUFFIXES:
+            if candidate.endswith(candidate_suffix):
+                candidate = candidate[: -len(candidate_suffix)]
+                break
+        if candidate and candidate != source_stem:
+            result = f"{honorific}{candidate}{suffix}"
+            if result != source:
+                return result
+
+    fallback = _draw_disjoint_name(
+        faker,
+        source_stem,
+        alphabet=_GUJARATI_LETTERS,
+        length=2,
+    )
+    return f"{honorific}{fallback}{suffix}"
+
+
 SCRIPT_NAME_PACKS: Final = (
     (HAN_LANGUAGE_PACK, "Han", generate_han_name),
     (DEVANAGARI_LANGUAGE_PACK, "Devanagari", generate_devanagari_name),
     (TELUGU_LANGUAGE_PACK, "Telugu", generate_telugu_name),
+    (GUJARATI_LANGUAGE_PACK, "Gujarati", generate_gujarati_name),
 )
 
 
 __all__ = [
     "DEVANAGARI_LANGUAGE_PACK",
+    "GUJARATI_LANGUAGE_PACK",
     "HAN_LANGUAGE_PACK",
     "SCRIPT_NAME_PACKS",
     "TELUGU_LANGUAGE_PACK",
     "generate_devanagari_name",
+    "generate_gujarati_name",
     "generate_han_name",
     "generate_telugu_name",
 ]
