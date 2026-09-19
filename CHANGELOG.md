@@ -5,6 +5,18 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
+  use private random HMAC keys by default. Reuse a pipeline or redactor instance,
+  or supply the same non-empty private key, when stable hashes across calls are
+  required. Web and React Native calls also accept explicit keys for this purpose.
+  Empty explicit keys are rejected; redaction labels and offsets are unchanged.
+- GitHub Actions are pinned to immutable commits, enforced by CI, and container
+  publishing permissions are limited to the publish job.
+
 ## [2.5.0] - 2026-09-14
 
 OpenMed 2.5 adds clinical privacy and extraction previews, local privacy
