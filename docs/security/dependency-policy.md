@@ -28,6 +28,26 @@ updates are grouped into one pull request, and GitHub Actions updates are
 grouped into one pull request. Dependabot PRs are reviewed and tested manually;
 auto-merge is intentionally out of scope.
 
+## GitHub Actions references and permissions
+
+Remote actions in workflows and local composite actions must use full commit
+SHAs, with the upstream version in a comment. Resolve each SHA from the action's
+own repository; a pin freezes that revision but does not establish that its code
+is safe. Keep Dependabot's GitHub Actions updates enabled and review the upstream
+changes before accepting a new pin.
+
+The CI repository-policy job enforces immutable references. Run the same checks
+locally without network access:
+
+```bash
+python scripts/release/check_github_actions_refs.py --require-sha
+python scripts/release/check_github_actions_refs.py --require-sha --workflows-dir .github/actions
+```
+
+Grant publishing, attestation, and OIDC permissions only to jobs that use them.
+The container workflow's test jobs use `contents: read`; its publish job receives
+the write permissions after both test jobs pass and is excluded from pull requests.
+
 ## Static Analysis
 
 Bandit still runs in CI. The full report is uploaded as `bandit-report.json`,

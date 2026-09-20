@@ -40,11 +40,11 @@ jobs:
       API_BASE_REF: ${{ inputs.api_base_ref || 'v2.3.0' }}
       MIGRATION_GUIDE: ${{ inputs.migration_guide || 'docs/migration/2.3-to-2.5.md' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ env.CANDIDATE_SHA }}
-      - uses: astral-sh/setup-uv@v8.3.2
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: "0.11.28"
       - name: Install locked gate dependencies
@@ -92,7 +92,7 @@ jobs:
             --output artifacts/sdk-readiness/readiness.json --json
       - name: Upload candidate evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sdk-release-readiness
           if-no-files-found: error
