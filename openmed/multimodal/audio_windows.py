@@ -173,7 +173,13 @@ def plan_audio_windows(
         raise AudioWindowError("audio_min_tail_exceeds_window")
 
     stride_ms = window_ms - overlap_ms
-    planned = -(-duration_ms // stride_ms) if duration_ms else 0
+    if duration_ms == 0:
+        planned = 0
+    elif duration_ms <= window_ms:
+        planned = 1
+    else:
+        remaining_ms = duration_ms - window_ms
+        planned = 1 + -(-remaining_ms // stride_ms)
     if planned > MAX_AUDIO_WINDOW_COUNT:
         raise AudioWindowError("audio_window_count_limit_exceeded")
 

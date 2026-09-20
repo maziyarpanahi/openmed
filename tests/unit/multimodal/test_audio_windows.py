@@ -95,6 +95,16 @@ def test_planning_stops_once_a_window_reaches_the_end() -> None:
     assert spans(plan) == [(0, 600), (300, 700)]
 
 
+def test_large_overlap_does_not_overcount_a_single_full_window() -> None:
+    plan = plan_audio_windows(
+        MAX_AUDIO_WINDOW_COUNT + 1,
+        window_ms=MAX_AUDIO_WINDOW_COUNT + 1,
+        overlap_ms=MAX_AUDIO_WINDOW_COUNT,
+    )
+
+    assert spans(plan) == [(0, MAX_AUDIO_WINDOW_COUNT + 1)]
+
+
 @pytest.mark.parametrize("duration", [1, 7, 999, 1000, 1001, 4321])
 @pytest.mark.parametrize("window,overlap", [(500, 0), (600, 300), (250, 249), (1, 0)])
 def test_windows_cover_the_duration_without_gaps(duration, window, overlap) -> None:
