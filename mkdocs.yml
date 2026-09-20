@@ -34,6 +34,7 @@ nav:
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Event Correlation: agent/event-correlation.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Reviewer Handoff Packets: agent/reviewer-handoffs.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Agent Skill Installation: agent-skills/install.md
