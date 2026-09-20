@@ -347,6 +347,11 @@ def _execute_target(target_key: str, data: bytes) -> None:
 
 
 def _worker_main(requests: Any, responses: Any) -> None:
+    # Resolve lazy privacy imports and pattern compilation within the bounded
+    # startup phase, so the first email input pays only for parsing its content.
+    from openmed.core.safety_sweep import safety_sweep
+
+    safety_sweep("", [])
     responses.put(("ready", ""))
     while True:
         request = requests.get()
