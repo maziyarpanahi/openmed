@@ -177,17 +177,6 @@ def _assert_free_of(payload: object, forbidden: tuple[str, ...]) -> None:
             assert token not in text, f"{token!r} leaked into {text!r}"
 
 
-def _synthetic_sensitive_tokens(count: int = 12) -> tuple[str, ...]:
-    """Return exact raw fixture values that must not reach manifest metadata."""
-    documents = _documents(count)
-    return (
-        SECRET_ERROR_TOKEN,
-        *(document["id"] for document in documents),
-        *(document["text"] for document in documents),
-        *(f"555-{index:04d}" for index in range(count)),
-    )
-
-
 # --- Digest parity ----------------------------------------------------------
 
 
@@ -611,7 +600,7 @@ def test_worker_failure_records_error_type_without_leaking_detail(
         assert record.output_digest is None
     assert not list((tmp_path / "outputs").glob("shard-*.jsonl"))
 
-    forbidden = _synthetic_sensitive_tokens()
+    forbidden = (SECRET_ERROR_TOKEN, DOCUMENT_ID_PREFIX, "Synthetic subject", "555-")
     _assert_free_of(result.to_dict(), forbidden)
     _assert_free_of(result.manifest.to_dict(), forbidden)
     _assert_free_of(
@@ -639,7 +628,7 @@ def test_completed_manifest_bytes_are_phi_free(tmp_path: Path) -> None:
     )
     assert result.is_complete
 
-    forbidden = _synthetic_sensitive_tokens()
+    forbidden = (SECRET_ERROR_TOKEN, DOCUMENT_ID_PREFIX, "Synthetic subject", "555-")
     raw_manifest = (tmp_path / "manifest.json").read_text(encoding="utf-8")
     for token in forbidden:
         assert token not in raw_manifest
