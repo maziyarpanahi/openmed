@@ -34,6 +34,7 @@ nav:
       - Signed Agent Capability Grants: agent/capability-grants.md
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
       - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
+      - Tool Argument Classification: agent/tool-argument-classification.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Event Correlation: agent/event-correlation.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
