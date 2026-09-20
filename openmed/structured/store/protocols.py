@@ -46,8 +46,12 @@ _SENSITIVE_METADATA_KEYS = frozenset(
 T = TypeVar("T")
 
 
+class CommitStatusUnknown(RuntimeError):
+    """Raised when a backend cannot prove whether a commit completed."""
+
+
 class StoreState(str, Enum):
-    """Explicit state for every local-store read or mutation."""
+    """Explicit state for every Journey-store read or mutation."""
 
     SUCCESS = "success"
     PARTIAL = "partial"
@@ -299,7 +303,7 @@ class DenyStorageOperations:
 
 @runtime_checkable
 class ArtifactStore(Protocol):
-    """Content-addressed local bytes and artifact metadata."""
+    """Content-addressed artifact bytes under a bounded namespace."""
 
     def put_bytes(
         self, artifact: ClinicalArtifact, content: bytes
@@ -308,6 +312,14 @@ class ArtifactStore(Protocol):
 
     def get_bytes(self, content_hash: str) -> StoreResult[bytes]:
         """Read and verify one content-addressed blob."""
+
+
+@runtime_checkable
+class CompensatingArtifactStore(ArtifactStore, Protocol):
+    """Artifact store that can compensate a newly created object."""
+
+    def discard_if_created(self, content_hash: str) -> None:
+        """Discard one digest-derived object after metadata rollback."""
 
 
 @runtime_checkable
@@ -467,7 +479,7 @@ class TransactionalJourneyStore(
     PointInTimeReader,
     Protocol,
 ):
-    """Complete local metadata-store surface."""
+    """Complete backend-neutral metadata-store surface."""
 
     def transaction(
         self, *, committed_at: str
