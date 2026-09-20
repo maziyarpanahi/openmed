@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `serialize_measurement_trends`, compact JSON for measurement trends that is
-  byte-identical for equivalent input orderings and rejects non-finite derived values,
-  with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
-  tied on one timepoint are now ordered by value instead of input position (#3107).
+- Added deterministic half-open window planning for offline streaming
+  audio, with integer-millisecond offsets, real per-window overlap,
+  keep/merge/drop tail policies, arithmetic window-count bounds, and
+  value-free rejection of boolean, negative and overflowing input (#3005).
 
 ### Changed
 
