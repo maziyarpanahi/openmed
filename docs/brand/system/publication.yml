@@ -175,6 +175,7 @@ classification:
     - interop/resumable-ingestion.md
     - interop/identity-resolution.md
     - interop/structured-evidence-adapters.md
+    - interop/ingestion-to-fact-pipeline.md
     - clinical/model-packs.md
     - structured/clinical-fact-normalization.md
     - structured/terminology-cache.md
