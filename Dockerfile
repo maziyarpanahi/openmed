@@ -22,7 +22,7 @@ RUN apt-get update \
         "libreadline8t64=8.3-4" \
         "libsqlite3-0=3.53.4-2" \
         "libssl3t64=3.6.4-1" \
-        "libuuid1=2.42.2-4" \
+        "libuuid1=2.42.3-1" \
         "netbase=6.6" \
         "openssl=3.6.4-1" \
         "openssl-provider-legacy=3.6.4-1" \
