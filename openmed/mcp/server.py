@@ -1156,8 +1156,8 @@ def _clinical_detect_stage(
         )
 
     from openmed.core.labels import normalize_label, policy_label_for
-    from openmed.core.pipeline import DEFAULT_HASH_SECRET
     from openmed.core.schemas import OpenMedSpan, hmac_text_hash
+    from openmed.core.schemas.span import _resolve_hmac_secret
 
     options = dict(stage_options)
     doc_id = str(options.pop("doc_id", "clinical-pipeline"))
@@ -1167,6 +1167,7 @@ def _clinical_detect_stage(
         runtime_provider=runtime_provider,
         **options,
     )
+    hash_secret = _resolve_hmac_secret(None)
     canonical_spans: list[dict[str, Any]] = []
     for entity in response.get("entities", []):
         if not isinstance(entity, Mapping):
@@ -1189,7 +1190,7 @@ def _clinical_detect_stage(
                 doc_id=doc_id,
                 start=start,
                 end=end,
-                text_hash=hmac_text_hash(surface, DEFAULT_HASH_SECRET),
+                text_hash=hmac_text_hash(surface, hash_secret),
                 entity_type=label,
                 canonical_label=canonical_label,
                 policy_label=policy_label_for(canonical_label, language),

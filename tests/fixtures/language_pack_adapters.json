@@ -12,11 +12,13 @@
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
     "fa": "OpenMed/privacy-filter-multilingual",
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
+    "gu": "OpenMed/privacy-filter-multilingual",
     "he": "OpenMed/privacy-filter-multilingual",
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
     "id": "OpenMed/privacy-filter-multilingual",
     "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
+    "kn": "OpenMed/privacy-filter-multilingual",
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
     "mr": "OpenMed/privacy-filter-multilingual",
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
@@ -177,6 +179,10 @@
       "fr_FR",
       "ssn"
     ],
+    "gu": [
+      "gu_IN",
+      "aadhaar"
+    ],
     "ha": [
       "ha_NG",
       "nigeria_nin"
@@ -212,6 +218,10 @@
     "ja": [
       "ja_JP",
       "my_number"
+    ],
+    "kn": [
+      "kn_IN",
+      "aadhaar"
     ],
     "ko": [
       "ko_KR",
@@ -422,11 +432,13 @@
     "es",
     "fa",
     "fr",
+    "gu",
     "he",
     "hi",
     "id",
     "it",
     "ja",
+    "kn",
     "ko",
     "mr",
     "nl",
