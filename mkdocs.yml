@@ -384,6 +384,7 @@ nav:
       - No-Telemetry Guarantee: security/no-telemetry.md
       - Policy Migration Reviews: security/policy-migrations.md
       - MCP Prompt Injection Guard: security/prompt-injection-guard.md
+      - Agent Boundary Threat Model: security/agent-threat-model.md
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
