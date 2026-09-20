@@ -111,6 +111,7 @@ classification:
     - agent/outcome-reasons.md
     - agent/reviewer-handoffs.md
     - agent/policy-decision-matrices.md
+    - agent/human-approval-tokens.md
     - agent/run-summaries.md
     - agent/timing-metadata.md
     - agent-skills/install.md

@@ -36,6 +36,7 @@ nav:
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Reviewer Handoff Packets: agent/reviewer-handoffs.md
       - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
+      - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Agent Skill Installation: agent-skills/install.md
