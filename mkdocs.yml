@@ -311,6 +311,7 @@ nav:
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
       - Staged OMOP Mutations: interop/omop-staged-mutations.md
+      - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md

@@ -50,6 +50,18 @@ from .vocab_router import (
     domain_cdm_table,
     route_domain,
 )
+from .vocabulary_write_gate import (
+    VOCABULARY_WRITE_GATE_SCHEMA,
+    VocabularyCompatibility,
+    VocabularyConcept,
+    VocabularyGateDecision,
+    VocabularyMappingProvenance,
+    VocabularyRemappingRequest,
+    VocabularySnapshot,
+    VocabularyWriteGate,
+    VocabularyWriteGateError,
+    VocabularyWriteGateReport,
+)
 
 __all__ = [
     "LoadMode",
@@ -79,6 +91,16 @@ __all__ = [
     "UNMAPPED_CONCEPT_NAME",
     "UNMAPPED_VOCABULARY_ID",
     "VocabularyRouter",
+    "VOCABULARY_WRITE_GATE_SCHEMA",
+    "VocabularyCompatibility",
+    "VocabularyConcept",
+    "VocabularyGateDecision",
+    "VocabularyMappingProvenance",
+    "VocabularyRemappingRequest",
+    "VocabularySnapshot",
+    "VocabularyWriteGate",
+    "VocabularyWriteGateError",
+    "VocabularyWriteGateReport",
     "WriterKind",
     "create_omop_schema",
     "deterministic_note_hash",
