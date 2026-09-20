@@ -48,7 +48,7 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 101
+    assert len(entries) == 102
     assert len(records) == len(entries)
     assert {
         record.name
@@ -59,6 +59,7 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     assert {record.name for record in records} >= {
         "faker",
         "jieba",
+        "medspacy",
         "pysbd",
         "pyyaml",
         "snowflake-snowpark-python",
