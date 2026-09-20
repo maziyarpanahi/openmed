@@ -101,6 +101,7 @@ nav:
       - Patient and Encounter Identity Resolution: interop/identity-resolution.md
       - Structured Source Evidence Adapters: interop/structured-evidence-adapters.md
       - Clinical Task Router and Model Packs: clinical/model-packs.md
+      - Clinical Fact Normalization: structured/clinical-fact-normalization.md
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md

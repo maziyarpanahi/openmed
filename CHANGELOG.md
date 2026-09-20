@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a versioned clinical model-pack contract and local-only task router with
   pinned artifact integrity, license and quantization gates, explicit runtime
   capability outcomes, and deterministic fallbacks (#3328).
+- Added model-independent clinical-fact normalization across extraction,
+  assertion, temporality, relation, medication, laboratory, observation, and
+  social-determinant outputs with evidence and derivation gates (#3330).
 
 ### Changed
 
