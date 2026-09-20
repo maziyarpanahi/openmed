@@ -262,6 +262,8 @@ def test_golden_note_pipeline_matches_chained_handlers_without_egress_or_phi(
         composed = mcp_server.openmed_clinical_pipeline(
             stages=list(CLINICAL_STAGE_ORDER),
             text=deidentified_text,
+            # Reuse one detection's private hashes when comparing downstream stages.
+            spans=early["artifacts"]["detect"]["spans"],
             options={
                 "detect": {"doc_id": "synthetic-agent-run-1251"},
                 "ground": {
