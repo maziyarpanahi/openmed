@@ -7,11 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
+  use private random HMAC keys by default. Reuse a pipeline or redactor instance,
+  or supply the same non-empty private key, when stable hashes across calls are
+  required. Web and React Native calls also accept explicit keys for this purpose.
+  Empty explicit keys are rejected; redaction labels and offsets are unchanged.
+- GitHub Actions are pinned to immutable commits, enforced by CI, and container
+  publishing permissions are limited to the publish job.
+
+## [2.5.0] - 2026-09-14
+
+OpenMed 2.5 adds clinical privacy and extraction previews, local privacy
+and audit controls, FHIR and OMOP validation, bounded multimodal intake,
+and registry and training orchestration. This release compares against v2.3.0;
+there is no intervening v2.4.0 tag. See the
+[release notes](docs/release/v2.5.0.md) and
+[migration guide](docs/migration/2.3-to-2.5.md).
+
 ### Added
 
-- Added allocation-safe image geometry derivation with checked pixel counts,
-  reduced aspect ratios, orientation classes, and overflow-checked optional memory
-  estimates from validated dimensions, with synthetic regression tests (#3047).
+- Added duplicate-cue validation for status vocabularies: cues that collide after the
+  existing Unicode, case, and whitespace normalization are rejected on load, both
+  within one status and across statuses, with value-free errors (#3104).
+- Added duplicate and conflicting sense validation for abbreviation inventories: equivalent
+  candidates, short forms that normalize together, and repeated JSON keys now fail on load
+  instead of being silently dropped, and one long form under distinct semantic types is kept
+  as separate alternatives when a local inventory is merged (#3105).
+- Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
+  functional-scale, assistive-device, and cognitive-status labels, synthetic
+  span fixtures, and offline per-label coverage reporting (#911).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
@@ -200,45 +226,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded synthetic waiver metadata by severity, scope, expiry, and policy
   fingerprint, failing closed on exceeded or unbounded exceptions (#2591).
 
-### Security
-
-- Added a local session-end hook that transactionally scrubs completed JSON and
-  JSONL traces with value-free failure reports and concurrent-change checks
-  (#2300).
-- Added deterministic authenticated encryption for reversible surrogate
-  mappings, with caller-owned keys, owner-only atomic persistence, and
-  value-free failures (#2293).
-- Added a fail-closed local dataset-upload privacy guard with block and
-  redact-to-staging modes, privacy-safe reports, and private atomic staging
-  files (#2297).
-- Added a reusable offline CI privacy scanner with explicit scan paths,
-  non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
-  report writes (#2299).
-- Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
-  DOM-based search-suggestion XSS tracked as CVE-2026-73295.
-
-### Fixed
-
-- Fixed verified artifact deletion and rollback on Windows Python 3.12 by
-  comparing explicit creation timestamps across pathname and descriptor stat
-  results, while retaining identity and in-read mutation checks.
-
-## [2.3.0] - 2026-09-04
-
-OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
-workflows, multimodal asset intake, clinical evidence, local training,
-cross-platform runtimes, deployment adapters, and release hardening. The final
-audited `v2.2.0..v2.3.0` release-branch range contains 252 commits and 651 changed
-files.
-
-The static public Python surface grows from 37,735 to 41,729 symbols with
-3,994 additions, zero removals or narrowed signatures, and zero new
-deprecations. Python, Swift, Kotlin/Android, JavaScript, REST, CLI,
-configuration, serialized evidence, and deployment contracts are reviewed in
-the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
-
-### Added
-
 - Added local, deterministic FHIR ValueSet expansion over caller-loaded free
   vocabulary snapshots plus explicit FHIR `$expand` and ECL delegation to a
   caller-supplied terminology endpoint. Results include versioned provenance;
@@ -264,6 +251,74 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
   scalars and Reference normalization, `effective[x]` mutual exclusivity,
   deep-copy evidence preservation, field-name-only value-free errors, and
   no network or clock dependency (#2566).
+- Added privacy-safe multimodal asset batches with opaque batch identifiers,
+  canonical asset ordering, duplicate identifier and digest detection, a
+  bounded asset count, derived byte, page, frame, and duration totals, and
+  sorted value-free findings for invalid, oversized, overflowing, or
+  inconsistent batches (#3002).
+- Rekeyed the committed model-registry state to schema v2: sparse
+  `family::tier::format` release-channel slots (the `baseline_key`
+  convention shared by `gates/baseline.json`, `gates/rollout_state.json`,
+  and the release ledger), created only by coordinate-matched RELEASABLE
+  promotions, with assigned per-slot SemVer that is validated as stored
+  state and never recomputed from repo-id version tokens. Ships a
+  fail-closed one-time v1 migration (`registry_ctl.py migrate`) that maps
+  pointers through committed baseline coordinate evidence and leaves the
+  file unchanged on any ambiguity (#1804).
+
+### Security
+
+- Added a local session-end hook that transactionally scrubs completed JSON and
+  JSONL traces with value-free failure reports and concurrent-change checks
+  (#2300).
+- Added deterministic authenticated encryption for reversible surrogate
+  mappings, with caller-owned keys, owner-only atomic persistence, and
+  value-free failures (#2293).
+- Added a fail-closed local dataset-upload privacy guard with block and
+  redact-to-staging modes, privacy-safe reports, and private atomic staging
+  files (#2297).
+- Added a reusable offline CI privacy scanner with explicit scan paths,
+  non-transitive synthetic-fixture allowlists, counts-only reports, and atomic
+  report writes (#2299).
+- Updated the locked Material for MkDocs dependency to 9.7.7, which fixes the
+  DOM-based search-suggestion XSS tracked as CVE-2026-73295.
+
+### Fixed
+
+- Preserve the v2.3 family registry API, CLI selectors, serialized views, and
+  unambiguous aliases; expose slot operations through `SlotRegistryService`
+  with an explicit v2 state contract and fail-closed compatibility adapter.
+- Pin Swift tokenization to the validated 0.1.24 release so clean package
+  resolution cannot select an incompatible MLX dependency graph.
+- Add SDK-only readiness evidence for unchanged model artifacts and pointer
+  targets while retaining signed model gates for model releases.
+- Validate ONNX label metadata before importing optional runtimes; malformed
+  labels now fail at the metadata boundary.
+- Keep local privacy-proxy request mappings scoped to one request and reject
+  unknown, duplicate, or malformed placeholders on inbound restoration.
+- Refresh Debian certificate and OpenSSL package pins used by the container
+  build and validate release artifact size budgets against measured growth.
+
+- Fixed verified artifact deletion and rollback on Windows Python 3.12 by
+  comparing explicit creation timestamps across pathname and descriptor stat
+  results, while retaining identity and in-read mutation checks.
+
+## [2.3.0] - 2026-09-04
+
+OpenMed 2.3 expands the stable v2 contract across privacy-safe agent and trace
+workflows, multimodal asset intake, clinical evidence, local training,
+cross-platform runtimes, deployment adapters, and release hardening. The final
+audited `v2.2.0..v2.3.0` release-branch range contains 252 commits and 651 changed
+files.
+
+The static public Python surface grows from 37,735 to 41,729 symbols with
+3,994 additions, zero removals or narrowed signatures, and zero new
+deprecations. Python, Swift, Kotlin/Android, JavaScript, REST, CLI,
+configuration, serialized evidence, and deployment contracts are reviewed in
+the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
+
+### Added
+
 - Added a dependency-free, versioned multimodal asset manifest with strict
   media and digest validation, bounded metadata-only fields, deterministic
   JSON serialization, and value-free rejection of paths, URLs, free text, and
@@ -279,11 +334,6 @@ the [2.2-to-2.3 migration guide](docs/migration/2.2-to-2.3.md).
 - Added image, PDF, DICOM, and audio profiles that validate canonical manifest
   metadata into deterministic field-and-reason findings without opening or
   decoding an asset (#2978).
-- Added privacy-safe multimodal asset batches with opaque batch identifiers,
-  canonical asset ordering, duplicate identifier and digest detection, a
-  bounded asset count, derived byte, page, frame, and duration totals, and
-  sorted value-free findings for invalid, oversized, overflowing, or
-  inconsistent batches (#3002).
 - Added a closed, JSON-safe agent outcome vocabulary with success, abstention,
   reviewer-handoff, policy-denial, and failure classes, deterministic
   serialization, and value-free rejection of unknown codes or free-text
@@ -878,15 +928,6 @@ text should follow `docs/migration/2.0-to-2.1.md`.
   exposed as `openmed.core.labels.is_recognized_label`,
   `openmed.core.catalog_coherence.manifest_label_errors`, and a `Catalog
   coherence` workflow (#2246).
-- Rekeyed the committed model-registry state to schema v2: sparse
-  `family::tier::format` release-channel slots (the `baseline_key`
-  convention shared by `gates/baseline.json`, `gates/rollout_state.json`,
-  and the release ledger), created only by coordinate-matched RELEASABLE
-  promotions, with assigned per-slot SemVer that is validated as stored
-  state and never recomputed from repo-id version tokens. Ships a
-  fail-closed one-time v1 migration (`registry_ctl.py migrate`) that maps
-  pointers through committed baseline coordinate evidence and leaves the
-  file unchanged on any ambiguity (#1804).
 
 ### Changed
 

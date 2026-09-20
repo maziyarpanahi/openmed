@@ -88,7 +88,7 @@ classification:
   navigated:
     - index.md
     - feature-map.md
-    - release/v2.3.0.md
+    - release/v2.5.0.md
     - release/v2.2.0.md
     - release/v2.2-standards-matrix.md
     - release/v2.1.0.md
@@ -172,6 +172,9 @@ classification:
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
+    - clinical/nli-label-contract.md
+    - clinical/nli-assertion-pairs.md
+    - clinical/nli-experiencer-pairs.md
     - clinical/concept-grounding.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md
@@ -179,15 +182,21 @@ classification:
     - clinical/code-crosswalk.md
     - clinical/terminology-conflicts.md
     - clinical/abbreviation-disambiguation.md
+    - clinical/nli-verification.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/nli-temporal-pairs.md
     - clinical/medication-reconciliation.md
+    - clinical/nli-numeric-precheck.md
+    - clinical/nli-medication-status.md
     - clinical/event-timeline.md
     - clinical/terminology-provenance.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/nli-premise-windows.md
+    - clinical/nli-hypothesis-guard.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
@@ -271,6 +280,12 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - clinical/nli-abstention.md
+    - evaluation/nli-calibration.md
+    - clinical/note-routing.md
+    - clinical/radiology-profile.md
+    - clinical/pathology-profile.md
+    - clinical/discharge-profile.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
@@ -288,6 +303,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - language-packs.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
@@ -448,12 +464,14 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - migration/2.3-to-2.5.md
     - migration/2.2-to-2.3.md
     - migration/2.1-to-2.2.md
     - migration/2.0-to-2.1.md
     - migration/1.9-to-2.0.md
     - migration/1.8-to-1.9.md
     - release/trusted-publishing.md
+    - release/v2.3.0.md
     - release/v1.9.1.md
     - release/v1.9.0.md
     - release/v1.8.0.md

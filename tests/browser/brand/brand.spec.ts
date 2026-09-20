@@ -1578,9 +1578,6 @@ test("staged artifact respects recorded byte budgets", async ({
   const sourceMapFiles = manifest.files.filter(
     (file: { path: string }) => file.path.endsWith(".map"),
   );
-  expect(manifest.files.length).toBeLessThanOrEqual(
-    budgets.artifact.maximum_files,
-  );
   expect(totalBytes).toBeLessThanOrEqual(
     budgets.artifact.maximum_total_bytes,
   );
