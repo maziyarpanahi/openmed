@@ -249,6 +249,7 @@ classification:
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/provider-results.md
+    - multimodal/audio-windows.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/pdf-redaction-fidelity.md

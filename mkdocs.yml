@@ -174,6 +174,7 @@ nav:
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
