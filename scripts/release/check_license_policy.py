@@ -109,6 +109,7 @@ REVIEWED_LICENSES = {
     "llama-index-core": "MIT",
     "markdown-it-py": "MIT",
     "mcp": "MIT",
+    "medspacy": "MIT",
     "mkdocs": "BSD-2-Clause",
     "mkdocs-git-revision-date-localized-plugin": "MIT",
     "mkdocs-llmstxt": "ISC",
