@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Return the result-cache instance selected under the global lock so concurrent
+  capacity changes cannot replace a caller's return value.
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
   use private random HMAC keys by default. Reuse a pipeline or redactor instance,
   or supply the same non-empty private key, when stable hashes across calls are
