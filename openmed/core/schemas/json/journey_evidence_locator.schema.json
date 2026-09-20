@@ -1,0 +1,112 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/journey/evidence-locator.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {"properties": {"location_type": {"const": "text_span"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/text_span"}}}
+    },
+    {
+      "if": {"properties": {"location_type": {"const": "json_pointer"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/json_pointer"}}}
+    },
+    {
+      "if": {"properties": {"location_type": {"const": "message_field"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/message_field"}}}
+    },
+    {
+      "if": {"properties": {"location_type": {"const": "page_box"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/page_box"}}}
+    },
+    {
+      "if": {"properties": {"location_type": {"const": "dicom_element"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/dicom_element"}}}
+    },
+    {
+      "if": {"properties": {"location_type": {"const": "table_cell"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/table_cell"}}}
+    }
+  ],
+  "$defs": {
+    "dicom_element": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_uid": {"pattern": "^[0-9]+(?:\\.[0-9]+)*$", "type": "string"},
+        "series_uid": {"pattern": "^[0-9]+(?:\\.[0-9]+)*$", "type": "string"},
+        "study_uid": {"pattern": "^[0-9]+(?:\\.[0-9]+)*$", "type": "string"},
+        "tag": {"pattern": "^[0-9A-F]{4},[0-9A-F]{4}$", "type": "string"}
+      },
+      "required": ["instance_uid", "series_uid", "study_uid", "tag"],
+      "type": "object"
+    },
+    "json_pointer": {
+      "additionalProperties": false,
+      "properties": {
+        "pointer": {"pattern": "^(?:/(?:[^~/]|~[01])*)*$", "type": "string"}
+      },
+      "required": ["pointer"],
+      "type": "object"
+    },
+    "message_field": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[A-Z0-9][A-Z0-9_-]*(?:\\.[1-9][0-9]*)+(?:\\[[1-9][0-9]*\\])?$",
+          "type": "string"
+        }
+      },
+      "required": ["path"],
+      "type": "object"
+    },
+    "page_box": {
+      "additionalProperties": false,
+      "dependentRequired": {
+        "page_height": ["page_width"],
+        "page_width": ["page_height"]
+      },
+      "properties": {
+        "box": {"items": {"minimum": 0, "type": "number"}, "maxItems": 4, "minItems": 4, "type": "array"},
+        "coordinate_space": {"enum": ["normalized", "pixels", "points"]},
+        "page": {"minimum": 1, "type": "integer"},
+        "page_height": {"exclusiveMinimum": 0, "type": "number"},
+        "page_width": {"exclusiveMinimum": 0, "type": "number"}
+      },
+      "required": ["box", "coordinate_space", "page"],
+      "type": "object"
+    },
+    "table_cell": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {"minimum": 1, "type": "integer"},
+        "row": {"minimum": 1, "type": "integer"},
+        "sheet": {"maxLength": 128, "minLength": 1, "type": "string"}
+      },
+      "required": ["column", "row"],
+      "type": "object"
+    },
+    "text_span": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {"minimum": 1, "type": "integer"},
+        "start": {"minimum": 0, "type": "integer"}
+      },
+      "required": ["end", "start"],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "artifact_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "location": {"oneOf": [{"$ref": "#/$defs/text_span"}, {"$ref": "#/$defs/json_pointer"}, {"$ref": "#/$defs/message_field"}, {"$ref": "#/$defs/page_box"}, {"$ref": "#/$defs/dicom_element"}, {"$ref": "#/$defs/table_cell"}]},
+    "location_type": {"enum": ["text_span", "json_pointer", "message_field", "page_box", "dicom_element", "table_cell"]},
+    "locator_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+    "transform": {"type": "object"}
+  },
+  "required": ["artifact_id", "location", "location_type", "locator_id", "schema_version", "transform"],
+  "schema_version": 1,
+  "title": "OpenMedJourneyEvidenceLocator",
+  "type": "object"
+}
