@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   encounter, time, event, status, source, and review filters; complete immutable
   provenance drill-down; correction-aware state; and a value-free timeline
   graph (#3333).
+- Added versioned PDF, OCR, image, and DICOM evidence coordinates with
+  invertible rotation, crop, and scale chains; exact source-space round trips;
+  explicit DICOM tag provenance; and typed quarantine behavior (#3334).
 
 ### Changed
 

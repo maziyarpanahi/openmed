@@ -34,7 +34,7 @@
   "properties": {
     "artifact": {"$ref": "#/$defs/artifact"},
     "compatibility_policy": {"const": "same_major"},
-    "coordinate_convention": {"enum": ["unicode_text_v1", "existing_document_v1", "fhir_json_pointer_v1", "hl7v2_field_component_v1", "cda_document_path_v1", "table_cell_v1"]},
+    "coordinate_convention": {"enum": ["unicode_text_v1", "existing_document_v1", "fhir_json_pointer_v1", "hl7v2_field_component_v1", "cda_document_path_v1", "table_cell_v1", "pdf_top_left_v1", "ocr_top_left_v1", "image_top_left_v1", "dicom_element_v1"]},
     "locators": {"items": {"$ref": "#/$defs/locator"}, "type": "array", "uniqueItems": true},
     "normalization_transform": {"minProperties": 1, "type": "object"},
     "parser_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
@@ -43,7 +43,7 @@
     "schema_version": {"const": "1.0.0"},
     "source_byte_size": {"minimum": 0, "type": "integer"},
     "source_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
-    "source_format": {"enum": ["text", "document", "fhir_r4", "hl7v2", "cda", "csv", "xlsx"]},
+    "source_format": {"enum": ["text", "document", "fhir_r4", "hl7v2", "cda", "csv", "xlsx", "pdf", "ocr", "image", "dicom_sr"]},
     "source_version": {"pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$", "type": "string"}
   },
   "required": ["artifact", "compatibility_policy", "coordinate_convention", "locators", "normalization_transform", "parser_id", "parser_version", "result_id", "schema_version", "source_byte_size", "source_digest", "source_format", "source_version"],
