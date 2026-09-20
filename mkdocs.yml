@@ -194,6 +194,7 @@ nav:
       - Sealed Holdout Commitments: evaluation/holdout-commitments.md
       - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
+      - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
