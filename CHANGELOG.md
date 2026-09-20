@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added physically separated identified and de-identified projection stores,
   capability-scoped transform vault access, purpose and consent policy gates,
   cache revocation, and durable value-free access auditing (#3324).
+- Added conservative patient and encounter identity resolution with opaque
+  source keys, deterministic exact links, review-isolated candidate plugins,
+  transactional merge and split decisions, and durable provenance (#3325).
 
 ### Changed
 
