@@ -265,6 +265,7 @@ classification:
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
     - evaluation/privacy-corpus.md
+    - evaluation/sealed-workflow-manifests.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
