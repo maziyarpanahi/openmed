@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic, allocation-free audio resampling plans with reduced
+  rational rates, floor, nearest-even, and ceiling rounding policies,
+  exact or rounded status, overflow-checked arithmetic, and an optional
+  duration-error tolerance, with synthetic regression tests (#3049).
+
 ### Changed
 
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
