@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   artifacts, evidence locators, facts, conflicts, resolution events, and
   dataset snapshots, including deterministic JSON, bundled schemas, and
   derivation-graph validation (#3320).
+- Added durable local Journey storage with content-addressed artifact bytes,
+  append-only SQLite metadata and fact history, atomic graph transactions,
+  typed outcomes, deterministic migrations, integrity checks, and
+  point-in-time reads (#3321).
 
 ### Changed
 
