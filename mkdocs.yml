@@ -193,6 +193,7 @@ nav:
       - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
       - Sealed Holdout Commitments: evaluation/holdout-commitments.md
       - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
+      - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
