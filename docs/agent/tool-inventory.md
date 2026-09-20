@@ -67,3 +67,25 @@ request examples, and response examples are never rendered.
 
 All operations are local and deterministic. Inventory generation performs no
 network access, endpoint discovery, credential validation, or tool execution.
+
+## Inspect an inventory from the CLI
+
+Use the Typer command surface to validate and render a content-free inventory
+without importing an agent provider:
+
+```console
+python -m openmed.cli.typer_app agents tools \
+  --inventory tool-inventory.json \
+  --format json
+```
+
+The default `text` format uses the deterministic Markdown renderer. Use
+`--format json` for canonical compact JSON and `--output` (or `-o`) to write
+the exact rendered snapshot to a path instead of standard output. Omitting
+`--inventory` renders the empty local registry, which is useful for readiness
+checks before tools are registered.
+
+The input document must use the exact output contract from `ToolInventory`.
+Unknown fields fail closed, so endpoints, credentials, arguments, examples,
+and clinical values cannot pass through the command. The command does not
+probe a tool, validate credentials, execute a handler, or make a network call.
