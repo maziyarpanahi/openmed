@@ -37,6 +37,7 @@ EVIDENCE_LOCATION_TYPES: Final = (
     "text_span",
     "json_pointer",
     "message_field",
+    "document_path",
     "page_box",
     "dicom_element",
     "table_cell",
@@ -66,6 +67,11 @@ _DICOM_UID_RE: Final = re.compile(r"^[0-9]+(?:\.[0-9]+)*$")
 _DICOM_TAG_RE: Final = re.compile(r"^[0-9A-Fa-f]{4},?[0-9A-Fa-f]{4}$")
 _MESSAGE_FIELD_RE: Final = re.compile(
     r"^[A-Z0-9][A-Z0-9_-]*(?:\.[1-9][0-9]*)+(?:\[[1-9][0-9]*\])?$"
+)
+_DOCUMENT_PATH_RE: Final = re.compile(
+    r"^/(?:[A-Za-z_][A-Za-z0-9_.-]*\[[1-9][0-9]*\]/)*"
+    r"[A-Za-z_][A-Za-z0-9_.-]*\[[1-9][0-9]*\]"
+    r"(?:/(?:@[A-Za-z_][A-Za-z0-9_.-]*|text\(\)|tail\(\)))?$"
 )
 _JSON_POINTER_BAD_ESCAPE_RE: Final = re.compile(r"~(?![01])")
 _SAFE_PATH_COMPONENT_RE: Final = re.compile(r"^[A-Za-z0-9_.@+=,-]{1,255}$")
@@ -327,6 +333,11 @@ def _schema_version(value: Any) -> str:
     return f"{major}.{minor}.{patch}"
 
 
+def _version_tuple(value: str) -> tuple[int, int, int]:
+    major, minor, patch = value.split(".")
+    return int(major), int(minor), int(patch)
+
+
 def _freeze_json(value: Any, field_name: str) -> Any:
     if value is None or type(value) in (bool, int, str):
         return value
@@ -472,6 +483,16 @@ def _normalize_location(location_type: str, location: Any) -> Mapping[str, Any]:
         if _MESSAGE_FIELD_RE.fullmatch(path) is None:
             raise JourneyContractError("message field path has an invalid format")
         value = {"path": path}
+    elif location_type == "document_path":
+        exact_keys({"path"}, {"section"})
+        path = _required_text(value["path"], "location.path", max_length=512)
+        if _DOCUMENT_PATH_RE.fullmatch(path) is None:
+            raise JourneyContractError("document path has an invalid format")
+        value = {"path": path}
+        if "section" in location:
+            value["section"] = _integer(
+                location["section"], "location.section", minimum=1
+            )
     elif location_type == "page_box":
         exact_keys(
             {"page", "box", "coordinate_space"},
@@ -768,7 +789,14 @@ class EvidenceLocator(_JourneyRecord):
         object.__setattr__(
             self, "transform", _freeze_mapping(self.transform, "transform")
         )
-        object.__setattr__(self, "schema_version", _schema_version(self.schema_version))
+        schema_version = _schema_version(self.schema_version)
+        if location_type == "document_path" and _version_tuple(schema_version) < (
+            1,
+            1,
+            0,
+        ):
+            raise JourneyContractError("document_path requires locator schema 1.1")
+        object.__setattr__(self, "schema_version", schema_version)
         object.__setattr__(
             self, "extensions", _extension_mapping(self.extensions, self._KNOWN_FIELDS)
         )
