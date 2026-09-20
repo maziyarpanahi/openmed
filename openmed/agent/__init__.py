@@ -35,6 +35,13 @@ from .outcomes import (
     WorkflowOutcome,
     allowed_reason_codes,
 )
+from .policy_matrix import (
+    MAX_POLICY_MATRIX_ROWS,
+    POLICY_MATRIX_SCHEMA_VERSION,
+    PolicyDecisionMatrix,
+    PolicyDecisionRow,
+    PolicyMatrixError,
+)
 from .reviewer_handoff import (
     MAX_HANDOFF_EVIDENCE_REFERENCES,
     REVIEWER_HANDOFF_SCHEMA_VERSION,
@@ -73,6 +80,7 @@ __all__ = [
     "OutcomeError",
     "MAX_ARTIFACT_BYTE_SIZE",
     "MAX_HANDOFF_EVIDENCE_REFERENCES",
+    "MAX_POLICY_MATRIX_ROWS",
     "MAX_RUN_SUMMARY_JSON_BYTES",
     "RunEvent",
     "RUN_SUMMARY_SCHEMA_VERSION",
@@ -83,6 +91,10 @@ __all__ = [
     "RUN_ID_PREFIX",
     "RunId",
     "PolicyId",
+    "POLICY_MATRIX_SCHEMA_VERSION",
+    "PolicyDecisionMatrix",
+    "PolicyDecisionRow",
+    "PolicyMatrixError",
     "PurposeId",
     "REVIEWER_HANDOFF_SCHEMA_VERSION",
     "RequestedDecision",

@@ -110,6 +110,7 @@ classification:
     - agent/event-correlation.md
     - agent/outcome-reasons.md
     - agent/reviewer-handoffs.md
+    - agent/policy-decision-matrices.md
     - agent/run-summaries.md
     - agent/timing-metadata.md
     - agent-skills/install.md
