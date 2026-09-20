@@ -384,6 +384,7 @@ classification:
     - compliance/hipaa-safe-harbor-attestation.md
     - compliance/iso-27701-control-evidence.md
     - compliance/consent-data-use-tags.md
+    - compliance/separated-projections.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - compliance/privacy-release-gate.md
