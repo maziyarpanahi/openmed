@@ -39,16 +39,14 @@ except ValueError as error:
 ## Guard against duplicate cues
 
 Matching resolves ties by `priority` order, so a cue accidentally listed
-under two statuses silently favors whichever status is checked first;
-`load_status_vocab` does not fail this case on its own. The example adds
-`validate_no_duplicate_cues()`, a small local check run after loading:
+under two statuses would be ambiguous. `load_status_vocab` rejects cues that
+collide after the same Unicode, case, and whitespace normalization used for
+matching. The error identifies the conflicting statuses and cue positions
+without echoing the cue text:
 
 ```python
-from examples.custom_status_vocabulary import validate_no_duplicate_cues
-
-validate_no_duplicate_cues(mobility, domain="mobility")
-# ValueError: mobility vocabulary lists 'uses a cane' under both
-# 'assisted' and 'never'
+load_status_vocab("duplicate_cues.yaml")
+# ValueError: mobility vocabulary lists one normalized cue under two statuses
 ```
 
 ## Normalize against the local domain

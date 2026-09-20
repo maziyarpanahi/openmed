@@ -61,37 +61,6 @@ def write_example_vocabulary(directory: Path) -> Path:
     return path
 
 
-def find_duplicate_cues(vocabulary: Mapping[str, Any]) -> list[tuple[str, str, str]]:
-    """Return cues that collide, after normalization, across statuses.
-
-    ``load_status_vocab`` checks structure and provenance but does not check
-    whether the same cue was listed under two statuses by mistake; matching
-    resolves ties by priority order, so a duplicate silently favors whichever
-    status is checked first. Contributors extending a vocabulary locally
-    should run this check before trusting normalization output.
-    """
-    seen: dict[str, str] = {}
-    collisions: list[tuple[str, str, str]] = []
-    for status, entry in vocabulary["statuses"].items():
-        for cue in entry["cues"]:
-            normalized = _normalize_phrase(cue)
-            existing = seen.setdefault(normalized, status)
-            if existing != status:
-                collisions.append((cue, existing, status))
-    return collisions
-
-
-def validate_no_duplicate_cues(vocabulary: Mapping[str, Any], *, domain: str) -> None:
-    """Raise ``ValueError`` if any cue in ``vocabulary`` collides across statuses."""
-    collisions = find_duplicate_cues(vocabulary)
-    if collisions:
-        cue, first_status, second_status = collisions[0]
-        raise ValueError(
-            f"{domain} vocabulary lists {cue!r} under both "
-            f"{first_status!r} and {second_status!r}"
-        )
-
-
 def normalize_mobility_status(
     phrase: object,
     vocabulary: Mapping[str, Any],
@@ -163,7 +132,6 @@ def main() -> dict[str, Any]:
         mobility = load_status_vocab(write_example_vocabulary(directory))[
             "vocabularies"
         ][_MOBILITY_DOMAIN]
-        validate_no_duplicate_cues(mobility, domain=_MOBILITY_DOMAIN)
 
         normalized = {
             "uses a cane": normalize_mobility_status("uses a cane", mobility),
@@ -197,17 +165,12 @@ def main() -> dict[str, Any]:
 
         duplicate_cue_path = directory / "duplicate_cues.yaml"
         duplicate_cue_path.write_text(broken_duplicate_cue_yaml(), encoding="utf-8")
-        duplicate_mobility = load_status_vocab(duplicate_cue_path)["vocabularies"][
-            _MOBILITY_DOMAIN
-        ]
         try:
-            validate_no_duplicate_cues(duplicate_mobility, domain=_MOBILITY_DOMAIN)
+            load_status_vocab(duplicate_cue_path)
         except ValueError as error:
             duplicate_cue_rejected = str(error)
         else:
-            raise AssertionError(
-                "expected validate_no_duplicate_cues to reject a duplicate cue"
-            )
+            raise AssertionError("expected load_status_vocab to reject a duplicate cue")
 
     summary = {
         "normalized": normalized,

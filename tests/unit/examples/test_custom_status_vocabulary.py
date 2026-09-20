@@ -25,9 +25,10 @@ def test_custom_status_vocabulary_runs_end_to_end(capsys) -> None:
         "chart silent on mobility": "unknown",
     }
     assert "advisory disclaimer" in summary["invalid_provenance_rejected"]
-    assert "uses a cane" in summary["duplicate_cue_rejected"]
+    assert "normalized cue" in summary["duplicate_cue_rejected"]
     assert "assisted" in summary["duplicate_cue_rejected"]
     assert "never" in summary["duplicate_cue_rejected"]
+    assert "uses a cane" not in summary["duplicate_cue_rejected"]
 
 
 def test_write_example_vocabulary_loads_through_the_public_path_api(tmp_path) -> None:
@@ -39,13 +40,10 @@ def test_write_example_vocabulary_loads_through_the_public_path_api(tmp_path) ->
     assert "clinical decision" in payload["provenance"]["disclaimer"]
 
 
-def test_find_duplicate_cues_is_empty_for_the_shipped_example_vocabulary(
-    tmp_path,
-) -> None:
+def test_shipped_example_passes_builtin_duplicate_validation(tmp_path) -> None:
     path = example.write_example_vocabulary(tmp_path)
-    mobility = load_status_vocab(path)["vocabularies"]["mobility"]
 
-    assert example.find_duplicate_cues(mobility) == []
+    assert "mobility" in load_status_vocab(path)["vocabularies"]
 
 
 def test_broken_provenance_yaml_is_rejected_by_load_status_vocab(tmp_path) -> None:
@@ -56,15 +54,12 @@ def test_broken_provenance_yaml_is_rejected_by_load_status_vocab(tmp_path) -> No
         load_status_vocab(path)
 
 
-def test_broken_duplicate_cue_yaml_is_rejected_by_validate_no_duplicate_cues(
-    tmp_path,
-) -> None:
+def test_broken_duplicate_cue_yaml_is_rejected_by_load_status_vocab(tmp_path) -> None:
     path = tmp_path / "duplicate.yaml"
     path.write_text(example.broken_duplicate_cue_yaml(), encoding="utf-8")
-    mobility = load_status_vocab(path)["vocabularies"]["mobility"]
 
-    with pytest.raises(ValueError, match="uses a cane"):
-        example.validate_no_duplicate_cues(mobility, domain="mobility")
+    with pytest.raises(ValueError, match="normalized cue"):
+        load_status_vocab(path)
 
 
 @pytest.mark.parametrize(
