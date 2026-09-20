@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 51196190,
-    "maximum_unique_payload_bytes": 50858611,
+    "maximum_total_bytes": 51193653,
+    "maximum_unique_payload_bytes": 50856074,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,10 +31,10 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including its release, migration, clinical routing/profile pages, and deterministic measurement-trend guide, with 110750 bytes of documentation headroom.",
-    "Documentation growth is governed by manifest ownership and hashes plus byte, transfer, duplicate-payload, source-map, and performance budgets. An absolute file-count ceiling is omitted because legitimate pages add files without measuring payload or behavior.",
-    "The staged artifact measures 51085440 total bytes, 50747861 unique payload bytes, and 337579 duplicate payload bytes. The 51196190-byte total and 50858611-byte unique-payload ceilings retain 110750 bytes of headroom.",
-    "The clinical guides remain searchable. The measured search index is 3477610 bytes; its 3511794-byte JSON ceiling retains 34184 bytes of headroom. Per-file caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the language-pack onboarding guide, with 110750 bytes of documentation headroom.",
+    "The audited candidate contains 51082903 total bytes, 50745324 unique payload bytes, and 337579 duplicate payload bytes. The language-pack guide and navigation remain governed by the byte, route, and performance budgets without an arbitrary file-count ceiling.",
+    "The 50856074-byte unique-payload ceiling and 51193653-byte total-payload ceiling retain 110750 bytes of headroom. Per-file non-JSON caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The clinical and language-pack guides remain searchable. The measured search index is 3479079 bytes; its 3511794-byte JSON ceiling retains 32715 bytes of headroom. Other per-file caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets are unchanged.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
