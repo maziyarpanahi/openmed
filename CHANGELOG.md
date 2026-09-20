@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic, metadata-only validation of append-only agent run
+  event sequences with duplicate, gap, ordering, cross-run and
+  post-terminal findings, stable finding order, and byte-stable JSON
+  reports that never accept or echo event payloads (#2997).
+
 ### Changed
 
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
