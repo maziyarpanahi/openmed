@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Allow model loading when optional architecture metadata is absent or empty; retain
+  advisory warnings and normal factory failures.
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
   use private random HMAC keys by default. Reuse a pipeline or redactor instance,
   or supply the same non-empty private key, when stable hashes across calls are
