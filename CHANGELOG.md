@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added deterministic SPDX identifier normalization for synthetic lineage with a
-  committed permissive allowlist, deprecated-alias mapping, LicenseRef support,
-  and stable unknown and malformed outcomes, with synthetic regression tests
-  (#3120).
+- Added deterministic half-open window planning for offline streaming
+  audio, with integer-millisecond offsets, real per-window overlap,
+  keep/merge/drop tail policies, arithmetic window-count bounds, and
+  value-free rejection of boolean, negative and overflowing input (#3005).
 
 ### Changed
 
