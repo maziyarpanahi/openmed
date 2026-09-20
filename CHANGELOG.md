@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added evidence-preserving fact deduplication, dimension-specific conflict
   sets, versioned policy and human resolutions, append-only correction history,
   guarded review packets, and counts-only queue SLA summaries (#3332).
+- Added paginated point-in-time longitudinal journey views with typed patient,
+  encounter, time, event, status, source, and review filters; complete immutable
+  provenance drill-down; correction-aware state; and a value-free timeline
+  graph (#3333).
 
 ### Changed
 

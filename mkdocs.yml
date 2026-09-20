@@ -105,6 +105,7 @@ nav:
       - Clinical Fact Normalization: structured/clinical-fact-normalization.md
       - Terminology Resolution Cascades: clinical/terminology-resolution.md
       - Fact Reconciliation and Correction History: structured/fact-reconciliation.md
+      - Point-in-Time Longitudinal Journey: clinical/longitudinal-journey.md
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
