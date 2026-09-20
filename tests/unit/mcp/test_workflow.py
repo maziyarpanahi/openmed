@@ -526,6 +526,13 @@ def test_clinical_pipeline_preserves_text_free_spans_across_local_stages(
 
     monkeypatch.setattr(mcp_server, "openmed_analyze_text", analyze)
 
+    from openmed.mcp.workflow import ClinicalPipelineArtifact
+
+    artifact = ClinicalPipelineArtifact(text=note)
+    first = mcp_server._clinical_detect_stage(artifact, {}, runtime_provider=None)
+    second = mcp_server._clinical_detect_stage(artifact, {}, runtime_provider=None)
+    assert first["spans"][0]["text_hash"] != second["spans"][0]["text_hash"]
+
     result = mcp_server.openmed_clinical_pipeline(
         stages=["detect", "context", "sections", "relations"],
         text=note,
