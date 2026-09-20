@@ -192,6 +192,7 @@ nav:
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
       - Sealed Holdout Commitments: evaluation/holdout-commitments.md
+      - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
