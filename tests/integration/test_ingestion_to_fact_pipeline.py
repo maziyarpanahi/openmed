@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +39,13 @@ from openmed.interop.ingest import (
     SQLiteIngestionStore,
     TextEvidenceAdapter,
 )
-from openmed.structured.facts import MappingFactAdapter
+from openmed.structured.facts import (
+    FactReconciler,
+    FactReconciliationInput,
+    FactReconciliationPolicy,
+    MappingFactAdapter,
+    persist_fact_reconciliation,
+)
 from openmed.structured.store import StoreState
 
 pytestmark = pytest.mark.integration
@@ -346,6 +353,99 @@ def test_golden_journey_fact_code_resolves_with_versioned_mapping(
     assert coverage["unmapped_rate"] == 0.0
     assert source not in mapped.value.to_json()
     journey_store.close()
+
+
+def test_golden_journey_correction_appends_reconciliation_history(
+    tmp_path: Path,
+) -> None:
+    """Carry a normalized fact through correction and canonical replay."""
+
+    store = SQLiteIngestionStore(tmp_path / "correction-journey.sqlite3")
+    pipeline = IngestionToFactPipeline(store, _components())
+    adapter = TextEvidenceAdapter()
+    source = "Synthetic correction journey fixture."
+    source_id = derived_opaque_id("source", "correction-golden")
+    manifest = _manifest(
+        pipeline,
+        adapter=adapter,
+        source=source,
+        source_id=source_id,
+        suffix="correction",
+    )
+    context = EvidenceAdapterContext(
+        source_id=source_id,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        recorded_at=T0,
+    )
+    ingested = pipeline.run(
+        manifest=manifest,
+        source=source,
+        adapter=adapter,
+        adapter_context=context,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id=WORKER_ID,
+    )
+    assert ingested.ok
+    facts = store.list_facts(SUBJECT_ID)
+    assert facts.value is not None
+    original = facts.value[0]
+    corrected = replace(
+        original,
+        fact_id=derived_opaque_id("fact", original.fact_id, "correction"),
+        value={"code": "synthetic-text-corrected", "system": "synthetic"},
+        status="corrected",
+        parent_fact_ids=(original.fact_id,),
+        derivation_hash=canonical_digest(
+            {"original_fact_id": original.fact_id, "operation": "correction"}
+        ),
+    )
+    written = store.put_fact(corrected, committed_at="2026-01-02T04:04:05Z")
+    assert written.ok and written.created
+
+    reconciliation_id = derived_opaque_id("canonical", SUBJECT_ID, "synthetic-text")
+    plan = FactReconciler(
+        FactReconciliationPolicy(prefer_valid_amendment=True)
+    ).reconcile(
+        SUBJECT_ID,
+        (
+            FactReconciliationInput(
+                fact=original,
+                reconciliation_id=reconciliation_id,
+                source="source.synthetic",
+            ),
+            FactReconciliationInput(
+                fact=corrected,
+                reconciliation_id=reconciliation_id,
+                source="source.synthetic",
+                amendment_of=original.fact_id,
+            ),
+        ),
+        occurred_at="2026-01-02T05:04:05Z",
+    )
+    assert plan.ok and plan.value is not None
+    persisted = persist_fact_reconciliation(
+        plan.value,
+        store,
+        committed_at="2026-01-02T05:04:05Z",
+    )
+
+    assert persisted.ok and persisted.created
+    canonical = store.get_canonical(reconciliation_id)
+    assert canonical.ok and canonical.value is not None
+    assert canonical.value.record.fact_id == corrected.fact_id
+    assert canonical.value.record.metadata["policy_version"] == "1.0.0"
+    history = store.list_facts(SUBJECT_ID)
+    assert history.value is not None
+    assert tuple(item.fact_id for item in history.value) == (
+        original.fact_id,
+        corrected.fact_id,
+    )
+    assert source not in plan.value.to_json()
+    store.close()
 
 
 def test_failed_stage_commits_no_fact_or_successful_job_and_no_raw_audit(

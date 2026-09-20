@@ -637,6 +637,38 @@ class SQLiteJourneyStore:
             return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
         return StoreResult.success(job, revision=int(row["created_revision"]))
 
+    def list_job_versions(
+        self,
+        job_id: str,
+        *,
+        as_of: StorePoint | None = None,
+    ) -> StoreResult[tuple[JobMetadata, ...]]:
+        """Return append-only job metadata versions through one revision."""
+
+        denied = self._denied("read", "job")
+        if denied is not None:
+            return denied
+        if not _valid_opaque_id(job_id):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_identifier")
+        rows = self._connection.execute(
+            """
+            SELECT payload_json
+            FROM job_metadata_versions
+            WHERE job_id = ? AND created_revision <= ?
+            ORDER BY version, created_revision
+            """,
+            (job_id, self._cutoff(as_of)),
+        ).fetchall()
+        if not rows:
+            return StoreResult.outcome(StoreState.UNKNOWN, "job_not_found")
+        try:
+            versions = tuple(
+                JobMetadata.from_dict(json.loads(row["payload_json"])) for row in rows
+            )
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
+        return StoreResult.success(versions)
+
     def list_facts(
         self,
         subject_id: str,
@@ -1269,27 +1301,27 @@ class LocalJourneyStore:
                 for locator in locators:
                     if failure is not None:
                         break
-                    result = transaction.put_evidence(locator)
-                    if not result.ok:
-                        failure = result
+                    evidence_result = transaction.put_evidence(locator)
+                    if not evidence_result.ok:
+                        failure = evidence_result
                     else:
-                        created_metadata = created_metadata or result.created
+                        created_metadata = created_metadata or evidence_result.created
                 for fact in fact_records:
                     if failure is not None:
                         break
-                    result = transaction.put_fact(fact)
-                    if not result.ok:
-                        failure = result
+                    fact_result = transaction.put_fact(fact)
+                    if not fact_result.ok:
+                        failure = fact_result
                     else:
-                        created_metadata = created_metadata or result.created
+                        created_metadata = created_metadata or fact_result.created
                 for conflict in conflict_records:
                     if failure is not None:
                         break
-                    result = transaction.put_conflict(conflict)
-                    if not result.ok:
-                        failure = result
+                    conflict_result = transaction.put_conflict(conflict)
+                    if not conflict_result.ok:
+                        failure = conflict_result
                     else:
-                        created_metadata = created_metadata or result.created
+                        created_metadata = created_metadata or conflict_result.created
         except (LocalStoreError, sqlite3.Error, TypeError, ValueError):
             failure = StoreResult.outcome(StoreState.FAILURE, "transaction_failed")
 

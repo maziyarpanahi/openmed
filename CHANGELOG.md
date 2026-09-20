@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provenance, explicit ambiguous and unmapped outcomes, an append-only local
   review queue, opt-in local semantic candidates, and value-free coverage
   summaries (#3331).
+- Added evidence-preserving fact deduplication, dimension-specific conflict
+  sets, versioned policy and human resolutions, append-only correction history,
+  guarded review packets, and counts-only queue SLA summaries (#3332).
 
 ### Changed
 
