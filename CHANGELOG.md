@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added assertion-aware FHIR R4 `AllergyIntolerance`, `Immunization`, and
+  `Encounter` exporters with RxNorm, SNOMED CT, and CVX coding support.
+
 ### Changed
 
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
