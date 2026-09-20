@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, TextIO
@@ -22,7 +23,6 @@ from typing import Any, TextIO
 DEFAULT_RECORD_BATCH_SIZE = 128
 DEFAULT_BYTE_BATCH_SIZE = 1024 * 1024
 
-_DEFAULT_HMAC_SECRET = b"openmed-trace-redaction-v1"
 _SUPPORTED_METHODS = frozenset({"mask", "remove", "replace", "hash"})
 
 DEFAULT_TRACE_FIELDS = (
@@ -134,7 +134,7 @@ class TraceRedactionConfig:
     method: str = "mask"
     seed: int = 0
     hmac_secret: str | bytes = field(
-        default=_DEFAULT_HMAC_SECRET,
+        default_factory=lambda: secrets.token_bytes(32),
         repr=False,
     )
     preserve_unmatched_text: bool = True
@@ -386,7 +386,7 @@ class TraceRedactor:
         fields: Sequence[str] | None = None,
         method: str = "mask",
         seed: int = 0,
-        hmac_secret: str | bytes = _DEFAULT_HMAC_SECRET,
+        hmac_secret: str | bytes | None = None,
         preserve_unmatched_text: bool = True,
         text_redactor: TextRedactor | None = None,
         redactor: TextRedactor | None = None,
@@ -417,7 +417,7 @@ class TraceRedactor:
             text_fields=tuple(text_fields),
             method=method,
             seed=seed,
-            hmac_secret=hmac_secret,
+            hmac_secret=secrets.token_bytes(32) if hmac_secret is None else hmac_secret,
             preserve_unmatched_text=preserve_unmatched_text,
         )
         self.context = TraceRedactionContext(
@@ -682,7 +682,7 @@ def redact_trace_records(
     fields: Sequence[str] | None = None,
     method: str = "mask",
     seed: int = 0,
-    hmac_secret: str | bytes = _DEFAULT_HMAC_SECRET,
+    hmac_secret: str | bytes | None = None,
     preserve_unmatched_text: bool = True,
     text_redactor: TextRedactor | None = None,
     redactor: TextRedactor | None = None,
@@ -732,7 +732,7 @@ def redact_trace_lines(
     fields: Sequence[str] | None = None,
     method: str = "mask",
     seed: int = 0,
-    hmac_secret: str | bytes = _DEFAULT_HMAC_SECRET,
+    hmac_secret: str | bytes | None = None,
     preserve_unmatched_text: bool = True,
     text_redactor: TextRedactor | None = None,
     redactor: TextRedactor | None = None,
@@ -789,7 +789,7 @@ def redact_ndjson_stream(
     fields: Sequence[str] | None = None,
     method: str = "mask",
     seed: int = 0,
-    hmac_secret: str | bytes = _DEFAULT_HMAC_SECRET,
+    hmac_secret: str | bytes | None = None,
     preserve_unmatched_text: bool = True,
     text_redactor: TextRedactor | None = None,
     redactor: TextRedactor | None = None,
