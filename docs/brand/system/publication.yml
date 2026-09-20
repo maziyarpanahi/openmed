@@ -115,6 +115,7 @@ classification:
     - agent/prior-auth-completeness.md
     - agent/cohort-explanations.md
     - agent/quality-measure-evidence.md
+    - agent/trial-eligibility-review.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
