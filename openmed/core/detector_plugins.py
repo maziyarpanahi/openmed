@@ -70,7 +70,7 @@ from .labels import (
     id_subtype_for,
     normalize_label,
 )
-from .schemas.span import OpenMedSpan, hmac_text_hash
+from .schemas.span import OpenMedSpan, _resolve_hmac_secret, hmac_text_hash
 
 DETECTOR_ENTRY_POINT_GROUP = "openmed.detectors"
 DETECTOR_STAGES = frozenset({"deterministic", "fast_pii", "clinical_phi"})
@@ -231,13 +231,14 @@ def detect_indian_identifiers(
 
     Returned records contain offsets, HMAC hashes, structural validator names,
     and subtype metadata only. Raw identifier surfaces are never stored in
-    evidence or metadata.
+    evidence or metadata. Each invocation uses a fresh private HMAC key.
     """
 
     del lang, context
     from .pii_entity_merger import find_context_words
     from .pii_i18n import INDIAN_MULTI_ID_PII_PATTERNS
 
+    hash_secret = _resolve_hmac_secret(None)
     candidates: list[tuple[int, int, int, OpenMedSpan]] = []
     for pattern in sorted(
         INDIAN_MULTI_ID_PII_PATTERNS,
@@ -284,7 +285,7 @@ def detect_indian_identifiers(
                         end=match.end(),
                         text_hash=hmac_text_hash(
                             surface,
-                            "builtin-indian-id-detector",
+                            hash_secret,
                         ),
                         entity_type=pattern.entity_type,
                         canonical_label=canonical,

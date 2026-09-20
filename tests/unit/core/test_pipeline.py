@@ -10,13 +10,58 @@ from openmed.core.pipeline import Pipeline, _identity_text
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
-def _empty_prediction(text: str, model_name: str = "stub") -> PredictionResult:
+def _empty_prediction(
+    text: str, model_name: str = "stub", **_kwargs
+) -> PredictionResult:
     return PredictionResult(
         text=text,
         entities=[],
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def test_default_pipeline_hashes_use_private_instance_keys():
+    from openmed.core.schemas import hmac_text_hash
+
+    text = "Contact synthetic@example.test"
+    first = Pipeline(model_detector=_empty_prediction)
+    second = Pipeline(model_detector=_empty_prediction)
+    result = first.run(text)
+    assert result.spans
+    assert [span.text_hash for span in result.spans] == [
+        span.text_hash for span in first.run(text).spans
+    ]
+    assert (
+        result.audit_record["input_text_hash"]
+        != second.run(text).audit_record["input_text_hash"]
+    )
+    assert result.audit_record["input_text_hash"] != hmac_text_hash(
+        text, b"openmed-pipeline-v1"
+    )
+    assert len(first.hmac_secret) == 32
+
+
+def test_explicit_pipeline_key_preserves_cross_instance_hashes():
+    text = "Contact synthetic@example.test"
+    options = {
+        "model_detector": _empty_prediction,
+        "hmac_secret": "synthetic-pipeline-parity-key",
+    }
+    first = Pipeline(**options).run(text)
+    second = Pipeline(**options).run(text)
+    assert [span.text_hash for span in first.spans] == [
+        span.text_hash for span in second.spans
+    ]
+    assert (
+        first.audit_record["input_text_hash"] == second.audit_record["input_text_hash"]
+    )
+
+
+@pytest.mark.parametrize("secret", ["", b""])
+def test_empty_pipeline_keys_fail_before_inference(secret):
+    with pytest.raises(ValueError, match="non-empty"):
+        Pipeline(hmac_secret=secret)
 
 
 def test_normalized_offsets_remap_combining_characters_to_original_positions():

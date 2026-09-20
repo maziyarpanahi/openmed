@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- Return the result-cache instance selected under the global lock so concurrent
-  capacity changes cannot replace a caller's return value.
+- Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
+  use private random HMAC keys by default. Reuse a pipeline or redactor instance,
+  or supply the same non-empty private key, when stable hashes across calls are
+  required. Web and React Native calls also accept explicit keys for this purpose.
+  Empty explicit keys are rejected; redaction labels and offsets are unchanged.
+- GitHub Actions are pinned to immutable commits, enforced by CI, and container
+  publishing permissions are limited to the publish job.
 
 ## [2.5.0] - 2026-09-14
 
@@ -23,6 +28,13 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added duplicate-cue validation for status vocabularies: cues that collide after the
+  existing Unicode, case, and whitespace normalization are rejected on load, both
+  within one status and across statuses, with value-free errors (#3104).
+- Added duplicate and conflicting sense validation for abbreviation inventories: equivalent
+  candidates, short forms that normalize together, and repeated JSON keys now fail on load
+  instead of being silently dropped, and one long form under distinct semantic types is kept
+  as separate alternatives when a local inventory is merged (#3105).
 - Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
   functional-scale, assistive-device, and cognitive-status labels, synthetic
   span fixtures, and offline per-label coverage reporting (#911).
