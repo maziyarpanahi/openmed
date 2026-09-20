@@ -12,7 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
-      - OpenMed 2.3.0 Release Notes: release/v2.3.0.md
+      - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
       - OpenMed 2.1.0 Release Notes: release/v2.1.0.md
@@ -98,6 +98,9 @@ nav:
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Clinical NLI Label Contract: clinical/nli-label-contract.md
+      - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
+      - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Offline Terminology Grounding: grounding.md
       - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
@@ -105,15 +108,21 @@ nav:
       - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
       - Terminology Conflict Resolution: clinical/terminology-conflicts.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+      - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
+      - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
+      - Medication-status NLI Precheck: clinical/nli-medication-status.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
+      - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
@@ -156,6 +165,7 @@ nav:
       - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
+      - OCR Through Memory: multimodal/ocr-streaming.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
@@ -195,6 +205,12 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical NLI abstention gate: clinical/nli-abstention.md
+      - Clinical NLI threshold calibration: evaluation/nli-calibration.md
+      - Section-aware note routing: clinical/note-routing.md
+      - Radiology Finding Profile: clinical/radiology-profile.md
+      - Pathology result profile: clinical/pathology-profile.md
+      - Structured discharge-summary profile: clinical/discharge-profile.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
@@ -213,6 +229,7 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Language Pack Plugins: language-packs.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
@@ -375,12 +392,14 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 2.3 to 2.5: migration/2.3-to-2.5.md
       - Migrate from 2.2 to 2.3: migration/2.2-to-2.3.md
       - Migrate from 2.1 to 2.2: migration/2.1-to-2.2.md
       - Migrate from 2.0 to 2.1: migration/2.0-to-2.1.md
       - Migrate from 1.9 to 2.0: migration/1.9-to-2.0.md
       - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
+      - OpenMed 2.3.0 Release Notes: release/v2.3.0.md
       - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
       - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
