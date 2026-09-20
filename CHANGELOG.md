@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added content-free audio format distribution summaries with validated
+  channel, sample-rate, bit-depth, duration-bucket, and format categories,
+  small-cell suppression, and deterministic sorting, with synthetic golden
+  regression tests (#3093).
+
 ### Changed
 
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
