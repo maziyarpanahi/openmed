@@ -258,6 +258,138 @@ POSTGRES_MIGRATIONS = (
             """,
         ),
     ),
+    PostgresMigration(
+        version=2,
+        name="ingestion_control_plane",
+        statements=(
+            """
+            CREATE TABLE ingestion_manifests (
+                manifest_digest TEXT PRIMARY KEY,
+                manifest_id TEXT NOT NULL UNIQUE,
+                payload_hash TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE ingestion_jobs (
+                job_id TEXT PRIMARY KEY,
+                manifest_digest TEXT NOT NULL UNIQUE
+                    REFERENCES ingestion_manifests(manifest_digest)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_job_versions (
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                version BIGINT NOT NULL,
+                state TEXT NOT NULL,
+                checkpoint_sequence BIGINT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (job_id, version),
+                UNIQUE (job_id, payload_hash)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_replay_audits (
+                replay_id TEXT PRIMARY KEY,
+                manifest_digest TEXT NOT NULL
+                    REFERENCES ingestion_manifests(manifest_digest),
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                action TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE ingestion_leases (
+                lease_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                worker_id TEXT NOT NULL,
+                epoch BIGINT NOT NULL,
+                acquired_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                UNIQUE (job_id, epoch)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_lease_releases (
+                lease_id TEXT PRIMARY KEY REFERENCES ingestion_leases(lease_id),
+                released_at TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE ingestion_checkpoints (
+                checkpoint_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                sequence BIGINT NOT NULL,
+                step TEXT NOT NULL,
+                input_digest TEXT NOT NULL,
+                output_digest TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                UNIQUE (job_id, sequence),
+                UNIQUE (job_id, step, input_digest)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_retries (
+                retry_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                classification TEXT NOT NULL,
+                attempt BIGINT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE ingestion_cancellations (
+                cancellation_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL UNIQUE REFERENCES ingestion_jobs(job_id),
+                requested_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE ingestion_quarantine_results (
+                quarantine_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                classification TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE ingestion_quarantine_promotions (
+                promotion_id TEXT PRIMARY KEY,
+                quarantine_id TEXT NOT NULL UNIQUE
+                    REFERENCES ingestion_quarantine_results(quarantine_id),
+                promoted_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE INDEX ingestion_job_state_idx
+            ON ingestion_job_versions(job_id, version, state)
+            """,
+            """
+            CREATE INDEX ingestion_lease_job_epoch_idx
+            ON ingestion_leases(job_id, epoch)
+            """,
+            """
+            CREATE INDEX ingestion_checkpoint_job_sequence_idx
+            ON ingestion_checkpoints(job_id, sequence)
+            """,
+        ),
+    ),
 )
 
 LATEST_POSTGRES_MIGRATION_VERSION = POSTGRES_MIGRATIONS[-1].version

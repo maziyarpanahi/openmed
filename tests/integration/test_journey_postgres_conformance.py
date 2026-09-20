@@ -243,8 +243,9 @@ def test_interrupted_migration_rolls_back_and_recovers(
     psycopg, dsn, schema = postgres_runtime
     original_migrations = postgres_module.POSTGRES_MIGRATIONS
     original_latest = postgres_module.LATEST_POSTGRES_MIGRATION_VERSION
+    broken_version = original_latest + 1
     broken = PostgresMigration(
-        version=2,
+        version=broken_version,
         name="synthetic_interruption",
         statements=(
             "CREATE TABLE migration_interruption_marker(id BIGINT PRIMARY KEY)",
@@ -256,7 +257,11 @@ def test_interrupted_migration_rolls_back_and_recovers(
         "POSTGRES_MIGRATIONS",
         (*original_migrations, broken),
     )
-    monkeypatch.setattr(postgres_module, "LATEST_POSTGRES_MIGRATION_VERSION", 2)
+    monkeypatch.setattr(
+        postgres_module,
+        "LATEST_POSTGRES_MIGRATION_VERSION",
+        broken_version,
+    )
 
     with pytest.raises(PostgresStoreError):
         PostgresJourneyStore(psycopg.connect(dsn), schema=schema)

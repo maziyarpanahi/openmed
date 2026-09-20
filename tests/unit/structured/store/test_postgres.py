@@ -28,10 +28,11 @@ def test_postgres_migrations_are_ordered_deterministic_and_native() -> None:
     for migration in POSTGRES_MIGRATIONS:
         assert migration.checksum == migration.checksum
         sql = "\n".join(migration.statements)
-        assert "revision BIGINT PRIMARY KEY" in sql
         assert "BIGSERIAL" not in sql
         assert "AUTOINCREMENT" not in sql
         assert "PRAGMA" not in sql
+        if migration.version == 1:
+            assert "revision BIGINT PRIMARY KEY" in sql
 
 
 def test_postgres_migration_checksum_changes_with_statement() -> None:
