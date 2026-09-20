@@ -35,6 +35,7 @@ nav:
       - Agent Event Correlation: agent/event-correlation.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+      - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md

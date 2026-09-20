@@ -44,6 +44,12 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .workflow_rollup import (
+    WORKFLOW_ROLLUP_SCHEMA_VERSION,
+    WorkflowRollup,
+    WorkflowRollupError,
+    WorkflowRollupRow,
+)
 
 __all__ = [
     "ARTIFACT_REFERENCE_VERSION",
@@ -79,6 +85,10 @@ __all__ = [
     "TimingValidationError",
     "WorkflowOutcome",
     "WorkflowId",
+    "WORKFLOW_ROLLUP_SCHEMA_VERSION",
+    "WorkflowRollup",
+    "WorkflowRollupError",
+    "WorkflowRollupRow",
     "allowed_reason_codes",
     "security",
     "validate_artifact_references",
