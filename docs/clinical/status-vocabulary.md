@@ -8,7 +8,7 @@ from an explicit local path, so a contributor-owned domain can live entirely
 outside the repository.
 
 This page walks through
-[`examples/custom_status_vocabulary.py`](../../examples/custom_status_vocabulary.py),
+[`examples/custom_status_vocabulary.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/custom_status_vocabulary.py),
 which adds a synthetic "mobility" domain and demonstrates the fail-closed
 checks a local vocabulary should pass before it is trusted.
 
@@ -76,5 +76,5 @@ authored for this walkthrough, not a bundled or restricted terminology. It
 demonstrates local validation and normalization only; it does not recommend
 a clinical decision from a normalized status, and it does not change any
 package default. See
-[`tests/unit/examples/test_custom_status_vocabulary.py`](../../tests/unit/examples/test_custom_status_vocabulary.py)
+[`tests/unit/examples/test_custom_status_vocabulary.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/examples/test_custom_status_vocabulary.py)
 for the runnable checks behind this page.
