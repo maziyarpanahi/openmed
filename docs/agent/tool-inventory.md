@@ -68,6 +68,9 @@ request examples, and response examples are never rendered.
 All operations are local and deterministic. Inventory generation performs no
 network access, endpoint discovery, credential validation, or tool execution.
 
+Integrators can validate the serialized contract with the self-contained
+[Agent tool inventory JSON Schema](tool-inventory-schema.md).
+
 ## Inspect an inventory from the CLI
 
 Use the Typer command surface to validate and render a content-free inventory

@@ -36,6 +36,7 @@ nav:
       - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
       - Tool Argument Classification: agent/tool-argument-classification.md
       - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
+      - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
       - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
       - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
