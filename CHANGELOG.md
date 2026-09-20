@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added allocation-safe image geometry derivation with checked pixel counts,
+  reduced aspect ratios, orientation classes, and overflow-checked optional memory
+  estimates from validated dimensions, with synthetic regression tests (#3047).
+
 ### Changed
 
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
