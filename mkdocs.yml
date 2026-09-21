@@ -85,6 +85,7 @@ nav:
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
+      - Journey Specialist Pack: models/journey-specialist-pack.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
       - Model Manifest: model-manifest.md

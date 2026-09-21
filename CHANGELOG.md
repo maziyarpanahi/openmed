@@ -56,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added versioned PDF, OCR, image, and DICOM evidence coordinates with
   invertible rotation, crop, and scale chains; exact source-space round trips;
   explicit DICOM tag provenance; and typed quarantine behavior (#3334).
+- Added a reproducible four-task Journey specialist pack with pinned low-cost
+  encoder/span recipes, deterministic offline split manifests, a hard shared
+  USD 1,000 GPU ledger, frozen-holdout calibration and failure slices,
+  quantized-delta gates, model cards, and fail-closed promotion fallback
+  (#3329).
 
 ### Changed
 
