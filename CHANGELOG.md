@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added a closed allowlist contract for agent event attributes covering
+  correlation and governance identifiers, execution stages, outcome codes,
+  digests, bounded counts, durations and flags, with a distinct
+  sensitive-key refusal that never echoes the submitted key (#2994).
 - Added deterministic page batching for document inference, planning
   ordered half-open page ranges under page-count and per-batch pixel
   budgets with reject or isolate oversize policies, exact gap-free

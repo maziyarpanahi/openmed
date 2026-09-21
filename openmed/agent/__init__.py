@@ -32,6 +32,19 @@ from .correlation import (
     CorrelationIdError,
     RunId,
 )
+from .event_attributes import (
+    ALLOWED_ATTRIBUTES,
+    EVENT_ATTRIBUTES_SCHEMA_VERSION,
+    EXECUTION_STAGES,
+    MAX_ATTRIBUTE_COUNT,
+    MAX_ATTRIBUTE_JSON_BYTES,
+    MAX_COUNT_VALUE,
+    MAX_DURATION_MS,
+    AttributeKind,
+    EventAttributeError,
+    EventAttributes,
+    validate_event_attributes,
+)
 from .event_sequence import (
     EVENT_SEQUENCE_SCHEMA_VERSION,
     MAX_EVENT_SEQUENCE_LENGTH,
@@ -70,7 +83,9 @@ from .run_summary import (
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 
 __all__ = [
+    "ALLOWED_ATTRIBUTES",
     "ARTIFACT_REFERENCE_VERSION",
+    "AttributeKind",
     "ActionTiming",
     "AgentRunTiming",
     "ACTION_GRAPH_SCHEMA_VERSION",
@@ -87,6 +102,10 @@ __all__ = [
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
     "CorrelationIdError",
+    "EVENT_ATTRIBUTES_SCHEMA_VERSION",
+    "EXECUTION_STAGES",
+    "EventAttributeError",
+    "EventAttributes",
     "GRAPH_REASON_CODES",
     "EVENT_SEQUENCE_SCHEMA_VERSION",
     "EventReference",
@@ -101,6 +120,10 @@ __all__ = [
     "MAX_ACTION_GRAPH_FINDINGS",
     "MAX_ACTION_GRAPH_NODES",
     "MAX_ARTIFACT_BYTE_SIZE",
+    "MAX_ATTRIBUTE_COUNT",
+    "MAX_ATTRIBUTE_JSON_BYTES",
+    "MAX_COUNT_VALUE",
+    "MAX_DURATION_MS",
     "MAX_EVENT_SEQUENCE_LENGTH",
     "MAX_RUN_SUMMARY_JSON_BYTES",
     "MAX_SEQUENCE_FINDINGS",
@@ -125,5 +148,6 @@ __all__ = [
     "security",
     "validate_action_graph",
     "validate_artifact_references",
+    "validate_event_attributes",
     "validate_event_sequence",
 ]
