@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added bounded PNG IHDR and JPEG frame-header geometry preflight with
+  CRC and length validation, a marker scan bounded by fill, marker-count
+  and byte budgets, value-free errors, and synthetic plus Pillow-written
+  file-level regression tests (#3008).
 - Added deterministic dependency validation and topological ordering for
   agent action graphs, with identifier-only nodes, categorical duplicate,
   dangling, self-edge and cycle findings, and documented lexicographic

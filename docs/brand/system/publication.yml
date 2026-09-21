@@ -240,6 +240,7 @@ classification:
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
+    - multimodal/image-header-preflight.md
     - multimodal/webp-header-preflight.md
     - multimodal/audio-format-summaries.md
     - multimodal/frame-sampling-manifests.md
