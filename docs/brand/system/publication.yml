@@ -239,6 +239,7 @@ classification:
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
     - multimodal/webp-header-preflight.md
+    - multimodal/audio-format-summaries.md
     - multimodal/frame-sampling-manifests.md
     - multimodal/audio-resampling-plans.md
     - multimodal/image-geometry.md
