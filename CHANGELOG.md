@@ -70,6 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   caller-injected remote adapters, signed aggregate conformance, completeness,
   and plausibility reports, typed non-success states, and reproducible
   reconciliation against a frozen synthetic reference projection (#3336).
+- Added provenance-preserving FHIR R4 round trips for Journey facts and
+  resolution events, byte-stable cohort-definition exchange with snapshot and
+  criterion custody, explicit conversion-loss reports, and an optional
+  digest-bound out-of-process cohort service bridge (#3337).
 
 ### Changed
 
