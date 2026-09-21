@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added allocation-safe image geometry derivation with checked pixel counts,
+  reduced aspect ratios, orientation classes, and overflow-checked optional memory
+  estimates from validated dimensions, with synthetic regression tests (#3047).
 - Added Unicode whitespace regression coverage for vital-sign parsing and fixed the
   cases it found: non-breaking, narrow, thin, and other Unicode spaces inside labels
   such as `oxygen saturation` no longer turn a vital sign into `unknown`, and units
