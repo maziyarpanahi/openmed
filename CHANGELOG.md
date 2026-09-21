@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Return the result-cache instance selected under the global lock so concurrent
+  capacity changes cannot replace a caller's return value.
 - Preserve already-qualified OpenMed logger names so module-level logging
   configuration applies without a duplicated openmed namespace.
 - Close newly created Pulsar clients when subscription or adapter setup
