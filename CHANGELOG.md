@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Grow the dense alias search budget when duplicate aliases would hide available
+  distinct concepts.
 - Allow model loading when optional architecture metadata is absent or empty; retain
   advisory warnings and normal factory failures.
 - Accept source-aligned literal hash tokens in space-delimited CoNLL rows without
