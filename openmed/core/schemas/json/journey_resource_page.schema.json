@@ -140,6 +140,12 @@
         "state",
         "namespace",
         "purpose",
+        "role",
+        "attributes",
+        "consent_state",
+        "export_policy",
+        "decision_id",
+        "request_digest",
         "allowed_fields",
         "code",
         "policy_version"
@@ -148,6 +154,25 @@
         "state": {"enum": ["success", "denied"]},
         "namespace": {"type": "string"},
         "purpose": {"type": "string"},
+        "role": {"type": "string"},
+        "attributes": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "consent_state": {
+          "enum": ["active", "unknown", "withdrawn"]
+        },
+        "export_policy": {"type": "string"},
+        "decision_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"
+        },
+        "request_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
         "allowed_fields": {
           "type": "array",
           "maxItems": 32,

@@ -659,8 +659,14 @@ export class OpenMedClient {
       resource_type: query.resource_type,
       namespace: query.namespace ?? "default",
       purpose: query.purpose ?? "care_review",
+      role: query.role ?? "clinician",
+      consent_state: query.consent_state ?? "active",
+      export_policy: query.export_policy ?? "metadata_only",
       first: String(query.first ?? 20),
     });
+    if (query.attributes?.length) {
+      parameters.set("attributes", query.attributes.join(","));
+    }
     if (query.after) {
       parameters.set("after", query.after);
     }

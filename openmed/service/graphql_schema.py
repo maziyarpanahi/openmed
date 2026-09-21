@@ -22,6 +22,7 @@ from .journey_resources import (
     JourneyResourceKind,
     JourneyResourcePage,
     JourneyResourceQuery,
+    parse_access_attributes,
     parse_resource_fields,
 )
 from .runtime import ServiceRuntime
@@ -95,11 +96,17 @@ class JourneyPageInfo:
 
 @strawberry.type
 class JourneyPolicyMetadata:
-    """Inspectible namespace, purpose, and field response policy."""
+    """Inspectible access context and minimum-necessary field policy."""
 
     state: str
     namespace: str
     purpose: str
+    role: str
+    attributes: list[str]
+    consent_state: str
+    export_policy: str
+    decision_id: str
+    request_digest: str
     allowed_fields: list[str]
     code: Optional[str]
     policy_version: str
@@ -150,6 +157,12 @@ class JourneyResourceConnection:
                 state=page.policy.state.value,
                 namespace=page.policy.namespace,
                 purpose=page.policy.purpose,
+                role=page.policy.role,
+                attributes=list(page.policy.attributes),
+                consent_state=page.policy.consent_state,
+                export_policy=page.policy.export_policy,
+                decision_id=page.policy.decision_id,
+                request_digest=page.policy.request_digest,
                 allowed_fields=list(page.policy.allowed_fields),
                 code=page.policy.code,
                 policy_version=page.policy.policy_version,
@@ -526,6 +539,10 @@ class Query:
         resource_type: JourneyResourceKindType,
         namespace: str = "default",
         purpose: str = "care_review",
+        role: str = "clinician",
+        attributes: Optional[list[str]] = None,
+        consent_state: str = "active",
+        export_policy: str = "metadata_only",
         first: int = 20,
         after: Optional[str] = None,
         fields: Optional[list[str]] = None,
@@ -537,6 +554,10 @@ class Query:
                 resource_type=JourneyResourceKind(resource_type.value),
                 namespace=namespace,
                 purpose=purpose,
+                role=role,
+                attributes=parse_access_attributes(attributes),
+                consent_state=consent_state,
+                export_policy=export_policy,
                 first=first,
                 after=after,
                 fields=parse_resource_fields(fields),

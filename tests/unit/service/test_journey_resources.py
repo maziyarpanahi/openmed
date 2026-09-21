@@ -192,6 +192,81 @@ def test_policy_denial_and_non_success_states_are_not_success() -> None:
     assert unknown.code == "resource_unknown"
 
 
+@pytest.mark.parametrize(
+    ("query_overrides", "policy_overrides", "code"),
+    [
+        ({"role": "guest"}, {}, "role_denied"),
+        ({"consent_state": "unknown"}, {}, "consent_unknown"),
+        ({"consent_state": "withdrawn"}, {}, "consent_withdrawn"),
+        ({"export_policy": "full_record"}, {}, "export_policy_denied"),
+        (
+            {},
+            {
+                "required_attributes_by_resource": {
+                    JourneyResourceKind.FACT: frozenset({"approved_device"})
+                }
+            },
+            "attribute_denied",
+        ),
+    ],
+)
+def test_access_context_fails_closed_with_reconstructable_decision(
+    query_overrides: dict[str, Any],
+    policy_overrides: dict[str, Any],
+    code: str,
+) -> None:
+    query = JourneyResourceQuery(
+        resource_type=JourneyResourceKind.FACT,
+        **query_overrides,
+    )
+
+    page = _catalog().list_resources(
+        query, policy=JourneyAccessPolicy(**policy_overrides)
+    )
+
+    assert page.state is JourneyResourceState.DENIED
+    assert page.code == code
+    assert page.resources == ()
+    policy_payload = page.policy.to_dict()
+    assert policy_payload.pop("request_digest") == query.access_request_digest
+    assert policy_payload.pop("decision_id").startswith("decision_")
+    assert policy_payload == {
+        "allowed_fields": [],
+        "attributes": list(query.attributes),
+        "code": code,
+        "consent_state": query.consent_state,
+        "export_policy": query.export_policy,
+        "namespace": query.namespace,
+        "policy_version": JOURNEY_RESOURCE_SCHEMA_VERSION,
+        "purpose": query.purpose,
+        "role": query.role,
+        "state": "denied",
+    }
+
+
+def test_cursor_cannot_be_reused_under_a_different_access_context() -> None:
+    catalog = _catalog()
+    original = JourneyResourceQuery(
+        resource_type=JourneyResourceKind.FACT,
+        first=1,
+    )
+    cursor = catalog.list_resources(original).page_info.end_cursor
+    assert cursor is not None
+
+    confused_deputy = catalog.list_resources(
+        JourneyResourceQuery(
+            resource_type=JourneyResourceKind.FACT,
+            role="researcher",
+            first=1,
+            after=cursor,
+        )
+    )
+
+    assert confused_deputy.state is JourneyResourceState.FAILURE
+    assert confused_deputy.code == "cursor_query_mismatch"
+    assert confused_deputy.resources == ()
+
+
 @pytest.mark.parametrize("first", [0, 101])
 def test_page_size_abuse_limits_fail_before_execution(first: int) -> None:
     with pytest.raises(ValueError, match="first must be between"):
@@ -309,6 +384,64 @@ def test_rest_graphql_python_and_sql_return_equivalent_facts(
     assert sql.snapshot_digest == expected["page_info"]["snapshot_digest"]
 
 
+def test_rest_graphql_and_sql_enforce_the_same_access_context(
+    client: TestClient,
+) -> None:
+    rest = client.get(
+        "/v1/journey/resources",
+        params={
+            "resource_type": "fact",
+            "role": "guest",
+            "attributes": "approved_device",
+            "consent_state": "active",
+            "export_policy": "metadata_only",
+        },
+    )
+    assert rest.status_code == 200
+    assert rest.json()["state"] == "denied"
+    assert rest.json()["code"] == "role_denied"
+    assert rest.json()["resources"] == []
+
+    graphql = client.post(
+        "/graphql",
+        json={
+            "query": """
+                {
+                  journeyResources(
+                    resourceType: FACT
+                    role: "clinician"
+                    attributes: ["approved_device"]
+                    consentState: "withdrawn"
+                    exportPolicy: "metadata_only"
+                  ) {
+                    state code resources { resourceId }
+                    policy {
+                      state role attributes consentState exportPolicy code
+                    }
+                  }
+                }
+            """
+        },
+    )
+    assert graphql.status_code == 200
+    graph_page = graphql.json()["data"]["journeyResources"]
+    assert graph_page["state"] == "denied"
+    assert graph_page["code"] == "consent_withdrawn"
+    assert graph_page["resources"] == []
+    assert graph_page["policy"]["consentState"] == "withdrawn"
+
+    sql = query_journey_view(
+        _catalog(),
+        "journey_facts",
+        role="researcher",
+        consent_state="active",
+        export_policy="full_record",
+    )
+    assert sql.state is JourneyResourceState.DENIED
+    assert sql.code == "export_policy_denied"
+    assert sql.rows == ()
+
+
 def test_rest_limits_and_access_denial_remain_typed(client: TestClient) -> None:
     too_large = client.get(
         "/v1/journey/resources",
@@ -362,6 +495,9 @@ def test_python_client_encodes_bounded_journey_query() -> None:
             "first": "2",
             "namespace": "default",
             "purpose": "care_review",
+            "role": "clinician",
+            "consent_state": "active",
+            "export_policy": "metadata_only",
             "resource_type": "fact",
             "fields": "subject_id,concept",
         },
@@ -401,11 +537,21 @@ def test_sql_views_are_generated_and_analytics_credentials_cannot_write() -> Non
         _catalog(),
         "journey_facts",
         namespace="unsafe\nvalue",
+        role="guest",
+        attributes=("external_device",),
+        consent_state="unknown",
+        export_policy="full_record",
         limit=101,
     )
     assert invalid.state is JourneyResourceState.FAILURE
     assert invalid.code == "sql_limit_invalid"
     assert invalid.policy["namespace"] == "invalid"
+    assert invalid.policy["role"] == "guest"
+    assert invalid.policy["attributes"] == ["external_device"]
+    assert invalid.policy["consent_state"] == "unknown"
+    assert invalid.policy["export_policy"] == "full_record"
+    assert str(invalid.policy["decision_id"]).startswith("decision_")
+    assert str(invalid.policy["request_digest"]).startswith("sha256:")
 
 
 def test_sql_snapshot_creates_only_views_over_caller_owned_table() -> None:

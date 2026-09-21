@@ -625,13 +625,20 @@
       },
       "JourneyPolicyResponse": {
         "additionalProperties": false,
-        "description": "Namespace, purpose, and field response-policy decision.",
+        "description": "Complete access context and response-policy decision.",
         "properties": {
           "allowed_fields": {
             "items": {
               "type": "string"
             },
             "title": "Allowed Fields",
+            "type": "array"
+          },
+          "attributes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attributes",
             "type": "array"
           },
           "code": {
@@ -645,6 +652,23 @@
             ],
             "title": "Code"
           },
+          "consent_state": {
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "title": "Consent State",
+            "type": "string"
+          },
+          "decision_id": {
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "export_policy": {
+            "title": "Export Policy",
+            "type": "string"
+          },
           "namespace": {
             "title": "Namespace",
             "type": "string"
@@ -656,6 +680,14 @@
           },
           "purpose": {
             "title": "Purpose",
+            "type": "string"
+          },
+          "request_digest": {
+            "title": "Request Digest",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
             "type": "string"
           },
           "state": {
@@ -671,6 +703,12 @@
           "state",
           "namespace",
           "purpose",
+          "role",
+          "attributes",
+          "consent_state",
+          "export_policy",
+          "decision_id",
+          "request_digest",
           "allowed_fields",
           "code",
           "policy_version"
@@ -2978,6 +3016,53 @@
             "schema": {
               "default": "care_review",
               "title": "Purpose",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "default": "clinician",
+              "title": "Role",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Attributes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "consent_state",
+            "required": false,
+            "schema": {
+              "default": "active",
+              "title": "Consent State",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "export_policy",
+            "required": false,
+            "schema": {
+              "default": "metadata_only",
+              "title": "Export Policy",
               "type": "string"
             }
           },

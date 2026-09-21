@@ -456,6 +456,10 @@ class OpenMedClient(JourneyWorkflowClientMixin):
         *,
         namespace: str = "default",
         purpose: str = "care_review",
+        role: str = "clinician",
+        attributes: Sequence[str] = (),
+        consent_state: str = "active",
+        export_policy: str = "metadata_only",
         first: int = 20,
         after: Optional[str] = None,
         fields: Sequence[str] = (),
@@ -467,8 +471,13 @@ class OpenMedClient(JourneyWorkflowClientMixin):
             "first": first,
             "namespace": namespace,
             "purpose": purpose,
+            "role": role,
+            "consent_state": consent_state,
+            "export_policy": export_policy,
             "resource_type": resource_type,
         }
+        if attributes:
+            params["attributes"] = ",".join(attributes)
         if after is not None:
             params["after"] = after
         if fields:
