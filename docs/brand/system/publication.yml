@@ -190,6 +190,7 @@ classification:
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
     - clinical/event-timeline.md
+    - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
     - clinical/status-vocabulary.md
     - clinical/consent-cache.md
