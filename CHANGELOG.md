@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added backend-neutral Journey storage composition, PostgreSQL metadata parity,
   transactional migration recovery, and allowlisted content-addressed object
   namespaces with local-only defaults (#3322).
+- Added replay-safe ingestion jobs with versioned manifests, exclusive leases,
+  gap-safe checkpoints, value-free retries, explicit cancellation, quarantine
+  promotion, SQLite and PostgreSQL ledgers, and restart recovery tests (#3323).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and

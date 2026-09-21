@@ -100,6 +100,7 @@ nav:
       - Longitudinal Journey Contracts: clinical/journey-contracts.md
       - Durable Local Journey Storage: structured/local-journey-store.md
       - PostgreSQL and Object-backed Journey Storage: structured/postgres-object-journey-store.md
+      - Resumable Ingestion Control Plane: interop/resumable-ingestion.md
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
