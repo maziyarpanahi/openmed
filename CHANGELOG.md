@@ -78,6 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic point-in-time reruns, four-state membership with criterion and
   time-window evidence, opaque-key workflow explanations, local append-only
   persistence, and vocabulary-license boundaries (#3338).
+- Added governed dataset snapshots from saved cohorts and ingestion jobs with
+  deterministic JSONL, annotation, and Parquet artifacts; fail-closed split and
+  distribution gates; license custody; and separately authorized, audited
+  identified exports (#3339).
 
 ### Changed
 
