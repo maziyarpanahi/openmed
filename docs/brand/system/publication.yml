@@ -416,6 +416,7 @@ classification:
     - clinical/care-gaps.md
     - clinical/trial-records.md
     - clinical/trial-eligibility.md
+    - clinical/drug-safety-signals.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md

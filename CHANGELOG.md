@@ -98,6 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic public trial-criteria parsing, local candidate reranking,
   five-state evidence-bound criterion evaluation, value-free review packets,
   fail-closed aggregate matching, and a provenance-bound benchmark (#3345).
+- Added opt-in public adverse-event ingestion, report-level PRR and ROR
+  calculations, explicit count suppression, immutable dataset/filter/policy
+  provenance, and separately typed chart-level suspected relations (#3346).
 
 ### Changed
 
