@@ -712,6 +712,16 @@ class JourneyResourceCatalog:
             item.to_dict(fields=decision.allowed_fields) for item in selected
         )
         state, code = _aggregate_page_state(selected)
+        if state in {
+            JourneyResourceState.FAILURE,
+            JourneyResourceState.UNSUPPORTED,
+        }:
+            return self._terminal_page(
+                query,
+                decision,
+                state,
+                code or f"resource_{state.value}",
+            )
         next_offset = offset + len(selected)
         has_next_page = next_offset < len(matching)
         return JourneyResourcePage(

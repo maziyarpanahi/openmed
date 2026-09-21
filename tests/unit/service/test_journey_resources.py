@@ -193,6 +193,34 @@ def test_policy_denial_and_non_success_states_are_not_success() -> None:
 
 
 @pytest.mark.parametrize(
+    "state",
+    [JourneyResourceState.FAILURE, JourneyResourceState.UNSUPPORTED],
+)
+def test_terminal_resource_states_return_value_free_pages(
+    state: JourneyResourceState,
+) -> None:
+    catalog = JourneyResourceCatalog(
+        [
+            JourneyResourceRecord(
+                resource_type=JourneyResourceKind.FACT,
+                resource_id=f"fact_{state.value + '0' * 16}"[:21],
+                namespace="default",
+                data={},
+                state=state,
+            )
+        ]
+    )
+
+    page = catalog.list_resources(
+        JourneyResourceQuery(resource_type=JourneyResourceKind.FACT)
+    )
+
+    assert page.state is state
+    assert page.code == f"resource_{state.value}"
+    assert page.resources == ()
+
+
+@pytest.mark.parametrize(
     ("query_overrides", "policy_overrides", "code"),
     [
         ({"role": "guest"}, {}, "role_denied"),
