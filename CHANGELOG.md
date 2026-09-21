@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Preserve already-qualified OpenMed logger names so module-level logging
+  configuration applies without a duplicated openmed namespace.
 - Close newly created Pulsar clients when subscription or adapter setup
   fails, preserving the setup error and successful caller ownership.
 - Clean up temporary evaluation reports after failed writes, closes, or
