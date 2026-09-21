@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Align grounding-index recall references, queries and report metadata with the
+  selected vocabulary systems.
 - Grow the dense alias search budget when duplicate aliases would hide available
   distinct concepts.
 - Allow model loading when optional architecture metadata is absent or empty; retain
