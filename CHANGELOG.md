@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added decoded-memory planning for multimodal batches: estimates image,
+  DICOM, and audio memory from validated manifests and an explicit
+  caller-supplied factor policy, then accepts, splits into ordered batches,
+  or rejects against an inclusive byte budget with per-batch overhead. Missing
+  factors or geometry, including PDF page counts, stay unevaluable, and
+  saturating 64-bit arithmetic never yields an accept (#3091).
 - Added a synthetic local-extension example and documentation page for the
   status vocabulary, covering an explicit local path, provenance validation,
   and a duplicate-cue guard (#3108).
