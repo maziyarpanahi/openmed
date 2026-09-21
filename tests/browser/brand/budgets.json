@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 53686257,
-    "maximum_unique_payload_bytes": 53348678,
+    "maximum_total_bytes": 54014353,
+    "maximum_unique_payload_bytes": 53676774,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3561920
+    "json": 3569825
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3561920
+    "docs/search/search_index.json": 3569825
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,12 +31,12 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the streaming audio-window, status-vocabulary, and measurement-trend guides, with 110750 bytes of documentation headroom.",
-    "The audited candidate contains 53395946 total bytes, 53058367 unique payload bytes, and 337579 duplicate payload bytes. The audio-window, status-vocabulary, and measurement-trend guides and navigation remain governed by the byte, route, and performance budgets without an arbitrary file-count ceiling.",
-    "The 53169117-byte unique-payload ceiling and 53506696-byte total-payload ceiling retain 110750 bytes of bounded headroom over the audited candidate. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The clinical, language-pack, audio-window, status-vocabulary, and measurement-trend guides remain searchable. The measured search index is 3529205 bytes; its 3561920-byte JSON ceiling retains 32715 bytes of headroom.",
+    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including all currently registered clinical, agent, and multimodal guides, with 110750 bytes of documentation headroom.",
+    "The audited candidate contains 53724042 total bytes, 53386463 unique payload bytes, and 337579 duplicate payload bytes. All registered guides and navigation remain governed by the byte, route, and performance budgets without an arbitrary file-count ceiling.",
+    "The 53497213-byte unique-payload ceiling and 53834792-byte total-payload ceiling retain 110750 bytes of bounded headroom over the audited candidate. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The measured search index is 3537110 bytes; its 3569825-byte JSON ceiling retains 32715 bytes of headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
-    "The multimodal batch-memory guide and its navigation entry add 179561 total and unique payload bytes, measured as a same-environment staged-artifact delta against master 0f8090c23 and added on top of the measurement-trend reconciliation above (53506696 / 53169117). Both ceilings rise by exactly that amount, so the recorded 110750-byte headroom is unchanged; duplicate, per-file, route, and search-index budgets are unaffected.",
+    "The multimodal batch-memory guide and its navigation entry add 179561 total and unique payload bytes, measured as a same-environment staged-artifact delta against master 0f8090c23 and added on top of the reconciliation above (53834792 / 53497213). Both ceilings rise by exactly that amount, so the recorded 110750-byte headroom is unchanged; duplicate, per-file, route, and search-index budgets are unaffected.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",

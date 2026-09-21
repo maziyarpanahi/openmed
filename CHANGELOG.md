@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or rejects against an inclusive byte budget with per-batch overhead. Missing
   factors or geometry, including PDF page counts, stay unevaluable, and
   saturating 64-bit arithmetic never yields an accept (#3091).
+- Added deterministic, allocation-free audio resampling plans with reduced
+  rational rates, floor, nearest-even, and ceiling rounding policies,
+  exact or rounded status, overflow-checked arithmetic, and an optional
+  duration-error tolerance, with synthetic regression tests (#3049).
+- Added allocation-safe image geometry derivation with checked pixel counts,
+  reduced aspect ratios, orientation classes, and overflow-checked optional memory
+  estimates from validated dimensions, with synthetic regression tests (#3047).
 - Added Unicode whitespace regression coverage for vital-sign parsing and fixed the
   cases it found: non-breaking, narrow, thin, and other Unicode spaces inside labels
   such as `oxygen saturation` no longer turn a vital sign into `unknown`, and units
