@@ -104,6 +104,17 @@ const registry = await client.registry();
 const measure = await client.measure();
 const trialReview = await client.trialReview();
 
+const decision = await client.decision({
+  mode: "fixed_choice",
+  input_text: "Synthetic review priority is urgent.",
+  options: ["urgent", "routine"],
+});
+if (decision.state === "success") {
+  console.log(decision.choice, decision.confidence);
+} else {
+  console.log(decision.state, decision.code);
+}
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```

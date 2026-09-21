@@ -30,6 +30,16 @@ from openmed.core.errors import (
     PolicyError,
 )
 from openmed.processing import format_predictions
+from openmed.structured.decision import (
+    DETERMINISTIC_DECISION_BACKEND,
+    DecisionAccessPolicy,
+    DecisionError,
+    decide,
+    decision_result_schema,
+)
+from openmed.structured.decision import (
+    DecisionRequest as CoreDecisionRequest,
+)
 from openmed.utils.validation import validate_model_name
 
 from .auth import ServiceAuth, parse_service_auth_config
@@ -91,6 +101,7 @@ from .schemas import (
     DeidentifyJobRequest,
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
+    FixedOptionDecisionRequest,
     GroundRequest,
     JourneyResourcePageResponse,
     ModelUnloadRequest,
@@ -125,6 +136,7 @@ _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
+_DECISION_PATH = "/v1/decisions"
 _MODEL_BACKED_PATHS = frozenset(
     {
         "/graphql",
@@ -138,6 +150,7 @@ _MODEL_BACKED_PATHS = frozenset(
         _SMART_BACKEND_START_PATH,
         _FHIR_BULK_EXPORT_PATH,
         _FHIR_BULK_IMPORT_PATH,
+        _DECISION_PATH,
         OPENHIM_MEDIATOR_PATH,
     }
 )
@@ -712,6 +725,9 @@ def create_app() -> FastAPI:
     app.state.openhim_deidentifier = None
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
+    app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
+    app.state.decision_access_policy = DecisionAccessPolicy()
+    app.state.decision_calibration_profiles = None
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -974,6 +990,54 @@ def create_app() -> FastAPI:
             fields=parse_resource_fields(fields),
         )
         return catalog.list_resources(query, policy=policy).to_dict()
+
+    @app.post(
+        _DECISION_PATH,
+        response_model=None,
+        tags=["decision"],
+        responses={
+            200: {
+                "description": "A calibrated fixed-option decision result.",
+                "content": {"application/json": {"schema": decision_result_schema()}},
+            }
+        },
+    )
+    async def fixed_option_decision(
+        payload: FixedOptionDecisionRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """Evaluate a bounded local decision and return a typed review result."""
+
+        body = (
+            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        )
+        try:
+            decision_request = CoreDecisionRequest.from_dict(body)
+        except (DecisionError, TypeError, ValueError) as exc:
+            raise InputError(
+                "Invalid fixed-option decision request.",
+                details={"reason": str(exc)},
+            ) from exc
+        result = await run_in_threadpool(
+            decide,
+            decision_request,
+            backend=getattr(
+                request.app.state,
+                "decision_backend",
+                DETERMINISTIC_DECISION_BACKEND,
+            ),
+            policy=getattr(
+                request.app.state,
+                "decision_access_policy",
+                DecisionAccessPolicy(),
+            ),
+            calibration_profiles=getattr(
+                request.app.state,
+                "decision_calibration_profiles",
+                None,
+            ),
+        )
+        return result.to_dict()
 
     if openhim_settings.enabled:
 

@@ -208,6 +208,16 @@ State-changing tools continue through the signed, single-use consent-receipt
 verification path; the read-only Journey tools never accept a receipt as a
 substitute for access policy.
 
+## Fixed-option decisions
+
+`openmed_decide` scores bounded caller-supplied options, preserves caller
+ordering, applies the selected calibration profile, and returns typed
+abstention, denial, conflict, unsupported, timeout, and failure states. It is a
+read-only, non-destructive, idempotent, closed-world tool. The result always
+requires human review and never authorizes a clinical action. Its request and
+result schemas are identical to the Python and REST contracts described in
+[Fixed-option decision API](api/fixed-option-decisions.md).
+
 ## Canonical clinical agent workflow
 
 MCP clients can discover the `openmed-clinical-workflow` prompt, the

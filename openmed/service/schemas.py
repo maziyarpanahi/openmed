@@ -13,6 +13,24 @@ from openmed.interop.tools import (
     PIILanguage,
     UnloadModelArgs,
 )
+from openmed.structured.decision import (
+    DECISION_COMPATIBILITY_POLICY,
+    DECISION_SCHEMA_VERSION,
+    DEFAULT_CALIBRATION_ID,
+    decision_request_schema,
+)
+from openmed.structured.decision import (
+    MAX_INPUT_CHARS as DECISION_MAX_INPUT_CHARS,
+)
+from openmed.structured.decision import (
+    MAX_OPTIONS as DECISION_MAX_OPTIONS,
+)
+from openmed.structured.decision import (
+    MAX_TIMEOUT_MS as DECISION_MAX_TIMEOUT_MS,
+)
+from openmed.structured.decision import (
+    MIN_TIMEOUT_MS as DECISION_MIN_TIMEOUT_MS,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
@@ -893,6 +911,53 @@ else:
             if values.get("text") is None and not values.get("entities"):
                 raise ValueError("provide text or at least one entity")
             return values
+
+
+DecisionModeValue = Literal[
+    "fixed_choice",
+    "boolean_choice",
+    "ordered_preference",
+    "scalar_score",
+    "multi_label",
+]
+
+
+def _decision_options_field() -> Any:
+    constraints = (
+        {"max_length": DECISION_MAX_OPTIONS}
+        if PYDANTIC_V2
+        else {"max_items": DECISION_MAX_OPTIONS}
+    )
+    return Field(default_factory=list, **constraints)
+
+
+class FixedOptionDecisionRequest(_StrictModel):
+    """Canonical bounded request for ``POST /v1/decisions``."""
+
+    mode: DecisionModeValue
+    input_text: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS)
+    options: list[str] = _decision_options_field()
+    namespace: str = "default"
+    purpose: str = "care_review"
+    calibration_id: str = DEFAULT_CALIBRATION_ID
+    timeout_ms: int = Field(
+        default=5000,
+        ge=DECISION_MIN_TIMEOUT_MS,
+        le=DECISION_MAX_TIMEOUT_MS,
+    )
+    schema_version: Literal["1.0.0"] = DECISION_SCHEMA_VERSION
+    compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
+
+    if PYDANTIC_V2:
+        model_config = ConfigDict(
+            extra="forbid",
+            json_schema_extra=decision_request_schema(),
+        )
+    else:  # pragma: no cover
+
+        class Config:
+            extra = "forbid"
+            schema_extra = decision_request_schema()
 
 
 class FHIRBulkExportRequest(_StrictModel):

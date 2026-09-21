@@ -107,6 +107,17 @@ func main() {
 	}
 	fmt.Println("journey state:", facts.State, "facts:", len(facts.Resources))
 
+	// Evaluate a bounded fixed-option decision. Non-success states remain typed.
+	decision, err := client.Decision(ctx, openmed.FixedOptionDecisionRequest{
+		Mode:      openmed.DecisionFixedChoice,
+		InputText: "Synthetic review priority is urgent.",
+		Options:   []string{"urgent", "routine"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("decision state:", decision.State, "choice:", decision.Choice)
+
 	// Inspect loaded models and unload one.
 	loaded, err := client.LoadedModels(ctx)
 	if err != nil {

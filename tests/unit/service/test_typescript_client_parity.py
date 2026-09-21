@@ -18,6 +18,7 @@ SDK_PACKAGE_PATH = SDK_ROOT / "package.json"
 CLIENT_METHOD_BY_PATH = {
     "/analyze": "analyze",
     "/cohort/resolve": "resolveCohort",
+    "/v1/decisions": "decision",
     "/fhir/smart-backend/ingestions": "startSmartBackendIngestion",
     "/fhir/smart-backend/ingestions/{job_id}": "smartBackendIngestionStatus",
     "/fhir/smart-backend/ingestions/{job_id}/summary": ("smartBackendIngestionSummary"),

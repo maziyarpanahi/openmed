@@ -139,6 +139,32 @@ const (
 	PolicyMinimal  PrivacyPolicy = "minimal"
 )
 
+// DecisionMode selects one bounded fixed-output decision shape.
+type DecisionMode string
+
+// Decision modes accepted by POST /v1/decisions.
+const (
+	DecisionFixedChoice       DecisionMode = "fixed_choice"
+	DecisionBooleanChoice     DecisionMode = "boolean_choice"
+	DecisionOrderedPreference DecisionMode = "ordered_preference"
+	DecisionScalarScore       DecisionMode = "scalar_score"
+	DecisionMultiLabel        DecisionMode = "multi_label"
+)
+
+// DecisionState reports whether a decision succeeded or stopped safely.
+type DecisionState string
+
+const (
+	DecisionSuccess     DecisionState = "success"
+	DecisionAbstained   DecisionState = "abstained"
+	DecisionPartial     DecisionState = "partial"
+	DecisionUnknown     DecisionState = "unknown"
+	DecisionConflict    DecisionState = "conflict"
+	DecisionUnsupported DecisionState = "unsupported"
+	DecisionDenied      DecisionState = "denied"
+	DecisionFailure     DecisionState = "failure"
+)
+
 // JourneyResourceType selects a versioned Journey resource family.
 type JourneyResourceType string
 
@@ -281,6 +307,19 @@ type PrivacyGatewayRequest struct {
 	Lang                       PIILanguage   `json:"lang,omitempty"`
 	NormalizeAccents           *bool         `json:"normalize_accents,omitempty"`
 	KeepAlive                  any           `json:"keep_alive,omitempty"`
+}
+
+// FixedOptionDecisionRequest is the request body for POST /v1/decisions.
+type FixedOptionDecisionRequest struct {
+	Mode                DecisionMode `json:"mode"`
+	InputText           string       `json:"input_text"`
+	Options             []string     `json:"options,omitempty"`
+	Namespace           string       `json:"namespace,omitempty"`
+	Purpose             string       `json:"purpose,omitempty"`
+	CalibrationID       string       `json:"calibration_id,omitempty"`
+	TimeoutMS           int          `json:"timeout_ms,omitempty"`
+	SchemaVersion       string       `json:"schema_version,omitempty"`
+	CompatibilityPolicy string       `json:"compatibility_policy,omitempty"`
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
@@ -489,6 +528,38 @@ type PrivacyGatewayResponse struct {
 		RecordHash string `json:"record_hash"`
 		Verified   bool   `json:"verified"`
 	} `json:"audit"`
+}
+
+// DecisionOptionScore preserves a caller option's original position and score.
+type DecisionOptionScore struct {
+	Index  int     `json:"index"`
+	Option string  `json:"option"`
+	Score  float64 `json:"score"`
+}
+
+// FixedOptionDecisionResult is the calibrated, explicitly review-only result
+// returned by POST /v1/decisions.
+type FixedOptionDecisionResult struct {
+	Mode                DecisionMode          `json:"mode"`
+	State               DecisionState         `json:"state"`
+	Code                *string               `json:"code"`
+	OptionScores        []DecisionOptionScore `json:"option_scores"`
+	Choice              *string               `json:"choice"`
+	Choices             []string              `json:"choices"`
+	Ranking             []string              `json:"ranking"`
+	ScalarScore         *float64              `json:"scalar_score"`
+	Confidence          *float64              `json:"confidence"`
+	Margin              *float64              `json:"margin"`
+	Calibration         JSONObject            `json:"calibration"`
+	Backend             JSONObject            `json:"backend"`
+	Access              JSONObject            `json:"access"`
+	Warnings            []string              `json:"warnings"`
+	Review              JSONObject            `json:"review"`
+	Advisory            string                `json:"advisory"`
+	AutonomousAction    bool                  `json:"autonomous_action"`
+	SchemaVersion       string                `json:"schema_version"`
+	CompatibilityPolicy string                `json:"compatibility_policy"`
+	Extensions          JSONObject            `json:"extensions"`
 }
 
 // HealthResponse is returned by /health.
@@ -1182,6 +1253,15 @@ func (c *Client) DeidentifyStream(ctx context.Context, req PIIDeidentifyStreamRe
 func (c *Client) PrivacyGateway(ctx context.Context, req PrivacyGatewayRequest) (*PrivacyGatewayResponse, error) {
 	var out PrivacyGatewayResponse
 	if err := c.post(ctx, "/privacy-gateway/complete", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Decision calls POST /v1/decisions.
+func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (*FixedOptionDecisionResult, error) {
+	var out FixedOptionDecisionResult
+	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

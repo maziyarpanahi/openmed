@@ -353,6 +353,132 @@
         "title": "DeidentifyJobRequest",
         "type": "object"
       },
+      "FixedOptionDecisionRequest": {
+        "$id": "https://openmed.dev/schemas/decision-request/1.0.0",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "scalar_score"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "maxItems": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "boolean_choice"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "fixed_choice",
+                    "ordered_preference",
+                    "multi_label"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "maxItems": 64,
+                  "minItems": 2
+                }
+              }
+            }
+          }
+        ],
+        "description": "Canonical bounded request for ``POST /v1/decisions``.",
+        "properties": {
+          "calibration_id": {
+            "default": "openmed.synthetic.fixed_option.v1",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "default": "same_major",
+            "type": "string"
+          },
+          "input_text": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "fixed_choice",
+              "boolean_choice",
+              "ordered_preference",
+              "scalar_score",
+              "multi_label"
+            ],
+            "type": "string"
+          },
+          "namespace": {
+            "default": "default",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "options": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "purpose": {
+            "default": "care_review",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "default": "1.0.0",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 5000,
+            "maximum": 30000.0,
+            "minimum": 1.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "input_text"
+        ],
+        "title": "OpenMed Fixed-Option Decision Request",
+        "type": "object"
+      },
       "GroundRequest": {
         "additionalProperties": false,
         "description": "Request schema for the offline terminology grounding route.",
@@ -2441,6 +2567,385 @@
           }
         },
         "summary": "Readyz"
+      }
+    },
+    "/v1/decisions": {
+      "post": {
+        "description": "Evaluate a bounded local decision and return a typed review result.",
+        "operationId": "fixed_option_decision_v1_decisions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedOptionDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$id": "https://openmed.dev/schemas/decision-result/1.0.0",
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "allowed": {
+                          "type": "boolean"
+                        },
+                        "code": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "namespace": {
+                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                          "type": "string"
+                        },
+                        "policy_version": {
+                          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                          "type": "string"
+                        },
+                        "purpose": {
+                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "allowed",
+                        "code",
+                        "namespace",
+                        "purpose",
+                        "policy_version"
+                      ],
+                      "type": "object"
+                    },
+                    "advisory": {
+                      "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+                      "type": "string"
+                    },
+                    "autonomous_action": {
+                      "const": false,
+                      "type": "boolean"
+                    },
+                    "backend": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "backend_id": {
+                          "maxLength": 256,
+                          "type": "string"
+                        },
+                        "deterministic": {
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "enum": [
+                            "deterministic",
+                            "encoder",
+                            "cross_encoder",
+                            "specialist"
+                          ],
+                          "type": "string"
+                        },
+                        "license_id": {
+                          "enum": [
+                            "Apache-2.0",
+                            "BSD-2-Clause",
+                            "BSD-3-Clause",
+                            "MIT",
+                            "MPL-2.0"
+                          ],
+                          "type": "string"
+                        },
+                        "local": {
+                          "const": true,
+                          "type": "boolean"
+                        },
+                        "model_id": {
+                          "maxLength": 256,
+                          "type": "string"
+                        },
+                        "revision": {
+                          "maxLength": 256,
+                          "type": "string"
+                        },
+                        "runtime": {
+                          "maxLength": 256,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "backend_id",
+                        "kind",
+                        "runtime",
+                        "model_id",
+                        "revision",
+                        "license_id",
+                        "local",
+                        "deterministic"
+                      ],
+                      "type": "object"
+                    },
+                    "calibration": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "calibration_id": {
+                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                          "type": "string"
+                        },
+                        "in_domain_digest": {
+                          "pattern": "^sha256:[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "method": {
+                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                          "type": "string"
+                        },
+                        "minimum_confidence": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "minimum_margin": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "multi_label_threshold": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "out_of_domain_digest": {
+                          "pattern": "^sha256:[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "version": {
+                          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "calibration_id",
+                        "version",
+                        "method",
+                        "minimum_confidence",
+                        "minimum_margin",
+                        "multi_label_threshold",
+                        "in_domain_digest",
+                        "out_of_domain_digest"
+                      ],
+                      "type": "object"
+                    },
+                    "choice": {
+                      "maxLength": 256,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "choices": {
+                      "items": {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "type": "array"
+                    },
+                    "code": {
+                      "anyOf": [
+                        {
+                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "compatibility_policy": {
+                      "const": "same_major",
+                      "type": "string"
+                    },
+                    "confidence": {
+                      "maximum": 1.0,
+                      "minimum": 0.0,
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "extensions": {
+                      "type": "object"
+                    },
+                    "margin": {
+                      "maximum": 1.0,
+                      "minimum": 0.0,
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "mode": {
+                      "enum": [
+                        "fixed_choice",
+                        "boolean_choice",
+                        "ordered_preference",
+                        "scalar_score",
+                        "multi_label"
+                      ],
+                      "type": "string"
+                    },
+                    "option_scores": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "index": {
+                            "minimum": 0.0,
+                            "type": "integer"
+                          },
+                          "option": {
+                            "maxLength": 256,
+                            "type": "string"
+                          },
+                          "score": {
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "option",
+                          "score"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 64,
+                      "type": "array"
+                    },
+                    "ranking": {
+                      "items": {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "type": "array"
+                    },
+                    "review": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "reasons": {
+                          "items": {
+                            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                            "type": "string"
+                          },
+                          "maxItems": 32,
+                          "minItems": 1,
+                          "type": "array",
+                          "uniqueItems": true
+                        },
+                        "required": {
+                          "const": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "required",
+                        "reasons"
+                      ],
+                      "type": "object"
+                    },
+                    "scalar_score": {
+                      "maximum": 1.0,
+                      "minimum": 0.0,
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "schema_version": {
+                      "const": "1.0.0",
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "success",
+                        "abstained",
+                        "partial",
+                        "unknown",
+                        "conflict",
+                        "unsupported",
+                        "denied",
+                        "failure"
+                      ],
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "items": {
+                        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                        "type": "string"
+                      },
+                      "maxItems": 32,
+                      "type": "array",
+                      "uniqueItems": true
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "state",
+                    "code",
+                    "option_scores",
+                    "choice",
+                    "choices",
+                    "ranking",
+                    "scalar_score",
+                    "confidence",
+                    "margin",
+                    "calibration",
+                    "backend",
+                    "access",
+                    "warnings",
+                    "review",
+                    "advisory",
+                    "autonomous_action",
+                    "schema_version",
+                    "compatibility_policy",
+                    "extensions"
+                  ],
+                  "title": "OpenMed Fixed-Option Decision Result",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A calibrated fixed-option decision result."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fixed Option Decision",
+        "tags": [
+          "decision"
+        ]
       }
     },
     "/v1/journey/resources": {
