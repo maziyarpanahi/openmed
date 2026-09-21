@@ -115,7 +115,9 @@ nav:
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
+      - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
+      - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
@@ -162,6 +164,8 @@ nav:
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
       - WebP Header Preflight: multimodal/webp-header-preflight.md
+      - Audio Resampling Plans: multimodal/audio-resampling-plans.md
+      - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md

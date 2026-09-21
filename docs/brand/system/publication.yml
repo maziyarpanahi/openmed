@@ -190,7 +190,9 @@ classification:
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
     - clinical/event-timeline.md
+    - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
+    - clinical/status-vocabulary.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
@@ -237,6 +239,8 @@ classification:
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
     - multimodal/webp-header-preflight.md
+    - multimodal/audio-resampling-plans.md
+    - multimodal/image-geometry.md
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
