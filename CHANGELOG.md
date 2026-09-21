@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added deterministic dependency validation and topological ordering for
+  agent action graphs, with identifier-only nodes, categorical duplicate,
+  dangling, self-edge and cycle findings, and documented lexicographic
+  tie-breaking that makes the order independent of input order (#2996).
 - Added deterministic, metadata-only validation of append-only agent run
   event sequences with duplicate, gap, ordering, cross-run and
   post-terminal findings, stable finding order, and byte-stable JSON
