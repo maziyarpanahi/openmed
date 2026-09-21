@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added immutable, versioned longitudinal Journey contracts for clinical
+  artifacts, evidence locators, facts, conflicts, resolution events, and
+  dataset snapshots, including deterministic JSON, bundled schemas, and
+  derivation-graph validation (#3320).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
