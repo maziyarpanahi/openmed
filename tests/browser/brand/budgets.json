@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 53343106,
-    "maximum_unique_payload_bytes": 53005527,
+    "maximum_total_bytes": 53522667,
+    "maximum_unique_payload_bytes": 53185088,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -36,6 +36,7 @@
     "The 53005527-byte unique-payload ceiling and 53343106-byte total-payload ceiling retain 110750 bytes of bounded headroom over the audited candidate. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
     "The clinical, language-pack, audio-window, and status-vocabulary guides remain searchable. The measured search index is 3525832 bytes; its 3558547-byte JSON ceiling retains 32715 bytes of headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
+    "The multimodal batch-memory guide and its navigation entry add 179561 total and unique payload bytes, measured as a same-environment staged-artifact delta against master 0f8090c23. Both ceilings rise by exactly that amount, so the recorded 110750-byte headroom is unchanged; duplicate, per-file, route, and search-index budgets are unaffected.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
