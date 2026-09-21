@@ -2,6 +2,18 @@
 
 from __future__ import annotations
 
+from .action_graph import (
+    ACTION_GRAPH_SCHEMA_VERSION,
+    GRAPH_REASON_CODES,
+    MAX_ACTION_DEPENDENCIES,
+    MAX_ACTION_GRAPH_FINDINGS,
+    MAX_ACTION_GRAPH_NODES,
+    ActionGraphError,
+    ActionGraphReport,
+    ActionNode,
+    GraphFinding,
+    validate_action_graph,
+)
 from .artifact_reference import (
     ARTIFACT_REFERENCE_VERSION,
     MAX_ARTIFACT_BYTE_SIZE,
@@ -61,7 +73,11 @@ __all__ = [
     "ARTIFACT_REFERENCE_VERSION",
     "ActionTiming",
     "AgentRunTiming",
+    "ACTION_GRAPH_SCHEMA_VERSION",
     "ACTION_ID_PREFIX",
+    "ActionGraphError",
+    "ActionGraphReport",
+    "ActionNode",
     "ActionCorrelation",
     "ActionId",
     "ArtifactKind",
@@ -71,14 +87,19 @@ __all__ = [
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
     "CorrelationIdError",
+    "GRAPH_REASON_CODES",
     "EVENT_SEQUENCE_SCHEMA_VERSION",
     "EventReference",
     "EventSequenceError",
     "EventSequenceReport",
     "GovernanceIdError",
+    "GraphFinding",
     "OUTCOME_SCHEMA_VERSION",
     "OutcomeClass",
     "OutcomeError",
+    "MAX_ACTION_DEPENDENCIES",
+    "MAX_ACTION_GRAPH_FINDINGS",
+    "MAX_ACTION_GRAPH_NODES",
     "MAX_ARTIFACT_BYTE_SIZE",
     "MAX_EVENT_SEQUENCE_LENGTH",
     "MAX_RUN_SUMMARY_JSON_BYTES",
@@ -102,6 +123,7 @@ __all__ = [
     "WorkflowId",
     "allowed_reason_codes",
     "security",
+    "validate_action_graph",
     "validate_artifact_references",
     "validate_event_sequence",
 ]

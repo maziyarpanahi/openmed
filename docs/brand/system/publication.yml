@@ -105,6 +105,7 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent/action-graphs.md
     - agent/artifact-references.md
     - agent/governance-identifiers.md
     - agent/event-correlation.md
