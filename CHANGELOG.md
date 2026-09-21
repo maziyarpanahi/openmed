@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reject non-positive bootstrap sample counts and invalid alpha probabilities before
+  producing a confidence interval.
 - Release an interrupted circuit-breaker recovery probe only when its ownership
   token still matches, preserving health evidence.
 - Raise typed client errors for unfollowed non-2xx responses, including redirects in
