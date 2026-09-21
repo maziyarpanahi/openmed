@@ -35,6 +35,7 @@ CLIENT_METHOD_BY_PATH = {
     "/pii/extract/stream": "extractPiiStream",
     "/privacy-gateway/complete": "privacyGateway",
     "/readyz": "readyz",
+    "/v1/journey/resources": "journeyResources",
 }
 
 

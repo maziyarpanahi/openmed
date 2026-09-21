@@ -60,6 +60,76 @@ export type DeidentificationMethod =
   | "hash"
   | "shift_dates";
 
+export type JourneyResourceType =
+  | "artifact"
+  | "job"
+  | "fact"
+  | "conflict"
+  | "journey"
+  | "cohort"
+  | "dataset"
+  | "registry"
+  | "measure"
+  | "trial_review"
+  | "evidence"
+  | "current_fact"
+  | "journey_event"
+  | "mapping"
+  | "cohort_run"
+  | "dataset_manifest";
+
+export type JourneyResourceState =
+  | "success"
+  | "partial"
+  | "empty"
+  | "unknown"
+  | "conflict"
+  | "unsupported"
+  | "denied"
+  | "failure";
+
+export interface JourneyResourceQuery {
+  resource_type: JourneyResourceType;
+  namespace?: string;
+  purpose?: string;
+  first?: number;
+  after?: string | null;
+  fields?: string[];
+}
+
+export interface JourneyResourcePage {
+  state: JourneyResourceState;
+  code: string | null;
+  resources: Array<{
+    resource_type: JourneyResourceType;
+    resource_id: string;
+    namespace: string;
+    data: JsonObject;
+    state: JourneyResourceState;
+    version: number;
+    revision: number;
+    schema_version: string;
+    compatibility_policy: "same_major";
+    extensions: JsonObject;
+  }>;
+  page_info: {
+    has_next_page: boolean;
+    end_cursor: string | null;
+    page_size: number;
+    snapshot_digest: string;
+  };
+  policy: {
+    state: "success" | "denied";
+    namespace: string;
+    purpose: string;
+    allowed_fields: string[];
+    code: string | null;
+    policy_version: string;
+  };
+  schema_version: string;
+  compatibility_policy: "same_major";
+}
+
 export interface OpenMedClientOptions {
   baseUrl: string;
   fetch?: FetchLike;
@@ -565,6 +635,25 @@ export class OpenMedClient {
 
   async loadedModels(): Promise<LoadedModelsResponse> {
     return this.get("/models/loaded");
+  }
+
+  async journeyResources(
+    query: JourneyResourceQuery,
+  ): Promise<JourneyResourcePage> {
+    const path = "/v1/journey/resources";
+    const parameters = new URLSearchParams({
+      resource_type: query.resource_type,
+      namespace: query.namespace ?? "default",
+      purpose: query.purpose ?? "care_review",
+      first: String(query.first ?? 20),
+    });
+    if (query.after) {
+      parameters.set("after", query.after);
+    }
+    if (query.fields?.length) {
+      parameters.set("fields", query.fields.join(","));
+    }
+    return this.get(`${path}?${parameters.toString()}`);
   }
 
   async unloadModels(

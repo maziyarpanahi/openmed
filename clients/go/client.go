@@ -139,6 +139,29 @@ const (
 	PolicyMinimal  PrivacyPolicy = "minimal"
 )
 
+// JourneyResourceType selects a versioned Journey resource family.
+type JourneyResourceType string
+
+// Journey resource families supported by the versioned read contract.
+const (
+	JourneyArtifact        JourneyResourceType = "artifact"
+	JourneyJob             JourneyResourceType = "job"
+	JourneyFact            JourneyResourceType = "fact"
+	JourneyConflict        JourneyResourceType = "conflict"
+	Journey                JourneyResourceType = "journey"
+	JourneyCohort          JourneyResourceType = "cohort"
+	JourneyDataset         JourneyResourceType = "dataset"
+	JourneyRegistry        JourneyResourceType = "registry"
+	JourneyMeasure         JourneyResourceType = "measure"
+	JourneyTrialReview     JourneyResourceType = "trial_review"
+	JourneyEvidence        JourneyResourceType = "evidence"
+	JourneyCurrentFact     JourneyResourceType = "current_fact"
+	JourneyEvent           JourneyResourceType = "journey_event"
+	JourneyMapping         JourneyResourceType = "mapping"
+	JourneyCohortRun       JourneyResourceType = "cohort_run"
+	JourneyDatasetManifest JourneyResourceType = "dataset_manifest"
+)
+
 // JobStatus enumerates the lifecycle states of a de-identification job.
 type JobStatus string
 
@@ -662,6 +685,53 @@ type CohortResolveResponse struct {
 	Provenance    JSONObject              `json:"provenance"`
 }
 
+// JourneyResourceQuery selects one bounded, policy-aware resource page.
+type JourneyResourceQuery struct {
+	ResourceType JourneyResourceType
+	Namespace    string
+	Purpose      string
+	First        int
+	After        string
+	Fields       []string
+}
+
+// JourneyResource is one versioned, field-filtered read model.
+type JourneyResource struct {
+	ResourceType        JourneyResourceType `json:"resource_type"`
+	ResourceID          string              `json:"resource_id"`
+	Namespace           string              `json:"namespace"`
+	Data                JSONObject          `json:"data"`
+	State               string              `json:"state"`
+	Version             int                 `json:"version"`
+	Revision            int                 `json:"revision"`
+	SchemaVersion       string              `json:"schema_version"`
+	CompatibilityPolicy string              `json:"compatibility_policy"`
+	Extensions          JSONObject          `json:"extensions"`
+}
+
+// JourneyResourcePage is the cross-surface bounded list response.
+type JourneyResourcePage struct {
+	State     string            `json:"state"`
+	Code      *string           `json:"code"`
+	Resources []JourneyResource `json:"resources"`
+	PageInfo  struct {
+		HasNextPage    bool    `json:"has_next_page"`
+		EndCursor      *string `json:"end_cursor"`
+		PageSize       int     `json:"page_size"`
+		SnapshotDigest string  `json:"snapshot_digest"`
+	} `json:"page_info"`
+	Policy struct {
+		State         string   `json:"state"`
+		Namespace     string   `json:"namespace"`
+		Purpose       string   `json:"purpose"`
+		AllowedFields []string `json:"allowed_fields"`
+		Code          *string  `json:"code"`
+		PolicyVersion string   `json:"policy_version"`
+	} `json:"policy"`
+	SchemaVersion       string `json:"schema_version"`
+	CompatibilityPolicy string `json:"compatibility_policy"`
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -1155,6 +1225,37 @@ func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error
 		return nil, err
 	}
 	if err := decodeInto("/models/loaded", body, &out.Raw); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// JourneyResources calls GET /v1/journey/resources.
+func (c *Client) JourneyResources(ctx context.Context, query JourneyResourceQuery) (*JourneyResourcePage, error) {
+	parameters := url.Values{}
+	parameters.Set("resource_type", string(query.ResourceType))
+	if query.Namespace == "" {
+		query.Namespace = "default"
+	}
+	if query.Purpose == "" {
+		query.Purpose = "care_review"
+	}
+	if query.First == 0 {
+		query.First = 20
+	}
+	parameters.Set("namespace", query.Namespace)
+	parameters.Set("purpose", query.Purpose)
+	parameters.Set("first", fmt.Sprintf("%d", query.First))
+	if query.After != "" {
+		parameters.Set("after", query.After)
+	}
+	if len(query.Fields) > 0 {
+		parameters.Set("fields", strings.Join(query.Fields, ","))
+	}
+	path := "/v1/journey/resources"
+	path += "?" + parameters.Encode()
+	var out JourneyResourcePage
+	if err := c.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

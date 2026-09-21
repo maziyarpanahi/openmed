@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Literal, Mapping, Optional
 
@@ -12,6 +13,24 @@ JsonDict = dict[str, Any]
 KeepAliveValue = int | float | str
 AggregationStrategy = Literal["simple", "first", "average", "max"]
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
+JourneyResourceType = Literal[
+    "artifact",
+    "job",
+    "fact",
+    "conflict",
+    "journey",
+    "cohort",
+    "dataset",
+    "registry",
+    "measure",
+    "trial_review",
+    "evidence",
+    "current_fact",
+    "journey_event",
+    "mapping",
+    "cohort_run",
+    "dataset_manifest",
+]
 PIILanguage = Literal[
     "am",
     "as",
@@ -185,6 +204,7 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
         request_fields=_request_field_names(PrivacyGatewayRequest),
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
+    "journey_resources": ClientEndpoint(method="GET", path="/v1/journey/resources"),
     "unload_model": ClientEndpoint(
         method="POST",
         path="/models/unload",
@@ -430,6 +450,36 @@ class OpenMedClient:
         """Return loaded model and warm-pool state."""
         return self._request("GET", "/models/loaded", request_id=request_id)
 
+    def journey_resources(
+        self,
+        resource_type: JourneyResourceType,
+        *,
+        namespace: str = "default",
+        purpose: str = "care_review",
+        first: int = 20,
+        after: Optional[str] = None,
+        fields: Sequence[str] = (),
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """List a bounded page from ``GET /v1/journey/resources``."""
+
+        params: dict[str, Any] = {
+            "first": first,
+            "namespace": namespace,
+            "purpose": purpose,
+            "resource_type": resource_type,
+        }
+        if after is not None:
+            params["after"] = after
+        if fields:
+            params["fields"] = ",".join(fields)
+        return self._request(
+            "GET",
+            "/v1/journey/resources",
+            params=params,
+            request_id=request_id,
+        )
+
     def unload_model(
         self,
         model_name: str,
@@ -495,11 +545,18 @@ class OpenMedClient:
         path: str,
         *,
         json: Optional[JsonDict] = None,
+        params: Optional[Mapping[str, Any]] = None,
         request_id: Optional[str] = None,
     ) -> JsonDict:
         active_request_id = request_id or self._request_id
         headers = {_REQUEST_ID_HEADER: active_request_id} if active_request_id else None
-        response = self._client.request(method, path, json=json, headers=headers)
+        response = self._client.request(
+            method,
+            path,
+            json=json,
+            params=params,
+            headers=headers,
+        )
         if response.is_error:
             self._raise_api_error(response, request_id=active_request_id)
 
@@ -549,6 +606,7 @@ __all__ = [
     "AnalyzeRequest",
     "CLIENT_ENDPOINTS",
     "ClientEndpoint",
+    "JourneyResourceType",
     "ModelUnloadRequest",
     "OpenMedAPIError",
     "OpenMedClient",

@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -43,6 +43,13 @@ from .batcher import (
 from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
+from .journey_resources import (
+    JourneyAccessPolicy,
+    JourneyResourceCatalog,
+    JourneyResourceKind,
+    JourneyResourceQuery,
+    parse_resource_fields,
+)
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
@@ -85,6 +92,7 @@ from .schemas import (
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
     GroundRequest,
+    JourneyResourcePageResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
     PIIDeidentifyRequest,
@@ -532,6 +540,14 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     return queue
 
 
+def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
+    catalog = getattr(request.app.state, "journey_resources", None)
+    if catalog is None:
+        catalog = JourneyResourceCatalog()
+        request.app.state.journey_resources = catalog
+    return catalog
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -694,6 +710,8 @@ def create_app() -> FastAPI:
     app.state.tracing = service_tracing_from_env()
     app.state.openhim_settings = openhim_settings
     app.state.openhim_deidentifier = None
+    app.state.journey_resources = JourneyResourceCatalog()
+    app.state.journey_access_policy = JourneyAccessPolicy()
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -928,6 +946,34 @@ def create_app() -> FastAPI:
             "Service preload has not completed",
             details=None,
         )
+
+    @app.get(
+        "/v1/journey/resources",
+        response_model=JourneyResourcePageResponse,
+        tags=["journey"],
+    )
+    async def list_journey_resources(
+        request: Request,
+        resource_type: JourneyResourceKind,
+        namespace: str = "default",
+        purpose: str = "care_review",
+        first: int = Query(default=20, ge=1, le=100),
+        after: Optional[str] = Query(default=None, max_length=2048),
+        fields: Optional[str] = Query(default=None, max_length=1024),
+    ) -> Dict[str, Any]:
+        """List a bounded, policy-filtered page of versioned Journey resources."""
+
+        catalog = _get_journey_resource_catalog(request)
+        policy = getattr(request.app.state, "journey_access_policy", None)
+        query = JourneyResourceQuery(
+            resource_type=resource_type,
+            namespace=namespace,
+            purpose=purpose,
+            first=first,
+            after=after,
+            fields=parse_resource_fields(fields),
+        )
+        return catalog.list_resources(query, policy=policy).to_dict()
 
     if openhim_settings.enabled:
 
@@ -1457,7 +1503,11 @@ def create_app() -> FastAPI:
 
     from .graphql_app import mount_graphql
 
-    mount_graphql(app, runtime_getter=_get_service_runtime)
+    mount_graphql(
+        app,
+        runtime_getter=_get_service_runtime,
+        resource_getter=_get_journey_resource_catalog,
+    )
 
     if app.state.tracing.enabled:
         app.add_middleware(

@@ -458,6 +458,282 @@
         "title": "JobWebhookRequest",
         "type": "object"
       },
+      "JourneyPageInfoResponse": {
+        "additionalProperties": false,
+        "description": "Cursor metadata for one bounded Journey resource page.",
+        "properties": {
+          "end_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Cursor"
+          },
+          "has_next_page": {
+            "title": "Has Next Page",
+            "type": "boolean"
+          },
+          "page_size": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "snapshot_digest": {
+            "title": "Snapshot Digest",
+            "type": "string"
+          }
+        },
+        "required": [
+          "has_next_page",
+          "end_cursor",
+          "page_size",
+          "snapshot_digest"
+        ],
+        "title": "JourneyPageInfoResponse",
+        "type": "object"
+      },
+      "JourneyPolicyResponse": {
+        "additionalProperties": false,
+        "description": "Namespace, purpose, and field response-policy decision.",
+        "properties": {
+          "allowed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Fields",
+            "type": "array"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "policy_version": {
+            "const": "1.0.0",
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "denied"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "namespace",
+          "purpose",
+          "allowed_fields",
+          "code",
+          "policy_version"
+        ],
+        "title": "JourneyPolicyResponse",
+        "type": "object"
+      },
+      "JourneyResourceKind": {
+        "description": "Versioned Journey resource families exposed by public read surfaces.",
+        "enum": [
+          "artifact",
+          "job",
+          "fact",
+          "conflict",
+          "journey",
+          "cohort",
+          "dataset",
+          "registry",
+          "measure",
+          "trial_review",
+          "evidence",
+          "current_fact",
+          "journey_event",
+          "mapping",
+          "cohort_run",
+          "dataset_manifest"
+        ],
+        "title": "JourneyResourceKind",
+        "type": "string"
+      },
+      "JourneyResourcePageResponse": {
+        "additionalProperties": false,
+        "description": "Typed response shared by versioned Journey list endpoints.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "title": "Compatibility Policy",
+            "type": "string"
+          },
+          "page_info": {
+            "$ref": "#/components/schemas/JourneyPageInfoResponse"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/JourneyPolicyResponse"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/JourneyResourceResponse"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy"
+        ],
+        "title": "JourneyResourcePageResponse",
+        "type": "object"
+      },
+      "JourneyResourceResponse": {
+        "additionalProperties": false,
+        "description": "One versioned, field-filtered Journey resource.",
+        "properties": {
+          "compatibility_policy": {
+            "const": "same_major",
+            "title": "Compatibility Policy",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "extensions": {
+            "additionalProperties": true,
+            "title": "Extensions",
+            "type": "object"
+          },
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_type": {
+            "enum": [
+              "artifact",
+              "job",
+              "fact",
+              "conflict",
+              "journey",
+              "cohort",
+              "dataset",
+              "registry",
+              "measure",
+              "trial_review",
+              "evidence",
+              "current_fact",
+              "journey_event",
+              "mapping",
+              "cohort_run",
+              "dataset_manifest"
+            ],
+            "title": "Resource Type",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "namespace",
+          "data",
+          "state",
+          "version",
+          "revision",
+          "schema_version",
+          "compatibility_policy",
+          "extensions"
+        ],
+        "title": "JourneyResourceResponse",
+        "type": "object"
+      },
       "ModelUnloadRequest": {
         "additionalProperties": false,
         "description": "Request schema for /models/unload.",
@@ -2165,6 +2441,114 @@
           }
         },
         "summary": "Readyz"
+      }
+    },
+    "/v1/journey/resources": {
+      "get": {
+        "description": "List a bounded, policy-filtered page of versioned Journey resources.",
+        "operationId": "list_journey_resources_v1_journey_resources_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "resource_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JourneyResourceKind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "namespace",
+            "required": false,
+            "schema": {
+              "default": "default",
+              "title": "Namespace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "purpose",
+            "required": false,
+            "schema": {
+              "default": "care_review",
+              "title": "Purpose",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "First",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fields",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fields"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JourneyResourcePageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Journey Resources",
+        "tags": [
+          "journey"
+        ]
       }
     }
   }

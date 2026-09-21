@@ -229,6 +229,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Versioned Journey Resources: api/journey-resources.md
       - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - Minimum-necessary Field Selection: security/minimum-necessary.md

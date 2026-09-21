@@ -250,6 +250,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "deidentify",
         "privacy_gateway",
         "loaded_models",
+        "journey_resources",
         "unload_model",
         "unload_all_models",
     }
