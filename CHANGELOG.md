@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Measure awaited coroutine execution in the profiling decorator, preserving
+  coroutine identity and recording elapsed time on failure or cancellation.
 - Scope shared tokenizer cache entries to loader identity, including bound
   methods, so different loader implementations cannot share the wrong tokenizer.
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
