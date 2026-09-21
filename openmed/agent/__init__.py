@@ -44,6 +44,11 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .workflows import (
+    COHORT_EXPLANATION_SCHEMA_VERSION,
+    CohortMembershipExplanation,
+    explain_cohort_membership,
+)
 
 __all__ = [
     "ARTIFACT_REFERENCE_VERSION",
@@ -58,7 +63,9 @@ __all__ = [
     "CapabilityId",
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
+    "COHORT_EXPLANATION_SCHEMA_VERSION",
     "CorrelationIdError",
+    "CohortMembershipExplanation",
     "GovernanceIdError",
     "OUTCOME_SCHEMA_VERSION",
     "OutcomeClass",
@@ -80,6 +87,7 @@ __all__ = [
     "WorkflowOutcome",
     "WorkflowId",
     "allowed_reason_codes",
+    "explain_cohort_membership",
     "security",
     "validate_artifact_references",
 ]

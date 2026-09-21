@@ -409,6 +409,7 @@ classification:
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
     - interop/fhir-cohort-roundtrip.md
+    - structured/saved-cohorts.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md
