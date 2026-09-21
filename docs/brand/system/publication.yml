@@ -413,6 +413,7 @@ classification:
     - structured/governed-datasets.md
     - structured/clinical-registries.md
     - clinical/measures.md
+    - clinical/care-gaps.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md
