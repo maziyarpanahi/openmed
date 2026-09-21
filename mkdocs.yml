@@ -34,6 +34,7 @@ nav:
       - Agent Artifact References: agent/artifact-references.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Event Correlation: agent/event-correlation.md
+      - Agent Event Attributes: agent/event-attributes.md
       - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
