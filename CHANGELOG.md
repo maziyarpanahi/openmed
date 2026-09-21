@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added immutable local ASR input profiles and a metadata-only
+  compatibility check over privacy-safe WAV headers, returning compatible,
+  resample, downmix, review or incompatible with ordered reason codes and
+  closed, bounded, sorted-unique profile validation (#3050).
 - Added bounded PNG IHDR and JPEG frame-header geometry preflight with
   CRC and length validation, a marker scan bounded by fill, marker-count
   and byte budgets, value-free errors, and synthetic plus Pillow-written
