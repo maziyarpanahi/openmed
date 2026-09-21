@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Clean up temporary evaluation reports after failed writes, closes, or
+  publication without masking the original error or replacing an existing report.
 - Measure awaited coroutine execution in the profiling decorator, preserving
   coroutine identity and recording elapsed time on failure or cancellation.
 - Scope shared tokenizer cache entries to loader identity, including bound
