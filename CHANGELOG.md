@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Allow model loading when optional architecture metadata is absent or empty; retain
+  advisory warnings and normal factory failures.
 - Accept source-aligned literal hash tokens in space-delimited CoNLL rows without
   displacing ordinary hash comments.
 - Reject non-finite numeric keep-alive durations and conversion overflow while
