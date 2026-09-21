@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or rejects against an inclusive byte budget with per-batch overhead. Missing
   factors or geometry, including PDF page counts, stay unevaluable, and
   saturating 64-bit arithmetic never yields an accept (#3091).
+- Added content-free audio format distribution summaries with validated
+  channel, sample-rate, bit-depth, duration-bucket, and format categories,
+  small-cell suppression, and deterministic sorting, with synthetic golden
+  regression tests (#3093).
+- Added content-free frame-sampling manifests for clinical video with strict
+  monotonicity, bounds, declared-strategy validation, and a recomputed coverage
+  digest, with synthetic regression tests (#3092).
+- Added deterministic SPDX identifier normalization for synthetic lineage with a
+  committed permissive allowlist, deprecated-alias mapping, LicenseRef support,
+  and stable unknown and malformed outcomes, with synthetic regression tests
+  (#3120).
 - Added deterministic, allocation-free audio resampling plans with reduced
   rational rates, floor, nearest-even, and ceiling rounding policies,
   exact or rounded status, overflow-checked arithmetic, and an optional
