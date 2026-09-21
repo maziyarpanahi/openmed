@@ -96,6 +96,14 @@ if (facts.state === "success") {
   for (const fact of facts.resources) consumeStructuredFact(fact.data);
 }
 
+// Fixed workflow methods use the same generated resource contract.
+const journey = await client.journey({ first: 10 });
+const cohort = await client.cohort({ purpose: "analytics" });
+const dataset = await client.dataset();
+const registry = await client.registry();
+const measure = await client.measure();
+const trialReview = await client.trialReview();
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```

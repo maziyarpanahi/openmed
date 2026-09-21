@@ -20,6 +20,12 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
+from openmed.service.journey_workflows import (
+    JOURNEY_WORKFLOW_DEFINITIONS,
+    JourneyWorkflowDefinition,
+    journey_workflow_output_schema,
+    journey_workflow_query_properties,
+)
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -149,6 +155,18 @@ class ToolSpec:
             "openWorldHint": self.open_world_hint,
         }
 
+    @property
+    def state_changing(self) -> bool:
+        """Return whether invocation may change runtime or durable state."""
+
+        return not self.read_only_hint
+
+    @property
+    def requires_consent_receipt(self) -> bool:
+        """Return whether the MCP server requires its consent-receipt path."""
+
+        return self.state_changing
+
     def mcp_output_schema(self) -> JsonSchema:
         """Return the MCP result schema, including structured failures."""
 
@@ -186,6 +204,11 @@ class ToolSpec:
             "stability": self.stability,
             "input_schema": deepcopy(dict(self.input_schema)),
             "output_schema": deepcopy(dict(self.output_schema)),
+            "annotations": self.annotations(),
+            "authorization": {
+                "state_changing": self.state_changing,
+                "consent_receipt_required": self.requires_consent_receipt,
+            },
         }
         if self.plugin_id:
             payload["plugin"] = {
@@ -425,7 +448,7 @@ class ToolRegistry:
 
         self._ensure_runtime_plugins()
         return {
-            "schema_version": "1.1.0",
+            "schema_version": "1.2.0",
             "tools": [spec.document() for spec in self.all_specs()],
             "workflows": [spec.document() for spec in self.workflow_specs()],
         }
@@ -1624,6 +1647,57 @@ def _tool_spec(
     )
 
 
+def _journey_workflow_tool_spec(
+    definition: JourneyWorkflowDefinition,
+) -> ToolSpec:
+    """Build one read-only Journey tool from the shared workflow contract."""
+
+    properties = journey_workflow_query_properties(definition)
+    parameters = (
+        _parameter(
+            "namespace",
+            properties["namespace"],
+            str,
+            "default",
+        ),
+        _parameter(
+            "purpose",
+            properties["purpose"],
+            str,
+            "care_review",
+        ),
+        _parameter(
+            "first",
+            properties["first"],
+            int,
+            20,
+        ),
+        _parameter(
+            "after",
+            properties["after"],
+            Optional[str],
+            None,
+        ),
+        _parameter(
+            "fields",
+            properties["fields"],
+            Optional[Sequence[str]],
+            None,
+        ),
+    )
+    return _tool_spec(
+        name=definition.tool_name,
+        title=definition.title,
+        description=definition.description,
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+        parameters=parameters,
+        output_schema=journey_workflow_output_schema(definition),
+    )
+
+
 TOOL_SPECS: tuple[ToolSpec, ...] = (
     _tool_spec(
         name="openmed_analyze_text",
@@ -2004,6 +2078,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             _parameter("limit", _schema("integer", minimum=0), int, 50),
         ),
         output_schema=_LIST_MODELS_OUTPUT,
+    ),
+    *(
+        _journey_workflow_tool_spec(definition)
+        for definition in JOURNEY_WORKFLOW_DEFINITIONS
     ),
 )
 
