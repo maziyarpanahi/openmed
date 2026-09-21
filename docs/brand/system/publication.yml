@@ -111,6 +111,7 @@ classification:
     - agent/outcome-reasons.md
     - agent/run-summaries.md
     - agent/timing-metadata.md
+    - agent/evidence-query-planner.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
