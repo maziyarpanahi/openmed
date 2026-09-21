@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 53336747,
-    "maximum_unique_payload_bytes": 52999168,
+    "maximum_total_bytes": 54342906,
+    "maximum_unique_payload_bytes": 54005327,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3558260
+    "json": 3581897
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3558260
+    "docs/search/search_index.json": 3581897
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,10 +31,10 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the streaming audio-window and audio-format guides, with 110750 bytes of documentation headroom.",
-    "The audited candidate contains 53225997 total bytes, 52888418 unique payload bytes, and 337579 duplicate payload bytes. The audio-window and audio-format guides and navigation remain governed by the byte, route, and performance budgets without an arbitrary file-count ceiling.",
-    "The 52999168-byte unique-payload ceiling and 53336747-byte total-payload ceiling retain 110750 bytes of bounded headroom over the audited candidate. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The clinical, language-pack, audio-window, and audio-format guides remain searchable. The measured search index is 3525545 bytes; its 3558260-byte JSON ceiling retains 32715 bytes of headroom.",
+    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including all currently registered clinical, agent, and multimodal guides, with 110750 bytes of documentation headroom.",
+    "The audited candidate contains 54232156 total bytes, 53894577 unique payload bytes, and 337579 duplicate payload bytes. All registered guides and navigation remain governed by the byte, route, and performance budgets without an arbitrary file-count ceiling.",
+    "The 54005327-byte unique-payload ceiling and 54342906-byte total-payload ceiling retain 110750 bytes of bounded headroom over the audited candidate. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The measured search index is 3549182 bytes; its 3581897-byte JSON ceiling retains 32715 bytes of headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
