@@ -30,9 +30,11 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Event Correlation: agent/event-correlation.md
+      - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Agent Timing Metadata: agent/timing-metadata.md
