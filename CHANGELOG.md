@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added deterministic, privacy-safe diffs of agent run summaries with sorted
+  added and removed workflow identifiers and artifact digests, signed outcome,
+  tool-call, and duration deltas, and byte-stable JSON and Markdown output
+  (#3040).
 - Added offline lifetime and audience validation for agent capability
   grants, with caller-supplied evaluation instants, symmetric clock-skew
   tolerance, an optional lifetime ceiling, ordered reason codes, and
