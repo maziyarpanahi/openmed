@@ -263,6 +263,10 @@ from openmed.eval.suites.naamapadam import (
     naamapadam_suite_metadata,
     run_naamapadam,
 )
+from openmed.eval.suites.omop_quality import (
+    FrozenOmopQualityFixture,
+    load_frozen_omop_quality_fixture,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -601,6 +605,8 @@ __all__ = [
     "evaluate_journey_specialist_holdout",
     "finalize_journey_specialist_run",
     "render_journey_specialist_model_card",
+    "FrozenOmopQualityFixture",
+    "load_frozen_omop_quality_fixture",
     "BIORED",
     "GOLDEN",
     "GROUNDING_CALIBRATION",

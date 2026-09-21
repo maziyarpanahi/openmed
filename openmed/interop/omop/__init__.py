@@ -75,13 +75,54 @@ _FACT_PROJECTION_EXPORTS = frozenset(
     }
 )
 
+_QUALITY_EXPORTS = frozenset(
+    {
+        "OMOP_QUALITY_CATEGORIES",
+        "OMOP_QUALITY_CHECK_STATUSES",
+        "OMOP_QUALITY_COMPATIBILITY_POLICY",
+        "OMOP_QUALITY_EXECUTION_MODES",
+        "OMOP_QUALITY_PERMISSIVE_LICENSES",
+        "OMOP_QUALITY_REPORT_ARTIFACT",
+        "OMOP_QUALITY_REPORT_SCHEMA_VERSION",
+        "OMOP_QUALITY_SEVERITIES",
+        "OMOP_QUALITY_SIGNATURE_ALGORITHM",
+        "OMOP_QUALITY_VERDICTS",
+        "OmopProjectionAggregate",
+        "OmopQualityCategorySummary",
+        "OmopQualityCheck",
+        "OmopQualityConflictError",
+        "OmopQualityDeniedError",
+        "OmopQualityError",
+        "OmopQualityInput",
+        "OmopQualityProtocolError",
+        "OmopQualityReport",
+        "OmopQualitySignature",
+        "OmopQualityUnsupportedError",
+        "OmopReconciliation",
+        "OmopRowCountDelta",
+        "build_omop_quality_tool_output",
+        "load_omop_quality_report_schema",
+        "normalize_omop_quality_output",
+        "projection_quality_checks",
+        "reconcile_omop_aggregates",
+        "run_omop_quality_remote",
+        "run_omop_quality_subprocess",
+        "sign_omop_quality_report",
+        "verify_omop_quality_report",
+    }
+)
+
 
 def __getattr__(name: str) -> Any:
-    """Load fact-projection contracts without widening OMOP import cycles."""
+    """Load newer OMOP contracts without widening import cycles."""
 
-    if name not in _FACT_PROJECTION_EXPORTS:
+    if name in _FACT_PROJECTION_EXPORTS:
+        module_name = ".fact_projection"
+    elif name in _QUALITY_EXPORTS:
+        module_name = ".quality"
+    else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module = import_module(".fact_projection", __name__)
+    module = import_module(module_name, __name__)
     value = getattr(module, name)
     globals()[name] = value
     return value
@@ -99,6 +140,16 @@ __all__ = [
     "OMOP_FACT_TABLES",
     "OMOP_MAPPING_STATES",
     "OMOP_PERMISSIVE_LICENSES",
+    "OMOP_QUALITY_CATEGORIES",
+    "OMOP_QUALITY_CHECK_STATUSES",
+    "OMOP_QUALITY_COMPATIBILITY_POLICY",
+    "OMOP_QUALITY_EXECUTION_MODES",
+    "OMOP_QUALITY_PERMISSIVE_LICENSES",
+    "OMOP_QUALITY_REPORT_ARTIFACT",
+    "OMOP_QUALITY_REPORT_SCHEMA_VERSION",
+    "OMOP_QUALITY_SEVERITIES",
+    "OMOP_QUALITY_SIGNATURE_ALGORITHM",
+    "OMOP_QUALITY_VERDICTS",
     "LoadMode",
     "MappingStatus",
     "OmopCdmTables",
@@ -117,10 +168,23 @@ __all__ = [
     "OmopFactProjectionUnsupportedError",
     "OmopFactRoundTripReport",
     "OmopMappingOutcome",
+    "OmopProjectionAggregate",
     "OmopProjectionLoss",
     "OmopProjectionSummary",
     "OmopProjectionViolation",
+    "OmopQualityCategorySummary",
+    "OmopQualityCheck",
+    "OmopQualityConflictError",
+    "OmopQualityDeniedError",
+    "OmopQualityError",
+    "OmopQualityInput",
+    "OmopQualityProtocolError",
+    "OmopQualityReport",
+    "OmopQualitySignature",
+    "OmopQualityUnsupportedError",
+    "OmopReconciliation",
     "OmopRowProvenance",
+    "OmopRowCountDelta",
     "OmopVocabularySnapshot",
     "OmopValidationReport",
     "RejectedSpan",
@@ -131,6 +195,7 @@ __all__ = [
     "VocabularyRouter",
     "WriterKind",
     "assess_omop_fact_round_trip",
+    "build_omop_quality_tool_output",
     "create_omop_schema",
     "deterministic_note_hash",
     "deterministic_omop_id",
@@ -139,14 +204,22 @@ __all__ = [
     "load_grounded_jsonl",
     "load_grounded_notes",
     "load_omop_fact_projection_schema",
+    "load_omop_quality_report_schema",
+    "normalize_omop_quality_output",
     "project_clinical_facts_to_omop",
+    "projection_quality_checks",
+    "reconcile_omop_aggregates",
     "route_domain",
+    "run_omop_quality_remote",
+    "run_omop_quality_subprocess",
+    "sign_omop_quality_report",
     "summarize_omop_violations",
     "validate_omop_database",
     "validate_omop_database_report",
     "validate_omop_fact_projection",
     "validate_omop_tables",
     "validate_omop_tables_report",
+    "verify_omop_quality_report",
     "write_omop_duckdb",
     "write_omop_parquet",
     "write_omop_sqlite",
