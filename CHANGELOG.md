@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or rejects against an inclusive byte budget with per-batch overhead. Missing
   factors or geometry, including PDF page counts, stay unevaluable, and
   saturating 64-bit arithmetic never yields an accept (#3091).
+- Added Unicode whitespace regression coverage for vital-sign parsing and fixed the
+  cases it found: non-breaking, narrow, thin, and other Unicode spaces inside labels
+  such as `oxygen saturation` no longer turn a vital sign into `unknown`, and units
+  such as `mm Hg` match their ASCII spelling (#3106).
 - Added `serialize_measurement_trends`, compact JSON for measurement trends that is
   byte-identical for equivalent input orderings and rejects non-finite derived values,
   with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
