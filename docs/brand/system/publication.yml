@@ -411,6 +411,7 @@ classification:
     - interop/fhir-cohort-roundtrip.md
     - structured/saved-cohorts.md
     - structured/governed-datasets.md
+    - structured/clinical-registries.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md

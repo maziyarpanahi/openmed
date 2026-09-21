@@ -82,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic JSONL, annotation, and Parquet artifacts; fail-closed split and
   distribution gates; license custody; and separately authorized, audited
   identified exports (#3339).
+- Added content-addressed clinical registry definitions, evidence-bound cases,
+  owner-scoped assignments, non-skippable review and adjudication, correction
+  history, counts-only queue summaries, and policy-bound value-free exports
+  (#3341).
 
 ### Changed
 

@@ -337,6 +337,7 @@ nav:
       - FHIR Journey and Cohort-definition Round Trips: interop/fhir-cohort-roundtrip.md
       - Saved Cohorts and Membership Evidence: structured/saved-cohorts.md
       - Governed Dataset Snapshots: structured/governed-datasets.md
+      - Governed Clinical Registries: structured/clinical-registries.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
