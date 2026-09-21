@@ -95,6 +95,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added opt-in public clinical-trial metadata synchronization with immutable
   study versions, source and cache integrity checks, typed drift failures,
   deterministic incremental updates, and offline metadata queries (#3344).
+- Added deterministic public trial-criteria parsing, local candidate reranking,
+  five-state evidence-bound criterion evaluation, value-free review packets,
+  fail-closed aggregate matching, and a provenance-bound benchmark (#3345).
 
 ### Changed
 
