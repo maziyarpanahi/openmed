@@ -19,12 +19,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or rejects against an inclusive byte budget with per-batch overhead. Missing
   factors or geometry, including PDF page counts, stay unevaluable, and
   saturating 64-bit arithmetic never yields an accept (#3091).
+- Added `serialize_measurement_trends`, compact JSON for measurement trends that is
+  byte-identical for equivalent input orderings and rejects non-finite derived values,
+  with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
+  tied on one timepoint are now ordered by value instead of input position (#3107).
 - Added a synthetic local-extension example and documentation page for the
   status vocabulary, covering an explicit local path, provenance validation,
   and a duplicate-cue guard (#3108).
 
 ### Changed
 
+- Reject non-positive bootstrap sample counts and invalid alpha probabilities before
+  producing a confidence interval.
+- Release an interrupted circuit-breaker recovery probe only when its ownership
+  token still matches, preserving health evidence.
+- Raise typed client errors for unfollowed non-2xx responses, including redirects in
+  JSON and streaming requests.
+- Keep load-test clients connected through final response bodies and count
+  incomplete responses as failures.
+- Align grounding-index recall references, queries and report metadata with the
+  selected vocabulary systems.
+- Grow the dense alias search budget when duplicate aliases would hide available
+  distinct concepts.
+- Allow model loading when optional architecture metadata is absent or empty; retain
+  advisory warnings and normal factory failures.
+- Accept source-aligned literal hash tokens in space-delimited CoNLL rows without
+  displacing ordinary hash comments.
 - Reject non-finite numeric keep-alive durations and conversion overflow while
   preserving explicit expiry opt-out aliases.
 - Return the result-cache instance selected under the global lock so concurrent
