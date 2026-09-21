@@ -13,11 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added a synthetic local-extension example and documentation page for the
+  status vocabulary, covering an explicit local path, provenance validation,
+  and a duplicate-cue guard (#3108).
 
 ### Changed
 
 - Return the result-cache instance selected under the global lock so concurrent
   capacity changes cannot replace a caller's return value.
+- Preserve already-qualified OpenMed logger names so module-level logging
+  configuration applies without a duplicated openmed namespace.
+- Close newly created Pulsar clients when subscription or adapter setup
+  fails, preserving the setup error and successful caller ownership.
+- Clean up temporary evaluation reports after failed writes, closes, or
+  publication without masking the original error or replacing an existing report.
+- Measure awaited coroutine execution in the profiling decorator, preserving
+  coroutine identity and recording elapsed time on failure or cancellation.
+- Scope shared tokenizer cache entries to loader identity, including bound
+  methods, so different loader implementations cannot share the wrong tokenizer.
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
   use private random HMAC keys by default. Reuse a pipeline or redactor instance,
   or supply the same non-empty private key, when stable hashes across calls are
