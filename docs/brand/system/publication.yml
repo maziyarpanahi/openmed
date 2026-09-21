@@ -192,6 +192,7 @@ classification:
     - clinical/event-timeline.md
     - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
+    - clinical/status-vocabulary.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
