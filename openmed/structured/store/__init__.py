@@ -1,5 +1,6 @@
 """Durable local persistence for longitudinal Journey records."""
 
+from .composed import ComposedJourneyStore, StoredJourneyGraph
 from .local import (
     IngestedGraph,
     LocalArtifactStore,
@@ -11,6 +12,18 @@ from .local import (
     StoreMigrationError,
 )
 from .migrations import LATEST_MIGRATION_VERSION, MIGRATIONS, StoreMigration
+from .objects import FsspecArtifactStore, ObjectStoreNamespace
+from .postgres import (
+    LATEST_POSTGRES_MIGRATION_VERSION,
+    POSTGRES_MIGRATIONS,
+    DBAPIConnection,
+    MigrationHealth,
+    PostgresJourneyStore,
+    PostgresJourneyTransaction,
+    PostgresMigration,
+    PostgresMigrationReport,
+    PostgresStoreError,
+)
 from .protocols import (
     LOCAL_STORE_SCHEMA_VERSION,
     AllowAllStoragePolicy,
@@ -18,6 +31,8 @@ from .protocols import (
     CanonicalRecord,
     CanonicalRecordVersion,
     CanonicalStore,
+    CommitStatusUnknown,
+    CompensatingArtifactStore,
     DatasetStore,
     DenyStorageOperations,
     EvidenceStore,
@@ -37,16 +52,23 @@ from .protocols import (
 __all__ = [
     "LOCAL_STORE_SCHEMA_VERSION",
     "LATEST_MIGRATION_VERSION",
+    "LATEST_POSTGRES_MIGRATION_VERSION",
     "MIGRATIONS",
+    "POSTGRES_MIGRATIONS",
     "AllowAllStoragePolicy",
     "ArtifactStore",
     "CanonicalRecord",
     "CanonicalRecordVersion",
     "CanonicalStore",
+    "CommitStatusUnknown",
+    "CompensatingArtifactStore",
+    "ComposedJourneyStore",
     "DatasetStore",
+    "DBAPIConnection",
     "DenyStorageOperations",
     "EvidenceStore",
     "FactStore",
+    "FsspecArtifactStore",
     "IngestedGraph",
     "JobMetadata",
     "JobMetadataStore",
@@ -54,7 +76,14 @@ __all__ = [
     "LocalArtifactStore",
     "LocalJourneyStore",
     "LocalStoreError",
+    "MigrationHealth",
+    "ObjectStoreNamespace",
     "PointInTimeReader",
+    "PostgresJourneyStore",
+    "PostgresJourneyTransaction",
+    "PostgresMigration",
+    "PostgresMigrationReport",
+    "PostgresStoreError",
     "ResolutionStore",
     "SQLiteJourneyStore",
     "SQLiteJourneyTransaction",
@@ -65,5 +94,6 @@ __all__ = [
     "StorePoint",
     "StoreResult",
     "StoreState",
+    "StoredJourneyGraph",
     "TransactionalJourneyStore",
 ]

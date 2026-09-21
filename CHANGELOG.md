@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   append-only SQLite metadata and fact history, atomic graph transactions,
   typed outcomes, deterministic migrations, integrity checks, and
   point-in-time reads (#3321).
+- Added backend-neutral Journey storage composition, PostgreSQL metadata parity,
+  transactional migration recovery, and allowlisted content-addressed object
+  namespaces with local-only defaults (#3322).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and

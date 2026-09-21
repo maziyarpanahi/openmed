@@ -31,6 +31,7 @@ from .protocols import (
     AllowAllStoragePolicy,
     CanonicalRecord,
     CanonicalRecordVersion,
+    CommitStatusUnknown,
     JobMetadata,
     StoragePolicy,
     StorePoint,
@@ -59,6 +60,10 @@ class StoreCompatibilityError(LocalStoreError):
 
 class StoreMigrationError(LocalStoreError):
     """Raised when a deterministic migration cannot be applied."""
+
+
+class StoreConstraintError(LocalStoreError):
+    """Raised by backend adapters for a value-safe constraint conflict."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -709,6 +714,8 @@ class SQLiteJourneyStore:
         try:
             with self.transaction(committed_at=committed_at) as transaction:
                 result = operation(transaction)
+        except CommitStatusUnknown:
+            return StoreResult.outcome(StoreState.UNKNOWN, "commit_status_unknown")
         except (LocalStoreError, sqlite3.Error, ValueError, TypeError):
             return StoreResult.outcome(StoreState.FAILURE, "transaction_failed")
         if not result.ok:
@@ -1163,7 +1170,7 @@ class SQLiteJourneyTransaction:
                 f"INSERT INTO {table}({','.join(columns)}) VALUES ({placeholders})",  # noqa: S608
                 (record_id, *extra_values, payload_hash, payload_json, self.revision),
             )
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, StoreConstraintError):
             return self._fail(StoreState.CONFLICT, "record_conflict")
         self.mutated = True
         return StoreResult.success(value, created=True, revision=self.revision)
