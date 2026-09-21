@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added bounded classic TIFF header preflight for both byte orders, with an
+  allowlisted first-IFD tag set, overflow-checked counts, offset bounds and
+  cycle detection inside a loaded prefix, value-free errors, and synthetic
+  plus Pillow-written file-level regression tests (#3046).
 - Added immutable local ASR input profiles and a metadata-only
   compatibility check over privacy-safe WAV headers, returning compatible,
   resample, downmix, review or incompatible with ordered reason codes and
