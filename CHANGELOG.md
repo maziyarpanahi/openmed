@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Keep load-test clients connected through final response bodies and count
+  incomplete responses as failures.
 - Align grounding-index recall references, queries and report metadata with the
   selected vocabulary systems.
 - Grow the dense alias search budget when duplicate aliases would hide available
