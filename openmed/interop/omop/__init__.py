@@ -1,5 +1,8 @@
 """OMOP CDM interoperability helpers."""
 
+from importlib import import_module
+from typing import Any
+
 from .cdm_loader import (
     UNMAPPED_CONCEPT_ID,
     UNMAPPED_CONCEPT_NAME,
@@ -37,15 +40,88 @@ from .vocab_router import (
     route_domain,
 )
 
+_FACT_PROJECTION_EXPORTS = frozenset(
+    {
+        "OMOP_DATASET_SPLITS",
+        "OMOP_DOMAIN_TABLES",
+        "OMOP_FACT_PROJECTION_CDM_VERSION",
+        "OMOP_FACT_PROJECTION_COMPATIBILITY_POLICY",
+        "OMOP_FACT_PROJECTION_MODES",
+        "OMOP_FACT_PROJECTION_SCHEMA_NAME",
+        "OMOP_FACT_PROJECTION_SCHEMA_VERSION",
+        "OMOP_FACT_PROJECTOR_VERSION",
+        "OMOP_FACT_TABLES",
+        "OMOP_MAPPING_STATES",
+        "OMOP_PERMISSIVE_LICENSES",
+        "OmopConceptMapping",
+        "OmopEtlRun",
+        "OmopFactProjection",
+        "OmopFactProjectionConflictError",
+        "OmopFactProjectionDeniedError",
+        "OmopFactProjectionError",
+        "OmopFactProjectionInput",
+        "OmopFactProjectionUnsupportedError",
+        "OmopFactRoundTripReport",
+        "OmopMappingOutcome",
+        "OmopProjectionLoss",
+        "OmopProjectionSummary",
+        "OmopProjectionViolation",
+        "OmopRowProvenance",
+        "OmopVocabularySnapshot",
+        "assess_omop_fact_round_trip",
+        "load_omop_fact_projection_schema",
+        "project_clinical_facts_to_omop",
+        "validate_omop_fact_projection",
+    }
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Load fact-projection contracts without widening OMOP import cycles."""
+
+    if name not in _FACT_PROJECTION_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(".fact_projection", __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
+
 __all__ = [
+    "OMOP_DATASET_SPLITS",
+    "OMOP_DOMAIN_TABLES",
+    "OMOP_FACT_PROJECTION_CDM_VERSION",
+    "OMOP_FACT_PROJECTION_COMPATIBILITY_POLICY",
+    "OMOP_FACT_PROJECTION_MODES",
+    "OMOP_FACT_PROJECTION_SCHEMA_NAME",
+    "OMOP_FACT_PROJECTION_SCHEMA_VERSION",
+    "OMOP_FACT_PROJECTOR_VERSION",
+    "OMOP_FACT_TABLES",
+    "OMOP_MAPPING_STATES",
+    "OMOP_PERMISSIVE_LICENSES",
     "LoadMode",
     "MappingStatus",
     "OmopCdmTables",
+    "OmopConceptMapping",
     "OmopConstraintViolation",
     "OmopDownstreamConsumer",
     "OmopDomain",
     "OmopLoadEvent",
     "OmopLoadSummary",
+    "OmopEtlRun",
+    "OmopFactProjection",
+    "OmopFactProjectionConflictError",
+    "OmopFactProjectionDeniedError",
+    "OmopFactProjectionError",
+    "OmopFactProjectionInput",
+    "OmopFactProjectionUnsupportedError",
+    "OmopFactRoundTripReport",
+    "OmopMappingOutcome",
+    "OmopProjectionLoss",
+    "OmopProjectionSummary",
+    "OmopProjectionViolation",
+    "OmopRowProvenance",
+    "OmopVocabularySnapshot",
     "OmopValidationReport",
     "RejectedSpan",
     "SourceToConceptMapping",
@@ -54,6 +130,7 @@ __all__ = [
     "UNMAPPED_VOCABULARY_ID",
     "VocabularyRouter",
     "WriterKind",
+    "assess_omop_fact_round_trip",
     "create_omop_schema",
     "deterministic_note_hash",
     "deterministic_omop_id",
@@ -61,10 +138,13 @@ __all__ = [
     "emit_postgres_ddl",
     "load_grounded_jsonl",
     "load_grounded_notes",
+    "load_omop_fact_projection_schema",
+    "project_clinical_facts_to_omop",
     "route_domain",
     "summarize_omop_violations",
     "validate_omop_database",
     "validate_omop_database_report",
+    "validate_omop_fact_projection",
     "validate_omop_tables",
     "validate_omop_tables_report",
     "write_omop_duckdb",
