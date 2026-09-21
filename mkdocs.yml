@@ -182,6 +182,7 @@ nav:
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
