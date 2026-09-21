@@ -33,6 +33,7 @@ nav:
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
+      - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md
       - Agent Error Envelopes: agent/error-envelopes.md
       - Agent Event Attributes: agent/event-attributes.md

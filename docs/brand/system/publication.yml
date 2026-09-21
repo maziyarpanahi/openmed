@@ -108,6 +108,7 @@ classification:
     - agent/action-graphs.md
     - agent/artifact-references.md
     - agent/governance-identifiers.md
+    - agent/capability-validity.md
     - agent/event-correlation.md
     - agent/error-envelopes.md
     - agent/event-attributes.md
