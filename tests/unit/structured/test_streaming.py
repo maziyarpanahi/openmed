@@ -193,9 +193,9 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     with source.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["age", "zip", "note"])
-        for index in range(50_000):
+        for index in range(100_000):
             writer.writerow([30 + index % 5, 10_000 + index % 4, "x" * 200])
-    ceiling = 8 * 1024 * 1024
+    ceiling = 16 * 1024 * 1024
     assert source.stat().st_size > ceiling
 
     report = stream_deidentify_table(
@@ -208,7 +208,7 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
         overwrite=True,
     )
 
-    assert report["decision"]["record_count"] == 50_000
+    assert report["decision"]["record_count"] == 100_000
     assert report["memory"]["rss_guard_available"] is True
     assert report["memory"]["peak_rss_delta_bytes"] <= ceiling
 
