@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise typed client errors for unfollowed non-2xx responses, including redirects in
+  JSON and streaming requests.
 - Keep load-test clients connected through final response bodies and count
   incomplete responses as failures.
 - Align grounding-index recall references, queries and report metadata with the
