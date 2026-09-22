@@ -160,6 +160,13 @@ def test_contracts_are_deeply_immutable() -> None:
         ("json_pointer", {"pointer": "/entry/0/resource"}),
         ("message_field", {"path": "PID.3.1"}),
         (
+            "document_path",
+            {
+                "path": "/ClinicalDocument[1]/component[1]/section[1]/text[1]/text()",
+                "section": 1,
+            },
+        ),
+        (
             "page_box",
             {
                 "page": 1,
@@ -188,10 +195,14 @@ def test_every_evidence_coordinate_kind_is_supported(
         artifact_id="artifact_aaaaaaaaaaaaaaaa",
         location_type=location_type,
         location=location,
+        schema_version="1.1.0" if location_type == "document_path" else "1.0.0",
     )
 
     assert locator.location_type == location_type
     assert EvidenceLocator.from_dict(locator.to_dict()) == locator
+    schema = load_all_journey_schemas()["evidence_locator"]
+    validator = validator_for(schema)
+    assert not tuple(validator(schema).iter_errors(locator.to_dict()))
 
 
 @pytest.mark.parametrize(
@@ -200,6 +211,7 @@ def test_every_evidence_coordinate_kind_is_supported(
         ("text_span", {"start": 4, "end": 4}),
         ("json_pointer", {"pointer": "/entry/~2"}),
         ("message_field", {"path": "PID"}),
+        ("document_path", {"path": "//section/text()"}),
         (
             "page_box",
             {"page": 1, "box": [0.5, 0.2, 0.4, 0.8], "coordinate_space": "normalized"},
@@ -230,6 +242,17 @@ def test_invalid_evidence_coordinates_are_rejected(
             artifact_id="artifact_aaaaaaaaaaaaaaaa",
             location_type=location_type,
             location=location,
+        )
+
+
+def test_document_path_requires_same_major_locator_version_1_1() -> None:
+    with pytest.raises(JourneyContractError, match="requires locator schema 1.1"):
+        EvidenceLocator(
+            locator_id="evidence_aaaaaaaaaaaaaaaa",
+            artifact_id="artifact_aaaaaaaaaaaaaaaa",
+            location_type="document_path",
+            location={"path": "/ClinicalDocument[1]/text[1]/text()"},
+            schema_version="1.0.0",
         )
 
 

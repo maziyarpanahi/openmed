@@ -53,13 +53,14 @@ component version, sorted input identifiers, and JSON configuration.
 
 ## Evidence coordinate types
 
-An `EvidenceLocator` accepts one of six explicit coordinate shapes:
+An `EvidenceLocator` accepts one of seven explicit coordinate shapes:
 
 | Type | Required coordinates |
 | --- | --- |
 | `text_span` | zero-based half-open `start` and `end` |
 | `json_pointer` | RFC 6901-style `pointer` |
 | `message_field` | bounded structured `path` such as `PID.3.1` |
+| `document_path` | indexed element path with optional one-based section |
 | `page_box` | one-based `page`, `[x0, y0, x1, y1]`, and coordinate space |
 | `dicom_element` | study, series, instance UIDs and canonical tag |
 | `table_cell` | one-based row and column with an optional sheet |
@@ -67,6 +68,9 @@ An `EvidenceLocator` accepts one of six explicit coordinate shapes:
 Invalid spans, malformed pointer escapes, inverted or out-of-bounds boxes,
 malformed DICOM identifiers, and zero-based table cells fail before a record is
 created.
+
+`document_path` was added in locator schema `1.1.0`; a producer using that
+coordinate must declare `schema_version="1.1.0"` or a later same-major version.
 
 ## Forward-compatible reads
 

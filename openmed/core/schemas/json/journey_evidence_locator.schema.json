@@ -16,6 +16,10 @@
       "then": {"properties": {"location": {"$ref": "#/$defs/message_field"}}}
     },
     {
+      "if": {"properties": {"location_type": {"const": "document_path"}}},
+      "then": {"properties": {"location": {"$ref": "#/$defs/document_path"}, "schema_version": {"pattern": "^1\\.(?:[1-9][0-9]*)(?:\\.[0-9]+)?$"}}}
+    },
+    {
       "if": {"properties": {"location_type": {"const": "page_box"}}},
       "then": {"properties": {"location": {"$ref": "#/$defs/page_box"}}}
     },
@@ -29,6 +33,20 @@
     }
   ],
   "$defs": {
+    "document_path": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^/(?:[A-Za-z_][A-Za-z0-9_.-]*\\[[1-9][0-9]*\\]/)*[A-Za-z_][A-Za-z0-9_.-]*\\[[1-9][0-9]*\\](?:/(?:@[A-Za-z_][A-Za-z0-9_.-]*|text\\(\\)|tail\\(\\)))?$",
+          "type": "string"
+        },
+        "section": {"minimum": 1, "type": "integer"}
+      },
+      "required": ["path"],
+      "type": "object"
+    },
     "dicom_element": {
       "additionalProperties": false,
       "properties": {
@@ -99,8 +117,8 @@
   },
   "properties": {
     "artifact_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
-    "location": {"oneOf": [{"$ref": "#/$defs/text_span"}, {"$ref": "#/$defs/json_pointer"}, {"$ref": "#/$defs/message_field"}, {"$ref": "#/$defs/page_box"}, {"$ref": "#/$defs/dicom_element"}, {"$ref": "#/$defs/table_cell"}]},
-    "location_type": {"enum": ["text_span", "json_pointer", "message_field", "page_box", "dicom_element", "table_cell"]},
+    "location": {"oneOf": [{"$ref": "#/$defs/text_span"}, {"$ref": "#/$defs/json_pointer"}, {"$ref": "#/$defs/message_field"}, {"$ref": "#/$defs/document_path"}, {"$ref": "#/$defs/page_box"}, {"$ref": "#/$defs/dicom_element"}, {"$ref": "#/$defs/table_cell"}]},
+    "location_type": {"enum": ["text_span", "json_pointer", "message_field", "document_path", "page_box", "dicom_element", "table_cell"]},
     "locator_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
     "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
     "transform": {"type": "object"}

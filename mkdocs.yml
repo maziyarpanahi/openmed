@@ -104,6 +104,8 @@ nav:
       - Durable Local Journey Storage: structured/local-journey-store.md
       - PostgreSQL and Object-backed Journey Storage: structured/postgres-object-journey-store.md
       - Resumable Ingestion Control Plane: interop/resumable-ingestion.md
+      - Patient and Encounter Identity Resolution: interop/identity-resolution.md
+      - Structured Source Evidence Adapters: interop/structured-evidence-adapters.md
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
@@ -330,6 +332,7 @@ nav:
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
       - ISO 27701/27001 Evidence Pack: compliance/iso-27701-control-evidence.md
       - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
+      - Separated Projection Boundaries: compliance/separated-projections.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
