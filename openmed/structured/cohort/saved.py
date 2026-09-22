@@ -773,7 +773,11 @@ class LocalSavedCohortStore:
                 if version.state is StoreState.UNKNOWN
                 else (version.code or "definition_read_failed"),
             )
-        if version.value.definition_digest != execution.manifest.definition_digest:
+        if (
+            version.value.definition_digest != execution.manifest.definition_digest
+            or version.value.criterion_ids != execution.manifest.criterion_ids
+            or version.value.definition.expression != execution.manifest.expression
+        ):
             return StoreResult.outcome(
                 StoreState.CONFLICT, "definition_digest_conflict"
             )
@@ -816,7 +820,11 @@ class LocalSavedCohortStore:
                 if version.state is StoreState.UNKNOWN
                 else (version.code or "definition_read_failed"),
             )
-        if version.value.definition_digest != value.manifest.definition_digest:
+        if (
+            version.value.definition_digest != value.manifest.definition_digest
+            or version.value.criterion_ids != value.manifest.criterion_ids
+            or version.value.definition.expression != value.manifest.expression
+        ):
             return StoreResult.outcome(
                 StoreState.CONFLICT, "definition_digest_conflict"
             )
