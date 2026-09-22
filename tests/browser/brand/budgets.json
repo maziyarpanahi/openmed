@@ -22,7 +22,7 @@
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 4969823,
+    "/docs/": 5089393,
     "/docs/model-tokenizer-script-coverage/": 7176065
   },
   "page_metrics": {
@@ -39,7 +39,7 @@
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
-    "The /docs/ route measured 4850521 bytes on the audited pull-request build; its 4969823-byte ceiling retains 119302 bytes of bounded transfer headroom.",
+    "The /docs/ route measured 4970091 bytes on the audited Linux pull-request build; its 5089393-byte ceiling retains 119302 bytes of bounded transfer headroom.",
     "The tokenizer coverage route measured 7069261 bytes on the audited Linux pull-request build; its 7176065-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
