@@ -2,6 +2,14 @@ title = "OpenMed secret scanning"
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
+description = "Literal synthetic patient identifier in saved cohort journey fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/integration/test_saved_cohort_journey\.py$''']
+regexes = ['''^\s*patient_key="patient_goldenjourney001",\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
 description = "Literal synthetic patient identifier in identity resolution examples"
 condition = "AND"
 regexTarget = "line"
