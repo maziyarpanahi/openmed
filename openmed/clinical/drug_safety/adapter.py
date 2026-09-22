@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -254,10 +255,12 @@ def _source_text(value: Any, name: str) -> str:
 def _optional_integer(value: Any, name: str) -> int | None:
     if value is None or value == "":
         return None
-    if isinstance(value, bool):
+    if type(value) is int:
+        return value
+    if not isinstance(value, str) or re.fullmatch(r"[+-]?[0-9]+", value.strip()) is None:
         raise DrugSafetyContractError(f"{name} must be an integer")
     try:
-        return int(value)
+        return int(value.strip())
     except (TypeError, ValueError):
         raise DrugSafetyContractError(f"{name} must be an integer") from None
 

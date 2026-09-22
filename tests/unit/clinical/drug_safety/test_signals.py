@@ -13,6 +13,7 @@ from openmed.clinical.drug_safety import (
     DescriptiveSignal,
     DrugExposure,
     DrugSafetyConflictError,
+    DrugSafetyContractError,
     DrugSafetyDataset,
     ExposureWindow,
     NormalizedSafetyTerm,
@@ -192,6 +193,7 @@ def test_source_digest_and_conflicting_seriousness_fail_closed(tmp_path: Path) -
             license_id="synthetic-test-data",
         )
 
+
     rows = _rows(a=1, b=1, c=1, d=1)
     rows.append({**rows[0], "event": "Event Z", "seriousness": "non_serious"})
     with pytest.raises(DrugSafetyConflictError, match="conflicting seriousness"):
@@ -215,6 +217,18 @@ def test_source_digest_and_conflicting_seriousness_fail_closed(tmp_path: Path) -
             dataset_id="synthetic_public_events",
             version="1",
             source_digest=sha256_digest(malformed.read_bytes()),
+            license_id="synthetic-test-data",
+        )
+
+
+def test_adapter_rejects_fractional_exposure_days_without_truncation() -> None:
+    row = {**_rows(a=1, b=0, c=0, d=0)[0], "exposure_start_day": 1.5}
+    with pytest.raises(DrugSafetyContractError, match="integer"):
+        OpenEventDatasetAdapter().import_rows(
+            (row,),
+            dataset_id="synthetic_rows",
+            version="1",
+            source_digest="sha256:" + "a" * 64,
             license_id="synthetic-test-data",
         )
 
