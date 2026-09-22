@@ -22,8 +22,9 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from importlib import resources
+from io import BufferedReader
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from openmed.clinical.journey_contracts import (
     canonical_digest,
@@ -1445,7 +1446,9 @@ def _run_bounded_adapter(
         stderr=subprocess.DEVNULL,
         env=environment,
     )
-    assert process.stdin is not None and process.stdout is not None
+    stdin = process.stdin
+    stdout = cast(BufferedReader, process.stdout)
+    assert stdin is not None and stdout is not None
     timed_out = threading.Event()
 
     def expire() -> None:
@@ -1455,13 +1458,13 @@ def _run_bounded_adapter(
 
     def feed() -> None:
         try:
-            process.stdin.write(payload)
-            process.stdin.flush()
+            stdin.write(payload)
+            stdin.flush()
         except (BrokenPipeError, OSError):
             pass
         finally:
             try:
-                process.stdin.close()
+                stdin.close()
             except OSError:
                 pass
 
@@ -1471,7 +1474,7 @@ def _run_bounded_adapter(
     try:
         writer.start()
         watchdog.start()
-        while chunk := process.stdout.read1(
+        while chunk := stdout.read1(
             min(65536, _MAX_TOOL_OUTPUT_BYTES + 1 - len(output))
         ):
             output.extend(chunk)
@@ -1491,10 +1494,10 @@ def _run_bounded_adapter(
         if writer.ident is not None:
             writer.join()
         else:
-            process.stdin.close()
+            stdin.close()
         if watchdog.ident is not None:
             watchdog.join()
-        process.stdout.close()
+        stdout.close()
 
 
 def _decode_tool_output(value: bytes) -> Mapping[str, Any]:
