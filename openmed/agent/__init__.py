@@ -112,6 +112,21 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .tool_catalog_diff import (
+    TOOL_CATALOG_DIFF_SCHEMA_VERSION,
+    ToolCatalogDiff,
+    ToolCatalogDiffError,
+    ToolChange,
+    diff_tool_catalogs,
+)
+from .tool_inventory import (
+    TOOL_INVENTORY_SCHEMA_VERSION,
+    CapabilityClass,
+    SideEffectClass,
+    ToolEntry,
+    ToolInventory,
+    ToolInventoryError,
+)
 
 __all__ = [
     "ALLOWED_ATTRIBUTES",
@@ -133,6 +148,8 @@ __all__ = [
     "CapabilityGrant",
     "CapabilityId",
     "CapabilityValidityError",
+    "CapabilityClass",
+    "SideEffectClass",
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
     "CorrelationIdError",
@@ -192,12 +209,21 @@ __all__ = [
     "RunId",
     "PolicyId",
     "PurposeId",
+    "TOOL_CATALOG_DIFF_SCHEMA_VERSION",
+    "TOOL_INVENTORY_SCHEMA_VERSION",
+    "ToolCatalogDiff",
+    "ToolCatalogDiffError",
+    "ToolChange",
     "ToolId",
+    "ToolEntry",
+    "ToolInventory",
+    "ToolInventoryError",
     "TimingValidationError",
     "WorkflowOutcome",
     "WorkflowId",
     "allowed_reason_codes",
     "diff_run_summaries",
+    "diff_tool_catalogs",
     "check_capability_validity",
     "envelope_from_exception",
     "error_class_for_code",

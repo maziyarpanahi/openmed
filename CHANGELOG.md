@@ -105,6 +105,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a synthetic local-extension example and documentation page for the
   status vocabulary, covering an explicit local path, provenance validation,
   and a duplicate-cue guard (#3108).
+- Added a PHI-safe, content-free agent tool inventory that renders tool
+  identifiers, versions, closed capability classes, closed side-effect classes,
+  and schema digests as sorted, deterministic JSON and Markdown while rejecting
+  endpoints, paths, secrets, and free-form descriptions, with synthetic
+  regression tests (#3081).
+- Added deterministic, content-free diffs of agent tool catalogs with sorted
+  added, removed, and unchanged tool identifiers plus per-field version, schema
+  digest, capability, and side-effect deltas for changed tools, rendered as
+  byte-stable JSON and Markdown, with synthetic regression tests (#3087).
 
 ### Changed
 
