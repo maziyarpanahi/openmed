@@ -175,7 +175,8 @@ def test_artifact_store_is_content_addressed_idempotent_and_private(
     digest = _artifact().content_hash.removeprefix("sha256:")
     blob = tmp_path / "artifacts" / "blobs" / "sha256" / digest[:2] / digest
     assert blob.is_file()
-    assert os.stat(blob).st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert os.stat(blob).st_mode & 0o077 == 0
 
 
 def test_artifact_store_rejects_mismatch_and_detects_restart_corruption(

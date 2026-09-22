@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import replace
 
 import pytest
@@ -361,22 +362,28 @@ def test_subprocess_adapter_uses_argv_without_shell_or_stderr_capture(
 ) -> None:
     request = _request("subprocess")
     observed: dict[str, object] = {}
+    real_popen = subprocess.Popen
 
-    def fake_run(command, **kwargs):
+    def observed_popen(command, **kwargs):
         observed["command"] = command
         observed.update(kwargs)
-        return subprocess.CompletedProcess(command, 0, stdout=_response(request))
+        return real_popen(command, **kwargs)
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", observed_popen)
+    command = (
+        sys.executable,
+        "-c",
+        f"import sys; sys.stdout.buffer.write({_response(request)!r})",
+    )
     result = SubprocessCqlElmAdapter(
-        ("synthetic-elm-runner", "--json"),
+        command,
         config=CqlElmAdapterConfig(
             supported_features=("retrieve", "valueset_membership")
         ),
     ).evaluate(request)
 
     assert result.state is StoreState.SUCCESS
-    assert observed["command"] == ("synthetic-elm-runner", "--json")
+    assert observed["command"] == command
     assert "shell" not in observed
     assert observed["stderr"] is subprocess.DEVNULL
     assert isinstance(observed["env"], dict)
@@ -410,3 +417,39 @@ def test_elm_library_digest_and_result_digest_tampering_are_rejected() -> None:
     payload["result_digest"] = "sha256:" + "0" * 64
     with pytest.raises(Exception, match="result digest differs"):
         MeasureSubjectResult.from_dict(payload)
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://localhost.evil.invalid/evaluate",
+        "http://127.0.0.1.evil.invalid/evaluate",
+        "http://localhost@evil.invalid/evaluate",
+        "https:///missing-host",
+    ],
+)
+def test_service_adapter_rejects_malformed_or_nonlocal_plaintext_endpoints(endpoint):
+    with pytest.raises(ValueError):
+        ServiceCqlElmAdapter(
+            endpoint,
+            lambda *args: b"{}",
+            config=CqlElmAdapterConfig(supported_features=()),
+        )
+
+
+def test_subprocess_output_limit_is_enforced_before_timeout() -> None:
+    request = _request("subprocess")
+    result = SubprocessCqlElmAdapter(
+        (
+            sys.executable,
+            "-c",
+            "import sys,time; sys.stdout.write('x'*8192); sys.stdout.flush(); time.sleep(10)",
+        ),
+        config=CqlElmAdapterConfig(
+            supported_features=("retrieve", "valueset_membership"),
+            max_response_bytes=4096,
+            timeout_seconds=0.5,
+        ),
+    ).evaluate(request)
+    assert result.state is StoreState.DENIED
+    assert result.code == "cql_elm_response_too_large"
