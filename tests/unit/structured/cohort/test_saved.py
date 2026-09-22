@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -214,7 +215,12 @@ def test_unresolved_memberships_require_review_and_cannot_be_eligible(
         replace(membership, state=MembershipState.MET)
 
 
-def test_local_store_is_immutable_idempotent_and_referential(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fchmod_available", [True, False])
+def test_local_store_is_immutable_idempotent_and_referential(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fchmod_available: bool
+) -> None:
+    if not fchmod_available:
+        monkeypatch.delattr(os, "fchmod", raising=False)
     store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
     version = save_cohort_definition(_definition())
     execution = _execution()
@@ -228,7 +234,8 @@ def test_local_store_is_immutable_idempotent_and_referential(tmp_path: Path) -> 
     assert saved.ok and saved.created
     assert store.get_definition(version.version_id or "").value == version
     assert store.get_execution(execution.manifest.execution_id or "").value == execution
-    assert oct((tmp_path / "saved-cohorts").stat().st_mode & 0o777) == "0o700"
+    if os.name == "posix":
+        assert oct((tmp_path / "saved-cohorts").stat().st_mode & 0o777) == "0o700"
 
     drifted = CohortExecution(
         manifest=execution.manifest,
@@ -242,6 +249,31 @@ def test_local_store_is_immutable_idempotent_and_referential(tmp_path: Path) -> 
     missing = missing_store.put_execution(execution)
     assert missing.state is StoreState.UNKNOWN
     assert missing.code == "definition_not_available"
+
+
+def test_store_rejects_valid_definition_under_a_different_id(tmp_path: Path) -> None:
+    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+    expected = save_cohort_definition(_definition())
+    other = save_cohort_definition(_definition_without_metformin())
+    assert store.put_definition(expected).ok
+    path = store.root / "definitions" / f"{expected.version_id}.json"
+    path.write_bytes(other.to_json_bytes())
+    result = store.get_definition(expected.version_id or "")
+    assert result.state is StoreState.CONFLICT
+    assert result.code == "definition_integrity_failed"
+
+
+def test_store_rejects_valid_execution_under_a_different_id(tmp_path: Path) -> None:
+    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+    assert store.put_definition(save_cohort_definition(_definition())).ok
+    expected = _execution()
+    other = _execution(snapshot=_snapshot("b"))
+    assert store.put_execution(expected).ok
+    path = store.root / "executions" / f"{expected.manifest.execution_id}.json"
+    path.write_bytes(other.to_json_bytes())
+    result = store.get_execution(expected.manifest.execution_id or "")
+    assert result.state is StoreState.CONFLICT
+    assert result.code == "execution_integrity_failed"
 
 
 def test_rerun_proves_reproducibility_and_reports_drift(tmp_path: Path) -> None:

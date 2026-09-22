@@ -170,12 +170,22 @@ class CompositeIdentityResolver:
         if exact_result.value.state != "unmatched":
             return self.exact.store.save_resolution(exact_result.value)
 
-        candidates_result = self.plugin.candidates(request)
+        try:
+            candidates_result = self.plugin.candidates(request)
+        except Exception:
+            return StoreResult.outcome(StoreState.FAILURE, "identity_plugin_failed")
+        if not isinstance(candidates_result, StoreResult):
+            return StoreResult.outcome(StoreState.FAILURE, "identity_plugin_invalid")
         if not candidates_result.ok or candidates_result.value is None:
             return StoreResult.outcome(
                 candidates_result.state,
                 candidates_result.code or "identity_plugin_failed",
             )
+        if not isinstance(candidates_result.value, tuple) or not all(
+            isinstance(item, ProbabilisticIdentityCandidate)
+            for item in candidates_result.value
+        ):
+            return StoreResult.outcome(StoreState.FAILURE, "identity_plugin_invalid")
         candidates = tuple(sorted(set(candidates_result.value)))
         if not candidates:
             return self.exact.store.save_resolution(exact_result.value)
