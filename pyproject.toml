@@ -289,7 +289,7 @@ cloud = [
 
 journey = [
   "fsspec>=2025.9.0",
-  "psycopg[binary]>=3.2,<4",
+  "pg8000>=1.31.5,<2",
 ]
 
 ray = [
