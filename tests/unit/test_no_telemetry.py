@@ -64,6 +64,7 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "clinical/grounding/vocab.py": "opt-in clinical vocabulary download (offline-gated)",
     "clinical/trials/source.py": "explicit public clinical-trial metadata fetch",
     "core/offline.py": "the offline network-block guard itself (OM-005)",
+    "deploy/journey.py": "explicit operator-configured worker/model readiness probes",
     "eval/datasets/drugprot.py": "opt-in evaluation dataset download",
     "eval/suites/shield.py": "opt-in evaluation dataset/rows fetch",
     "interop/fhir_server.py": "opt-in user-configured FHIR server HTTP client",
@@ -83,6 +84,7 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "service/security.py": ("opt-in remote MCP/OAuth metadata and token validation"),
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",
+    "structured/store/postgres.py": "explicit caller-DSN PostgreSQL TLS context",
     "training/recipe.py": "opt-in training distributed rendezvous",
 }
 
