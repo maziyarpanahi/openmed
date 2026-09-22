@@ -29,6 +29,7 @@ from openmed.interop.ingest import (
     PIPELINE_COMPONENT_STAGES,
     CallablePipelineComponent,
     CDAEvidenceAdapter,
+    CoordinateTransformChain,
     DelimitedTableEvidenceAdapter,
     EvidenceAdapterContext,
     FHIRR4EvidenceAdapter,
@@ -39,6 +40,10 @@ from openmed.interop.ingest import (
     SourceManifest,
     SQLiteIngestionStore,
     TextEvidenceAdapter,
+    VisualEvidenceAdapter,
+    VisualEvidenceFrame,
+    VisualEvidenceInput,
+    VisualEvidenceRegion,
 )
 from openmed.structured.facts import (
     FactReconciler,
@@ -233,6 +238,49 @@ def _manifest(
     )
 
 
+def _visual_source() -> VisualEvidenceInput:
+    return VisualEvidenceInput(
+        source_bytes=b"synthetic-visual-source",
+        source_format="image",
+        source_version="png",
+        media_type="image/png",
+        frames=(
+            VisualEvidenceFrame(
+                frame_id="frame_0001",
+                page=1,
+                coordinate_space="pixels",
+                transform=CoordinateTransformChain(640, 480),
+            ),
+        ),
+        regions=(
+            VisualEvidenceRegion(
+                frame_id="frame_0001",
+                box=(20.0, 30.0, 120.0, 80.0),
+                region_kind="image_region",
+            ),
+        ),
+    )
+
+
+def _visual_manifest(
+    pipeline: IngestionToFactPipeline,
+    adapter: VisualEvidenceAdapter,
+    source: VisualEvidenceInput | bytes,
+    *,
+    suffix: str,
+) -> SourceManifest:
+    payload = source.source_bytes if isinstance(source, VisualEvidenceInput) else source
+    source_id = derived_opaque_id("source", f"visual-{suffix}")
+    return SourceManifest(
+        manifest_id=derived_opaque_id("manifest", source_id, suffix),
+        source_id=source_id,
+        artifact_digests=(sha256_digest(payload),),
+        policy_digest=pipeline.policy_digest,
+        pipeline_digest=pipeline.pipeline_digest(adapter),
+        created_at=T0,
+    )
+
+
 @pytest.mark.parametrize(
     "source_fixture", _fixture_sources(), ids=lambda item: item["format"]
 )
@@ -306,6 +354,129 @@ def test_five_source_pipeline_is_durable_and_idempotent(
     assert facts.ok and facts.value is not None and len(facts.value) == 1
     assert store.ingestion_integrity_check().ok
     store.close()
+
+
+def test_visual_evidence_pipeline_is_durable_idempotent_and_replay_safe(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteIngestionStore(tmp_path / "visual-journey.sqlite3")
+    pipeline = IngestionToFactPipeline(store, _components())
+    adapter = VisualEvidenceAdapter()
+    source = _visual_source()
+    manifest = _visual_manifest(pipeline, adapter, source, suffix="success")
+    context = EvidenceAdapterContext(
+        source_id=manifest.source_id,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        recorded_at=T0,
+    )
+
+    first = pipeline.run(
+        manifest=manifest,
+        source=source,
+        adapter=adapter,
+        adapter_context=context,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id=WORKER_ID,
+    )
+    replay = pipeline.run(
+        manifest=manifest,
+        source=source,
+        adapter=adapter,
+        adapter_context=context,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id=WORKER_ID,
+    )
+
+    assert first.ok and first.created and first.value is not None
+    assert replay.ok and not replay.created and replay.value is not None
+    assert replay.value.replayed and replay.value.fact_ids == first.value.fact_ids
+    facts = store.list_facts(SUBJECT_ID)
+    assert facts.ok and facts.value is not None and len(facts.value) == 1
+    evidence = store.get_evidence(facts.value[0].evidence_ids[0])
+    assert evidence.ok and evidence.value is not None
+    assert evidence.value.location_type == "page_box"
+    assert evidence.value.location["box"] == (20.0, 30.0, 120.0, 80.0)
+    store.close()
+
+
+def test_visual_stage_failure_and_corrupt_source_never_persist_partial_facts(
+    tmp_path: Path,
+) -> None:
+    adapter = VisualEvidenceAdapter()
+
+    failure_store = SQLiteIngestionStore(tmp_path / "visual-stage-failure.sqlite3")
+    failing_pipeline = IngestionToFactPipeline(
+        failure_store,
+        _components(fail_stage="grounding"),
+    )
+    visual_source = _visual_source()
+    failure_manifest = _visual_manifest(
+        failing_pipeline,
+        adapter,
+        visual_source,
+        suffix="stage-failure",
+    )
+    failed = failing_pipeline.run(
+        manifest=failure_manifest,
+        source=visual_source,
+        adapter=adapter,
+        adapter_context=EvidenceAdapterContext(
+            source_id=failure_manifest.source_id,
+            subject_id=SUBJECT_ID,
+            encounter_id=ENCOUNTER_ID,
+            recorded_at=T0,
+        ),
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id=WORKER_ID,
+    )
+    assert failed.state is StoreState.FAILURE
+    assert failed.code == "synthetic_stage_failure"
+    assert failure_store.list_facts(SUBJECT_ID).value == ()
+    failure_store.close()
+
+    corrupt_store = SQLiteIngestionStore(tmp_path / "visual-corrupt.sqlite3")
+    pipeline = IngestionToFactPipeline(corrupt_store, _components())
+    corrupt_source = b"synthetic-corrupt-visual-source"
+    corrupt_manifest = _visual_manifest(
+        pipeline,
+        adapter,
+        corrupt_source,
+        suffix="corrupt",
+    )
+    quarantined = pipeline.run(
+        manifest=corrupt_manifest,
+        source=corrupt_source,
+        adapter=adapter,
+        adapter_context=EvidenceAdapterContext(
+            source_id=corrupt_manifest.source_id,
+            subject_id=SUBJECT_ID,
+            encounter_id=ENCOUNTER_ID,
+            recorded_at=T0,
+        ),
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id=WORKER_ID,
+    )
+    assert quarantined.state is StoreState.UNSUPPORTED
+    assert quarantined.code == "visual_source_unsupported"
+    assert quarantined.value is not None
+    assert tuple(item.stage for item in quarantined.value.stage_manifests) == (
+        "source_adaptation",
+    )
+    assert corrupt_store.list_facts(SUBJECT_ID).value == ()
+    corrupt_store.close()
 
 
 def test_golden_journey_fact_code_resolves_with_versioned_mapping(

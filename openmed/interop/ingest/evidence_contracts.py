@@ -22,7 +22,19 @@ EVIDENCE_ADAPTER_COMPATIBILITY_POLICY = "same_major"
 EVIDENCE_ADAPTER_SCHEMA_PACKAGE = "openmed.core.schemas.json"
 EVIDENCE_ADAPTER_SCHEMA_NAMES = ("result", "quarantine")
 EVIDENCE_SOURCE_FORMATS = frozenset(
-    {"text", "document", "fhir_r4", "hl7v2", "cda", "csv", "xlsx"}
+    {
+        "text",
+        "document",
+        "fhir_r4",
+        "hl7v2",
+        "cda",
+        "csv",
+        "xlsx",
+        "pdf",
+        "ocr",
+        "image",
+        "dicom_sr",
+    }
 )
 EVIDENCE_COORDINATE_CONVENTIONS = frozenset(
     {
@@ -32,6 +44,10 @@ EVIDENCE_COORDINATE_CONVENTIONS = frozenset(
         "hl7v2_field_component_v1",
         "cda_document_path_v1",
         "table_cell_v1",
+        "pdf_top_left_v1",
+        "ocr_top_left_v1",
+        "image_top_left_v1",
+        "dicom_element_v1",
     }
 )
 EVIDENCE_QUARANTINE_CLASSIFICATIONS = frozenset(
