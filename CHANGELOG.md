@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, domain-separated SHA-256 commitments for validated
+  agent run summaries, with constant-time categorical verification, stable
+  golden vectors, and value-free malformed-input handling (#3039).
 - Added immutable, versioned longitudinal Journey contracts for clinical
   artifacts, evidence locators, facts, conflicts, resolution events, and
   dataset snapshots, including deterministic JSON, bundled schemas, and

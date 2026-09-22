@@ -97,6 +97,13 @@ from .outcomes import (
     WorkflowOutcome,
     allowed_reason_codes,
 )
+from .run_commitment import (
+    RUN_COMMITMENT_VERSION,
+    RunCommitmentError,
+    RunCommitmentVerificationResult,
+    compute_run_summary_commitment,
+    verify_run_summary_commitment,
+)
 from .run_diff import (
     RUN_DIFF_SCHEMA_VERSION,
     RunDiffError,
@@ -174,6 +181,9 @@ __all__ = [
     "MAX_DURATION_MS",
     "MAX_EVENT_SEQUENCE_LENGTH",
     "MAX_RUN_SUMMARY_JSON_BYTES",
+    "RUN_COMMITMENT_VERSION",
+    "RunCommitmentError",
+    "RunCommitmentVerificationResult",
     "RUN_DIFF_SCHEMA_VERSION",
     "RunDiffError",
     "MAX_SEQUENCE_FINDINGS",
@@ -199,6 +209,7 @@ __all__ = [
     "allowed_reason_codes",
     "diff_run_summaries",
     "check_capability_validity",
+    "compute_run_summary_commitment",
     "envelope_from_exception",
     "error_class_for_code",
     "is_retryable",
@@ -207,4 +218,5 @@ __all__ = [
     "validate_artifact_references",
     "validate_event_attributes",
     "validate_event_sequence",
+    "verify_run_summary_commitment",
 ]

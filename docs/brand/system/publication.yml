@@ -115,6 +115,7 @@ classification:
     - agent/event-sequences.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
+    - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/timing-metadata.md
     - agent-skills/install.md
