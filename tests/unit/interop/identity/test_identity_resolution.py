@@ -376,6 +376,38 @@ def test_plugin_failure_is_not_converted_to_unmatched(tmp_path: Path) -> None:
     store.close()
 
 
+@pytest.mark.parametrize("mode", ["raises", "invalid_result", "invalid_candidates"])
+def test_plugin_errors_are_value_free_and_do_not_persist(
+    tmp_path: Path, mode: str
+) -> None:
+    canary = "synthetic private plugin failure payload"
+
+    class BrokenPlugin:
+        def candidates(self, request):
+            if mode == "raises":
+                raise RuntimeError(canary)
+            if mode == "invalid_result":
+                return canary
+            return StoreResult.success((canary,))
+
+    with IdentityResolutionStore(tmp_path / "identity.sqlite3") as store:
+        resolver = CompositeIdentityResolver(
+            ExactIdentityResolver(store), BrokenPlugin()
+        )
+        result = resolver.resolve(_request(_source(1)))
+        assert result.state is StoreState.FAILURE
+        assert result.code == (
+            "identity_plugin_failed" if mode == "raises" else "identity_plugin_invalid"
+        )
+        assert canary not in repr(result)
+        assert (
+            store._connection.execute(
+                "SELECT COUNT(*) FROM identity_resolutions"
+            ).fetchone()[0]
+            == 0
+        )
+
+
 def test_confirm_unmatched_deactivates_collision_without_merge(tmp_path: Path) -> None:
     store = IdentityResolutionStore(tmp_path / "identity.sqlite3")
     resolver = ExactIdentityResolver(store)
