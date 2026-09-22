@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
+import pytest
 from jsonschema.validators import validator_for
 
 from openmed.clinical.journey import JourneySnapshot
 from openmed.clinical.journey_contracts import canonical_digest, derived_opaque_id
 from openmed.clinical.trials import (
     JourneySignal,
+    TrialContractError,
     TrialCriterionKind,
     TrialCriterionOperator,
     TrialCriterionState,
@@ -230,6 +233,50 @@ def test_not_met_unknown_conflict_and_unsupported_states_are_explicit() -> None:
     }
     assert unsupported.eligible is False
     assert unsupported.review_required is True
+
+
+def test_incomplete_numeric_evidence_cannot_be_overridden_by_one_match() -> None:
+    signals = (
+        *_signals(),
+        _signal(
+            "observation",
+            "hba1c",
+            "hba1c-value-missing",
+            unit="percent",
+            observed_at="2026-09-01T10:00:00Z",
+        ),
+    )
+    result = evaluate_trial_eligibility(
+        _study(), SNAPSHOT, signals, evaluated_at=EVALUATED_AT
+    )
+    assert result.state is TrialMatchState.REVIEW_REQUIRED
+    assert result.eligible is False
+    assert result.criterion_results[2].state is TrialCriterionState.UNKNOWN
+    assert result.criterion_results[2].reason_code == "typed_value_missing"
+
+
+def test_caller_supplied_criteria_must_match_the_public_study() -> None:
+    study = _study()
+    parsed = parse_trial_criteria(study)
+    forged = replace(parsed, criteria=parsed.criteria[:3])
+    with pytest.raises(TrialContractError, match="criteria"):
+        evaluate_trial_eligibility(
+            study,
+            SNAPSHOT,
+            _signals(),
+            criteria=forged,
+            evaluated_at=EVALUATED_AT,
+        )
+
+    candidate = retrieve_trial_candidates((study,), _signals())[0]
+    with pytest.raises(TrialContractError, match="candidate"):
+        evaluate_trial_eligibility(
+            study,
+            SNAPSHOT,
+            _signals(),
+            candidate=replace(candidate, study_id="NCT00000002"),
+            evaluated_at=EVALUATED_AT,
+        )
 
 
 def test_candidate_retrieval_reranks_before_evaluation() -> None:

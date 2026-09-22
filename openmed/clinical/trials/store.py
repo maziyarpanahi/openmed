@@ -200,7 +200,8 @@ class LocalTrialStore:
             descriptor, temp_name = tempfile.mkstemp(
                 prefix=".trial-cache-", dir=self.root
             )
-            os.fchmod(descriptor, 0o600)
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 descriptor = -1
                 stream.write(canonical_json(envelope))
