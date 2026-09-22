@@ -179,6 +179,7 @@ classification:
     - structured/local-journey-store.md
     - structured/postgres-object-journey-store.md
     - interop/resumable-ingestion.md
+    - interop/identity-resolution.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
