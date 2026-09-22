@@ -181,6 +181,29 @@ def test_missing_optional_runtime_uses_explicit_deterministic_fallback() -> None
     assert result.value.local_reference == "builtin://builtin/rules.classification"
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"output_schema": "different_schema"},
+        {"output_schema_version": "2.0.0"},
+        {"languages": ("fr",)},
+        {"domains": ("legal",)},
+    ],
+)
+def test_fallback_must_satisfy_request_contract(changes: dict[str, object]) -> None:
+    primary = _entry(runtime="mlx", fallback="rules.classification")
+    fallback = replace(_rules(), **changes)
+    router = ClinicalTaskRouter(
+        _pack(primary, fallback),
+        bindings=(_builtin_binding(),),
+        available_runtimes=("torch",),
+    )
+    result = router.route(_request())
+    assert result.state is StoreState.CONFLICT
+    assert result.code == "fallback_contract_mismatch"
+    assert result.value is None
+
+
 def test_missing_runtime_without_fallback_is_typed_unsupported() -> None:
     router = ClinicalTaskRouter(
         _pack(_entry(runtime="mlx")),
