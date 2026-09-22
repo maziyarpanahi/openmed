@@ -276,6 +276,31 @@ def test_store_rejects_valid_execution_under_a_different_id(tmp_path: Path) -> N
     assert result.code == "execution_integrity_failed"
 
 
+@pytest.mark.parametrize("operation", ["write", "read"])
+def test_execution_expression_must_match_the_named_definition(
+    tmp_path: Path, operation: str
+) -> None:
+    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+    assert store.put_definition(save_cohort_definition(_definition())).ok
+    execution = _execution()
+    changed = replace(
+        execution,
+        manifest=replace(
+            execution.manifest,
+            expression=replace(execution.manifest.expression, operator="or"),
+            execution_id=None,
+        ),
+    )
+    if operation == "write":
+        result = store.put_execution(changed)
+    else:
+        path = store.root / "executions" / f"{changed.manifest.execution_id}.json"
+        path.write_bytes(changed.to_json_bytes())
+        result = store.get_execution(changed.manifest.execution_id or "")
+    assert result.state is StoreState.CONFLICT
+    assert result.code == "definition_digest_conflict"
+
+
 def test_rerun_proves_reproducibility_and_reports_drift(tmp_path: Path) -> None:
     store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
     version = save_cohort_definition(_definition())
