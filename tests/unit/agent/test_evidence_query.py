@@ -177,6 +177,18 @@ def test_ready_plan_emits_only_bounded_read_only_typed_calls() -> None:
             "sql_function_rejected",
         ),
         (
+            "SELECT pg_advisory_lock(1) FROM journey_facts LIMIT 5",
+            "sql_function_rejected",
+        ),
+        (
+            "SELECT fact_id FROM journey_facts, private_records LIMIT 5",
+            "sql_view_not_allowed",
+        ),
+        (
+            'SELECT fact_id FROM "private_records", journey_facts LIMIT 5',
+            "sql_quoted_identifier_rejected",
+        ),
+        (
             "SELECT fact_id FROM journey_facts LIMIT 101",
             "sql_row_limit_exceeded",
         ),
@@ -219,7 +231,26 @@ def test_sql_literals_are_inert_and_raw_sql_is_not_serialized() -> None:
         "SELECT fact_id FROM journey_facts LIMIT 5"
         ") SELECT fact_id FROM bounded LIMIT 5"
     )
-    assert validate_bounded_read_only_sql(cte_sql, max_rows=5) == cte_sql
+    with pytest.raises(ValueError, match="sql_query_shape_invalid"):
+        validate_bounded_read_only_sql(cte_sql, max_rows=5)
+
+
+def test_sql_projection_and_resource_must_match_declared_tool_call() -> None:
+    for sql in (
+        "SELECT private_value FROM journey_facts LIMIT 5",
+        "SELECT fact_id FROM registry_cases LIMIT 5",
+    ):
+        with pytest.raises(
+            ValueError, match="sql_projection_not_allowed|sql_view_not_allowed"
+        ):
+            BoundedQueryOperation(
+                operation_id="read_sql",
+                tool=EvidenceTool.SQL,
+                resource_id="journey_facts",
+                fields=("fact_id",),
+                limit=5,
+                sql=sql,
+            )
 
 
 @given(limit=st.integers(min_value=1, max_value=100))

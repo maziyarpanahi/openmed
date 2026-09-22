@@ -744,6 +744,8 @@ class LocalSavedCohortStore:
             )
         try:
             value = CohortDefinitionVersion.from_json(result.value)
+            if value.version_id != version_id:
+                raise SavedCohortConflictError("stored definition identity differs")
         except SavedCohortUnsupportedError:
             return StoreResult.outcome(
                 StoreState.UNSUPPORTED, "cohort_version_unsupported"
@@ -771,7 +773,11 @@ class LocalSavedCohortStore:
                 if version.state is StoreState.UNKNOWN
                 else (version.code or "definition_read_failed"),
             )
-        if version.value.definition_digest != execution.manifest.definition_digest:
+        if (
+            version.value.definition_digest != execution.manifest.definition_digest
+            or version.value.criterion_ids != execution.manifest.criterion_ids
+            or version.value.definition.expression != execution.manifest.expression
+        ):
             return StoreResult.outcome(
                 StoreState.CONFLICT, "definition_digest_conflict"
             )
@@ -794,6 +800,8 @@ class LocalSavedCohortStore:
             )
         try:
             value = CohortExecution.from_json(result.value)
+            if value.manifest.execution_id != execution_id:
+                raise SavedCohortConflictError("stored execution identity differs")
         except SavedCohortUnsupportedError:
             return StoreResult.outcome(
                 StoreState.UNSUPPORTED, "cohort_version_unsupported"
@@ -812,7 +820,11 @@ class LocalSavedCohortStore:
                 if version.state is StoreState.UNKNOWN
                 else (version.code or "definition_read_failed"),
             )
-        if version.value.definition_digest != value.manifest.definition_digest:
+        if (
+            version.value.definition_digest != value.manifest.definition_digest
+            or version.value.criterion_ids != value.manifest.criterion_ids
+            or version.value.definition.expression != value.manifest.expression
+        ):
             return StoreResult.outcome(
                 StoreState.CONFLICT, "definition_digest_conflict"
             )
@@ -904,7 +916,8 @@ class LocalSavedCohortStore:
                     prefix=".saved-cohort-", dir=target.parent
                 )
                 try:
-                    os.fchmod(descriptor, 0o600)
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(descriptor, 0o600)
                     with os.fdopen(descriptor, "wb") as stream:
                         stream.write(payload)
                         stream.flush()

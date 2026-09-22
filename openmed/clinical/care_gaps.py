@@ -16,6 +16,7 @@ from openmed.clinical.journey_contracts import canonical_digest, canonical_json
 from openmed.clinical.measures import (
     MeasureSubjectResult,
     MeasureTimeWindow,
+    PopulationKind,
     PopulationResult,
     PopulationState,
 )
@@ -832,6 +833,24 @@ def _derive_state(
     )
     if any(item not in populations for item in (*required_ids, *optional_ids)):
         return CareGapState.INSUFFICIENT_DATA, "population_result_missing"
+    expected_kinds = {
+        policy.initial_population_id: PopulationKind.INITIAL_POPULATION,
+        policy.denominator_population_id: PopulationKind.DENOMINATOR,
+        policy.numerator_population_id: PopulationKind.NUMERATOR,
+    }
+    if policy.exclusion_population_id is not None:
+        expected_kinds[policy.exclusion_population_id] = (
+            PopulationKind.DENOMINATOR_EXCLUSION
+        )
+    if policy.exception_population_id is not None:
+        expected_kinds[policy.exception_population_id] = (
+            PopulationKind.DENOMINATOR_EXCEPTION
+        )
+    if any(
+        populations[identifier].kind is not kind
+        for identifier, kind in expected_kinds.items()
+    ):
+        return CareGapState.INSUFFICIENT_DATA, "population_role_conflict"
     if conflict_ids:
         return CareGapState.INSUFFICIENT_DATA, "source_evidence_conflict"
     selected = tuple(populations[item] for item in (*required_ids, *optional_ids))

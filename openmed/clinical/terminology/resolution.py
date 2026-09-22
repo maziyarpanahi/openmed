@@ -726,6 +726,11 @@ class TerminologyResolver:
                 language=query.language,
                 limit=self.policy.semantic_limit,
             )
+            if not isinstance(supplied, Sequence):
+                raise TypeError("semantic provider returned invalid candidates")
+            supplied = supplied[: self.policy.semantic_limit]
+            if not all(isinstance(item, SemanticCandidate) for item in supplied):
+                raise TypeError("semantic provider returned invalid candidates")
         except Exception:
             result = self._result(
                 query=query,

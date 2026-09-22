@@ -58,8 +58,9 @@ def test_local_namespace_is_default_private_and_idempotent(tmp_path: Path) -> No
     digest = _artifact().content_hash.removeprefix("sha256:")
     blob = root / "blobs" / "sha256" / digest[:2] / digest
     assert blob.is_file()
-    assert os.stat(blob).st_mode & 0o077 == 0
-    assert os.stat(blob.parent).st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert os.stat(blob).st_mode & 0o077 == 0
+        assert os.stat(blob.parent).st_mode & 0o077 == 0
 
 
 def test_memory_namespace_requires_explicit_allowlist() -> None:

@@ -266,6 +266,23 @@ def test_snapshot_custody_and_split_leakage_are_conflicts() -> None:
     )
 
 
+def test_import_rejects_snapshot_that_does_not_cover_bundle_facts() -> None:
+    facts, _, snapshot = _records()
+    complete = export_journey_to_fhir(facts, source_snapshot=snapshot)
+    subset = export_journey_to_fhir(
+        facts[:1],
+        source_snapshot=replace(
+            snapshot, source_fact_ids=(facts[0].fact_id,), record_count=1
+        ),
+    )
+    assert complete.value is not None and subset.value is not None
+    bundle = copy.deepcopy(complete.value.bundle)
+    bundle["extension"] = copy.deepcopy(subset.value.bundle["extension"])
+    result = import_journey_from_fhir(bundle)
+    assert result.state is StoreState.CONFLICT
+    assert result.code == "fhir_custody_conflict"
+
+
 @given(
     fact_type=st.sampled_from(
         (

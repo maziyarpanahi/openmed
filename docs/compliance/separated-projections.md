@@ -25,7 +25,9 @@ projections/
     └── events.sqlite3
 ```
 
-The directories use owner-only permissions. Each namespace has its own SQLite
+On POSIX systems, directories use owner-only permissions. On Windows, provision
+the root with an ACL restricted to the service account; Python permission bits
+do not establish equivalent Windows access control. Each namespace has its own SQLite
 metadata database and content-addressed object tree. An identifier present in
 the identified database is unknown to the de-identified database unless a
 separate de-identified record was explicitly written.
