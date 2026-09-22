@@ -17,6 +17,7 @@ from openmed.clinical.journey_contracts import (
     derived_opaque_id,
 )
 from openmed.guard.query_safety import (
+    DEFAULT_READ_ONLY_VIEWS,
     MAX_QUERY_ROWS,
     QuerySafetyError,
     classify_query_text,
@@ -155,7 +156,12 @@ class BoundedQueryOperation:
                 raise EvidenceQueryError("SQL operation requires a query")
             try:
                 normalized_sql = validate_bounded_read_only_sql(
-                    self.sql, max_rows=self.limit
+                    self.sql,
+                    max_rows=self.limit,
+                    allowed_views=(self.resource_id,)
+                    if self.resource_id in DEFAULT_READ_ONLY_VIEWS
+                    else (),
+                    selected_fields=fields,
                 )
             except QuerySafetyError as exc:
                 raise EvidenceQueryError(exc.code) from None
@@ -302,7 +308,14 @@ class EvidenceToolCall:
             if self.sql is None:
                 raise EvidenceQueryError("SQL tool call requires SQL")
             try:
-                validate_bounded_read_only_sql(self.sql, max_rows=self.limit)
+                validate_bounded_read_only_sql(
+                    self.sql,
+                    max_rows=self.limit,
+                    allowed_views=(self.resource_id,)
+                    if self.resource_id in DEFAULT_READ_ONLY_VIEWS
+                    else (),
+                    selected_fields=self.fields,
+                )
             except QuerySafetyError as exc:
                 raise EvidenceQueryError(exc.code) from None
         elif self.sql is not None:

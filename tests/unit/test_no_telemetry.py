@@ -62,6 +62,7 @@ NETWORK_IMPORT_MODULES = frozenset(
 # that is the "fails on additions" enforcement for outbound calls.
 ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "clinical/grounding/vocab.py": "opt-in clinical vocabulary download (offline-gated)",
+    "clinical/trials/source.py": "explicit public clinical-trial metadata fetch",
     "core/offline.py": "the offline network-block guard itself (OM-005)",
     "eval/datasets/drugprot.py": "opt-in evaluation dataset download",
     "eval/suites/shield.py": "opt-in evaluation dataset/rows fetch",

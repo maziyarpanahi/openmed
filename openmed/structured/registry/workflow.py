@@ -224,7 +224,7 @@ def correct_registry_field(
     )
     to_state = (
         RegistryCaseState.REVIEW_REQUIRED
-        if replacement.state in policy.review_field_states
+        if any(item.state in policy.review_field_states for item in fields)
         else RegistryCaseState.EXPORT_READY
     )
     return _transition(
@@ -336,6 +336,18 @@ def mark_registry_case_exported(
         )
     if envelope.case_digests.get(case.case_id) != case.case_digest:
         return StoreResult.outcome(StoreState.CONFLICT, "registry_export_case_conflict")
+    workflow = definition_version.definition.workflow
+    if (
+        envelope.definition_version_id != definition_version.version_id
+        or envelope.definition_digest != definition_version.definition_digest
+        or envelope.registry_id != definition_version.definition.registry_id
+        or envelope.privacy_policy_digest != workflow.privacy_policy_digest
+        or envelope.export_policy_digest != workflow.export_policy_digest
+        or case.source_snapshot_id not in envelope.source_snapshot_ids
+    ):
+        return StoreResult.outcome(
+            StoreState.CONFLICT, "registry_export_context_conflict"
+        )
     return _transition(
         case,
         to_state=RegistryCaseState.EXPORTED,

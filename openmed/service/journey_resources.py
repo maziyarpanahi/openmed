@@ -187,7 +187,7 @@ class JourneyResourceRecord:
         return {
             "compatibility_policy": self.compatibility_policy,
             "data": data,
-            "extensions": _plain(self.extensions),
+            "extensions": _plain(self.extensions) if fields is None else {},
             "namespace": self.namespace,
             "resource_id": self.resource_id,
             "resource_type": self.resource_type.value,

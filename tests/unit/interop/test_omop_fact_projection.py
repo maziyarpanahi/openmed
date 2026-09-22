@@ -257,6 +257,42 @@ def test_replay_is_idempotent_and_correction_replaces_current_source() -> None:
     assert not validate_omop_fact_projection(projection)
 
 
+def test_correction_recomputes_visit_dates_from_current_facts() -> None:
+    first = _project()
+    assert first.ok and first.value is not None
+    source = _inputs()[0]
+    correction = replace(
+        source,
+        fact=replace(source.fact, effective_time={"start": "2026-03-01"}),
+        source_revision=canonical_digest({"revision": "corrected-date"}),
+    )
+    result = _project(
+        (correction,), previous=first.value, occurred_at="2026-09-22T11:00:00Z"
+    )
+    assert result.ok and result.value is not None
+    visit = result.value.table("visit_occurrence")[0]
+    assert visit["visit_start_date"] == "2026-03-01"
+    assert visit["visit_end_date"] == "2026-03-01"
+    assert len(result.value.etl_runs) == 2
+
+
+def test_incremental_visit_dates_include_the_entire_incoming_batch() -> None:
+    first_source = replace(
+        _inputs()[0],
+        source_key="source_bbbbbbbbbbbbbbbb",
+        fact=replace(_inputs()[0].fact, effective_time={"start": "2026-01-03"}),
+    )
+    first = _project((first_source,))
+    assert first.ok and first.value is not None
+    result = _project(
+        _inputs()[1:], previous=first.value, occurred_at="2026-09-22T11:00:00Z"
+    )
+    assert result.ok and result.value is not None
+    visit = result.value.table("visit_occurrence")[0]
+    assert visit["visit_start_date"] == "2026-01-02"
+    assert visit["visit_end_date"] == "2026-01-05"
+
+
 def test_typed_outcomes_cover_unsupported_split_snapshot_and_license_gates() -> None:
     source = _inputs()[0]
     unsupported = replace(

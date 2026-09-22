@@ -292,6 +292,26 @@ def test_records_reject_sensitive_or_unallowlisted_data() -> None:
         )
 
 
+def test_projected_pages_do_not_expose_unselected_extensions() -> None:
+    record = JourneyResourceRecord(
+        resource_type=JourneyResourceKind.FACT,
+        resource_id="fact_extension000000",
+        namespace="default",
+        data={"concept": "synthetic.condition"},
+        extensions={"producer_hint": {"format": "internal_synthetic"}},
+    )
+    page = JourneyResourceCatalog((record,)).list_resources(
+        JourneyResourceQuery(
+            resource_type=JourneyResourceKind.FACT,
+            fields=("concept",),
+        )
+    )
+    assert record.to_dict()["extensions"] == {
+        "producer_hint": {"format": "internal_synthetic"}
+    }
+    assert page.resources[0]["extensions"] == {}
+
+
 def test_same_major_migration_preserves_unknown_extensions() -> None:
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))[0]
     payload["schema_version"] = "1.2.0"
