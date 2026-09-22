@@ -193,7 +193,6 @@ def test_source_digest_and_conflicting_seriousness_fail_closed(tmp_path: Path) -
             license_id="synthetic-test-data",
         )
 
-
     rows = _rows(a=1, b=1, c=1, d=1)
     rows.append({**rows[0], "event": "Event Z", "seriousness": "non_serious"})
     with pytest.raises(DrugSafetyConflictError, match="conflicting seriousness"):

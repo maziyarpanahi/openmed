@@ -257,7 +257,10 @@ def _optional_integer(value: Any, name: str) -> int | None:
         return None
     if type(value) is int:
         return value
-    if not isinstance(value, str) or re.fullmatch(r"[+-]?[0-9]+", value.strip()) is None:
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"[+-]?[0-9]+", value.strip()) is None
+    ):
         raise DrugSafetyContractError(f"{name} must be an integer")
     try:
         return int(value.strip())
