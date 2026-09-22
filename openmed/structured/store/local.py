@@ -123,7 +123,8 @@ class LocalArtifactStore:
                     dir=target.parent,
                 )
                 try:
-                    os.fchmod(descriptor, 0o600)
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(descriptor, 0o600)
                     with os.fdopen(descriptor, "wb") as stream:
                         stream.write(content)
                         stream.flush()

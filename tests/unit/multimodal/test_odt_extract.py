@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import struct
 import zipfile
 import zlib
 from pathlib import Path
@@ -179,6 +180,62 @@ def test_odt_rejects_corrupt_compressed_content(tmp_path: Path, monkeypatch):
 
     with pytest.raises(UnsupportedDocumentError, match="readable entries"):
         extract_odt(path)
+
+
+def _patch_compression_method(path: Path, entry: str, method: int) -> Path:
+    raw = bytearray(path.read_bytes())
+    eocd = raw.rindex(b"PK\x05\x06")
+    position = struct.unpack_from("<I", raw, eocd + 16)[0]
+    for _ in range(struct.unpack_from("<H", raw, eocd + 10)[0]):
+        name_length, extra_length, comment_length = struct.unpack_from(
+            "<HHH", raw, position + 28
+        )
+        name = bytes(raw[position + 46 : position + 46 + name_length])
+        if name == entry.encode("ascii"):
+            local_header = struct.unpack_from("<I", raw, position + 42)[0]
+            struct.pack_into("<H", raw, position + 10, method)
+            struct.pack_into("<H", raw, local_header + 8, method)
+        position += 46 + name_length + extra_length + comment_length
+    path.write_bytes(bytes(raw))
+    return path
+
+
+@pytest.mark.parametrize("entry", ["mimetype", "content.xml"])
+def test_odt_rejects_unimplemented_compression_methods(tmp_path: Path, entry: str):
+    path = tmp_path / "unknown-method.odt"
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+        archive.writestr("content.xml", CONTENT_XML)
+    _patch_compression_method(path, entry, 99)
+
+    with pytest.raises(UnsupportedDocumentError, match="stored or deflate"):
+        extract_odt(path)
+
+
+@pytest.mark.parametrize("compression", [zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA])
+def test_odt_rejects_compression_methods_outside_odf_packages(
+    tmp_path: Path, compression: int
+):
+    path = tmp_path / "non-odf-method.odt"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+        archive.writestr("content.xml", CONTENT_XML, compress_type=compression)
+
+    with pytest.raises(UnsupportedDocumentError, match="stored or deflate"):
+        extract_odt(path)
+
+
+def test_odt_accepts_stored_and_deflated_entries(tmp_path: Path):
+    path = tmp_path / "mixed-methods.odt"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            "mimetype",
+            "application/vnd.oasis.opendocument.text",
+            compress_type=zipfile.ZIP_STORED,
+        )
+        archive.writestr("content.xml", CONTENT_XML, compress_type=zipfile.ZIP_DEFLATED)
+
+    assert extract_odt(path).text == EXPECTED_TEXT
 
 
 def test_odt_rejects_unsafe_xml_declarations(tmp_path: Path):
