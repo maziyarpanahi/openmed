@@ -9,6 +9,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /livez`
 - `GET /readyz`
 - `GET /models/loaded`
+- `GET /v1/journey/resources`
 - `POST /models/unload`
 - `POST /analyze`
 - `POST /ground`
@@ -35,6 +36,8 @@ error envelope.
 
 For ready-to-run `curl` and Python `requests` snippets covering the common
 calls, see the task-oriented [REST API Recipes](rest-recipes.md) page.
+For versioned, policy-scoped Journey resource pagination, see the
+[Journey Resources API](api/journey-resources.md) guide.
 
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
