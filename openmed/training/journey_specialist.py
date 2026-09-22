@@ -837,10 +837,10 @@ class GpuSpendEntry:
     def committed_cost_usd(self) -> float:
         """Return the cap-relevant cost for this run."""
 
-        if self.state == "cancelled":
-            return 0.0
         if self.actual_cost_usd is not None:
             return self.actual_cost_usd
+        if self.state == "cancelled":
+            return 0.0
         return self.estimated_cost_usd
 
     def to_dict(self) -> dict[str, Any]:
@@ -928,6 +928,8 @@ class GpuSpendLedger:
     ) -> "GpuSpendLedger":
         """Replace one reservation with actual totals while retaining the cap."""
 
+        actual_cost_usd = _finite(actual_cost_usd, "actual_cost_usd")
+        actual_gpu_hours = _finite(actual_gpu_hours, "actual_gpu_hours")
         found = False
         updated: list[GpuSpendEntry] = []
         for entry in self.entries:
@@ -935,6 +937,17 @@ class GpuSpendLedger:
                 updated.append(entry)
                 continue
             found = True
+            if entry.state != "reserved":
+                if (
+                    entry.state == "completed"
+                    and entry.actual_cost_usd == actual_cost_usd
+                    and entry.actual_gpu_hours == actual_gpu_hours
+                ):
+                    updated.append(entry)
+                    continue
+                raise JourneySpecialistConflictError(
+                    "terminal GPU spend cannot be rewritten"
+                )
             updated.append(
                 replace(
                     entry,

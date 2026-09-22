@@ -171,6 +171,22 @@ def test_opt_in_local_semantic_provider_uses_margin() -> None:
     assert provider.calls == 1
 
 
+@pytest.mark.parametrize("payload", [None, CANARY, [CANARY], {"code": CANARY}])
+def test_malformed_semantic_output_is_a_value_free_failure(payload: object) -> None:
+    class InvalidProvider(_SemanticProvider):
+        def candidates(self, *_: object, **__: object):
+            return payload
+
+    result = _resolver(
+        policy=TerminologyResolutionPolicy(semantic_enabled=True),
+        semantic_provider=InvalidProvider(),
+    ).resolve(TerminologyQuery(source_value=CANARY))
+    assert result.state is StoreState.FAILURE
+    assert result.code == "semantic_provider_failed"
+    assert result.value is not None
+    assert CANARY not in result.value.to_json()
+
+
 def test_enabled_semantic_without_provider_is_explicitly_unsupported() -> None:
     result = _resolver(
         policy=TerminologyResolutionPolicy(semantic_enabled=True)
@@ -218,7 +234,8 @@ def test_store_appends_snapshot_versions_and_queues_non_success(tmp_path: Path) 
     assert queue.ok and queue.value is not None
     assert len(queue.value) == 2
     assert {item.state for item in queue.value} == {"unmapped"}
-    assert oct(path.stat().st_mode & 0o777) == "0o600"
+    if os.name == "posix":
+        assert oct(path.stat().st_mode & 0o777) == "0o600"
     assert CANARY.encode() not in path.read_bytes()
 
 

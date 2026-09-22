@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 51193653,
-    "maximum_unique_payload_bytes": 50856074,
+    "maximum_total_bytes": 61746938,
+    "maximum_unique_payload_bytes": 61409359,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3511794
+    "json": 3821444
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3511794
+    "docs/search/search_index.json": 3821444
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 4849664,
-    "/docs/model-tokenizer-script-coverage/": 6946816
+    "/docs/": 5212796,
+    "/docs/model-tokenizer-script-coverage/": 7290092
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,16 +31,16 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the language-pack onboarding guide, with 110750 bytes of documentation headroom.",
-    "The audited candidate contains 51082903 total bytes, 50745324 unique payload bytes, and 337579 duplicate payload bytes. The language-pack guide and navigation remain governed by the byte, route, and performance budgets without an arbitrary file-count ceiling.",
-    "The 50856074-byte unique-payload ceiling and 51193653-byte total-payload ceiling retain 110750 bytes of headroom. Per-file non-JSON caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The clinical and language-pack guides remain searchable. The measured search index is 3479079 bytes; its 3511794-byte JSON ceiling retains 32715 bytes of headroom. Other per-file caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets are unchanged.",
+    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the Journey contracts, local store, PostgreSQL and object store, resumable ingestion, and current agent and multimodal guides, with bounded documentation headroom.",
+    "The staged aggregate through versioned Journey resource documentation contains 61631753 total bytes, 61294174 unique payload bytes, and 337579 duplicate payload bytes. The Linux ceilings carry forward the observed 4435-byte platform delta plus 110750 bytes of bounded headroom.",
+    "The 61409359-byte unique-payload ceiling and 61746938-byte total-payload ceiling preserve the existing headroom policy. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The measured aggregate search index is 3810551 bytes; its 3821444-byte JSON ceiling retains 10893 bytes of headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
-    "The /docs/ route measured 4730362 bytes on the audited master build; its 4849664-byte ceiling retains 119302 bytes of bounded transfer headroom.",
-    "The tokenizer coverage route measured 6842165 bytes locally on the staged master build; its 6946816-byte ceiling retains 104651 bytes of bounded transfer headroom.",
+    "The /docs/ route measured 5093494 bytes on the staged FHIR round-trip build; its 5212796-byte ceiling retains 119302 bytes of bounded transfer headroom.",
+    "The tokenizer coverage route measured 7183288 bytes on the staged specialist-training build; its 7290092-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
   ]

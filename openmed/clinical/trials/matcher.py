@@ -533,12 +533,17 @@ def evaluate_trial_eligibility(
     signal_values = tuple(signals)
     if any(not isinstance(item, JourneySignal) for item in signal_values):
         raise TypeError("signals must contain JourneySignal")
-    parsed = criteria or parse_trial_criteria(study)
+    canonical_criteria = parse_trial_criteria(study)
+    if criteria is not None and not isinstance(criteria, ParsedTrialCriteria):
+        raise TypeError("criteria must be ParsedTrialCriteria")
+    parsed = criteria or canonical_criteria
     if (
-        parsed.study_version_id != study.version_id
+        parsed.study_id != study.study_id
+        or parsed.study_version_id != study.version_id
         or parsed.study_version_digest != study.version_digest
+        or parsed.parse_digest != canonical_criteria.parse_digest
     ):
-        raise TrialContractError("parsed criteria belong to another study version")
+        raise TrialContractError("parsed criteria differ from the public study")
     active_candidate = candidate or TrialCandidate(
         study_id=study.study_id,
         study_version_id=study.version_id,
@@ -547,7 +552,8 @@ def evaluate_trial_eligibility(
         retrieval_score=1.0,
     )
     if (
-        active_candidate.study_version_id != study.version_id
+        active_candidate.study_id != study.study_id
+        or active_candidate.study_version_id != study.version_id
         or active_candidate.study_version_digest != study.version_digest
     ):
         raise TrialContractError("candidate belongs to another study version")
@@ -706,12 +712,12 @@ def _evaluate_criterion(
         )
     states = tuple(_compare_signal(item, criterion) for item in in_window)
     resolved = {item for item in states if item is not TrialCriterionState.UNKNOWN}
-    if not resolved:
-        state = TrialCriterionState.UNKNOWN
-        reason = "typed_value_missing"
-    elif len(resolved) > 1:
+    if len(resolved) > 1:
         state = TrialCriterionState.CONFLICT
         reason = "typed_value_conflict"
+    elif TrialCriterionState.UNKNOWN in states:
+        state = TrialCriterionState.UNKNOWN
+        reason = "typed_value_missing"
     else:
         state = next(iter(resolved))
         reason = (

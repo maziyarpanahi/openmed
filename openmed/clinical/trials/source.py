@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from .contracts import (
 
 OFFICIAL_TRIAL_API_URL: Final = "https://clinicaltrials.gov/api/v2/studies"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_MAX_SOURCE_PAGE_BYTES = 64 * 1024 * 1024
 
 
 @runtime_checkable
@@ -41,7 +43,7 @@ class UrlLibTrialSourceTransport:
 
         request = Request(url, headers={"Accept": "application/json"})
         with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
-            return response.read()
+            return response.read(_MAX_SOURCE_PAGE_BYTES + 1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +90,13 @@ class ClinicalTrialSource:
     ) -> None:
         if not base_url.startswith("https://"):
             raise TrialContractError("trial source base_url must use HTTPS")
-        if timeout_seconds <= 0 or timeout_seconds > 120:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+            or timeout_seconds > 120
+        ):
             raise TrialContractError("timeout_seconds must be in (0, 120]")
         self._transport = transport or UrlLibTrialSourceTransport()
         self._base_url = base_url
@@ -113,10 +121,12 @@ class ClinicalTrialSource:
         url = f"{self._base_url}?{urlencode(params)}"
         try:
             payload = self._transport.fetch(url, timeout_seconds=self._timeout_seconds)
-        except OSError as exc:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
             raise TrialSourceUnavailableError(
                 "public trial metadata fetch failed"
-            ) from exc
+            ) from None
         return parse_trial_source_page(payload, retrieved_at=retrieved_at)
 
 
@@ -125,6 +135,8 @@ def parse_trial_source_page(payload: bytes, *, retrieved_at: str) -> TrialSource
 
     if not isinstance(payload, bytes):
         raise TypeError("payload must be bytes")
+    if len(payload) > _MAX_SOURCE_PAGE_BYTES:
+        raise TrialSchemaDriftError("trial source response size exceeds limit")
     try:
         decoded = json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:

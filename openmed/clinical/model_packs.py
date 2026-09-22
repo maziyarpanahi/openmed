@@ -541,6 +541,10 @@ class ClinicalTaskRouter:
             return StoreResult.outcome(StoreState.CONFLICT, "fallback_task_mismatch")
         if fallback.model_kind == "generative":
             return StoreResult.outcome(StoreState.DENIED, "generative_profile_required")
+        if fallback not in candidates:
+            return StoreResult.outcome(
+                StoreState.CONFLICT, "fallback_contract_mismatch"
+            )
         return self._resolve_entry(fallback, fallback_from=primary.alias)
 
     def _candidates(self, request: ClinicalTaskRequest) -> tuple[ModelPackEntry, ...]:
