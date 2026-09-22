@@ -372,7 +372,10 @@ def test_csv_bom_unicode_quoted_newline_and_indexes_round_trip(
     st.lists(
         st.lists(
             st.text(
-                alphabet=st.characters(blacklist_categories=("Cs",)),
+                # Python 3.10's CSV writer rejects NUL before the adapter runs.
+                alphabet=st.characters(
+                    blacklist_categories=("Cs",), blacklist_characters="\x00"
+                ),
                 max_size=24,
             ),
             min_size=1,

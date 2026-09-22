@@ -1,5 +1,13 @@
 title = "OpenMed secret scanning"
 
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Literal synthetic patient identifier in identity resolution examples"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/interop/identity-resolution\.md$''']
+regexes = ['''^\s*(selected_)?canonical_key="patient_0123456789abcdef",\s*$''']
+
 [extend]
 useDefault = true
 

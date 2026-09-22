@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -1241,14 +1242,11 @@ def run_omop_quality_subprocess(
         payload = canonical_json(_quality_request_payload(quality_input)).encode(
             "utf-8"
         )
-        completed = subprocess.run(  # noqa: S603 - explicit caller-selected argv
+        raw_output = _run_bounded_adapter(
             argv,
-            input=payload,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
+            payload,
             timeout=timeout_value,
-            env=_safe_environment(environment),
+            environment=_safe_environment(environment),
         )
     except FileNotFoundError:
         return StoreResult.outcome(
@@ -1256,12 +1254,12 @@ def run_omop_quality_subprocess(
         )
     except subprocess.TimeoutExpired:
         return StoreResult.outcome(StoreState.FAILURE, "quality_adapter_timeout")
+    except OmopQualityProtocolError:
+        return StoreResult.outcome(StoreState.FAILURE, "quality_output_invalid")
     except (OSError, OmopQualityError, TypeError, ValueError):
         return StoreResult.outcome(StoreState.FAILURE, "quality_adapter_failed")
-    if completed.returncode != 0:
-        return StoreResult.outcome(StoreState.FAILURE, "quality_adapter_failed")
     try:
-        output = _decode_tool_output(completed.stdout)
+        output = _decode_tool_output(raw_output)
         report = normalize_omop_quality_output(
             output,
             quality_input=quality_input,
@@ -1429,6 +1427,74 @@ def _quality_verdict(
     if any(item.verdict == "unknown" for item in categories):
         return "unknown"
     return "pass"
+
+
+def _run_bounded_adapter(
+    argv: tuple[str, ...],
+    payload: bytes,
+    *,
+    timeout: float,
+    environment: Mapping[str, str],
+) -> bytes:
+    """Bound captured output while feeding input and reap the owned process."""
+
+    process = subprocess.Popen(  # noqa: S603 - explicit caller-selected argv
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    timed_out = threading.Event()
+
+    def expire() -> None:
+        timed_out.set()
+        if process.poll() is None:
+            process.kill()
+
+    def feed() -> None:
+        try:
+            process.stdin.write(payload)
+            process.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
+    writer = threading.Thread(target=feed, name="openmed-quality-input")
+    watchdog = threading.Timer(timeout, expire)
+    output = bytearray()
+    try:
+        writer.start()
+        watchdog.start()
+        while chunk := process.stdout.read1(
+            min(65536, _MAX_TOOL_OUTPUT_BYTES + 1 - len(output))
+        ):
+            output.extend(chunk)
+            if len(output) > _MAX_TOOL_OUTPUT_BYTES:
+                raise OmopQualityProtocolError("quality adapter output size is invalid")
+        process.wait()
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired(argv, timeout)
+        if process.returncode != 0:
+            raise OmopQualityError("quality adapter failed")
+        return bytes(output)
+    finally:
+        watchdog.cancel()
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        if writer.ident is not None:
+            writer.join()
+        else:
+            process.stdin.close()
+        if watchdog.ident is not None:
+            watchdog.join()
+        process.stdout.close()
 
 
 def _decode_tool_output(value: bytes) -> Mapping[str, Any]:
