@@ -186,6 +186,7 @@ classification:
     - structured/clinical-fact-normalization.md
     - clinical/terminology-resolution.md
     - structured/fact-reconciliation.md
+    - clinical/longitudinal-journey.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md

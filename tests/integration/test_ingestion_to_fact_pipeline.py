@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from openmed.clinical.grounding.vocab import VocabConcept, VocabularyIndex
+from openmed.clinical.journey import JourneyQuery, query_journey
 from openmed.clinical.journey_contracts import (
     canonical_digest,
     derived_opaque_id,
@@ -491,6 +492,17 @@ def test_golden_journey_correction_appends_reconciliation_history(
         original.fact_id,
         corrected.fact_id,
     )
+    journey = query_journey(
+        store,
+        JourneyQuery(subject_id=SUBJECT_ID),
+    )
+    assert journey.ok and journey.value is not None
+    journey_by_fact = {event.fact.fact_id: event for event in journey.value.events}
+    assert journey_by_fact[original.fact_id].journey_state == "historical"
+    assert journey_by_fact[original.fact_id].correction_state == "superseded"
+    assert journey_by_fact[corrected.fact_id].journey_state == "current"
+    assert journey_by_fact[corrected.fact_id].correction_state == "amends"
+    assert all(event.evidence_paths for event in journey.value.events)
     assert source not in plan.value.to_json()
     store.close()
 
