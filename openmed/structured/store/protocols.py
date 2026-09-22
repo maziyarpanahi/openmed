@@ -411,6 +411,11 @@ class JobMetadataStore(Protocol):
     ) -> StoreResult[JobMetadata]:
         """Read job metadata at one revision."""
 
+    def list_job_versions(
+        self, job_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[JobMetadata, ...]]:
+        """Read append-only job metadata versions through one revision."""
+
 
 @runtime_checkable
 class PointInTimeReader(Protocol):
