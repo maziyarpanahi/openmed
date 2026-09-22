@@ -744,6 +744,8 @@ class LocalSavedCohortStore:
             )
         try:
             value = CohortDefinitionVersion.from_json(result.value)
+            if value.version_id != version_id:
+                raise SavedCohortConflictError("stored definition identity differs")
         except SavedCohortUnsupportedError:
             return StoreResult.outcome(
                 StoreState.UNSUPPORTED, "cohort_version_unsupported"
@@ -794,6 +796,8 @@ class LocalSavedCohortStore:
             )
         try:
             value = CohortExecution.from_json(result.value)
+            if value.manifest.execution_id != execution_id:
+                raise SavedCohortConflictError("stored execution identity differs")
         except SavedCohortUnsupportedError:
             return StoreResult.outcome(
                 StoreState.UNSUPPORTED, "cohort_version_unsupported"
@@ -904,7 +908,8 @@ class LocalSavedCohortStore:
                     prefix=".saved-cohort-", dir=target.parent
                 )
                 try:
-                    os.fchmod(descriptor, 0o600)
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(descriptor, 0o600)
                     with os.fdopen(descriptor, "wb") as stream:
                         stream.write(payload)
                         stream.flush()
