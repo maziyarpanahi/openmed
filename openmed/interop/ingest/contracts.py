@@ -22,6 +22,8 @@ INGESTION_SCHEMA_NAMES = (
     "retry",
     "cancellation",
     "quarantine_result",
+    "pipeline_stage",
+    "stage_invalidation",
 )
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")

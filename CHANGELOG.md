@@ -32,6 +32,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added offline structured-evidence adapters for text, existing document
   results, FHIR R4, HL7 v2, CDA R2, CSV, and XLSX with exact coordinates,
   parser provenance, bounded quarantine, and value-free results (#3326).
+- Added a versioned clinical model-pack contract and local-only task router with
+  pinned artifact integrity, license and quantization gates, explicit runtime
+  capability outcomes, and deterministic fallbacks (#3328).
+- Added model-independent clinical-fact normalization across extraction,
+  assertion, temporality, relation, medication, laboratory, observation, and
+  social-determinant outputs with evidence and derivation gates (#3330).
+- Added a local-first ingestion-to-fact orchestrator with versioned stage
+  manifests, value-free derivation edges, exact replay, descendant-only
+  reprocessing, typed quarantine, and atomic Journey writes across five
+  synthetic structured source formats (#3327).
+- Added deterministic terminology resolution cascades with versioned mapping
+  provenance, explicit ambiguous and unmapped outcomes, an append-only local
+  review queue, opt-in local semantic candidates, and value-free coverage
+  summaries (#3331).
+- Added evidence-preserving fact deduplication, dimension-specific conflict
+  sets, versioned policy and human resolutions, append-only correction history,
+  guarded review packets, and counts-only queue SLA summaries (#3332).
+- Added paginated point-in-time longitudinal journey views with typed patient,
+  encounter, time, event, status, source, and review filters; complete immutable
+  provenance drill-down; correction-aware state; and a value-free timeline
+  graph (#3333).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
