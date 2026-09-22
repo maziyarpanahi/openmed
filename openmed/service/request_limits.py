@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections import deque
 from typing import Final
 
 from starlette.datastructures import Headers
@@ -62,7 +63,7 @@ class BoundedRequestBodyMiddleware:
                 )
                 return
 
-        messages: list[Message] = []
+        messages: deque[Message] = deque()
         received = 0
         while True:
             message = await receive()
@@ -82,7 +83,7 @@ class BoundedRequestBodyMiddleware:
 
         async def replay() -> Message:
             if messages:
-                return messages.pop(0)
+                return messages.popleft()
             return await receive()
 
         await self.app(scope, replay, send)
