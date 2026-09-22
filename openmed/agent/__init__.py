@@ -112,6 +112,13 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .workflow_rollup import (
+    WORKFLOW_ROLLUP_SCHEMA_VERSION,
+    WorkflowRollup,
+    WorkflowRollupEntry,
+    WorkflowRollupError,
+    rollup_workflows,
+)
 
 __all__ = [
     "ALLOWED_ATTRIBUTES",
@@ -194,10 +201,15 @@ __all__ = [
     "PurposeId",
     "ToolId",
     "TimingValidationError",
+    "WORKFLOW_ROLLUP_SCHEMA_VERSION",
     "WorkflowOutcome",
     "WorkflowId",
+    "WorkflowRollup",
+    "WorkflowRollupEntry",
+    "WorkflowRollupError",
     "allowed_reason_codes",
     "diff_run_summaries",
+    "rollup_workflows",
     "check_capability_validity",
     "envelope_from_exception",
     "error_class_for_code",
