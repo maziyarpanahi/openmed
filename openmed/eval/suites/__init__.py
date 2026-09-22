@@ -238,6 +238,18 @@ from openmed.eval.suites.indic_name_consistency import (
     indic_name_consistency_metadata,
     load_indic_name_fixtures,
 )
+from openmed.eval.suites.journey_specialist import (
+    PROMOTION_DECISIONS,
+    JourneySpecialistEvaluationError,
+    SpecialistHoldoutReport,
+    SpecialistPrediction,
+    SpecialistPromotionPolicy,
+    SpecialistRunCompletion,
+    build_journey_specialist_model_pack_entry,
+    evaluate_journey_specialist_holdout,
+    finalize_journey_specialist_run,
+    render_journey_specialist_model_card,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -579,6 +591,16 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "PROMOTION_DECISIONS",
+    "JourneySpecialistEvaluationError",
+    "SpecialistHoldoutReport",
+    "SpecialistPrediction",
+    "SpecialistPromotionPolicy",
+    "SpecialistRunCompletion",
+    "build_journey_specialist_model_pack_entry",
+    "evaluate_journey_specialist_holdout",
+    "finalize_journey_specialist_run",
+    "render_journey_specialist_model_card",
     "BIORED",
     "GOLDEN",
     "GROUNDING_CALIBRATION",
