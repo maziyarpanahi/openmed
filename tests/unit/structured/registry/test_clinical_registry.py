@@ -1,4 +1,4 @@
-"""Registry definition, materialization, governance, and export tests."""
+"""Clinical registry definition, materialization, governance, and export tests."""
 
 from __future__ import annotations
 
