@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from openmed.clinical.grounding.vocab import VocabConcept, VocabularyIndex
 from openmed.clinical.journey_contracts import (
     canonical_digest,
     derived_opaque_id,
     sha256_digest,
+)
+from openmed.clinical.terminology import (
+    SQLiteTerminologyMappingStore,
+    TerminologyCoverageSummary,
+    TerminologyQuery,
+    TerminologyRelationshipRule,
+    TerminologyResolver,
+    TerminologySnapshot,
 )
 from openmed.interop.ingest import (
     PIPELINE_COMPONENT_STAGES,
@@ -289,6 +298,101 @@ def test_five_source_pipeline_is_durable_and_idempotent(
     assert facts.ok and facts.value is not None and len(facts.value) == 1
     assert store.ingestion_integrity_check().ok
     store.close()
+
+
+def test_golden_journey_fact_code_resolves_with_versioned_mapping(
+    tmp_path: Path,
+) -> None:
+    """Carry one synthetic Journey fact through the public mapping contract."""
+
+    journey_store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    pipeline = IngestionToFactPipeline(journey_store, _components())
+    adapter = TextEvidenceAdapter()
+    source = "Synthetic terminology journey fixture."
+    source_id = derived_opaque_id("source", "terminology-golden")
+    manifest = _manifest(
+        pipeline,
+        adapter=adapter,
+        source=source,
+        source_id=source_id,
+        suffix="mapping",
+    )
+    context = EvidenceAdapterContext(
+        source_id=source_id,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        recorded_at=T0,
+    )
+
+    ingested = pipeline.run(
+        manifest=manifest,
+        source=source,
+        adapter=adapter,
+        adapter_context=context,
+        subject_id=SUBJECT_ID,
+        encounter_id=ENCOUNTER_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id=WORKER_ID,
+    )
+    assert ingested.ok
+    facts = journey_store.list_facts(SUBJECT_ID)
+    assert facts.ok and facts.value is not None
+    fact = facts.value[0]
+    assert isinstance(fact.value, Mapping)
+
+    target_index = VocabularyIndex(
+        "loinc",
+        (
+            VocabConcept(
+                system="loinc",
+                code="SYN-100",
+                preferred_term="Synthetic target concept",
+            ),
+        ),
+    )
+    snapshot = TerminologySnapshot(
+        vocabulary="synthetic-loinc",
+        version="2026.1",
+        index=target_index,
+    )
+    resolver = TerminologyResolver(
+        snapshot,
+        hmac_secret="synthetic-journey-secret-material",
+        relationships=(
+            TerminologyRelationshipRule(
+                source_system=str(fact.value["system"]),
+                source_code=str(fact.value["code"]),
+                target_code="SYN-100",
+                relationship="equivalent",
+                mapping_rule="explicit_code",
+            ),
+        ),
+    )
+    mapped = resolver.resolve(
+        TerminologyQuery(
+            source_system=str(fact.value["system"]),
+            source_code=str(fact.value["code"]),
+        )
+    )
+    assert mapped.ok and mapped.value is not None
+    assert mapped.value.selected_candidate is not None
+    assert mapped.value.selected_candidate.code == "SYN-100"
+    assert mapped.value.selected_candidate.vocabulary_version == "2026.1"
+
+    with SQLiteTerminologyMappingStore(tmp_path / "terminology.sqlite3") as store:
+        recorded = store.record(mapped.value, recorded_at=T0)
+        history = store.history(mapped.value.source_digest)
+        review = store.review_queue()
+    coverage = TerminologyCoverageSummary.from_results((mapped.value,)).to_dict()
+
+    assert recorded.ok and recorded.created
+    assert history.ok and history.value is not None and len(history.value) == 1
+    assert review.ok and review.value == ()
+    assert coverage["mapped_rate"] == 1.0
+    assert coverage["unmapped_rate"] == 0.0
+    assert source not in mapped.value.to_json()
+    journey_store.close()
 
 
 def test_failed_stage_commits_no_fact_or_successful_job_and_no_raw_audit(

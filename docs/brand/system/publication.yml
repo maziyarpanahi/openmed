@@ -184,6 +184,7 @@ classification:
     - interop/ingestion-to-fact-pipeline.md
     - clinical/model-packs.md
     - structured/clinical-fact-normalization.md
+    - clinical/terminology-resolution.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
