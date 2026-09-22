@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from hypothesis import given
@@ -15,6 +16,7 @@ from hypothesis import strategies as st
 from jsonschema.validators import validator_for
 
 from openmed.clinical.journey_contracts import canonical_digest
+from openmed.compliance import projections
 from openmed.compliance.projections import (
     PROJECTION_SCHEMA_NAMES,
     PROJECTION_SCHEMA_VERSION,
@@ -209,11 +211,28 @@ def test_policy_attribute_canonicalization_is_deterministic(
 
 
 @pytest.mark.parametrize("fchmod_available", [True, False])
+@pytest.mark.parametrize("directory_sync_available", [True, False])
 def test_namespaces_are_physically_separate_and_restart_safe(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fchmod_available: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fchmod_available: bool,
+    directory_sync_available: bool,
 ) -> None:
     if not fchmod_available:
         monkeypatch.delattr(os, "fchmod", raising=False)
+    if not directory_sync_available:
+        real_open = os.open
+
+        def windows_open(path, flags, *args, **kwargs):
+            if Path(path).is_dir():
+                raise PermissionError("directory descriptors are unsupported")
+            return real_open(path, flags, *args, **kwargs)
+
+        monkeypatch.setattr(
+            projections,
+            "os",
+            SimpleNamespace(**(vars(os) | {"name": "nt", "open": windows_open})),
+        )
     root = tmp_path / "projections"
     boundary = ProjectionBoundary(root)
     identified = boundary.identified(InMemoryTransformVault())
