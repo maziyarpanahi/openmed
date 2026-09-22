@@ -97,6 +97,12 @@ from .outcomes import (
     WorkflowOutcome,
     allowed_reason_codes,
 )
+from .run_diff import (
+    RUN_DIFF_SCHEMA_VERSION,
+    RunDiffError,
+    RunSummaryDiff,
+    diff_run_summaries,
+)
 from .run_summary import (
     MAX_RUN_SUMMARY_JSON_BYTES,
     RUN_SUMMARY_SCHEMA_VERSION,
@@ -168,12 +174,15 @@ __all__ = [
     "MAX_DURATION_MS",
     "MAX_EVENT_SEQUENCE_LENGTH",
     "MAX_RUN_SUMMARY_JSON_BYTES",
+    "RUN_DIFF_SCHEMA_VERSION",
+    "RunDiffError",
     "MAX_SEQUENCE_FINDINGS",
     "MAX_SEQUENCE_NUMBER",
     "RunEvent",
     "RUN_SUMMARY_SCHEMA_VERSION",
     "RunSummary",
     "RunSummaryError",
+    "RunSummaryDiff",
     "RunSummaryPrivacyError",
     "RETRYABLE_ERROR_CODES",
     "RunTiming",
@@ -188,6 +197,7 @@ __all__ = [
     "WorkflowOutcome",
     "WorkflowId",
     "allowed_reason_codes",
+    "diff_run_summaries",
     "check_capability_validity",
     "envelope_from_exception",
     "error_class_for_code",
