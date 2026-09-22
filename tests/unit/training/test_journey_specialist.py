@@ -26,6 +26,7 @@ from openmed.training.journey_specialist import (
     JOURNEY_SPECIALIST_GPU_BUDGET_USD,
     JOURNEY_SPECIALIST_TASKS,
     GpuSpendLedger,
+    JourneySpecialistConflictError,
     JourneySpecialistDeniedError,
     SpecialistTrainingExample,
     build_specialist_split,
@@ -322,6 +323,34 @@ def test_shared_gpu_ledger_never_exceeds_hard_cap(actual_cost: float) -> None:
             actual_cost_usd=actual_cost,
             actual_gpu_hours=1,
         )
+
+
+def test_cancelled_run_still_counts_measured_spend() -> None:
+    dry = dry_run_journey_specialist_pack(code_revision=CODE_REVISION)
+    assert dry.value is not None
+    cancelled = replace(
+        dry.value.ledger.entries[0],
+        state="cancelled",
+        actual_cost_usd=1001.0,
+        actual_gpu_hours=1.0,
+    )
+    with pytest.raises(JourneySpecialistDeniedError, match="exceeds"):
+        GpuSpendLedger(entries=(cancelled,))
+
+
+def test_completed_spend_is_idempotent_but_cannot_be_rewritten() -> None:
+    dry = dry_run_journey_specialist_pack(code_revision=CODE_REVISION)
+    assert dry.value is not None
+    run_id = dry.value.ledger.entries[0].run_id
+    completed = dry.value.ledger.record_actual(
+        run_id, actual_cost_usd=10.0, actual_gpu_hours=1.0
+    )
+    assert (
+        completed.record_actual(run_id, actual_cost_usd=10.0, actual_gpu_hours=1.0)
+        == completed
+    )
+    with pytest.raises(JourneySpecialistConflictError):
+        completed.record_actual(run_id, actual_cost_usd=0.0, actual_gpu_hours=0.0)
 
 
 def test_frozen_holdout_reports_metrics_calibration_slices_and_promotion() -> None:

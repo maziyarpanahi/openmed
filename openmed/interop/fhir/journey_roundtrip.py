@@ -830,6 +830,9 @@ def _import(
         ):
             raise FHIRJourneyConflictError("FHIR resolution projection differs")
 
+    if snapshot is not None:
+        _validate_snapshot_custody(facts, snapshot)
+
     result = FHIRJourneyImport(
         facts=tuple(facts),
         events=tuple(events),

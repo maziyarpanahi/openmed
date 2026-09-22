@@ -174,6 +174,9 @@ class ModelLoader:
     ) -> Dict[str, Any]:
         """Load a TokenClassification model and tokenizer.
 
+        Missing architecture metadata does not prevent loading; it only limits
+        the advisory model-type check before the auto-model factory is called.
+
         Args:
             model_name: Name of the model to load. Can be just the model name
                        (will prepend org) or full model path.
@@ -267,10 +270,16 @@ class ModelLoader:
                 not hasattr(config, "num_labels")
                 or config.problem_type != "token_classification"
             ):
-                # Try to infer from architecture
+                # Architecture metadata is optional and only informs a warning;
+                # the auto-model factory remains responsible for loading support.
+                architectures = getattr(config, "architectures", None) or ()
                 if not any(
-                    arch in config.architectures[0].lower()
-                    for arch in ["tokenclassification", "ner", "pos"]
+                    isinstance(architecture, str)
+                    and any(
+                        marker in architecture.lower()
+                        for marker in ("tokenclassification", "ner", "pos")
+                    )
+                    for architecture in architectures
                 ):
                     logger.warning(
                         "Model %s may not be a TokenClassification model",

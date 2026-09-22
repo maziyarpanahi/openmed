@@ -240,7 +240,11 @@ class OpenMedAPIError(RuntimeError):
 
 
 class OpenMedClient:
-    """Small typed sync client for the OpenMed REST service."""
+    """Small typed sync client for the OpenMed REST service.
+
+    Non-2xx responses, including unfollowed redirects, raise
+    :class:`OpenMedAPIError` for both JSON and streaming requests.
+    """
 
     def __init__(
         self,
@@ -532,7 +536,7 @@ class OpenMedClient:
             json=asdict(payload),
             headers=headers,
         ) as response:
-            if response.is_error:
+            if not response.is_success:
                 response.read()
                 self._raise_api_error(response, request_id=active_request_id)
             for line in response.iter_lines():
@@ -557,7 +561,7 @@ class OpenMedClient:
             params=params,
             headers=headers,
         )
-        if response.is_error:
+        if not response.is_success:
             self._raise_api_error(response, request_id=active_request_id)
 
         payload = response.json()
