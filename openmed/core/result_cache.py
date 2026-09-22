@@ -48,13 +48,15 @@ class ResultCache:
 
 
 def get_result_cache(max_entries=128):
+    """Return the shared cache selected for this call's requested capacity."""
     global RESULT_CACHE
 
     with _CACHE_LOCK:
         if RESULT_CACHE is None or max_entries != RESULT_CACHE.max_entries:
             RESULT_CACHE = ResultCache(max_entries)
-
-    return RESULT_CACHE
+        # Evaluate the return value before another caller can replace the global
+        # cache with one configured for a different capacity.
+        return RESULT_CACHE
 
 
 def freeze_value(value):
