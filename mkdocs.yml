@@ -184,6 +184,7 @@ nav:
       - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
+      - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
