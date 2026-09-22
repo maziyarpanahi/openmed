@@ -105,6 +105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a synthetic local-extension example and documentation page for the
   status vocabulary, covering an explicit local path, provenance validation,
   and a duplicate-cue guard (#3108).
+- Added domain-separated SHA-256 commitments for agent run summaries with
+  constant-time verification, closed match and mismatch outcomes, value-free
+  rejection of malformed commitments and non-summary inputs, and no I/O,
+  signing, or key management, with synthetic regression tests (#3039).
 
 ### Changed
 
