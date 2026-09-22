@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -82,6 +84,24 @@ def _write(
         consent_revision=REVISION,
         occurred_at=occurred_at,
     )
+
+
+def test_pipeline_import_and_projection_exports_work_in_fresh_process() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from openmed.core.pipeline import Pipeline; "
+            "from openmed.compliance import ProjectionBoundary; "
+            "from openmed.compliance.projections import ProjectionBoundary as direct; "
+            "assert ProjectionBoundary is direct",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_projection_contracts_round_trip_without_content() -> None:
@@ -188,7 +208,12 @@ def test_policy_attribute_canonicalization_is_deterministic(
     assert restored.request_digest == request.request_digest
 
 
-def test_namespaces_are_physically_separate_and_restart_safe(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fchmod_available", [True, False])
+def test_namespaces_are_physically_separate_and_restart_safe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fchmod_available: bool
+) -> None:
+    if not fchmod_available:
+        monkeypatch.delattr(os, "fchmod", raising=False)
     root = tmp_path / "projections"
     boundary = ProjectionBoundary(root)
     identified = boundary.identified(InMemoryTransformVault())
@@ -210,9 +235,10 @@ def test_namespaces_are_physically_separate_and_restart_safe(tmp_path: Path) -> 
     assert first.ok and second.ok
     assert (root / "identified" / "metadata.sqlite3").is_file()
     assert (root / "deidentified" / "metadata.sqlite3").is_file()
-    assert os.stat(root / "identified").st_mode & 0o077 == 0
-    assert os.stat(root / "deidentified").st_mode & 0o077 == 0
-    assert os.stat(root / "identified" / "metadata.sqlite3").st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert os.stat(root / "identified").st_mode & 0o077 == 0
+        assert os.stat(root / "deidentified").st_mode & 0o077 == 0
+        assert os.stat(root / "identified" / "metadata.sqlite3").st_mode & 0o077 == 0
     assert not hasattr(deidentified, "resolve_transform")
     assert not hasattr(deidentified, "identified_root")
     assert not hasattr(deidentified, "vault")
