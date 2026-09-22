@@ -180,6 +180,7 @@ classification:
     - structured/postgres-object-journey-store.md
     - interop/resumable-ingestion.md
     - interop/identity-resolution.md
+    - interop/structured-evidence-adapters.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md

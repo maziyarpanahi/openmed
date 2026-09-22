@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added conservative patient and encounter identity resolution with opaque
   source keys, deterministic exact links, review-isolated candidate plugins,
   transactional merge and split decisions, and durable provenance (#3325).
+- Added offline structured-evidence adapters for text, existing document
+  results, FHIR R4, HL7 v2, CDA R2, CSV, and XLSX with exact coordinates,
+  parser provenance, bounded quarantine, and value-free results (#3326).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
