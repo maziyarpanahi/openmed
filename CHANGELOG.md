@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added a bounded, dependency-free PDF page geometry preflight that reads the
+  version, page count, and inherited media box, crop box, and rotation for
+  each page, including FlateDecode object streams, and reports numbers and
+  stable reason codes only while rejecting encrypted or over-limit files
+  (#3088).
 - Added a metadata-only image orientation preflight that compares all eight
   EXIF orientations with declared mirror and rotation transforms and optional
   dimensions, returning aligned, transform-required, ambiguous, or invalid
