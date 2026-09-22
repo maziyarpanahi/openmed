@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added immutable, versioned longitudinal Journey contracts for clinical
+  artifacts, evidence locators, facts, conflicts, resolution events, and
+  dataset snapshots, including deterministic JSON, bundled schemas, and
+  derivation-graph validation (#3320).
+- Added durable local Journey storage with content-addressed artifact bytes,
+  append-only SQLite metadata and fact history, atomic graph transactions,
+  typed outcomes, deterministic migrations, integrity checks, and
+  point-in-time reads (#3321).
+- Added backend-neutral Journey storage composition, PostgreSQL metadata parity,
+  transactional migration recovery, and allowlisted content-addressed object
+  namespaces with local-only defaults (#3322).
+- Added replay-safe ingestion jobs with versioned manifests, exclusive leases,
+  gap-safe checkpoints, value-free retries, explicit cancellation, quarantine
+  promotion, SQLite and PostgreSQL ledgers, and restart recovery tests (#3323).
+- Added physically separated identified and de-identified projection stores,
+  capability-scoped transform vault access, purpose and consent policy gates,
+  cache revocation, and durable value-free access auditing (#3324).
+- Added conservative patient and encounter identity resolution with opaque
+  source keys, deterministic exact links, review-isolated candidate plugins,
+  transactional merge and split decisions, and durable provenance (#3325).
+- Added offline structured-evidence adapters for text, existing document
+  results, FHIR R4, HL7 v2, CDA R2, CSV, and XLSX with exact coordinates,
+  parser provenance, bounded quarantine, and value-free results (#3326).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
@@ -19,6 +42,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or rejects against an inclusive byte budget with per-batch overhead. Missing
   factors or geometry, including PDF page counts, stay unevaluable, and
   saturating 64-bit arithmetic never yields an accept (#3091).
+- Added a bounded, dependency-free PDF page geometry preflight that reads the
+  version, page count, and inherited media box, crop box, and rotation for
+  each page, including FlateDecode object streams, and reports numbers and
+  stable reason codes only while rejecting encrypted or over-limit files
+  (#3088).
+- Added a metadata-only image orientation preflight that compares all eight
+  EXIF orientations with declared mirror and rotation transforms and optional
+  dimensions, returning aligned, transform-required, ambiguous, or invalid
+  verdicts with stable reason codes and deterministic JSON (#3090).
+- Added deterministic, privacy-safe diffs of agent run summaries with sorted
+  added and removed workflow identifiers and artifact digests, signed outcome,
+  tool-call, and duration deltas, and byte-stable JSON and Markdown output
+  (#3040).
+- Added offline lifetime and audience validation for agent capability
+  grants, with caller-supplied evaluation instants, symmetric clock-skew
+  tolerance, an optional lifetime ceiling, ordered reason codes, and
+  byte-stable reports that carry no grant payload (#3080).
+- Added PHI-safe categorical error envelopes for agent execution, mapping
+  the documented public failure classes onto stable codes, validated
+  class/stage combinations and derived retryability, with no free-text
+  field and no exception message, argument or traceback retained (#2995).
+- Added a closed allowlist contract for agent event attributes covering
+  correlation and governance identifiers, execution stages, outcome codes,
+  digests, bounded counts, durations and flags, with a distinct
+  sensitive-key refusal that never echoes the submitted key (#2994).
+- Added deterministic page batching for document inference, planning
+  ordered half-open page ranges under page-count and per-batch pixel
+  budgets with reject or isolate oversize policies, exact gap-free
+  partitioning, and value-free bound and overflow checks (#3048).
+- Added bounded classic TIFF header preflight for both byte orders, with an
+  allowlisted first-IFD tag set, overflow-checked counts, offset bounds and
+  cycle detection inside a loaded prefix, value-free errors, and synthetic
+  plus Pillow-written file-level regression tests (#3046).
+- Added immutable local ASR input profiles and a metadata-only
+  compatibility check over privacy-safe WAV headers, returning compatible,
+  resample, downmix, review or incompatible with ordered reason codes and
+  closed, bounded, sorted-unique profile validation (#3050).
+- Added bounded PNG IHDR and JPEG frame-header geometry preflight with
+  CRC and length validation, a marker scan bounded by fill, marker-count
+  and byte budgets, value-free errors, and synthetic plus Pillow-written
+  file-level regression tests (#3008).
 - Added deterministic dependency validation and topological ordering for
   agent action graphs, with identifier-only nodes, categorical duplicate,
   dangling, self-edge and cycle findings, and documented lexicographic

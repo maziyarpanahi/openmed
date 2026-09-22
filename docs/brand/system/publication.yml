@@ -108,10 +108,14 @@ classification:
     - agent/action-graphs.md
     - agent/artifact-references.md
     - agent/governance-identifiers.md
+    - agent/capability-validity.md
     - agent/event-correlation.md
+    - agent/error-envelopes.md
+    - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
     - agent/run-summaries.md
+    - agent/run-diffs.md
     - agent/timing-metadata.md
     - agent-skills/install.md
     - agent-skills/validation.md
@@ -171,6 +175,12 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - clinical/journey-contracts.md
+    - structured/local-journey-store.md
+    - structured/postgres-object-journey-store.md
+    - interop/resumable-ingestion.md
+    - interop/identity-resolution.md
+    - interop/structured-evidence-adapters.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
@@ -240,7 +250,10 @@ classification:
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
+    - multimodal/image-header-preflight.md
     - multimodal/webp-header-preflight.md
+    - multimodal/image-orientation-preflight.md
+    - multimodal/tiff-preflight.md
     - multimodal/audio-format-summaries.md
     - multimodal/frame-sampling-manifests.md
     - multimodal/audio-resampling-plans.md
@@ -248,6 +261,7 @@ classification:
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
+    - multimodal/pdf-geometry-preflight.md
     - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
@@ -255,6 +269,7 @@ classification:
     - multimodal/asset-limits.md
     - multimodal/batch-memory-estimates.md
     - multimodal/preflight.md
+    - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
@@ -262,6 +277,7 @@ classification:
     - multimodal/audio-windows.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
+    - multimodal/asr-audio-profiles.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
@@ -391,6 +407,7 @@ classification:
     - compliance/hipaa-safe-harbor-attestation.md
     - compliance/iso-27701-control-evidence.md
     - compliance/consent-data-use-tags.md
+    - compliance/separated-projections.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - compliance/privacy-release-gate.md
