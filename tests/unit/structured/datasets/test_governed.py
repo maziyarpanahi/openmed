@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -285,9 +286,14 @@ def test_changed_policy_or_source_snapshot_changes_manifest_identity() -> None:
     )
 
 
+@pytest.mark.parametrize("fchmod_available", [True, False])
 def test_local_export_is_idempotent_and_distribution_is_license_gated(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fchmod_available: bool,
 ) -> None:
+    if not fchmod_available:
+        monkeypatch.delattr(os, "fchmod", raising=False)
     dataset = _dataset()
     exporter = LocalDatasetExporter(tmp_path / "permitted")
     first = exporter.export(dataset, distribution=True)
