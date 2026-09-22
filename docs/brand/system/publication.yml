@@ -175,6 +175,10 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - clinical/journey-contracts.md
+    - structured/local-journey-store.md
+    - structured/postgres-object-journey-store.md
+    - interop/resumable-ingestion.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
