@@ -71,6 +71,53 @@ ADAPTERS: dict[str, Callable[[], Any]] = {
 }
 
 
+def test_worker_without_lease_cannot_execute_pipeline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = SQLiteIngestionStore(tmp_path / "leased.sqlite3")
+    pipeline = IngestionToFactPipeline(store, _components())
+    adapter = TextEvidenceAdapter()
+    source_id = derived_opaque_id("source", "leased-source")
+    manifest = _manifest(
+        pipeline,
+        adapter=adapter,
+        source="synthetic condition",
+        source_id=source_id,
+        suffix="initial",
+    )
+    registered = pipeline.coordinator.register(manifest, recorded_at=T0)
+    assert registered.ok and registered.value is not None
+    job_id = registered.value.job.job_id
+    assert store.acquire_lease(
+        job_id, WORKER_ID, acquired_at=T0, duration_seconds=3600
+    ).ok
+    executed: list[str] = []
+
+    def unexpected_stage(*args: Any, **kwargs: Any) -> None:
+        executed.append("stage")
+        raise AssertionError("unleased worker executed a stage")
+
+    monkeypatch.setattr(pipeline, "_run_stage", unexpected_stage)
+    result = pipeline.run(
+        manifest=manifest,
+        source="synthetic condition",
+        adapter=adapter,
+        adapter_context=EvidenceAdapterContext(
+            source_id=source_id, subject_id=SUBJECT_ID, recorded_at=T0
+        ),
+        subject_id=SUBJECT_ID,
+        fact_profile="condition",
+        recorded_at=T0,
+        worker_id="worker_bbbbbbbbbbbbbbbb",
+    )
+    assert result.state is StoreState.CONFLICT
+    assert result.code == "lease_held"
+    assert executed == []
+    assert store.list_pipeline_stages(job_id).state is StoreState.UNKNOWN
+    assert store.list_facts(SUBJECT_ID).value == ()
+    store.close()
+
+
 def _fixture_sources() -> tuple[dict[str, str], ...]:
     return tuple(json.loads(FIXTURE_PATH.read_text(encoding="utf-8")))
 
