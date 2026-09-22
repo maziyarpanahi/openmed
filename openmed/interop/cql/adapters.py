@@ -13,11 +13,14 @@ import math
 import os
 import re
 import subprocess
+import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from io import BufferedReader
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
+from urllib.parse import urlsplit
 
 from openmed.clinical.journey_contracts import (
     canonical_digest,
@@ -225,16 +228,11 @@ class SubprocessCqlElmAdapter:
         if len(payload) > self._config.max_request_bytes:
             return StoreResult.outcome(StoreState.DENIED, "cql_elm_request_too_large")
         try:
-            completed = subprocess.run(  # noqa: S603 - explicit caller-selected argv
-                self._command,
-                input=payload,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=self._config.timeout_seconds,
-                cwd=self._cwd,
-                env=_minimal_environment(),
+            completed = _run_bounded_evaluator(
+                self._command, payload, self._config, self._cwd
             )
+        except OverflowError:
+            return StoreResult.outcome(StoreState.DENIED, "cql_elm_response_too_large")
         except subprocess.TimeoutExpired:
             return StoreResult.outcome(StoreState.FAILURE, "cql_elm_evaluator_timeout")
         except (OSError, subprocess.SubprocessError):
@@ -256,9 +254,7 @@ class ServiceCqlElmAdapter:
         *,
         config: CqlElmAdapterConfig,
     ) -> None:
-        if not isinstance(endpoint, str) or not endpoint.startswith(
-            ("https://", "http://127.0.0.1", "http://localhost")
-        ):
+        if not _valid_service_endpoint(endpoint):
             raise ValueError("endpoint must use HTTPS or an explicit loopback address")
         if not callable(transport):
             raise TypeError("transport must be callable")
@@ -290,6 +286,90 @@ class ServiceCqlElmAdapter:
         if not isinstance(response, bytes):
             return StoreResult.outcome(StoreState.FAILURE, "cql_elm_response_invalid")
         return _parse_response(response, request, self._config)
+
+
+def _valid_service_endpoint(endpoint: str) -> bool:
+    if not isinstance(endpoint, str) or any(ord(char) <= 32 for char in endpoint):
+        return False
+    try:
+        parsed = urlsplit(endpoint)
+        if not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+            return False
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            return False
+        return parsed.scheme == "https" or (
+            parsed.scheme == "http"
+            and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+        )
+    except ValueError:
+        return False
+
+
+def _run_bounded_evaluator(
+    command: tuple[str, ...],
+    payload: bytes,
+    config: CqlElmAdapterConfig,
+    cwd: Path | None,
+) -> subprocess.CompletedProcess[bytes]:
+    """Capture bounded evaluator output and always reap the owned process."""
+    process = subprocess.Popen(  # noqa: S603 - explicit caller-selected argv
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        cwd=cwd,
+        env=_minimal_environment(),
+    )
+    stdin = process.stdin
+    stdout = cast(BufferedReader, process.stdout)
+    assert stdin is not None and stdout is not None
+    timed_out = threading.Event()
+
+    def expire() -> None:
+        timed_out.set()
+        if process.poll() is None:
+            process.kill()
+
+    def feed() -> None:
+        try:
+            stdin.write(payload)
+            stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+        finally:
+            try:
+                stdin.close()
+            except OSError:
+                pass
+
+    writer = threading.Thread(target=feed, name="openmed-measure-input")
+    watchdog = threading.Timer(config.timeout_seconds, expire)
+    output = bytearray()
+    try:
+        writer.start()
+        watchdog.start()
+        while chunk := stdout.read1(
+            min(65536, config.max_response_bytes + 1 - len(output))
+        ):
+            output.extend(chunk)
+            if len(output) > config.max_response_bytes:
+                raise OverflowError("evaluator output limit exceeded")
+        process.wait()
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired(command, config.timeout_seconds)
+        return subprocess.CompletedProcess(command, process.returncode, bytes(output))
+    finally:
+        watchdog.cancel()
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        if writer.ident is not None:
+            writer.join()
+        else:
+            stdin.close()
+        if watchdog.ident is not None:
+            watchdog.join()
+        stdout.close()
 
 
 def _preflight(

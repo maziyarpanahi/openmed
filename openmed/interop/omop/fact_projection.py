@@ -2121,6 +2121,18 @@ def _prune_supporting_rows(
         for row_id, row in tables["visit_occurrence"].items()
         if row_id in active_visits
     }
+    # Visit bounds are derived from current fact dates, not historical rows.
+    # Recompute after replacement so corrected or removed sources cannot leave
+    # stale bounds, and every date in an incoming batch remains represented.
+    visit_dates: dict[int, list[str]] = defaultdict(list)
+    for table in OMOP_DOMAIN_TABLES:
+        date_column = _DOMAIN_SPEC[table][3]
+        for row in tables[table].values():
+            visit_dates[int(row["visit_occurrence_id"])].append(row[date_column])
+    for visit_id, dates in visit_dates.items():
+        visit = tables["visit_occurrence"][visit_id]
+        visit["visit_start_date"] = min(dates)
+        visit["visit_end_date"] = max(dates)
     active_people = {int(row["person_id"]) for row in tables["note"].values()}
     tables["person"] = {
         row_id: row

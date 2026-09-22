@@ -1294,10 +1294,15 @@ def _decision_from_scores(
             zip(request.options, raw.option_scores, strict=True)
         )
     )
-    ranked = tuple(sorted(scored, key=lambda item: (-item["score"], item["index"])))
-    confidence = float(ranked[0]["score"])
-    margin = confidence - float(ranked[1]["score"])
-    ranking = tuple(str(item["option"]) for item in ranked)
+    ranked_indices = tuple(
+        sorted(
+            range(len(request.options)),
+            key=lambda index: (-raw.option_scores[index], index),
+        )
+    )
+    confidence = raw.option_scores[ranked_indices[0]]
+    margin = confidence - raw.option_scores[ranked_indices[1]]
+    ranking = tuple(request.options[index] for index in ranked_indices)
 
     if request.mode is DecisionMode.MULTI_LABEL:
         selected = tuple(
@@ -1322,7 +1327,7 @@ def _decision_from_scores(
             code = "low_confidence"
         elif not clears_margin:
             code = "ambiguous_scores"
-        choice = str(ranked[0]["option"]) if state is DecisionState.SUCCESS else None
+        choice = ranking[0] if state is DecisionState.SUCCESS else None
         choices = (choice,) if choice is not None else ()
 
     return _result(

@@ -1117,7 +1117,8 @@ class _ProjectionNamespaceStore:
             prefix=".projection-", dir=target.parent
         )
         try:
-            os.fchmod(descriptor, 0o600)
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
@@ -1881,6 +1882,10 @@ def _prepare_private_directory(path: Path) -> None:
 
 
 def _fsync_directory(path: Path) -> None:
+    # Windows cannot open directory descriptors through os.open. File data is
+    # already flushed before publication; retain strict directory fsync on POSIX.
+    if os.name == "nt":
+        return
     descriptor = os.open(path, os.O_RDONLY)
     try:
         os.fsync(descriptor)

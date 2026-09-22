@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -12,12 +13,15 @@ from openmed.clinical.trials import (
     ClinicalTrialSource,
     LocalTrialStore,
     TrialCacheCorruptionError,
+    TrialContractError,
     TrialQuery,
     TrialSchemaDriftError,
     TrialSourceUnavailableError,
     load_trial_study_schema,
     parse_trial_source_page,
 )
+from openmed.clinical.trials import source as trial_source_module
+from openmed.clinical.trials import store as trial_store_module
 
 FIXTURES = Path(__file__).parents[3] / "fixtures" / "clinical" / "trials"
 
@@ -149,3 +153,43 @@ def test_explicit_source_failure_is_typed() -> None:
     source = ClinicalTrialSource(transport=FailingTransport())
     with pytest.raises(TrialSourceUnavailableError, match="metadata fetch failed"):
         source.fetch_page(retrieved_at="2026-09-21T08:00:00Z")
+
+
+@pytest.mark.parametrize("timeout", [math.nan, math.inf, -math.inf])
+def test_source_rejects_nonfinite_timeout(timeout: float) -> None:
+    with pytest.raises(TrialContractError):
+        ClinicalTrialSource(timeout_seconds=timeout)
+
+
+def test_unexpected_transport_exception_is_value_free() -> None:
+    class FailingTransport:
+        def fetch(self, url: str, *, timeout_seconds: float) -> bytes:
+            raise RuntimeError("private-input-should-not-leak")
+
+    source = ClinicalTrialSource(transport=FailingTransport())
+    with pytest.raises(TrialSourceUnavailableError) as raised:
+        source.fetch_page(retrieved_at="2026-09-21T08:00:00Z")
+    assert "private-input-should-not-leak" not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_source_response_limit_rejects_oversized_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trial_source_module, "_MAX_SOURCE_PAGE_BYTES", 100)
+    source = ClinicalTrialSource(transport=FrozenTransport(_fixture("initial.json")))
+    with pytest.raises(TrialSchemaDriftError, match="size"):
+        source.fetch_page(retrieved_at="2026-09-21T08:00:00Z")
+
+
+def test_cache_write_without_posix_fchmod(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(trial_store_module.os, "fchmod", raising=False)
+    store = LocalTrialStore(tmp_path / "trials")
+    page = parse_trial_source_page(
+        _fixture("initial.json"), retrieved_at="2026-09-21T08:00:00Z"
+    )
+    assert store.apply_page(page).created_versions == 2
+    assert store.latest("NCT00000001") is not None
