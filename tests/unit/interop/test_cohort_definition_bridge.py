@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+import pytest
 
 from openmed.interop.bridges import (
     COHORT_SERVICE_COMPATIBILITY_POLICY,
@@ -116,8 +119,43 @@ def test_unavailable_and_digest_mismatch_fail_closed() -> None:
         is StoreState.FAILURE
     )
 
-    executable_failure = CohortDefinitionServiceBridge(command=("/usr/bin/false",))
+    executable_failure = CohortDefinitionServiceBridge(
+        command=(sys.executable, "-c", "raise SystemExit(1)")
+    )
     assert (
         executable_failure.export(_envelope(), target_format="open-service.v1").state
         is StoreState.FAILURE
     )
+
+
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
+def test_timeout_must_be_finite(timeout: float) -> None:
+    with pytest.raises(ValueError):
+        CohortDefinitionServiceBridge(timeout_seconds=timeout)
+
+
+def test_runner_exceptions_are_sanitized() -> None:
+    def runner(_request):
+        raise RuntimeError("synthetic-sensitive-error-canary")
+
+    result = CohortDefinitionServiceBridge(runner=runner).export(
+        _envelope(), target_format="open-service.v1"
+    )
+    assert result.state is StoreState.FAILURE
+    assert result.code == "cohort_bridge_execution_failed"
+    assert result.value is None
+
+
+def test_oversized_output_is_rejected_before_adapter_timeout() -> None:
+    bridge = CohortDefinitionServiceBridge(
+        command=(
+            sys.executable,
+            "-c",
+            "import sys,time; sys.stdout.buffer.write(b'x' * 8000001); "
+            "sys.stdout.flush(); time.sleep(30)",
+        ),
+        timeout_seconds=5,
+    )
+    result = bridge.export(_envelope(), target_format="open-service.v1")
+    assert result.state is StoreState.FAILURE
+    assert result.code == "cohort_bridge_protocol_invalid"

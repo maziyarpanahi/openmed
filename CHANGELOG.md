@@ -89,9 +89,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic native clinical measures and pinned optional CQL/ELM JSON
   evaluator bridges with explicit population, unknown, error, evidence,
   value-set, time-window, trace, aggregate-summary, and drift contracts (#3342).
+- Added deterministic half-open window planning for offline streaming
+  audio, with integer-millisecond offsets, real per-window overlap,
+  keep/merge/drop tail policies, arithmetic window-count bounds, and
+  value-free rejection of boolean, negative and overflowing input (#3005).
+- Added a bounded, dependency-free PDF page geometry preflight that reads the
+  version, page count, and inherited media box, crop box, and rotation for
+  each page, including FlateDecode object streams, and reports numbers and
+  stable reason codes only while rejecting encrypted or over-limit files
+  (#3088).
+- Added a metadata-only image orientation preflight that compares all eight
+  EXIF orientations with declared mirror and rotation transforms and optional
+  dimensions, returning aligned, transform-required, ambiguous, or invalid
+  verdicts with stable reason codes and deterministic JSON (#3090).
+- Added deterministic, privacy-safe diffs of agent run summaries with sorted
+  added and removed workflow identifiers and artifact digests, signed outcome,
+  tool-call, and duration deltas, and byte-stable JSON and Markdown output
+  (#3040).
+- Added offline lifetime and audience validation for agent capability
+  grants, with caller-supplied evaluation instants, symmetric clock-skew
+  tolerance, an optional lifetime ceiling, ordered reason codes, and
+  byte-stable reports that carry no grant payload (#3080).
+- Added PHI-safe categorical error envelopes for agent execution, mapping
+  the documented public failure classes onto stable codes, validated
+  class/stage combinations and derived retryability, with no free-text
+  field and no exception message, argument or traceback retained (#2995).
+- Added a closed allowlist contract for agent event attributes covering
+  correlation and governance identifiers, execution stages, outcome codes,
+  digests, bounded counts, durations and flags, with a distinct
+  sensitive-key refusal that never echoes the submitted key (#2994).
+- Added deterministic page batching for document inference, planning
+  ordered half-open page ranges under page-count and per-batch pixel
+  budgets with reject or isolate oversize policies, exact gap-free
+  partitioning, and value-free bound and overflow checks (#3048).
+- Added bounded classic TIFF header preflight for both byte orders, with an
+  allowlisted first-IFD tag set, overflow-checked counts, offset bounds and
+  cycle detection inside a loaded prefix, value-free errors, and synthetic
+  plus Pillow-written file-level regression tests (#3046).
+- Added immutable local ASR input profiles and a metadata-only
+  compatibility check over privacy-safe WAV headers, returning compatible,
+  resample, downmix, review or incompatible with ordered reason codes and
+  closed, bounded, sorted-unique profile validation (#3050).
+- Added bounded PNG IHDR and JPEG frame-header geometry preflight with
+  CRC and length validation, a marker scan bounded by fill, marker-count
+  and byte budgets, value-free errors, and synthetic plus Pillow-written
+  file-level regression tests (#3008).
+- Added deterministic dependency validation and topological ordering for
+  agent action graphs, with identifier-only nodes, categorical duplicate,
+  dangling, self-edge and cycle findings, and documented lexicographic
+  tie-breaking that makes the order independent of input order (#2996).
+- Added deterministic, metadata-only validation of append-only agent run
+  event sequences with duplicate, gap, ordering, cross-run and
+  post-terminal findings, stable finding order, and byte-stable JSON
+  reports that never accept or echo event payloads (#2997).
+- Added content-free audio format distribution summaries with validated
+  channel, sample-rate, bit-depth, duration-bucket, and format categories,
+  small-cell suppression, and deterministic sorting, with synthetic golden
+  regression tests (#3093).
+- Added content-free frame-sampling manifests for clinical video with strict
+  monotonicity, bounds, declared-strategy validation, and a recomputed coverage
+  digest, with synthetic regression tests (#3092).
+- Added deterministic SPDX identifier normalization for synthetic lineage with a
+  committed permissive allowlist, deprecated-alias mapping, LicenseRef support,
+  and stable unknown and malformed outcomes, with synthetic regression tests
+  (#3120).
+- Added deterministic, allocation-free audio resampling plans with reduced
+  rational rates, floor, nearest-even, and ceiling rounding policies,
+  exact or rounded status, overflow-checked arithmetic, and an optional
+  duration-error tolerance, with synthetic regression tests (#3049).
+- Added allocation-safe image geometry derivation with checked pixel counts,
+  reduced aspect ratios, orientation classes, and overflow-checked optional memory
+  estimates from validated dimensions, with synthetic regression tests (#3047).
+- Added Unicode whitespace regression coverage for vital-sign parsing and fixed the
+  cases it found: non-breaking, narrow, thin, and other Unicode spaces inside labels
+  such as `oxygen saturation` no longer turn a vital sign into `unknown`, and units
+  such as `mm Hg` match their ASCII spelling (#3106).
+- Added `serialize_measurement_trends`, compact JSON for measurement trends that is
+  byte-identical for equivalent input orderings and rejects non-finite derived values,
+  with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
+  tied on one timepoint are now ordered by value instead of input position (#3107).
+- Added a synthetic local-extension example and documentation page for the
+  status vocabulary, covering an explicit local path, provenance validation,
+  and a duplicate-cue guard (#3108).
 
 ### Changed
 
+- Reject non-positive bootstrap sample counts and invalid alpha probabilities before
+  producing a confidence interval.
+- Release an interrupted circuit-breaker recovery probe only when its ownership
+  token still matches, preserving health evidence.
+- Raise typed client errors for unfollowed non-2xx responses, including redirects in
+  JSON and streaming requests.
+- Keep load-test clients connected through final response bodies and count
+  incomplete responses as failures.
+- Align grounding-index recall references, queries and report metadata with the
+  selected vocabulary systems.
+- Grow the dense alias search budget when duplicate aliases would hide available
+  distinct concepts.
+- Allow model loading when optional architecture metadata is absent or empty; retain
+  advisory warnings and normal factory failures.
+- Accept source-aligned literal hash tokens in space-delimited CoNLL rows without
+  displacing ordinary hash comments.
+- Reject non-finite numeric keep-alive durations and conversion overflow while
+  preserving explicit expiry opt-out aliases.
+- Return the result-cache instance selected under the global lock so concurrent
+  capacity changes cannot replace a caller's return value.
+- Preserve already-qualified OpenMed logger names so module-level logging
+  configuration applies without a duplicated openmed namespace.
+- Close newly created Pulsar clients when subscription or adapter setup
+  fails, preserving the setup error and successful caller ownership.
+- Clean up temporary evaluation reports after failed writes, closes, or
+  publication without masking the original error or replacing an existing report.
+- Measure awaited coroutine execution in the profiling decorator, preserving
+  coroutine identity and recording elapsed time on failure or cancellation.
+- Scope shared tokenizer cache entries to loader identity, including bound
+  methods, so different loader implementations cannot share the wrong tokenizer.
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
   use private random HMAC keys by default. Reuse a pipeline or redactor instance,
   or supply the same non-empty private key, when stable hashes across calls are

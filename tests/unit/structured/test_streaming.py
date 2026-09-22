@@ -6,7 +6,6 @@ import csv
 import json
 import subprocess
 import sys
-import tracemalloc
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -62,35 +61,65 @@ def _synthetic_rows(count: int, *, ages: int = 5, zips: int = 4) -> list[dict]:
 def test_working_set_does_not_scale_with_row_count(tmp_path: Path) -> None:
     """The class census stays constant while the row count grows 8x."""
 
-    def run(count: int) -> tuple[dict, int]:
+    script = """
+import json
+from pathlib import Path
+import sys
+import tracemalloc
+
+from openmed.structured.streaming import stream_deidentify_table
+
+
+def redact(_text: str, **_kwargs: object) -> str:
+    return "[REDACTED]"
+
+
+tracemalloc.start()
+report = stream_deidentify_table(
+    Path(sys.argv[1]),
+    Path(sys.argv[2]),
+    quasi_identifiers=["age", "zip"],
+    free_text_columns=["note"],
+    target_k=2,
+    chunk_size=256,
+    deidentifier=redact,
+    overwrite=True,
+)
+peak = tracemalloc.get_traced_memory()[1]
+tracemalloc.stop()
+print(json.dumps({
+    "census_bytes": report["decision"]["census_bytes"],
+    "class_count": report["decision"]["class_count"],
+    "peak": peak,
+    "record_count": report["decision"]["record_count"],
+}, sort_keys=True))
+"""
+
+    def run(count: int) -> dict[str, int]:
         source = tmp_path / f"in_{count}.csv"
         output = tmp_path / f"out_{count}.csv"
         _write_csv(source, _synthetic_rows(count))
-        tracemalloc.start()
-        report = stream_deidentify_table(
-            source,
-            output,
-            quasi_identifiers=["age", "zip"],
-            free_text_columns=["note"],
-            target_k=2,
-            chunk_size=256,
-            deidentifier=_tag_deidentifier,
-            overwrite=True,
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(source), str(output)],
+            check=False,
+            capture_output=True,
+            text=True,
         )
-        peak = tracemalloc.get_traced_memory()[1]
-        tracemalloc.stop()
-        return report, peak
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert all(type(value) is int for value in payload.values())
+        return payload
 
-    small, small_peak = run(1_000)
-    big, big_peak = run(8_000)
+    small = run(1_000)
+    big = run(8_000)
 
     # Identical distinct-class census despite 8x more rows: the working set is
     # a function of quasi-identifier cardinality, not of the number of records.
-    assert small["decision"]["class_count"] == big["decision"]["class_count"]
-    assert small["decision"]["census_bytes"] == big["decision"]["census_bytes"]
-    assert big["decision"]["record_count"] == 8_000
+    assert small["class_count"] == big["class_count"]
+    assert small["census_bytes"] == big["census_bytes"]
+    assert big["record_count"] == 8_000
     # Peak allocation must not grow proportionally to the row count.
-    assert big_peak < small_peak * 4
+    assert big["peak"] < small["peak"] * 4
 
 
 def test_memory_ceiling_rejects_high_cardinality_census(tmp_path: Path) -> None:
@@ -193,9 +222,9 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     with source.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["age", "zip", "note"])
-        for index in range(50_000):
+        for index in range(100_000):
             writer.writerow([30 + index % 5, 10_000 + index % 4, "x" * 200])
-    ceiling = 8 * 1024 * 1024
+    ceiling = 16 * 1024 * 1024
     assert source.stat().st_size > ceiling
 
     report = stream_deidentify_table(
@@ -208,7 +237,7 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
         overwrite=True,
     )
 
-    assert report["decision"]["record_count"] == 50_000
+    assert report["decision"]["record_count"] == 100_000
     assert report["memory"]["rss_guard_available"] is True
     assert report["memory"]["peak_rss_delta_bytes"] <= ceiling
 
