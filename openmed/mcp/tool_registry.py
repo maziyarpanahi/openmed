@@ -1340,6 +1340,77 @@ _GROUND_OUTPUT = _object(
     required=("schema_version", "status", "spans", "grounded_concepts", "error"),
     additional=False,
 )
+_GROUNDING_CONCEPT_OUTPUT = _object(
+    properties={
+        "span": _object(
+            properties={
+                "start": _schema("integer", minimum=0),
+                "end": _schema("integer", minimum=0),
+            },
+            required=("start", "end"),
+            additional=False,
+        ),
+        "start": _schema("integer", minimum=0),
+        "end": _schema("integer", minimum=0),
+        "surface": _schema("string"),
+        "surface_text": _schema("string"),
+        "text": _schema("string"),
+        "system": _schema("string"),
+        "system_uri": _nullable("string"),
+        "code": _nullable("string"),
+        "display": _nullable("string"),
+        "confidence": _schema("number", minimum=0.0, maximum=1.0),
+        "score": _schema("number", minimum=0.0, maximum=1.0),
+        "candidates": _array(_object()),
+        "top_k": _array(_object()),
+        "provenance": _object(),
+        "section_context": _nullable("string"),
+    },
+    required=(
+        "span",
+        "start",
+        "end",
+        "surface",
+        "surface_text",
+        "text",
+        "system",
+        "system_uri",
+        "code",
+        "display",
+        "confidence",
+        "score",
+        "candidates",
+        "top_k",
+        "provenance",
+        "section_context",
+    ),
+    additional=False,
+)
+_GROUNDING_FACADE_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.grounding.v1"]),
+        "systems": _array(_schema("string")),
+        "language": _schema("string"),
+        "lang": _schema("string"),
+        "top_k": _schema("integer", minimum=1),
+        "offline": _schema("boolean"),
+        "spans": _array(_object()),
+        "concepts": _array(_GROUNDING_CONCEPT_OUTPUT),
+        "grounded_concepts": _array(_GROUNDING_CONCEPT_OUTPUT),
+    },
+    required=(
+        "schema_version",
+        "systems",
+        "language",
+        "lang",
+        "top_k",
+        "offline",
+        "spans",
+        "concepts",
+        "grounded_concepts",
+    ),
+    additional=False,
+)
 _EXPORT_FHIR_OUTPUT = _object(
     properties={
         "schema_version": _schema("string", enum=["openmed.export_fhir.v1"]),
@@ -1937,6 +2008,48 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             ),
         ),
         output_schema=_GROUND_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_ground_concepts",
+        title="Ground Clinical Concepts",
+        description=(
+            "Ground clinical text or extracted entities with the public local-first "
+            "terminology facade."
+        ),
+        read_only_hint=True,
+        open_world_hint=True,
+        parameters=(
+            _parameter(
+                "text",
+                _nullable("string"),
+                Optional[str],
+                None,
+                "Optional clinical text to ground.",
+            ),
+            _parameter(
+                "entities",
+                _OBJECT_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional pre-extracted entity objects to ground.",
+            ),
+            _parameter(
+                "systems",
+                _STRING_ARRAY_OR_NULL,
+                Optional[list[str]],
+                None,
+                "Optional terminology systems to constrain.",
+            ),
+            _parameter("lang", _schema("string"), str, "en"),
+            _parameter(
+                "top_k",
+                _schema("integer", minimum=1, maximum=50),
+                int,
+                1,
+            ),
+            _parameter("offline", _schema("boolean"), bool, True),
+        ),
+        output_schema=_GROUNDING_FACADE_OUTPUT,
     ),
     _tool_spec(
         name="openmed_export_fhir",
