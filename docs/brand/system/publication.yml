@@ -228,10 +228,19 @@ classification:
     - clinical/evidence-tables.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
+    - clinical/summary-claim-segmentation.md
+    - clinical/summary-temporal-order.md
+    - clinical/summary-medication-changes.md
+    - clinical/summary-lab-trends.md
+    - clinical/summary-input-contract.md
+    - clinical/summary-safety.md
+    - clinical/summary-citations.md
+    - evaluation/summary-coverage.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
+    - clinical/summarization.md
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
@@ -306,7 +315,12 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/nli-error-slices.md
+    - evaluation/nli-negation-challenge.md
+    - evaluation/relation-review-yield.md
     - evaluation/privacy-corpus.md
+    - evaluation/mixed-script-integrity.md
+    - evaluation/doctype-calibration.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -328,6 +342,9 @@ classification:
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
     - clinical/discharge-profile.md
+    - clinical/summary-omission-budgets.md
+    - clinical/summary-demographic-minimization.md
+    - clinical/summary-retry-control.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
