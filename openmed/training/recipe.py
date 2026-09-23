@@ -31,6 +31,12 @@ from openmed.eval.datasets.public import (
     validate_clinical_family_dataset_evidence,
 )
 from openmed.eval.metrics import compute_leakage_rate, compute_recall_slices
+from openmed.eval.tiers import TIERS
+from openmed.training.synthetic.section_labels import (
+    CANONICAL_DOCUMENT_TYPES,
+    CANONICAL_SECTION_LABELS,
+    build_section_dataset,
+)
 
 if TYPE_CHECKING:
     from openmed.eval.release_gates import GateReport
@@ -39,15 +45,30 @@ CONFIG_SCHEMA_VERSION = "openmed.training.recipe.v1"
 QLORA_CONFIG_SCHEMA_VERSION = "openmed.training.qlora_recipe.v1"
 QLORA_SMOKE_RESULT_SCHEMA_VERSION = "openmed.training.qlora_smoke_result.v1"
 CLINICAL_FAMILY_RELEASE_SCHEMA_VERSION = "openmed.training.clinical_family_release.v1"
+DOCTYPE_SECTION_HEAD_SCHEMA_VERSION = "openmed.training.doctype_section_head.v1"
+DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION = "openmed.training.doctype_section_dry_run.v1"
 MAX_LORA_TRAINABLE_RATIO = 0.015
 CONFIG_DIR = Path(__file__).with_name("configs")
 QLORA_SMOKE_PRESET = "qlora_smoke"
+DOCTYPE_SECTION_PRESET = "doctype_section_lora"
+DOCTYPE_SECTION_CONFIG_PATH = CONFIG_DIR / f"{DOCTYPE_SECTION_PRESET}.yaml"
+DOCTYPE_SECTION_LABEL_SET_REF = "openmed.training.recipe:DOCTYPE_SECTION_LABEL_SET@v1"
+DOCTYPE_SECTION_REQUIRED_GATES = ("G5", "G6")
+DOCTYPE_SECTION_LABEL_SET: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "document_types": tuple(sorted(CANONICAL_DOCUMENT_TYPES)),
+        "section_labels": tuple(sorted(CANONICAL_SECTION_LABELS)),
+    }
+)
 PRESET_BY_MODE = {
     "A": "tiny_distill",
     "B": "laptop_lora",
     "C": "large_teacher",
 }
-MODE_BY_PRESET = {preset: mode for mode, preset in PRESET_BY_MODE.items()}
+MODE_BY_PRESET = {
+    **{preset: mode for mode, preset in PRESET_BY_MODE.items()},
+    DOCTYPE_SECTION_PRESET: "B",
+}
 _CLINICAL_RELEASE_TIERS_BY_MODE = {
     "A": frozenset({"Tiny"}),
     "B": frozenset({"Base"}),
@@ -70,7 +91,9 @@ _REQUIRED_ROOT_FIELDS = frozenset(
         "seed",
     }
 )
-_OPTIONAL_ROOT_FIELDS = frozenset({"clinical_family_targets", "head_contract"})
+_OPTIONAL_ROOT_FIELDS = frozenset(
+    {"clinical_family_targets", "head_contract", "required_gates"}
+)
 _QLORA_REQUIRED_ROOT_FIELDS = frozenset(
     {
         "schema_version",
@@ -253,6 +276,64 @@ CLINICAL_MODEL_FAMILY_SPECS: Mapping[str, ClinicalModelFamilySpec] = MappingProx
 
 
 @dataclass(frozen=True)
+class DoctypeSectionHeadContract:
+    """Validated dual-head contract for section BIO and document-type training."""
+
+    schema_version: str
+    section_task: str
+    section_encoding: str
+    section_labels: str
+    doctype_task: str
+    doctype_pooling: str
+    doctype_labels: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the versioned contract as a JSON-ready mapping."""
+
+        return {
+            "doctype": {
+                "labels": self.doctype_labels,
+                "pooling": self.doctype_pooling,
+                "task": self.doctype_task,
+            },
+            "schema_version": self.schema_version,
+            "section_bio": {
+                "encoding": self.section_encoding,
+                "labels": self.section_labels,
+                "task": self.section_task,
+            },
+        }
+
+
+@dataclass(frozen=True)
+class ResolvedDoctypeSectionHeadContract:
+    """Concrete labels and behavior selected by the dual-head recipe contract."""
+
+    section_task: str
+    section_encoding: str
+    section_labels: tuple[str, ...]
+    doctype_task: str
+    doctype_pooling: str
+    document_types: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the resolved, deterministic head contract."""
+
+        return {
+            "doctype": {
+                "document_types": list(self.document_types),
+                "pooling": self.doctype_pooling,
+                "task": self.doctype_task,
+            },
+            "section_bio": {
+                "encoding": self.section_encoding,
+                "section_labels": list(self.section_labels),
+                "task": self.section_task,
+            },
+        }
+
+
+@dataclass(frozen=True)
 class TrainingRecipeConfig:
     schema_version: str
     preset_name: str
@@ -266,8 +347,9 @@ class TrainingRecipeConfig:
     output_tier: str
     quantization: QuantizationConfig
     seed: int
-    head_contract: str | None = None
+    head_contract: str | DoctypeSectionHeadContract | None = None
     clinical_family_targets: tuple[str, ...] = ()
+    required_gates: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, raw_config: Mapping[str, Any]) -> "TrainingRecipeConfig":
@@ -285,10 +367,13 @@ class TrainingRecipeConfig:
             raise RecipeConfigError("mode must be one of A, B, or C")
 
         preset_name = _require_str(data, "preset_name")
-        expected_preset = PRESET_BY_MODE[mode]
-        if preset_name != expected_preset:
+        expected_presets = {PRESET_BY_MODE[mode]}
+        if mode == "B":
+            expected_presets.add(DOCTYPE_SECTION_PRESET)
+        if preset_name not in expected_presets:
             raise RecipeConfigError(
-                f"preset_name {preset_name!r} does not match mode {mode!r}"
+                f"preset_name {preset_name!r} does not match mode {mode!r}; "
+                f"expected one of {', '.join(sorted(expected_presets))}"
             )
 
         hard_negatives_required = data["hard_negatives_required"]
@@ -299,6 +384,16 @@ class TrainingRecipeConfig:
         if seed < 0:
             raise RecipeConfigError("seed must be a non-negative integer")
 
+        label_set_ref = _require_str(data, "label_set_ref")
+        head_contract = _parse_head_contract(
+            data.get("head_contract"), preset_name=preset_name
+        )
+        allowed_loss_labels = (
+            set(CANONICAL_SECTION_LABELS) | set(CANONICAL_DOCUMENT_TYPES)
+            if preset_name == DOCTYPE_SECTION_PRESET
+            else set(CANONICAL_LABELS)
+        )
+
         config = cls(
             schema_version=schema_version,
             preset_name=preset_name,
@@ -306,18 +401,28 @@ class TrainingRecipeConfig:
             backbone=_parse_backbone(_require_mapping(data, "backbone")),
             dapt=_parse_dapt(_require_mapping(data, "dapt")),
             lora=_parse_lora(_require_mapping(data, "lora")),
-            label_set_ref=_require_str(data, "label_set_ref"),
-            loss=_parse_loss(_require_mapping(data, "loss")),
+            label_set_ref=label_set_ref,
+            loss=_parse_loss(
+                _require_mapping(data, "loss"), allowed_labels=allowed_loss_labels
+            ),
             hard_negatives_required=hard_negatives_required,
             output_tier=_require_str(data, "output_tier"),
             quantization=_parse_quantization(_require_mapping(data, "quantization")),
             seed=seed,
-            head_contract=_optional_str(data, "head_contract"),
+            head_contract=head_contract,
             clinical_family_targets=_parse_clinical_family_targets(
                 data.get("clinical_family_targets", ())
             ),
+            required_gates=_parse_required_gates(data.get("required_gates", ())),
         )
-        _validate_output_tier(config.output_tier)
+        if preset_name == DOCTYPE_SECTION_PRESET:
+            _validate_doctype_section_recipe(config)
+        else:
+            _validate_output_tier(config.output_tier)
+            if config.required_gates:
+                raise RecipeConfigError(
+                    "required_gates is only supported by doctype_section_lora"
+                )
         return config
 
     def to_dict(self) -> dict[str, Any]:
@@ -335,10 +440,14 @@ class TrainingRecipeConfig:
             "schema_version": self.schema_version,
             "seed": self.seed,
         }
-        if self.head_contract is not None:
+        if isinstance(self.head_contract, DoctypeSectionHeadContract):
+            payload["head_contract"] = self.head_contract.to_dict()
+        elif self.head_contract is not None:
             payload["head_contract"] = self.head_contract
         if self.clinical_family_targets:
             payload["clinical_family_targets"] = list(self.clinical_family_targets)
+        if self.required_gates:
+            payload["required_gates"] = list(self.required_gates)
         return payload
 
 
@@ -376,6 +485,27 @@ class DryRunResult:
             "quant_default": self.quant_default,
             "seed": self.seed,
         }
+
+
+@dataclass(frozen=True)
+class DoctypeSectionDryRunResult:
+    """Local artifacts and stable manifest from a DocType/Section dry run."""
+
+    manifest: Mapping[str, Any]
+    manifest_path: Path
+    dataset_path: Path
+    dataset_manifest_path: Path
+
+    @property
+    def reproducibility_hash(self) -> str:
+        """Return the stable hash covering recipe, contract, and synthetic data."""
+
+        return str(self.manifest["reproducibility_hash"])
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the path-independent dry-run manifest."""
+
+        return _plain_mapping(dict(self.manifest), "doctype/section dry-run manifest")
 
 
 @dataclass(frozen=True)
@@ -691,6 +821,40 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
     return _parse_yaml_subset(text)
 
 
+def resolve_doctype_section_head_contract(
+    config: TrainingRecipeConfig,
+) -> ResolvedDoctypeSectionHeadContract:
+    """Resolve a validated dual-head recipe to its concrete canonical labels.
+
+    Args:
+        config: Validated DocType/Section training recipe.
+
+    Returns:
+        Concrete section labels, document types, tasks, and encoding behavior.
+
+    Raises:
+        RecipeConfigError: If the recipe is not the DocType/Section preset or
+            does not carry its validated dual-head contract.
+    """
+
+    if config.preset_name != DOCTYPE_SECTION_PRESET:
+        raise RecipeConfigError(
+            f"head-contract resolution requires preset_name {DOCTYPE_SECTION_PRESET!r}"
+        )
+    if not isinstance(config.head_contract, DoctypeSectionHeadContract):
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} requires a validated mapping head_contract"
+        )
+    return ResolvedDoctypeSectionHeadContract(
+        section_task=config.head_contract.section_task,
+        section_encoding=config.head_contract.section_encoding,
+        section_labels=DOCTYPE_SECTION_LABEL_SET[config.head_contract.section_labels],
+        doctype_task=config.head_contract.doctype_task,
+        doctype_pooling=config.head_contract.doctype_pooling,
+        document_types=DOCTYPE_SECTION_LABEL_SET[config.head_contract.doctype_labels],
+    )
+
+
 def clinical_model_family_spec(family: str) -> ClinicalModelFamilySpec:
     """Return the immutable label, head, runtime, recipe, and tier contract.
 
@@ -863,6 +1027,100 @@ def run_recipe(mode_or_preset: str, *, dry_run: bool = True) -> DryRunResult:
     )
 
 
+def run_doctype_section_dry_run(
+    output_dir: str | Path,
+    *,
+    config_path: str | Path = DOCTYPE_SECTION_CONFIG_PATH,
+    dataset_record_count: int | None = None,
+) -> DoctypeSectionDryRunResult:
+    """Validate and wire the seed-pinned DocType/Section recipe without training.
+
+    The harness invokes the existing deterministic synthetic section dataset
+    builder, resolves both model heads, and writes a path-independent manifest.
+    It never loads a model, accelerator runtime, optimizer, or training loop.
+
+    Args:
+        output_dir: Local directory for generated synthetic data and manifests.
+        config_path: Recipe v1 YAML file to validate.
+        dataset_record_count: Synthetic records to wire. The default emits one
+            record for every canonical document type.
+
+    Returns:
+        Paths plus the deterministic dry-run manifest.
+
+    Raises:
+        RecipeConfigError: If the config is not the DocType/Section preset.
+        ValueError: If ``dataset_record_count`` is not a positive integer.
+    """
+
+    config = TrainingRecipeConfig.from_mapping(load_config_file(config_path))
+    if config.preset_name != DOCTYPE_SECTION_PRESET:
+        raise RecipeConfigError(
+            f"doctype/section dry-run requires preset_name {DOCTYPE_SECTION_PRESET!r}"
+        )
+    resolved_contract = resolve_doctype_section_head_contract(config)
+    record_count = (
+        len(CANONICAL_DOCUMENT_TYPES)
+        if dataset_record_count is None
+        else dataset_record_count
+    )
+    if (
+        not isinstance(record_count, int)
+        or isinstance(record_count, bool)
+        or record_count < 1
+    ):
+        raise ValueError("dataset_record_count must be a positive integer")
+
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    dataset_result = build_section_dataset(
+        config.seed,
+        record_count,
+        destination / "section-doctype.jsonl",
+    )
+    reproducibility_inputs = {
+        "dataset": {
+            "builder": (
+                "openmed.training.synthetic.section_labels:build_section_dataset"
+            ),
+            "dataset_hash": dataset_result.dataset_hash,
+            "manifest_hash": dataset_result.manifest_hash,
+            "record_count": dataset_result.record_count,
+        },
+        "head_contract": resolved_contract.to_dict(),
+        "label_set_ref": config.label_set_ref,
+        "output_tier": config.output_tier,
+        "quantization": config.quantization.to_dict(),
+        "recipe_config_hash": config_hash(config),
+        "required_gates": list(config.required_gates),
+        "seed": config.seed,
+    }
+    manifest = {
+        **reproducibility_inputs,
+        "artifacts": {
+            "dataset": dataset_result.dataset_path.name,
+            "dataset_manifest": dataset_result.manifest_path.name,
+        },
+        "dry_run": True,
+        "network_required": False,
+        "preset_name": config.preset_name,
+        "reproducibility_hash": stable_hash(reproducibility_inputs),
+        "schema_version": DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION,
+        "training_launched": False,
+    }
+    manifest_path = destination / "dry-run-manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return DoctypeSectionDryRunResult(
+        manifest=MappingProxyType(manifest),
+        manifest_path=manifest_path,
+        dataset_path=dataset_result.dataset_path,
+        dataset_manifest_path=dataset_result.manifest_path,
+    )
+
+
 def run_qlora_smoke(
     preset_or_path: str | Path | QloraRecipeConfig = QLORA_SMOKE_PRESET,
     *,
@@ -964,14 +1222,43 @@ def runtime_dependencies() -> RuntimeDependencies:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Validate an OpenMed training recipe preset."
+        description="Validate an OpenMed training recipe or run a local dry-run."
     )
     parser.add_argument(
-        "mode", choices=tuple(PRESET_BY_MODE) + tuple(PRESET_BY_MODE.values())
+        "mode",
+        choices=(
+            tuple(PRESET_BY_MODE)
+            + tuple(PRESET_BY_MODE.values())
+            + (DOCTYPE_SECTION_PRESET,)
+        ),
     )
     parser.add_argument("--dry-run", action="store_true", default=True)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Required output directory for the DocType/Section dry-run.",
+    )
+    parser.add_argument(
+        "--dataset-record-count",
+        type=int,
+        help="Synthetic record count for the DocType/Section dry-run.",
+    )
     args = parser.parse_args(argv)
 
+    if args.mode == DOCTYPE_SECTION_PRESET:
+        if args.output_dir is None:
+            parser.error(f"{DOCTYPE_SECTION_PRESET} requires --output-dir")
+        result = run_doctype_section_dry_run(
+            args.output_dir,
+            dataset_record_count=args.dataset_record_count,
+        )
+        print(json.dumps(result.to_dict(), sort_keys=True))
+        return 0
+    if args.output_dir is not None or args.dataset_record_count is not None:
+        parser.error(
+            "--output-dir and --dataset-record-count are only valid for "
+            f"{DOCTYPE_SECTION_PRESET}"
+        )
     result = run_recipe(args.mode, dry_run=args.dry_run)
     print(json.dumps(result.to_dict(), sort_keys=True))
     return 0
@@ -1065,7 +1352,7 @@ def _parse_lora(data: Mapping[str, Any]) -> LoraConfig:
     )
 
 
-def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
+def _parse_loss(data: Mapping[str, Any], *, allowed_labels: set[str]) -> LossConfig:
     _require_exact_fields(
         data,
         "loss",
@@ -1093,7 +1380,7 @@ def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
     critical_labels = _require_str_tuple(data, "critical_labels")
     if not critical_labels:
         raise RecipeConfigError("loss.critical_labels must not be empty")
-    unknown_labels = sorted(set(critical_labels) - CANONICAL_LABELS)
+    unknown_labels = sorted(set(critical_labels) - allowed_labels)
     if unknown_labels:
         raise RecipeConfigError(
             f"loss.critical_labels contains unknown label(s): {', '.join(unknown_labels)}"
@@ -1106,6 +1393,112 @@ def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
         critical_label_weight=critical_label_weight,
         critical_labels=critical_labels,
     )
+
+
+def _parse_head_contract(
+    value: Any, *, preset_name: str
+) -> str | DoctypeSectionHeadContract | None:
+    if preset_name != DOCTYPE_SECTION_PRESET:
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value:
+            raise RecipeConfigError(
+                "head_contract must be a non-empty string for standard presets"
+            )
+        return value
+
+    if value is None:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} requires a head_contract mapping"
+        )
+    if not isinstance(value, Mapping):
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} head_contract must be a mapping"
+        )
+    _require_exact_fields(
+        value,
+        "head_contract",
+        {"schema_version", "section_bio", "doctype"},
+    )
+    schema_version = _require_contract_value(
+        value,
+        "schema_version",
+        DOCTYPE_SECTION_HEAD_SCHEMA_VERSION,
+        field="head_contract.schema_version",
+    )
+    section = _require_mapping(value, "section_bio")
+    _require_exact_fields(
+        section,
+        "head_contract.section_bio",
+        {"task", "encoding", "labels"},
+    )
+    doctype = _require_mapping(value, "doctype")
+    _require_exact_fields(
+        doctype,
+        "head_contract.doctype",
+        {"task", "pooling", "labels"},
+    )
+    return DoctypeSectionHeadContract(
+        schema_version=schema_version,
+        section_task=_require_contract_value(
+            section,
+            "task",
+            "token_classification",
+            field="head_contract.section_bio.task",
+        ),
+        section_encoding=_require_contract_value(
+            section,
+            "encoding",
+            "BIO",
+            field="head_contract.section_bio.encoding",
+        ),
+        section_labels=_require_contract_value(
+            section,
+            "labels",
+            "section_labels",
+            field="head_contract.section_bio.labels",
+        ),
+        doctype_task=_require_contract_value(
+            doctype,
+            "task",
+            "sequence_classification",
+            field="head_contract.doctype.task",
+        ),
+        doctype_pooling=_require_contract_value(
+            doctype,
+            "pooling",
+            "first_token_window",
+            field="head_contract.doctype.pooling",
+        ),
+        doctype_labels=_require_contract_value(
+            doctype,
+            "labels",
+            "document_types",
+            field="head_contract.doctype.labels",
+        ),
+    )
+
+
+def _require_contract_value(
+    data: Mapping[str, Any], key: str, expected: str, *, field: str
+) -> str:
+    value = data.get(key)
+    if value != expected:
+        raise RecipeConfigError(f"{field} must be {expected!r}, got {value!r}")
+    return expected
+
+
+def _parse_required_gates(value: Any) -> tuple[str, ...]:
+    if value in (None, ()):
+        return ()
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise RecipeConfigError("required_gates must be a list of strings")
+    gates = tuple(value)
+    if any(not isinstance(gate, str) or not gate for gate in gates):
+        raise RecipeConfigError("required_gates must contain non-empty strings")
+    if len(set(gates)) != len(gates):
+        raise RecipeConfigError("required_gates must not contain duplicates")
+    return gates
 
 
 def _parse_quantization(data: Mapping[str, Any]) -> QuantizationConfig:
@@ -1465,6 +1858,44 @@ def _validate_output_tier(output_tier: str) -> None:
         raise RecipeConfigError("output_tier must be one of tiny, laptop, or teacher")
 
 
+def _validate_doctype_section_recipe(config: TrainingRecipeConfig) -> None:
+    if config.mode != "B":
+        raise RecipeConfigError(f"{DOCTYPE_SECTION_PRESET} must use mode B")
+    if config.label_set_ref != DOCTYPE_SECTION_LABEL_SET_REF:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} label_set_ref must be "
+            f"{DOCTYPE_SECTION_LABEL_SET_REF!r}"
+        )
+    if not isinstance(config.head_contract, DoctypeSectionHeadContract):
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} requires a valid dual-head head_contract"
+        )
+    if config.required_gates != DOCTYPE_SECTION_REQUIRED_GATES:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} required_gates must be "
+            f"{list(DOCTYPE_SECTION_REQUIRED_GATES)!r}"
+        )
+    if config.output_tier not in TIERS:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} output_tier must name a tier from "
+            "openmed.eval.tiers"
+        )
+    tier_default = str(TIERS[config.output_tier]["default_format"])
+    tier_quantization = tier_default.partition(" ")[0].casefold()
+    quant_default = config.quantization.default
+    if quant_default.casefold() != tier_quantization:
+        raise RecipeConfigError(
+            f"quantization.default {quant_default!r} is incompatible with "
+            f"{config.output_tier} tier default {tier_default!r}"
+        )
+    if "fallback" in tier_default.casefold() and not (
+        config.quantization.allow_fp32_fallback
+    ):
+        raise RecipeConfigError(
+            f"{config.output_tier} tier requires quantization.allow_fp32_fallback=true"
+        )
+
+
 def _validate_qlora_local_only(config: QloraRecipeConfig) -> None:
     if _has_remote_prefix(config.base_model.model_ref):
         raise RecipeConfigError("base_model.model_ref must be local-only")
@@ -1735,17 +2166,6 @@ def _require_str(data: Mapping[str, Any], key: str) -> str:
     value = data[key]
     if not isinstance(value, str) or not value:
         raise RecipeConfigError(f"{key} must be a non-empty string")
-    return value
-
-
-def _optional_str(data: Mapping[str, Any], key: str) -> str | None:
-    if key not in data:
-        return None
-    value = data[key]
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value:
-        raise RecipeConfigError(f"{key} must be a non-empty string when present")
     return value
 
 
