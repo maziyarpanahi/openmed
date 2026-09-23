@@ -379,6 +379,7 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - evaluation/ocr-routing.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
