@@ -310,6 +310,7 @@ nav:
       - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
       - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
       - Clinical claim-packet integrity: clinical/claim-integrity.md
+      - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md

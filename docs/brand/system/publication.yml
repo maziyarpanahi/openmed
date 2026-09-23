@@ -385,6 +385,7 @@ classification:
     - clinical/evidence-span-audit.md
     - clinical/uncertainty-disclosure.md
     - clinical/claim-integrity.md
+    - clinical/review-transitions.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
