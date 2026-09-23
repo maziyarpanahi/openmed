@@ -24,7 +24,7 @@ OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和
 </p>
 
 <p>
-  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>33 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>35 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -124,7 +124,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
 ]
 ```
 
@@ -166,11 +166,11 @@ dependencyResolutionManagement {
 }
 ```
 
-然后使用不可变的 OpenMed `v2.3.0` 版本：
+然后使用不可变的 OpenMed `v2.5.0` 版本：
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.3.0")
+    implementation("com.github.maziyarpanahi:openmed:v2.5.0")
 }
 ```
 
@@ -509,14 +509,14 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（36 条支持的路由；33 条由模型支持）
+## 多语言 PII（38 条支持的路由；35 条由模型支持）
 
-实体抽取和去标识化支持 **35 个 PII 语言代码**：
-`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
+实体抽取和去标识化支持 **38 个 PII 语言代码**：
+`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fa`、`fr`、`gu`、`he`、`hi`、`id`、`it`、`ja`、`kn`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
 俄语路由目前使用文档中说明的多语言默认模型占位符。孟加拉语、中文和泰米尔语拥有专用注册表条目。
-一个由用户选择并配置的印度语言 NER 系列还支持四条额外路由
-（`gu`、`kn`、`ml` 和 `pa`），
-并且也可服务于阿萨姆语、孟加拉语、印地语、马拉地语、奥里亚语、泰米尔语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
+一个由用户选择并配置的印度语言 NER 系列还支持两条额外路由
+（`ml` 和 `pa`），
+并且也可服务于阿萨姆语、孟加拉语、古吉拉特语、印地语、卡纳达语、马拉地语、奥里亚语、泰米尔语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
 OpenMed 不会捆绑或自动选择这些权重。
 OpenMed 还为其他仅含证件号的语言区域提供基于 validator 的国家证件号覆盖，
 例如波兰、拉脱维亚、斯洛伐克、马来西亚、菲律宾和芬兰。
@@ -643,7 +643,7 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [常见问题](docs/faq.md) | [匿名化](docs/anonymization.md) | [批处理](https://openmed.life/docs/batch-processing) |
 | [配置档案](https://openmed.life/docs/profiles) | [REST 服务](docs/rest-service.md) | [MLX 后端](docs/mlx-backend.md) |
 | [Transformers.js 导出](docs/export-transformersjs.md) | [FHIR 互操作](docs/fhir-interop.md) | [HL7 v2 去标识化](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.3.0 发行说明](docs/release/v2.3.0.md) | [OpenMed 2.2.0 发行说明](docs/release/v2.2.0.md) | [示例](docs/examples.md) |
+| [OpenMed 2.5.0 发行说明](docs/release/v2.5.0.md) | [OpenMed 2.2.0 发行说明](docs/release/v2.2.0.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
 | [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [扩展插件 SDK](docs/plugin-sdk.md) |
 | [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |

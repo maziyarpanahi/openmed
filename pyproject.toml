@@ -107,6 +107,11 @@ presidio = [
   "presidio-analyzer>=2.2.354,<3",
 ]
 
+medspacy = [
+  # Older Python versions require spaCy below the supported security floor.
+  "medspacy>=1.3.1,<2; python_version >= '3.12'",
+]
+
 philter = [
   "philter-ucsf>=1.0.3,<2",
 ]
@@ -282,6 +287,11 @@ cloud = [
   "adlfs>=2025.8.0",
 ]
 
+journey = [
+  "fsspec>=2025.9.0",
+  "pg8000>=1.31.5,<2",
+]
+
 ray = [
   "ray[data]>=2.30,<3",
 ]
@@ -398,7 +408,7 @@ docs = [
   "mkdocs-minify-plugin>=0.8.0",
   "mkdocs-static-i18n>=1.3,<2",
   "pymdown-extensions>=11.0.1,<12",
-  "gitpython>=3.1.58,<4",
+  "gitpython>=3.1.60,<4",
   "mkdocstrings[python]",
   "griffe",
 ]
@@ -412,6 +422,7 @@ openmed = "openmed.cli:main"
 openmed-sidecar = "openmed.service.sidecar:main"
 openmed-executable-udf = "openmed.integrations.executable_udf:main"
 openmed-mcp = "openmed.mcp.server:main"
+openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [

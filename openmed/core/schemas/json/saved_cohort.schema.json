@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/structured/saved-cohort.schema.json",
+  "title": "OpenMed saved cohort artifacts",
+  "schema_version": "1.0.0",
+  "oneOf": [
+    {"$ref": "#/$defs/definition_version"},
+    {"$ref": "#/$defs/execution"}
+  ],
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "phenotype": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_sets", "expression", "id", "name", "schema_version"],
+      "properties": {
+        "concept_sets": {"type": "array", "minItems": 1},
+        "description": {"type": "string", "minLength": 1},
+        "expression": {"type": "object"},
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "openmed.cohort.phenotype.v1"}
+      }
+    },
+    "definition_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "definition",
+        "definition_digest",
+        "schema_version",
+        "version_id"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "definition": {"$ref": "#/$defs/phenotype"},
+        "definition_digest": {"$ref": "#/$defs/digest"},
+        "schema_version": {"const": "1.0.0"},
+        "version_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "source_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundled_vocabulary",
+        "digest",
+        "license_tags",
+        "schema_version",
+        "snapshot_id"
+      ],
+      "properties": {
+        "bundled_vocabulary": {"const": false},
+        "digest": {"$ref": "#/$defs/digest"},
+        "license_tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "schema_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "snapshot_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "criterion_ids",
+        "definition_digest",
+        "definition_version_id",
+        "evaluator_version",
+        "execution_id",
+        "expression",
+        "input_digest",
+        "policy_digest",
+        "schema_version",
+        "source_snapshot",
+        "vocabulary_digest"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "criterion_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "definition_digest": {"$ref": "#/$defs/digest"},
+        "definition_version_id": {"$ref": "#/$defs/opaque_id"},
+        "evaluator_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "execution_id": {"$ref": "#/$defs/opaque_id"},
+        "expression": {"type": "object"},
+        "input_digest": {"$ref": "#/$defs/digest"},
+        "policy_digest": {"$ref": "#/$defs/digest"},
+        "schema_version": {"const": "1.0.0"},
+        "source_snapshot": {"$ref": "#/$defs/source_snapshot"},
+        "vocabulary_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "fact_id", "role", "time_window_id"],
+      "properties": {
+        "evidence_id": {"$ref": "#/$defs/opaque_id"},
+        "fact_id": {
+          "oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+        },
+        "role": {"$ref": "#/$defs/controlled"},
+        "time_window_id": {
+          "oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+        }
+      }
+    },
+    "criterion_membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criterion_id",
+        "evidence",
+        "reason_codes",
+        "review_required",
+        "state"
+      ],
+      "properties": {
+        "criterion_id": {"$ref": "#/$defs/controlled"},
+        "evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/evidence"}
+        },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "review_required": {"type": "boolean"},
+        "state": {"enum": ["met", "not_met", "unknown", "conflict"]}
+      }
+    },
+    "membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criteria",
+        "eligible",
+        "patient_key",
+        "review_required",
+        "state"
+      ],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/criterion_membership"}
+        },
+        "eligible": {"type": "boolean"},
+        "patient_key": {"$ref": "#/$defs/opaque_id"},
+        "review_required": {"type": "boolean"},
+        "state": {"enum": ["met", "not_met", "unknown", "conflict"]}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory",
+        "compatibility_policy",
+        "execution_digest",
+        "manifest",
+        "membership_counts",
+        "membership_digest",
+        "memberships",
+        "review_required",
+        "schema_version"
+      ],
+      "properties": {
+        "advisory": {
+          "const": "Saved cohort membership is an analytical result for human review and must not automatically trigger enrollment, outreach, or clinical action."
+        },
+        "compatibility_policy": {"const": "same_major"},
+        "execution_digest": {"$ref": "#/$defs/digest"},
+        "manifest": {"$ref": "#/$defs/manifest"},
+        "membership_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["conflict", "met", "not_met", "unknown"],
+          "properties": {
+            "conflict": {"type": "integer", "minimum": 0},
+            "met": {"type": "integer", "minimum": 0},
+            "not_met": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0}
+          }
+        },
+        "membership_digest": {"$ref": "#/$defs/digest"},
+        "memberships": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/membership"}
+        },
+        "review_required": {"type": "boolean"},
+        "schema_version": {"const": "1.0.0"}
+      }
+    }
+  }
+}
