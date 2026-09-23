@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added assertion-aware FHIR R4 `AllergyIntolerance`, `Immunization`, and
+  `Encounter` exporters with RxNorm, SNOMED CT, and CVX coding support.
 - Added immutable, versioned longitudinal Journey contracts for clinical
   artifacts, evidence locators, facts, conflicts, resolution events, and
   dataset snapshots, including deterministic JSON, bundled schemas, and
