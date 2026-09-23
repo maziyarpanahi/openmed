@@ -82,6 +82,9 @@ def _surrogate_locale_status(pack: "LanguagePack") -> tuple[str, dict[str, objec
     }
     if backend not in AVAILABLE_LOCALES:
         return MISSING, detail
+    if pack.surrogate_locale_approximation is not None:
+        detail["approximation"] = pack.surrogate_locale_approximation
+        return APPROXIMATED, detail
     if (
         pack.code in _APPROXIMATE_LOCALES
         and LANG_TO_LOCALE.get(pack.code) == pack.surrogate_locale
@@ -250,6 +253,7 @@ def _pack_row(pack: "LanguagePack") -> dict[str, object]:
         "filled": sum(1 for status in slots.values() if status == FILLED),
         "approximated": sum(1 for status in slots.values() if status == APPROXIMATED),
         "missing": sum(1 for status in slots.values() if status == MISSING),
+        "populated": sum(1 for status in slots.values() if status != MISSING),
     }
 
     return {

@@ -19,6 +19,13 @@ from openmed.clinical.review_state_machine import (
 )
 
 
+def test_existing_review_transition_module_preserves_both_public_apis() -> None:
+    from openmed.clinical import review_transitions
+
+    assert review_transitions.ReviewStateMachine is ReviewStateMachine
+    assert review_transitions.ClinicalReviewPacket.__name__ == "ClinicalReviewPacket"
+
+
 def _event(seed: int | str) -> str:
     return make_opaque_event_id({"synthetic_sequence": seed})
 
