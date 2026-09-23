@@ -321,6 +321,14 @@
     "PainScore",
     "SkinAssessment"
   ],
+  "medical_device": [
+    "DeviceType",
+    "DeviceIdentifier",
+    "Manufacturer",
+    "ModelNumber",
+    "ImplantSite",
+    "DeviceStatus"
+  ],
   "functional_status": [
     "ADLActivity",
     "AssistanceLevel",

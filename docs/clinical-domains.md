@@ -464,6 +464,19 @@
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 
+## Medical Device
+
+**Alignment:** The display labels are descriptive extraction metadata for a planned FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, ModelNumber, ImplantSite, and DeviceStatus describe device mentions without UDI lookup or decoding or contacting GUDID or any other network service. DeviceIdentifier remains a HIPAA device identifier and requires human review; this catalog is not clinical guidance and does not make device, treatment, or safety decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| DeviceType | DEVICE_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceIdentifier | DEVICE_IDENTIFIER | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/medical_device.jsonl |
+| Manufacturer | ORGANIZATION | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/medical_device.jsonl |
+| ModelNumber | DEVICE_MODEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| ImplantSite | IMPLANT_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/medical_device.jsonl |
+
 ## Functional Status
 
 **Alignment:** This map captures documented activities of daily living, assistance, mobility, assistive-device mentions, functional-scale references, and cognitive status for offline extraction review. It does not score Barthel or Katz scales, infer care needs, recommend a disposition, or make clinical decisions.
