@@ -166,6 +166,7 @@ classification:
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md
+    - models/journey-specialist-pack.md
     - model-registry.md
     - ner-families.md
     - model-manifest.md
@@ -181,6 +182,7 @@ classification:
     - interop/resumable-ingestion.md
     - interop/identity-resolution.md
     - interop/structured-evidence-adapters.md
+    - interop/multimodal-evidence-coordinates.md
     - interop/ingestion-to-fact-pipeline.md
     - clinical/model-packs.md
     - structured/clinical-fact-normalization.md
