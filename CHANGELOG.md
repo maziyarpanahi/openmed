@@ -66,6 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   observation, and source-to-concept tables with explicit concept-0 outcomes,
   evidence custody, correction-aware replacement, retained ETL lineage,
   vocabulary-license gates, and split-leakage protection (#3335).
+- Added an optional OMOP 5.4 quality bridge with digest-bound local and
+  caller-injected remote adapters, signed aggregate conformance, completeness,
+  and plausibility reports, typed non-success states, and reproducible
+  reconciliation against a frozen synthetic reference projection (#3336).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
