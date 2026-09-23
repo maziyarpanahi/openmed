@@ -297,6 +297,7 @@ nav:
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - TensorRT Runtime: runtimes/tensorrt.md
+      - Clinical NLI Cascade: clinical/nli-cascade.md
       - WebGPU Token-Classification Runtime: runtimes/webgpu.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
