@@ -65,11 +65,15 @@ kubectl apply -k deploy/operator
 kubectl -n openmed-system rollout status deployment/openmed-operator
 ```
 
-The bundled Deployment runs one replica with a `Recreate` strategy. Running
+The bundled Deployment runs one replica with a `Recreate` strategy. It has
+bounded resources, liveness and readiness checks, a short retained revision
+history, a progress deadline, and a default-deny NetworkPolicy. The policy
+allows cluster DNS and Kubernetes API HTTPS ports only; clusters with a
+non-standard API endpoint must narrow an overlay to that endpoint. Running
 multiple standalone Kopf replicas against the same resources can cause
 duplicate reconciliation, so do not scale it horizontally. The operator has a
-liveness endpoint but no readiness endpoint because it does not serve workload
-traffic.
+liveness and readiness endpoints report controller process health; workload
+readiness remains on the managed API and Journey worker.
 
 For local development without building the image:
 
