@@ -383,6 +383,7 @@ classification:
     - clinical/evidence-coverage.md
     - clinical/evidence-span-audit.md
     - clinical/uncertainty-disclosure.md
+    - clinical/claim-integrity.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
