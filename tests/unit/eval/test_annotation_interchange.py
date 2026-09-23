@@ -143,3 +143,32 @@ def test_abuse_limits_and_strict_json_fail_closed() -> None:
 
     recovered = import_annotation_tsv(FIXTURE.read_text(encoding="utf-8"))
     assert len(recovered.records) == 3
+
+
+def test_model_version_metadata_rejects_free_text() -> None:
+    record = import_annotation_tsv(FIXTURE.read_text(encoding="utf-8")).records[0]
+    schema = load_annotation_interchange_schema("record")
+    unsafe = record.to_dict()
+    unsafe["metadata"] = {"model_version": "Synthetic Patient Name"}
+
+    with pytest.raises(AnnotationInterchangeError, match="model_version"):
+        replace(record, metadata={"model_version": "Synthetic Patient Name"})
+    assert tuple(validator_for(schema)(schema).iter_errors(unsafe))
+
+    assert replace(record, metadata={"model_version": "v3.0.1"}).metadata == {
+        "model_version": "v3.0.1"
+    }
+
+
+def test_record_schema_rejects_result_free_text_and_cross_type_fields() -> None:
+    record = import_annotation_tsv(FIXTURE.read_text(encoding="utf-8")).records[0]
+    schema = load_annotation_interchange_schema("record")
+    validator = validator_for(schema)(schema)
+
+    with_raw_text = record.to_dict()
+    with_raw_text["result"]["source_text"] = "Synthetic Patient Name"
+    assert tuple(validator.iter_errors(with_raw_text))
+
+    with_cross_type_field = record.to_dict()
+    with_cross_type_field["result"]["evidence_ids"] = []
+    assert tuple(validator.iter_errors(with_cross_type_field))

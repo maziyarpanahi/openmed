@@ -74,21 +74,20 @@ def handle_annotation_import(args: argparse.Namespace) -> int:
         _write(args.output, envelope.to_json() + "\n", force=args.force)
     except (OSError, AnnotationInterchangeError) as exc:
         raise CliError(
-            f"Annotation import failed: {exc}",
+            "Annotation import failed; inspect input and destination permissions",
             code="annotation_import_failed",
             exit_code=EXIT_ERROR,
         ) from exc
     data = {
         "count": len(envelope.records),
         "envelope_digest": envelope.envelope_digest,
-        "output": str(args.output),
         "state": "success",
     }
     return emit(
         args,
         data,
         human=(
-            f"Imported {data['count']} annotations to {args.output} "
+            f"Imported {data['count']} annotations to the requested output "
             f"({data['envelope_digest']})."
         ),
     )
@@ -116,14 +115,13 @@ def handle_annotation_export(args: argparse.Namespace) -> int:
             )
     except (OSError, AnnotationInterchangeError) as exc:
         raise CliError(
-            f"Annotation export failed: {exc}",
+            "Annotation export failed; inspect input and destination permissions",
             code="annotation_export_failed",
             exit_code=EXIT_ERROR,
         ) from exc
     data = {
         "count": len(envelope.records),
         "loss_count": len(exported.report.entries),
-        "output": str(args.output),
         "output_digest": exported.report.output_digest,
         "state": exported.report.state.value,
     }
@@ -131,7 +129,7 @@ def handle_annotation_export(args: argparse.Namespace) -> int:
         args,
         data,
         human=(
-            f"Exported {data['count']} annotations to {args.output}; "
+            f"Exported {data['count']} annotations to the requested output; "
             f"state={data['state']}, declared_losses={data['loss_count']}."
         ),
     )
@@ -151,17 +149,15 @@ def handle_pipeline_scan(args: argparse.Namespace) -> int:
             _write(args.stub, _canonical_line(report.native_config), force=args.force)
     except (OSError, PipelineMigrationError) as exc:
         raise CliError(
-            f"Pipeline scan failed: {exc}",
+            "Pipeline scan failed; inspect input and destination permissions",
             code="pipeline_scan_failed",
             exit_code=EXIT_ERROR,
         ) from exc
     data = {
         "automatic": report.can_auto_migrate,
-        "report": str(args.report),
         "report_digest": report.report_digest,
         "stage_count": len(report.stages),
         "state": report.state.value,
-        "stub": str(args.stub) if args.stub is not None else None,
     }
     return emit(
         args,
@@ -175,7 +171,7 @@ def handle_pipeline_scan(args: argparse.Namespace) -> int:
 
 def _write(path: Path, text: str, *, force: bool) -> None:
     if path.exists() and not force:
-        raise OSError(f"refusing to overwrite {path}; pass --force")
+        raise OSError("refusing to overwrite an output; pass --force")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
@@ -187,7 +183,7 @@ def _ensure_writable(paths: tuple[Path, ...], *, force: bool) -> None:
     if not force:
         existing = next((path for path in paths if path.exists()), None)
         if existing is not None:
-            raise OSError(f"refusing to overwrite {existing}; pass --force")
+            raise OSError("refusing to overwrite an output; pass --force")
 
 
 def _canonical_line(payload: object) -> str:

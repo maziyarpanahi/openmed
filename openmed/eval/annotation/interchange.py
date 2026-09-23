@@ -42,6 +42,7 @@ MAX_ANNOTATION_EMBEDDING_DIMENSIONS: Final = 4_096
 MAX_ANNOTATION_PAGE_SIZE: Final = 100
 
 _CONTROLLED_RE = re.compile(r"^[a-z][a-z0-9_.:/-]{0,127}$")
+_MODEL_VERSION_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 _OPAQUE_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _CURSOR_RE = re.compile(r"^[A-Za-z0-9_-]{16,2048}$")
@@ -921,7 +922,7 @@ def _validate_metadata(value: Mapping[str, Any]) -> dict[str, Any]:
         if key.endswith("_id"):
             _opaque(item, key)
         elif key == "model_version":
-            if not isinstance(item, str) or len(item) > 64:
+            if not isinstance(item, str) or _MODEL_VERSION_RE.fullmatch(item) is None:
                 raise AnnotationInterchangeError("model_version is invalid")
         else:
             _controlled(item, key)

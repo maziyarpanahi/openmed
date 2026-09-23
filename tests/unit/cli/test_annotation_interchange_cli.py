@@ -77,6 +77,48 @@ def test_annotation_cli_refuses_overwrite(tmp_path: Path, capsys: object) -> Non
     assert output.read_text(encoding="utf-8") == "keep"
 
 
+def test_annotation_cli_never_echoes_sensitive_path_fragments(
+    tmp_path: Path, capsys: object
+) -> None:
+    canary = "synthetic-patient-name-9824"
+    output = tmp_path / canary / "annotations.json"
+    output.parent.mkdir()
+    output.write_text("keep", encoding="utf-8")
+
+    assert (
+        main(
+            [
+                "annotation",
+                "import",
+                "--input",
+                str(FIXTURE),
+                "--output",
+                str(output),
+                "--json",
+            ]
+        )
+        == 1
+    )
+    assert canary not in capsys.readouterr().out  # type: ignore[attr-defined]
+
+    output.unlink()
+    assert (
+        main(
+            [
+                "annotation",
+                "import",
+                "--input",
+                str(FIXTURE),
+                "--output",
+                str(output),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assert canary not in capsys.readouterr().out  # type: ignore[attr-defined]
+
+
 def test_pipeline_scan_writes_report_and_safe_stub(
     tmp_path: Path, capsys: object
 ) -> None:
