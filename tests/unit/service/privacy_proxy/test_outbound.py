@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -66,7 +67,7 @@ def test_transform_redacts_message_content_and_keeps_request_state() -> None:
     }
     assert privacy_filter.get_state("request-907") == prepared.state
     assert prepared.state.to_metadata() == {
-        "request_id": "request-907",
+        "request_id_sha256": hashlib.sha256(b"request-907").hexdigest(),
         "replacement_count": 2,
         "message_count": 2,
         "redacted_field_count": 1,
@@ -201,15 +202,22 @@ def test_incomplete_redaction_is_rejected_without_raw_error_details() -> None:
 
 def test_safe_representations_and_metadata_do_not_record_raw_values() -> None:
     privacy_filter = OutboundRequestPrivacyFilter(synthetic_redactor)
+    synthetic_sensitive_id = "synthetic-patient-5550101"
     prepared = privacy_filter.transform(
         {"messages": [{"role": "user", "content": SYNTHETIC_NAME}]},
-        request_id="safe-representation",
+        request_id=synthetic_sensitive_id,
     )
 
     rendered = repr(prepared) + repr(prepared.state) + repr(prepared.replacements)
-    rendered += repr(prepared.to_metadata())
+    rendered += repr(prepared.to_metadata()) + repr(prepared.state.to_metadata())
 
     assert SYNTHETIC_NAME not in rendered
+    assert synthetic_sensitive_id not in rendered
+    assert prepared.request_id == synthetic_sensitive_id
+    assert (
+        prepared.to_metadata()["request_id_sha256"]
+        == hashlib.sha256(synthetic_sensitive_id.encode("utf-8")).hexdigest()
+    )
     assert NAME_TOKEN in prepared.body["messages"][0]["content"]
 
 

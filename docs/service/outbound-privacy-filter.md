@@ -75,5 +75,9 @@ unsupported body.
 
 Do not log request bodies, redactor results, or replacement mappings. Use
 `PreparedOutboundRequest.to_metadata()` and
-`RequestReplacementState.to_metadata()` for counts and request identifiers
-only. All examples in this guide use synthetic values.
+`RequestReplacementState.to_metadata()` for counts and a SHA-256 digest of the
+request identifier only; neither method nor the objects' string
+representations echo a caller-supplied ID. Prefer the generated opaque ID,
+and never put patient identifiers in caller-supplied correlation IDs. The raw
+ID remains available on the request/state objects only for local handoff. All
+examples in this guide use synthetic values.

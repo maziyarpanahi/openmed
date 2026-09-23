@@ -15,6 +15,7 @@ outputs are rejected before a transformed body is returned.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -203,9 +204,9 @@ class RequestReplacementState:
             ) from None
 
     def to_metadata(self) -> dict[str, Any]:
-        """Return PHI-free state metadata for logs or reports."""
+        """Return state metadata without the caller-controlled request ID."""
         return {
-            "request_id": self.request_id,
+            "request_id_sha256": _request_id_digest(self.request_id),
             "replacement_count": len(self.replacements),
             "message_count": self.message_count,
             "redacted_field_count": self.redacted_field_count,
@@ -213,7 +214,8 @@ class RequestReplacementState:
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}(request_id={self.request_id!r}, "
+            f"{self.__class__.__name__}(request_id_sha256="
+            f"{_request_id_digest(self.request_id)!r}, "
             f"replacement_count={len(self.replacements)}, "
             f"message_count={self.message_count}, "
             f"redacted_field_count={self.redacted_field_count})"
@@ -247,16 +249,16 @@ class PreparedOutboundRequest:
         return self.state.replacements
 
     def to_metadata(self) -> dict[str, Any]:
-        """Return PHI-free request metadata without serializing the body."""
+        """Return request metadata without body text or the raw request ID."""
         return {
-            "request_id": self.request_id,
             "content_type": self.content_type,
             **self.state.to_metadata(),
         }
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}(request_id={self.request_id!r}, "
+            f"{self.__class__.__name__}(request_id_sha256="
+            f"{_request_id_digest(self.request_id)!r}, "
             f"content_type={self.content_type!r}, "
             f"state={self.state!r})"
         )
@@ -612,6 +614,11 @@ def _coerce_request_id(request_id: str | None) -> str:
             reason_code="invalid_request_id",
         )
     return request_id
+
+
+def _request_id_digest(request_id: str) -> str:
+    """Give safe reports a stable reference without echoing caller input."""
+    return hashlib.sha256(request_id.encode("utf-8")).hexdigest()
 
 
 def _load_json_body(body: RequestBody) -> tuple[dict[str, Any], str]:
