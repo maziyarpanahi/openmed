@@ -316,6 +316,7 @@ nav:
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - SMART Scope Audit Examples: interop/smart-scope-audit.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
