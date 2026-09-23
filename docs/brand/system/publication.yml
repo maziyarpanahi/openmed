@@ -426,6 +426,7 @@ classification:
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
+    - interop/omop-fact-projection.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md

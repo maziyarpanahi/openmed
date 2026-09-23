@@ -61,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   USD 1,000 GPU ledger, frozen-holdout calibration and failure slices,
   quantized-delta gates, model cards, and fail-closed promotion fallback
   (#3329).
+- Added deterministic projection of resolved clinical facts into versioned
+  OMOP 5.4 person, visit, note, condition, drug, procedure, measurement,
+  observation, and source-to-concept tables with explicit concept-0 outcomes,
+  evidence custody, correction-aware replacement, retained ETL lineage,
+  vocabulary-license gates, and split-leakage protection (#3335).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
