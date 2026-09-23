@@ -89,6 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic native clinical measures and pinned optional CQL/ELM JSON
   evaluator bridges with explicit population, unknown, error, evidence,
   value-set, time-window, trace, aggregate-summary, and drift contracts (#3342).
+- Added evidence-bound met, open, not-applicable, and insufficient-data care-gap
+  states with conservative missing-data behavior, mandatory unresolved-input
+  review, immutable corrections, and versioned history (#3343).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
