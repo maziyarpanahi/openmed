@@ -73,10 +73,11 @@ Do not raise a budget merely to make an unexplained regression pass.
 
 The v3 Journey release decision aggregates ten typed evidence lanes, verifies
 the tagged checkout and frozen input digests, checks artifact freshness and
-license boundaries, and writes a signed value-free packet:
+license boundaries, and writes a signed value-free packet. Before running it,
+set `OPENMED_JOURNEY_RELEASE_KEY` from a secret manager to a secret of at least
+32 bytes; do not put the secret in a command, shell history, or repository file.
 
 ```bash
-export OPENMED_JOURNEY_RELEASE_KEY="replace-with-a-secret-of-at-least-32-bytes"
 python scripts/release/journey_release_gate.py \
   --manifest journey-release-manifest.json \
   --output journey-release-packet.json
