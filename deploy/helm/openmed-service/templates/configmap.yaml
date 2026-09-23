@@ -28,3 +28,7 @@ data:
   OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY: {{ .Values.config.throttle.maxConcurrency | quote }}
   OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS: {{ .Values.config.throttle.concurrencyWaitSeconds | quote }}
   OPENMED_SERVICE_THROTTLE_KEY: {{ .Values.config.throttle.keyBy | quote }}
+  {{- if .Values.journey.enabled }}
+  OPENMED_JOURNEY_SCHEMA: {{ .Values.journey.schema | quote }}
+  OPENMED_JOURNEY_ARTIFACT_ROOT: {{ .Values.journey.artifacts.mountPath | quote }}
+  {{- end }}

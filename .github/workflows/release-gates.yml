@@ -26,15 +26,15 @@ on:
       api_base_ref:
         description: Git ref used as the public API compatibility baseline.
         required: false
-        default: v2.2.0
+        default: v2.3.0
       migration_guide:
         description: Migration guide required for the release.
         required: false
-        default: docs/migration/2.2-to-2.3.md
+        default: docs/migration/2.3-to-2.5.md
       release_version:
         description: Version recorded in the readiness report.
         required: false
-        default: 2.3.0
+        default: 2.5.0
       rollback_family:
         description: Family supplied by an automated status monitor for rollback.
         required: false
@@ -71,18 +71,18 @@ jobs:
       STAGED_MANIFEST: ${{ github.event.inputs.staged_manifest || 'artifacts/staged-models.jsonl' }}
       BENCHMARK_MODEL: ${{ github.event.inputs.benchmark_model || '' }}
       BENCHMARK_DEVICE: ${{ github.event.inputs.benchmark_device || 'cpu' }}
-      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v2.2.0' }}
-      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/2.2-to-2.3.md' }}
-      RELEASE_VERSION: ${{ github.event.inputs.release_version || '2.3.0' }}
+      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v2.3.0' }}
+      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/2.3-to-2.5.md' }}
+      RELEASE_VERSION: ${{ github.event.inputs.release_version || '2.5.0' }}
       RELEASE_STAGE: ${{ github.workspace }}/release-stage
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
 
@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload Chinese and Indic throughput evidence
         if: always() && hashFiles('i18n-throughput-report.json') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: i18n-throughput
           path: |
@@ -127,7 +127,7 @@ jobs:
 
       - name: Upload grounding accuracy gate report
         if: always() && hashFiles('grounding-accuracy-gate.json') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: grounding-accuracy-gate
           path: grounding-accuracy-gate.json
@@ -373,7 +373,7 @@ jobs:
 
       - name: Upload gate evidence
         if: always() && steps.check-candidate.outputs.exists == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-gate-report
           if-no-files-found: error
@@ -431,7 +431,7 @@ jobs:
 
       - name: Upload release-readiness report
         if: always() && hashFiles('release-readiness-report.json') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-readiness-report
           path: release-readiness-report.json
@@ -549,7 +549,7 @@ jobs:
 
       - name: Publish green promotion bundle
         if: steps.promote.outcome == 'success'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: green-release-promotion
           if-no-files-found: error
@@ -581,7 +581,7 @@ jobs:
 
       - name: Upload nightly status monitor
         if: always() && github.event_name == 'schedule'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: nightly-release-status
           path: ${{ runner.temp }}/nightly/
@@ -692,10 +692,10 @@ jobs:
       ROLLBACK_FORMAT: ${{ github.event.client_payload.format || github.event.inputs.rollback_format }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
 
@@ -735,7 +735,7 @@ jobs:
             --smoke-failure-reason "Automated rollback after a release regression."
 
       - name: Publish rollback bundle
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-rollback
           if-no-files-found: error
