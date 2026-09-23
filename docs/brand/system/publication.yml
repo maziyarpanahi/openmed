@@ -319,6 +319,7 @@ classification:
     - evaluation/sealed-workflow-manifests.md
     - evaluation/holdout-commitments.md
     - evaluation/feedback-budgets.md
+    - evaluation/overlap-forensics.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
