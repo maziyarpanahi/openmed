@@ -11616,6 +11616,10 @@ indic = [
 integrity = [
     { name = "cryptography" },
 ]
+journey = [
+    { name = "fsspec" },
+    { name = "pg8000" },
+]
 kafka = [
     { name = "confluent-kafka" },
 ]
@@ -11808,6 +11812,7 @@ requires-dist = [
     { name = "fonttools", extras = ["woff"], marker = "extra == 'dev'", specifier = "==4.61.1" },
     { name = "fsspec", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "fsspec", marker = "extra == 'dev'", specifier = ">=2025.9.0" },
+    { name = "fsspec", marker = "extra == 'journey'", specifier = ">=2025.9.0" },
     { name = "gcsfs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "gitpython", marker = "extra == 'docs'", specifier = ">=3.1.60,<4" },
     { name = "gliner", extras = ["tokenizers"], marker = "extra == 'gliner'", specifier = ">=0.2.0" },
@@ -11892,6 +11897,7 @@ requires-dist = [
     { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'spark'", specifier = ">=2.0" },
     { name = "pdfplumber", marker = "extra == 'multimodal'", specifier = ">=0.11" },
+    { name = "pg8000", marker = "extra == 'journey'", specifier = ">=1.31.5,<2" },
     { name = "philter-ucsf", marker = "extra == 'philter'", specifier = ">=1.0.3,<2" },
     { name = "piexif", marker = "extra == 'multimodal'", specifier = ">=1.1" },
     { name = "pikepdf", marker = "extra == 'multimodal'", specifier = ">=9.0" },
@@ -11962,7 +11968,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "journey", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"
@@ -12575,6 +12581,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
+]
+
+[[package]]
+name = "pg8000"
+version = "1.31.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "scramp" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c8/9a/077ab21e700051e03d8c5232b6bcb9a1a4d4b6242c9a0226df2cfa306414/pg8000-1.31.5.tar.gz", hash = "sha256:46ebb03be52b7a77c03c725c79da2ca281d6e8f59577ca66b17c9009618cae78", size = 118933, upload-time = "2025-09-14T09:16:49.748Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/45/07/5fd183858dff4d24840f07fc845f213cd371a19958558607ba22035dadd7/pg8000-1.31.5-py3-none-any.whl", hash = "sha256:0af2c1926b153307639868d2ee5cef6cd3a7d07448e12736989b10e1d491e201", size = 57816, upload-time = "2025-09-14T09:16:47.798Z" },
 ]
 
 [[package]]
@@ -15465,6 +15484,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d5/f1/cd5837f74d7001cb9ad518e728c1c2a4dae00d176ac9a27a5a2398691682/scispacy-0.6.2.tar.gz", hash = "sha256:a591fdd36027e854d4c3098c1ede3a717e98ece420f9a7097a7658601457ed5c", size = 65936, upload-time = "2025-10-01T06:19:00.739Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/53/134dc2faeef3c3996c23fa97cc422c9d6553b584f211ccfe13f208830253/scispacy-0.6.2-py3-none-any.whl", hash = "sha256:4a4d38948c95e7233a31bc42751336f4fda0da3a554dd5f29197a2d2eef42452", size = 62607, upload-time = "2025-10-01T06:18:58.247Z" },
+]
+
+[[package]]
+name = "scramp"
+version = "1.4.17"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asn1crypto" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/76/6db02f36db58a7d009e90f51e961bcc3c44a1c930a744f026e30e791989b/scramp-1.4.17.tar.gz", hash = "sha256:28970f29ebc33df47f9975c805e5e5a360effe5b31045e607d64b3b60370dba1", size = 21291, upload-time = "2026-08-07T17:19:40.827Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/99/0e372781210cd36b2f2727e5be3ea93066edad7edd6fa2dfdec3b3e28845/scramp-1.4.17-py3-none-any.whl", hash = "sha256:a4e3fd2e8169461a28a13777a166d3da94274454f0714a7d3023fee124474ac8", size = 16131, upload-time = "2026-08-07T17:19:39.591Z" },
 ]
 
 [[package]]
