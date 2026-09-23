@@ -137,7 +137,7 @@ any generated diff, so manifest refreshes must commit every derived surface.
 <!-- BEGIN MANIFEST CATALOG SURFACES -->
 ## Manifest-backed catalog
 
-The committed manifest contains 2,266 entries across 33 model-backed PII languages. Family counts: General=9, NER=1,093, PII=1,018, Vision=3, ZeroShot=143.
+The committed manifest contains 2,266 entries across 35 model-backed PII languages. Family counts: General=9, NER=1,093, PII=1,018, Vision=3, ZeroShot=143.
 
 <!-- BEGIN MANIFEST MODEL TABLE -->
 | Model | Family | Task | Languages | Tier | Formats |
@@ -2250,12 +2250,12 @@ The committed manifest contains 2,266 entries across 33 model-backed PII languag
 | `OpenMed/OpenMed-PII-mSuperClinical-Large-279M-v1-mlx` | PII | token-classification | en | Large | mlx-fp, pytorch |
 | `OpenMed/OpenMed-PII-mSuperClinical-Large-279M-v1-onnx-android` | PII | token-classification | en | Large | onnx |
 | `OpenMed/privacy-filter-mlx-8bit` | PII | token-classification | en | - | mlx-8bit, pytorch |
-| `OpenMed/privacy-filter-multilingual` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, he, hi, id, it, ja, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | pytorch |
-| `OpenMed/privacy-filter-multilingual-mlx` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, he, hi, id, it, ja, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-fp, pytorch |
-| `OpenMed/privacy-filter-multilingual-mlx-8bit` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, he, hi, id, it, ja, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-8bit, pytorch |
-| `OpenMed/privacy-filter-multilingual-v2` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, he, hi, id, it, ja, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | pytorch |
-| `OpenMed/privacy-filter-multilingual-v2-mlx` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, he, hi, id, it, ja, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-fp, pytorch |
-| `OpenMed/privacy-filter-multilingual-v2-mlx-8bit` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, he, hi, id, it, ja, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-8bit, pytorch |
+| `OpenMed/privacy-filter-multilingual` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | pytorch |
+| `OpenMed/privacy-filter-multilingual-mlx` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-fp, pytorch |
+| `OpenMed/privacy-filter-multilingual-mlx-8bit` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-8bit, pytorch |
+| `OpenMed/privacy-filter-multilingual-v2` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | pytorch |
+| `OpenMed/privacy-filter-multilingual-v2-mlx` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-fp, pytorch |
+| `OpenMed/privacy-filter-multilingual-v2-mlx-8bit` | PII | token-classification | am, ar, as, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, xh, zu | - | mlx-8bit, pytorch |
 | `OpenMed/privacy-filter-nemotron` | PII | token-classification | en | - | pytorch |
 | `OpenMed/privacy-filter-nemotron-mlx` | PII | token-classification | en | - | mlx-fp, pytorch |
 | `OpenMed/privacy-filter-nemotron-mlx-8bit` | PII | token-classification | en | - | mlx-8bit, pytorch |
