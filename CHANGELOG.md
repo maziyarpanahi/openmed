@@ -247,6 +247,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, offline SDOH negated-need resolution with
+  determinant-specific assertion scope, value-free provenance, and human
+  review for double-negated, contradictory, and uncertain findings (#2731).
 - Added deterministic, value-free SDOH experiencer classification and patient-level
   filtering for patient, household, family, and unknown evidence with reviewable
   offset provenance (#2724).
