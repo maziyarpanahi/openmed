@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal, Optional, Union
 
+from openmed.clinical.grounding.systems import SYSTEM_URIS, canonical_system
 from openmed.core.policy import canonical_policy_name
 from openmed.interop.tools import (
     AnalyzeTextArgs,
@@ -202,10 +203,35 @@ def _normalize_grounding_systems(value: Any) -> list[str]:
         values = list(value)
     else:
         raise ValueError("systems must be a list of vocabulary names")
-    systems = [str(item).strip() for item in values if str(item).strip()]
+    systems = [canonical_system(str(item)) for item in values if str(item).strip()]
     if not systems:
         raise ValueError("systems must contain at least one vocabulary")
+    if any(system not in SYSTEM_URIS for system in systems):
+        raise ValueError("systems contains an unsupported grounding vocabulary")
     return list(dict.fromkeys(systems))
+
+
+def _normalize_grounding_language(value: Any) -> str:
+    if value is None:
+        return "en"
+    normalized = str(value).strip().casefold()
+    if not normalized:
+        raise ValueError("lang must be a non-empty language string")
+    return normalized
+
+
+def _normalize_grounding_language_alias(values: Any) -> Any:
+    if not isinstance(values, Mapping) or "lang" not in values:
+        return values
+    normalized = dict(values)
+    language = normalized.pop("lang")
+    source_language = normalized.get("source_language")
+    if source_language is not None and _normalize_grounding_language(
+        source_language
+    ) != _normalize_grounding_language(language):
+        raise ValueError("lang and source_language must match when both are provided")
+    normalized["source_language"] = language
+    return normalized
 
 
 def _normalize_grounding_entities(value: Any) -> Optional[list[dict[str, Any]]]:
@@ -257,6 +283,7 @@ class _StrictModel(BaseModel):
 
         class Config:
             extra = "forbid"
+            allow_population_by_field_name = True
 
     if PYDANTIC_V2:
 
@@ -564,6 +591,8 @@ if PYDANTIC_V2:
         records_jsonl: str
         vocabulary_version: Optional[str] = None
         validate_constraints: bool = False
+        completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
 
         @field_validator("records_jsonl", mode="before")
         @classmethod
@@ -574,6 +603,19 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class ProfileRequest(_StrictModel):
+        """Request schema for the PHI-free quality profile route."""
+
+        records_jsonl: str
+        completeness_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
+        athena_index: Optional[dict[str, Any]] = None
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
 
     class GroundRequest(_StrictModel):
         """Request schema for the offline terminology grounding route."""
@@ -586,6 +628,12 @@ if PYDANTIC_V2:
         source_language: str = "en"
         top_k: int = Field(default=5, ge=1, le=50)
         offline: bool = True
+
+        @property
+        def lang(self) -> str:
+            """Return the grounding facade language argument."""
+
+            return self.source_language
 
         @field_validator("text", mode="before")
         @classmethod
@@ -605,7 +653,12 @@ if PYDANTIC_V2:
         @field_validator("source_language", mode="before")
         @classmethod
         def _validate_source_language(cls, value: Any) -> str:
-            return str(value or "en").strip().casefold()
+            return _normalize_grounding_language(value)
+
+        @model_validator(mode="before")
+        @classmethod
+        def _validate_language_alias(cls, values: Any) -> Any:
+            return _normalize_grounding_language_alias(values)
 
         @model_validator(mode="after")
         def _validate_inputs(self) -> "GroundRequest":
@@ -869,6 +922,8 @@ else:
         records_jsonl: str
         vocabulary_version: Optional[str] = None
         validate_constraints: bool = False
+        completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
 
         @validator("records_jsonl", pre=True)
         def _validate_records_jsonl(cls, value: Any) -> str:
@@ -877,6 +932,18 @@ else:
         @validator("vocabulary_version", pre=True)
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class ProfileRequest(_StrictModel):
+        """Request schema for the PHI-free quality profile route."""
+
+        records_jsonl: str
+        completeness_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
+        athena_index: Optional[dict[str, Any]] = None
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
 
     class GroundRequest(_StrictModel):
         """Request schema for the offline terminology grounding route."""
@@ -889,6 +956,12 @@ else:
         source_language: str = "en"
         top_k: int = Field(default=5, ge=1, le=50)
         offline: bool = True
+
+        @property
+        def lang(self) -> str:
+            """Return the grounding facade language argument."""
+
+            return self.source_language
 
         @validator("text", pre=True)
         def _validate_text(cls, value: Any) -> Optional[str]:
@@ -904,7 +977,11 @@ else:
 
         @validator("source_language", pre=True)
         def _validate_source_language(cls, value: Any) -> str:
-            return str(value or "en").strip().casefold()
+            return _normalize_grounding_language(value)
+
+        @root_validator(pre=True)
+        def _validate_language_alias(cls, values: dict[str, Any]) -> dict[str, Any]:
+            return _normalize_grounding_language_alias(values)
 
         @root_validator
         def _validate_inputs(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -960,6 +1037,61 @@ class FixedOptionDecisionRequest(_StrictModel):
             schema_extra = decision_request_schema()
 
 
+class GroundCandidateResponse(_StrictModel):
+    """One coded terminology candidate in a grounding response."""
+
+    system: str
+    system_uri: Optional[str] = None
+    code: str
+    display: str
+    score: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    source_language: str
+    source: str
+    matched_alias: Optional[str] = None
+    match_kind: Optional[str] = None
+    vocab_version: Optional[str] = None
+
+
+class GroundedSpanResponse(_StrictModel):
+    """One grounded source span with provenance and ranked candidates."""
+
+    text: str
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    system: Optional[str] = None
+    system_uri: Optional[str] = None
+    code: Optional[str] = None
+    display: Optional[str] = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    cui: Optional[str] = None
+    codes: dict[str, str]
+    score: float = Field(ge=0.0, le=1.0)
+    calibrated_score: Optional[float] = None
+    abstained: bool
+    provenance: dict[str, Any]
+    canonical_label: Optional[str] = None
+    assertion: Optional[dict[str, Any]] = None
+    source_language: str
+    candidates: list[GroundCandidateResponse]
+    alternatives: list[GroundCandidateResponse]
+    ranked_alternatives: list[GroundCandidateResponse]
+    section: Optional[str] = None
+    section_context: Optional[str] = None
+    snapshot_provenance: dict[str, dict[str, Any]]
+    metadata: dict[str, Any]
+
+
+class GroundResponse(_StrictModel):
+    """Response schema mirroring the grounding facade's span result shape."""
+
+    schema_version: Literal["openmed.grounding.v1"]
+    offline: bool
+    systems: list[str]
+    snapshots: dict[str, dict[str, Any]]
+    results: list[GroundedSpanResponse]
+
+
 class FHIRBulkExportRequest(_StrictModel):
     """Request schema for local or SMART-backed Bulk Data jobs.
 
@@ -1012,6 +1144,8 @@ class CohortResolveRequest(_StrictModel):
     phenotype: dict[str, Any]
     records_jsonl: str
     concept_ancestors: list[ConceptAncestorRequest] = Field(default_factory=list)
+    completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+    required_fields: list[str] = Field(default_factory=list)
 
     if PYDANTIC_V2:
 

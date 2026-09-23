@@ -45,6 +45,7 @@ __all__ = [
 # https://www.hl7.org/fhir/terminologies-systems.html
 
 _SYSTEM_URI: dict[str, str] = {
+    "cvx": "http://hl7.org/fhir/sid/cvx",
     "rxnorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
     "icd10cm": "http://hl7.org/fhir/sid/icd-10-cm",
     "icd-11-mms": "http://id.who.int/icd/release/11/mms",
@@ -55,6 +56,7 @@ _SYSTEM_URI: dict[str, str] = {
 }
 
 _SYSTEM_ALIASES: dict[str, str] = {
+    "cvx": "cvx",
     "rxnorm": "rxnorm",
     "rx-norm": "rxnorm",
     "rx_norm": "rxnorm",
@@ -77,6 +79,7 @@ _SYSTEM_ALIASES: dict[str, str] = {
 # (alphabetically among themselves so the output is still stable).
 _DEFAULT_SYSTEM_PRIORITY: tuple[str, ...] = (
     "http://snomed.info/sct",
+    "http://hl7.org/fhir/sid/cvx",
     "http://loinc.org",
     "http://www.nlm.nih.gov/research/umls/rxnorm",
     "http://hl7.org/fhir/sid/icd-10-cm",
@@ -104,7 +107,7 @@ def system_uri(vocabulary_id: str) -> str:
 
     Args:
         vocabulary_id: A short vocabulary id such as ``"rxnorm"``,
-            ``"loinc"``, ``"snomed"``, ``"icd-10-cm"``, ``"icd-11-mms"``,
+            ``"cvx"``, ``"loinc"``, ``"snomed"``, ``"icd-10-cm"``, ``"icd-11-mms"``,
             ``"hpo"``, or ``"mesh"``; **or** an already-canonical system URI
             such as ``"http://loinc.org"``.
 

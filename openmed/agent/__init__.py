@@ -97,6 +97,21 @@ from .outcomes import (
     WorkflowOutcome,
     allowed_reason_codes,
 )
+from .policy_matrix import (
+    MAX_POLICY_MATRIX_ROWS,
+    POLICY_MATRIX_SCHEMA_VERSION,
+    PolicyDecisionMatrix,
+    PolicyDecisionRow,
+    PolicyMatrixError,
+)
+from .reviewer_handoff import (
+    MAX_HANDOFF_EVIDENCE_REFERENCES,
+    REVIEWER_HANDOFF_SCHEMA_VERSION,
+    RequestedDecision,
+    ReviewerHandoffError,
+    ReviewerHandoffPacket,
+    allowed_handoff_reason_codes,
+)
 from .run_diff import (
     RUN_DIFF_SCHEMA_VERSION,
     RunDiffError,
@@ -112,6 +127,12 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .workflow_rollup import (
+    WORKFLOW_ROLLUP_SCHEMA_VERSION,
+    WorkflowRollup,
+    WorkflowRollupError,
+    WorkflowRollupRow,
+)
 from .workflows import (
     COHORT_EXPLANATION_SCHEMA_VERSION,
     EVIDENCE_QUERY_ADVISORY,
@@ -234,6 +255,8 @@ __all__ = [
     "MAX_COUNT_VALUE",
     "MAX_DURATION_MS",
     "MAX_EVENT_SEQUENCE_LENGTH",
+    "MAX_HANDOFF_EVIDENCE_REFERENCES",
+    "MAX_POLICY_MATRIX_ROWS",
     "MAX_RUN_SUMMARY_JSON_BYTES",
     "RUN_DIFF_SCHEMA_VERSION",
     "RunDiffError",
@@ -252,16 +275,28 @@ __all__ = [
     "RUN_ID_PREFIX",
     "RunId",
     "PolicyId",
+    "POLICY_MATRIX_SCHEMA_VERSION",
+    "PolicyDecisionMatrix",
+    "PolicyDecisionRow",
+    "PolicyMatrixError",
     "PurposeId",
     "QueryAccessDecision",
     "QueryIntent",
     "QueryPlanState",
     "QueryScope",
+    "REVIEWER_HANDOFF_SCHEMA_VERSION",
+    "RequestedDecision",
+    "ReviewerHandoffError",
+    "ReviewerHandoffPacket",
     "ToolId",
     "TimingValidationError",
     "ToolResultState",
     "WorkflowOutcome",
     "WorkflowId",
+    "WORKFLOW_ROLLUP_SCHEMA_VERSION",
+    "WorkflowRollup",
+    "WorkflowRollupError",
+    "WorkflowRollupRow",
     "allowed_reason_codes",
     "compose_evidence_answer",
     "explain_cohort_membership",
@@ -274,6 +309,7 @@ __all__ = [
     "make_evidence_citation",
     "make_query_access_decision",
     "plan_evidence_query",
+    "allowed_handoff_reason_codes",
     "security",
     "validate_action_graph",
     "validate_artifact_references",

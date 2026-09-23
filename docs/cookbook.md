@@ -59,6 +59,7 @@ using the same workflow with real data.
 | Run MLX token classification | [`examples/mlx_token_classification_ner.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/mlx_token_classification_ner.py) |
 | Run MLX GLiNER zero-shot NER | [`examples/mlx_gliner_zero_shot_ner.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/mlx_gliner_zero_shot_ner.py) |
 | Render registry tools for agent frameworks | [`examples/agent_tools_quickstart.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/agent_tools_quickstart.py) |
+| Inspect synthetic human-approval failure receipts | [`examples/agent_approval_failures.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/agent_approval_failures.py) |
 | Add a privacy boundary to a graph flow | [`examples/graph_orchestration_privacy.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/graph_orchestration_privacy.py) |
 | Redact before an external model call | [`examples/privacy_gateway_quickstart.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/privacy_gateway_quickstart.py) |
 | Preserve retrieval utility after redaction | [`examples/redaction_preserving_retrieval.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/redaction_preserving_retrieval.py) |

@@ -431,9 +431,11 @@ type SMARTBackendIngestionRequest struct {
 // newline-delimited grounded note records and the response is a PHI-free load
 // summary.
 type OMOPLoadRequest struct {
-	RecordsJSONL        string `json:"records_jsonl"`
-	VocabularyVersion   string `json:"vocabulary_version,omitempty"`
-	ValidateConstraints bool   `json:"validate_constraints,omitempty"`
+	RecordsJSONL        string   `json:"records_jsonl"`
+	VocabularyVersion   string   `json:"vocabulary_version,omitempty"`
+	ValidateConstraints bool     `json:"validate_constraints,omitempty"`
+	CompletenessFloor   *float64 `json:"completeness_floor,omitempty"`
+	RequiredFields      []string `json:"required_fields,omitempty"`
 }
 
 // ConceptAncestorRequest is one caller-supplied Athena hierarchy edge.
@@ -444,9 +446,19 @@ type ConceptAncestorRequest struct {
 
 // CohortResolveRequest is the request body for POST /cohort/resolve.
 type CohortResolveRequest struct {
-	Phenotype        JSONObject               `json:"phenotype"`
-	RecordsJSONL     string                   `json:"records_jsonl"`
-	ConceptAncestors []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
+	Phenotype         JSONObject               `json:"phenotype"`
+	RecordsJSONL      string                   `json:"records_jsonl"`
+	ConceptAncestors  []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
+	CompletenessFloor *float64                 `json:"completeness_floor,omitempty"`
+	RequiredFields    []string                 `json:"required_fields,omitempty"`
+}
+
+// ProfileRequest is the request body for POST /profile.
+type ProfileRequest struct {
+	RecordsJSONL      string     `json:"records_jsonl"`
+	CompletenessFloor float64    `json:"completeness_floor,omitempty"`
+	RequiredFields    []string   `json:"required_fields,omitempty"`
+	AthenaIndex       JSONObject `json:"athena_index,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +491,9 @@ type AnalyzeResponse = PredictionResult
 
 // GroundResponse is the open grounding result returned by /ground.
 type GroundResponse = JSONObject
+
+// ProfileResponse is the structured quality report returned by /profile.
+type ProfileResponse = JSONObject
 
 // PIIExtractResponse is returned by /pii/extract.
 type PIIExtractResponse = PredictionResult
@@ -1361,6 +1376,15 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
 	var out OMOPLoadResponse
 	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Profile calls POST /profile and returns the PHI-free quality report.
+func (c *Client) Profile(ctx context.Context, req ProfileRequest) (*ProfileResponse, error) {
+	var out ProfileResponse
+	if err := c.post(ctx, "/profile", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
