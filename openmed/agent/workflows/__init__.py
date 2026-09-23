@@ -1,5 +1,19 @@
 """Deterministic, safety-bounded clinical workflow helpers."""
 
+from .abstraction_evidence import (
+    ABSTRACTION_EVIDENCE_SCHEMA,
+    AbstractionEvidenceChain,
+    AbstractionEvidenceError,
+    AbstractionEvidenceIssue,
+    AbstractionEvidenceReport,
+    ChartAbstractionEvidence,
+    FinalizedAbstractionEvidence,
+    ReviewerState,
+    SourceKind,
+    SourceLocation,
+    TransformationKind,
+)
+
 from .cohort_explanations import (
     COHORT_EXPLANATION_SCHEMA_VERSION,
     CohortMembershipExplanation,
@@ -76,4 +90,15 @@ __all__ = [
     "make_evidence_citation",
     "make_query_access_decision",
     "plan_evidence_query",
+    "ABSTRACTION_EVIDENCE_SCHEMA",
+    "AbstractionEvidenceChain",
+    "AbstractionEvidenceError",
+    "AbstractionEvidenceIssue",
+    "AbstractionEvidenceReport",
+    "ChartAbstractionEvidence",
+    "FinalizedAbstractionEvidence",
+    "ReviewerState",
+    "SourceKind",
+    "SourceLocation",
+    "TransformationKind",
 ]
