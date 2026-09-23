@@ -51,6 +51,26 @@ REFERENCE_SUMMARY = FIXTURE_DIRECTORY / "synthea_reference_omop_54_summary.json"
 SIGNING_KEY = b"synthetic-omop-quality-signing-key"
 
 
+def _bundled_fixture_digest(path: Path) -> str:
+    """Hash the committed text fixture independent of checkout line endings."""
+
+    canonical = path.read_bytes().replace(b"\r\n", b"\n")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+
+def test_bundled_fixture_digest_is_stable_across_checkout_line_endings(
+    tmp_path: Path,
+) -> None:
+    lf = tmp_path / "lf.json"
+    crlf = tmp_path / "crlf.json"
+    canonical = PROJECTION_FIXTURE.read_bytes().replace(b"\r\n", b"\n")
+    lf.write_bytes(canonical)
+    crlf.write_bytes(canonical.replace(b"\n", b"\r\n"))
+    expected = load_frozen_omop_quality_fixture(QUALITY_FIXTURE)
+    assert _bundled_fixture_digest(lf) == expected.quality_input.cohort_digest
+    assert _bundled_fixture_digest(crlf) == expected.quality_input.cohort_digest
+
+
 def _projection_inputs() -> tuple[OmopFactProjectionInput, ...]:
     payload = json.loads(PROJECTION_FIXTURE.read_text(encoding="utf-8"))
     result = []
@@ -129,12 +149,8 @@ def _tool_output(*, mode: str = "local") -> dict[str, object]:
 def test_frozen_cohort_and_reference_snapshot_are_digest_bound() -> None:
     fixture = load_frozen_omop_quality_fixture(QUALITY_FIXTURE)
 
-    cohort_digest = (
-        f"sha256:{hashlib.sha256(PROJECTION_FIXTURE.read_bytes()).hexdigest()}"
-    )
-    reference_digest = (
-        f"sha256:{hashlib.sha256(REFERENCE_SUMMARY.read_bytes()).hexdigest()}"
-    )
+    cohort_digest = _bundled_fixture_digest(PROJECTION_FIXTURE)
+    reference_digest = _bundled_fixture_digest(REFERENCE_SUMMARY)
     assert fixture.quality_input.cohort_digest == cohort_digest
     assert fixture.quality_input.reference_snapshot_digest == reference_digest
     assert fixture.openmed.snapshot_digest == _projection().digest
@@ -159,9 +175,7 @@ def test_projection_checks_cover_references_round_trip_mapping_and_dates() -> No
     assert all(item.status == "pass" for item in checks)
     aggregate = OmopProjectionAggregate.from_projection(
         projection,
-        cohort_digest=(
-            f"sha256:{hashlib.sha256(PROJECTION_FIXTURE.read_bytes()).hexdigest()}"
-        ),
+        cohort_digest=_bundled_fixture_digest(PROJECTION_FIXTURE),
     )
     assert aggregate.row_counts == projection.summary.row_counts
     assert aggregate.mapped_coverage_ppm == 1_000_000
