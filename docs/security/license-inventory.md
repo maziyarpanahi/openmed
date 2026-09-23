@@ -88,6 +88,7 @@ a dependency also declared in another extra.
 | `paddleocr` | `ocr-paddle` | `Apache-2.0` |
 | `pandas` | `pandas, spark` | `BSD-3-Clause` |
 | `pdfplumber` | `multimodal` | `MIT` |
+| `pg8000` | `journey` | `BSD-3-Clause` |
 | `philter-ucsf` | `philter` | `BSD-3-Clause` |
 | `piexif` | `multimodal` | `MIT` |
 | `pikepdf` | `multimodal` | `MPL-2.0` |
