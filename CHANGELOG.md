@@ -104,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an evidence-grounded patient and cohort query planner with closed
   read-only tool calls, bounded SQL guards, snapshot citations, access receipts,
   explicit abstention states, and inert prompt-injection boundaries (#3347).
+- Added a single versioned Journey resource contract across Python, REST,
+  GraphQL, and bounded read-only SQL, including cursor pagination,
+  namespace/purpose/field policy, typed non-success states, generated schema
+  snapshots, and client parity (#3348).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and

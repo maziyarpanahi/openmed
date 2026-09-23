@@ -969,3 +969,80 @@ class CohortResolveRequest(_StrictModel):
         @validator("records_jsonl", pre=True)
         def _validate_records_jsonl(cls, value: Any) -> str:
             return _normalize_records_jsonl(value)
+
+
+JourneyResourceStateValue = Literal[
+    "success",
+    "partial",
+    "empty",
+    "unknown",
+    "conflict",
+    "unsupported",
+    "denied",
+    "failure",
+]
+JourneyResourceTypeValue = Literal[
+    "artifact",
+    "job",
+    "fact",
+    "conflict",
+    "journey",
+    "cohort",
+    "dataset",
+    "registry",
+    "measure",
+    "trial_review",
+    "evidence",
+    "current_fact",
+    "journey_event",
+    "mapping",
+    "cohort_run",
+    "dataset_manifest",
+]
+
+
+class JourneyResourceResponse(_StrictModel):
+    """One versioned, field-filtered Journey resource."""
+
+    resource_type: JourneyResourceTypeValue
+    resource_id: str
+    namespace: str
+    data: dict[str, Any]
+    state: JourneyResourceStateValue
+    version: int = Field(ge=1)
+    revision: int = Field(ge=1)
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]
+    extensions: dict[str, Any]
+
+
+class JourneyPageInfoResponse(_StrictModel):
+    """Cursor metadata for one bounded Journey resource page."""
+
+    has_next_page: bool
+    end_cursor: Optional[str]
+    page_size: int = Field(ge=0, le=100)
+    snapshot_digest: str
+
+
+class JourneyPolicyResponse(_StrictModel):
+    """Namespace, purpose, and field response-policy decision."""
+
+    state: Literal["success", "denied"]
+    namespace: str
+    purpose: str
+    allowed_fields: list[str]
+    code: Optional[str]
+    policy_version: Literal["1.0.0"]
+
+
+class JourneyResourcePageResponse(_StrictModel):
+    """Typed response shared by versioned Journey list endpoints."""
+
+    state: JourneyResourceStateValue
+    code: Optional[str]
+    resources: list[JourneyResourceResponse]
+    page_info: JourneyPageInfoResponse
+    policy: JourneyPolicyResponse
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]

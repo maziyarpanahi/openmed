@@ -691,6 +691,65 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Journey Resources",
+      "description": "Bounded, versioned, policy-aware read access to local Journey resources.",
+      "item": [
+        {
+          "name": "List Journey Resources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/journey/resources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "journey",
+                "resources"
+              ],
+              "query": [
+                {
+                  "key": "resource_type",
+                  "value": "fact"
+                },
+                {
+                  "key": "namespace",
+                  "value": "default"
+                },
+                {
+                  "key": "purpose",
+                  "value": "care_review"
+                },
+                {
+                  "key": "first",
+                  "value": "20"
+                },
+                {
+                  "key": "after",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fields",
+                  "value": "subject_id,concept,assertion",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List one bounded resource page. Cursor, policy, compatibility, and non-success state metadata are returned with every response."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

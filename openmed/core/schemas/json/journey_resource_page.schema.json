@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/journey-resource-page/1.0.0",
+  "title": "OpenMed Journey Resource Page",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "state",
+    "code",
+    "resources",
+    "page_info",
+    "policy",
+    "schema_version",
+    "compatibility_policy"
+  ],
+  "properties": {
+    "state": {
+      "enum": [
+        "success",
+        "partial",
+        "empty",
+        "unknown",
+        "conflict",
+        "unsupported",
+        "denied",
+        "failure"
+      ]
+    },
+    "code": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "resources": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/resource"}
+    },
+    "page_info": {"$ref": "#/$defs/page_info"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "compatibility_policy": {
+      "type": "string",
+      "const": "same_major"
+    }
+  },
+  "$defs": {
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_type",
+        "resource_id",
+        "namespace",
+        "data",
+        "state",
+        "version",
+        "revision",
+        "schema_version",
+        "compatibility_policy",
+        "extensions"
+      ],
+      "properties": {
+        "resource_type": {
+          "enum": [
+            "artifact",
+            "job",
+            "fact",
+            "conflict",
+            "journey",
+            "cohort",
+            "dataset",
+            "registry",
+            "measure",
+            "trial_review",
+            "evidence",
+            "current_fact",
+            "journey_event",
+            "mapping",
+            "cohort_run",
+            "dataset_manifest"
+          ]
+        },
+        "resource_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+        },
+        "data": {"type": "object"},
+        "state": {
+          "enum": [
+            "success",
+            "partial",
+            "empty",
+            "unknown",
+            "conflict",
+            "unsupported",
+            "denied",
+            "failure"
+          ]
+        },
+        "version": {"type": "integer", "minimum": 1},
+        "revision": {"type": "integer", "minimum": 1},
+        "schema_version": {
+          "type": "string",
+          "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+        },
+        "compatibility_policy": {"const": "same_major"},
+        "extensions": {"type": "object"}
+      }
+    },
+    "page_info": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "has_next_page",
+        "end_cursor",
+        "page_size",
+        "snapshot_digest"
+      ],
+      "properties": {
+        "has_next_page": {"type": "boolean"},
+        "end_cursor": {"type": ["string", "null"]},
+        "page_size": {"type": "integer", "minimum": 0, "maximum": 100},
+        "snapshot_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "namespace",
+        "purpose",
+        "allowed_fields",
+        "code",
+        "policy_version"
+      ],
+      "properties": {
+        "state": {"enum": ["success", "denied"]},
+        "namespace": {"type": "string"},
+        "purpose": {"type": "string"},
+        "allowed_fields": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "code": {"type": ["string", "null"]},
+        "policy_version": {
+          "type": "string",
+          "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    }
+  }
+}

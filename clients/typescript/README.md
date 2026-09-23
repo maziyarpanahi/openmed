@@ -86,6 +86,16 @@ const job = await client.createJob({
 });
 const jobStatus = await client.getJob(job.id);
 
+const facts = await client.journeyResources({
+  resource_type: "fact",
+  purpose: "care_review",
+  first: 20,
+  fields: ["subject_id", "concept", "assertion"],
+});
+if (facts.state === "success") {
+  for (const fact of facts.resources) consumeStructuredFact(fact.data);
+}
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```

@@ -43,6 +43,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/pii/extract/stream"): "ExtractPIIStream",
     ("post", "/privacy-gateway/complete"): "PrivacyGateway",
     ("get", "/readyz"): "Readyz",
+    ("get", "/v1/journey/resources"): "JourneyResources",
 }
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
