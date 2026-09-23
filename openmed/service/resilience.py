@@ -55,9 +55,10 @@ class _CircuitBreaker:
     failures: int = 0
     opened_at: Optional[float] = None
     half_open_probe_active: bool = False
+    _probe_token: object | None = field(default=None, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
-    def before_call(self) -> None:
+    def before_call(self) -> object | None:
         with self._lock:
             now = self.clock()
             if self.state == CIRCUIT_OPEN:
@@ -71,6 +72,9 @@ class _CircuitBreaker:
                 if self.half_open_probe_active:
                     raise CircuitBreakerOpenError(1)
                 self.half_open_probe_active = True
+                self._probe_token = object()
+                return self._probe_token
+            return None
 
     def record_success(self) -> None:
         with self._lock:
@@ -78,10 +82,12 @@ class _CircuitBreaker:
             self.failures = 0
             self.opened_at = None
             self.half_open_probe_active = False
+            self._probe_token = None
 
     def record_failure(self) -> None:
         with self._lock:
             self.half_open_probe_active = False
+            self._probe_token = None
             if self.state == CIRCUIT_HALF_OPEN:
                 self._open()
                 return
@@ -89,6 +95,13 @@ class _CircuitBreaker:
             self.failures += 1
             if self.failures >= self.config.failure_threshold:
                 self._open()
+
+    def record_aborted(self, probe_token: object | None) -> None:
+        """Release only this call's probe, without inferring backend health."""
+        with self._lock:
+            if probe_token is not None and self._probe_token is probe_token:
+                self.half_open_probe_active = False
+                self._probe_token = None
 
     def snapshot(self) -> CircuitBreakerSnapshot:
         with self._lock:
@@ -111,6 +124,7 @@ class _CircuitBreaker:
         self.state = CIRCUIT_OPEN
         self.opened_at = self.clock()
         self.half_open_probe_active = False
+        self._probe_token = None
 
     def _open_remaining(self, now: float) -> float:
         if self.opened_at is None:
@@ -138,12 +152,16 @@ class ResilienceManager:
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def execute(self, key: str, operation: Callable[[], Any]) -> Any:
-        """Run one operation with retry and breaker accounting."""
+        """Run one operation with retry and breaker accounting.
+
+        Base exceptions outside ``Exception`` propagate without retrying or
+        changing health evidence, while releasing an interrupted recovery probe.
+        """
         if not self.config.enabled:
             return operation()
 
         breaker = self._breaker_for(key)
-        breaker.before_call()
+        probe_token = breaker.before_call()
         try:
             result = self._run_with_retry(operation)
         except Exception as exc:
@@ -151,6 +169,11 @@ class ResilienceManager:
                 breaker.record_failure()
             else:
                 breaker.record_success()
+            raise
+        except BaseException:
+            # Cancellation and process interruption are not retryable backend
+            # failures, but must not permanently reserve a half-open probe.
+            breaker.record_aborted(probe_token)
             raise
         breaker.record_success()
         return result
