@@ -3,6 +3,9 @@
 The `deploy/helm/openmed-service` chart deploys the OpenMed de-identification
 REST service on Kubernetes with separate liveness and readiness probes, a
 persistent model cache volume, and configurable service runtime settings.
+Its optional production Journey profile adds a pre-install/pre-upgrade
+migration gate, a worker Deployment, durable artifact storage, dependency-aware
+readiness, and a default-deny NetworkPolicy.
 
 ## Install
 
@@ -14,7 +17,7 @@ helm upgrade --install openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --create-namespace \
   --set image.repository=ghcr.io/maziyarpanahi/openmed \
-  --set image.tag=v2.0.0
+  --set image.tag=v2.5.0
 ```
 
 The default chart creates:
@@ -28,6 +31,39 @@ The service stores OpenMed model cache files under
 `/root/.cache/huggingface/openmed`, so downloads survive pod restarts when the
 PVC is retained.
 
+## Production Journey profile
+
+Create a PostgreSQL database and a least-privilege application role, then put
+its DSN in an existing Secret. The chart deliberately never accepts the DSN as
+a plain Helm value:
+
+```bash
+kubectl -n openmed create secret generic openmed-journey-database \
+  --from-literal=dsn='postgresql://USER:PASSWORD@postgres.openmed.svc:5432/openmed'
+```
+
+Install with Journey enabled and explicitly identify the in-cluster database
+pods allowed by the default-deny egress policy:
+
+```bash
+helm upgrade --install openmed-service deploy/helm/openmed-service \
+  --namespace openmed \
+  --create-namespace \
+  --set journey.enabled=true \
+  --set journey.networkPolicy.databasePodSelector.app=postgres
+```
+
+For an external database, keep `databasePodSelector` empty and supply a
+reviewed `journey.networkPolicy.additionalEgress` IP block. Do not disable the
+whole policy merely to make an unknown destination reachable. DNS is the only
+default egress other than an explicitly selected database.
+
+The Helm hook job runs `openmed-journey migrate` before install and upgrade.
+It uses an advisory migration lock and checksum verification, so concurrent
+releases cannot race the schema. The API readiness command then distinguishes
+migration, metadata-store, artifact-store, worker, and local model state. The
+worker has separate liveness and readiness probes and no service-account token.
+
 ## Upgrade
 
 Upgrade by changing values and running the same release name:
@@ -36,12 +72,19 @@ Upgrade by changing values and running the same release name:
 helm upgrade openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --set image.repository=ghcr.io/maziyarpanahi/openmed \
-  --set image.tag=v2.0.0
+  --set image.tag=v2.5.0
 ```
 
 The chart does not create an Ingress or autoscaling object. Add those in
 environment-specific overlays so cluster ingress classes, certificates, and HPA
 policy stay outside the reusable chart.
+
+For Journey releases, take a paired PostgreSQL and artifact-volume recovery
+point before `helm upgrade`. Wait for the migration hook, both Deployments,
+and the value-free golden journey before declaring success. Migrations are
+additive; a Helm rollback never reverses them. Roll back only to an image whose
+documented compatibility major accepts the current schema, or restore the
+paired recovery point into new storage.
 
 ## Probes
 
@@ -71,13 +114,18 @@ extraEnv:
         key: token
 ```
 
+Rotate the database credential with overlapping roles: create the successor
+role, update the referenced Secret, roll migration/worker/API in order, verify
+health, and revoke the old role after the rollback window. Kubernetes Secret
+objects are not backups; use the cluster's encrypted secret manager.
+
 ## Values Reference
 
 | Value | Default | Description |
 | --- | --- | --- |
 | `replicaCount` | `1` | Number of service pods. |
 | `image.repository` | `openmed` | Container image repository. |
-| `image.tag` | `2.0.0` | Container image tag. Empty uses `Chart.appVersion`. |
+| `image.tag` | `2.5.0` | Container image tag. Empty uses `Chart.appVersion`. |
 | `image.pullPolicy` | `IfNotPresent` | Kubernetes image pull policy. |
 | `imagePullSecrets` | `[]` | Pull secrets for private image registries. |
 | `nameOverride` | `""` | Short name override. |
@@ -98,6 +146,10 @@ extraEnv:
 | `config.batching.enabled` | `false` | `OPENMED_SERVICE_BATCHING_ENABLED`. |
 | `config.batching.maxSize` | `8` | `OPENMED_SERVICE_BATCH_MAX_SIZE`. |
 | `config.batching.maxWaitMs` | `5` | `OPENMED_SERVICE_BATCH_MAX_WAIT_MS`. |
+| `config.batching.maxQueueSize` | `256` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE`. |
+| `config.batching.highWatermark` | `256` | `OPENMED_SERVICE_BATCH_HIGH_WATERMARK`. |
+| `config.batching.lowWatermark` | `128` | `OPENMED_SERVICE_BATCH_LOW_WATERMARK`. |
+| `config.batching.maxQueueWaitMs` | `1000` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS`. |
 | `config.coalescing.enabled` | `false` | `OPENMED_SERVICE_COALESCING_ENABLED`. |
 | `config.shutdownDrainSeconds` | `30` | `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`. |
 | `config.metrics.enabled` | `false` | `OPENMED_SERVICE_METRICS_ENABLED`. |
@@ -138,3 +190,16 @@ extraEnv:
 | `affinity` | `{}` | Pod affinity. |
 | `extraVolumes` | `[]` | Extra pod volumes. |
 | `extraVolumeMounts` | `[]` | Extra container volume mounts. |
+| `journey.enabled` | `false` | Enable migrations, worker, artifact PVC, dependency health, and NetworkPolicy. |
+| `journey.schema` | `openmed_journey` | Controlled PostgreSQL schema name. |
+| `journey.database.secretName` | `openmed-journey-database` | Existing Secret containing the DSN. |
+| `journey.database.secretKey` | `dsn` | Key inside the database Secret. |
+| `journey.artifacts.existingClaim` | `""` | Existing artifact PVC; empty creates one. |
+| `journey.artifacts.size` | `20Gi` | Requested content-addressed artifact capacity. |
+| `journey.worker.replicas` | `1` | Operational worker replicas. |
+| `journey.worker.port` | `8091` | Internal worker health port. |
+| `journey.migration.backoffLimit` | `3` | Bounded migration Job retries. |
+| `journey.networkPolicy.enabled` | `true` | Apply default-deny ingress and egress to chart pods. |
+| `journey.networkPolicy.allowDns` | `true` | Allow cluster DNS only. |
+| `journey.networkPolicy.databasePodSelector` | `{}` | Explicit in-cluster PostgreSQL pod selector. |
+| `journey.networkPolicy.additionalEgress` | `[]` | Reviewed extra Kubernetes egress rules. |

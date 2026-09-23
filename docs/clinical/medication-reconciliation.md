@@ -1,71 +1,120 @@
-# Medication reconciliation confidence
+# Medication reconciliation
 
-`openmed.clinical.medication_reconciliation` provides deterministic support
-for reviewing whether normalized medication candidates from separate documents
-can represent one longitudinal medication entry. It does not ground names,
-query a vocabulary, select a dose, or make a clinical decision. The caller
-must provide the normalized candidates and remains responsible for review.
+`reconcile_medications()` collapses medication mentions within one document
+into one normalized, reviewable state per medication. It is an assistive
+organization layer, not a prescription or clinical decision.
 
-## Scoring
-
-`score_medication_match(left, right)` compares four independent signals:
-
-| Signal | Default weight | Match behavior |
-| --- | ---: | --- |
-| Name or shared coded identity | 0.45 | Normalized case and punctuation variants match, or the supplied coding system and code match. |
-| Dose | 0.25 | Local dose normalization compares compatible canonical units and amounts. |
-| Route | 0.15 | Common route aliases such as `PO` and `oral` are controlled to one value. |
-| Temporal evidence | 0.15 | Overlapping windows or the same temporal label match; separated windows receive a deterministic partial score. |
-
-Unknown fields contribute no score. The default threshold is `0.80`, so a
-name-only match cannot be silently merged. Known name, code, dose, route, or
-overlapping temporal-status conflicts always produce an abstention with stable
-reason codes such as `dose_conflict`, `route_conflict`,
-`temporal_conflict`, and `insufficient_evidence`.
-
-Dose comparison is limited to equality of caller-supplied normalized values;
-this module does not determine whether any dose is appropriate.
+The input can be a mapping, `MedicationMention`, or a grounded span-like
+record. Supply a local ingredient or code when available; document-local
+coreference chains can provide an additional identity key:
 
 ```python
-from openmed.clinical.medication_reconciliation import (
-    reconcile_medications,
-    score_medication_match,
+from openmed.clinical import reconcile_medications
+
+records = reconcile_medications(
+    [
+        {
+            "ingredient": "metformin",
+            "system": "RXNORM",
+            "code": "860975",
+            "dose": "500 MG",
+            "route": "PO",
+            "status": "started",
+            "effective_time": "2026-01-01",
+            "offset": (10, 19),
+        },
+        {
+            "ingredient": "metformin",
+            "system": "RXNORM",
+            "code": "860975",
+            "dose": "1000 mg",
+            "route": "oral",
+            "status": "changed",
+            "effective_time": "2026-01-15",
+            "offset": (82, 91),
+        },
+    ],
+    document_id="synthetic-note-1",
 )
 
+record = records[0]
+assert record.current_status == "changed"
+assert record.current_dose == "1000 mg"
+assert record.current_route == "oral"
+```
+
+## Identity and ordering
+
+Mentions are grouped using, in order, a supplied coreference entity, an
+explicit normalized ingredient, a coded grounding identity, or a normalized
+surface fallback. `RXNORM` candidates may be supplied through the existing
+grounding record contract. Reconciliation is document-local and never calls a
+terminology service by default.
+
+History is ordered by normalized absolute effective timestamps when present.
+When timestamps are absent, source offsets provide deterministic document
+order. A missing status is conservatively normalized to `continued`. Supported
+normalized transitions are `started`, `continued`, `held`, `changed`, and
+`stopped`; common start/hold/change/discontinue variants are accepted.
+
+## Dose and route conflicts
+
+The latest normalized timestamp wins when it provides a unique value. At the
+same timestamp, section precedence is used (`assessment`/`plan`, then current
+medication lists, then narrative history). If conflicting values remain tied,
+the current field is `None` and `record.conflicts` contains the normalized
+values, field name, and source offsets. Untimestamped disagreements without a
+unique section authority are also left unresolved rather than silently merged.
+
+## Privacy and scope
+
+`ReconciledMedication.to_dict()` emits normalized ingredient, dose, route,
+status, timestamps, hashes/codes supplied by upstream grounding, and source
+offsets. It does not emit source mention text or the source document. The
+module does not parse sigs, extract medication relations, reconcile across
+documents, or make treatment recommendations.
+
+## Cross-document match confidence
+
+Cross-document candidate scoring is a separate, more conservative API in
+`openmed.clinical.medication_reconciliation`. Use
+`reconcile_medication_candidates` for that task; the top-level
+`reconcile_medications` above retains its document-local contract.
+
+`score_medication_match(left, right)` compares caller-supplied normalized name
+or coded identity, dose, route, and temporal evidence. Its default weights are
+0.45, 0.25, 0.15, and 0.15 respectively, with a default merge threshold of
+0.80. Unknown fields contribute no score. Known identity, dose, route, or
+overlapping temporal-status conflicts cause abstention. A name-only match
+cannot silently merge. The scorer does not decide whether a dose is clinically
+appropriate.
+
+```python
+from openmed.clinical import reconcile_medication_candidates, score_medication_match
+
 left = {
-    "candidate_id": "synthetic-1",
+    "candidate_id": "synthetic-a",
     "normalized_name": "Synthetic Medication Alpha",
     "dose": "500 mg",
     "route": "PO",
     "event_date": "2026-01-15",
 }
 right = {
-    "candidate_id": "synthetic-2",
+    "candidate_id": "synthetic-b",
     "normalized_name": "synthetic medication alpha",
-    "dose": {"value": 0.5, "unit": "g"},
+    "dose": "0.5 g",
     "route": "oral",
     "event_date": "2026-01-15",
 }
 
 decision = score_medication_match(left, right)
 assert decision.matched
-assert decision.confidence == 1.0
-
-result = reconcile_medications([left, right])
+result = reconcile_medication_candidates([left, right])
 assert len(result.merged_groups) == 1
 ```
 
-## Conservative grouping and privacy
-
-`reconcile_medications` computes every pair first and merges groups only when
-the complete cross-product is compatible. This prevents a transitive chain
-from joining two candidates whose regimens conflict. Every rejected pair is
-available through `result.abstentions` and its `abstention_reasons`.
-
-Candidates retain normalized values in memory for a review client, but
-`MedicationMatchDecision.to_dict()`,
-`ReconciledMedicationGroup.to_dict()`, and
-`MedicationReconciliationResult.to_dict()` hash candidate identities, names,
-doses, and source identifiers. They do not emit raw medication or document
-values. The implementation uses only the Python standard library plus
-OpenMed's local dose normalizer and makes no mandatory network call.
+Candidate grouping checks every cross-pair before merging a group, so a
+transitive chain cannot hide a regimen conflict. Rejected pairs remain
+reviewable through stable abstention reasons. Serialized audit decisions hash
+candidate and source identifiers instead of emitting raw medication or
+document values. All processing is local and requires no terminology service.

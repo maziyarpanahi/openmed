@@ -29,6 +29,22 @@ def _candidate(
     }
 
 
+def test_public_medication_reconciliation_apis_remain_distinct() -> None:
+    from openmed.clinical import reconcile_medication_candidates
+    from openmed.clinical import reconcile_medications as reconcile_document_medications
+
+    assert reconcile_document_medications.__module__ == (
+        "openmed.clinical.med_reconciliation"
+    )
+    assert reconcile_medication_candidates.__module__ == (
+        "openmed.clinical.medication_reconciliation"
+    )
+    result = reconcile_medication_candidates(
+        [_candidate("mention-a"), _candidate("mention-b")]
+    )
+    assert len(result.merged_groups) == 1
+
+
 def test_exact_name_dose_route_and_temporal_evidence_matches() -> None:
     decision = score_medication_match(
         _candidate("mention-a"),

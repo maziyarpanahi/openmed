@@ -33,8 +33,8 @@ const DefaultBaseURL = "http://localhost:8080"
 // responses are read incrementally and are not subject to this total limit.
 const DefaultMaxResponseBodyBytes int64 = 64 << 20
 
-// DefaultMaxStreamEventBytes bounds one NDJSON event returned by
-// /pii/extract/stream. The total stream remains unbounded and is consumed
+// DefaultMaxStreamEventBytes bounds one NDJSON event returned by a streaming
+// PII endpoint. The total stream remains unbounded and is consumed
 // incrementally.
 const DefaultMaxStreamEventBytes = 4 << 20
 
@@ -92,6 +92,7 @@ const (
 	LangUR PIILanguage = "ur"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"
+	LangFA PIILanguage = "fa"
 	LangHE PIILanguage = "he"
 	LangJA PIILanguage = "ja"
 	LangTR PIILanguage = "tr"
@@ -138,6 +139,55 @@ const (
 	PolicyMinimal  PrivacyPolicy = "minimal"
 )
 
+// DecisionMode selects one bounded fixed-output decision shape.
+type DecisionMode string
+
+// Decision modes accepted by POST /v1/decisions.
+const (
+	DecisionFixedChoice       DecisionMode = "fixed_choice"
+	DecisionBooleanChoice     DecisionMode = "boolean_choice"
+	DecisionOrderedPreference DecisionMode = "ordered_preference"
+	DecisionScalarScore       DecisionMode = "scalar_score"
+	DecisionMultiLabel        DecisionMode = "multi_label"
+)
+
+// DecisionState reports whether a decision succeeded or stopped safely.
+type DecisionState string
+
+const (
+	DecisionSuccess     DecisionState = "success"
+	DecisionAbstained   DecisionState = "abstained"
+	DecisionPartial     DecisionState = "partial"
+	DecisionUnknown     DecisionState = "unknown"
+	DecisionConflict    DecisionState = "conflict"
+	DecisionUnsupported DecisionState = "unsupported"
+	DecisionDenied      DecisionState = "denied"
+	DecisionFailure     DecisionState = "failure"
+)
+
+// JourneyResourceType selects a versioned Journey resource family.
+type JourneyResourceType string
+
+// Journey resource families supported by the versioned read contract.
+const (
+	JourneyArtifact        JourneyResourceType = "artifact"
+	JourneyJob             JourneyResourceType = "job"
+	JourneyFact            JourneyResourceType = "fact"
+	JourneyConflict        JourneyResourceType = "conflict"
+	Journey                JourneyResourceType = "journey"
+	JourneyCohort          JourneyResourceType = "cohort"
+	JourneyDataset         JourneyResourceType = "dataset"
+	JourneyRegistry        JourneyResourceType = "registry"
+	JourneyMeasure         JourneyResourceType = "measure"
+	JourneyTrialReview     JourneyResourceType = "trial_review"
+	JourneyEvidence        JourneyResourceType = "evidence"
+	JourneyCurrentFact     JourneyResourceType = "current_fact"
+	JourneyEvent           JourneyResourceType = "journey_event"
+	JourneyMapping         JourneyResourceType = "mapping"
+	JourneyCohortRun       JourneyResourceType = "cohort_run"
+	JourneyDatasetManifest JourneyResourceType = "dataset_manifest"
+)
+
 // JobStatus enumerates the lifecycle states of a de-identification job.
 type JobStatus string
 
@@ -168,6 +218,16 @@ type AnalyzeRequest struct {
 	SentenceClean       bool                 `json:"sentence_clean,omitempty"`
 	UseFastTokenizer    *bool                `json:"use_fast_tokenizer,omitempty"`
 	KeepAlive           any                  `json:"keep_alive,omitempty"`
+}
+
+// GroundRequest is the request body for POST /ground.
+type GroundRequest struct {
+	Entities       []JSONObject `json:"entities,omitempty"`
+	Offline        *bool        `json:"offline,omitempty"`
+	SourceLanguage string       `json:"source_language,omitempty"`
+	Systems        []string     `json:"systems,omitempty"`
+	Text           *string      `json:"text,omitempty"`
+	TopK           int          `json:"top_k,omitempty"`
 }
 
 // PIIExtractRequest is the request body for POST /pii/extract.
@@ -215,6 +275,26 @@ type PIIDeidentifyRequest struct {
 	KeepAlive           any                    `json:"keep_alive,omitempty"`
 }
 
+// PIIDeidentifyStreamRequest is the request body for
+// POST /pii/deidentify/stream.
+type PIIDeidentifyStreamRequest struct {
+	Text                string                 `json:"text"`
+	Method              DeidentificationMethod `json:"method,omitempty"`
+	ModelName           string                 `json:"model_name,omitempty"`
+	ConfidenceThreshold *float64               `json:"confidence_threshold,omitempty"`
+	KeepYear            bool                   `json:"keep_year,omitempty"`
+	ShiftDates          *bool                  `json:"shift_dates,omitempty"`
+	DateShiftDays       *int                   `json:"date_shift_days,omitempty"`
+	KeepMapping         bool                   `json:"keep_mapping,omitempty"`
+	Policy              PrivacyPolicy          `json:"policy,omitempty"`
+	UseSmartMerging     *bool                  `json:"use_smart_merging,omitempty"`
+	UseSafetySweep      *bool                  `json:"use_safety_sweep,omitempty"`
+	Lang                PIILanguage            `json:"lang,omitempty"`
+	NormalizeAccents    *bool                  `json:"normalize_accents,omitempty"`
+	KeepAlive           any                    `json:"keep_alive,omitempty"`
+	ChunkSize           int                    `json:"chunk_size,omitempty"`
+}
+
 // PrivacyGatewayRequest is the request body for POST /privacy-gateway/complete.
 type PrivacyGatewayRequest struct {
 	Text                       string        `json:"text"`
@@ -227,6 +307,19 @@ type PrivacyGatewayRequest struct {
 	Lang                       PIILanguage   `json:"lang,omitempty"`
 	NormalizeAccents           *bool         `json:"normalize_accents,omitempty"`
 	KeepAlive                  any           `json:"keep_alive,omitempty"`
+}
+
+// FixedOptionDecisionRequest is the request body for POST /v1/decisions.
+type FixedOptionDecisionRequest struct {
+	Mode                DecisionMode `json:"mode"`
+	InputText           string       `json:"input_text"`
+	Options             []string     `json:"options,omitempty"`
+	Namespace           string       `json:"namespace,omitempty"`
+	Purpose             string       `json:"purpose,omitempty"`
+	CalibrationID       string       `json:"calibration_id,omitempty"`
+	TimeoutMS           int          `json:"timeout_ms,omitempty"`
+	SchemaVersion       string       `json:"schema_version,omitempty"`
+	CompatibilityPolicy string       `json:"compatibility_policy,omitempty"`
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
@@ -252,6 +345,19 @@ type PIIExtractStreamEvent struct {
 	LatencyMS   *float64               `json:"latency_ms,omitempty"`
 	WindowChars *int                   `json:"window_chars,omitempty"`
 	Audit       JSONObject             `json:"audit"`
+}
+
+// PIIDeidentifyStreamEvent is one NDJSON object returned by
+// POST /pii/deidentify/stream. Mapping is present only when reversible mapping
+// was explicitly requested and must be handled as PHI.
+type PIIDeidentifyStreamEvent struct {
+	Type         string            `json:"type"`
+	Index        *int              `json:"index,omitempty"`
+	RedactedText string            `json:"redacted_text,omitempty"`
+	Audit        JSONObject        `json:"audit,omitempty"`
+	Spans        []JSONObject      `json:"spans,omitempty"`
+	Mapping      map[string]string `json:"mapping,omitempty"`
+	Error        *ErrorBody        `json:"error,omitempty"`
 }
 
 // ModelUnloadRequest is the request body for POST /models/unload. Provide a
@@ -325,9 +431,11 @@ type SMARTBackendIngestionRequest struct {
 // newline-delimited grounded note records and the response is a PHI-free load
 // summary.
 type OMOPLoadRequest struct {
-	RecordsJSONL        string `json:"records_jsonl"`
-	VocabularyVersion   string `json:"vocabulary_version,omitempty"`
-	ValidateConstraints bool   `json:"validate_constraints,omitempty"`
+	RecordsJSONL        string   `json:"records_jsonl"`
+	VocabularyVersion   string   `json:"vocabulary_version,omitempty"`
+	ValidateConstraints bool     `json:"validate_constraints,omitempty"`
+	CompletenessFloor   *float64 `json:"completeness_floor,omitempty"`
+	RequiredFields      []string `json:"required_fields,omitempty"`
 }
 
 // ConceptAncestorRequest is one caller-supplied Athena hierarchy edge.
@@ -338,9 +446,19 @@ type ConceptAncestorRequest struct {
 
 // CohortResolveRequest is the request body for POST /cohort/resolve.
 type CohortResolveRequest struct {
-	Phenotype        JSONObject               `json:"phenotype"`
-	RecordsJSONL     string                   `json:"records_jsonl"`
-	ConceptAncestors []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
+	Phenotype         JSONObject               `json:"phenotype"`
+	RecordsJSONL      string                   `json:"records_jsonl"`
+	ConceptAncestors  []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
+	CompletenessFloor *float64                 `json:"completeness_floor,omitempty"`
+	RequiredFields    []string                 `json:"required_fields,omitempty"`
+}
+
+// ProfileRequest is the request body for POST /profile.
+type ProfileRequest struct {
+	RecordsJSONL      string     `json:"records_jsonl"`
+	CompletenessFloor float64    `json:"completeness_floor,omitempty"`
+	RequiredFields    []string   `json:"required_fields,omitempty"`
+	AthenaIndex       JSONObject `json:"athena_index,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -370,6 +488,12 @@ type PredictionResult struct {
 
 // AnalyzeResponse is returned by /analyze.
 type AnalyzeResponse = PredictionResult
+
+// GroundResponse is the open grounding result returned by /ground.
+type GroundResponse = JSONObject
+
+// ProfileResponse is the structured quality report returned by /profile.
+type ProfileResponse = JSONObject
 
 // PIIExtractResponse is returned by /pii/extract.
 type PIIExtractResponse = PredictionResult
@@ -419,6 +543,38 @@ type PrivacyGatewayResponse struct {
 		RecordHash string `json:"record_hash"`
 		Verified   bool   `json:"verified"`
 	} `json:"audit"`
+}
+
+// DecisionOptionScore preserves a caller option's original position and score.
+type DecisionOptionScore struct {
+	Index  int     `json:"index"`
+	Option string  `json:"option"`
+	Score  float64 `json:"score"`
+}
+
+// FixedOptionDecisionResult is the calibrated, explicitly review-only result
+// returned by POST /v1/decisions.
+type FixedOptionDecisionResult struct {
+	Mode                DecisionMode          `json:"mode"`
+	State               DecisionState         `json:"state"`
+	Code                *string               `json:"code"`
+	OptionScores        []DecisionOptionScore `json:"option_scores"`
+	Choice              *string               `json:"choice"`
+	Choices             []string              `json:"choices"`
+	Ranking             []string              `json:"ranking"`
+	ScalarScore         *float64              `json:"scalar_score"`
+	Confidence          *float64              `json:"confidence"`
+	Margin              *float64              `json:"margin"`
+	Calibration         JSONObject            `json:"calibration"`
+	Backend             JSONObject            `json:"backend"`
+	Access              JSONObject            `json:"access"`
+	Warnings            []string              `json:"warnings"`
+	Review              JSONObject            `json:"review"`
+	Advisory            string                `json:"advisory"`
+	AutonomousAction    bool                  `json:"autonomous_action"`
+	SchemaVersion       string                `json:"schema_version"`
+	CompatibilityPolicy string                `json:"compatibility_policy"`
+	Extensions          JSONObject            `json:"extensions"`
 }
 
 // HealthResponse is returned by /health.
@@ -615,6 +771,53 @@ type CohortResolveResponse struct {
 	Provenance    JSONObject              `json:"provenance"`
 }
 
+// JourneyResourceQuery selects one bounded, policy-aware resource page.
+type JourneyResourceQuery struct {
+	ResourceType JourneyResourceType
+	Namespace    string
+	Purpose      string
+	First        int
+	After        string
+	Fields       []string
+}
+
+// JourneyResource is one versioned, field-filtered read model.
+type JourneyResource struct {
+	ResourceType        JourneyResourceType `json:"resource_type"`
+	ResourceID          string              `json:"resource_id"`
+	Namespace           string              `json:"namespace"`
+	Data                JSONObject          `json:"data"`
+	State               string              `json:"state"`
+	Version             int                 `json:"version"`
+	Revision            int                 `json:"revision"`
+	SchemaVersion       string              `json:"schema_version"`
+	CompatibilityPolicy string              `json:"compatibility_policy"`
+	Extensions          JSONObject          `json:"extensions"`
+}
+
+// JourneyResourcePage is the cross-surface bounded list response.
+type JourneyResourcePage struct {
+	State     string            `json:"state"`
+	Code      *string           `json:"code"`
+	Resources []JourneyResource `json:"resources"`
+	PageInfo  struct {
+		HasNextPage    bool    `json:"has_next_page"`
+		EndCursor      *string `json:"end_cursor"`
+		PageSize       int     `json:"page_size"`
+		SnapshotDigest string  `json:"snapshot_digest"`
+	} `json:"page_info"`
+	Policy struct {
+		State         string   `json:"state"`
+		Namespace     string   `json:"namespace"`
+		Purpose       string   `json:"purpose"`
+		AllowedFields []string `json:"allowed_fields"`
+		Code          *string  `json:"code"`
+		PolicyVersion string   `json:"policy_version"`
+	} `json:"policy"`
+	SchemaVersion       string `json:"schema_version"`
+	CompatibilityPolicy string `json:"compatibility_policy"`
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -685,6 +888,16 @@ type PIIExtractStream struct {
 	closed  bool
 }
 
+// PIIDeidentifyStream incrementally decodes the NDJSON response from
+// /pii/deidentify/stream. Callers must close the stream, normally with defer.
+type PIIDeidentifyStream struct {
+	body    io.ReadCloser
+	scanner *bufio.Scanner
+	event   PIIDeidentifyStreamEvent
+	err     error
+	closed  bool
+}
+
 // Next advances to the next event. It returns false at EOF or after an error.
 func (s *PIIExtractStream) Next() bool {
 	if s == nil || s.closed || s.err != nil {
@@ -742,6 +955,71 @@ func (s *PIIExtractStream) Close() error {
 }
 
 func (s *PIIExtractStream) closeBody() error {
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	return s.body.Close()
+}
+
+// Next advances to the next de-identification event. It returns false at EOF
+// or after an error.
+func (s *PIIDeidentifyStream) Next() bool {
+	if s == nil || s.closed || s.err != nil {
+		return false
+	}
+	if !s.scanner.Scan() {
+		if err := s.scanner.Err(); err != nil {
+			s.err = fmt.Errorf("openmed: read /pii/deidentify/stream event: %w", err)
+		}
+		_ = s.closeBody()
+		return false
+	}
+
+	var event PIIDeidentifyStreamEvent
+	if err := decodeJSONObject(
+		"/pii/deidentify/stream event",
+		s.scanner.Bytes(),
+		&event,
+	); err != nil {
+		s.err = err
+		_ = s.closeBody()
+		return false
+	}
+	if strings.TrimSpace(event.Type) == "" {
+		s.err = errors.New("openmed: /pii/deidentify/stream event has no type")
+		_ = s.closeBody()
+		return false
+	}
+	s.event = event
+	return true
+}
+
+// Event returns the event decoded by the most recent successful Next call.
+func (s *PIIDeidentifyStream) Event() PIIDeidentifyStreamEvent {
+	if s == nil {
+		return PIIDeidentifyStreamEvent{}
+	}
+	return s.event
+}
+
+// Err returns the first stream scanning or JSON decoding error, if any.
+func (s *PIIDeidentifyStream) Err() error {
+	if s == nil {
+		return nil
+	}
+	return s.err
+}
+
+// Close closes the response body. It is safe to call more than once.
+func (s *PIIDeidentifyStream) Close() error {
+	if s == nil {
+		return nil
+	}
+	return s.closeBody()
+}
+
+func (s *PIIDeidentifyStream) closeBody() error {
 	if s.closed {
 		return nil
 	}
@@ -892,6 +1170,15 @@ func (c *Client) Analyze(ctx context.Context, req AnalyzeRequest) (*AnalyzeRespo
 	return &out, nil
 }
 
+// Ground calls POST /ground.
+func (c *Client) Ground(ctx context.Context, req GroundRequest) (*GroundResponse, error) {
+	var out GroundResponse
+	if err := c.post(ctx, "/ground", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ExtractPII calls POST /pii/extract.
 func (c *Client) ExtractPII(ctx context.Context, req PIIExtractRequest) (*PIIExtractResponse, error) {
 	var out PIIExtractResponse
@@ -943,10 +1230,53 @@ func (c *Client) Deidentify(ctx context.Context, req PIIDeidentifyRequest) (*PII
 	return &out, nil
 }
 
+// DeidentifyStream calls POST /pii/deidentify/stream and returns an
+// incremental, bounded-per-event NDJSON decoder. The caller must close the
+// returned stream.
+func (c *Client) DeidentifyStream(ctx context.Context, req PIIDeidentifyStreamRequest) (*PIIDeidentifyStream, error) {
+	resp, err := c.do(
+		ctx,
+		http.MethodPost,
+		"/pii/deidentify/stream",
+		req,
+		"application/x-ndjson",
+	)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, apiErrorFromResponse(resp)
+	}
+	if !isNDJSONContentType(resp.Header.Get("Content-Type")) {
+		_ = resp.Body.Close()
+		return nil, errors.New(
+			"openmed: /pii/deidentify/stream returned a non-NDJSON response",
+		)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	initialBufferSize := 64 << 10
+	if c.maxStreamEventBytes < initialBufferSize {
+		initialBufferSize = c.maxStreamEventBytes
+	}
+	scanner.Buffer(make([]byte, initialBufferSize), c.maxStreamEventBytes)
+	return &PIIDeidentifyStream{body: resp.Body, scanner: scanner}, nil
+}
+
 // PrivacyGateway calls POST /privacy-gateway/complete.
 func (c *Client) PrivacyGateway(ctx context.Context, req PrivacyGatewayRequest) (*PrivacyGatewayResponse, error) {
 	var out PrivacyGatewayResponse
 	if err := c.post(ctx, "/privacy-gateway/complete", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Decision calls POST /v1/decisions.
+func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (*FixedOptionDecisionResult, error) {
+	var out FixedOptionDecisionResult
+	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -995,6 +1325,37 @@ func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error
 	return &out, nil
 }
 
+// JourneyResources calls GET /v1/journey/resources.
+func (c *Client) JourneyResources(ctx context.Context, query JourneyResourceQuery) (*JourneyResourcePage, error) {
+	parameters := url.Values{}
+	parameters.Set("resource_type", string(query.ResourceType))
+	if query.Namespace == "" {
+		query.Namespace = "default"
+	}
+	if query.Purpose == "" {
+		query.Purpose = "care_review"
+	}
+	if query.First == 0 {
+		query.First = 20
+	}
+	parameters.Set("namespace", query.Namespace)
+	parameters.Set("purpose", query.Purpose)
+	parameters.Set("first", fmt.Sprintf("%d", query.First))
+	if query.After != "" {
+		parameters.Set("after", query.After)
+	}
+	if len(query.Fields) > 0 {
+		parameters.Set("fields", strings.Join(query.Fields, ","))
+	}
+	path := "/v1/journey/resources"
+	path += "?" + parameters.Encode()
+	var out JourneyResourcePage
+	if err := c.get(ctx, path, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // UnloadModels calls POST /models/unload.
 func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*ModelUnloadResponse, error) {
 	body, err := c.raw(ctx, http.MethodPost, "/models/unload", req)
@@ -1015,6 +1376,15 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
 	var out OMOPLoadResponse
 	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Profile calls POST /profile and returns the PHI-free quality report.
+func (c *Client) Profile(ctx context.Context, req ProfileRequest) (*ProfileResponse, error) {
+	var out ProfileResponse
+	if err := c.post(ctx, "/profile", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

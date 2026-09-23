@@ -19,9 +19,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
-  packages: write
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
@@ -40,18 +37,18 @@ jobs:
             arch: arm64
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with:
           platforms: arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build smoke image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -111,9 +108,9 @@ jobs:
       ARM_LATENCY_REVISION: 79f7db205869b1be4be23ac4f42aa95bdedc5aee
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
           cache: pip
@@ -150,7 +147,7 @@ jobs:
             --output arm-latency-report.json
 
       - name: Upload ARM latency report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: arm-latency-report
           path: arm-latency-report.json
@@ -160,28 +157,43 @@ jobs:
   publish:
     name: Publish manifest list
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
     needs:
       - smoke
       - arm-latency
     if: github.event_name != 'pull_request'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with:
           platforms: arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve the lowercase image name
+        id: image-name
+        shell: bash
+        run: |
+          # GHCR rejects references whose repository name carries uppercase
+          # characters, which any fork of a capitalised owner would produce.
+          owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV"
+          echo "image_name=ghcr.io/${owner_repo}" >> "$GITHUB_OUTPUT"
 
       - name: Compute image tags
         id: tags
@@ -204,7 +216,7 @@ jobs:
 
       - name: Build and push manifest list
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -227,9 +239,9 @@ jobs:
 
       - name: Generate SLSA provenance for image
         id: attest-image
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
-          subject-name: ${{ env.IMAGE_NAME }}
+          subject-name: ${{ steps.image-name.outputs.image_name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
           create-storage-record: false
@@ -272,7 +284,7 @@ jobs:
           PY
 
       - name: Upload image provenance evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: image-provenance
           path: |

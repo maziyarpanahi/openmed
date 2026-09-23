@@ -229,6 +229,11 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+For Mexican Spanish records, pass `locale="es_MX"`. The deterministic safety
+sweep recognizes context-labelled CURP and RFC values, and replacement uses
+checksum-valid synthetic surrogates while preserving whether an RFC is the
+12-character company form or 13-character individual form.
+
 Country-aware African French and Portuguese surrogates are available through
 conceptual locale overrides. `fr_SN`, `fr_CI`, and `fr_CM` use curated names,
 cities, addresses, and country-code phone formats while keeping the French PII
@@ -260,6 +265,24 @@ Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
 
 ### Cross-document surrogate vaults
+
+Canonical span and pipeline audit-record HMACs use private random keys by
+default. A `Pipeline` keeps its key for its own lifetime, so streaming windows
+and repeated calls on that instance agree. Separate pipelines, standalone
+recognizer calls, and interop projections receive separate keys. For intentional
+stable HMACs across pipeline instances, pass the same non-empty, securely stored
+`hmac_secret` to each `Pipeline`. Fresh `deidentify(..., audit=True)` calls
+therefore produce different audit hashes; each report still verifies against
+its own contents.
+This does not change redaction labels or offsets.
+
+The separate `AuditReport` format retains SHA-256 integrity digests of input,
+spans, and context. These unkeyed digests can be guessed for low-entropy values;
+they are not an anonymization boundary. Keep those reports access-controlled.
+
+The web SDK and React Native bridges generate a private key per inference call
+when `hashSecret` is omitted. Supply a non-empty private `hashSecret` when
+cross-call linkage is needed; keep keys separate from span output.
 
 Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
 calls need stable pseudonyms for the same identifier:
@@ -350,6 +373,8 @@ so every surrogate ID passes the same validator that detection uses:
 | `fr_FR` | NIR                 | Faker built-in (`fr_FR.ssn`)                           |
 | `it_IT` | Codice Fiscale      | Faker built-in (`it_IT.ssn`)                           |
 | `es_ES` | NIE                 | Faker built-in (`es_ES.nie`)                           |
+| `es_MX` | CURP                | OpenMed `MexicanCURPProvider` (modulo-10)              |
+| `es_MX` | RFC                 | OpenMed `MexicanRFCProvider` (modulo-11)               |
 | `en_IN` | Aadhaar (Verhoeff)  | OpenMed `AadhaarProvider` (Faker's built-in is invalid) |
 | `de_DE` | Steuer-ID           | OpenMed `GermanSteuerIdProvider` (Faker's `de_DE.ssn` is US-style) |
 | any     | NPI (Luhn over 80840) | OpenMed `NPIProvider`                                 |
@@ -430,14 +455,13 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **35 supported PII language codes**:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
-`it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+as its source of truth and supports **38 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
+`it`, `ja`, `kn`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
-The optional Indic NER adapter adds four user-configured routes (`gu`, `kn`,
-`ml`, and `pa`) and can also serve Assamese, Bengali, Hindi, Marathi, Odia,
+The optional Indic NER adapter adds two user-configured routes (`ml` and `pa`) and can also serve Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia,
 Tamil, and Telugu. It loads only an explicit path or repository from
 `OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint. See the
 [Indic NER checkpoint compatibility matrix](indic-ner-checkpoints.md) for
@@ -447,6 +471,10 @@ Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale
 uses Faker's installed `en_PK` backend for general surrogate data while CNIC
 generation remains provider-backed and format-valid.
+The Irish `en_IE` overlay validates PPS numbers with their weighted modulo-23
+check letter, and the Japanese `ja_JP` path validates My Numbers with their
+modulo-11 check digit; both paths generate synthetic, checksum-valid
+surrogates locally.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 

@@ -134,6 +134,60 @@ _FAMILY_RE = _cue_pattern(_FAMILY_CUES)
 _OTHER_RE = _cue_pattern(_OTHER_CUES)
 
 
+# Compact German subject cues are scoped to whole words and the governing
+# clause. They are authored language rules, not clinically qualified findings.
+_GERMAN_FAMILY_RE = _cue_pattern(
+    (
+        "Familienanamnese",
+        "Familiengeschichte",
+        "Mutter",
+        "Vater",
+        "Eltern",
+        "Bruder",
+        "Schwester",
+        "Geschwister",
+        "Sohn",
+        "Tochter",
+        "Großmutter",
+        "Grossmutter",
+        "Großvater",
+        "Grossvater",
+        "Großeltern",
+        "Grosseltern",
+        "Tante",
+        "Onkel",
+        "Cousin",
+        "Cousine",
+        "Ehefrau",
+        "Ehemann",
+    )
+)
+_GERMAN_OTHER_RE = _cue_pattern(
+    (
+        "Spender",
+        "Spenderin",
+        "Mitbewohner",
+        "Mitbewohnerin",
+        "Kollege",
+        "Kollegin",
+        "Nachbar",
+        "Nachbarin",
+    )
+)
+_GERMAN_PATIENT_RE = _cue_pattern(("Patient", "Patientin"))
+_GERMAN_CLAUSE_BOUNDARY_RE = re.compile(
+    r"[.!?;\r\n]|(?<!\w)(?:aber|jedoch|hingegen|wohingegen|but|however|whereas)(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def _is_german(language: str | None) -> bool:
+    return (
+        isinstance(language, str)
+        and language.lower().replace("_", "-").split("-")[0] == "de"
+    )
+
+
 @dataclass(frozen=True)
 class ExperiencerAssignment:
     """The resolved experiencer for a span, with provenance.
@@ -158,11 +212,14 @@ class RefinedExperiencerAssertion:
     assignment: ExperiencerAssignment
 
 
-def _clause_start(text: str, span_start: int) -> int:
+def _clause_start(text: str, span_start: int, language: str | None = None) -> int:
     """Offset just after the last clause boundary before ``span_start``."""
 
     last = 0
-    for match in _CLAUSE_BOUNDARY_RE.finditer(text, 0, span_start):
+    boundary = (
+        _GERMAN_CLAUSE_BOUNDARY_RE if _is_german(language) else _CLAUSE_BOUNDARY_RE
+    )
+    for match in boundary.finditer(text, 0, span_start):
         last = match.end()
     return last
 
@@ -182,6 +239,7 @@ def _nearest_cue(
     text: str,
     clause_start: int,
     span_start: int,
+    language: str | None = None,
 ) -> tuple[str, int, int] | None:
     """Return the (experiencer, cue_start, cue_end) of the cue nearest the span.
 
@@ -190,10 +248,17 @@ def _nearest_cue(
     """
 
     best: tuple[int, int, str, int, int] | None = None
-    for experiencer, pattern, rank in (
+    patterns = (
         (OTHER_EXPERIENCER, _OTHER_RE, 0),
         (FAMILY_EXPERIENCER, _FAMILY_RE, 1),
-    ):
+    )
+    if _is_german(language):
+        patterns += (
+            (OTHER_EXPERIENCER, _GERMAN_OTHER_RE, 0),
+            (FAMILY_EXPERIENCER, _GERMAN_FAMILY_RE, 1),
+            (PATIENT_EXPERIENCER, _GERMAN_PATIENT_RE, 2),
+        )
+    for experiencer, pattern, rank in patterns:
         for match in pattern.finditer(text, clause_start, span_start):
             gap = span_start - match.end()
             key = (gap, rank)
@@ -210,18 +275,30 @@ def resolve_experiencer(
     span: Mapping[str, object],
     *,
     section_experiencer: str | None = None,
+    language: str | None = None,
 ) -> ExperiencerAssignment:
     """Resolve the experiencer of ``span`` from local subject cues.
 
     A subject cue within the span's clause decides the result; otherwise the
     ``section_experiencer`` prior is used, and failing that the span defaults to
     the patient. An explicit cue always overrides the section prior.
+
+    Args:
+        text: Original source document.
+        span: Half-open source offsets of the clinical finding.
+        section_experiencer: Fallback subject from the containing section.
+        language: Optional source language; German adds localized whole-word
+            subject cues and contrastive clause boundaries. Other languages
+            retain the existing English cue rules without implying qualification.
+
+    Returns:
+        Subject attribution with the winning cue offsets or section prior.
     """
 
     span_start, _span_end = _coerce_span(span)
-    clause_start = _clause_start(text, span_start)
+    clause_start = _clause_start(text, span_start, language)
 
-    hit = _nearest_cue(text, clause_start, span_start)
+    hit = _nearest_cue(text, clause_start, span_start, language)
     if hit is not None:
         experiencer, cue_start, cue_end = hit
         return ExperiencerAssignment(
@@ -253,6 +330,7 @@ def refine_experiencer(
     *,
     text: str | None = None,
     section_experiencer: str | None = None,
+    language: str | None = None,
 ) -> list[RefinedExperiencerAssertion] | ExperiencerAssignment:
     """Return clinical assertions enriched with experiencer attribution.
 
@@ -272,6 +350,7 @@ def refine_experiencer(
             spans,
             context_result,
             section_experiencer=section_experiencer,
+            language=language,
         )
 
     span_list = list(_iter_span_mappings(spans))
@@ -287,6 +366,7 @@ def refine_experiencer(
             document_text,
             span,
             section_experiencer=section_experiencer or base_assertion.experiencer,
+            language=language,
         )
         refined.append(
             RefinedExperiencerAssertion(

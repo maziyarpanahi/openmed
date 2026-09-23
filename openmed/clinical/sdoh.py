@@ -1,23 +1,87 @@
 """SHAC-aligned SDOH finding schema and determinant dispatcher.
 
-This module contains only the public SHAC trigger-and-argument shape and a
-section-aware extension point. Determinant logic must use synthetic or public
-data. The real Social History Annotated Corpus (SHAC) is DUA-gated, eval-only,
-and must never be bundled with OpenMed or loaded by this runtime module.
+The employment and living-status extractors use a compact OpenMed-maintained
+cue table containing only synthetic/public phrases. Food insecurity is an
+OpenMed extension beyond the five core SHAC determinant categories. The real
+Social History Annotated Corpus (SHAC) is DUA-gated, eval-only, and must never
+be bundled with OpenMed or loaded by this runtime module.
 """
 
 from __future__ import annotations
 
+import copy
 import math
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
+from importlib import resources
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+import yaml
+
+from .context import (
+    HISTORICAL,
+    HYPOTHETICAL,
+    NEGATED,
+    resolve_negation,
+    resolve_temporality,
+)
+from .status_vocab import (
+    normalize_employment_status,
+    normalize_living_status,
+    normalize_substance_status,
+)
+
 SOCIAL_HISTORY_SECTION = "social_history"
+
+SDOH_SUBSTANCE_CUES_RESOURCE = "data/sdoh_substance_cues.yaml"
+_SUBSTANCE_CUES_PACKAGE = "openmed.clinical"
+_SUBSTANCE_CATEGORIES = (
+    "tobacco",
+    "alcohol",
+    "drug",
+)
+_SUBSTANCE_CLAUSE_BOUNDARY_RE = re.compile(
+    r"(?<!\w)(?:but|however|although|whereas)(?!\w)",
+    re.IGNORECASE,
+)
+_SUBSTANCE_COORDINATOR_RE = re.compile(
+    r",|(?<!\w)(?:and|or)(?!\w)",
+    re.IGNORECASE,
+)
+_SUBSTANCE_LOCAL_STATUS_RE = re.compile(
+    r"(?<!\w)(?:"
+    r"active|current(?:ly)?|former|ex[-\s]?smoker|quit|stopped|"
+    r"past|remote|history\s+of|hx\s+of|in\s+remission|status\s+post|s/p|"
+    r"den(?:y|ies|ied)|never|none|no|not|without|does\s+not|"
+    r"abstain(?:s|ed|ing)?|abstinent|non[-\s]?smoker|"
+    r"smoker|smoking|uses|drinks?|vapes?|vaping|"
+    r"occasional(?:ly)?|daily|weekly|monthly|rarely"
+    r")(?!\w)",
+    re.IGNORECASE,
+)
+
+_SDOH_SUBSTANCE_STATUS = {
+    "current": "current",
+    "former": "past",
+    "never": "none",
+    "unknown": "unknown",
+}
+
 SHAC_DATA_POLICY = (
     "Real SHAC data is DUA-gated and eval-only; runtime extraction uses only "
     "synthetic or public data."
 )
+SDOH_SOCIAL_CUES_RESOURCE = "data/sdoh_social_cues.yaml"
+FOOD_INSECURITY_EXTENSION_NOTE = (
+    "Food insecurity is an OpenMed extension beyond the five core SHAC "
+    "determinant categories."
+)
+
+_SOCIAL_CUES_PACKAGE = "openmed.clinical"
+_CLAUSE_RE = re.compile(r"[^.;!?\n]+")
 
 SpanOffset = tuple[int, int]
 
@@ -88,6 +152,13 @@ class SDOHFinding:
             span=payload["span"],
             score=payload["score"],
         )
+
+
+@dataclass(frozen=True)
+class _CueMatch:
+    start: int
+    end: int
+    value: str
 
 
 @runtime_checkable
@@ -232,6 +303,744 @@ def extract_sdoh(
     return findings
 
 
+def load_sdoh_social_cues(path: str | Path | None = None) -> dict[str, Any]:
+    """Load and validate the unrestricted social-determinant cue table.
+
+    Args:
+        path: Optional replacement YAML path, primarily for downstream
+            validation. The packaged OpenMed cue table is used when omitted.
+
+    Returns:
+        A detached copy of the validated cue-table payload.
+    """
+
+    if path is None:
+        return copy.deepcopy(_load_default_sdoh_social_cues())
+    payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return _validate_sdoh_social_cues(payload)
+
+
+def extract_employment_findings(
+    text: str,
+    spans: Sequence[Any] = (),
+) -> list[SDOHFinding]:
+    """Extract deterministic employment status and occupation findings.
+
+    Args:
+        text: Caller-selected clinical text to scan.
+        spans: Upstream candidates accepted for registry compatibility.
+
+    Returns:
+        Employment findings anchored to their source cue spans.
+
+    ``spans`` is accepted for registry compatibility. These compact cue-based
+    extractors scan caller-selected text directly; the dispatcher still applies
+    candidate and Social History section boundaries to its inputs and outputs.
+    """
+
+    _validate_extractor_text(text)
+    _ = spans
+    config = _determinant_config("employment")
+    findings: list[SDOHFinding] = []
+    for clause_start, clause_end in _clause_offsets(text):
+        clause = text[clause_start:clause_end]
+        status_match = _status_match(clause, config)
+        type_match = _typed_cue_match(clause, config["types"])
+        if status_match is None and type_match is None:
+            continue
+
+        if status_match is None:
+            assert type_match is not None
+            status_match = _CueMatch(
+                start=type_match.start,
+                end=type_match.end,
+                value="employed",
+            )
+        match_start, match_end = _combined_offset(status_match, type_match)
+        absolute_start = clause_start + match_start
+        absolute_end = clause_start + match_end
+        temporality = _finding_temporality(text, absolute_start, absolute_end)
+        status = normalize_employment_status(
+            clause,
+            temporality=temporality,
+        )
+        if status == "unknown":
+            status = status_match.value
+        findings.append(
+            SDOHFinding(
+                category=config["category"],
+                value=type_match.value if type_match else status_match.value,
+                status=status,
+                extent=None,
+                temporality=temporality,
+                span=(absolute_start, absolute_end),
+                score=config["score"],
+            )
+        )
+    return findings
+
+
+def extract_living_status_findings(
+    text: str,
+    spans: Sequence[Any] = (),
+) -> list[SDOHFinding]:
+    """Extract deterministic housing and living-situation findings.
+
+    Args:
+        text: Caller-selected clinical text to scan.
+        spans: Upstream candidates accepted for registry compatibility.
+
+    Returns:
+        Living-status findings anchored to their source cue spans.
+    """
+
+    _validate_extractor_text(text)
+    _ = spans
+    config = _determinant_config("living_status")
+    findings: list[SDOHFinding] = []
+    for clause_start, clause_end in _clause_offsets(text):
+        clause = text[clause_start:clause_end]
+        status_match = _status_match(clause, config)
+        if status_match is None:
+            continue
+
+        absolute_start = clause_start + status_match.start
+        absolute_end = clause_start + status_match.end
+        temporality = _finding_temporality(text, absolute_start, absolute_end)
+        status = normalize_living_status(clause, temporality=temporality)
+        if status == "unknown":
+            status = status_match.value
+        findings.append(
+            SDOHFinding(
+                category=config["category"],
+                value=status_match.value,
+                status=status,
+                extent=None,
+                temporality=temporality,
+                span=(absolute_start, absolute_end),
+                score=config["score"],
+            )
+        )
+    return findings
+
+
+def extract_food_insecurity_findings(
+    text: str,
+    spans: Sequence[Any] = (),
+) -> list[SDOHFinding]:
+    """Extract food-insecurity cues as an extension beyond core SHAC.
+
+    Args:
+        text: Caller-selected clinical text to scan.
+        spans: Upstream candidates accepted for registry compatibility.
+
+    Returns:
+        Food-insecurity findings anchored to their source cue spans.
+    """
+
+    _validate_extractor_text(text)
+    _ = spans
+    config = _determinant_config("food_insecurity")
+    findings: list[SDOHFinding] = []
+    for clause_start, clause_end in _clause_offsets(text):
+        cue_match = _cue_match(text[clause_start:clause_end], config["cues"])
+        if cue_match is None:
+            continue
+
+        absolute_start = clause_start + cue_match.start
+        absolute_end = clause_start + cue_match.end
+        findings.append(
+            SDOHFinding(
+                category=config["category"],
+                value=config["value"],
+                status=config["status"],
+                extent=None,
+                temporality=_finding_temporality(
+                    text,
+                    absolute_start,
+                    absolute_end,
+                ),
+                span=(absolute_start, absolute_end),
+                score=config["score"],
+            )
+        )
+    return findings
+
+
+@lru_cache(maxsize=1)
+def _load_default_sdoh_social_cues() -> dict[str, Any]:
+    resource = resources.files(_SOCIAL_CUES_PACKAGE).joinpath(SDOH_SOCIAL_CUES_RESOURCE)
+    payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    return _validate_sdoh_social_cues(payload)
+
+
+def _validate_sdoh_social_cues(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise ValueError("SDOH social cue table requires schema_version 1")
+
+    provenance = payload.get("provenance")
+    if (
+        not isinstance(provenance, Mapping)
+        or not provenance.get("source")
+        or provenance.get("restricted_data") is not False
+    ):
+        raise ValueError("SDOH social cues require unrestricted provenance")
+
+    determinants = payload.get("determinants")
+    if not isinstance(determinants, Mapping):
+        raise ValueError("SDOH social cues require a determinants mapping")
+
+    employment = _validate_status_determinant(determinants, "employment")
+    types = employment.get("types")
+    if not isinstance(types, Mapping) or not types:
+        raise ValueError("employment social cues require occupation types")
+    _validate_cue_mapping(types, "employment.types")
+
+    _validate_status_determinant(determinants, "living_status")
+
+    food = determinants.get("food_insecurity")
+    if not isinstance(food, Mapping):
+        raise ValueError("food_insecurity social cues must be a mapping")
+    _validate_determinant_identity(food, "food_insecurity")
+    _validate_cue_sequence(food.get("cues"), "food_insecurity.cues")
+    if food.get("status") != "current" or food.get("value") != "food_insecure":
+        raise ValueError("food_insecurity social cues require canonical values")
+    if food.get("extension_beyond_core_shac") is not True:
+        raise ValueError("food_insecurity must be marked as a SHAC extension")
+    extension_note = food.get("extension_note")
+    if not isinstance(extension_note, str) or "beyond the five core SHAC" not in (
+        extension_note
+    ):
+        raise ValueError("food_insecurity requires its SHAC extension note")
+    return payload
+
+
+def _validate_status_determinant(
+    determinants: Mapping[str, Any],
+    determinant: str,
+) -> Mapping[str, Any]:
+    config = determinants.get(determinant)
+    if not isinstance(config, Mapping):
+        raise ValueError(f"{determinant} social cues must be a mapping")
+    _validate_determinant_identity(config, determinant)
+
+    priority = config.get("status_priority")
+    status_cues = config.get("status_cues")
+    _validate_cue_sequence(priority, f"{determinant}.status_priority")
+    assert isinstance(priority, Sequence) and not isinstance(priority, str | bytes)
+    if not isinstance(status_cues, Mapping) or not status_cues:
+        raise ValueError(f"{determinant}.status_cues must be a mapping")
+    _validate_cue_mapping(status_cues, f"{determinant}.status_cues")
+    if set(priority) != set(status_cues):
+        raise ValueError(f"{determinant} status priority must cover every status")
+    return config
+
+
+def _validate_determinant_identity(
+    config: Mapping[str, Any],
+    determinant: str,
+) -> None:
+    if config.get("category") != determinant:
+        raise ValueError(f"{determinant} requires a matching category")
+    score = config.get("score")
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, int | float)
+        or not math.isfinite(score)
+        or not 0.0 <= score <= 1.0
+    ):
+        raise ValueError(f"{determinant} requires a score between 0.0 and 1.0")
+
+
+def _validate_cue_mapping(value: Mapping[Any, Any], field_name: str) -> None:
+    for key, cues in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError(f"{field_name} requires non-empty string keys")
+        _validate_cue_sequence(cues, f"{field_name}.{key}")
+
+
+def _validate_cue_sequence(value: Any, field_name: str) -> None:
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, str | bytes)
+        or not value
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        raise ValueError(f"{field_name} requires non-empty string cues")
+
+
+def _determinant_config(determinant: str) -> Mapping[str, Any]:
+    return _load_default_sdoh_social_cues()["determinants"][determinant]
+
+
+def _clause_offsets(text: str) -> Iterable[SpanOffset]:
+    for match in _CLAUSE_RE.finditer(text):
+        segment = match.group()
+        leading_space = len(segment) - len(segment.lstrip())
+        trailing_space = len(segment) - len(segment.rstrip())
+        start = match.start() + leading_space
+        end = match.end() - trailing_space
+        if start < end:
+            yield start, end
+
+
+def _status_match(clause: str, config: Mapping[str, Any]) -> _CueMatch | None:
+    status_cues = config["status_cues"]
+    for status in config["status_priority"]:
+        match = _cue_match(clause, status_cues[status])
+        if match is not None:
+            return _CueMatch(match.start, match.end, status)
+    return None
+
+
+def _typed_cue_match(
+    clause: str,
+    cue_mapping: Mapping[str, Sequence[str]],
+) -> _CueMatch | None:
+    matches: list[_CueMatch] = []
+    for value, cues in cue_mapping.items():
+        match = _cue_match(clause, cues)
+        if match is not None:
+            matches.append(_CueMatch(match.start, match.end, value))
+    return (
+        min(matches, key=lambda item: (item.start, -(item.end - item.start)))
+        if matches
+        else None
+    )
+
+
+def _cue_match(text: str, cues: Sequence[str]) -> _CueMatch | None:
+    matches: list[_CueMatch] = []
+    for cue in sorted(cues, key=len, reverse=True):
+        match = _cue_pattern(cue).search(text)
+        if match is not None:
+            matches.append(_CueMatch(match.start(), match.end(), cue))
+    return (
+        min(matches, key=lambda item: (item.start, -(item.end - item.start)))
+        if matches
+        else None
+    )
+
+
+@lru_cache(maxsize=512)
+def _cue_pattern(cue: str) -> re.Pattern[str]:
+    escaped = re.escape(" ".join(cue.split())).replace(r"\ ", r"\s+")
+    return re.compile(rf"(?<!\w){escaped}(?!\w)", re.IGNORECASE)
+
+
+def _combined_offset(
+    required: _CueMatch,
+    optional: _CueMatch | None,
+) -> SpanOffset:
+    if optional is None:
+        return required.start, required.end
+    return min(required.start, optional.start), max(required.end, optional.end)
+
+
+def _finding_temporality(text: str, start: int, end: int) -> str | None:
+    try:
+        return resolve_temporality(
+            {
+                "text": text[start:end],
+                "context": text,
+                "start": start,
+                "end": end,
+            }
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _validate_extractor_text(text: object) -> None:
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+
+def _extract_tobacco(
+    text: str,
+    spans: Sequence[Any],
+) -> list[SDOHFinding]:
+    del spans
+    return _extract_substance_category(
+        text,
+        "tobacco",
+    )
+
+
+def _parse_tobacco_extent(text: str) -> str | None:
+    match = re.search(
+        r"\b(?P<amount>\d+(?:\.\d+)?)\s*pack(?:-|\s+)years?\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match is None:
+        return None
+
+    amount = match.group("amount")
+    return f"{amount} pack-years"
+
+
+def _extract_alcohol(
+    text: str,
+    spans: Sequence[Any],
+) -> list[SDOHFinding]:
+    del spans
+    return _extract_substance_category(
+        text,
+        "alcohol",
+    )
+
+
+def _parse_alcohol_extent(text: str) -> str | None:
+    match = re.search(
+        r"\b(?P<amount>\d+(?:\.\d+)?)\s+drinks?"
+        r"\s*(?:/|per\s+|a\s+)week\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match is None:
+        return None
+
+    amount = match.group("amount")
+    return f"{amount} drinks/week"
+
+
+def _extract_drug(
+    text: str,
+    spans: Sequence[Any],
+) -> list[SDOHFinding]:
+    del spans
+    return _extract_substance_category(
+        text,
+        "drug",
+    )
+
+
+def _parse_drug_extent(text: str) -> str | None:
+    match = re.search(
+        r"\b(?:occasional(?:ly)?|daily|weekly|monthly|rarely)\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match is None:
+        return None
+
+    value = match.group(0).lower()
+
+    if value == "occasionally":
+        return "occasional"
+
+    return value
+
+
+def _parse_substance_extent(
+    category: str,
+    text: str,
+) -> str | None:
+    if category == "tobacco":
+        return _parse_tobacco_extent(text)
+
+    if category == "alcohol":
+        return _parse_alcohol_extent(text)
+
+    if category == "drug":
+        return _parse_drug_extent(text)
+
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_substance_cues() -> dict[str, tuple[str, ...]]:
+    resource = resources.files(_SUBSTANCE_CUES_PACKAGE).joinpath(
+        SDOH_SUBSTANCE_CUES_RESOURCE
+    )
+
+    payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+
+    if not isinstance(payload, Mapping):
+        raise ValueError("substance cue resource must be a mapping")
+
+    if payload.get("schema_version") != 1:
+        raise ValueError("substance cue resource requires schema_version 1")
+
+    determinants = payload.get("determinants")
+
+    if not isinstance(determinants, Mapping):
+        raise ValueError("substance cue resource requires determinants")
+
+    result: dict[str, tuple[str, ...]] = {}
+
+    for category in _SUBSTANCE_CATEGORIES:
+        entry = determinants.get(category)
+
+        if not isinstance(entry, Mapping):
+            raise ValueError(
+                f"substance cue resource requires determinant {category!r}"
+            )
+
+        triggers = entry.get("triggers")
+
+        if (
+            not isinstance(triggers, Sequence)
+            or isinstance(triggers, str | bytes)
+            or not triggers
+        ):
+            raise ValueError(f"substance determinant {category!r} requires triggers")
+
+        cleaned: list[str] = []
+
+        for cue in triggers:
+            if not isinstance(cue, str) or not cue.strip():
+                raise ValueError(
+                    f"substance determinant {category!r} contains an invalid trigger"
+                )
+
+            normalized = " ".join(cue.split())
+
+            if normalized not in cleaned:
+                cleaned.append(normalized)
+
+        result[category] = tuple(cleaned)
+
+    return result
+
+
+def _substance_context_bounds(
+    text: str,
+    start: int,
+    end: int,
+) -> SpanOffset:
+    boundaries = ".;\n!?"
+
+    left = max(text.rfind(boundary, 0, start) for boundary in boundaries)
+
+    right_positions = [text.find(boundary, end) for boundary in boundaries]
+
+    right_positions = [position for position in right_positions if position != -1]
+
+    right = min(right_positions) if right_positions else len(text)
+
+    left += 1
+
+    for boundary in _SUBSTANCE_CLAUSE_BOUNDARY_RE.finditer(text, left, right):
+        if boundary.end() <= start:
+            left = boundary.end()
+        elif boundary.start() >= end:
+            right = boundary.start()
+            break
+
+    return _coordinated_substance_context_bounds(
+        text,
+        start,
+        end,
+        left,
+        right,
+    )
+
+
+def _coordinated_substance_context_bounds(
+    text: str,
+    start: int,
+    end: int,
+    left: int,
+    right: int,
+) -> SpanOffset:
+    """Isolate explicit statuses while preserving shared coordinated cues."""
+
+    coordinators = tuple(_SUBSTANCE_COORDINATOR_RE.finditer(text, left, right))
+    if not coordinators:
+        return left, right
+
+    segments: list[SpanOffset] = []
+    segment_start = left
+    for coordinator in coordinators:
+        segments.append((segment_start, coordinator.start()))
+        segment_start = coordinator.end()
+    segments.append((segment_start, right))
+
+    target_index = next(
+        (
+            index
+            for index, (segment_start, segment_end) in enumerate(segments)
+            if segment_start <= start and end <= segment_end
+        ),
+        None,
+    )
+    if target_index is None:
+        return left, right
+
+    segment_categories = tuple(
+        _substance_categories_in_text(text[segment_start:segment_end])
+        for segment_start, segment_end in segments
+    )
+    categories = set().union(*segment_categories)
+    if len(categories) < 2:
+        return left, right
+
+    local_status = tuple(
+        bool(categories_in_segment)
+        and _has_local_substance_status(
+            text[segment_start:segment_end],
+            categories_in_segment,
+        )
+        for (segment_start, segment_end), categories_in_segment in zip(
+            segments,
+            segment_categories,
+            strict=True,
+        )
+    )
+    if not any(local_status):
+        return left, right
+
+    if local_status[target_index]:
+        left = segments[target_index][0]
+    else:
+        prior_local = [index for index in range(target_index) if local_status[index]]
+        if prior_local:
+            left = segments[prior_local[-1]][0]
+
+    later_local = [
+        index for index in range(target_index + 1, len(segments)) if local_status[index]
+    ]
+    if later_local:
+        right = coordinators[later_local[0] - 1].start()
+
+    return left, right
+
+
+def _substance_categories_in_text(text: str) -> frozenset[str]:
+    return frozenset(
+        category
+        for category in _SUBSTANCE_CATEGORIES
+        if _substance_trigger_pattern(category).search(text) is not None
+    )
+
+
+def _has_local_substance_status(
+    text: str,
+    categories: Iterable[str],
+) -> bool:
+    if _SUBSTANCE_LOCAL_STATUS_RE.search(text) is not None:
+        return True
+    return any(
+        _parse_substance_extent(category, text) is not None for category in categories
+    )
+
+
+def _extract_substance_category(
+    text: str,
+    category: str,
+) -> list[SDOHFinding]:
+    pattern = _substance_trigger_pattern(category)
+
+    findings: list[SDOHFinding] = []
+    seen_windows: set[SpanOffset] = set()
+
+    for match in pattern.finditer(text):
+        window = _substance_context_bounds(
+            text,
+            match.start(),
+            match.end(),
+        )
+        if window in seen_windows:
+            continue
+        seen_windows.add(window)
+
+        window_start, window_end = window
+        context_text = text[window_start:window_end]
+        target = {
+            "text": match.group(0),
+            "document_text": context_text,
+            "start": match.start() - window_start,
+            "end": match.end() - window_start,
+        }
+
+        negation = resolve_negation(target)
+        temporality = resolve_temporality(target)
+
+        status_text = context_text.strip()
+        extent = _parse_substance_extent(
+            category,
+            status_text,
+        )
+
+        normalized_status = normalize_substance_status(
+            status_text,
+            negated=negation,
+            temporality=temporality,
+        )
+
+        status = _SDOH_SUBSTANCE_STATUS[normalized_status]
+        if status == "past":
+            temporality = HISTORICAL
+
+        if temporality == HYPOTHETICAL:
+            status = "unknown"
+
+        if (
+            status == "unknown"
+            and negation != NEGATED
+            and temporality != HYPOTHETICAL
+            and re.search(
+                r"\b(?:occasional|occasionally)\b",
+                status_text,
+                re.IGNORECASE,
+            )
+        ):
+            status = "current"
+        if (
+            status == "unknown"
+            and extent is not None
+            and negation != NEGATED
+            and temporality != HYPOTHETICAL
+        ):
+            if temporality == HISTORICAL:
+                status = "past"
+            else:
+                status = "current"
+
+        if status == "none":
+            extent = None
+
+        findings.append(
+            SDOHFinding(
+                category=category,
+                value=match.group(0),
+                status=status,
+                extent=extent,
+                temporality=temporality,
+                span=(match.start(), match.end()),
+                score=1.0,
+            )
+        )
+    return findings
+
+
+@lru_cache(maxsize=None)
+def _substance_trigger_pattern(category: str) -> re.Pattern[str]:
+    cues = _load_substance_cues()[category]
+
+    alternatives: list[str] = []
+
+    for cue in sorted(cues, key=len, reverse=True):
+        parts = cue.split()
+
+        escaped = r"\s+".join(re.escape(part) for part in parts)
+
+        prefix = r"(?<!\w)" if cue[0].isalnum() else ""
+        suffix = r"(?!\w)" if cue[-1].isalnum() else ""
+
+        alternatives.append(f"{prefix}(?:{escaped}){suffix}")
+
+    return re.compile(
+        "|".join(alternatives),
+        re.IGNORECASE,
+    )
+
+
 def _required_text(value: object, field_name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a string")
@@ -316,14 +1125,40 @@ def _offset_within_ranges(
     )
 
 
+register_determinant_extractor("employment", extract_employment_findings)
+register_determinant_extractor("food_insecurity", extract_food_insecurity_findings)
+register_determinant_extractor("living_status", extract_living_status_findings)
+
+register_determinant_extractor(
+    "tobacco",
+    _extract_tobacco,
+)
+
+register_determinant_extractor(
+    "alcohol",
+    _extract_alcohol,
+)
+
+register_determinant_extractor(
+    "drug",
+    _extract_drug,
+)
+
+
 __all__ = [
+    "FOOD_INSECURITY_EXTENSION_NOTE",
     "SHAC_DATA_POLICY",
+    "SDOH_SOCIAL_CUES_RESOURCE",
     "SOCIAL_HISTORY_SECTION",
     "DeterminantExtractor",
     "DeterminantExtractorRegistry",
     "SDOHFinding",
     "available_determinant_extractors",
+    "extract_employment_findings",
+    "extract_food_insecurity_findings",
+    "extract_living_status_findings",
     "extract_sdoh",
+    "load_sdoh_social_cues",
     "register_determinant_extractor",
     "unregister_determinant_extractor",
 ]
