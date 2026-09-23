@@ -257,6 +257,9 @@ classification:
     - clinical/summary-safety.md
     - clinical/summary-citations.md
     - evaluation/summary-coverage.md
+    - clinical/review-override-reasons.md
+    - clinical/review-packet-privacy.md
+    - clinical/review-packet-migrations.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md

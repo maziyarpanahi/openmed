@@ -182,6 +182,9 @@ nav:
       - Summary Safety Envelope: clinical/summary-safety.md
       - Summary Citation Consistency: clinical/summary-citations.md
       - Summary Fact Coverage: evaluation/summary-coverage.md
+      - Structured Review Override Reasons: clinical/review-override-reasons.md
+      - Clinical Review Packet Privacy: clinical/review-packet-privacy.md
+      - Clinical Review Packet Migrations: clinical/review-packet-migrations.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
