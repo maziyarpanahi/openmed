@@ -157,9 +157,15 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
+      - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
+      - Medication-change Relation Candidates: clinical/medication-change-relations.md
+      - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
+      - Procedure-to-indication Relation Candidates: clinical/procedure-indication-relations.md
+      - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
+      - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
@@ -178,6 +184,15 @@ nav:
       - Summary Safety Envelope: clinical/summary-safety.md
       - Summary Citation Consistency: clinical/summary-citations.md
       - Summary Fact Coverage: evaluation/summary-coverage.md
+      - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
+      - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
+      - SDOH Longitudinal Status Resolution: clinical/sdoh-longitudinal-resolution.md
+      - SDOH Sensitive-Use Labels: clinical/sdoh-sensitive-use-labels.md
+      - SDOH Review Routing: clinical/sdoh-review-routing.md
+      - SDOH Category Completeness: clinical/sdoh-category-completeness.md
+      - Structured Review Override Reasons: clinical/review-override-reasons.md
+      - Clinical Review Packet Privacy: clinical/review-packet-privacy.md
+      - Clinical Review Packet Migrations: clinical/review-packet-migrations.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
@@ -270,11 +285,14 @@ nav:
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
+      - SDOH Experiencer Filtering: clinical/sdoh-experiencer-filtering.md
+      - SDOH Negated-Need Resolution: clinical/sdoh-negated-needs.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - TensorRT Runtime: runtimes/tensorrt.md
@@ -287,6 +305,8 @@ nav:
       - GGUF Embedding Export: export-gguf.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
+      - Outbound request privacy filter: service/outbound-privacy-filter.md
+      - Social-determinant evidence contract: clinical/sdoh-evidence.md
       - Section-aware note routing: clinical/note-routing.md
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
