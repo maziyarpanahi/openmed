@@ -307,6 +307,7 @@ nav:
       - Clinical Output Use Policy: clinical/output-use-policy.md
       - Value-free Evidence Coverage: clinical/evidence-coverage.md
       - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
+      - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
