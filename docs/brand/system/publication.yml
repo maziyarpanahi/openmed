@@ -320,6 +320,7 @@ classification:
     - evaluation/holdout-commitments.md
     - evaluation/feedback-budgets.md
     - evaluation/overlap-forensics.md
+    - evaluation/blinded-adjudication.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
