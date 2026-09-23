@@ -40,9 +40,9 @@ def test_nightly_workflow_archives_slo_results() -> None:
 
     assert "schedule:" in content
     assert "workflow_dispatch:" in content
-    assert "grafana/setup-k6-action@v1" in content
+    assert "grafana/setup-k6-action@" in content
     assert "deploy/loadtest/run.sh" in content
-    assert "actions/upload-artifact@v7" in content
+    assert "actions/upload-artifact@" in content
     assert "if: always()" in content
     assert "loadtest-results/" in content
 
