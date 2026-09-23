@@ -112,6 +112,7 @@ nav:
       - Ingestion-to-Fact Pipeline: interop/ingestion-to-fact-pipeline.md
       - Annotation Interchange and Pipeline Migration: interop/annotation-interchange.md
       - V3 Five-source Golden Journey: interop/v3-golden-journey.md
+      - V3 Journey Release Gate: release/v3.0-journey-release-gate.md
       - Clinical Task Router and Model Packs: clinical/model-packs.md
       - Clinical Fact Normalization: structured/clinical-fact-normalization.md
       - Terminology Resolution Cascades: clinical/terminology-resolution.md
@@ -421,6 +422,7 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
@@ -442,6 +444,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 2.5 to 3.0: migration/2.5-to-3.0.md
       - Migrate from 2.3 to 2.5: migration/2.3-to-2.5.md
       - Migrate from 2.2 to 2.3: migration/2.2-to-2.3.md
       - Migrate from 2.1 to 2.2: migration/2.1-to-2.2.md

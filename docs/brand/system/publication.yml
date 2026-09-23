@@ -187,6 +187,7 @@ classification:
     - interop/ingestion-to-fact-pipeline.md
     - interop/annotation-interchange.md
     - interop/v3-golden-journey.md
+    - release/v3.0-journey-release-gate.md
     - clinical/model-packs.md
     - structured/clinical-fact-normalization.md
     - clinical/terminology-resolution.md
@@ -493,6 +494,7 @@ classification:
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
+    - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
@@ -514,6 +516,7 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - migration/2.5-to-3.0.md
     - migration/2.3-to-2.5.md
     - migration/2.2-to-2.3.md
     - migration/2.1-to-2.2.md

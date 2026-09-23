@@ -68,6 +68,26 @@ not accept environment-variable overrides.
 
 Do not raise a budget merely to make an unexplained regression pass.
 
+## V3 Journey release packet
+
+The v3 Journey release decision aggregates ten typed evidence lanes, verifies
+the tagged checkout and frozen input digests, checks artifact freshness and
+license boundaries, and writes a signed value-free packet. Before running it,
+set `OPENMED_JOURNEY_RELEASE_KEY` from a secret manager to a secret of at least
+32 bytes; do not put the secret in a command, shell history, or repository file.
+
+```bash
+python scripts/release/journey_release_gate.py \
+  --manifest journey-release-manifest.json \
+  --output journey-release-packet.json
+```
+
+The command returns `0` only for `READY`, `1` for a signed `NOT_READY` packet,
+and `2` when no safe decision can be produced. It does not publish, promote,
+download, or mutate release inputs. See
+`docs/release/v3.0-journey-release-gate.md` for the complete manifest,
+performance, licensing, exception, signing, and verification contracts.
+
 ## Retraining recipe proposals
 
 `retrain_queue.py` consumes the committed aggregate-only input contract at
