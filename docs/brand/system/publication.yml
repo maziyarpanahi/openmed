@@ -428,6 +428,8 @@ classification:
     - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/reproducible-release.md
+    - compliance/v3.1-agent-assurance.md
+    - compliance/v3.1-clinician-review.md
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
     - compliance/evidence-freshness.md
