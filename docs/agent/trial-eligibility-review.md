@@ -12,7 +12,7 @@ clinical outreach.
 ## Privacy-safe inputs
 
 First evaluate the exact eligibility definition with
-`explain_cohort_membership`. Then provide one `ModelCriterionAssessment` per
+`explain_criterion_membership`. Then provide one `ModelCriterionAssessment` per
 criterion assessed by the model. Each assessment contains only:
 
 - a developer-authored criterion identifier;
@@ -56,7 +56,7 @@ packet = build_trial_eligibility_review_packet(
 ```
 
 `rule_explanation` is the value-free result returned by
-`explain_cohort_membership`. Assessments may arrive in any order; packets and
+`explain_criterion_membership`. Assessments may arrive in any order; packets and
 citations are normalized before hashing and serialization.
 
 ## Disagreement classification

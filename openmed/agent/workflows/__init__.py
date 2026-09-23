@@ -1,6 +1,4 @@
-"""Safety contracts for reviewable agent workflows."""
-
-from __future__ import annotations
+"""Deterministic, safety-bounded clinical workflow helpers."""
 
 from .abstraction_evidence import (
     ABSTRACTION_EVIDENCE_SCHEMA,
@@ -15,12 +13,11 @@ from .abstraction_evidence import (
     SourceLocation,
     TransformationKind,
 )
-from .cohort_explanations import (
+from .cohort_criterion_evidence import (
     COHORT_EXPLANATION_SCHEMA,
     CohortCriterion,
     CohortDefinition,
     CohortExplanationError,
-    CohortMembershipExplanation,
     CohortRecordEvidence,
     CriterionEvaluation,
     CriterionEvidence,
@@ -29,7 +26,51 @@ from .cohort_explanations import (
     EvidenceAssertion,
     MembershipState,
     TimeWindowReference,
+)
+from .cohort_criterion_evidence import (
+    CohortMembershipExplanation as CriterionMembershipExplanation,
+)
+from .cohort_criterion_evidence import (
+    explain_cohort_membership as explain_criterion_membership,
+)
+from .cohort_explanations import (
+    COHORT_EXPLANATION_SCHEMA_VERSION,
+    CohortMembershipExplanation,
     explain_cohort_membership,
+)
+from .evidence_query import (
+    EVIDENCE_QUERY_ADVISORY,
+    EVIDENCE_QUERY_ANSWER_SCHEMA_NAME,
+    EVIDENCE_QUERY_COMPATIBILITY_POLICY,
+    EVIDENCE_QUERY_PLAN_SCHEMA_NAME,
+    EVIDENCE_QUERY_PLANNER_VERSION,
+    EVIDENCE_QUERY_SCHEMA_VERSION,
+    AccessOutcome,
+    BoundedEvidenceQuery,
+    BoundedQueryOperation,
+    EvidenceAnswerState,
+    EvidenceCitation,
+    EvidenceFact,
+    EvidenceQueryAnswer,
+    EvidenceQueryConflictError,
+    EvidenceQueryError,
+    EvidenceQueryPlan,
+    EvidenceQueryUnsupportedError,
+    EvidenceTool,
+    EvidenceToolCall,
+    EvidenceToolResult,
+    EvidenceUncertainty,
+    GroundedStatement,
+    QueryAccessDecision,
+    QueryIntent,
+    QueryPlanState,
+    QueryScope,
+    ToolResultState,
+    compose_evidence_answer,
+    load_evidence_query_schema,
+    make_evidence_citation,
+    make_query_access_decision,
+    plan_evidence_query,
 )
 from .prior_auth_completeness import (
     PRIOR_AUTH_COMPLETENESS_SCHEMA,
@@ -78,6 +119,41 @@ from .trial_eligibility_review import (
 )
 
 __all__ = [
+    "COHORT_EXPLANATION_SCHEMA_VERSION",
+    "CohortMembershipExplanation",
+    "explain_cohort_membership",
+    "EVIDENCE_QUERY_ADVISORY",
+    "EVIDENCE_QUERY_ANSWER_SCHEMA_NAME",
+    "EVIDENCE_QUERY_COMPATIBILITY_POLICY",
+    "EVIDENCE_QUERY_PLANNER_VERSION",
+    "EVIDENCE_QUERY_PLAN_SCHEMA_NAME",
+    "EVIDENCE_QUERY_SCHEMA_VERSION",
+    "AccessOutcome",
+    "BoundedEvidenceQuery",
+    "BoundedQueryOperation",
+    "EvidenceAnswerState",
+    "EvidenceCitation",
+    "EvidenceFact",
+    "EvidenceQueryAnswer",
+    "EvidenceQueryConflictError",
+    "EvidenceQueryError",
+    "EvidenceQueryPlan",
+    "EvidenceQueryUnsupportedError",
+    "EvidenceTool",
+    "EvidenceToolCall",
+    "EvidenceToolResult",
+    "EvidenceUncertainty",
+    "GroundedStatement",
+    "QueryAccessDecision",
+    "QueryIntent",
+    "QueryPlanState",
+    "QueryScope",
+    "ToolResultState",
+    "compose_evidence_answer",
+    "load_evidence_query_schema",
+    "make_evidence_citation",
+    "make_query_access_decision",
+    "plan_evidence_query",
     "ABSTRACTION_EVIDENCE_SCHEMA",
     "COHORT_EXPLANATION_SCHEMA",
     "PRIOR_AUTH_COMPLETENESS_SCHEMA",
@@ -94,8 +170,8 @@ __all__ = [
     "CohortCriterion",
     "CohortDefinition",
     "CohortExplanationError",
-    "CohortMembershipExplanation",
     "CohortRecordEvidence",
+    "CriterionMembershipExplanation",
     "CriterionEvaluation",
     "CriterionDisagreement",
     "CriterionEvidence",
@@ -134,12 +210,12 @@ __all__ = [
     "SourceLocation",
     "TransformationKind",
     "TimeWindowReference",
+    "explain_criterion_membership",
     "TrialEligibilityReviewError",
     "TrialEligibilityReviewPacket",
     "ValueSetEvidence",
     "build_quality_measure_evidence_packet",
     "build_trial_eligibility_review_packet",
     "compare_quality_measure_evidence",
-    "explain_cohort_membership",
     "score_prior_authorization_packet",
 ]

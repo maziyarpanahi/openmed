@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
-from .cohort_explanations import (
+from .cohort_criterion_evidence import (
     CohortMembershipExplanation,
     CriterionEvaluation,
     CriterionKind,

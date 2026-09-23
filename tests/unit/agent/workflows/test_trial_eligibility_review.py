@@ -23,7 +23,7 @@ from openmed.agent.workflows import (
     ModelCriterionAssessment,
     TrialEligibilityReviewError,
     build_trial_eligibility_review_packet,
-    explain_cohort_membership,
+    explain_criterion_membership,
 )
 
 RECORD = "sha256:" + "1" * 64
@@ -55,7 +55,7 @@ def _explanation(
         definition.version,
         evidence,
     )
-    return explain_cohort_membership(record, definition)
+    return explain_criterion_membership(record, definition)
 
 
 def _citation(

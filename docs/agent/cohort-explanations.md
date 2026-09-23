@@ -33,7 +33,7 @@ from openmed.agent.workflows import (
     CriterionKind,
     EvidenceAssertion,
     TimeWindowReference,
-    explain_cohort_membership,
+    explain_criterion_membership,
 )
 
 lookback = TimeWindowReference(
@@ -74,7 +74,7 @@ record = CohortRecordEvidence(
     ),
 )
 
-explanation = explain_cohort_membership(record, definition)
+explanation = explain_criterion_membership(record, definition)
 ```
 
 The record must bind the exact definition identifier and version. Evidence for
