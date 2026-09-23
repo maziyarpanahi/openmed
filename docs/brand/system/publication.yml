@@ -105,13 +105,32 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent-usage.md
+    - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/capability-grants.md
+    - agent/purpose-bound-access.md
+    - agent/non-amplifying-delegation.md
+    - agent/tool-argument-classification.md
+    - agent/tool-inventory.md
+    - agent/tool-inventory-schema.md
+    - agent/tool-catalog-diffs.md
+    - agent/minimum-data-contracts.md
+    - agent/minimum-data-projections.md
     - agent/governance-identifiers.md
+    - agent/capability-validity.md
     - agent/event-correlation.md
+    - agent/error-envelopes.md
+    - agent/event-attributes.md
+    - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/reviewer-handoffs.md
+    - agent/policy-decision-matrices.md
+    - agent/human-approval-tokens.md
     - agent/run-summaries.md
+    - agent/run-diffs.md
     - agent/workflow-rollups.md
     - agent/timing-metadata.md
+    - agent/evidence-query-planner.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -161,6 +180,7 @@ classification:
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md
+    - models/journey-specialist-pack.md
     - model-registry.md
     - ner-families.md
     - model-manifest.md
@@ -170,6 +190,22 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
+    - clinical/journey-contracts.md
+    - structured/local-journey-store.md
+    - structured/postgres-object-journey-store.md
+    - interop/resumable-ingestion.md
+    - interop/identity-resolution.md
+    - interop/structured-evidence-adapters.md
+    - interop/multimodal-evidence-coordinates.md
+    - interop/ingestion-to-fact-pipeline.md
+    - interop/annotation-interchange.md
+    - interop/v3-golden-journey.md
+    - release/v3.0-journey-release-gate.md
+    - clinical/model-packs.md
+    - structured/clinical-fact-normalization.md
+    - clinical/terminology-resolution.md
+    - structured/fact-reconciliation.md
+    - clinical/longitudinal-journey.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
@@ -191,7 +227,9 @@ classification:
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
     - clinical/event-timeline.md
+    - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
+    - clinical/status-vocabulary.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
@@ -233,25 +271,37 @@ classification:
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
+    - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
+    - multimodal/image-header-preflight.md
     - multimodal/webp-header-preflight.md
+    - multimodal/image-orientation-preflight.md
+    - multimodal/tiff-preflight.md
+    - multimodal/audio-format-summaries.md
+    - multimodal/frame-sampling-manifests.md
+    - multimodal/audio-resampling-plans.md
+    - multimodal/image-geometry.md
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
     - multimodal/pdf-reading-order.md
+    - multimodal/pdf-geometry-preflight.md
     - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
     - multimodal/preflight.md
+    - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/provider-results.md
+    - multimodal/audio-windows.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
+    - multimodal/asr-audio-profiles.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
@@ -264,6 +314,7 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
     - evaluation/sealed-workflow-manifests.md
     - evaluation/holdout-commitments.md
@@ -294,6 +345,8 @@ classification:
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
+    - api/fixed-option-decisions.md
+    - api/journey-resources.md
     - guides/file-redaction.md
     - reidentification-risk.md
     - security/minimum-necessary.md
@@ -386,6 +439,7 @@ classification:
     - compliance/hipaa-safe-harbor-attestation.md
     - compliance/iso-27701-control-evidence.md
     - compliance/consent-data-use-tags.md
+    - compliance/separated-projections.md
     - compliance/breach-notification-runbook.md
     - compliance/templates/breach-report-template.md
     - compliance/privacy-release-gate.md
@@ -397,6 +451,17 @@ classification:
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
+    - interop/omop-fact-projection.md
+    - interop/omop-quality-bridge.md
+    - interop/fhir-cohort-roundtrip.md
+    - structured/saved-cohorts.md
+    - structured/governed-datasets.md
+    - structured/clinical-registries.md
+    - clinical/measures.md
+    - clinical/care-gaps.md
+    - clinical/trial-records.md
+    - clinical/trial-eligibility.md
+    - clinical/drug-safety-signals.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md
@@ -448,11 +513,13 @@ classification:
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
+    - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
     - security/policy-migrations.md
     - security/prompt-injection-guard.md
+    - security/agent-threat-model.md
     - security/mcp-consent-receipts.md
     - security/mcp-authorization-matrix.md
     - security/mcp-upstream-policy.md
@@ -469,6 +536,7 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - migration/2.5-to-3.0.md
     - migration/2.3-to-2.5.md
     - migration/2.2-to-2.3.md
     - migration/2.1-to-2.2.md
