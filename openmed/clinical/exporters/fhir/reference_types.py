@@ -59,6 +59,17 @@ def _freeze_allowlist(
 # StructureDefinitions. CodeableReference values are unwrapped by the checker.
 FHIR_R4_REFERENCE_TARGETS = _freeze_allowlist(
     {
+        "AllergyIntolerance": {
+            "asserter": (
+                "Patient",
+                "Practitioner",
+                "PractitionerRole",
+                "RelatedPerson",
+            ),
+            "encounter": ("Encounter",),
+            "patient": ("Patient",),
+            "recorder": ("Practitioner", "PractitionerRole"),
+        },
         "CarePlan": {
             "addresses": ("Condition",),
             "author": (
@@ -210,6 +221,19 @@ FHIR_R4_REFERENCE_TARGETS = _freeze_allowlist(
             "procedureReference": ("Procedure",),
             "referrer": ("Practitioner", "PractitionerRole"),
             "subject": ("Device", "Group", "Patient"),
+        },
+        "Immunization": {
+            "encounter": ("Encounter",),
+            "location": ("Location",),
+            "manufacturer": ("Organization",),
+            "patient": ("Patient",),
+            "performer.actor": (
+                "Organization",
+                "Practitioner",
+                "PractitionerRole",
+            ),
+            "reaction.detail": ("Observation",),
+            "reasonReference": ("Condition", "DiagnosticReport", "Observation"),
         },
         "MedicationAdministration": {
             "context": ("Encounter", "EpisodeOfCare"),

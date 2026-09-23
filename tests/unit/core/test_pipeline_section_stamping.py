@@ -119,11 +119,13 @@ def test_unavailable_section_hook_leaves_pipeline_output_unchanged():
     text = "Patient John Doe visited."
 
     unavailable_result = Pipeline(
+        hmac_secret="synthetic-section-parity-key",
         model_detector=_model_detector("John Doe"),
         section_detector=lambda text: {"section_hook": "unavailable"},
         use_safety_sweep=False,
     ).run(text, method="mask")
     empty_sections_result = Pipeline(
+        hmac_secret="synthetic-section-parity-key",
         model_detector=_model_detector("John Doe"),
         section_detector=lambda text: {"section_hook": "unavailable", "sections": ()},
         use_safety_sweep=False,

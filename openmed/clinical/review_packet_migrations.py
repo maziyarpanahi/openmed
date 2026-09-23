@@ -1,199 +1,176 @@
-"""Deterministic, lossless migrations for clinical review packet mappings."""
+"""Deterministic forward migrations for value-free clinical review packets."""
 
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field
-from typing import Any, Final
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
 
-REVIEW_PACKET_SCHEMA_VERSION: Final = 2
-REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION: Final = 1
-SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS: Final = (1, 2)
+from openmed.structured.store import StoreResult, StoreState
 
+from .review_packet_mapping_migrations import (
+    REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION,
+    REVIEW_PACKET_SCHEMA_VERSION,
+    SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS,
+    LossyReviewPacketMigrationError,
+    ReviewPacketMigrationChange,
+    ReviewPacketMigrationError,
+    ReviewPacketMigrationResult,
+)
+from .review_packet_mapping_migrations import (
+    ReviewPacketMigrationReport as MappingReviewPacketMigrationReport,
+)
+from .review_packet_mapping_migrations import (
+    migrate_review_packet as _migrate_mapping_review_packet,
+)
+from .review_transitions import (
+    CLINICAL_REVIEW_COMPATIBILITY_POLICY,
+    CLINICAL_REVIEW_PACKET_SCHEMA_VERSION,
+    ClinicalReviewError,
+    ClinicalReviewPacket,
+)
 
-class ReviewPacketMigrationError(ValueError):
-    """Base error for an unsupported or malformed packet migration."""
-
-
-class LossyReviewPacketMigrationError(ReviewPacketMigrationError):
-    """Raised when migration would remove or overwrite packet information."""
-
-
-@dataclass(frozen=True, order=True)
-class ReviewPacketMigrationChange:
-    """One value-free field operation applied during migration."""
-
-    field_path: str
-    operation: str
-
-    def __post_init__(self) -> None:
-        if not self.field_path.startswith("/"):
-            raise ValueError("migration change field_path must be absolute")
-        if self.operation not in {"add", "replace"}:
-            raise ValueError("unsupported migration change operation")
-
-    def to_dict(self) -> dict[str, str]:
-        """Return the field path and operation without field values."""
-
-        return {"field_path": self.field_path, "operation": self.operation}
+SUPPORTED_REVIEW_PACKET_VERSIONS = ("1.0.0", "1.1.0")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ReviewPacketMigrationReport:
-    """Field-level, value-free report for one forward migration."""
+    """Value-free field-level report for one forward migration."""
 
-    source_version: int
-    target_version: int
-    changes: tuple[ReviewPacketMigrationChange, ...]
-    schema_version: int = REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION
-
-    def __post_init__(self) -> None:
-        if self.schema_version != REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION:
-            raise ValueError("unsupported review packet migration report version")
-        object.__setattr__(self, "changes", tuple(sorted(set(self.changes))))
+    source_version: str
+    target_version: str
+    added_fields: tuple[str, ...]
+    preserved_transition_count: int
+    lossy: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a deterministic report that contains no packet values."""
+        """Return counts and field names only."""
 
         return {
-            "schema_version": self.schema_version,
+            "added_fields": list(self.added_fields),
+            "lossy": self.lossy,
+            "preserved_transition_count": self.preserved_transition_count,
             "source_version": self.source_version,
             "target_version": self.target_version,
-            "changes": [change.to_dict() for change in self.changes],
         }
 
 
-@dataclass(frozen=True)
-class ReviewPacketMigrationResult:
-    """Migrated packet plus its safe report.
+@dataclass(frozen=True, slots=True)
+class ReviewPacketMigration:
+    """A migrated packet and its value-free report."""
 
-    Packet content is hidden from ``repr`` so accidental exception/log output
-    does not expose review material.
-    """
-
-    packet: Mapping[str, Any] = field(repr=False)
+    packet: ClinicalReviewPacket
     report: ReviewPacketMigrationReport
-
-    def __iter__(self) -> Iterator[Any]:
-        """Allow explicit unpacking as ``packet, report``."""
-
-        yield self.packet
-        yield self.report
 
 
 def migrate_review_packet(
-    packet: Mapping[str, Any],
+    payload: Mapping[str, Any],
     *,
-    target_version: int = REVIEW_PACKET_SCHEMA_VERSION,
-) -> ReviewPacketMigrationResult:
-    """Migrate a review packet forward without network or external state.
+    target_version: str | int | None = None,
+) -> StoreResult[ReviewPacketMigration] | ReviewPacketMigrationResult:
+    """Dispatch to the integer mapping or semver clinical packet migration.
 
-    Version 2 adds ``safety.privacy_scan_required``. The migration never
-    overwrites an existing packet field: an incompatible ``safety`` field or a
-    pre-existing false/non-boolean requirement is rejected as potentially
-    lossy. Backward migrations are also rejected.
+    The integer mapping contract returns a copied mapping and raises a
+    value-free migration error. The semver clinical packet contract returns a
+    typed ``StoreResult``. The source schema version selects the contract;
+    callers should not mix their target-version types.
     """
 
-    if not isinstance(packet, Mapping):
-        raise TypeError("review packet must be a mapping")
-    source_version = _packet_version(packet.get("schema_version"))
-    target = _target_version(target_version)
-
-    if source_version > target:
-        raise LossyReviewPacketMigrationError(
-            "backward review packet migrations are not supported"
+    if isinstance(payload.get("schema_version"), int):
+        mapping_target = (
+            REVIEW_PACKET_SCHEMA_VERSION if target_version is None else target_version
         )
+        return _migrate_mapping_review_packet(payload, target_version=mapping_target)
+    clinical_target = (
+        CLINICAL_REVIEW_PACKET_SCHEMA_VERSION
+        if target_version is None
+        else target_version
+    )
+    return _migrate_clinical_review_packet(payload, target_version=clinical_target)
 
+
+def _migrate_clinical_review_packet(
+    payload: Mapping[str, Any], *, target_version: str
+) -> StoreResult[ReviewPacketMigration]:
+    """Migrate a supported semver clinical packet forward without external access.
+
+    Version 1.1 adds an explicit compatibility policy, extension container,
+    and redundant transition-id list for append-only integrity checks.
+    """
+
+    source_version = str(payload.get("schema_version") or "")
+    if target_version != CLINICAL_REVIEW_PACKET_SCHEMA_VERSION:
+        return StoreResult.outcome(
+            StoreState.UNSUPPORTED, "review_packet_target_unsupported"
+        )
+    if source_version not in SUPPORTED_REVIEW_PACKET_VERSIONS:
+        return StoreResult.outcome(
+            StoreState.UNSUPPORTED, "review_packet_source_unsupported"
+        )
+    migrated = copy.deepcopy(dict(payload))
+    added: list[str] = []
+    transitions = migrated.get("transitions", ())
+    if not isinstance(transitions, (list, tuple)):
+        return StoreResult.outcome(StoreState.FAILURE, "review_packet_invalid")
+    if source_version == "1.0.0":
+        defaults = {
+            "compatibility_policy": CLINICAL_REVIEW_COMPATIBILITY_POLICY,
+            "extensions": {},
+            "transition_ids": [
+                item.get("event_id")
+                for item in transitions
+                if isinstance(item, Mapping)
+            ],
+        }
+        for name, value in defaults.items():
+            if name not in migrated:
+                migrated[name] = value
+                added.append(name)
+        migrated["schema_version"] = CLINICAL_REVIEW_PACKET_SCHEMA_VERSION
+        for transition in transitions:
+            if not isinstance(transition, Mapping):
+                return StoreResult.outcome(StoreState.FAILURE, "review_packet_invalid")
+            if transition.get("schema_version") not in {"1.0.0", "1.1.0"}:
+                return StoreResult.outcome(
+                    StoreState.UNSUPPORTED, "review_transition_source_unsupported"
+                )
+            if isinstance(transition, dict):
+                transition["schema_version"] = CLINICAL_REVIEW_PACKET_SCHEMA_VERSION
+                transition.setdefault(
+                    "compatibility_policy", CLINICAL_REVIEW_COMPATIBILITY_POLICY
+                )
+            else:
+                normalized = dict(transition)
+                normalized["schema_version"] = CLINICAL_REVIEW_PACKET_SCHEMA_VERSION
+                normalized.setdefault(
+                    "compatibility_policy", CLINICAL_REVIEW_COMPATIBILITY_POLICY
+                )
+                transitions = [
+                    normalized if item is transition else item for item in transitions
+                ]
+        migrated["transitions"] = transitions
     try:
-        migrated: dict[str, Any] = copy.deepcopy(dict(packet))
-    except Exception:
-        raise ReviewPacketMigrationError(
-            "review packet could not be copied for migration"
-        ) from None
-
-    changes: list[ReviewPacketMigrationChange] = []
-    version = source_version
-    while version < target:
-        if version == 1:
-            _migrate_v1_to_v2(migrated, changes)
-            version = 2
-            continue
-        raise ReviewPacketMigrationError(
-            "review packet has no supported forward migration path"
-        )
-
-    if target == 2:
-        _validate_v2(migrated)
-
+        packet = ClinicalReviewPacket.from_dict(migrated)
+    except ClinicalReviewError:
+        return StoreResult.outcome(StoreState.FAILURE, "review_packet_invalid")
     report = ReviewPacketMigrationReport(
         source_version=source_version,
-        target_version=target,
-        changes=tuple(changes),
+        target_version=target_version,
+        added_fields=tuple(sorted(added)),
+        preserved_transition_count=len(packet.transitions),
     )
-    return ReviewPacketMigrationResult(packet=migrated, report=report)
-
-
-def _migrate_v1_to_v2(
-    packet: dict[str, Any], changes: list[ReviewPacketMigrationChange]
-) -> None:
-    safety = packet.get("safety")
-    if "safety" not in packet:
-        packet["safety"] = {"privacy_scan_required": True}
-        changes.append(ReviewPacketMigrationChange("/safety", "add"))
-    else:
-        if not isinstance(safety, Mapping):
-            raise LossyReviewPacketMigrationError(
-                "review packet migration would overwrite an incompatible safety field"
-            )
-        safe_copy = copy.deepcopy(dict(safety))
-        if "privacy_scan_required" not in safe_copy:
-            safe_copy["privacy_scan_required"] = True
-            changes.append(
-                ReviewPacketMigrationChange("/safety/privacy_scan_required", "add")
-            )
-        elif safe_copy["privacy_scan_required"] is not True:
-            raise LossyReviewPacketMigrationError(
-                "review packet migration would overwrite an incompatible safety field"
-            )
-        packet["safety"] = safe_copy
-
-    packet["schema_version"] = 2
-    changes.append(ReviewPacketMigrationChange("/schema_version", "replace"))
-
-
-def _validate_v2(packet: Mapping[str, Any]) -> None:
-    safety = packet.get("safety")
-    if (
-        not isinstance(safety, Mapping)
-        or safety.get("privacy_scan_required") is not True
-    ):
-        raise ReviewPacketMigrationError(
-            "review packet schema version 2 requires the privacy scan safety field"
-        )
-
-
-def _packet_version(value: Any) -> int:
-    if type(value) is not int or value not in SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS:
-        raise ReviewPacketMigrationError(
-            "review packet schema version is missing or unsupported"
-        )
-    return value
-
-
-def _target_version(value: Any) -> int:
-    if type(value) is not int or value not in SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS:
-        raise ReviewPacketMigrationError(
-            "target review packet schema version is unsupported"
-        )
-    return value
+    return StoreResult.success(ReviewPacketMigration(packet=packet, report=report))
 
 
 __all__ = [
     "REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION",
     "REVIEW_PACKET_SCHEMA_VERSION",
     "SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS",
+    "SUPPORTED_REVIEW_PACKET_VERSIONS",
     "LossyReviewPacketMigrationError",
+    "MappingReviewPacketMigrationReport",
+    "ReviewPacketMigration",
     "ReviewPacketMigrationChange",
     "ReviewPacketMigrationError",
     "ReviewPacketMigrationReport",
