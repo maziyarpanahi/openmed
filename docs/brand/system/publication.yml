@@ -140,6 +140,7 @@ classification:
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
     - agent/action-ledger.md
+    - agent/deterministic-replay.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
