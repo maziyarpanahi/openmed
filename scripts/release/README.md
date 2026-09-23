@@ -33,20 +33,19 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 5,185,410 bytes. Its maximum is 5,703,951
+The committed wheel baseline is 5,709,568 bytes. Its maximum is 6,280,525
 bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
 
-The baseline was measured from `master` commit
-`dbfe2415e58325f1b21c6ec013672f08fa46d32b` on `ubuntu-latest` in
-[CI run 34721832020](https://github.com/maziyarpanahi/openmed/actions/runs/34721832020).
-A clean local build reproduced the same wheel size. The earlier 4,618,352-byte
-baseline no longer covered the accepted source additions on `master`.
-The reviewed v2.5 multimodal and agent additions produce a 5,211,250-byte wheel,
-an increase of 25,840 bytes over the refreshed baseline. That increase consists
-of the reviewed Python modules and wheel metadata; the packaged data payload
-is unchanged.
+The baseline was measured from the clinical-fact integration candidate on
+`ubuntu-latest` in [CI run 35787695425](https://github.com/maziyarpanahi/openmed/actions/runs/35787695425).
+The previous 5,185,410-byte baseline, measured from `master` commit
+`dbfe2415e58325f1b21c6ec013672f08fa46d32b`, no longer covers the reviewed
+Journey contracts, model packs, fact normalization, ingestion, terminology,
+reconciliation, and timeline implementation. The candidate exceeded the prior
+5,703,951-byte maximum by 5,617 bytes. The baseline now records that measured
+candidate while retaining the repository's 10% future headroom rule.
 
 The JSON size report records the wheel size plus total site-packages bytes for
 `openmed`, `openmed[zh]`, and `openmed[indic]`. Each language profile includes
