@@ -622,11 +622,11 @@ def write_journey_release_packet(
 
     output = Path(path)
     if output.exists() and not overwrite:
-        raise JourneyReleaseError(f"refusing to overwrite existing output: {output}")
+        raise JourneyReleaseError("refusing to overwrite existing output")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp-{os.getpid()}")
     if temporary.exists():
-        raise JourneyReleaseError(f"temporary output already exists: {temporary}")
+        raise JourneyReleaseError("temporary output already exists")
     rendered = (
         json.dumps(
             packet.to_dict(),
@@ -642,7 +642,16 @@ def write_journey_release_packet(
             handle.write(rendered)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, output)
+        if overwrite:
+            os.replace(temporary, output)
+        else:
+            try:
+                os.link(temporary, output)
+            except FileExistsError as exc:
+                raise JourneyReleaseError(
+                    "refusing to overwrite existing output"
+                ) from exc
+            temporary.unlink()
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
@@ -679,8 +688,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             key_id=args.key_id,
         )
         write_journey_release_packet(packet, args.output, overwrite=args.overwrite)
-    except (JourneyReleaseError, OSError, subprocess.SubprocessError) as exc:
+    except JourneyReleaseError as exc:
         print(f"journey-release: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, subprocess.SubprocessError):
+        print("journey-release: release evidence is unavailable", file=sys.stderr)
         return 2
 
     if args.json:
@@ -799,11 +811,11 @@ def _validate_frozen_inputs(items: list[Any]) -> list[dict[str, str]]:
         _require_exact_fields(payload, _INPUT_FIELDS, "frozen input")
         input_id = _require_code(payload["id"], "frozen input id")
         if input_id in ids:
-            raise JourneyReleaseError(f"duplicate frozen input id: {input_id}")
+            raise JourneyReleaseError("duplicate frozen input id")
         ids.add(input_id)
         origin = str(payload["origin"])
         if origin not in _INPUT_ORIGINS:
-            raise JourneyReleaseError(f"unsupported frozen input origin: {origin}")
+            raise JourneyReleaseError("unsupported frozen input origin")
         path = _require_portable_path(payload["path"], "frozen input path")
         digest = _require_digest(payload["sha256"], "frozen input sha256")
         inputs.append(
@@ -828,13 +840,13 @@ def _validate_gate_reports(items: list[Any]) -> list[dict[str, Any]]:
             raise JourneyReleaseError("gate report compatibility_policy is unsupported")
         gate = str(payload["gate"])
         if gate not in JOURNEY_RELEASE_GATES:
-            raise JourneyReleaseError(f"unknown release gate: {gate}")
+            raise JourneyReleaseError("unknown release gate")
         if gate in seen:
-            raise JourneyReleaseError(f"duplicate release gate: {gate}")
+            raise JourneyReleaseError("duplicate release gate")
         seen.add(gate)
         state = str(payload["state"])
         if state not in JOURNEY_RELEASE_STATES:
-            raise JourneyReleaseError(f"unknown release state: {state}")
+            raise JourneyReleaseError("unknown release state")
         metrics = _validate_metrics(gate, payload["metrics"])
         reports.append(
             {
@@ -890,17 +902,17 @@ def _validate_licenses(items: list[Any]) -> list[dict[str, Any]]:
         _require_exact_fields(payload, _LICENSE_FIELDS, "license record")
         asset_id = _require_code(payload["asset_id"], "license.asset_id")
         if asset_id in ids:
-            raise JourneyReleaseError(f"duplicate license asset_id: {asset_id}")
+            raise JourneyReleaseError("duplicate license asset_id")
         ids.add(asset_id)
         asset_type = str(payload["asset_type"])
         use = str(payload["use"])
         distribution = str(payload["distribution"])
         if asset_type not in _ASSET_TYPES:
-            raise JourneyReleaseError(f"unsupported asset_type: {asset_type}")
+            raise JourneyReleaseError("unsupported asset_type")
         if use not in _ASSET_USES:
-            raise JourneyReleaseError(f"unsupported license use: {use}")
+            raise JourneyReleaseError("unsupported license use")
         if distribution not in _DISTRIBUTIONS:
-            raise JourneyReleaseError(f"unsupported distribution: {distribution}")
+            raise JourneyReleaseError("unsupported distribution")
         redistributable = payload["redistributable"]
         if type(redistributable) is not bool:
             raise JourneyReleaseError("license.redistributable must be boolean")
@@ -935,19 +947,17 @@ def _validate_exception_records(items: list[Any]) -> list[dict[str, str]]:
         _require_exact_fields(payload, _EXCEPTION_FIELDS, "exception")
         code = _require_code(payload["code"], "exception.code")
         if code in codes:
-            raise JourneyReleaseError(f"duplicate exception code: {code}")
+            raise JourneyReleaseError("duplicate exception code")
         codes.add(code)
         gate = str(payload["gate"])
         severity = str(payload["severity"])
         disposition = str(payload["disposition"])
         if gate not in JOURNEY_RELEASE_GATES:
-            raise JourneyReleaseError(f"exception has unknown gate: {gate}")
+            raise JourneyReleaseError("exception has unknown gate")
         if severity not in _SEVERITIES:
-            raise JourneyReleaseError(f"exception has unknown severity: {severity}")
+            raise JourneyReleaseError("exception has unknown severity")
         if disposition not in _DISPOSITIONS:
-            raise JourneyReleaseError(
-                f"exception has unknown disposition: {disposition}"
-            )
+            raise JourneyReleaseError("exception has unknown disposition")
         records.append(
             {
                 "code": code,
@@ -1001,9 +1011,7 @@ def _git_output(root: Path, *arguments: str) -> str:
             timeout=30,
         )
     except subprocess.SubprocessError as exc:
-        raise JourneyReleaseError(
-            f"repository binding command failed: git {' '.join(arguments)}"
-        ) from exc
+        raise JourneyReleaseError("repository binding command failed") from exc
     value = completed.stdout.strip().lower()
     if not _COMMIT_RE.fullmatch(value):
         raise JourneyReleaseError("repository binding did not resolve a full commit")
@@ -1230,11 +1238,7 @@ def _require_exact_fields(
 ) -> None:
     actual = set(payload)
     if actual != set(expected):
-        missing = sorted(set(expected) - actual)
-        extra = sorted(actual - set(expected))
-        raise JourneyReleaseError(
-            f"{name} fields differ; missing={missing}, extra={extra}"
-        )
+        raise JourneyReleaseError(f"{name} fields differ")
 
 
 def _require_mapping(value: Any, name: str) -> dict[str, Any]:
@@ -1354,7 +1358,7 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise JourneyReleaseError(f"duplicate JSON key: {key}")
+            raise JourneyReleaseError("duplicate JSON key")
         result[key] = value
     return result
 

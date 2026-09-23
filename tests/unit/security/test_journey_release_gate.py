@@ -12,6 +12,7 @@ from openmed.eval.journey_release import (
     JOURNEY_RELEASE_NOT_READY,
     JourneyReleaseError,
     evaluate_journey_release,
+    load_journey_release_manifest,
     main,
 )
 from tests.fixtures.journey_release import make_release_repository
@@ -113,3 +114,46 @@ def test_short_or_missing_signing_key_never_writes_packet(
         == 2
     )
     assert not output.exists()
+
+
+def test_invalid_evidence_and_cli_errors_never_echo_sensitive_input_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    canary = "SyntheticPatientName9824"
+    manifest[canary] = "invalid"
+    with pytest.raises(JourneyReleaseError) as unknown_field:
+        evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+    assert canary not in str(unknown_field.value)
+    del manifest[canary]
+
+    manifest["frozen_inputs"][0]["origin"] = canary
+    with pytest.raises(JourneyReleaseError) as unknown_origin:
+        evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+    assert canary not in str(unknown_origin.value)
+    manifest["frozen_inputs"][0]["origin"] = "synthetic"
+
+    malformed = root / "duplicate.json"
+    malformed.write_text('{"' + canary + '":0,"' + canary + '":1}', encoding="utf-8")
+    with pytest.raises(JourneyReleaseError) as duplicate:
+        load_journey_release_manifest(malformed)
+    assert canary not in str(duplicate.value)
+
+    input_path = root / "manifest.json"
+    input_path.write_text(json.dumps(manifest), encoding="utf-8")
+    output = root / canary / "packet.json"
+    monkeypatch.setenv("OPENMED_JOURNEY_RELEASE_KEY", SIGNING_KEY)
+    arguments = [
+        "--manifest",
+        str(input_path),
+        "--repo-root",
+        str(root),
+        "--output",
+        str(output),
+    ]
+    assert main(arguments) == 0
+    capsys.readouterr()
+    assert main(arguments) == 2
+    assert canary not in capsys.readouterr().err

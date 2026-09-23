@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -411,3 +412,23 @@ def test_writer_requires_explicit_overwrite(tmp_path: Path) -> None:
         write_journey_release_packet(packet, output)
     write_journey_release_packet(packet, output, overwrite=True)
     assert json.loads(output.read_text(encoding="utf-8"))["decision"] == "READY"
+
+
+def test_writer_does_not_replace_a_destination_created_during_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    packet = evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+    output = tmp_path / "racing-packet.json"
+
+    def create_racing_destination(
+        _source: str | os.PathLike[str], destination: str | os.PathLike[str]
+    ) -> None:
+        Path(destination).write_text("other writer", encoding="utf-8")
+        raise FileExistsError("destination appeared")
+
+    monkeypatch.setattr(os, "link", create_racing_destination)
+    with pytest.raises(JourneyReleaseError, match="refusing to overwrite"):
+        write_journey_release_packet(packet, output)
+    assert output.read_text(encoding="utf-8") == "other writer"
+    assert not tuple(tmp_path.glob(".racing-packet.json.tmp-*"))
