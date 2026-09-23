@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added local FHIR Subscription intake checkpoints with bounded deduplication,
+  ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+
 ### Changed
 
 - Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now

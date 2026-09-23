@@ -396,6 +396,7 @@ classification:
     - interop/fhir-conditional-writes.md
     - interop/fhir-concurrency.md
     - interop/fhir-transaction-compensation.md
+    - interop/fhir-subscription-checkpoints.md
     - interop/smart-scope-audit.md
     - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
