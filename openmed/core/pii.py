@@ -2751,8 +2751,9 @@ def deidentify(
         transliterated_name_config: Optional configuration for the
             Latin-script Indian name allow/deny bridge. The default bridge is
             conservative and can be replaced or extended by configuration.
-        audit: Return a deterministic AuditReport instead of the
-            DeidentificationResult.
+        audit: Return an AuditReport instead of the DeidentificationResult.
+            Fresh calls use separate private HMAC keys. For stable hashes across
+            runs, use a Pipeline with an explicit private hmac_secret.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         budget: Optional per-request wall-time and input-character budget.
