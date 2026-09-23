@@ -318,6 +318,7 @@ nav:
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
+      - SMART Scope Audit: interop/smart-scope-audit.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Reference Target-Type Checks: fhir/reference-target-types.md

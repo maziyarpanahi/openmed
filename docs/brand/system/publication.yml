@@ -390,6 +390,7 @@ classification:
     - fhir/profile-declarations.md
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
+    - interop/smart-scope-audit.md
     - interop/fhir-omop-matrix.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
