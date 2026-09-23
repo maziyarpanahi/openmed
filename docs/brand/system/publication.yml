@@ -426,6 +426,13 @@ classification:
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
     - interop/fhir-omop-matrix.md
+    - interop/omop-fact-projection.md
+    - interop/omop-quality-bridge.md
+    - interop/fhir-cohort-roundtrip.md
+    - structured/saved-cohorts.md
+    - structured/governed-datasets.md
+    - structured/clinical-registries.md
+    - clinical/measures.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md

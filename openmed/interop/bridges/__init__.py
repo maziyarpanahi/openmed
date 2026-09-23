@@ -13,6 +13,17 @@ from .arx import (
     ArxProtocolError,
     ArxResult,
 )
+from .cohort_definition import (
+    COHORT_SERVICE_COMPATIBILITY_POLICY,
+    COHORT_SERVICE_PROTOCOL_VERSION,
+    DEFAULT_COHORT_SERVICE_TIMEOUT_SECONDS,
+    MAX_COHORT_SERVICE_RESPONSE_BYTES,
+    CohortDefinitionServiceBridge,
+    CohortServiceBridgeError,
+    CohortServiceConversion,
+    CohortServiceProtocolError,
+    CohortServiceUnavailableError,
+)
 from .icd10cn import (
     ICD10CNBridge,
     ICD10CNMapping,
@@ -34,12 +45,21 @@ from .snomed_terminology_bridge import (
 
 __all__ = [
     "ARX_PROTOCOL_SCHEMA_VERSION",
+    "COHORT_SERVICE_COMPATIBILITY_POLICY",
+    "COHORT_SERVICE_PROTOCOL_VERSION",
+    "DEFAULT_COHORT_SERVICE_TIMEOUT_SECONDS",
+    "MAX_COHORT_SERVICE_RESPONSE_BYTES",
     "DEFAULT_ARX_TIMEOUT_SECONDS",
     "ArxBridge",
     "ArxBridgeError",
     "ArxNotAvailableError",
     "ArxProtocolError",
     "ArxResult",
+    "CohortDefinitionServiceBridge",
+    "CohortServiceBridgeError",
+    "CohortServiceConversion",
+    "CohortServiceProtocolError",
+    "CohortServiceUnavailableError",
     "ICD10CNBridge",
     "ICD10CNMapping",
     "load_icd10cn_crosswalk",

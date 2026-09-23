@@ -2,6 +2,30 @@ title = "OpenMed secret scanning"
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
+description = "Literal synthetic unresolved patient identifier in clinical registry test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/unit/structured/registry/test_(clinical_)?registry\.py$''']
+regexes = ['''^\s*patient_key="patient_unresolved000001",\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Literal synthetic unresolved patient identifier in dataset integration fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/integration/test_saved_cohort_dataset_build\.py$''']
+regexes = ['''^\s*patient_key="patient_unresolved000001",\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Literal synthetic patient identifier in saved cohort journey fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/integration/test_saved_cohort_journey\.py$''']
+regexes = ['''^\s*patient_key="patient_goldenjourney001",\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
 description = "Literal synthetic patient identifier in identity resolution examples"
 condition = "AND"
 regexTarget = "line"
