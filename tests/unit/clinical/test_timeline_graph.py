@@ -1,178 +1,104 @@
-"""Synthetic tests for the privacy-safe evidence-linked timeline graph."""
+"""Tests for the value-free evidence-linked timeline graph contract."""
 
 from __future__ import annotations
 
-import json
-from datetime import date
+from typing import Any, cast
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
-from openmed.clinical import (
-    ClinicalAssertion,
-    TimelineEvidence,
-    TimelineGraphCycleError,
-    TimelineGraphEvent,
-    build_timeline_graph,
+from openmed.clinical.journey_contracts import canonical_digest, derived_opaque_id
+from openmed.clinical.timeline_graph import (
+    EvidenceLinkedTimelineGraph,
+    TimelineGraphEdge,
+    TimelineGraphNode,
 )
-from openmed.core.audit import hash_text
 
 
-def test_graph_preserves_typed_events_assertion_context_and_safe_evidence() -> None:
-    source = "Synthetic procedure occurred on 2026-06-01. Synthetic finding followed."
-    procedure_start = source.index("Synthetic procedure")
-    procedure_end = procedure_start + len("Synthetic procedure")
-    procedure_date_start = source.index("2026-06-01")
-    finding_start = source.index("Synthetic finding")
-    finding_end = finding_start + len("Synthetic finding")
-
-    graph = build_timeline_graph(
-        [
-            {
-                "id": "event-procedure",
-                "type": "procedure",
-                "start": procedure_start,
-                "end": procedure_end,
-                "text": source[procedure_start:procedure_end],
-                "timestamp": date(2026, 6, 1),
-                "assertion": {
-                    "temporality": "recent",
-                    "certainty": "certain",
-                    "negation": "affirmed",
-                },
-                "temporal_evidence": [
-                    {
-                        "start": procedure_date_start,
-                        "end": procedure_date_start + len("2026-06-01"),
-                        "value": "2026-06-01",
-                        "type": "DATE",
-                    }
-                ],
-            },
-            {
-                "id": "event-finding",
-                "type": "finding",
-                "start": finding_start,
-                "end": finding_end,
-                "text": source[finding_start:finding_end],
-                "timestamp": "2026-06-01",
-                "assertion": ClinicalAssertion(
-                    temporality="recent",
-                    certainty="certain",
-                    negation="affirmed",
-                ),
-            },
-        ],
-        links=[
-            {
-                "source_id": "event-procedure",
-                "target_id": "event-finding",
-                "relation": "before",
-                "evidence_start": procedure_date_start,
-                "evidence_end": procedure_date_start + len("2026-06-01"),
-                "evidence_value": "2026-06-01",
-            }
-        ],
-        document_text=source,
+def test_graph_rejects_correction_cycle() -> None:
+    first = _node("a", 0)
+    second = _node("b", 1)
+    edges = (
+        _edge(first, second, "a-b"),
+        _edge(second, first, "b-a"),
     )
 
-    assert graph.ordered_event_ids == ("event-procedure", "event-finding")
-    procedure = graph.event("event-procedure")
-    assert procedure.event_type == "procedure"
-    assert procedure.source_offsets == (procedure_start, procedure_end)
-    assert procedure.assertion_context.temporality == "recent"
-    assert procedure.temporal_evidence[0].normalized_value == "2026-06-01"
-    assert procedure.temporal_evidence[0].text_hash == hash_text("2026-06-01")
-
-    serialized = graph.to_json()
-    assert source not in serialized
-    assert "Synthetic procedure" not in serialized
-    assert "Synthetic finding" not in serialized
-    assert graph.to_dict()["cycle_free"] is True
+    with pytest.raises(ValueError, match="ordering cycle"):
+        EvidenceLinkedTimelineGraph(nodes=(first, second), edges=edges)
 
 
-def test_equal_timestamps_have_input_order_independent_tie_breaking() -> None:
-    events = [
-        TimelineGraphEvent(
-            event_id="event-late-offset",
-            event_type="observation",
-            start=20,
-            end=30,
-            timestamp="2026-06-01",
-        ),
-        TimelineGraphEvent(
-            event_id="event-early-offset",
-            event_type="observation",
-            start=2,
-            end=12,
-            timestamp="2026-06-01",
-            temporal_evidence=(
-                TimelineEvidence(
-                    start=0,
-                    end=10,
-                    normalized_value="2026-06-01",
-                    text_hash=hash_text("2026-06-01"),
-                    timex_type="DATE",
-                ),
-            ),
-        ),
-    ]
+def test_graph_serialization_is_value_free_and_deterministic() -> None:
+    first = _node("a", 0)
+    second = _node("b", 1)
+    edge = _edge(first, second, "a-b")
 
-    forward = build_timeline_graph(events)
-    reversed_input = build_timeline_graph(reversed(events))
+    forward = EvidenceLinkedTimelineGraph(nodes=(first, second), edges=(edge,))
+    reordered = EvidenceLinkedTimelineGraph(nodes=(second, first), edges=(edge,))
 
-    assert forward.ordered_event_ids == (
-        "event-early-offset",
-        "event-late-offset",
-    )
-    assert forward.to_dict() == reversed_input.to_dict()
+    assert forward.to_dict() == reordered.to_dict()
+    assert "value" not in str(forward.to_dict()).casefold()
+    assert forward.nodes[0].effective_time == {
+        "precision": "day",
+        "start": "2026-01-01",
+    }
 
 
-def test_before_after_cycle_is_rejected_without_echoing_event_values() -> None:
-    events = [
-        {"id": "event-a", "type": "procedure", "start": 0, "end": 1},
-        {"id": "event-b", "type": "finding", "start": 2, "end": 3},
-    ]
-
-    with pytest.raises(TimelineGraphCycleError, match="cycle") as error:
-        build_timeline_graph(
-            events,
-            temporal_links=[
-                {"source": "event-a", "target": "event-b", "relation": "before"},
-                {"source": "event-b", "target": "event-a", "relation": "before"},
-            ],
+def test_graph_rejects_malformed_nested_values() -> None:
+    with pytest.raises(TypeError, match="TimelineGraphNode"):
+        EvidenceLinkedTimelineGraph(
+            nodes=(cast(Any, "malformed"),),
+            edges=(),
+        )
+    with pytest.raises(TypeError, match="TimelineGraphEdge"):
+        EvidenceLinkedTimelineGraph(
+            nodes=(_node("a", 0),),
+            edges=(cast(Any, "malformed"),),
         )
 
-    assert "event-a" not in str(error.value)
-    assert "event-b" not in str(error.value)
+
+@given(st.permutations(("a", "b", "c", "d")))
+def test_graph_serialization_is_invariant_to_input_order(
+    suffixes: list[str],
+) -> None:
+    positions = {suffix: index for index, suffix in enumerate(("a", "b", "c", "d"))}
+    nodes = tuple(_node(suffix, positions[suffix]) for suffix in suffixes)
+
+    graph = EvidenceLinkedTimelineGraph(nodes=nodes, edges=())
+
+    assert [item.fact_id for item in graph.nodes] == [
+        derived_opaque_id("fact", suffix) for suffix in ("a", "b", "c", "d")
+    ]
 
 
-def test_graph_output_is_json_ready_and_contains_only_explicit_temporal_links() -> None:
-    graph = build_timeline_graph(
-        [
-            {
-                "event_id": "event-one",
-                "event_type": "event",
-                "source_offsets": [4, 9],
-                "event_time": "2026-06-01",
-            },
-            {
-                "event_id": "event-two",
-                "event_type": "event",
-                "source_offsets": [14, 19],
-                "event_time": "2026-06-02",
-            },
-        ],
-        temporal_links=[
-            {
-                "source": "event-one",
-                "target": "event-two",
-                "relation_type": "AFTER",
-            }
-        ],
+def _node(suffix: str, position: int) -> TimelineGraphNode:
+    return TimelineGraphNode(
+        event_id=derived_opaque_id("journeyevent", suffix),
+        fact_id=derived_opaque_id("fact", suffix),
+        position=position,
+        event_type="condition",
+        journey_state="current",
+        correction_state="none",
+        effective_time={"precision": "day", "start": "2026-01-01"},
+        evidence_ids=(derived_opaque_id("evidence", suffix),),
+        derivation_hash=canonical_digest({"fixture": suffix}),
+        assertion_status="affirmed",
+        certainty="certain",
+        experiencer="patient",
     )
 
-    assert graph.ordered_event_ids == ("event-two", "event-one")
-    payload = graph.to_dict()
-    assert json.loads(graph.to_json()) == payload
-    assert payload["temporal_links"][0]["relation"] == "after"
-    assert payload["events"][0]["source_offsets"] == [14, 19]
+
+def _edge(
+    source: TimelineGraphNode,
+    target: TimelineGraphNode,
+    suffix: str,
+) -> TimelineGraphEdge:
+    return TimelineGraphEdge(
+        edge_id=derived_opaque_id("timelineedge", suffix),
+        source_event_id=source.event_id,
+        target_event_id=target.event_id,
+        relation_type="corrects",
+        ordering_basis="fact_parent_lineage",
+        evidence_ids=tuple(sorted((*source.evidence_ids, *target.evidence_ids))),
+        derivation_hash=canonical_digest({"edge": suffix}),
+    )
