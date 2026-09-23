@@ -45,6 +45,7 @@ using the same workflow with real data.
 | Compare clinical and biomedical NER families | [`examples/clinical_ner_families.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/clinical_ner_families.py) |
 | Redact, extract, and build a FHIR Bundle | [`examples/first_five_minutes_redact_extract_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/first_five_minutes_redact_extract_fhir.py) |
 | Export grounded spans for FHIR and OMOP workflows | [`examples/interop_fhir_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/interop_fhir_export.py) |
+| Run the v3 five-source synthetic Journey gate | [`examples/v3_golden_journey.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v3_golden_journey.py) |
 | De-identify, extract, ground, and export a FHIR Bundle | [`examples/ground_then_export_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/ground_then_export_fhir.py) |
 | Ground a synthetic mention offline | [`examples/offline_grounding.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/offline_grounding.py) |
 | Prepare a local OpenMRS de-identified handoff | [`examples/openmrs_deid_handoff.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/openmrs_deid_handoff.py) |
