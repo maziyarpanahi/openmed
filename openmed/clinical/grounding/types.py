@@ -231,6 +231,7 @@ class GroundedSpan:
             "text": self.text,
             "start": self.start,
             "end": self.end,
+            "system": self.system,
             "system_uri": self.system_uri,
             "code": self.code,
             "display": self.display,
