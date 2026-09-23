@@ -361,6 +361,7 @@ nav:
       - Deterministic Clinical Measures: clinical/measures.md
       - Evidence-bound Care Gaps: clinical/care-gaps.md
       - Versioned Public Trial Records: clinical/trial-records.md
+      - Reviewable Trial Eligibility: clinical/trial-eligibility.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md

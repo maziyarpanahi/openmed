@@ -309,6 +309,12 @@ from openmed.eval.suites.temporal_tlinks import (
     evaluate_temporal_tlink_fixtures,
     load_temporal_tlink_fixtures,
 )
+from openmed.eval.suites.trial_eligibility import (
+    TRIAL_ELIGIBILITY_SUITE_VERSION,
+    TrialEligibilityBenchmarkCase,
+    TrialEligibilityBenchmarkReport,
+    run_trial_eligibility_benchmark,
+)
 
 GOLDEN = "golden"
 GROUNDING_CALIBRATION = "grounding_calibration"
@@ -595,6 +601,10 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "TRIAL_ELIGIBILITY_SUITE_VERSION",
+    "TrialEligibilityBenchmarkCase",
+    "TrialEligibilityBenchmarkReport",
+    "run_trial_eligibility_benchmark",
     "PROMOTION_DECISIONS",
     "JourneySpecialistEvaluationError",
     "SpecialistHoldoutReport",
