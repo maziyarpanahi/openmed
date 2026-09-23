@@ -171,11 +171,30 @@ class SchemaDriftResult:
     removed_properties: tuple[str, ...] = ()
 
 
+def _resolve_hmac_secret(secret: str | bytes | None) -> bytes:
+    """Resolve an explicit key or a private key for one operation's lifetime."""
+    if secret is None:
+        from secrets import token_bytes
+
+        return token_bytes(32)
+    if isinstance(secret, str):
+        key = secret.encode("utf-8")
+    elif isinstance(secret, (bytes, bytearray)):
+        key = bytes(secret)
+    else:
+        raise TypeError("hmac_secret must be a string or bytes")
+    if not key:
+        raise ValueError("hmac_secret must be non-empty")
+    return key
+
+
 def hmac_text_hash(surface: str | bytes, secret: str | bytes) -> str:
     """Return the safe loggable HMAC-SHA256 hash for source surface text."""
 
     payload = surface.encode("utf-8") if isinstance(surface, str) else surface
-    key = secret.encode("utf-8") if isinstance(secret, str) else secret
+    if secret is None:
+        raise TypeError("hmac_text_hash requires an explicit key")
+    key = _resolve_hmac_secret(secret)
     digest = hmac.new(key, payload, hashlib.sha256).hexdigest()
     return f"hmac-sha256:{digest}"
 
