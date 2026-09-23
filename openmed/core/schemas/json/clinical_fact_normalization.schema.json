@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_fact_normalization.schema.json",
+  "title": "OpenMed normalized clinical fact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy",
+    "component_outputs",
+    "fact",
+    "field_states",
+    "normalization_state",
+    "schema_version"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "component_outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/component_output"}
+    },
+    "fact": {"$ref": "#/$defs/fact"},
+    "field_states": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": ["known", "partial", "unknown", "conflict", "unsupported"]
+      }
+    },
+    "normalization_state": {
+      "enum": ["success", "partial", "unknown", "unsupported"]
+    },
+    "schema_version": {"const": "1.0.0"}
+  },
+  "$defs": {
+    "controlled": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"},
+    "component_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "component",
+        "component_version",
+        "output_digest",
+        "output_schema",
+        "output_schema_version",
+        "schema_version"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "component": {"$ref": "#/$defs/controlled"},
+        "component_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+        "output_digest": {"$ref": "#/$defs/digest"},
+        "output_schema": {"$ref": "#/$defs/controlled"},
+        "output_schema_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+        "schema_version": {"const": "1.0.0"}
+      }
+    },
+    "fact": {
+      "type": "object",
+      "required": [
+        "attributes",
+        "confidence",
+        "derivation_hash",
+        "effective_time",
+        "encounter_id",
+        "evidence_ids",
+        "fact_id",
+        "fact_type",
+        "parent_fact_ids",
+        "schema_version",
+        "status",
+        "subject_id",
+        "unit",
+        "value"
+      ],
+      "properties": {
+        "attributes": {"type": "object"},
+        "confidence": {"oneOf": [{"type": "number", "minimum": 0, "maximum": 1}, {"type": "null"}]},
+        "derivation_hash": {"$ref": "#/$defs/digest"},
+        "effective_time": {"type": "object"},
+        "encounter_id": {"oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]},
+        "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "fact_id": {"$ref": "#/$defs/opaque_id"},
+        "fact_type": {"enum": ["condition", "laboratory", "medication", "observation", "procedure", "social_determinant"]},
+        "parent_fact_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "schema_version": {"type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$"},
+        "status": {"$ref": "#/$defs/controlled"},
+        "subject_id": {"$ref": "#/$defs/opaque_id"},
+        "unit": {"oneOf": [{"type": "string", "minLength": 1, "maxLength": 128}, {"type": "null"}]},
+        "value": {}
+      }
+    }
+  }
+}
