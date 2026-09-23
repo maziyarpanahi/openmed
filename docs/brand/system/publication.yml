@@ -362,6 +362,7 @@ classification:
     - export-gguf.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
+    - service/outbound-privacy-filter.md
     - clinical/note-routing.md
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
