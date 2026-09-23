@@ -54,6 +54,7 @@ nav:
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
+      - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
       - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
