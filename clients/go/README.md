@@ -95,6 +95,29 @@ func main() {
 	}
 	fmt.Println(deid.DeidentifiedText)
 
+	// Read one bounded, minimum-necessary Journey resource page.
+	facts, err := client.JourneyResources(ctx, openmed.JourneyResourceQuery{
+		ResourceType: openmed.JourneyFact,
+		Purpose:      "care_review",
+		First:        20,
+		Fields:       []string{"subject_id", "concept", "assertion"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("journey state:", facts.State, "facts:", len(facts.Resources))
+
+	// Evaluate a bounded fixed-option decision. Non-success states remain typed.
+	decision, err := client.Decision(ctx, openmed.FixedOptionDecisionRequest{
+		Mode:      openmed.DecisionFixedChoice,
+		InputText: "Synthetic review priority is urgent.",
+		Options:   []string{"urgent", "routine"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("decision state:", decision.State, "choice:", decision.Choice)
+
 	// Inspect loaded models and unload one.
 	loaded, err := client.LoadedModels(ctx)
 	if err != nil {
@@ -238,6 +261,7 @@ non-nil redirect policy when that forwarding behavior is deliberate.
 | `Health` | `GET /health` |
 | `Livez` | `GET /livez` |
 | `Readyz` | `GET /readyz` |
+| `JourneyResources` | `GET /v1/journey/resources` |
 | `LoadedModels` | `GET /models/loaded` |
 | `UnloadModels` | `POST /models/unload` |
 | `CreateJob` | `POST /jobs` |
