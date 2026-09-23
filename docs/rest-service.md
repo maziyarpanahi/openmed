@@ -219,7 +219,7 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 12
 ```
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
-`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
+`/ground`, `/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
 `/pii/deidentify/stream`, `/jobs`, and `/privacy-gateway/complete`. The default
 is `1,000,000` characters. Oversized requests return the standard `422`
 validation envelope; split larger documents client-side or route them through
@@ -511,11 +511,25 @@ local terminology snapshots:
 {
   "text": "Aspirin 81 mg daily",
   "systems": ["rxnorm"],
-  "source_language": "en",
+  "lang": "en",
   "top_k": 5,
   "offline": true
 }
 ```
+
+For example:
+
+```bash
+curl --fail-with-body --max-time 30 \
+  -X POST "http://127.0.0.1:8080/ground" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Aspirin 81 mg daily","systems":["rxnorm"],"lang":"en","top_k":5,"offline":true}'
+```
+
+`source_language` remains accepted as a compatibility alias for `lang`.
+Unsupported terminology systems return the standard `422` validation envelope.
+The route is covered by the service request-body and throttle middleware, so an
+oversized body returns `413` and a rate-limited request returns `429`.
 
 The route is offline by default. Restricted terminologies such as UMLS and
 SNOMED CT require an explicitly configured, user-licensed terminology source;

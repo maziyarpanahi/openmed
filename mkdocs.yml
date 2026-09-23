@@ -32,6 +32,15 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Signed Agent Capability Grants: agent/capability-grants.md
+      - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
+      - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
+      - Tool Argument Classification: agent/tool-argument-classification.md
+      - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
+      - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
+      - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
+      - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
+      - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md
@@ -39,10 +48,21 @@ nav:
       - Agent Event Attributes: agent/event-attributes.md
       - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Reviewer Handoff Packets: agent/reviewer-handoffs.md
+      - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
+      - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
+      - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
+      - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
+      - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
+      - Cohort Membership Explanations: agent/cohort-explanations.md
+      - Quality-Measure Evidence: agent/quality-measure-evidence.md
+      - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
+      - Human-approval Receipt Failures: agent/human-approval-receipts.md
+      - Durable Workflow Recovery: agent/workflow-recovery.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -149,10 +169,19 @@ nav:
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
+      - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
+      - Summary Temporal-order Validation: clinical/summary-temporal-order.md
+      - Medication-change Summary Views: clinical/summary-medication-changes.md
+      - Laboratory Sequence Summary Views: clinical/summary-lab-trends.md
+      - Guarded Summary Input Contract: clinical/summary-input-contract.md
+      - Summary Safety Envelope: clinical/summary-safety.md
+      - Summary Citation Consistency: clinical/summary-citations.md
+      - Summary Fact Coverage: evaluation/summary-coverage.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
+      - Post-de-identification Summarization: clinical/summarization.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
@@ -227,7 +256,19 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
+      - Clinical NLI Error Slices: evaluation/nli-error-slices.md
+      - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
+      - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
+      - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
+      - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
+      - Document-type Calibration: evaluation/doctype-calibration.md
+      - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
+      - Sealed Holdout Commitments: evaluation/holdout-commitments.md
+      - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
+      - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
+      - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
+      - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -249,6 +290,9 @@ nav:
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
       - Structured discharge-summary profile: clinical/discharge-profile.md
+      - Summary omission budgets: clinical/summary-omission-budgets.md
+      - Summary demographic minimization: clinical/summary-demographic-minimization.md
+      - Bounded local-summary retries: clinical/summary-retry-control.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
@@ -334,6 +378,8 @@ nav:
       - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Reproducible Release Provenance: compliance/reproducible-release.md
+      - v3.1 Agent Deployment Assurance: compliance/v3.1-agent-assurance.md
+      - v3.1 Clinician Review Protocol: compliance/v3.1-clinician-review.md
       - Access-scope Minimization Evidence: compliance/access-scope.md
       - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
       - Privacy Evidence Freshness Gate: compliance/evidence-freshness.md
@@ -352,12 +398,19 @@ nav:
       - Breach Report Template: compliance/templates/breach-report-template.md
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
+      - Staged OMOP Mutations: interop/omop-staged-mutations.md
+      - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
+      - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
+      - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
+      - FHIR-to-OMOP Write Lineage: interop/fhir-omop-write-lineage.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
+      - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
@@ -429,6 +482,7 @@ nav:
       - No-Telemetry Guarantee: security/no-telemetry.md
       - Policy Migration Reviews: security/policy-migrations.md
       - MCP Prompt Injection Guard: security/prompt-injection-guard.md
+      - Agent Boundary Threat Model: security/agent-threat-model.md
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md

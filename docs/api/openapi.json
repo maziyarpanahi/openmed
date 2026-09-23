@@ -499,6 +499,99 @@
         "title": "OpenMed Fixed-Option Decision Request",
         "type": "object"
       },
+      "GroundCandidateResponse": {
+        "additionalProperties": false,
+        "description": "One coded terminology candidate in a grounding response.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "match_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Kind"
+          },
+          "matched_alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Alias"
+          },
+          "score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_language": {
+            "title": "Source Language",
+            "type": "string"
+          },
+          "system": {
+            "title": "System",
+            "type": "string"
+          },
+          "system_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Uri"
+          },
+          "vocab_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vocab Version"
+          }
+        },
+        "required": [
+          "system",
+          "code",
+          "display",
+          "score",
+          "confidence",
+          "source_language",
+          "source"
+        ],
+        "title": "GroundCandidateResponse",
+        "type": "object"
+      },
       "GroundRequest": {
         "additionalProperties": false,
         "description": "Request schema for the offline terminology grounding route.",
@@ -555,6 +648,267 @@
           }
         },
         "title": "GroundRequest",
+        "type": "object"
+      },
+      "GroundResponse": {
+        "additionalProperties": false,
+        "description": "Response schema mirroring the grounding facade's span result shape.",
+        "properties": {
+          "offline": {
+            "title": "Offline",
+            "type": "boolean"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedSpanResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "openmed.grounding.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "snapshots": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Snapshots",
+            "type": "object"
+          },
+          "systems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Systems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "offline",
+          "systems",
+          "snapshots",
+          "results"
+        ],
+        "title": "GroundResponse",
+        "type": "object"
+      },
+      "GroundedSpanResponse": {
+        "additionalProperties": false,
+        "description": "One grounded source span with provenance and ranked candidates.",
+        "properties": {
+          "abstained": {
+            "title": "Abstained",
+            "type": "boolean"
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/GroundCandidateResponse"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "assertion": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assertion"
+          },
+          "calibrated_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Score"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/GroundCandidateResponse"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "canonical_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Label"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "codes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Codes",
+            "type": "object"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "cui": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cui"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
+          "end": {
+            "minimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "title": "Provenance",
+            "type": "object"
+          },
+          "ranked_alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/GroundCandidateResponse"
+            },
+            "title": "Ranked Alternatives",
+            "type": "array"
+          },
+          "score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "section_context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Context"
+          },
+          "snapshot_provenance": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Snapshot Provenance",
+            "type": "object"
+          },
+          "source_language": {
+            "title": "Source Language",
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System"
+          },
+          "system_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Uri"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "start",
+          "end",
+          "confidence",
+          "codes",
+          "score",
+          "abstained",
+          "provenance",
+          "source_language",
+          "candidates",
+          "alternatives",
+          "ranked_alternatives",
+          "snapshot_provenance",
+          "metadata"
+        ],
+        "title": "GroundedSpanResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2233,9 +2587,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ground Route Ground Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/GroundResponse"
                 }
               }
             },

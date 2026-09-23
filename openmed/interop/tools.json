@@ -3135,6 +3135,382 @@
       "annotations": {
         "destructiveHint": false,
         "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true,
+        "title": "Ground Clinical Concepts"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Ground clinical text or extracted entities with the public local-first terminology facade.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "entities": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional pre-extracted entity objects to ground."
+          },
+          "lang": {
+            "default": "en",
+            "type": "string"
+          },
+          "offline": {
+            "default": true,
+            "type": "boolean"
+          },
+          "systems": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional terminology systems to constrain."
+          },
+          "text": {
+            "default": null,
+            "description": "Optional clinical text to ground.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "top_k": {
+            "default": 1,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_ground_concepts",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "concepts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "candidates": {
+                  "items": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "confidence": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "display": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "provenance": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "score": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "section_context": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "span": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "end": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "start": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "start",
+                    "end"
+                  ],
+                  "type": "object"
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "surface": {
+                  "type": "string"
+                },
+                "surface_text": {
+                  "type": "string"
+                },
+                "system": {
+                  "type": "string"
+                },
+                "system_uri": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "top_k": {
+                  "items": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "span",
+                "start",
+                "end",
+                "surface",
+                "surface_text",
+                "text",
+                "system",
+                "system_uri",
+                "code",
+                "display",
+                "confidence",
+                "score",
+                "candidates",
+                "top_k",
+                "provenance",
+                "section_context"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "grounded_concepts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "candidates": {
+                  "items": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "confidence": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "display": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "provenance": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "score": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "section_context": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "span": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "end": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "start": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "start",
+                    "end"
+                  ],
+                  "type": "object"
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "surface": {
+                  "type": "string"
+                },
+                "surface_text": {
+                  "type": "string"
+                },
+                "system": {
+                  "type": "string"
+                },
+                "system_uri": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "top_k": {
+                  "items": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "span",
+                "start",
+                "end",
+                "surface",
+                "surface_text",
+                "text",
+                "system",
+                "system_uri",
+                "code",
+                "display",
+                "confidence",
+                "score",
+                "candidates",
+                "top_k",
+                "provenance",
+                "section_context"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "offline": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "enum": [
+              "openmed.grounding.v1"
+            ],
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "systems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "top_k": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "systems",
+          "language",
+          "lang",
+          "top_k",
+          "offline",
+          "spans",
+          "concepts",
+          "grounded_concepts"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
         "openWorldHint": false,
         "readOnlyHint": true,
         "title": "List Available Models"
