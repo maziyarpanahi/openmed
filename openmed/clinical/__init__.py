@@ -871,6 +871,17 @@ from .status_vocab import (
     normalize_living_status,
     normalize_substance_status,
 )
+from .summarize import (
+    DEFAULT_SUMMARIZATION_MODE,
+    SUMMARIZATION_ADVISORY,
+    LeakageCheck,
+    SummarizationLeakageError,
+    SummarizationOrderError,
+    SummarizationResult,
+    SummarizerBackend,
+    summarize,
+    summarize_deidentified,
+)
 from .summary_card import (
     CODING_COUNT_LABELS,
     ENTITY_CATEGORY_LABELS,
@@ -1450,6 +1461,15 @@ __all__ = [
     "run_summary_stage",
     "validate_summary_envelope",
     "verify_deidentified_artifact",
+    "DEFAULT_SUMMARIZATION_MODE",
+    "SUMMARIZATION_ADVISORY",
+    "LeakageCheck",
+    "SummarizationLeakageError",
+    "SummarizationOrderError",
+    "SummarizationResult",
+    "SummarizerBackend",
+    "summarize",
+    "summarize_deidentified",
     "NormalizedTimex",
     "normalize_temporal",
     "EVENT_ANCHORING_ADVISORY",
