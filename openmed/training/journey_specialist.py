@@ -1179,7 +1179,10 @@ def load_journey_specialist_examples(
         resource = resources.files(JOURNEY_SPECIALIST_DATA_PACKAGE).joinpath(
             lineage.resource
         )
-        payload = resource.read_bytes()
+        # Git may check out this bundled text asset with CRLF on Windows. Its
+        # pinned digest is over canonical LF bytes; caller-supplied bytes stay
+        # exact and are never normalized for integrity checking.
+        payload = resource.read_bytes().replace(b"\r\n", b"\n")
     if sha256_digest(payload) != lineage.content_digest:
         raise JourneySpecialistConflictError("dataset content digest does not match")
     examples: list[SpecialistTrainingExample] = []
