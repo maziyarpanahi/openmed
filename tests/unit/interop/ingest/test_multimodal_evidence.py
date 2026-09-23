@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema.validators import validator_for
 
@@ -140,16 +140,15 @@ def test_visual_coordinate_golden_round_trip(
 @given(
     x0=st.integers(min_value=40, max_value=350),
     y0=st.integers(min_value=20, max_value=170),
-    x1=st.integers(min_value=50, max_value=360),
-    y1=st.integers(min_value=30, max_value=180),
+    data=st.data(),
 )
 def test_crop_and_ocr_rescale_round_trip_property(
     x0: int,
     y0: int,
-    x1: int,
-    y1: int,
+    data: st.DataObject,
 ) -> None:
-    assume(x1 > x0 and y1 > y0)
+    x1 = data.draw(st.integers(min_value=x0 + 1, max_value=360), label="x1")
+    y1 = data.draw(st.integers(min_value=y0 + 1, max_value=180), label="y1")
     chain = CoordinateTransformChain(
         source_width=400,
         source_height=200,

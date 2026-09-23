@@ -107,6 +107,15 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/capability-grants.md
+    - agent/purpose-bound-access.md
+    - agent/non-amplifying-delegation.md
+    - agent/tool-argument-classification.md
+    - agent/tool-inventory.md
+    - agent/tool-inventory-schema.md
+    - agent/tool-catalog-diffs.md
+    - agent/minimum-data-contracts.md
+    - agent/minimum-data-projections.md
     - agent/governance-identifiers.md
     - agent/capability-validity.md
     - agent/event-correlation.md
@@ -114,10 +123,21 @@ classification:
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/reviewer-handoffs.md
+    - agent/policy-decision-matrices.md
+    - agent/human-approval-tokens.md
     - agent/run-summaries.md
     - agent/run-diffs.md
+    - agent/workflow-rollups.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
+    - agent/chart-abstraction-evidence.md
+    - agent/prior-auth-completeness.md
+    - agent/cohort-explanations.md
+    - agent/quality-measure-evidence.md
+    - agent/trial-eligibility-review.md
+    - agent/human-approval-receipts.md
+    - agent/workflow-recovery.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -200,6 +220,7 @@ classification:
     - clinical/nli-assertion-pairs.md
     - clinical/nli-experiencer-pairs.md
     - clinical/concept-grounding.md
+    - clinical/data-quality-profiler.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md
     - interop/snomed-terminology-bridge.md
@@ -223,10 +244,19 @@ classification:
     - clinical/evidence-tables.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
+    - clinical/summary-claim-segmentation.md
+    - clinical/summary-temporal-order.md
+    - clinical/summary-medication-changes.md
+    - clinical/summary-lab-trends.md
+    - clinical/summary-input-contract.md
+    - clinical/summary-safety.md
+    - clinical/summary-citations.md
+    - evaluation/summary-coverage.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
+    - clinical/summarization.md
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
@@ -301,7 +331,19 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/nli-error-slices.md
+    - evaluation/nli-negation-challenge.md
+    - evaluation/relation-review-yield.md
+    - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
+    - evaluation/mixed-script-integrity.md
+    - evaluation/doctype-calibration.md
+    - evaluation/sealed-workflow-manifests.md
+    - evaluation/holdout-commitments.md
+    - evaluation/feedback-budgets.md
+    - evaluation/overlap-forensics.md
+    - evaluation/blinded-adjudication.md
+    - evaluation/v3.1-agent-gates.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -323,6 +365,9 @@ classification:
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
     - clinical/discharge-profile.md
+    - clinical/summary-omission-budgets.md
+    - clinical/summary-demographic-minimization.md
+    - clinical/summary-retry-control.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
@@ -408,6 +453,8 @@ classification:
     - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/reproducible-release.md
+    - compliance/v3.1-agent-assurance.md
+    - compliance/v3.1-clinician-review.md
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
     - compliance/evidence-freshness.md
@@ -426,12 +473,19 @@ classification:
     - compliance/templates/breach-report-template.md
     - compliance/privacy-release-gate.md
     - guides/fhir-omop-interoperability.md
+    - interop/omop-staged-mutations.md
+    - interop/omop-vocabulary-write-gates.md
+    - interop/omop-rollback-manifests.md
+    - interop/omop-rollback-schema.md
+    - interop/fhir-omop-write-lineage.md
     - interop/archive-safety.md
     - fhir-interop.md
     - integrations/fhir-r5-fidelity.md
     - fhir/profile-declarations.md
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
+    - interop/fhir-capability-fixtures.md
+    - interop/fhir-write-preflight.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
@@ -501,6 +555,7 @@ classification:
     - security/no-telemetry.md
     - security/policy-migrations.md
     - security/prompt-injection-guard.md
+    - security/agent-threat-model.md
     - security/mcp-consent-receipts.md
     - security/mcp-authorization-matrix.md
     - security/mcp-upstream-policy.md

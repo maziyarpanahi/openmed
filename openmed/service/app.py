@@ -15,8 +15,10 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import openmed
 from openmed.core.errors import (
@@ -61,10 +63,12 @@ from .journey_resources import (
     parse_access_attributes,
     parse_resource_fields,
 )
+from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
     service_log_config_from_env,
+    set_access_log_grounding,
     set_access_log_model_name,
 )
 from .metrics import (
@@ -106,6 +110,7 @@ from .schemas import (
     FHIRBulkImportRequest,
     FixedOptionDecisionRequest,
     GroundRequest,
+    GroundResponse,
     JourneyResourcePageResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
@@ -113,6 +118,7 @@ from .schemas import (
     PIIExtractRequest,
     PIIExtractStreamRequest,
     PrivacyGatewayRequest,
+    ProfileRequest,
     SMARTBackendIngestionRequest,
 )
 from .security_headers import (
@@ -145,6 +151,7 @@ _MODEL_BACKED_PATHS = frozenset(
     {
         "/graphql",
         "/analyze",
+        "/ground",
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
@@ -163,6 +170,8 @@ _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
 _GROUNDING_CACHE_ENV_VAR = "OPENMED_GROUNDING_CACHE_DIR"
+_REQUEST_BODY_ENCODING_MULTIPLIER = 12
+_REQUEST_BODY_OVERHEAD_BYTES = 65_536
 
 
 @dataclass(frozen=True)
@@ -183,6 +192,85 @@ class ServiceTimeoutError(RuntimeError):
         super().__init__(
             f"Request exceeded configured timeout of {self.timeout_seconds:g} seconds"
         )
+
+
+class _BoundedRequestBodyMiddleware:
+    """Reject oversized model-backed request bodies before JSON parsing."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        limited_paths: Sequence[str],
+    ) -> None:
+        if max_bytes < 1:
+            raise ValueError("max request body bytes must be positive")
+        self.app = app
+        self.max_bytes = int(max_bytes)
+        self.limited_paths = frozenset(limited_paths)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] != "http"
+            or scope.get("method") not in {"POST", "PUT", "PATCH"}
+            or scope.get("path") not in self.limited_paths
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        content_length = Headers(scope=scope).get("content-length")
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length < 0:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length > self.max_bytes:
+                await _error_response(
+                    413,
+                    "payload_too_large",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+
+        messages: list[Message] = []
+        received_bytes = 0
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            received_bytes += len(message.get("body", b""))
+            if received_bytes > self.max_bytes:
+                await _error_response(
+                    413,
+                    "payload_too_large",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        async def replay() -> Message:
+            if messages:
+                return messages.pop(0)
+            return await receive()
+
+        await self.app(scope, replay, send)
 
 
 def _result_to_dict(result: Any) -> Dict[str, Any]:
@@ -251,6 +339,8 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
     tables = load_grounded_notes(
         records,
         vocabulary_version=payload.vocabulary_version,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
     )
     summary = tables.summary
     response: Dict[str, Any] = {
@@ -269,6 +359,20 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
             "by_reason": by_reason,
         }
     return response
+
+
+def _profile_summary(payload: ProfileRequest) -> Dict[str, Any]:
+    """Build the deterministic PHI-free quality profile for inline JSONL."""
+
+    from ..structured.quality import profile_results
+
+    records = _parse_grounded_jsonl_text(payload.records_jsonl)
+    return profile_results(
+        records,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
+        athena_index=payload.athena_index,
+    ).to_dict()
 
 
 def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
@@ -290,7 +394,7 @@ def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
         systems=payload.systems,
         loader=loader,
         config=RankingConfig(k=payload.top_k),
-        source_language=payload.source_language,
+        source_language=payload.lang,
         offline=payload.offline,
     )
 
@@ -307,7 +411,11 @@ def _cohort_resolve_summary(payload: CohortResolveRequest) -> Dict[str, Any]:
 
     definition = PhenotypeDefinition.from_dict(payload.phenotype)
     records = _parse_grounded_jsonl_text(payload.records_jsonl)
-    tables = load_grounded_notes(records)
+    tables = load_grounded_notes(
+        records,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
+    )
     hierarchy_rows = [
         {
             "ancestor_concept_id": edge.ancestor_concept_id,
@@ -630,7 +738,7 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app() -> FastAPI:
+def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
@@ -1343,6 +1451,8 @@ def create_app() -> FastAPI:
 
     @app.post("/omop/load")
     async def omop_load(payload: OmopLoadRequest, request: Request) -> Dict[str, Any]:
+        from ..structured.quality import QualityGateError
+
         with trace_service_stage(
             "omop_load",
             {
@@ -1350,14 +1460,54 @@ def create_app() -> FastAPI:
                 "openmed.input.length": len(payload.records_jsonl),
             },
         ):
-            return await run_in_threadpool(_omop_load_summary, payload)
+            try:
+                return await run_in_threadpool(_omop_load_summary, payload)
+            except QualityGateError as exc:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "rejected",
+                        "quality_gate": exc.report.to_dict(),
+                    },
+                )
 
-    @app.post("/ground")
+    @app.post("/profile")
+    async def profile_route(
+        payload: ProfileRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """Profile extracted output without returning note text or values."""
+
+        with trace_service_stage(
+            "profile",
+            {
+                "openmed.endpoint": "/profile",
+                "openmed.input.length": len(payload.records_jsonl),
+            },
+        ):
+            return await run_in_threadpool(_profile_summary, payload)
+
+    @app.post("/ground", response_model=GroundResponse)
     async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
         """Ground text or pre-extracted entities against local snapshots."""
 
+        input_count = len(payload.entities) if payload.entities is not None else 1
+        set_access_log_grounding(
+            request,
+            input_count=input_count,
+            systems=payload.systems,
+            lang=payload.lang,
+        )
         try:
-            return await run_in_threadpool(_ground_summary, payload)
+            response = await run_in_threadpool(_ground_summary, payload)
+            set_access_log_grounding(
+                request,
+                input_count=input_count,
+                result_count=len(response["results"]),
+                systems=payload.systems,
+                lang=payload.lang,
+            )
+            return response
         except Exception as exc:
             from openmed.clinical.grounding import (
                 RestrictedVocabularyError,
@@ -1504,6 +1654,8 @@ def create_app() -> FastAPI:
         payload: CohortResolveRequest,
         request: Request,
     ) -> Dict[str, Any]:
+        from ..structured.quality import QualityGateError
+
         with trace_service_stage(
             "cohort_resolve",
             {
@@ -1511,7 +1663,16 @@ def create_app() -> FastAPI:
                 "openmed.input.length": len(payload.records_jsonl),
             },
         ):
-            return await run_in_threadpool(_cohort_resolve_summary, payload)
+            try:
+                return await run_in_threadpool(_cohort_resolve_summary, payload)
+            except QualityGateError as exc:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "rejected",
+                        "quality_gate": exc.report.to_dict(),
+                    },
+                )
 
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(
@@ -1603,6 +1764,19 @@ def create_app() -> FastAPI:
             OpenTelemetryMiddleware,
             tracing=app.state.tracing,
         )
+    body_limit = (
+        int(max_request_body_bytes)
+        if max_request_body_bytes is not None
+        else (
+            get_max_text_length() * _REQUEST_BODY_ENCODING_MULTIPLIER
+            + _REQUEST_BODY_OVERHEAD_BYTES
+        )
+    )
+    app.add_middleware(
+        _BoundedRequestBodyMiddleware,
+        max_bytes=body_limit,
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),

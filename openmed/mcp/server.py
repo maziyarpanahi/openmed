@@ -117,6 +117,7 @@ from openmed.utils.validation import validate_model_name
 REGISTERED_PII_LANGUAGES = (
     SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
 )
+_GROUNDING_CACHE_ENV_VAR = "OPENMED_GROUNDING_CACHE_DIR"
 
 RuntimeProvider = Callable[[], ServiceRuntime]
 PrivacyGatewayProvider = Callable[[], Any]
@@ -1052,6 +1053,46 @@ def openmed_ground(
     return validate_registered_tool_output("openmed_ground", response)
 
 
+def openmed_ground_concepts(
+    text: Optional[str] = None,
+    entities: Optional[list[Dict[str, Any]]] = None,
+    systems: Optional[list[str]] = None,
+    lang: str = "en",
+    top_k: int = 1,
+    offline: bool = True,
+) -> Dict[str, Any]:
+    """Ground text or entities through the public local-first facade."""
+
+    if entities is None:
+        if text is None:
+            raise InputError(
+                "text or entities is required. Provide one grounding input.",
+                details={"arguments": ["text", "entities"]},
+            )
+        grounding_input: Any = normalize_text(text)
+    else:
+        if not entities:
+            raise InputError(
+                "entities must contain at least one object.",
+                details={"argument": "entities"},
+            )
+        grounding_input = entities
+
+    selected_systems = list(DEFAULT_GROUNDING_SYSTEMS) if systems is None else systems
+    result = ground(
+        grounding_input,
+        systems=selected_systems,
+        lang=lang,
+        top_k=top_k,
+        loader=VocabLoader(
+            cache_dir=os.getenv(_GROUNDING_CACHE_ENV_VAR),
+            local_only=offline,
+        ),
+        offline=offline,
+    ).to_dict()
+    return validate_registered_tool_output("openmed_ground_concepts", result)
+
+
 def openmed_export_fhir(
     spans: list[Dict[str, Any]],
     resources: Optional[list[Dict[str, Any]]] = None,
@@ -1810,6 +1851,7 @@ def build_mcp_tool_handlers(
             runtime_provider=runtime_provider,
         ),
         "openmed_ground": lambda **kwargs: openmed_ground(**kwargs),
+        "openmed_ground_concepts": (lambda **kwargs: openmed_ground_concepts(**kwargs)),
         "openmed_export_fhir": lambda **kwargs: openmed_export_fhir(**kwargs),
         "openmed_risk_score": lambda **kwargs: openmed_risk_score(**kwargs),
         "openmed_clinical_pipeline": (

@@ -43,6 +43,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/pii/extract"): "ExtractPII",
     ("post", "/pii/extract/stream"): "ExtractPIIStream",
     ("post", "/privacy-gateway/complete"): "PrivacyGateway",
+    ("post", "/profile"): "Profile",
     ("get", "/readyz"): "Readyz",
     ("get", "/v1/journey/resources"): "JourneyResources",
 }
@@ -63,6 +64,7 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "PIIExtractRequest": "PIIExtractRequest",
     "PIIExtractStreamRequest": "PIIExtractStreamRequest",
     "PrivacyGatewayRequest": "PrivacyGatewayRequest",
+    "ProfileRequest": "ProfileRequest",
     "SMARTBackendIngestionRequest": "SMARTBackendIngestionRequest",
 }
 
