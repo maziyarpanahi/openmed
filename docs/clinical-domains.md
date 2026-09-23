@@ -305,6 +305,20 @@
 | Distribution | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
+## Wound Assessment
+
+**Alignment:** This map is intentionally distinct from the dermatology lesion map: it captures wound-care descriptors as written for nursing and surgical review. It does not infer wound staging, predict healing, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| WoundType | WOUND_TYPE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundLocation | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundStage | WOUND_STAGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundDimension | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| ExudateDescriptor | EXUDATE_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/wound_assessment.jsonl |
+| TissueType | TISSUE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| DressingType | DRESSING_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+
 ## Ophthalmology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |

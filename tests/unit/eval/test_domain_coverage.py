@@ -229,3 +229,20 @@ def test_benchmark_cli_writes_machine_readable_coverage_summary(
     captured = capsys.readouterr()
     assert "General anesthesia" not in captured.out
     assert '"passed": true' in captured.out
+
+
+def test_wound_assessment_reports_per_label_coverage() -> None:
+    report = assert_domain_coverage_gate(domains=("wound_assessment",))
+
+    domain = report.per_domain[0]
+    assert domain.domain == "wound_assessment"
+    assert [coverage.label for coverage in domain.per_label] == [
+        "WoundType",
+        "WoundLocation",
+        "WoundStage",
+        "WoundDimension",
+        "ExudateDescriptor",
+        "TissueType",
+        "DressingType",
+    ]
+    assert all(coverage.span_count == 1 for coverage in domain.per_label)
