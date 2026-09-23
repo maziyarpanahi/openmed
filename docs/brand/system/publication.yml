@@ -117,6 +117,7 @@ classification:
     - agent/run-summaries.md
     - agent/run-diffs.md
     - agent/timing-metadata.md
+    - agent/evidence-query-planner.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
