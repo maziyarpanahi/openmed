@@ -30,13 +30,32 @@ nav:
       - India Onboarding: onboarding-india.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Signed Agent Capability Grants: agent/capability-grants.md
+      - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
+      - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
+      - Tool Argument Classification: agent/tool-argument-classification.md
+      - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
+      - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
+      - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
+      - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
+      - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
+      - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md
+      - Agent Error Envelopes: agent/error-envelopes.md
+      - Agent Event Attributes: agent/event-attributes.md
+      - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Reviewer Handoff Packets: agent/reviewer-handoffs.md
+      - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
+      - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+      - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Timing Metadata: agent/timing-metadata.md
+      - Evidence-grounded Query Planner: agent/evidence-query-planner.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
@@ -87,6 +106,7 @@ nav:
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
+      - Journey Specialist Pack: models/journey-specialist-pack.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
@@ -96,6 +116,22 @@ nav:
       - Advanced NER & Output Formatting: output-formatting.md
       - Cross-format Offset Properties: structured/offset-properties.md
       - Schema Snapshot Compatibility: structured/schema-snapshots.md
+      - Longitudinal Journey Contracts: clinical/journey-contracts.md
+      - Durable Local Journey Storage: structured/local-journey-store.md
+      - PostgreSQL and Object-backed Journey Storage: structured/postgres-object-journey-store.md
+      - Resumable Ingestion Control Plane: interop/resumable-ingestion.md
+      - Patient and Encounter Identity Resolution: interop/identity-resolution.md
+      - Structured Source Evidence Adapters: interop/structured-evidence-adapters.md
+      - Multimodal Evidence Coordinates: interop/multimodal-evidence-coordinates.md
+      - Ingestion-to-Fact Pipeline: interop/ingestion-to-fact-pipeline.md
+      - Annotation Interchange and Pipeline Migration: interop/annotation-interchange.md
+      - V3 Five-source Golden Journey: interop/v3-golden-journey.md
+      - V3 Journey Release Gate: release/v3.0-journey-release-gate.md
+      - Clinical Task Router and Model Packs: clinical/model-packs.md
+      - Clinical Fact Normalization: structured/clinical-fact-normalization.md
+      - Terminology Resolution Cascades: clinical/terminology-resolution.md
+      - Fact Reconciliation and Correction History: structured/fact-reconciliation.md
+      - Point-in-Time Longitudinal Journey: clinical/longitudinal-journey.md
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
@@ -117,7 +153,9 @@ nav:
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
+      - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
+      - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
@@ -159,25 +197,37 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
+      - PNG and JPEG Header Preflight: multimodal/image-header-preflight.md
       - WebP Header Preflight: multimodal/webp-header-preflight.md
+      - Image Orientation Preflight: multimodal/image-orientation-preflight.md
+      - TIFF Header Preflight: multimodal/tiff-preflight.md
+      - Audio Format Summaries: multimodal/audio-format-summaries.md
+      - Frame-Sampling Manifests: multimodal/frame-sampling-manifests.md
+      - Audio Resampling Plans: multimodal/audio-resampling-plans.md
+      - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
+      - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
+      - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
@@ -190,6 +240,7 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
+      - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
       - Sealed Holdout Commitments: evaluation/holdout-commitments.md
@@ -222,6 +273,8 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Fixed-option Decision API: api/fixed-option-decisions.md
+      - Versioned Journey Resources: api/journey-resources.md
       - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - Minimum-necessary Field Selection: security/minimum-necessary.md
@@ -314,6 +367,7 @@ nav:
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
       - ISO 27701/27001 Evidence Pack: compliance/iso-27701-control-evidence.md
       - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
+      - Separated Projection Boundaries: compliance/separated-projections.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
@@ -325,6 +379,17 @@ nav:
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
+      - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
+      - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
+      - FHIR Journey and Cohort-definition Round Trips: interop/fhir-cohort-roundtrip.md
+      - Saved Cohorts and Membership Evidence: structured/saved-cohorts.md
+      - Governed Dataset Snapshots: structured/governed-datasets.md
+      - Governed Clinical Registries: structured/clinical-registries.md
+      - Deterministic Clinical Measures: clinical/measures.md
+      - Evidence-bound Care Gaps: clinical/care-gaps.md
+      - Versioned Public Trial Records: clinical/trial-records.md
+      - Reviewable Trial Eligibility: clinical/trial-eligibility.md
+      - Evidence-bound Drug-safety Signals: clinical/drug-safety-signals.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
@@ -378,11 +443,13 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
       - Policy Migration Reviews: security/policy-migrations.md
       - MCP Prompt Injection Guard: security/prompt-injection-guard.md
+      - Agent Boundary Threat Model: security/agent-threat-model.md
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
@@ -399,6 +466,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 2.5 to 3.0: migration/2.5-to-3.0.md
       - Migrate from 2.3 to 2.5: migration/2.3-to-2.5.md
       - Migrate from 2.2 to 2.3: migration/2.2-to-2.3.md
       - Migrate from 2.1 to 2.2: migration/2.1-to-2.2.md

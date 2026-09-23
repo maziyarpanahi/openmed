@@ -24,6 +24,7 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 CLIENT_METHOD_BY_OPERATION = {
     ("post", "/analyze"): "Analyze",
     ("post", "/cohort/resolve"): "ResolveCohort",
+    ("post", "/v1/decisions"): "Decision",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
@@ -43,6 +44,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/pii/extract/stream"): "ExtractPIIStream",
     ("post", "/privacy-gateway/complete"): "PrivacyGateway",
     ("get", "/readyz"): "Readyz",
+    ("get", "/v1/journey/resources"): "JourneyResources",
 }
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
@@ -51,6 +53,7 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
+    "FixedOptionDecisionRequest": "FixedOptionDecisionRequest",
     "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",
@@ -67,6 +70,7 @@ GO_NAMED_STRING_TYPE_BY_FIELD = {
     "aggregation_strategy": "AggregationStrategy",
     "lang": "PIILanguage",
     "method": "DeidentificationMethod",
+    "mode": "DecisionMode",
     "policy": "PrivacyPolicy",
 }
 
@@ -431,6 +435,7 @@ def _go_type_matches_schema(go_type: str, schema: dict[str, Any]) -> bool:
         "string": {
             "string",
             "AggregationStrategy",
+            "DecisionMode",
             "DeidentificationMethod",
             "PIILanguage",
             "PrivacyPolicy",
