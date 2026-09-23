@@ -2,6 +2,19 @@
 
 from importlib import import_module
 
+from .ade import (
+    ADE_RELATION_DISCLAIMER,
+    ADE_RELATION_SCHEMA_VERSION,
+    DRUG_TO_ADE,
+    DRUG_TO_REASON,
+    ADEAssertionStatus,
+    ADERelation,
+    ADERelationType,
+    DrugProtRelationHead,
+    MedicationADERecord,
+    extract_ade_relations,
+    reconstruct_medication_ade_records,
+)
 from .assertion_filter import (
     ASSERTION_FILTER_ADVISORY,
     RELATION_ASSERTION_STATUSES,
@@ -46,8 +59,15 @@ from .candidate import (
     build_relation_candidates,
     enumerate_joint_span_candidates,
     enumerate_span_pair_candidates,
+    generate_relation_candidates,
     sample_negative_span_pairs,
     split_sentence_offsets,
+)
+from .diagnosis_treatments import (
+    DIAGNOSIS_TREATMENT_ADVISORY,
+    DiagnosisTreatmentCandidate,
+    RelationUncertainty,
+    generate_diagnosis_treatment_candidates,
 )
 from .document_level import (
     DOCUMENT_RELATION_ADVISORY,
@@ -65,6 +85,13 @@ from .family_history import (
     FamilyHistoryRelation,
     extract_family_history_relations,
 )
+from .guarded_lab_result_candidates import (
+    LAB_RESULT_CANDIDATE_ADVISORY,
+    LabConflictState,
+    LabResultRelationCandidate,
+    LabUnitStatus,
+    generate_lab_result_candidates,
+)
 from .joint_head import (
     JOINT_HEAD_SCHEMA_VERSION,
     JointEntityScore,
@@ -76,6 +103,12 @@ from .joint_head import (
     decode_joint_span_pairs,
 )
 from .lab_results import LAB_RESULT_ADVISORY, LabResult, extract_lab_results
+from .medication_changes import (
+    MEDICATION_CHANGE_ADVISORY,
+    MedicationChangeCandidate,
+    MedicationChangeType,
+    generate_medication_change_candidates,
+)
 from .medication_links import (
     MEDICATION_LINK_ADVISORY,
     MedicationRelationScorer,
@@ -103,6 +136,21 @@ from .problem_links import (
     PROBLEM_STATUS_CUES,
     extract_problem_relations,
 )
+from .procedure_indications import (
+    PROCEDURE_INDICATION_ADVISORY,
+    ProcedureIndicationCandidate,
+    generate_procedure_indication_candidates,
+)
+from .review_priority import (
+    DEFAULT_REVIEW_PRIORITY_POLICY,
+    REVIEW_PRIORITY_ADVISORY,
+    EvidenceCompleteness,
+    RelationConflictState,
+    RelationReviewPriority,
+    ReviewBand,
+    ReviewPriorityPolicy,
+    assign_review_priority,
+)
 from .temporal import (
     TEMPORAL_GRAPH_SCHEMA_VERSION,
     TEMPORAL_RELATION_SCHEMA_VERSION,
@@ -117,6 +165,17 @@ from .temporal import (
 )
 
 __all__ = [
+    "ADE_RELATION_DISCLAIMER",
+    "ADE_RELATION_SCHEMA_VERSION",
+    "DRUG_TO_ADE",
+    "DRUG_TO_REASON",
+    "ADEAssertionStatus",
+    "ADERelation",
+    "ADERelationType",
+    "DrugProtRelationHead",
+    "MedicationADERecord",
+    "extract_ade_relations",
+    "reconstruct_medication_ade_records",
     "ASSERTION_FILTER_ADVISORY",
     "RELATION_ASSERTION_STATUSES",
     "RELATION_CONFIRMED",
@@ -140,6 +199,9 @@ __all__ = [
     "FAMILY_HISTORY_RELATION_ADVISORY",
     "FAMILY_HISTORY_RELATION_TYPE",
     "FamilyHistoryRelation",
+    "DIAGNOSIS_TREATMENT_ADVISORY",
+    "DiagnosisTreatmentCandidate",
+    "RelationUncertainty",
     "CoreferenceProvenance",
     "CoreferenceSourceReference",
     "DocumentLevelRelation",
@@ -152,19 +214,28 @@ __all__ = [
     "JointSpanPairHead",
     "JointSpanPairScore",
     "LAB_RESULT_ADVISORY",
+    "LAB_RESULT_CANDIDATE_ADVISORY",
     "LabResult",
+    "LabConflictState",
+    "LabResultRelationCandidate",
+    "LabUnitStatus",
     "MEDICATION_LINK_ADVISORY",
+    "MEDICATION_CHANGE_ADVISORY",
     "MedicationAttributeType",
     "MedicationRelation",
     "MedicationRelationGroup",
     "MedicationRelationScorer",
     "MedicationStatementRecord",
+    "MedicationChangeCandidate",
+    "MedicationChangeType",
     "MedicationRelationType",
     "MentionPairEvidence",
     "ProblemAttributeType",
     "ProblemRelationType",
     "PROBLEM_RELATION_ADVISORY",
     "PROBLEM_STATUS_CUES",
+    "PROCEDURE_INDICATION_ADVISORY",
+    "ProcedureIndicationCandidate",
     "Relation",
     "RELATION_TO_PATIENT",
     "RelationAttributeType",
@@ -178,6 +249,13 @@ __all__ = [
     "RelationCandidateBatch",
     "RelationCandidateRule",
     "RelationType",
+    "DEFAULT_REVIEW_PRIORITY_POLICY",
+    "REVIEW_PRIORITY_ADVISORY",
+    "EvidenceCompleteness",
+    "RelationConflictState",
+    "RelationReviewPriority",
+    "ReviewBand",
+    "ReviewPriorityPolicy",
     "SpanPairCandidate",
     "SpanReference",
     "SafeRelationMention",
@@ -192,12 +270,17 @@ __all__ = [
     "decode_tlink_candidates",
     "extract_tlink_candidates",
     "extract_lab_results",
+    "generate_lab_result_candidates",
+    "generate_medication_change_candidates",
+    "generate_procedure_indication_candidates",
+    "generate_diagnosis_treatment_candidates",
     "extract_medication_relations",
     "extract_document_relations",
     "extract_family_history_relations",
     "extract_problem_relations",
     "enumerate_joint_span_candidates",
     "enumerate_span_pair_candidates",
+    "generate_relation_candidates",
     "link_medication_attributes",
     "reconstruct_medication_statements",
     "CMEIE_ENTITY_TYPES",
@@ -214,6 +297,7 @@ __all__ = [
     "relation_type_mapping",
     "sample_negative_span_pairs",
     "split_sentence_offsets",
+    "assign_review_priority",
     "DEFAULT_MAX_RELATION_ABSTENTION_RATE",
     "DEFAULT_MIN_ISOTONIC_SAMPLES",
     "DEFAULT_MIN_RETAINED_RELATION_ACCURACY",
