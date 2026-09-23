@@ -266,6 +266,24 @@ so different originals always get different surrogates.
 
 ### Cross-document surrogate vaults
 
+Canonical span and pipeline audit-record HMACs use private random keys by
+default. A `Pipeline` keeps its key for its own lifetime, so streaming windows
+and repeated calls on that instance agree. Separate pipelines, standalone
+recognizer calls, and interop projections receive separate keys. For intentional
+stable HMACs across pipeline instances, pass the same non-empty, securely stored
+`hmac_secret` to each `Pipeline`. Fresh `deidentify(..., audit=True)` calls
+therefore produce different audit hashes; each report still verifies against
+its own contents.
+This does not change redaction labels or offsets.
+
+The separate `AuditReport` format retains SHA-256 integrity digests of input,
+spans, and context. These unkeyed digests can be guessed for low-entropy values;
+they are not an anonymization boundary. Keep those reports access-controlled.
+
+The web SDK and React Native bridges generate a private key per inference call
+when `hashSecret` is omitted. Supply a non-empty private `hashSecret` when
+cross-call linkage is needed; keep keys separate from span output.
+
 Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
 calls need stable pseudonyms for the same identifier:
 
