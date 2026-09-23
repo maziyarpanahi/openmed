@@ -395,6 +395,7 @@ classification:
     - security/no-raw-phi-logging.md
     - security/pre-push-privacy.md
     - security/trace-audit-artifact.md
+    - security/preflight-phi-gate.md
     - security/ci-privacy-scan.md
     - security/secret-detection.md
     - guides/in-place-redaction.md

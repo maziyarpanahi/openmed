@@ -321,6 +321,7 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md
+      - Agent Context PHI Preflight: security/preflight-phi-gate.md
       - CI Privacy Scan: security/ci-privacy-scan.md
       - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md
