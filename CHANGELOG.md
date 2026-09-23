@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, aggregate-only review-yield metrics for guarded clinical
+  relation candidates, with accepted, corrected, rejected, duplicate, and
+  deferred outcomes by relation class (#2753).
+- Added assertion-aware FHIR R4 `AllergyIntolerance`, `Immunization`, and
+  `Encounter` exporters with RxNorm, SNOMED CT, and CVX coding support.
 - Added immutable, versioned longitudinal Journey contracts for clinical
   artifacts, evidence locators, facts, conflicts, resolution events, and
   dataset snapshots, including deterministic JSON, bundled schemas, and
@@ -32,6 +37,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added offline structured-evidence adapters for text, existing document
   results, FHIR R4, HL7 v2, CDA R2, CSV, and XLSX with exact coordinates,
   parser provenance, bounded quarantine, and value-free results (#3326).
+- Added a versioned clinical model-pack contract and local-only task router with
+  pinned artifact integrity, license and quantization gates, explicit runtime
+  capability outcomes, and deterministic fallbacks (#3328).
+- Added model-independent clinical-fact normalization across extraction,
+  assertion, temporality, relation, medication, laboratory, observation, and
+  social-determinant outputs with evidence and derivation gates (#3330).
+- Added a local-first ingestion-to-fact orchestrator with versioned stage
+  manifests, value-free derivation edges, exact replay, descendant-only
+  reprocessing, typed quarantine, and atomic Journey writes across five
+  synthetic structured source formats (#3327).
+- Added deterministic terminology resolution cascades with versioned mapping
+  provenance, explicit ambiguous and unmapped outcomes, an append-only local
+  review queue, opt-in local semantic candidates, and value-free coverage
+  summaries (#3331).
+- Added evidence-preserving fact deduplication, dimension-specific conflict
+  sets, versioned policy and human resolutions, append-only correction history,
+  guarded review packets, and counts-only queue SLA summaries (#3332).
+- Added paginated point-in-time longitudinal journey views with typed patient,
+  encounter, time, event, status, source, and review filters; complete immutable
+  provenance drill-down; correction-aware state; and a value-free timeline
+  graph (#3333).
+- Added versioned PDF, OCR, image, and DICOM evidence coordinates with
+  invertible rotation, crop, and scale chains; exact source-space round trips;
+  explicit DICOM tag provenance; and typed quarantine behavior (#3334).
+- Added a reproducible four-task Journey specialist pack with pinned low-cost
+  encoder/span recipes, deterministic offline split manifests, a hard shared
+  USD 1,000 GPU ledger, frozen-holdout calibration and failure slices,
+  quantized-delta gates, model cards, and fail-closed promotion fallback
+  (#3329).
+- Added deterministic projection of resolved clinical facts into versioned
+  OMOP 5.4 person, visit, note, condition, drug, procedure, measurement,
+  observation, and source-to-concept tables with explicit concept-0 outcomes,
+  evidence custody, correction-aware replacement, retained ETL lineage,
+  vocabulary-license gates, and split-leakage protection (#3335).
+- Added an optional OMOP 5.4 quality bridge with digest-bound local and
+  caller-injected remote adapters, signed aggregate conformance, completeness,
+  and plausibility reports, typed non-success states, and reproducible
+  reconciliation against a frozen synthetic reference projection (#3336).
+- Added provenance-preserving FHIR R4 round trips for Journey facts and
+  resolution events, byte-stable cohort-definition exchange with snapshot and
+  criterion custody, explicit conversion-loss reports, and an optional
+  digest-bound out-of-process cohort service bridge (#3337).
+- Added immutable saved-cohort definition versions and execution manifests,
+  deterministic point-in-time reruns, four-state membership with criterion and
+  time-window evidence, opaque-key workflow explanations, local append-only
+  persistence, and vocabulary-license boundaries (#3338).
+- Added governed dataset snapshots from saved cohorts and ingestion jobs with
+  deterministic JSONL, annotation, and Parquet artifacts; fail-closed split and
+  distribution gates; license custody; and separately authorized, audited
+  identified exports (#3339).
+- Added content-addressed clinical registry definitions, evidence-bound cases,
+  owner-scoped assignments, non-skippable review and adjudication, correction
+  history, counts-only queue summaries, and policy-bound value-free exports
+  (#3341).
+- Added deterministic native clinical measures and pinned optional CQL/ELM JSON
+  evaluator bridges with explicit population, unknown, error, evidence,
+  value-set, time-window, trace, aggregate-summary, and drift contracts (#3342).
+- Added evidence-bound met, open, not-applicable, and insufficient-data care-gap
+  states with conservative missing-data behavior, mandatory unresolved-input
+  review, immutable corrections, and versioned history (#3343).
+- Added opt-in public clinical-trial metadata synchronization with immutable
+  study versions, source and cache integrity checks, typed drift failures,
+  deterministic incremental updates, and offline metadata queries (#3344).
+- Added deterministic public trial-criteria parsing, local candidate reranking,
+  five-state evidence-bound criterion evaluation, value-free review packets,
+  fail-closed aggregate matching, and a provenance-bound benchmark (#3345).
+- Added opt-in public adverse-event ingestion, report-level PRR and ROR
+  calculations, explicit count suppression, immutable dataset/filter/policy
+  provenance, and separately typed chart-level suspected relations (#3346).
+- Added an evidence-grounded patient and cohort query planner with closed
+  read-only tool calls, bounded SQL guards, snapshot citations, access receipts,
+  explicit abstention states, and inert prompt-injection boundaries (#3347).
+- Added a single versioned Journey resource contract across Python, REST,
+  GraphQL, and bounded read-only SQL, including cursor pagination,
+  namespace/purpose/field policy, typed non-success states, generated schema
+  snapshots, and client parity (#3348).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and

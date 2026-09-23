@@ -607,6 +607,50 @@ class SQLiteJourneyStore:
             return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
         return StoreResult.success(versions)
 
+    def list_canonical_records(
+        self,
+        subject_id: str,
+        *,
+        as_of: StorePoint | None = None,
+    ) -> StoreResult[tuple[CanonicalRecordVersion, ...]]:
+        """Return each latest visible canonical pointer for one subject."""
+
+        denied = self._denied("read", "canonical")
+        if denied is not None:
+            return denied
+        if not _valid_opaque_id(subject_id):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_identifier")
+        cutoff = self._cutoff(as_of)
+        rows = self._connection.execute(
+            """
+            SELECT visible_record.payload_json, visible_record.version,
+                   visible_record.created_revision
+            FROM canonical_record_versions AS visible_record
+            WHERE visible_record.subject_id = ?
+              AND visible_record.created_revision <= ?
+              AND visible_record.version = (
+                  SELECT MAX(candidate.version)
+                  FROM canonical_record_versions AS candidate
+                  WHERE candidate.canonical_id = visible_record.canonical_id
+                    AND candidate.created_revision <= ?
+              )
+            ORDER BY visible_record.canonical_id
+            """,
+            (subject_id, cutoff, cutoff),
+        ).fetchall()
+        try:
+            records = tuple(
+                CanonicalRecordVersion(
+                    record=CanonicalRecord.from_dict(json.loads(row["payload_json"])),
+                    version=int(row["version"]),
+                    revision=int(row["created_revision"]),
+                )
+                for row in rows
+            )
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
+        return StoreResult.success(records)
+
     def get_job(
         self,
         job_id: str,
@@ -638,6 +682,72 @@ class SQLiteJourneyStore:
             return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
         return StoreResult.success(job, revision=int(row["created_revision"]))
 
+    def list_job_versions(
+        self,
+        job_id: str,
+        *,
+        as_of: StorePoint | None = None,
+    ) -> StoreResult[tuple[JobMetadata, ...]]:
+        """Return append-only job metadata versions through one revision."""
+
+        denied = self._denied("read", "job")
+        if denied is not None:
+            return denied
+        if not _valid_opaque_id(job_id):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_identifier")
+        rows = self._connection.execute(
+            """
+            SELECT payload_json
+            FROM job_metadata_versions
+            WHERE job_id = ? AND created_revision <= ?
+            ORDER BY version, created_revision
+            """,
+            (job_id, self._cutoff(as_of)),
+        ).fetchall()
+        if not rows:
+            return StoreResult.outcome(StoreState.UNKNOWN, "job_not_found")
+        try:
+            versions = tuple(
+                JobMetadata.from_dict(json.loads(row["payload_json"])) for row in rows
+            )
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
+        return StoreResult.success(versions)
+
+    def list_jobs(
+        self,
+        *,
+        as_of: StorePoint | None = None,
+    ) -> StoreResult[tuple[JobMetadata, ...]]:
+        """Return the latest visible version of each PHI-free job record."""
+
+        denied = self._denied("read", "job")
+        if denied is not None:
+            return denied
+        cutoff = self._cutoff(as_of)
+        rows = self._connection.execute(
+            """
+            SELECT visible_job.payload_json
+            FROM job_metadata_versions AS visible_job
+            WHERE visible_job.created_revision <= ?
+              AND visible_job.version = (
+                  SELECT MAX(candidate.version)
+                  FROM job_metadata_versions AS candidate
+                  WHERE candidate.job_id = visible_job.job_id
+                    AND candidate.created_revision <= ?
+              )
+            ORDER BY visible_job.job_id
+            """,
+            (cutoff, cutoff),
+        ).fetchall()
+        try:
+            jobs = tuple(
+                JobMetadata.from_dict(json.loads(row["payload_json"])) for row in rows
+            )
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
+        return StoreResult.success(jobs)
+
     def list_facts(
         self,
         subject_id: str,
@@ -665,6 +775,66 @@ class SQLiteJourneyStore:
         except ValueError:
             return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
         return StoreResult.success(facts)
+
+    def list_conflicts(
+        self,
+        subject_id: str,
+        *,
+        as_of: StorePoint | None = None,
+    ) -> StoreResult[tuple[ConflictSet, ...]]:
+        """Return deterministic conflict history for one opaque subject."""
+
+        denied = self._denied("read", "conflict")
+        if denied is not None:
+            return denied
+        if not _valid_opaque_id(subject_id):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_identifier")
+        rows = self._connection.execute(
+            """
+            SELECT payload_json
+            FROM conflict_sets
+            WHERE subject_id = ? AND created_revision <= ?
+            ORDER BY created_revision, conflict_id
+            """,
+            (subject_id, self._cutoff(as_of)),
+        ).fetchall()
+        try:
+            conflicts = tuple(
+                ConflictSet.from_json(row["payload_json"]) for row in rows
+            )
+        except ValueError:
+            return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
+        return StoreResult.success(conflicts)
+
+    def list_resolutions(
+        self,
+        conflict_id: str,
+        *,
+        as_of: StorePoint | None = None,
+    ) -> StoreResult[tuple[ResolutionEvent, ...]]:
+        """Return append-only resolution history for one conflict."""
+
+        denied = self._denied("read", "resolution")
+        if denied is not None:
+            return denied
+        if not _valid_opaque_id(conflict_id):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_identifier")
+        rows = self._connection.execute(
+            """
+            SELECT payload_json
+            FROM resolution_events
+            WHERE conflict_id = ? AND created_revision <= ?
+            ORDER BY created_revision, resolution_id
+            """,
+            (conflict_id, self._cutoff(as_of)),
+        ).fetchall()
+        try:
+            resolutions = tuple(
+                ResolutionEvent.from_json(row["payload_json"]) for row in rows
+            )
+        except ValueError:
+            return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
+        return StoreResult.success(resolutions)
 
     def integrity_check(self) -> StoreResult[Mapping[str, int]]:
         """Run local SQLite and payload-hash integrity checks without values."""
@@ -1270,27 +1440,27 @@ class LocalJourneyStore:
                 for locator in locators:
                     if failure is not None:
                         break
-                    result = transaction.put_evidence(locator)
-                    if not result.ok:
-                        failure = result
+                    evidence_result = transaction.put_evidence(locator)
+                    if not evidence_result.ok:
+                        failure = evidence_result
                     else:
-                        created_metadata = created_metadata or result.created
+                        created_metadata = created_metadata or evidence_result.created
                 for fact in fact_records:
                     if failure is not None:
                         break
-                    result = transaction.put_fact(fact)
-                    if not result.ok:
-                        failure = result
+                    fact_result = transaction.put_fact(fact)
+                    if not fact_result.ok:
+                        failure = fact_result
                     else:
-                        created_metadata = created_metadata or result.created
+                        created_metadata = created_metadata or fact_result.created
                 for conflict in conflict_records:
                     if failure is not None:
                         break
-                    result = transaction.put_conflict(conflict)
-                    if not result.ok:
-                        failure = result
+                    conflict_result = transaction.put_conflict(conflict)
+                    if not conflict_result.ok:
+                        failure = conflict_result
                     else:
-                        created_metadata = created_metadata or result.created
+                        created_metadata = created_metadata or conflict_result.created
         except (LocalStoreError, sqlite3.Error, TypeError, ValueError):
             failure = StoreResult.outcome(StoreState.FAILURE, "transaction_failed")
 

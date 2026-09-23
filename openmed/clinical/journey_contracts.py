@@ -756,8 +756,8 @@ class EvidenceLocator(_JourneyRecord):
     locator_id: str
     artifact_id: str
     location_type: str
-    location: Mapping[str, Any]
-    transform: Mapping[str, Any] = field(default_factory=dict)
+    location: Mapping[str, Any] = field(repr=False)
+    transform: Mapping[str, Any] = field(default_factory=dict, repr=False)
     schema_version: str = JOURNEY_CONTRACT_SCHEMA_VERSION
     extensions: Mapping[str, Any] = field(default_factory=dict, repr=False)
 

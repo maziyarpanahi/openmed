@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/clinical/trial-eligibility.schema.json",
+  "title": "OpenMed reviewable trial eligibility result",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "advisory",
+    "candidate",
+    "compatibility_policy",
+    "criteria_parse_digest",
+    "criterion_results",
+    "eligible",
+    "evaluated_at",
+    "matcher_version",
+    "policy",
+    "policy_digest",
+    "result_digest",
+    "result_id",
+    "review_required",
+    "schema_version",
+    "state"
+  ],
+  "properties": {
+    "advisory": {
+      "const": "Trial matching output is a review aid, not a clinical recommendation, eligibility determination, enrollment action, or authorization to contact."
+    },
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "compatibility_policy": {"const": "same_major"},
+    "criteria_parse_digest": {"$ref": "#/$defs/digest"},
+    "criterion_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/criterion_result"}
+    },
+    "eligible": {"type": "boolean"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "matcher_version": {"const": "openmed.trial-matcher/1.0.0"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "policy_digest": {"$ref": "#/$defs/digest"},
+    "result_digest": {"$ref": "#/$defs/digest"},
+    "result_id": {"$ref": "#/$defs/opaque_id"},
+    "review_required": {"type": "boolean"},
+    "schema_version": {"const": "1.0.0"},
+    "state": {"enum": ["eligible", "not_eligible", "review_required"]}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "retrieval_score", "study_id", "study_version_digest", "study_version_id"],
+      "properties": {
+        "rank": {"type": "integer", "minimum": 1},
+        "retrieval_score": {"type": "number", "minimum": 0, "maximum": 1},
+        "study_id": {"type": "string", "pattern": "^NCT[0-9]{8}$"},
+        "study_version_digest": {"$ref": "#/$defs/digest"},
+        "study_version_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_id", "unresolved_blocks_eligible", "version"],
+      "properties": {
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "unresolved_blocks_eligible": {"const": true},
+        "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "criterion_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criterion_id",
+        "criterion_kind",
+        "evidence",
+        "reason_code",
+        "review_required",
+        "state",
+        "study_version_digest",
+        "study_version_id"
+      ],
+      "properties": {
+        "criterion_id": {"$ref": "#/$defs/opaque_id"},
+        "criterion_kind": {"enum": ["exclusion", "inclusion"]},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "review_required": {"type": "boolean"},
+        "state": {"enum": ["conflict", "met", "not_met", "unknown", "unsupported"]},
+        "study_version_digest": {"$ref": "#/$defs/digest"},
+        "study_version_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflict_ids", "evidence_ids", "fact_ids", "snapshot_digest", "snapshot_id"],
+      "properties": {
+        "conflict_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "evidence_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "fact_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "snapshot_digest": {"$ref": "#/$defs/digest"},
+        "snapshot_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    }
+  }
+}

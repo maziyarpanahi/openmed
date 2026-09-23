@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import ssl
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib import import_module
 from typing import Any, Protocol, cast
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from openmed.clinical.journey_contracts import canonical_digest
 
@@ -390,6 +392,61 @@ POSTGRES_MIGRATIONS = (
             """,
         ),
     ),
+    PostgresMigration(
+        version=3,
+        name="ingestion_pipeline_lineage",
+        statements=(
+            """
+            CREATE TABLE ingestion_pipeline_stages (
+                stage_manifest_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                stage TEXT NOT NULL,
+                sequence BIGINT NOT NULL,
+                state TEXT NOT NULL,
+                input_digest TEXT NOT NULL,
+                output_digest TEXT,
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                UNIQUE (job_id, stage, input_digest)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_pipeline_edges (
+                parent_stage_manifest_id TEXT NOT NULL
+                    REFERENCES ingestion_pipeline_stages(stage_manifest_id),
+                child_stage_manifest_id TEXT NOT NULL
+                    REFERENCES ingestion_pipeline_stages(stage_manifest_id),
+                PRIMARY KEY (parent_stage_manifest_id, child_stage_manifest_id)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_pipeline_invalidations (
+                invalidation_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                stage_manifest_id TEXT NOT NULL
+                    REFERENCES ingestion_pipeline_stages(stage_manifest_id),
+                replacement_job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                UNIQUE (stage_manifest_id, replacement_job_id)
+            )
+            """,
+            """
+            CREATE INDEX ingestion_pipeline_job_sequence_idx
+            ON ingestion_pipeline_stages(job_id, sequence, stage_manifest_id)
+            """,
+            """
+            CREATE INDEX ingestion_pipeline_edge_child_idx
+            ON ingestion_pipeline_edges(child_stage_manifest_id)
+            """,
+            """
+            CREATE INDEX ingestion_pipeline_invalidation_job_idx
+            ON ingestion_pipeline_invalidations(job_id, recorded_at)
+            """,
+        ),
+    ),
 )
 
 LATEST_POSTGRES_MIGRATION_VERSION = POSTGRES_MIGRATIONS[-1].version
@@ -563,7 +620,7 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         policy: StoragePolicy | None = None,
         connect_options: Mapping[str, Any] | None = None,
     ) -> StoreResult["PostgresJourneyStore"]:
-        """Connect lazily with psycopg when the caller explicitly supplies a DSN.
+        """Connect lazily with pg8000 when the caller explicitly supplies a DSN.
 
         The DSN and connection options are never stored, logged, or included in
         result representations.
@@ -572,8 +629,12 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         if not isinstance(dsn, str) or not dsn:
             return StoreResult.outcome(StoreState.FAILURE, "invalid_dsn")
         try:
-            psycopg = import_module("psycopg")
-            connection = psycopg.connect(dsn, **dict(connect_options or {}))
+            parameters = _pg8000_connect_parameters(dsn, connect_options)
+        except (TypeError, ValueError):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_dsn")
+        try:
+            pg8000 = import_module("pg8000.dbapi")
+            connection = pg8000.connect(**parameters)
         except Exception:
             return StoreResult.outcome(StoreState.FAILURE, "postgres_connect_failed")
         return cls.open(connection, schema=schema, policy=policy)
@@ -811,7 +872,7 @@ class PostgresJourneyStore(SQLiteJourneyStore):
 
 
 def _postgres_sql(operation: str) -> str:
-    """Translate the internal qmark parameter style to DB-API ``pyformat``."""
+    """Translate the internal qmark parameter style to DB-API ``format``."""
 
     return operation.replace("?", "%s")
 
@@ -828,7 +889,57 @@ def _sqlstate(error: Exception) -> str | None:
     if isinstance(value, str):
         return value
     value = getattr(error, "pgcode", None)
-    return value if isinstance(value, str) else None
+    if isinstance(value, str):
+        return value
+    if error.args and isinstance(error.args[0], dict):
+        code = error.args[0].get("C")
+        return code if isinstance(code, str) else None
+    return None
+
+
+def _pg8000_connect_parameters(
+    dsn: str,
+    options: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Convert a simple PostgreSQL URL into bounded pg8000 arguments."""
+
+    parsed = urlsplit(dsn)
+    if (
+        parsed.scheme not in {"postgres", "postgresql"}
+        or not parsed.hostname
+        or not parsed.username
+        or parsed.fragment
+        or not parsed.path.startswith("/")
+        or parsed.path.count("/") != 1
+        or len(parsed.path) == 1
+    ):
+        raise ValueError("unsupported PostgreSQL connection URL")
+    port = parsed.port if parsed.port is not None else 5432
+    if not 1 <= port <= 65535:
+        raise ValueError("invalid PostgreSQL port")
+    supplied = dict(options or {})
+    if set(supplied) - {"connect_timeout"}:
+        raise ValueError("unsupported PostgreSQL connection option")
+    timeout = supplied.get("connect_timeout", 3)
+    if type(timeout) not in {int, float} or not 0 < timeout <= 30:
+        raise ValueError("invalid PostgreSQL connection timeout")
+    # Python 3.10 treats an empty string as a malformed field in strict mode.
+    query = (
+        parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+        if parsed.query
+        else []
+    )
+    if len(query) > 1 or (query and query[0] != ("sslmode", "verify-full")):
+        raise ValueError("unsupported PostgreSQL connection option")
+    return {
+        "database": unquote(parsed.path[1:]),
+        "host": parsed.hostname,
+        "password": unquote(parsed.password) if parsed.password is not None else None,
+        "port": port,
+        "ssl_context": ssl.create_default_context() if query else None,
+        "timeout": timeout,
+        "user": unquote(parsed.username),
+    }
 
 
 __all__ = [

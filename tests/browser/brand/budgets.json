@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 57937460,
-    "maximum_unique_payload_bytes": 57599881,
+    "maximum_total_bytes": 74110863,
+    "maximum_unique_payload_bytes": 73773284,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3705273
+    "json": 4133034
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3705273
+    "docs/search/search_index.json": 4133034
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 5089393,
-    "/docs/model-tokenizer-script-coverage/": 7176065
+    "/docs/": 5560423,
+    "/docs/model-tokenizer-script-coverage/": 7660085
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,17 +31,17 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the Journey contracts, local store, PostgreSQL and object store, resumable ingestion, and current agent and multimodal guides, with bounded documentation headroom.",
-    "The staged aggregate with projection, identity and structured evidence documentation contains 57642714 total bytes, 57305135 unique payload bytes, and 337579 duplicate payload bytes. The Linux ceilings carry forward the observed 4435-byte platform delta plus 110750 bytes of bounded headroom.",
-    "The 57420320-byte unique-payload ceiling and 57757899-byte total-payload ceiling preserve the existing headroom policy. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The measured aggregate search index is 3672558 bytes; its 3705273-byte JSON ceiling retains 32715 bytes of headroom.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, and PHI-preflight evidence guides with bounded documentation headroom.",
+    "The combined four-feature staging aggregate contains 73816162 total bytes, 73478583 unique payload bytes, and 337579 duplicate payload bytes locally.",
+    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110404 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, and governance guides remain searchable. The combined search index measured 4103336 bytes; its unchanged 4133034-byte JSON ceiling retains 29698 bytes of bounded headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
-    "The multimodal batch-memory guide and its navigation entry add 179561 total and unique payload bytes, measured as a same-environment staged-artifact delta against master 0f8090c23 and added on top of the reconciliation above (57757899 / 57420320). Both ceilings rise by exactly that amount, so the recorded 110750-byte headroom is unchanged; duplicate, per-file, route, and search-index budgets are unaffected.",
+    "The multimodal batch-memory guide and its navigation entry add 179561 total and unique payload bytes, measured as a same-environment staged-artifact delta against master 0f8090c23 and added on top of the reconciliation above (73931302 / 73593723). Both ceilings rise by exactly that amount, so the recorded 110750-byte headroom is unchanged; duplicate, per-file, route, and search-index budgets are unaffected.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
-    "The /docs/ route measured 4970091 bytes on the audited Linux pull-request build; its 5089393-byte ceiling retains 119302 bytes of bounded transfer headroom.",
-    "The tokenizer coverage route measured 7069261 bytes on the audited Linux pull-request build; its 7176065-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
+    "The /docs/ route measured 5441121 bytes on the combined governance staging build; its 5560423-byte ceiling retains 119302 bytes of bounded transfer headroom.",
+    "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
   ]
