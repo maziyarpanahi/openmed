@@ -53,6 +53,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "invalid_credentials",
     "not_ready",
     "offline_snapshot_unavailable",
+    "payload_too_large",
     "outbound_privacy_error",
     "outbound_redaction_failed",
     "outbound_redactor_required",

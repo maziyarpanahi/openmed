@@ -46,11 +46,47 @@ print(bundle.summary.to_dict())
 ```
 
 `to_fhir()` maps supported canonical labels to `Condition`,
-`MedicationStatement`, `Observation`, or `Procedure`. For an iterable it calls
-the Bundle assembler, which assigns deterministic `urn:uuid` full URLs,
-rewrites internal references, and adds transaction request blocks. Treat
-grounding as advisory: review coding and assertion context before clinical or
-billing use.
+`MedicationStatement`, `Observation`, `Procedure`, `AllergyIntolerance`, or
+`Immunization`. Allergy exports accept RxNorm or caller-supplied SNOMED CT
+grounding, and vaccine exports accept CVX or caller-supplied SNOMED CT
+grounding. OpenMed does not download CVX or restricted terminology content;
+load and govern vocabulary files outside the package. For an iterable,
+`to_fhir()` calls the Bundle assembler, which assigns deterministic `urn:uuid`
+full URLs, rewrites internal references, and adds transaction request blocks.
+Treat grounding as advisory: review coding and assertion context before
+clinical or billing use.
+
+`Encounter` export is selected explicitly with `resource="Encounter"` because
+there is no canonical encounter entity label. Supply the required R4 class and
+any extracted period through structured span metadata:
+
+```python
+from openmed.clinical.grounding import GroundedSpan
+
+encounter_span = GroundedSpan(
+    text="synthetic ambulatory visit",
+    start=0,
+    end=len("synthetic ambulatory visit"),
+    metadata={
+        "encounter_class": "AMB",
+        "period": {
+            "start": "2026-01-02T03:04:05Z",
+            "end": "2026-01-02T03:34:05Z",
+        },
+    },
+)
+encounter = to_fhir(encounter_span, resource="Encounter")
+```
+
+When the span includes a grounded encounter-type candidate, its shared
+`CodeableConcept` is emitted in `Encounter.type`.
+
+Allergy and immunization spans may carry an `encounter_reference` metadata
+value. Allergy `criticality` is omitted unless explicitly extracted as `low`,
+`high`, or `unable-to-assess`. Immunization `occurrence_datetime`,
+`occurrence`, and `lot_number` metadata populate their corresponding R4
+elements; when no occurrence was extracted, the required occurrence is
+represented as the non-fabricated string `unknown`.
 
 Iterable export never guesses a resource from the coding system when a span
 has an unrecognized canonical label. Such spans are omitted and counted in the
