@@ -148,10 +148,19 @@ nav:
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
+      - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
+      - Summary Temporal-order Validation: clinical/summary-temporal-order.md
+      - Medication-change Summary Views: clinical/summary-medication-changes.md
+      - Laboratory Sequence Summary Views: clinical/summary-lab-trends.md
+      - Guarded Summary Input Contract: clinical/summary-input-contract.md
+      - Summary Safety Envelope: clinical/summary-safety.md
+      - Summary Citation Consistency: clinical/summary-citations.md
+      - Summary Fact Coverage: evaluation/summary-coverage.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
+      - Post-de-identification Summarization: clinical/summarization.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
@@ -248,6 +257,9 @@ nav:
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
       - Structured discharge-summary profile: clinical/discharge-profile.md
+      - Summary omission budgets: clinical/summary-omission-budgets.md
+      - Summary demographic minimization: clinical/summary-demographic-minimization.md
+      - Bounded local-summary retries: clinical/summary-retry-control.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
