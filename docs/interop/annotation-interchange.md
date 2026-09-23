@@ -201,8 +201,9 @@ openmed annotation scan-pipeline \
 ```
 
 Commands refuse to overwrite existing files unless `--force` is supplied.
-Machine-readable mode emits counts, states, paths, and digests; it does not
-print annotation rows or source pipeline content.
+Machine-readable mode emits counts, states, and digests, never output paths,
+annotation rows, or source pipeline content. Failures use content-free messages
+that do not echo a potentially identifying input or output path.
 
 ## Safety boundary
 

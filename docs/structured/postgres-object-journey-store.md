@@ -60,8 +60,11 @@ OpenMed does not add a mandatory database client.
 The connection or DSN must use TLS, authentication, routing, and access controls
 appropriate to the deployment. OpenMed neither weakens those controls nor puts
 connection details into result representations. `PostgresJourneyStore.connect()`
-is an optional convenience that lazily imports `psycopg`; direct construction
-accepts a compatible dedicated DB-API connection.
+is an optional convenience that lazily imports the BSD-licensed `pg8000` driver
+from the `journey` extra. It accepts a PostgreSQL URL with an optional
+`sslmode=verify-full` query (using the system trust store); other URL options
+fail closed. Direct construction accepts a compatible dedicated DB-API
+connection when deployment-specific TLS or routing is required.
 
 ## Migration state and recovery
 

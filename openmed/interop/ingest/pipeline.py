@@ -338,6 +338,8 @@ class IngestionToFactPipeline:
 
         _opaque(subject_id, "subject_id")
         _opaque(worker_id, "worker_id")
+        if type(attempt) is not int or attempt < 1:
+            raise ValueError("attempt must be positive")
         if encounter_id is not None:
             _opaque(encounter_id, "encounter_id")
         parents = _opaque_ids(tuple(parent_fact_ids), "parent_fact_ids")
@@ -378,6 +380,19 @@ class IngestionToFactPipeline:
                 )
             if job.state == "completed":
                 return self._completed_replay(job.job_id, manifest.manifest_digest)
+
+        # Stage computation and reprocessing can have side effects. Claim the
+        # job before either, not only when recording their checkpoints.
+        lease = self.store.acquire_lease(
+            job.job_id,
+            worker_id,
+            acquired_at=recorded_at,
+            duration_seconds=lease_seconds,
+        )
+        if not lease.ok or lease.value is None:
+            return StoreResult.outcome(
+                lease.state, lease.code or "lease_acquisition_failed"
+            )
 
         prior_manifests: tuple[PipelineStageManifest, ...] = ()
         invalidations: tuple[PipelineStageInvalidation, ...] = ()

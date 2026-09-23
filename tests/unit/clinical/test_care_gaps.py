@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
+import pytest
 from jsonschema.validators import validator_for
 
 from openmed.clinical.care_gaps import (
@@ -167,6 +169,23 @@ def test_missing_or_error_data_never_becomes_an_open_gap() -> None:
     assert missing.reason_code == "population_result_missing"
     assert errored.state is CareGapState.INSUFFICIENT_DATA
     assert errored.review_status is CareGapReviewStatus.REQUIRED
+
+
+@pytest.mark.parametrize("population_id", ["initial", "denominator", "numerator"])
+def test_population_role_mismatch_cannot_create_open_gap(population_id: str) -> None:
+    result = _measure_result(numerator=PopulationState.NOT_MET)
+    populations = tuple(
+        replace(item, kind=PopulationKind.MEASURE_OBSERVATION)
+        if item.population_id == population_id
+        else item
+        for item in result.populations
+    )
+    mismatched = replace(result, populations=populations)
+    evaluated = evaluate_care_gap(mismatched, _policy())
+    assert evaluated.value is not None
+    assert evaluated.value.state is CareGapState.INSUFFICIENT_DATA
+    assert evaluated.value.review_status is CareGapReviewStatus.REQUIRED
+    assert evaluated.value.reason_code == "population_role_conflict"
 
 
 def test_conflicting_inputs_require_review_and_review_cannot_be_skipped() -> None:
