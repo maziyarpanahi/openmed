@@ -3964,7 +3964,17 @@ def bootstrap_ci(
     The returned interval always brackets the point estimate. Degenerate inputs
     -- an empty corpus or a single document -- cannot vary under resampling and
     yield a zero-width interval flagged with ``degenerate=True``.
+
+    Raises:
+        ValueError: If ``n_resamples`` is not positive or ``alpha`` is outside
+            the interval ``[0, 1]``. Parameters are checked even for a
+            degenerate corpus, before calling the statistic.
     """
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be positive")
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("alpha must be between 0 and 1")
+
     values = list(per_document_values)
     point = float(statistic(values))
     if len(values) < 2:
