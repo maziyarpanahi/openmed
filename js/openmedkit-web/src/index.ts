@@ -1,9 +1,10 @@
 import { decodeBioTokenSpans } from "./decoder";
-import { loadTokenClassificationPipeline } from "./model-loader";
+import { loadOnnxModel, loadTokenClassificationPipeline } from "./model-loader";
 import {
   OPENMED_SPAN_SCHEMA_VERSION,
   type DeidentifyOptions,
   type ExtractPiiOptions,
+  type ModelLoader,
   type OpenMedDeidentifyResult,
   type OpenMedSpan,
   type SpanAction,
@@ -27,6 +28,10 @@ export type {
   OpenMedDeidentifyResult,
   OpenMedSpan,
   PolicyLabel,
+  RawTokenClassificationEntity,
+  RawTokenClassificationOutput,
+  RawTokenClassificationPipeline,
+  RawTransformersRuntime,
   SpanAction,
   TextHash,
   TokenClassificationCallOptions,
@@ -43,6 +48,7 @@ export {
   refinePrivacyFilterSpan,
   trimSpanWhitespace,
 } from "./decoder";
+export { alignTokenOffsets } from "./offsets";
 export {
   isLocalModelReference,
   loadOnnxModel,
@@ -50,6 +56,7 @@ export {
 } from "./model-loader";
 export {
   detectOrtWebCapabilities,
+  probeOrtWebCapabilities,
   selectOrtWebBackend,
 } from "./runtime/capability";
 export type {
@@ -57,7 +64,11 @@ export type {
   OrtCapabilityGlobalScope,
   OrtWebBackend,
   OrtWebBackendChoice,
+  OrtWebCapabilityProbeOptions,
+  OrtWebCapabilityProbeResult,
   OrtWebCapabilityProfile,
+  WebGpuAdapterProbe,
+  WebGpuNavigatorProbe,
 } from "./runtime/capability";
 export {
   assertOfflineAssetPath,
@@ -73,6 +84,7 @@ export type {
   OrtInferenceSession,
   OrtResults,
   OrtSessionCreateOptions,
+  OrtTensorConstructor,
   OrtTensorLike,
   OrtTokenClassificationDecodeContext,
   OrtWebLoadedSession,
@@ -82,22 +94,64 @@ export type {
   OrtWebSessionCache,
   OrtWebTokenClassificationPipelineOptions,
 } from "./runtime/ort-web-loader";
+export {
+  CLASSIFY_WGSL_SOURCE,
+  DEFAULT_WEBGPU_LOGIT_TOLERANCE,
+  DEFAULT_WEBGPU_MAX_RECALL_DELTA,
+  WEBGPU_BENCHMARK_SUITE,
+  WebGpuClassificationHead,
+  WebGpuTokenClassificationSession,
+  WebGpuVerificationError,
+  certifyWebGpuReference,
+  createWebGpuClassificationHead,
+  decodeWebGpuTokenSpans,
+  evaluateWebGpuRecallGate,
+  loadWebGpuTokenClassificationSession,
+} from "./runtime/webgpu-session";
+export type {
+  TokenClassificationLogits,
+  TokenIdData,
+  WebGpuBenchmarkOptions,
+  WebGpuBenchmarkReport,
+  WebGpuClassificationHeadConfig,
+  WebGpuDeviceBenchmarkMetrics,
+  WebGpuInputNames,
+  WebGpuModelPaths,
+  WebGpuRecallGate,
+  WebGpuRecallGateOptions,
+  WebGpuReferenceCertification,
+  WebGpuReferenceCertificationOptions,
+  WebGpuTokenBatch,
+  WebGpuTokenClassificationSessionOptions,
+  WebGpuTokenSpan,
+} from "./runtime/webgpu-session";
 
-const DEFAULT_MODEL_ID = "OpenMed/privacy-filter-transformersjs";
-const DEFAULT_HASH_SECRET = "openmedkit-web";
+export const DEFAULT_MODEL_ID =
+  "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
+const ONNX_ANDROID_REPO_PATTERN = /-onnx-android$/i;
 
 export async function extractPii(
   text: string,
   options: ExtractPiiOptions = {},
 ): Promise<OpenMedSpan[]> {
+  const hashSecret =
+    options.hashSecret == null
+      ? await ephemeralHashSecret()
+      : new Uint8Array(toBytes(options.hashSecret));
+  if (hashSecret.byteLength === 0) {
+    throw new Error("hashSecret must not be empty");
+  }
+  const model = options.model ?? DEFAULT_MODEL_ID;
   const pipeline =
     options.pipeline ??
-    (await (options.modelLoader ?? loadTokenClassificationPipeline)(
-      options.model ?? DEFAULT_MODEL_ID,
+    (await (options.modelLoader ?? defaultModelLoaderFor(model))(
+      model,
       options.loaderOptions,
     ));
+  // Keep "O" tokens so offset alignment sees the full token sequence.
   const rawOutput = await pipeline(text, {
     aggregation_strategy: "none",
+    ignore_labels: [],
     ...(options.pipelineOptions ?? {}),
   });
   const decoded = decodeBioTokenSpans(text, rawOutput, {
@@ -112,10 +166,7 @@ export async function extractPii(
       doc_id: options.docId ?? "document",
       start: entity.start,
       end: entity.end,
-      text_hash: await hmacTextHash(
-        surface,
-        options.hashSecret ?? DEFAULT_HASH_SECRET,
-      ),
+      text_hash: await hmacTextHash(surface, hashSecret),
       entity_type: entity.entity_type,
       canonical_label: entity.canonical_label,
       policy_label: entity.policy_label,
@@ -130,12 +181,18 @@ export async function extractPii(
       reversible_id: null,
       section: options.section ?? null,
       metadata: {
-        ...(options.model ? { model: options.model } : {}),
+        ...(options.model || !options.pipeline ? { model } : {}),
         ...(options.metadata ?? {}),
       },
     });
   }
   return spans;
+}
+
+function defaultModelLoaderFor(model: string): ModelLoader {
+  return ONNX_ANDROID_REPO_PATTERN.test(model)
+    ? loadOnnxModel
+    : loadTokenClassificationPipeline;
 }
 
 export async function deidentify(
@@ -174,7 +231,10 @@ export async function hmacTextHash(
   secret: string | Uint8Array,
 ): Promise<`hmac-sha256:${string}`> {
   const payload = toBytes(surface);
-  const key = toBytes(secret);
+  const key = new Uint8Array(toBytes(secret));
+  if (key.byteLength === 0) {
+    throw new Error("hashSecret must not be empty");
+  }
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {
     const cryptoKey = await subtle.importKey(
@@ -191,6 +251,14 @@ export async function hmacTextHash(
   const { createHmac } = await import("node:crypto");
   const digest = createHmac("sha256", key).update(payload).digest("hex");
   return `hmac-sha256:${digest}`;
+}
+
+async function ephemeralHashSecret(): Promise<Uint8Array> {
+  if (globalThis.crypto?.getRandomValues) {
+    return globalThis.crypto.getRandomValues(new Uint8Array(32));
+  }
+  const { randomBytes } = await import("node:crypto");
+  return randomBytes(32);
 }
 
 function toBytes(value: string | Uint8Array): Uint8Array {

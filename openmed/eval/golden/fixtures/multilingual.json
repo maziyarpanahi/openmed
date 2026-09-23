@@ -300,11 +300,11 @@
           "end": 56,
           "label": "ID_NUM",
           "metadata": {
-            "checksum_status": "not_validated",
+            "checksum_status": "valid",
             "identifier_type": "my_number"
           },
           "start": 42,
-          "text": "1234 5678 9012"
+          "text": "1234 5678 9018"
         }
       ],
       "id": "golden-multilingual-ja-my-number",
@@ -319,7 +319,7 @@
         "locale": "ja_JP",
         "synthetic": true
       },
-      "text": "合成メモ: テスト患者 山田太郎 は 2026年3月14日 に受診し、マイナンバー 1234 5678 9012 を提示しました。"
+      "text": "合成メモ: テスト患者 山田太郎 は 2026年3月14日 に受診し、マイナンバー 1234 5678 9018 を提示しました。"
     },
     {
       "gold_spans": [

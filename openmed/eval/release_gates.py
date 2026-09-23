@@ -29,7 +29,7 @@ from openmed.core.pii_i18n import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     SUPPORTED_LANGUAGES,
 )
-from openmed.core.registry_service import (
+from openmed.core.registry_slots import (
     REGISTRY_STATE_PATH,
     RegistryStateError,
     load_registry_state,
@@ -90,6 +90,8 @@ G4_INT8_DELTA_LIMIT = INT8_RECALL_DELTA_LIMIT
 G4_INT4_DELTA_LIMIT = INT4_RECALL_DELTA_LIMIT
 G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
+#: Minimum corpus-level mean Cohen/Fleiss kappa required for eval-set promotion.
+G12_MIN_AGREEMENT_KAPPA = 0.800
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
 G9_DUA_PROMOTION_CADENCE = "human-run"
@@ -114,6 +116,8 @@ G10_UNGROUNDED_FACT_CEILING = 0.0
 DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING = 0.0
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "as": 0.0,
+    "gu": 0.0,
+    "kn": 0.0,
     "mr": 0.0,
     "or": 0.0,
     "ta": 0.0,
@@ -780,6 +784,7 @@ class ReleaseGate:
         checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g11_critical_finding_recall_check(metrics, metadata))
+        checks.append(_g12_gold_corpus_agreement_check(metrics, metadata, payload))
         checks.append(_g14_extraction_fairness_check(metrics, metadata))
         checks.append(_g15_end_to_end_pipeline_check(metrics, metadata, baseline_entry))
         checks.append(_g4_check(quant_delta_result))
@@ -1253,7 +1258,18 @@ def _manifest_coherence_check(
                     "error": "candidate repo_id is absent from manifest",
                 }
 
-    if manifest_rows:
+    if manifest_path is not None and manifest_rows:
+        # Import lazily because data_license_gate returns this module's GateCheck.
+        # The release path must enforce the same read-only license decision as
+        # registry_ctl without creating an import cycle at module load time.
+        from openmed.eval.data_license_gate import evaluate_data_license_gate
+
+        data_license_check = evaluate_data_license_gate(manifest_path)
+        if not data_license_check.passed:
+            mismatches["training_data_licenses"] = {
+                "reason": data_license_check.reason,
+                "details": dict(data_license_check.details),
+            }
         mismatches.update(
             _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
         )
@@ -2322,6 +2338,122 @@ def _critical_finding_misses(metric: Mapping[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return misses
+
+
+def evaluate_gold_corpus_agreement_gate(
+    report: Mapping[str, Any] | Any,
+) -> GateCheck:
+    """Evaluate gold-corpus mean agreement kappa for G12.
+
+    The evaluator accepts a benchmark report, a serialized
+    :class:`~openmed.eval.report.GoldCorpusQualityReport`, or a mapping with a
+    nested ``gold_corpus_quality``/``gold_quality_report`` evidence payload.
+    Reports that do not claim gold-quality evidence are not applicable; once
+    such evidence is supplied, a missing or malformed kappa fails closed.
+    """
+
+    payload = _report_payload(report)
+    return _g12_gold_corpus_agreement_check(
+        _mapping(payload.get("metrics")),
+        _mapping(payload.get("metadata")),
+        payload,
+    )
+
+
+def _g12_gold_corpus_agreement_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    payload: Mapping[str, Any] | None = None,
+) -> GateCheck:
+    raw_kappa, metric_source, evidence_present = _gold_agreement_kappa_evidence(
+        metrics,
+        metadata,
+        payload or {},
+    )
+    details: dict[str, Any] = {
+        "evidence_present": evidence_present,
+        "floor": G12_MIN_AGREEMENT_KAPPA,
+        "metric_source": metric_source,
+        "threshold": G12_MIN_AGREEMENT_KAPPA,
+    }
+    if not evidence_present:
+        return GateCheck("G12", True, reason="not provided", details=details)
+
+    mean_kappa = _agreement_kappa(raw_kappa)
+    if mean_kappa is None:
+        return GateCheck(
+            "G12",
+            False,
+            reason="mean gold-corpus agreement kappa is missing or malformed",
+            details=details,
+        )
+
+    details["mean_agreement_kappa"] = mean_kappa
+    passed = mean_kappa >= G12_MIN_AGREEMENT_KAPPA
+    return GateCheck(
+        "G12",
+        passed,
+        reason=(
+            "ok"
+            if passed
+            else "mean gold-corpus agreement kappa is below the configured floor"
+        ),
+        details=details,
+    )
+
+
+def _gold_agreement_kappa_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    payload: Mapping[str, Any],
+) -> tuple[Any, str | None, bool]:
+    containers = (
+        ("metrics", metrics),
+        ("metadata", metadata),
+        ("candidate", payload),
+    )
+    evidence_keys = (
+        "gold_corpus_quality",
+        "gold_quality_report",
+        "gold_quality",
+    )
+    metric_keys = (
+        "mean_agreement_kappa",
+        "mean_kappa",
+        "overall_agreement",
+    )
+
+    for container_name, container in containers:
+        for evidence_key in evidence_keys:
+            if evidence_key not in container:
+                continue
+            evidence = container.get(evidence_key)
+            if not isinstance(evidence, Mapping):
+                return None, f"{container_name}.{evidence_key}", True
+            for metric_key in metric_keys:
+                if metric_key in evidence:
+                    return (
+                        evidence.get(metric_key),
+                        f"{container_name}.{evidence_key}.{metric_key}",
+                        True,
+                    )
+            return None, f"{container_name}.{evidence_key}", True
+
+    for metric_key in metric_keys:
+        if metric_key in payload:
+            return payload.get(metric_key), f"candidate.{metric_key}", True
+    return None, None, False
+
+
+def _agreement_kappa(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not -1.0 <= value <= 1.0:
+        return None
+    result = float(value)
+    if not math.isfinite(result):
+        return None
+    return result
 
 
 def _g14_extraction_fairness_check(
@@ -6307,6 +6439,7 @@ __all__ = [
     "G7_RECALL_DROP_LIMIT",
     "G10_UNGROUNDED_FACT_CEILING",
     "G11_CRITICAL_RECALL_FLOOR",
+    "G12_MIN_AGREEMENT_KAPPA",
     "G13_RADIOLOGY_ENTITY_F1_FLOOR",
     "G13_RADIOLOGY_RELATION_F1_FLOOR",
     "G13_RADIOLOGY_UNCERTAINTY_ACCURACY_FLOOR",
@@ -6349,6 +6482,7 @@ __all__ = [
     "evaluate_relation_golden_regression_gate",
     "evaluate_dua_relation_promotion_gate",
     "evaluate_grounding_accuracy_gate",
+    "evaluate_gold_corpus_agreement_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",
     "main",

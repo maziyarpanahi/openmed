@@ -258,6 +258,55 @@ class TestLocaleResolution:
         assert person != "ଅରୁଣ ଦାସ"
         assert validate_aadhaar(aadhaar)
 
+    def test_gujarati_pack_uses_native_locale_and_gender_suffixes(self):
+        pack = get_language_pack("gu")
+
+        assert pack is not None
+        assert pack.scripts == ("Gujarati",)
+        assert "gu" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["gu"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["gu"] == "Gujarati"
+        assert LANGUAGE_MODEL_PREFIX["gu"] == "Gujarati-"
+        assert LANGUAGE_MONTH_NAMES["gu"] == [
+            "જાન્યુઆરી",
+            "ફેબ્રુઆરી",
+            "માર્ચ",
+            "એપ્રિલ",
+            "મે",
+            "જૂન",
+            "જુલાઈ",
+            "ઑગસ્ટ",
+            "સપ્ટેમ્બર",
+            "ઑક્ટોબર",
+            "નવેમ્બર",
+            "ડિસેમ્બર",
+        ]
+        assert LANG_TO_LOCALE["gu"] == "gu_IN"
+        assert NATIONAL_ID_PROVIDERS["gu"] == ("gu_IN", "aadhaar")
+        assert "gu_IN" in AVAILABLE_LOCALES
+        assert "gu" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("gu") == "gu_IN"
+            anonymizer = Anonymizer(lang="gu", consistent=True, seed=691)
+            male = anonymizer.surrogate("નરેશભાઈ", "PERSON")
+            female = anonymizer.surrogate("રમીલાબેન", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "2467 7832 5484",
+                "national_id",
+            )
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert re.fullmatch(r"[\u0A80-\u0AFF]+ભાઈ", male)
+        assert re.fullmatch(r"[\u0A80-\u0AFF]+બેન", female)
+        assert male != "નરેશભાઈ"
+        assert female != "રમીલાબેન"
+        assert validate_aadhaar(aadhaar)
+
     def test_marathi_pack_uses_approximate_locale_and_three_part_names(self):
         assert "mr" in SUPPORTED_LANGUAGES
         assert DEFAULT_PII_MODELS["mr"] == "OpenMed/privacy-filter-multilingual"
@@ -308,12 +357,9 @@ class TestLocaleResolution:
         assert female_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
         assert male_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
 
-    def test_tamil_pack_uses_native_locale_model_and_aadhaar_provider(self):
+    def test_tamil_pack_uses_public_placeholder_locale_and_aadhaar_provider(self):
         assert "ta" in SUPPORTED_LANGUAGES
-        assert (
-            DEFAULT_PII_MODELS["ta"]
-            == "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1"
-        )
+        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
         assert LANG_TO_LOCALE["ta"] == "ta_IN"
         assert NATIONAL_ID_PROVIDERS["ta"] == ("ta_IN", "aadhaar")
         assert "ta_IN" in AVAILABLE_LOCALES
@@ -341,6 +387,61 @@ class TestLocaleResolution:
             )
             for surrogate in surrogates
         )
+
+    def test_kannada_pack_uses_documented_approximate_locale_and_initial_shape(self):
+        pack = get_language_pack("kn")
+
+        assert pack is not None
+        assert pack.scripts == ("Kannada",)
+        assert "kn" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["kn"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["kn"] == "Kannada"
+        assert LANGUAGE_MODEL_PREFIX["kn"] == "Kannada-"
+        assert LANGUAGE_MONTH_NAMES["kn"] == [
+            "ಜನವರಿ",
+            "ಫೆಬ್ರವರಿ",
+            "ಮಾರ್ಚ್",
+            "ಏಪ್ರಿಲ್",
+            "ಮೇ",
+            "ಜೂನ್",
+            "ಜುಲೈ",
+            "ಆಗಸ್ಟ್",
+            "ಸೆಪ್ಟೆಂಬರ್",
+            "ಅಕ್ಟೋಬರ್",
+            "ನವೆಂಬರ್",
+            "ಡಿಸೆಂಬರ್",
+        ]
+        assert LANG_TO_LOCALE["kn"] == "kn_IN"
+        assert FAKER_BACKEND_LOCALE["kn_IN"] == "en_IN"
+        assert "kn_IN" not in AVAILABLE_LOCALES
+        assert NATIONAL_ID_PROVIDERS["kn"] == ("kn_IN", "aadhaar")
+        assert get_national_id("kn_IN", "aadhaar") is not None
+        assert "kn" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("kn") == "kn_IN"
+            anonymizer = Anonymizer(lang="kn", consistent=True, seed=695)
+            native = anonymizer.surrogate("ಕೆ. ಎಸ್. ರವಿ", "PERSON")
+            code_mixed = anonymizer.surrogate("K. S. Ravi", "PERSON")
+            aadhaar = anonymizer.surrogate("೨೪೬೭ ೭೮೩೨ ೫೪೮೪", "national_id")
+            assert resolve_locale("kn") == "kn_IN"
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "kn_IN" in str(user_warnings[0].message)
+        assert "en_IN" in str(user_warnings[0].message)
+        assert re.fullmatch(
+            r"[\u0C80-\u0CFF]+\.[ \t]*[\u0C80-\u0CFF]+\.[ \t]*[\u0C80-\u0CFF]+",
+            native,
+        )
+        assert re.fullmatch(r"[A-Za-z]+\.[ \t]*[A-Za-z]+\.[ \t]*[A-Za-z]+", code_mixed)
+        assert native != "ಕೆ. ಎಸ್. ರವಿ"
+        assert code_mixed != "K. S. Ravi"
+        assert validate_aadhaar(aadhaar)
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):
@@ -679,3 +780,27 @@ class TestAfricanFrenchPortugueseSurrogates:
         protected_values.extend(sweep_values)
         assert added_count == len(sweep_values)
         assert all(value not in result.deidentified_text for value in protected_values)
+
+
+@pytest.mark.parametrize(
+    ("source", "method", "stem", "expected"),
+    [
+        ("નરેશભાઈ", "first_name_male", "વિજય", "વિજયભાઈ"),
+        ("રમીલાબેન", "first_name_female", "કવિતા", "કવિતાબેન"),
+        ("નરેશ પટેલભાઈ", "name_male", "વિજય શાહ", "વિજય શાહભાઈ"),
+        ("રમીલા પટેલબેન", "name_female", "કવિતા શાહ", "કવિતા શાહબેન"),
+    ],
+)
+def test_gujarati_surrogates_choose_gender_aligned_native_names(
+    source, method, stem, expected
+):
+    from unittest.mock import Mock
+
+    from openmed.core.anonymizer.providers.script_names import generate_gujarati_name
+
+    faker = Mock()
+    getattr(faker, method).return_value = stem
+    assert generate_gujarati_name(faker, source, locale="gu_IN") == expected
+    getattr(faker, method).assert_called_once_with()
+    faker.name.assert_not_called()
+    faker.first_name.assert_not_called()
