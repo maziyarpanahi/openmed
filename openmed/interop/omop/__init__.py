@@ -53,6 +53,18 @@ from .vocab_router import (
     domain_cdm_table,
     route_domain,
 )
+from .vocabulary_write_gate import (
+    VOCABULARY_WRITE_GATE_SCHEMA,
+    VocabularyCompatibility,
+    VocabularyConcept,
+    VocabularyGateDecision,
+    VocabularyMappingProvenance,
+    VocabularyRemappingRequest,
+    VocabularySnapshot,
+    VocabularyWriteGate,
+    VocabularyWriteGateError,
+    VocabularyWriteGateReport,
+)
 
 _FACT_PROJECTION_EXPORTS = frozenset(
     {
@@ -219,6 +231,16 @@ __all__ = [
     "UNMAPPED_CONCEPT_NAME",
     "UNMAPPED_VOCABULARY_ID",
     "VocabularyRouter",
+    "VOCABULARY_WRITE_GATE_SCHEMA",
+    "VocabularyCompatibility",
+    "VocabularyConcept",
+    "VocabularyGateDecision",
+    "VocabularyMappingProvenance",
+    "VocabularyRemappingRequest",
+    "VocabularySnapshot",
+    "VocabularyWriteGate",
+    "VocabularyWriteGateError",
+    "VocabularyWriteGateReport",
     "WriterKind",
     "assess_omop_fact_round_trip",
     "build_omop_quality_tool_output",
