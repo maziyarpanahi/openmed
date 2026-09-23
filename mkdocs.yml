@@ -227,6 +227,7 @@ nav:
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
+      - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
