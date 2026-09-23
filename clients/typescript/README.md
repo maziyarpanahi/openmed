@@ -86,6 +86,35 @@ const job = await client.createJob({
 });
 const jobStatus = await client.getJob(job.id);
 
+const facts = await client.journeyResources({
+  resource_type: "fact",
+  purpose: "care_review",
+  first: 20,
+  fields: ["subject_id", "concept", "assertion"],
+});
+if (facts.state === "success") {
+  for (const fact of facts.resources) consumeStructuredFact(fact.data);
+}
+
+// Fixed workflow methods use the same generated resource contract.
+const journey = await client.journey({ first: 10 });
+const cohort = await client.cohort({ purpose: "analytics" });
+const dataset = await client.dataset();
+const registry = await client.registry();
+const measure = await client.measure();
+const trialReview = await client.trialReview();
+
+const decision = await client.decision({
+  mode: "fixed_choice",
+  input_text: "Synthetic review priority is urgent.",
+  options: ["urgent", "routine"],
+});
+if (decision.state === "success") {
+  console.log(decision.choice, decision.confidence);
+} else {
+  console.log(decision.state, decision.code);
+}
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```
