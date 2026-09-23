@@ -320,6 +320,7 @@ nav:
       - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
       - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
+      - FHIR Write Provenance Gate: interop/fhir-write-provenance.md
       - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
       - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
       - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
