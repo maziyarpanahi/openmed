@@ -226,6 +226,7 @@ classification:
     - clinical/summary-claim-segmentation.md
     - clinical/summary-temporal-order.md
     - clinical/summary-medication-changes.md
+    - clinical/summary-lab-trends.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
