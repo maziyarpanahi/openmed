@@ -277,6 +277,7 @@ nav:
       - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
+      - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
       - Document-type Calibration: evaluation/doctype-calibration.md
       - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
