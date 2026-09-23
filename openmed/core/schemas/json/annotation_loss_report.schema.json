@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/annotation-loss-report/1.0.0",
+  "title": "OpenMed Annotation Loss Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["compatibility_policy", "entries", "input_digest", "operation", "output_digest", "schema_version", "state"],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "entries": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["annotation_id", "code", "kind", "lossy"],
+        "properties": {
+          "annotation_id": {"type": "string"},
+          "code": {"type": "string"},
+          "kind": {"enum": ["embedding_omitted", "metadata_omitted", "unsupported_annotation", "offset_not_boundary", "token_map_required", "review_required"]},
+          "lossy": {"type": "boolean"}
+        }
+      }
+    },
+    "input_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "operation": {"type": "string"},
+    "output_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "schema_version": {"const": "1.0.0"},
+    "state": {"enum": ["success", "partial"]}
+  }
+}
