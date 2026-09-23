@@ -352,7 +352,6 @@ classification:
     - evaluation/relation-review-yield.md
     - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
-    - evaluation/local-guardrail-bypass.md
     - evaluation/mixed-script-integrity.md
     - evaluation/doctype-calibration.md
     - evaluation/sealed-workflow-manifests.md
@@ -362,6 +361,7 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
