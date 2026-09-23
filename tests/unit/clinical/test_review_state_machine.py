@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from openmed.clinical.review_transitions import (
+from openmed.clinical.review_state_machine import (
     ReviewPolicyRule,
     ReviewState,
     ReviewStateMachine,

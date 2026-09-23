@@ -445,7 +445,7 @@ from .relations import (
     sample_negative_span_pairs,
     split_sentence_offsets,
 )
-from .review_transitions import (
+from .review_state_machine import (
     DEFAULT_REVIEW_TRANSITIONS,
     REVIEW_STATES,
     REVIEW_TRANSITION_ADVISORY,

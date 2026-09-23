@@ -1,6 +1,6 @@
 # Guarded review-state transitions
 
-`openmed.clinical.review_transitions` provides a deterministic state machine for
+`openmed.clinical.review_state_machine` provides a deterministic state machine for
 human review of an assistive clinical output. It validates workflow metadata; it
 does not make a clinical decision, certify an output, or replace qualified
 clinical judgment.
