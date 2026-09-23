@@ -66,7 +66,10 @@ report = result.value
 print(report.ledger.committed_cost_usd)
 ```
 
-The dry run reads package resources only. It verifies the data digest, creates
+The dry run reads package resources only. It verifies the data digest over
+canonical LF JSONL bytes, including when Git checks out the bundled asset with
+CRLF on Windows; caller-supplied dataset bytes remain exact and are not
+normalized. It creates
 seeded stratified train/validation/holdout assignment digests, reserves all
 four runs in one ledger, and emits versioned run manifests. No source text is
 copied into a manifest.
