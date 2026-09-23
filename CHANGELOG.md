@@ -178,8 +178,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status vocabulary, covering an explicit local path, provenance validation,
   and a duplicate-cue guard (#3108).
 
-
-
 ### Changed
 
 - Reject non-positive bootstrap sample counts and invalid alpha probabilities before
