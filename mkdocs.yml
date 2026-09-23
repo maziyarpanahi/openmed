@@ -32,6 +32,7 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Signed Agent Capability Grants: agent/capability-grants.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md

@@ -107,6 +107,7 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/capability-grants.md
     - agent/governance-identifiers.md
     - agent/capability-validity.md
     - agent/event-correlation.md
