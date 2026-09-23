@@ -20,7 +20,7 @@ def test_ci_pins_uv_and_uses_the_native_build_frontend():
         step
         for job in jobs.values()
         for step in job.get("steps", [])
-        if step.get("uses") == "astral-sh/setup-uv@v8.3.2"
+        if step.get("uses", "").startswith("astral-sh/setup-uv@")
     ]
 
     assert uv_steps

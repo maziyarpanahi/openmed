@@ -240,7 +240,7 @@ def default_mixed_script_fixtures() -> tuple[MixedScriptFixture, ...]:
                     latin_text,
                     latin_value,
                     label="NAME",
-                    entity_key="latin-person-1",
+                    entity_key="latin-name",
                     surrogate=latin_surrogate,
                     occurrence=index,
                 )
