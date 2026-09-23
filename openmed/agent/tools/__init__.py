@@ -20,6 +20,20 @@ from .argument_classifier import (
     JsonValue,
     dispatch_with_argument_classification,
 )
+from .data_projection import (
+    DATA_CLASS_ANNOTATION,
+    DATA_PROJECTION_PLAN_SCHEMA_VERSION,
+    DATA_PROJECTION_RATIONALE_SCHEMA_VERSION,
+    DataProjectionDeniedError,
+    DataProjectionError,
+    DataProjectionPlan,
+    DataProjectionRationale,
+    DataProjectionValidationError,
+    ProjectionDecision,
+    ProjectionRationaleEntry,
+    ProjectionReasonCode,
+    plan_data_projection,
+)
 
 __all__ = [
     "ARGUMENT_CLASSIFICATION_REPORT_SCHEMA_VERSION",
@@ -37,7 +51,19 @@ __all__ = [
     "ArgumentPathRule",
     "ClassifiedArguments",
     "ClassifiedDispatchResult",
+    "DATA_CLASS_ANNOTATION",
+    "DATA_PROJECTION_PLAN_SCHEMA_VERSION",
+    "DATA_PROJECTION_RATIONALE_SCHEMA_VERSION",
+    "DataProjectionDeniedError",
+    "DataProjectionError",
+    "DataProjectionPlan",
+    "DataProjectionRationale",
+    "DataProjectionValidationError",
     "JsonScalar",
     "JsonValue",
+    "ProjectionDecision",
+    "ProjectionRationaleEntry",
+    "ProjectionReasonCode",
     "dispatch_with_argument_classification",
+    "plan_data_projection",
 ]

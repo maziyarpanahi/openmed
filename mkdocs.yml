@@ -38,6 +38,7 @@ nav:
       - Tool Argument Classification: agent/tool-argument-classification.md
       - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
       - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
+      - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md
