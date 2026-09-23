@@ -13,6 +13,24 @@ from openmed.interop.tools import (
     PIILanguage,
     UnloadModelArgs,
 )
+from openmed.structured.decision import (
+    DECISION_COMPATIBILITY_POLICY,
+    DECISION_SCHEMA_VERSION,
+    DEFAULT_CALIBRATION_ID,
+    decision_request_schema,
+)
+from openmed.structured.decision import (
+    MAX_INPUT_CHARS as DECISION_MAX_INPUT_CHARS,
+)
+from openmed.structured.decision import (
+    MAX_OPTIONS as DECISION_MAX_OPTIONS,
+)
+from openmed.structured.decision import (
+    MAX_TIMEOUT_MS as DECISION_MAX_TIMEOUT_MS,
+)
+from openmed.structured.decision import (
+    MIN_TIMEOUT_MS as DECISION_MIN_TIMEOUT_MS,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
@@ -40,6 +58,7 @@ _DEFAULT_STREAM_CHUNK_SIZE = 1024
 _DEFAULT_STREAM_WINDOW_CHARS = 4096
 _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
+_DEFAULT_GROUNDING_SYSTEMS = ["rxnorm", "icd10cm", "loinc", "hpo"]
 KeepAliveValue = Union[int, float, str]
 
 
@@ -166,6 +185,42 @@ def _normalize_records_jsonl(value: Any) -> str:
             f"records_jsonl exceeds the maximum length of {max_text_length} characters"
         )
     return value
+
+
+def _normalize_optional_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return _normalize_text(value)
+
+
+def _normalize_grounding_systems(value: Any) -> list[str]:
+    if value is None:
+        return list(_DEFAULT_GROUNDING_SYSTEMS)
+    if isinstance(value, str):
+        values = value.split(",")
+    elif isinstance(value, Sequence):
+        values = list(value)
+    else:
+        raise ValueError("systems must be a list of vocabulary names")
+    systems = [str(item).strip() for item in values if str(item).strip()]
+    if not systems:
+        raise ValueError("systems must contain at least one vocabulary")
+    return list(dict.fromkeys(systems))
+
+
+def _normalize_grounding_entities(value: Any) -> Optional[list[dict[str, Any]]]:
+    if value is None:
+        return None
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError("entities must be a list of objects")
+    entities: list[dict[str, Any]] = []
+    for index, entity in enumerate(value):
+        if not isinstance(entity, dict):
+            raise ValueError(f"entity at index {index} must be an object")
+        entities.append(dict(entity))
+    if not entities:
+        raise ValueError("entities must contain at least one object")
+    return entities
 
 
 def _normalize_phenotype(value: Any) -> dict[str, Any]:
@@ -520,6 +575,44 @@ if PYDANTIC_V2:
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
 
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @field_validator("text", mode="before")
+        @classmethod
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @field_validator("entities", mode="before")
+        @classmethod
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @field_validator("systems", mode="before")
+        @classmethod
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @field_validator("source_language", mode="before")
+        @classmethod
+        def _validate_source_language(cls, value: Any) -> str:
+            return str(value or "en").strip().casefold()
+
+        @model_validator(mode="after")
+        def _validate_inputs(self) -> "GroundRequest":
+            if self.text is None and not self.entities:
+                raise ValueError("provide text or at least one entity")
+            return self
+
 else:
 
     class AnalyzeRequest(AnalyzeTextArgs):
@@ -785,6 +878,126 @@ else:
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
 
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @validator("text", pre=True)
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @validator("entities", pre=True)
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @validator("systems", pre=True)
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @validator("source_language", pre=True)
+        def _validate_source_language(cls, value: Any) -> str:
+            return str(value or "en").strip().casefold()
+
+        @root_validator
+        def _validate_inputs(cls, values: dict[str, Any]) -> dict[str, Any]:
+            if values.get("text") is None and not values.get("entities"):
+                raise ValueError("provide text or at least one entity")
+            return values
+
+
+DecisionModeValue = Literal[
+    "fixed_choice",
+    "boolean_choice",
+    "ordered_preference",
+    "scalar_score",
+    "multi_label",
+]
+
+
+def _decision_options_field() -> Any:
+    constraints = (
+        {"max_length": DECISION_MAX_OPTIONS}
+        if PYDANTIC_V2
+        else {"max_items": DECISION_MAX_OPTIONS}
+    )
+    return Field(default_factory=list, **constraints)
+
+
+class FixedOptionDecisionRequest(_StrictModel):
+    """Canonical bounded request for ``POST /v1/decisions``."""
+
+    mode: DecisionModeValue
+    input_text: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS)
+    options: list[str] = _decision_options_field()
+    namespace: str = "default"
+    purpose: str = "care_review"
+    calibration_id: str = DEFAULT_CALIBRATION_ID
+    timeout_ms: int = Field(
+        default=5000,
+        ge=DECISION_MIN_TIMEOUT_MS,
+        le=DECISION_MAX_TIMEOUT_MS,
+    )
+    schema_version: Literal["1.0.0"] = DECISION_SCHEMA_VERSION
+    compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
+
+    if PYDANTIC_V2:
+        model_config = ConfigDict(
+            extra="forbid",
+            json_schema_extra=decision_request_schema(),
+        )
+    else:  # pragma: no cover
+
+        class Config:
+            extra = "forbid"
+            schema_extra = decision_request_schema()
+
+
+class FHIRBulkExportRequest(_StrictModel):
+    """Request schema for local or SMART-backed Bulk Data jobs.
+
+    ``input_dir``/``source_dir`` select the offline local gateway. When they
+    are omitted, the SMART backend-service fields are required by the service
+    layer. Credential fields are accepted only for the duration of a job and
+    are never returned in status payloads.
+    """
+
+    input_dir: Optional[str] = None
+    source_dir: Optional[str] = None
+    output_dir: str
+    checkpoint_path: Optional[str] = None
+    policy: str = "hipaa_safe_harbor"
+    method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+    max_buffered_resources: int = Field(default=1, ge=1)
+    max_inflight_downloads: int = Field(default=2, ge=1)
+    poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+    request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    fhir_base_url: Optional[str] = None
+    token_url: Optional[str] = None
+    client_id: Optional[str] = None
+    private_key_pem: Optional[str] = None
+    key_id: Optional[str] = None
+    scope: str = "system/*.read"
+    export_path: str = "$export"
+    model_name: str = _DEFAULT_PII_MODEL
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    use_smart_merging: bool = True
+    use_safety_sweep: bool = True
+    lang: PIILanguage = "en"
+    normalize_accents: Optional[bool] = None
+    keep_alive: Optional[KeepAliveValue] = None
+
+
+class FHIRBulkImportRequest(FHIRBulkExportRequest):
+    """Request schema for the local Bulk Data import-compatible route."""
+
 
 class ConceptAncestorRequest(_StrictModel):
     """One caller-supplied concept hierarchy edge."""
@@ -821,3 +1034,86 @@ class CohortResolveRequest(_StrictModel):
         @validator("records_jsonl", pre=True)
         def _validate_records_jsonl(cls, value: Any) -> str:
             return _normalize_records_jsonl(value)
+
+
+JourneyResourceStateValue = Literal[
+    "success",
+    "partial",
+    "empty",
+    "unknown",
+    "conflict",
+    "unsupported",
+    "denied",
+    "failure",
+]
+JourneyResourceTypeValue = Literal[
+    "artifact",
+    "job",
+    "fact",
+    "conflict",
+    "journey",
+    "cohort",
+    "dataset",
+    "registry",
+    "measure",
+    "trial_review",
+    "evidence",
+    "current_fact",
+    "journey_event",
+    "mapping",
+    "cohort_run",
+    "dataset_manifest",
+]
+
+
+class JourneyResourceResponse(_StrictModel):
+    """One versioned, field-filtered Journey resource."""
+
+    resource_type: JourneyResourceTypeValue
+    resource_id: str
+    namespace: str
+    data: dict[str, Any]
+    state: JourneyResourceStateValue
+    version: int = Field(ge=1)
+    revision: int = Field(ge=1)
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]
+    extensions: dict[str, Any]
+
+
+class JourneyPageInfoResponse(_StrictModel):
+    """Cursor metadata for one bounded Journey resource page."""
+
+    has_next_page: bool
+    end_cursor: Optional[str]
+    page_size: int = Field(ge=0, le=100)
+    snapshot_digest: str
+
+
+class JourneyPolicyResponse(_StrictModel):
+    """Complete access context and response-policy decision."""
+
+    state: Literal["success", "denied"]
+    namespace: str
+    purpose: str
+    role: str
+    attributes: list[str]
+    consent_state: Literal["active", "unknown", "withdrawn"]
+    export_policy: str
+    decision_id: str
+    request_digest: str
+    allowed_fields: list[str]
+    code: Optional[str]
+    policy_version: Literal["1.0.0"]
+
+
+class JourneyResourcePageResponse(_StrictModel):
+    """Typed response shared by versioned Journey list endpoints."""
+
+    state: JourneyResourceStateValue
+    code: Optional[str]
+    resources: list[JourneyResourceResponse]
+    page_info: JourneyPageInfoResponse
+    policy: JourneyPolicyResponse
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]

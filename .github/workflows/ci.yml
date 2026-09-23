@@ -12,14 +12,23 @@ jobs:
     outputs:
       run-i18n-cjk-indic: ${{ steps.i18n_changes.outputs.should_run }}
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Detect CJK and Indic test changes
       id: i18n_changes
@@ -59,25 +68,26 @@ jobs:
 
     - name: Assert built wheel contains no restricted vocabulary data
       run: |
-        python -m pip install build
-        python -m build --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
+        uv build --wheel --out-dir "$RUNNER_TEMP/openmed-wheel"
         python scripts/release/check_license_policy.py \
           --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
 
     - name: Validate GitHub Actions references
       run: |
-        python scripts/release/check_github_actions_refs.py
+        uv run --no-project --with pyyaml==6.0.3 python scripts/release/check_github_actions_refs.py --require-sha
+        uv run --no-project --with pyyaml==6.0.3 python scripts/release/check_github_actions_refs.py --require-sha \
+          --workflows-dir .github/actions
 
   readme-i18n-drift:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
         python-version: "3.11"
 
@@ -108,22 +118,23 @@ jobs:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
     - name: Set up Java
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
       with:
         distribution: temurin
         java-version: "17"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -131,7 +142,7 @@ jobs:
 
     - name: Install validation dependencies
       run: |
-        uv sync --frozen --extra dev --python 3.11
+        uv sync --frozen --extra dev --extra grounding-validate --python 3.11
 
     - name: Fetch pinned HL7 FHIR validator
       run: |
@@ -145,23 +156,27 @@ jobs:
       run: |
         uv run python -m openmed.eval.suites.grounding_export \
           --validator-jar "$RUNNER_TEMP/validator_cli.jar" \
-          --output grounding-export-validation.json
+          --output grounding-export-validation.json \
+          --markdown-output grounding-export-validation.md
 
     - name: Upload grounding export validation report
       if: always() && hashFiles('grounding-export-validation.json') != ''
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: grounding-export-validation
-        path: grounding-export-validation.json
+        path: |
+          grounding-export-validation.json
+          grounding-export-validation.md
 
   lockfile-drift:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -178,16 +193,17 @@ jobs:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -228,16 +244,17 @@ jobs:
             python-version: "3.10"
 
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -260,7 +277,7 @@ jobs:
         uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
       with:
         files: ./coverage.xml
         flags: unittests
@@ -271,16 +288,17 @@ jobs:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -307,7 +325,7 @@ jobs:
           python scripts/security/pip_audit_gate.py
 
     - name: Upload security reports
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: security-reports
         path: |
@@ -319,16 +337,17 @@ jobs:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -343,7 +362,7 @@ jobs:
         uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
 
     - name: Upload SBOM artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: sbom
         path: sbom.cdx.json
@@ -353,30 +372,54 @@ jobs:
     needs: [repo-policy, lint]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-spacy-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-spacy-
-          ${{ runner.os }}-pip-
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install spaCy test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,spacy]"
+        uv sync --frozen --extra dev --extra spacy --python 3.11
 
     - name: Run spaCy adapter tests
       run: |
-        pytest tests/unit/interop/test_spacy_component.py -q
+        uv run pytest tests/unit/interop/test_spacy_component.py -q
+
+  browser-extension:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/extension/package-lock.json
+
+    - name: Install extension dependencies
+      working-directory: web/extension
+      run: npm ci
+
+    - name: Install headless Chromium
+      working-directory: web/extension
+      run: npx playwright install --with-deps chromium
+
+    - name: Test browser extension
+      working-directory: web/extension
+      run: npm test
 
   yasbd-integration:
     needs: [repo-policy, lint]
@@ -385,16 +428,17 @@ jobs:
       matrix:
         python-version: ["3.10", "3.12"]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -414,34 +458,33 @@ jobs:
     if: needs.repo-policy.outputs.run-i18n-cjk-indic == 'true'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-i18n-cjk-indic-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-i18n-cjk-indic-
-          ${{ runner.os }}-pip-
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install CJK and Indic test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,zh,indic]"
+        uv sync --frozen --extra dev --extra zh --extra indic --python 3.11
 
     - name: Run CJK and Indic fixture tests
       run: |
-        pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
+        uv run pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
 
     - name: Trust-CI no-raw-PHI logging guard
       run: |
-        pytest tests/unit/test_no_raw_text_logging.py -q
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
   build:
     needs:
@@ -452,6 +495,7 @@ jobs:
     - spacy-integration
     - yasbd-integration
     - i18n-cjk-indic
+    - browser-extension
     if: >-
       always() &&
       needs.repo-policy.result == 'success' &&
@@ -460,22 +504,24 @@ jobs:
       needs.security.result == 'success' &&
       needs.spacy-integration.result == 'success' &&
       needs.yasbd-integration.result == 'success' &&
+      needs.browser-extension.result == 'success' &&
       (
         needs.i18n-cjk-indic.result == 'success' ||
         needs.i18n-cjk-indic.result == 'skipped'
       )
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
+        version: "0.11.28"
         enable-cache: true
         cache-dependency-glob: |
           pyproject.toml
@@ -483,7 +529,7 @@ jobs:
 
     - name: Build package
       run: |
-        uv run --with build python -m build
+        uv build
 
     - name: Enforce wheel size budget and record language-extra footprints
       run: |
@@ -516,7 +562,7 @@ jobs:
         PY
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: dist-packages
         path: |

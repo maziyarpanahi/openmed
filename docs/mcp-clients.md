@@ -172,6 +172,52 @@ Hosted-assistant developer connectors use the same URL. They cannot reach a
 loopback address on your workstation; deploy through a private network or an
 authenticated HTTPS gateway instead of exposing the OpenMed process directly.
 
+## Journey workflow tools and generated clients
+
+Six fixed-resource, read-only tools expose journey, cohort, dataset, registry,
+measure, and trial-review workflows. Their schemas are derived from the same
+versioned Journey page contract used by REST, GraphQL, and read-only SQL:
+
+- `openmed_read_journey`
+- `openmed_read_cohort`
+- `openmed_read_dataset`
+- `openmed_read_registry`
+- `openmed_read_measure`
+- `openmed_read_trial_review`
+
+Every result carries evidence identifiers, schema and immutable snapshot
+versions, the access-policy decision, controlled warnings, and explicit review
+metadata. The result contract excludes raw source text. All six tools advertise
+`readOnlyHint=true`, `destructiveHint=false`, and closed-world execution.
+
+The machine-readable generation contract is available at
+`openmed://journey-workflows`. Regenerate the Python and TypeScript client
+surfaces after changing a Journey workflow schema:
+
+```bash
+python scripts/generate_journey_workflow_clients.py
+python scripts/generate_journey_workflow_clients.py --check
+```
+
+Python clients expose `journey()`, `cohort()`, `dataset()`, `registry()`,
+`measure()`, and `trial_review()`. The TypeScript client exposes the same names,
+with `trialReview()` using normal TypeScript casing.
+
+The registry document marks every tool as either state-changing or read-only.
+State-changing tools continue through the signed, single-use consent-receipt
+verification path; the read-only Journey tools never accept a receipt as a
+substitute for access policy.
+
+## Fixed-option decisions
+
+`openmed_decide` scores bounded caller-supplied options, preserves caller
+ordering, applies the selected calibration profile, and returns typed
+abstention, denial, conflict, unsupported, timeout, and failure states. It is a
+read-only, non-destructive, idempotent, closed-world tool. The result always
+requires human review and never authorizes a clinical action. Its request and
+result schemas are identical to the Python and REST contracts described in
+[Fixed-option decision API](api/fixed-option-decisions.md).
+
 ## Canonical clinical agent workflow
 
 MCP clients can discover the `openmed-clinical-workflow` prompt, the
@@ -237,6 +283,29 @@ negotiated during the `initialize` exchange. If a gateway allowlists headers,
 forward `MCP-Protocol-Version`, `Mcp-Session-Id`, `Content-Type`, `Accept`, and
 `Authorization`; do not replace the negotiated protocol version with a fixed
 value at the proxy.
+
+## Structured tool errors
+
+Expected OpenMed failures return structured content with `is_error: true` and
+the same stable code exposed by the Python API and REST service:
+
+```json
+{
+  "error": {
+    "code": "input_error",
+    "message": "The request input is malformed. Correct the documented field and retry.",
+    "details": {"argument": "text"}
+  },
+  "is_error": true
+}
+```
+
+Branch on `error.code`, not the human-readable message. Error payloads never
+echo tool arguments, clinical text, mappings, credentials, or upstream
+exception text. Security, authorization, consent, and tool-schema errors retain
+their existing specialized codes. See
+[Structured public errors](api/errors.md) for the complete Python/REST/MCP
+mapping.
 
 ## Environment-variable defaults
 

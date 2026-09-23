@@ -37,6 +37,13 @@ const analysis = await client.analyze({
   keep_alive: "5m",
 });
 
+const grounded = await client.ground({
+  text: "Aspirin 81 mg daily",
+  systems: ["rxnorm"],
+  source_language: "en",
+  offline: true,
+});
+
 const pii = await client.extractPii({
   text: "Paciente: Maria Garcia, DNI: 12345678Z",
   lang: "es",
@@ -50,6 +57,23 @@ const deidentified = await client.deidentify({
   keep_mapping: true,
 });
 
+const ndjson = await client.deidentifyStream({
+  text: "Paciente: Maria Garcia, DNI: 12345678Z",
+  method: "mask",
+  lang: "es",
+  chunk_size: 1024,
+});
+for (const line of ndjson.split("\n")) {
+  if (!line) continue;
+  const event = JSON.parse(line) as {
+    type: string;
+    redacted_text?: string;
+  };
+  if (event.type === "chunk") {
+    consumeRedactedText(event.redacted_text ?? "");
+  }
+}
+
 const job = await client.createJob({
   documents: [
     { id: "note-1", text: "Paciente: Maria Garcia, DNI: 12345678Z" },
@@ -61,6 +85,35 @@ const job = await client.createJob({
   },
 });
 const jobStatus = await client.getJob(job.id);
+
+const facts = await client.journeyResources({
+  resource_type: "fact",
+  purpose: "care_review",
+  first: 20,
+  fields: ["subject_id", "concept", "assertion"],
+});
+if (facts.state === "success") {
+  for (const fact of facts.resources) consumeStructuredFact(fact.data);
+}
+
+// Fixed workflow methods use the same generated resource contract.
+const journey = await client.journey({ first: 10 });
+const cohort = await client.cohort({ purpose: "analytics" });
+const dataset = await client.dataset();
+const registry = await client.registry();
+const measure = await client.measure();
+const trialReview = await client.trialReview();
+
+const decision = await client.decision({
+  mode: "fixed_choice",
+  input_text: "Synthetic review priority is urgent.",
+  options: ["urgent", "routine"],
+});
+if (decision.state === "success") {
+  console.log(decision.choice, decision.confidence);
+} else {
+  console.log(decision.state, decision.code);
+}
 
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
@@ -119,6 +172,9 @@ try {
   }
 }
 ```
+
+Streaming methods return the NDJSON response as text without JSON-decoding the
+whole body. Split it into lines as above; each non-empty line is one event.
 
 The underlying service envelope has this shape:
 

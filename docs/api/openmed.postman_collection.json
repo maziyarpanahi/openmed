@@ -205,6 +205,48 @@
       ]
     },
     {
+      "name": "Grounding",
+      "description": "Offline-first grounding against caller-provisioned terminology snapshots.",
+      "item": [
+        {
+          "name": "Ground Clinical Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Aspirin 81 mg daily\",\n  \"systems\": [\"rxnorm\"],\n  \"source_language\": \"en\",\n  \"top_k\": 5,\n  \"offline\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/ground",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ground"
+              ]
+            },
+            "description": "Ground synthetic clinical text using local terminology snapshots."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "PII",
       "description": "PII extraction and de-identification endpoints.",
       "item": [
@@ -317,6 +359,44 @@
               ]
             },
             "description": "De-identify PII in the supplied text using the selected method (mask, remove, replace, hash, shift_dates)."
+          },
+          "response": []
+        },
+        {
+          "name": "PII Deidentify (Stream)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/x-ndjson"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Contact Jordan Sample at 555-0100 or jordan.sample@example.org regarding appointment on 2021-04-15.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.7,\n  \"lang\": \"en\",\n  \"method\": \"mask\",\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true,\n  \"keep_mapping\": false,\n  \"chunk_size\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pii/deidentify/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pii",
+                "deidentify",
+                "stream"
+              ]
+            },
+            "description": "Stream safely finalized de-identified text and aggregate audit metadata as newline-delimited JSON (application/x-ndjson)."
           },
           "response": []
         }
@@ -607,6 +687,108 @@
               ]
             },
             "description": "Resolve a stable phenotype over newline-delimited synthetic grounded records in memory and return internal patient IDs plus PHI-free evidence pointers and provenance."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Decisions",
+      "description": "Bounded local fixed-option scoring with calibrated abstention and mandatory human review.",
+      "item": [
+        {
+          "name": "Evaluate Fixed-Option Decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"scalar_score\",\n  \"input_text\": \"Synthetic scalar is 0.42.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/decisions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions"
+              ]
+            },
+            "description": "Evaluate caller-supplied choices without authorizing diagnosis, treatment, enrollment, outreach, ordering, or autonomous clinical action."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Journey Resources",
+      "description": "Bounded, versioned, policy-aware read access to local Journey resources.",
+      "item": [
+        {
+          "name": "List Journey Resources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/journey/resources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "journey",
+                "resources"
+              ],
+              "query": [
+                {
+                  "key": "resource_type",
+                  "value": "fact"
+                },
+                {
+                  "key": "namespace",
+                  "value": "default"
+                },
+                {
+                  "key": "purpose",
+                  "value": "care_review"
+                },
+                {
+                  "key": "first",
+                  "value": "20"
+                },
+                {
+                  "key": "after",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fields",
+                  "value": "subject_id,concept,assertion",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List one bounded resource page. Cursor, policy, compatibility, and non-success state metadata are returned with every response."
           },
           "response": []
         }

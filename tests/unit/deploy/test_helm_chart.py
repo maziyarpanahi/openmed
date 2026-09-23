@@ -47,6 +47,20 @@ def _by_kind(manifests: list[dict], kind: str) -> dict:
     return matches[0]
 
 
+def _by_component(manifests: list[dict], kind: str, component: str) -> dict:
+    matches = [
+        manifest
+        for manifest in manifests
+        if manifest.get("kind") == kind
+        and manifest.get("metadata", {})
+        .get("labels", {})
+        .get("app.kubernetes.io/component")
+        == component
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
 def test_default_render_wires_probes_and_model_cache_volume():
     manifests = _render_chart()
     deployment = _by_kind(manifests, "Deployment")
@@ -55,6 +69,10 @@ def test_default_render_wires_probes_and_model_cache_volume():
     spec = deployment["spec"]["template"]["spec"]
     container = spec["containers"][0]
 
+    assert (
+        deployment["spec"]["selector"]["matchLabels"]["app.kubernetes.io/component"]
+        == "api"
+    )
     assert container["livenessProbe"]["httpGet"]["path"] == "/livez"
     assert container["readinessProbe"]["httpGet"]["path"] == "/readyz"
     assert container["livenessProbe"]["httpGet"]["httpHeaders"] == [
@@ -97,7 +115,7 @@ def test_synthetic_values_exercise_image_resources_and_secret_env():
     container = deployment["spec"]["template"]["spec"]["containers"][0]
 
     assert deployment["spec"]["replicas"] == 2
-    assert container["image"] == "ghcr.io/maziyarpanahi/openmed:v2.0.0"
+    assert container["image"] == "ghcr.io/maziyarpanahi/openmed:v2.5.0"
     assert container["resources"]["limits"]["memory"] == "8Gi"
     assert container["env"] == [
         {
@@ -110,3 +128,53 @@ def test_synthetic_values_exercise_image_resources_and_secret_env():
         == "disease_detection_superclinical"
     )
     assert configmap["data"]["OPENMED_SERVICE_METRICS_ENABLED"] == "true"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE"] == "32"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_HIGH_WATERMARK"] == "24"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_LOW_WATERMARK"] == "8"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"] == "250"
+
+
+def test_journey_profile_renders_migration_worker_storage_and_default_deny():
+    manifests = _render_chart(
+        "--set",
+        "journey.enabled=true",
+        "--set",
+        "journey.networkPolicy.databasePodSelector.app=postgres",
+    )
+    api = _by_component(manifests, "Deployment", "journey-worker")
+    migration = _by_component(manifests, "Job", "journey-migration")
+    artifacts = _by_component(manifests, "PersistentVolumeClaim", "journey-artifacts")
+    policy = _by_kind(manifests, "NetworkPolicy")
+    service_deployments = [
+        item
+        for item in manifests
+        if item.get("kind") == "Deployment"
+        and item.get("metadata", {})
+        .get("labels", {})
+        .get("app.kubernetes.io/component")
+        != "journey-worker"
+    ]
+    assert len(service_deployments) == 1
+    service_container = service_deployments[0]["spec"]["template"]["spec"][
+        "containers"
+    ][0]
+
+    assert migration["metadata"]["annotations"]["helm.sh/hook"] == (
+        "pre-install,pre-upgrade"
+    )
+    assert migration["spec"]["backoffLimit"] == 3
+    assert (
+        api["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["httpGet"][
+            "path"
+        ]
+        == "/readyz"
+    )
+    assert artifacts["spec"]["resources"]["requests"]["storage"] == "20Gi"
+    assert service_container["readinessProbe"]["exec"]["command"][-4:] == [
+        "--worker-url",
+        "http://openmed-service-journey-worker:8091/readyz",
+        "--model-url",
+        "http://127.0.0.1:8080/readyz",
+    ]
+    assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
+    assert all(set(rule) <= {"to", "ports"} for rule in policy["spec"]["egress"])
