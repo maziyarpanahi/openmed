@@ -118,6 +118,7 @@ classification:
     - agent/reviewer-handoffs.md
     - agent/run-summaries.md
     - agent/run-diffs.md
+    - agent/workflow-rollups.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
     - agent-skills/install.md

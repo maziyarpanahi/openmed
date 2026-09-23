@@ -157,6 +157,12 @@ from .workflows import (
     make_query_access_decision,
     plan_evidence_query,
 )
+from .workflow_rollup import (
+    WORKFLOW_ROLLUP_SCHEMA_VERSION,
+    WorkflowRollup,
+    WorkflowRollupError,
+    WorkflowRollupRow,
+)
 
 __all__ = [
     "ALLOWED_ATTRIBUTES",
@@ -275,6 +281,10 @@ __all__ = [
     "ToolResultState",
     "WorkflowOutcome",
     "WorkflowId",
+    "WORKFLOW_ROLLUP_SCHEMA_VERSION",
+    "WorkflowRollup",
+    "WorkflowRollupError",
+    "WorkflowRollupRow",
     "allowed_reason_codes",
     "compose_evidence_answer",
     "explain_cohort_membership",
