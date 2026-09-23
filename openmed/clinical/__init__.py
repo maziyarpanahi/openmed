@@ -320,6 +320,17 @@ from .evidence_coverage import (
     render_evidence_coverage,
     render_evidence_coverage_matrix,
 )
+from .evidence_span_audit import (
+    EVIDENCE_SPAN_AUDIT_ADVISORY,
+    EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION,
+    OVERLAP_KINDS,
+    EvidenceSpan,
+    EvidenceSpanAudit,
+    EvidenceSpanOverlap,
+    OverlapKind,
+    audit_evidence_span_overlaps,
+    audit_evidence_spans,
+)
 from .experiencer import (
     EXPERIENCER_REFINED_VALUES,
     EXPERIENCER_REFINEMENT_ADVISORY,
@@ -1469,6 +1480,15 @@ __all__ = [
     "EdgeKind",
     "EntityOccurrence",
     "link_documents",
+    "EVIDENCE_SPAN_AUDIT_ADVISORY",
+    "EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION",
+    "OVERLAP_KINDS",
+    "EvidenceSpan",
+    "EvidenceSpanAudit",
+    "EvidenceSpanOverlap",
+    "OverlapKind",
+    "audit_evidence_span_overlaps",
+    "audit_evidence_spans",
     "LabValueEventMention",
     "LAB_RESULT_ADVISORY",
     "LAB_RESULT_CANDIDATE_ADVISORY",

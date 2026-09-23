@@ -381,6 +381,7 @@ classification:
     - export-gguf.md
     - clinical/output-use-policy.md
     - clinical/evidence-coverage.md
+    - clinical/evidence-span-audit.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
