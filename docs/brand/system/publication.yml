@@ -428,6 +428,7 @@ classification:
     - interop/omop-staged-mutations.md
     - interop/omop-vocabulary-write-gates.md
     - interop/omop-rollback-manifests.md
+    - interop/omop-rollback-schema.md
     - interop/fhir-omop-write-lineage.md
     - interop/archive-safety.md
     - fhir-interop.md
