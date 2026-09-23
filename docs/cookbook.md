@@ -74,6 +74,7 @@ using the same workflow with real data.
 | Exercise policy, audit, and release gates | [`examples/v16_policy_audit_release_gates.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v16_policy_audit_release_gates.py) |
 | Produce the signed v3 Journey release packet | [`scripts/release/journey_release_gate.py`](https://github.com/maziyarpanahi/openmed/blob/master/scripts/release/journey_release_gate.py) |
 | Exercise multimodal, interop, and browser exports | [`examples/v17_multimodal_browser_interop.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v17_multimodal_browser_interop.py) |
+| Audit SMART scopes before an agent workflow | [`examples/smart_scope_audit.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/smart_scope_audit.py) |
 | Warm a mirror-backed cache, then work offline | [`examples/onboarding_china_mirrors.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/onboarding_china_mirrors.py) |
 | Review an India DPDP-aware workflow | [`examples/onboarding_india_dpdp.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/onboarding_india_dpdp.py) |
 

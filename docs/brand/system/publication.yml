@@ -129,6 +129,7 @@ classification:
     - agent/run-summaries.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
+    - agent/schema-compatibility.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
     - agent/chart-abstraction-evidence.md
@@ -495,6 +496,7 @@ classification:
     - interop/fhir-bulk-data.md
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
+    - interop/smart-scope-audit.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
