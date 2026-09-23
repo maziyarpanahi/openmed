@@ -9,6 +9,21 @@ from typing import Any
 
 from openmed.structured.store import StoreResult, StoreState
 
+from .review_packet_mapping_migrations import (
+    REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION,
+    REVIEW_PACKET_SCHEMA_VERSION,
+    SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS,
+    LossyReviewPacketMigrationError,
+    ReviewPacketMigrationChange,
+    ReviewPacketMigrationError,
+    ReviewPacketMigrationResult,
+)
+from .review_packet_mapping_migrations import (
+    ReviewPacketMigrationReport as MappingReviewPacketMigrationReport,
+)
+from .review_packet_mapping_migrations import (
+    migrate_review_packet as _migrate_mapping_review_packet,
+)
 from .review_transitions import (
     CLINICAL_REVIEW_COMPATIBILITY_POLICY,
     CLINICAL_REVIEW_PACKET_SCHEMA_VERSION,
@@ -52,9 +67,33 @@ class ReviewPacketMigration:
 def migrate_review_packet(
     payload: Mapping[str, Any],
     *,
-    target_version: str = CLINICAL_REVIEW_PACKET_SCHEMA_VERSION,
+    target_version: str | int | None = None,
+) -> StoreResult[ReviewPacketMigration] | ReviewPacketMigrationResult:
+    """Dispatch to the integer mapping or semver clinical packet migration.
+
+    The integer mapping contract returns a copied mapping and raises a
+    value-free migration error. The semver clinical packet contract returns a
+    typed ``StoreResult``. The source schema version selects the contract;
+    callers should not mix their target-version types.
+    """
+
+    if isinstance(payload.get("schema_version"), int):
+        mapping_target = (
+            REVIEW_PACKET_SCHEMA_VERSION if target_version is None else target_version
+        )
+        return _migrate_mapping_review_packet(payload, target_version=mapping_target)
+    clinical_target = (
+        CLINICAL_REVIEW_PACKET_SCHEMA_VERSION
+        if target_version is None
+        else target_version
+    )
+    return _migrate_clinical_review_packet(payload, target_version=clinical_target)
+
+
+def _migrate_clinical_review_packet(
+    payload: Mapping[str, Any], *, target_version: str
 ) -> StoreResult[ReviewPacketMigration]:
-    """Migrate a supported packet forward without external access.
+    """Migrate a supported semver clinical packet forward without external access.
 
     Version 1.1 adds an explicit compatibility policy, extension container,
     and redundant transition-id list for append-only integrity checks.
@@ -125,8 +164,16 @@ def migrate_review_packet(
 
 
 __all__ = [
+    "REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION",
+    "REVIEW_PACKET_SCHEMA_VERSION",
+    "SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS",
     "SUPPORTED_REVIEW_PACKET_VERSIONS",
+    "LossyReviewPacketMigrationError",
+    "MappingReviewPacketMigrationReport",
     "ReviewPacketMigration",
+    "ReviewPacketMigrationChange",
+    "ReviewPacketMigrationError",
     "ReviewPacketMigrationReport",
+    "ReviewPacketMigrationResult",
     "migrate_review_packet",
 ]

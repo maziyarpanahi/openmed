@@ -917,6 +917,16 @@ from openmed.eval.retrain_trigger import (
     score_retrain_candidates,
     write_retrain_trigger_artifacts,
 )
+from openmed.eval.reviewer_disagreement import (
+    DEFAULT_MINIMUM_CELL_SIZE,
+    REVIEWER_DISAGREEMENT_SCHEMA_VERSION,
+    DisagreementReason,
+    PublishedRate,
+    ReasonAdjudicationRate,
+    ReviewerDecision,
+    ReviewerDisagreementReport,
+    reviewer_disagreement_report,
+)
 from openmed.eval.robustness import (
     DEFAULT_ADVERSARIAL_PERTURBATION_PROBABILITY,
     DEFAULT_ADVERSARIAL_PERTURBATIONS,
@@ -2064,4 +2074,13 @@ __all__ = [
     "privacy_corpus_coverage",
     "validate_privacy_corpus_manifest",
     "write_privacy_corpus_manifest",
+    # Privacy-safe reviewer disagreement metric (OM-055d).
+    "DEFAULT_MINIMUM_CELL_SIZE",
+    "REVIEWER_DISAGREEMENT_SCHEMA_VERSION",
+    "DisagreementReason",
+    "PublishedRate",
+    "ReasonAdjudicationRate",
+    "ReviewerDecision",
+    "ReviewerDisagreementReport",
+    "reviewer_disagreement_report",
 ]
