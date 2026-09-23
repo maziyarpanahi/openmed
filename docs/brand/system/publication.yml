@@ -112,6 +112,7 @@ classification:
     - agent/non-amplifying-delegation.md
     - agent/tool-argument-classification.md
     - agent/tool-inventory.md
+    - agent/tool-inventory-schema.md
     - agent/minimum-data-contracts.md
     - agent/minimum-data-projections.md
     - agent/governance-identifiers.md
