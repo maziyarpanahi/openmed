@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import traceback
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -20,7 +20,7 @@ from openmed.agent import (
 )
 from openmed.agent.reviewer_handoff import REVIEWER_HANDOFF_SCHEMA_VERSION
 
-NOW = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
+NOW = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
 
 
 def _reference(index: int = 1, **updates: Any) -> dict[str, Any]:

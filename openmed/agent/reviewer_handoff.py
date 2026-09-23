@@ -10,7 +10,7 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import InitVar, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Final
 
@@ -152,7 +152,7 @@ class ReviewerHandoffPacket:
             raise ReviewerHandoffError("invalid_expiry", "expires_at")
 
         effective_time = (
-            datetime.now(UTC) if validation_time is None else validation_time
+            datetime.now(timezone.utc) if validation_time is None else validation_time
         )
         _validate_utc_timestamp(effective_time, "validation_time", allow_subsecond=True)
         if self.expires_at <= effective_time:
@@ -319,7 +319,9 @@ def _parse_timestamp(value: Any, field_name: str) -> datetime:
     if type(value) is not str or _TIMESTAMP_RE.fullmatch(value) is None:
         raise ReviewerHandoffError("invalid_timestamp", field_name)
     try:
-        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
     except ValueError:
         raise ReviewerHandoffError("invalid_timestamp", field_name) from None
 
@@ -340,7 +342,7 @@ def _validate_utc_timestamp(
 
 
 def _format_timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

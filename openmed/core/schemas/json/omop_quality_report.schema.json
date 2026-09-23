@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/omop_quality_report.schema.json",
+  "title": "OpenMed OMOP quality report",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "categories",
+    "cdm_version",
+    "checks",
+    "compatibility_policy",
+    "execution_mode",
+    "input",
+    "input_digest",
+    "quality_verdict",
+    "reconciliation",
+    "report_digest",
+    "report_id",
+    "requires_review",
+    "schema_version",
+    "signature",
+    "source_output_digest",
+    "tool_name",
+    "tool_version"
+  ],
+  "properties": {
+    "artifact_type": {"const": "openmed.omop_quality_report"},
+    "categories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/category"}
+    },
+    "cdm_version": {"const": "5.4"},
+    "checks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/check"}
+    },
+    "compatibility_policy": {"const": "same_major"},
+    "execution_mode": {"enum": ["local", "remote"]},
+    "input": {"$ref": "#/$defs/input"},
+    "input_digest": {"$ref": "#/$defs/digest"},
+    "quality_verdict": {"$ref": "#/$defs/verdict"},
+    "reconciliation": {"$ref": "#/$defs/reconciliation"},
+    "report_digest": {"$ref": "#/$defs/digest"},
+    "report_id": {"$ref": "#/$defs/controlled"},
+    "requires_review": {"type": "boolean"},
+    "schema_version": {"const": "1.0.0"},
+    "signature": {"$ref": "#/$defs/signature"},
+    "source_output_digest": {"$ref": "#/$defs/digest"},
+    "tool_name": {"$ref": "#/$defs/controlled"},
+    "tool_version": {"$ref": "#/$defs/version"}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+    },
+    "verdict": {"enum": ["pass", "fail", "unknown"]},
+    "count_map": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cdm_version",
+        "cohort_digest",
+        "cohort_id",
+        "cohort_split",
+        "compatibility_policy",
+        "projection_digest",
+        "reference_etl",
+        "reference_license",
+        "reference_snapshot_digest",
+        "reference_version",
+        "schema_version",
+        "vocabulary_digest"
+      ],
+      "properties": {
+        "cdm_version": {"const": "5.4"},
+        "cohort_digest": {"$ref": "#/$defs/digest"},
+        "cohort_id": {"$ref": "#/$defs/controlled"},
+        "cohort_split": {"$ref": "#/$defs/controlled"},
+        "compatibility_policy": {"const": "same_major"},
+        "projection_digest": {"$ref": "#/$defs/digest"},
+        "reference_etl": {"$ref": "#/$defs/controlled"},
+        "reference_license": {"$ref": "#/$defs/controlled"},
+        "reference_snapshot_digest": {"$ref": "#/$defs/digest"},
+        "reference_version": {"$ref": "#/$defs/version"},
+        "schema_version": {"const": "1.0.0"},
+        "vocabulary_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "affected_rows",
+        "category",
+        "check_id",
+        "code",
+        "remediation_code",
+        "requires_review",
+        "severity",
+        "status",
+        "table"
+      ],
+      "properties": {
+        "affected_rows": {"type": "integer", "minimum": 0},
+        "category": {
+          "enum": ["conformance", "completeness", "plausibility"]
+        },
+        "check_id": {"$ref": "#/$defs/controlled"},
+        "code": {"$ref": "#/$defs/controlled"},
+        "remediation_code": {"$ref": "#/$defs/controlled"},
+        "requires_review": {"type": "boolean"},
+        "severity": {"enum": ["info", "warning", "error"]},
+        "status": {"$ref": "#/$defs/verdict"},
+        "table": {
+          "oneOf": [
+            {"enum": [
+              "person",
+              "visit_occurrence",
+              "note",
+              "condition_occurrence",
+              "drug_exposure",
+              "procedure_occurrence",
+              "measurement",
+              "observation",
+              "source_to_concept_map"
+            ]},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "check_count",
+        "failed_count",
+        "unknown_count",
+        "verdict"
+      ],
+      "properties": {
+        "category": {
+          "enum": ["conformance", "completeness", "plausibility"]
+        },
+        "check_count": {"type": "integer", "minimum": 0},
+        "failed_count": {"type": "integer", "minimum": 0},
+        "unknown_count": {"type": "integer", "minimum": 0},
+        "verdict": {"$ref": "#/$defs/verdict"}
+      }
+    },
+    "row_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delta",
+        "expected_delta",
+        "matches_expected",
+        "openmed_count",
+        "reference_count",
+        "table"
+      ],
+      "properties": {
+        "delta": {"type": "integer"},
+        "expected_delta": {"type": ["integer", "null"]},
+        "matches_expected": {"type": "boolean"},
+        "openmed_count": {"type": "integer", "minimum": 0},
+        "reference_count": {"type": "integer", "minimum": 0},
+        "table": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cohort_digest",
+        "cohort_split",
+        "expectations_met",
+        "expected_mapped_coverage_delta_ppm",
+        "mapped_coverage_delta_ppm",
+        "openmed_aggregate_digest",
+        "openmed_snapshot_digest",
+        "reference_aggregate_digest",
+        "reference_snapshot_digest",
+        "row_deltas",
+        "semantic_difference_codes"
+      ],
+      "properties": {
+        "cohort_digest": {"$ref": "#/$defs/digest"},
+        "cohort_split": {"$ref": "#/$defs/controlled"},
+        "expectations_met": {"type": "boolean"},
+        "expected_mapped_coverage_delta_ppm": {
+          "type": ["integer", "null"]
+        },
+        "mapped_coverage_delta_ppm": {"type": "integer"},
+        "openmed_aggregate_digest": {"$ref": "#/$defs/digest"},
+        "openmed_snapshot_digest": {"$ref": "#/$defs/digest"},
+        "reference_aggregate_digest": {"$ref": "#/$defs/digest"},
+        "reference_snapshot_digest": {"$ref": "#/$defs/digest"},
+        "row_deltas": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {"$ref": "#/$defs/row_delta"}
+        },
+        "semantic_difference_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value"],
+      "properties": {
+        "algorithm": {"const": "HMAC-SHA256"},
+        "key_id": {"$ref": "#/$defs/controlled"},
+        "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}
