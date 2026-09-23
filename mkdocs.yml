@@ -354,6 +354,7 @@ nav:
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
+      - FHIR Journey and Cohort-definition Round Trips: interop/fhir-cohort-roundtrip.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
       - FHIR Reference Target-Type Checks: fhir/reference-target-types.md
       - FHIR Bulk Data Checkpoints: fhir/bulk-checkpoints.md
