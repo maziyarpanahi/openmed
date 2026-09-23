@@ -254,6 +254,7 @@ nav:
       - Structured discharge-summary profile: clinical/discharge-profile.md
       - Summary omission budgets: clinical/summary-omission-budgets.md
       - Summary demographic minimization: clinical/summary-demographic-minimization.md
+      - Bounded local-summary retries: clinical/summary-retry-control.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md

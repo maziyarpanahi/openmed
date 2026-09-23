@@ -329,6 +329,7 @@ classification:
     - clinical/discharge-profile.md
     - clinical/summary-omission-budgets.md
     - clinical/summary-demographic-minimization.md
+    - clinical/summary-retry-control.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
