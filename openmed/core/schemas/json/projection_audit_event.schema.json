@@ -1,0 +1,20 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/projections/audit-event.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "namespace": {"enum": ["identified", "deidentified"]},
+    "occurred_at": {"format": "date-time", "type": "string"},
+    "operation": {"enum": ["read", "write", "export", "correct", "review"]},
+    "outcome": {"enum": ["allow", "deny", "review", "failure"]},
+    "reason_code": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "request_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "resource_digest": {"anyOf": [{"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+    "schema_version": {"const": "1.0.0"}
+  },
+  "required": ["event_id", "namespace", "occurred_at", "operation", "outcome", "reason_code", "request_digest", "resource_digest", "schema_version"],
+  "schema_version": 1,
+  "title": "OpenMedProjectionAuditEvent",
+  "type": "object"
+}

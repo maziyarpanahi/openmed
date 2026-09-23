@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -32,6 +32,16 @@ from openmed.core.errors import (
     PolicyError,
 )
 from openmed.processing import format_predictions
+from openmed.structured.decision import (
+    DETERMINISTIC_DECISION_BACKEND,
+    DecisionAccessPolicy,
+    DecisionError,
+    decide,
+    decision_result_schema,
+)
+from openmed.structured.decision import (
+    DecisionRequest as CoreDecisionRequest,
+)
 from openmed.utils.validation import validate_model_name
 
 from .auth import ServiceAuth, parse_service_auth_config
@@ -45,6 +55,14 @@ from .batcher import (
 from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
+from .journey_resources import (
+    JourneyAccessPolicy,
+    JourneyResourceCatalog,
+    JourneyResourceKind,
+    JourneyResourceQuery,
+    parse_access_attributes,
+    parse_resource_fields,
+)
 from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
@@ -70,6 +88,7 @@ from .openhim_mediator import (
     mediator_response_headers,
     transform_mediator_payload,
 )
+from .operational import OperationalCategory, OperationalEvent, OperationalState
 from .privacy_gateway import (
     HttpExternalLLMTransport,
     InMemoryReidentificationStore,
@@ -80,6 +99,7 @@ from .privacy_gateway import (
     PrivacyGatewayPolicy,
     PrivacyTransportError,
 )
+from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
@@ -88,8 +108,10 @@ from .schemas import (
     DeidentifyJobRequest,
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
+    FixedOptionDecisionRequest,
     GroundRequest,
     GroundResponse,
+    JourneyResourcePageResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
     PIIDeidentifyRequest,
@@ -109,6 +131,7 @@ from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
+    operational_trace_attributes,
     result_summary_attributes,
     service_tracing_from_env,
     set_current_span_attributes,
@@ -122,6 +145,7 @@ _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
+_DECISION_PATH = "/v1/decisions"
 _MODEL_BACKED_PATHS = frozenset(
     {
         "/graphql",
@@ -136,6 +160,7 @@ _MODEL_BACKED_PATHS = frozenset(
         _SMART_BACKEND_START_PATH,
         _FHIR_BULK_EXPORT_PATH,
         _FHIR_BULK_IMPORT_PATH,
+        _DECISION_PATH,
         OPENHIM_MEDIATOR_PATH,
     }
 )
@@ -619,6 +644,14 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     return queue
 
 
+def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
+    catalog = getattr(request.app.state, "journey_resources", None)
+    if catalog is None:
+        catalog = JourneyResourceCatalog()
+        request.app.state.journey_resources = catalog
+    return catalog
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -781,6 +814,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     app.state.tracing = service_tracing_from_env()
     app.state.openhim_settings = openhim_settings
     app.state.openhim_deidentifier = None
+    app.state.journey_resources = JourneyResourceCatalog()
+    app.state.journey_access_policy = JourneyAccessPolicy()
+    app.state.operational_limits = request_limits_from_env()
+    app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
+    app.state.decision_access_policy = DecisionAccessPolicy()
+    app.state.decision_calibration_profiles = None
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -1015,6 +1054,102 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             "Service preload has not completed",
             details=None,
         )
+
+    @app.get(
+        "/v1/journey/resources",
+        response_model=JourneyResourcePageResponse,
+        tags=["journey"],
+    )
+    async def list_journey_resources(
+        request: Request,
+        resource_type: JourneyResourceKind,
+        namespace: str = "default",
+        purpose: str = "care_review",
+        role: str = "clinician",
+        attributes: Optional[str] = Query(default=None, max_length=1024),
+        consent_state: str = "active",
+        export_policy: str = "metadata_only",
+        first: int = Query(default=20, ge=1, le=100),
+        after: Optional[str] = Query(default=None, max_length=2048),
+        fields: Optional[str] = Query(default=None, max_length=1024),
+    ) -> Dict[str, Any]:
+        """List a bounded, policy-filtered page of versioned Journey resources."""
+
+        catalog = _get_journey_resource_catalog(request)
+        policy = getattr(request.app.state, "journey_access_policy", None)
+        query = JourneyResourceQuery(
+            resource_type=resource_type,
+            namespace=namespace,
+            purpose=purpose,
+            role=role,
+            attributes=parse_access_attributes(attributes),
+            consent_state=consent_state,
+            export_policy=export_policy,
+            first=first,
+            after=after,
+            fields=parse_resource_fields(fields),
+        )
+        started_at = time.perf_counter()
+        page = catalog.list_resources(query, policy=policy)
+        event = OperationalEvent(
+            category=OperationalCategory.QUERY,
+            operation="list",
+            state=OperationalState(page.state.value),
+            duration_seconds=time.perf_counter() - started_at,
+        )
+        metrics = getattr(request.app.state, "metrics", None)
+        if metrics is not None:
+            metrics.record_operational_event(event)
+        set_current_span_attributes(operational_trace_attributes(event))
+        return page.to_dict()
+
+    @app.post(
+        _DECISION_PATH,
+        response_model=None,
+        tags=["decision"],
+        responses={
+            200: {
+                "description": "A calibrated fixed-option decision result.",
+                "content": {"application/json": {"schema": decision_result_schema()}},
+            }
+        },
+    )
+    async def fixed_option_decision(
+        payload: FixedOptionDecisionRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """Evaluate a bounded local decision and return a typed review result."""
+
+        body = (
+            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        )
+        try:
+            decision_request = CoreDecisionRequest.from_dict(body)
+        except (DecisionError, TypeError, ValueError) as exc:
+            raise InputError(
+                "Invalid fixed-option decision request.",
+                details={"reason": str(exc)},
+            ) from exc
+        result = await run_in_threadpool(
+            decide,
+            decision_request,
+            backend=getattr(
+                request.app.state,
+                "decision_backend",
+                DETERMINISTIC_DECISION_BACKEND,
+            ),
+            policy=getattr(
+                request.app.state,
+                "decision_access_policy",
+                DecisionAccessPolicy(),
+            ),
+            calibration_profiles=getattr(
+                request.app.state,
+                "decision_calibration_profiles",
+                None,
+            ),
+        )
+        return result.to_dict()
 
     if openhim_settings.enabled:
 
@@ -1559,7 +1694,11 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     from .graphql_app import mount_graphql
 
-    mount_graphql(app, runtime_getter=_get_service_runtime)
+    mount_graphql(
+        app,
+        runtime_getter=_get_service_runtime,
+        resource_getter=_get_journey_resource_catalog,
+    )
 
     if app.state.tracing.enabled:
         app.add_middleware(
@@ -1582,6 +1721,10 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),
+    )
+    app.add_middleware(
+        BoundedRequestBodyMiddleware,
+        limits=app.state.operational_limits,
     )
     return app
 

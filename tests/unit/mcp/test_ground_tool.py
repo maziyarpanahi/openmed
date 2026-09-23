@@ -44,7 +44,7 @@ def test_ground_tool_is_listed_and_round_trips_without_logging_phi(
 
     tools = asyncio.run(server.list_tools())
     advertised = {tool.name: tool for tool in tools}
-    assert len(advertised) == len(TOOL_REGISTRY.latest_specs()) == 17
+    assert len(advertised) == len(TOOL_REGISTRY.latest_specs())
     assert "openmed_ground_concepts" in advertised
     spec = TOOL_REGISTRY.get("openmed_ground_concepts")
     assert advertised[spec.name].inputSchema == spec.input_schema

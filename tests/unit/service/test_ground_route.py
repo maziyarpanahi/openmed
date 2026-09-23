@@ -177,21 +177,24 @@ def test_ground_route_missing_snapshot_stays_offline(
         attempted_network = True
         raise AssertionError("grounding attempted network access")
 
-    monkeypatch.setattr(socket.socket, "connect", fail_connect)
     monkeypatch.setenv("OPENMED_GROUNDING_CACHE_DIR", str(tmp_path / "empty"))
     with TestClient(
         create_app(),
         base_url="http://127.0.0.1",
         raise_server_exceptions=False,
     ) as client:
-        response = client.post(
-            "/ground",
-            json={
-                "text": "synthetic medication",
-                "systems": ["rxnorm"],
-                "offline": True,
-            },
-        )
+        # Windows creates an asyncio loopback socketpair when TestClient starts.
+        # Intercept only the request, after the test harness is initialized.
+        with monkeypatch.context() as request_patch:
+            request_patch.setattr(socket.socket, "connect", fail_connect)
+            response = client.post(
+                "/ground",
+                json={
+                    "text": "synthetic medication",
+                    "systems": ["rxnorm"],
+                    "offline": True,
+                },
+            )
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "offline_snapshot_unavailable"

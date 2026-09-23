@@ -80,73 +80,9 @@ def _tool_handler(
 ) -> Callable[..., dict[str, Any]]:
     from openmed.mcp import server as mcp_server
 
-    handlers: dict[str, Callable[..., dict[str, Any]]] = {
-        "openmed_analyze_text": lambda **kwargs: mcp_server.openmed_analyze_text(
-            **kwargs,
-            runtime_provider=runtime_provider,
-        ),
-        "openmed_extract_pii": lambda **kwargs: mcp_server.openmed_extract_pii(
-            **kwargs,
-            runtime_provider=runtime_provider,
-        ),
-        "openmed_deidentify": lambda **kwargs: mcp_server.openmed_deidentify(
-            **kwargs,
-            runtime_provider=runtime_provider,
-        ),
-        "openmed_list_models": lambda **kwargs: mcp_server.openmed_list_models(
-            **kwargs
-        ),
-        "openmed_list_pii_languages": (
-            lambda **kwargs: mcp_server.openmed_list_pii_languages(**kwargs)
-        ),
-        "openmed_loaded_models": lambda **kwargs: mcp_server.openmed_loaded_models(
-            **kwargs,
-            runtime_provider=runtime_provider,
-        ),
-        "openmed_unload_model": lambda **kwargs: mcp_server.openmed_unload_model(
-            **kwargs,
-            runtime_provider=runtime_provider,
-        ),
-        "openmed_run_workflow": lambda **kwargs: mcp_server.openmed_run_workflow(
-            **kwargs,
-            runtime_provider=runtime_provider,
-        ),
-        "openmed_ground": lambda **kwargs: mcp_server.openmed_ground(**kwargs),
-        "openmed_ground_concepts": (
-            lambda **kwargs: mcp_server.openmed_ground_concepts(**kwargs)
-        ),
-        "openmed_export_fhir": lambda **kwargs: mcp_server.openmed_export_fhir(
-            **kwargs
-        ),
-        "openmed_risk_score": lambda **kwargs: mcp_server.openmed_risk_score(**kwargs),
-        "openmed_clinical_pipeline": (
-            lambda **kwargs: mcp_server.openmed_clinical_pipeline(
-                **kwargs,
-                runtime_provider=runtime_provider,
-            )
-        ),
-        "openmed_fhir_bundle": lambda **kwargs: mcp_server.openmed_fhir_bundle(
-            **kwargs
-        ),
-        "openmed_risk_report": lambda **kwargs: mcp_server.openmed_risk_report(
-            **kwargs
-        ),
-        "openmed_signed_audit_report": (
-            lambda **kwargs: mcp_server.openmed_signed_audit_report(
-                **kwargs,
-                runtime_provider=runtime_provider,
-            )
-        ),
-        "openmed_search_models": lambda **kwargs: mcp_server.openmed_search_models(
-            **kwargs
-        ),
-    }
+    handlers = mcp_server.build_mcp_tool_handlers(runtime_provider)
     try:
         return handlers[name]
-    except KeyError:
-        pass
-    try:
-        return TOOL_REGISTRY.handler(name)
     except KeyError as exc:
         raise KeyError(f"unknown OpenMed tool {name!r}") from exc
 

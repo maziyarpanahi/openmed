@@ -20,6 +20,19 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
+from openmed.service.journey_workflows import (
+    JOURNEY_WORKFLOW_DEFINITIONS,
+    JourneyWorkflowDefinition,
+    journey_workflow_output_schema,
+    journey_workflow_query_properties,
+)
+from openmed.structured.decision import (
+    DECISION_COMPATIBILITY_POLICY,
+    DECISION_SCHEMA_VERSION,
+    DEFAULT_CALIBRATION_ID,
+    decision_request_schema,
+    decision_result_schema,
+)
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -149,6 +162,18 @@ class ToolSpec:
             "openWorldHint": self.open_world_hint,
         }
 
+    @property
+    def state_changing(self) -> bool:
+        """Return whether invocation may change runtime or durable state."""
+
+        return not self.read_only_hint
+
+    @property
+    def requires_consent_receipt(self) -> bool:
+        """Return whether the MCP server requires its consent-receipt path."""
+
+        return self.state_changing
+
     def mcp_output_schema(self) -> JsonSchema:
         """Return the MCP result schema, including structured failures."""
 
@@ -186,6 +211,11 @@ class ToolSpec:
             "stability": self.stability,
             "input_schema": deepcopy(dict(self.input_schema)),
             "output_schema": deepcopy(dict(self.output_schema)),
+            "annotations": self.annotations(),
+            "authorization": {
+                "state_changing": self.state_changing,
+                "consent_receipt_required": self.requires_consent_receipt,
+            },
         }
         if self.plugin_id:
             payload["plugin"] = {
@@ -425,7 +455,7 @@ class ToolRegistry:
 
         self._ensure_runtime_plugins()
         return {
-            "schema_version": "1.1.0",
+            "schema_version": "1.2.0",
             "tools": [spec.document() for spec in self.all_specs()],
             "workflows": [spec.document() for spec in self.workflow_specs()],
         }
@@ -1695,7 +1725,133 @@ def _tool_spec(
     )
 
 
+def _journey_workflow_tool_spec(
+    definition: JourneyWorkflowDefinition,
+) -> ToolSpec:
+    """Build one read-only Journey tool from the shared workflow contract."""
+
+    properties = journey_workflow_query_properties(definition)
+    parameters = (
+        _parameter(
+            "namespace",
+            properties["namespace"],
+            str,
+            "default",
+        ),
+        _parameter(
+            "purpose",
+            properties["purpose"],
+            str,
+            "care_review",
+        ),
+        _parameter(
+            "role",
+            properties["role"],
+            str,
+            "clinician",
+        ),
+        _parameter(
+            "attributes",
+            properties["attributes"],
+            Optional[Sequence[str]],
+            None,
+        ),
+        _parameter(
+            "consent_state",
+            properties["consent_state"],
+            str,
+            "active",
+        ),
+        _parameter(
+            "export_policy",
+            properties["export_policy"],
+            str,
+            "metadata_only",
+        ),
+        _parameter(
+            "first",
+            properties["first"],
+            int,
+            20,
+        ),
+        _parameter(
+            "after",
+            properties["after"],
+            Optional[str],
+            None,
+        ),
+        _parameter(
+            "fields",
+            properties["fields"],
+            Optional[Sequence[str]],
+            None,
+        ),
+    )
+    return _tool_spec(
+        name=definition.tool_name,
+        title=definition.title,
+        description=definition.description,
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+        parameters=parameters,
+        output_schema=journey_workflow_output_schema(definition),
+    )
+
+
+def _decision_tool_spec() -> ToolSpec:
+    """Build the read-only fixed-option decision tool from its core schema."""
+
+    request_contract = decision_request_schema()
+    properties = request_contract["properties"]
+    parameters = (
+        _parameter("mode", properties["mode"], str),
+        _parameter("input_text", properties["input_text"], str),
+        _parameter("options", properties["options"], Sequence[str], ()),
+        _parameter("namespace", properties["namespace"], str, "default"),
+        _parameter("purpose", properties["purpose"], str, "care_review"),
+        _parameter(
+            "calibration_id",
+            properties["calibration_id"],
+            str,
+            DEFAULT_CALIBRATION_ID,
+        ),
+        _parameter("timeout_ms", properties["timeout_ms"], int, 5000),
+        _parameter(
+            "schema_version",
+            properties["schema_version"],
+            str,
+            DECISION_SCHEMA_VERSION,
+        ),
+        _parameter(
+            "compatibility_policy",
+            properties["compatibility_policy"],
+            str,
+            DECISION_COMPATIBILITY_POLICY,
+        ),
+    )
+    spec = _tool_spec(
+        name="openmed_decide",
+        title="Evaluate Fixed-Option Decision",
+        description=(
+            "Score bounded caller-supplied choices locally, apply calibrated "
+            "abstention, and return an explicitly review-only decision result."
+        ),
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+        parameters=parameters,
+        output_schema=decision_result_schema(),
+    )
+    for metadata_key in ("$id", "$schema", "title"):
+        request_contract.pop(metadata_key, None)
+    return replace(spec, input_schema=request_contract)
+
+
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    _decision_tool_spec(),
     _tool_spec(
         name="openmed_analyze_text",
         title="Analyze Clinical Text",
@@ -2117,6 +2273,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             _parameter("limit", _schema("integer", minimum=0), int, 50),
         ),
         output_schema=_LIST_MODELS_OUTPUT,
+    ),
+    *(
+        _journey_workflow_tool_spec(definition)
+        for definition in JOURNEY_WORKFLOW_DEFINITIONS
     ),
 )
 

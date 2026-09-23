@@ -14,6 +14,24 @@ from openmed.interop.tools import (
     PIILanguage,
     UnloadModelArgs,
 )
+from openmed.structured.decision import (
+    DECISION_COMPATIBILITY_POLICY,
+    DECISION_SCHEMA_VERSION,
+    DEFAULT_CALIBRATION_ID,
+    decision_request_schema,
+)
+from openmed.structured.decision import (
+    MAX_INPUT_CHARS as DECISION_MAX_INPUT_CHARS,
+)
+from openmed.structured.decision import (
+    MAX_OPTIONS as DECISION_MAX_OPTIONS,
+)
+from openmed.structured.decision import (
+    MAX_TIMEOUT_MS as DECISION_MAX_TIMEOUT_MS,
+)
+from openmed.structured.decision import (
+    MIN_TIMEOUT_MS as DECISION_MIN_TIMEOUT_MS,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
@@ -943,6 +961,53 @@ else:
             return values
 
 
+DecisionModeValue = Literal[
+    "fixed_choice",
+    "boolean_choice",
+    "ordered_preference",
+    "scalar_score",
+    "multi_label",
+]
+
+
+def _decision_options_field() -> Any:
+    constraints = (
+        {"max_length": DECISION_MAX_OPTIONS}
+        if PYDANTIC_V2
+        else {"max_items": DECISION_MAX_OPTIONS}
+    )
+    return Field(default_factory=list, **constraints)
+
+
+class FixedOptionDecisionRequest(_StrictModel):
+    """Canonical bounded request for ``POST /v1/decisions``."""
+
+    mode: DecisionModeValue
+    input_text: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS)
+    options: list[str] = _decision_options_field()
+    namespace: str = "default"
+    purpose: str = "care_review"
+    calibration_id: str = DEFAULT_CALIBRATION_ID
+    timeout_ms: int = Field(
+        default=5000,
+        ge=DECISION_MIN_TIMEOUT_MS,
+        le=DECISION_MAX_TIMEOUT_MS,
+    )
+    schema_version: Literal["1.0.0"] = DECISION_SCHEMA_VERSION
+    compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
+
+    if PYDANTIC_V2:
+        model_config = ConfigDict(
+            extra="forbid",
+            json_schema_extra=decision_request_schema(),
+        )
+    else:  # pragma: no cover
+
+        class Config:
+            extra = "forbid"
+            schema_extra = decision_request_schema()
+
+
 class GroundCandidateResponse(_StrictModel):
     """One coded terminology candidate in a grounding response."""
 
@@ -1072,3 +1137,86 @@ class CohortResolveRequest(_StrictModel):
         @validator("records_jsonl", pre=True)
         def _validate_records_jsonl(cls, value: Any) -> str:
             return _normalize_records_jsonl(value)
+
+
+JourneyResourceStateValue = Literal[
+    "success",
+    "partial",
+    "empty",
+    "unknown",
+    "conflict",
+    "unsupported",
+    "denied",
+    "failure",
+]
+JourneyResourceTypeValue = Literal[
+    "artifact",
+    "job",
+    "fact",
+    "conflict",
+    "journey",
+    "cohort",
+    "dataset",
+    "registry",
+    "measure",
+    "trial_review",
+    "evidence",
+    "current_fact",
+    "journey_event",
+    "mapping",
+    "cohort_run",
+    "dataset_manifest",
+]
+
+
+class JourneyResourceResponse(_StrictModel):
+    """One versioned, field-filtered Journey resource."""
+
+    resource_type: JourneyResourceTypeValue
+    resource_id: str
+    namespace: str
+    data: dict[str, Any]
+    state: JourneyResourceStateValue
+    version: int = Field(ge=1)
+    revision: int = Field(ge=1)
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]
+    extensions: dict[str, Any]
+
+
+class JourneyPageInfoResponse(_StrictModel):
+    """Cursor metadata for one bounded Journey resource page."""
+
+    has_next_page: bool
+    end_cursor: Optional[str]
+    page_size: int = Field(ge=0, le=100)
+    snapshot_digest: str
+
+
+class JourneyPolicyResponse(_StrictModel):
+    """Complete access context and response-policy decision."""
+
+    state: Literal["success", "denied"]
+    namespace: str
+    purpose: str
+    role: str
+    attributes: list[str]
+    consent_state: Literal["active", "unknown", "withdrawn"]
+    export_policy: str
+    decision_id: str
+    request_digest: str
+    allowed_fields: list[str]
+    code: Optional[str]
+    policy_version: Literal["1.0.0"]
+
+
+class JourneyResourcePageResponse(_StrictModel):
+    """Typed response shared by versioned Journey list endpoints."""
+
+    state: JourneyResourceStateValue
+    code: Optional[str]
+    resources: list[JourneyResourceResponse]
+    page_info: JourneyPageInfoResponse
+    policy: JourneyPolicyResponse
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]
