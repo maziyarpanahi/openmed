@@ -63,6 +63,12 @@ from .candidate import (
     sample_negative_span_pairs,
     split_sentence_offsets,
 )
+from .diagnosis_treatments import (
+    DIAGNOSIS_TREATMENT_ADVISORY,
+    DiagnosisTreatmentCandidate,
+    RelationUncertainty,
+    generate_diagnosis_treatment_candidates,
+)
 from .document_level import (
     DOCUMENT_RELATION_ADVISORY,
     DOCUMENT_RELATION_SCHEMA_VERSION,
@@ -71,6 +77,13 @@ from .document_level import (
     SafeRelationMention,
     aggregate_document_relations,
     extract_document_relations,
+)
+from .guarded_lab_result_candidates import (
+    LAB_RESULT_CANDIDATE_ADVISORY,
+    LabConflictState,
+    LabResultRelationCandidate,
+    LabUnitStatus,
+    generate_lab_result_candidates,
 )
 from .joint_head import (
     JOINT_HEAD_SCHEMA_VERSION,
@@ -83,6 +96,12 @@ from .joint_head import (
     decode_joint_span_pairs,
 )
 from .lab_results import LAB_RESULT_ADVISORY, LabResult, extract_lab_results
+from .medication_changes import (
+    MEDICATION_CHANGE_ADVISORY,
+    MedicationChangeCandidate,
+    MedicationChangeType,
+    generate_medication_change_candidates,
+)
 from .medication_links import (
     MEDICATION_LINK_ADVISORY,
     MedicationRelationScorer,
@@ -109,6 +128,21 @@ from .problem_links import (
     PROBLEM_RELATION_ADVISORY,
     PROBLEM_STATUS_CUES,
     extract_problem_relations,
+)
+from .procedure_indications import (
+    PROCEDURE_INDICATION_ADVISORY,
+    ProcedureIndicationCandidate,
+    generate_procedure_indication_candidates,
+)
+from .review_priority import (
+    DEFAULT_REVIEW_PRIORITY_POLICY,
+    REVIEW_PRIORITY_ADVISORY,
+    EvidenceCompleteness,
+    RelationConflictState,
+    RelationReviewPriority,
+    ReviewBand,
+    ReviewPriorityPolicy,
+    assign_review_priority,
 )
 from .temporal import (
     TEMPORAL_GRAPH_SCHEMA_VERSION,
@@ -155,6 +189,9 @@ __all__ = [
     "PROBLEM_ATTRIBUTE_RELATION_TYPES",
     "DOCUMENT_RELATION_ADVISORY",
     "DOCUMENT_RELATION_SCHEMA_VERSION",
+    "DIAGNOSIS_TREATMENT_ADVISORY",
+    "DiagnosisTreatmentCandidate",
+    "RelationUncertainty",
     "CoreferenceProvenance",
     "CoreferenceSourceReference",
     "DocumentLevelRelation",
@@ -167,19 +204,28 @@ __all__ = [
     "JointSpanPairHead",
     "JointSpanPairScore",
     "LAB_RESULT_ADVISORY",
+    "LAB_RESULT_CANDIDATE_ADVISORY",
     "LabResult",
+    "LabConflictState",
+    "LabResultRelationCandidate",
+    "LabUnitStatus",
     "MEDICATION_LINK_ADVISORY",
+    "MEDICATION_CHANGE_ADVISORY",
     "MedicationAttributeType",
     "MedicationRelation",
     "MedicationRelationGroup",
     "MedicationRelationScorer",
     "MedicationStatementRecord",
+    "MedicationChangeCandidate",
+    "MedicationChangeType",
     "MedicationRelationType",
     "MentionPairEvidence",
     "ProblemAttributeType",
     "ProblemRelationType",
     "PROBLEM_RELATION_ADVISORY",
     "PROBLEM_STATUS_CUES",
+    "PROCEDURE_INDICATION_ADVISORY",
+    "ProcedureIndicationCandidate",
     "Relation",
     "RelationAttributeType",
     "RELATION_ATTRIBUTE_TYPES",
@@ -192,6 +238,13 @@ __all__ = [
     "RelationCandidateBatch",
     "RelationCandidateRule",
     "RelationType",
+    "DEFAULT_REVIEW_PRIORITY_POLICY",
+    "REVIEW_PRIORITY_ADVISORY",
+    "EvidenceCompleteness",
+    "RelationConflictState",
+    "RelationReviewPriority",
+    "ReviewBand",
+    "ReviewPriorityPolicy",
     "SpanPairCandidate",
     "SpanReference",
     "SafeRelationMention",
@@ -206,6 +259,10 @@ __all__ = [
     "decode_tlink_candidates",
     "extract_tlink_candidates",
     "extract_lab_results",
+    "generate_lab_result_candidates",
+    "generate_medication_change_candidates",
+    "generate_procedure_indication_candidates",
+    "generate_diagnosis_treatment_candidates",
     "extract_medication_relations",
     "extract_document_relations",
     "extract_problem_relations",
@@ -228,6 +285,7 @@ __all__ = [
     "relation_type_mapping",
     "sample_negative_span_pairs",
     "split_sentence_offsets",
+    "assign_review_priority",
     "DEFAULT_MAX_RELATION_ABSTENTION_RATE",
     "DEFAULT_MIN_ISOTONIC_SAMPLES",
     "DEFAULT_MIN_RETAINED_RELATION_ACCURACY",

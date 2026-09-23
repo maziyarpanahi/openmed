@@ -159,6 +159,11 @@ nav:
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
+      - Medication-change Relation Candidates: clinical/medication-change-relations.md
+      - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
+      - Procedure-to-indication Relation Candidates: clinical/procedure-indication-relations.md
+      - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
+      - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
