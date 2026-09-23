@@ -56,6 +56,11 @@ nav:
       - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
+      - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
+      - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
+      - Cohort Membership Explanations: agent/cohort-explanations.md
+      - Quality-Measure Evidence: agent/quality-measure-evidence.md
+      - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Durable Workflow Recovery: agent/workflow-recovery.md
       - Agent Skill Installation: agent-skills/install.md
@@ -163,10 +168,19 @@ nav:
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
+      - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
+      - Summary Temporal-order Validation: clinical/summary-temporal-order.md
+      - Medication-change Summary Views: clinical/summary-medication-changes.md
+      - Laboratory Sequence Summary Views: clinical/summary-lab-trends.md
+      - Guarded Summary Input Contract: clinical/summary-input-contract.md
+      - Summary Safety Envelope: clinical/summary-safety.md
+      - Summary Citation Consistency: clinical/summary-citations.md
+      - Summary Fact Coverage: evaluation/summary-coverage.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
+      - Post-de-identification Summarization: clinical/summarization.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
@@ -241,8 +255,13 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
+      - Clinical NLI Error Slices: evaluation/nli-error-slices.md
+      - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
+      - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
+      - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
+      - Document-type Calibration: evaluation/doctype-calibration.md
       - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
       - Sealed Holdout Commitments: evaluation/holdout-commitments.md
       - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
@@ -270,6 +289,9 @@ nav:
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
       - Structured discharge-summary profile: clinical/discharge-profile.md
+      - Summary omission budgets: clinical/summary-omission-budgets.md
+      - Summary demographic minimization: clinical/summary-demographic-minimization.md
+      - Bounded local-summary retries: clinical/summary-retry-control.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
@@ -375,12 +397,19 @@ nav:
       - Breach Report Template: compliance/templates/breach-report-template.md
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
+      - Staged OMOP Mutations: interop/omop-staged-mutations.md
+      - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
+      - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
+      - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
+      - FHIR-to-OMOP Write Lineage: interop/fhir-omop-write-lineage.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
+      - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
