@@ -349,6 +349,7 @@ classification:
     - evaluation/overlap-forensics.md
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
+    - evaluation/reviewer-disagreement.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
