@@ -111,6 +111,7 @@ classification:
     - agent/purpose-bound-access.md
     - agent/non-amplifying-delegation.md
     - agent/tool-argument-classification.md
+    - agent/tool-inventory.md
     - agent/governance-identifiers.md
     - agent/capability-validity.md
     - agent/event-correlation.md

@@ -36,6 +36,7 @@ nav:
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
       - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
       - Tool Argument Classification: agent/tool-argument-classification.md
+      - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md
