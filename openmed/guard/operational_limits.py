@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import stat
 import zipfile
 from dataclasses import dataclass
@@ -234,8 +235,8 @@ def parse_bounded_json(
         raise OperationalLimitError(decision.code)
     _preflight_json(payload, active)
     try:
-        value = json.loads(payload)
-    except (RecursionError, UnicodeError, json.JSONDecodeError):
+        value = json.loads(payload, parse_constant=_reject_json_constant)
+    except (RecursionError, UnicodeError, ValueError):
         raise OperationalLimitError("json_invalid") from None
     node_count = 0
     string_bytes = 0
@@ -248,16 +249,29 @@ def parse_bounded_json(
         if depth > active.max_json_depth:
             raise OperationalLimitError("json_depth_limit_exceeded")
         if isinstance(current, str):
-            string_bytes += len(current.encode("utf-8"))
+            string_bytes += _utf8_length(current)
         elif isinstance(current, dict):
             for key, item in current.items():
-                string_bytes += len(str(key).encode("utf-8"))
+                string_bytes += _utf8_length(str(key))
                 stack.append((item, depth + 1))
         elif isinstance(current, list):
             stack.extend((item, depth + 1) for item in current)
+        elif isinstance(current, float) and not math.isfinite(current):
+            raise OperationalLimitError("json_invalid")
         if string_bytes > active.max_json_string_bytes:
             raise OperationalLimitError("json_string_limit_exceeded")
     return value
+
+
+def _reject_json_constant(_: str) -> None:
+    raise OperationalLimitError("json_invalid")
+
+
+def _utf8_length(value: str) -> int:
+    try:
+        return len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        raise OperationalLimitError("json_invalid") from None
 
 
 def _preflight_json(payload: bytes, limits: OperationalLimits) -> None:

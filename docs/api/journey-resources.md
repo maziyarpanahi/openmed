@@ -71,7 +71,9 @@ failures all return a typed `denied` page with an empty resource list.
 ## Compatibility and migration
 
 Version `1.x` readers use `same_major` compatibility. Additive extension fields
-are preserved during load and migration. A different major version is rejected
+are preserved during load and migration, but omitted from field-limited public
+projections to prevent unselected data from leaking into responses. A different
+major version is rejected
 instead of being silently downgraded. Committed OpenAPI, GraphQL SDL, and SQL
 view snapshots are drift-tested against their generators.
 

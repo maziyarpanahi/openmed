@@ -9,13 +9,16 @@ that implements the documented versioned protocol.
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from io import BufferedReader
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from openmed.clinical.journey_contracts import canonical_digest
 from openmed.structured.cohort.exchange import (
@@ -139,6 +142,7 @@ class CohortDefinitionServiceBridge:
             isinstance(self.timeout_seconds, bool)
             or not isinstance(self.timeout_seconds, (int, float))
             or self.timeout_seconds <= 0
+            or not math.isfinite(self.timeout_seconds)
         ):
             raise ValueError("timeout_seconds must be positive")
 
@@ -242,7 +246,10 @@ class CohortDefinitionServiceBridge:
 
     def _invoke(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         if self.runner is not None:
-            response = self.runner(dict(request))
+            try:
+                response = self.runner(dict(request))
+            except Exception:
+                raise CohortServiceBridgeError("cohort runner failed") from None
             if not isinstance(response, Mapping):
                 raise CohortServiceProtocolError("runner response must be an object")
             return response
@@ -255,23 +262,14 @@ class CohortDefinitionServiceBridge:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
-        completed = subprocess.run(
+        raw_output = _run_bounded_adapter(
             self.command,
-            input=encoded,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
+            encoded,
             timeout=float(self.timeout_seconds),
-            env=_safe_environment(),
+            environment=_safe_environment(),
         )
-        if completed.returncode != 0:
-            raise CohortServiceBridgeError(
-                f"cohort adapter exited unsuccessfully ({completed.returncode})"
-            )
-        if len(completed.stdout) > MAX_COHORT_SERVICE_RESPONSE_BYTES:
-            raise CohortServiceProtocolError("cohort adapter response is too large")
         try:
-            response = json.loads(completed.stdout.decode("utf-8"))
+            response = json.loads(raw_output.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise CohortServiceProtocolError(
                 "cohort adapter returned invalid JSON"
@@ -279,6 +277,78 @@ class CohortDefinitionServiceBridge:
         if not isinstance(response, Mapping):
             raise CohortServiceProtocolError("adapter response must be an object")
         return response
+
+
+def _run_bounded_adapter(
+    argv: tuple[str, ...],
+    payload: bytes,
+    *,
+    timeout: float,
+    environment: Mapping[str, str],
+) -> bytes:
+    """Bound captured output while feeding input and reap the owned process."""
+
+    process = subprocess.Popen(  # noqa: S603 - explicit caller-selected argv
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+    )
+    stdin = process.stdin
+    stdout = cast(BufferedReader, process.stdout)
+    assert stdin is not None and stdout is not None
+    timed_out = threading.Event()
+
+    def expire() -> None:
+        timed_out.set()
+        if process.poll() is None:
+            process.kill()
+
+    def feed() -> None:
+        try:
+            stdin.write(payload)
+            stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+        finally:
+            try:
+                stdin.close()
+            except OSError:
+                pass
+
+    writer = threading.Thread(target=feed, name="openmed-cohort-input")
+    watchdog = threading.Timer(timeout, expire)
+    output = bytearray()
+    try:
+        writer.start()
+        watchdog.start()
+        while chunk := stdout.read1(
+            min(65536, MAX_COHORT_SERVICE_RESPONSE_BYTES + 1 - len(output))
+        ):
+            output.extend(chunk)
+            if len(output) > MAX_COHORT_SERVICE_RESPONSE_BYTES:
+                raise CohortServiceProtocolError(
+                    "cohort adapter output size is invalid"
+                )
+        process.wait()
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired(argv, timeout)
+        if process.returncode != 0:
+            raise CohortServiceBridgeError("cohort adapter failed")
+        return bytes(output)
+    finally:
+        watchdog.cancel()
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        if writer.ident is not None:
+            writer.join()
+        else:
+            stdin.close()
+        if watchdog.ident is not None:
+            watchdog.join()
+        stdout.close()
 
 
 def _request(

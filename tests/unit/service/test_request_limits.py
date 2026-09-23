@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from starlette.types import Message, Scope
 
 from openmed.guard.operational_limits import OperationalLimits
 from openmed.service.request_limits import BoundedRequestBodyMiddleware
@@ -58,3 +61,29 @@ def test_invalid_content_length_is_content_free() -> None:
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "request_size_invalid"
     assert "synthetic-sensitive" not in response.text
+
+
+def test_fragmented_body_replays_in_original_order() -> None:
+    chunks: list[Message] = [
+        {"type": "http.request", "body": b"abc", "more_body": True},
+        {"type": "http.request", "body": b"def", "more_body": False},
+    ]
+    observed: list[Message] = []
+
+    async def app(scope, receive, send) -> None:
+        observed.append(await receive())
+        observed.append(await receive())
+
+    async def receive() -> Message:
+        return chunks.pop(0)
+
+    async def send(message: Message) -> None:
+        raise AssertionError(f"unexpected ASGI response: {message['type']}")
+
+    scope: Scope = {"type": "http", "method": "POST", "headers": []}
+    middleware = BoundedRequestBodyMiddleware(
+        app, limits=OperationalLimits(max_request_bytes=6)
+    )
+    asyncio.run(middleware(scope, receive, send))
+
+    assert [item["body"] for item in observed] == [b"abc", b"def"]
