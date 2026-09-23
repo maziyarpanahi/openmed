@@ -10,7 +10,7 @@ from openmed.core.labels import normalize_label, policy_label_for
 from openmed.core.pii import PIIEntity
 from openmed.core.pipeline import DEFAULT_HASH_SECRET
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash
-from openmed.core.schemas.span import ACTION_VALUES
+from openmed.core.schemas.span import ACTION_VALUES, _resolve_hmac_secret
 from openmed.core.surrogate_vault import SurrogateSource, SurrogateVault
 
 Merger = Callable[..., list[dict[str, Any]]]
@@ -32,7 +32,7 @@ def canonical_redaction(
     doc_id: str,
     lang: str = "en",
     method: str = "mask",
-    hash_secret: str | bytes = DEFAULT_HASH_SECRET,
+    hash_secret: str | bytes | None = DEFAULT_HASH_SECRET,
 ) -> CanonicalRedaction:
     """Project a de-identification result onto the canonical span contract.
 
@@ -42,6 +42,7 @@ def canonical_redaction(
     surfaces never enter the canonical records.
     """
 
+    hash_secret = _resolve_hmac_secret(hash_secret)
     redacted_text = value(result, "deidentified_text")
     if not isinstance(redacted_text, str):
         raise TypeError("deidentifier must return deidentified_text as a string")

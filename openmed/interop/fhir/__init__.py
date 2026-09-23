@@ -142,6 +142,35 @@ _BULK_EXPORTS = frozenset(
     }
 )
 
+_JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
+    {
+        "FHIR_JOURNEY_COMPATIBILITY_POLICY",
+        "FHIR_JOURNEY_RELEASE",
+        "FHIR_JOURNEY_SCHEMA_NAME",
+        "FHIR_JOURNEY_SCHEMA_VERSION",
+        "FHIREvidenceMapping",
+        "FHIRJourneyConflictError",
+        "FHIRJourneyExport",
+        "FHIRJourneyEventPayload",
+        "FHIRJourneyImport",
+        "FHIRJourneyLoss",
+        "FHIRJourneyRoundTripError",
+        "FHIRJourneyUnsupportedError",
+        "OPENMED_CANONICAL_HASH_SYSTEM",
+        "OPENMED_DERIVATION_HASH_SYSTEM",
+        "OPENMED_EVIDENCE_ID_SYSTEM",
+        "OPENMED_FACT_EXTENSION",
+        "OPENMED_FACT_ID_SYSTEM",
+        "OPENMED_JOURNEY_EVENT_EXTENSION",
+        "OPENMED_RESOLUTION_EXTENSION",
+        "OPENMED_SNAPSHOT_EXTENSION",
+        "OPENMED_SUBJECT_ID_SYSTEM",
+        "export_journey_to_fhir",
+        "import_journey_from_fhir",
+        "load_fhir_journey_schema",
+    }
+)
+
 __all__ = [
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
@@ -149,10 +178,22 @@ __all__ = [
     "CHECKPOINT_SCHEMA_VERSION",
     "DEFAULT_MAX_BUFFERED_RESOURCES",
     "FHIRConversionError",
+    "FHIR_JOURNEY_COMPATIBILITY_POLICY",
+    "FHIR_JOURNEY_RELEASE",
+    "FHIR_JOURNEY_SCHEMA_NAME",
+    "FHIR_JOURNEY_SCHEMA_VERSION",
     "FHIRBulkCheckpoint",
     "FHIRBulkCheckpointManifest",
     "FHIRReferenceIntegrityReport",
     "FHIRValidationResult",
+    "FHIREvidenceMapping",
+    "FHIRJourneyConflictError",
+    "FHIRJourneyExport",
+    "FHIRJourneyEventPayload",
+    "FHIRJourneyImport",
+    "FHIRJourneyLoss",
+    "FHIRJourneyRoundTripError",
+    "FHIRJourneyUnsupportedError",
     "FHIRVersion",
     "FHIR_R4",
     "FHIR_R5",
@@ -165,8 +206,17 @@ __all__ = [
     "SUPPORTED_R4_RESOURCE_TYPES",
     "SUPPORTED_RESOURCE_TYPES",
     "OPENMED_CONFIDENCE_EXTENSION",
+    "OPENMED_CANONICAL_HASH_SYSTEM",
+    "OPENMED_DERIVATION_HASH_SYSTEM",
+    "OPENMED_EVIDENCE_ID_SYSTEM",
+    "OPENMED_FACT_EXTENSION",
+    "OPENMED_FACT_ID_SYSTEM",
+    "OPENMED_JOURNEY_EVENT_EXTENSION",
     "OPENMED_PROVENANCE_EXTENSION",
+    "OPENMED_RESOLUTION_EXTENSION",
     "OPENMED_REVIEW_EXTENSION",
+    "OPENMED_SNAPSHOT_EXTENSION",
+    "OPENMED_SUBJECT_ID_SYSTEM",
     "SDC_QUESTIONNAIRE_PROFILE",
     "SDC_QUESTIONNAIRE_RESPONSE_PROFILE",
     "SDC_VERSION",
@@ -219,6 +269,7 @@ __all__ = [
     "deidentify_ndjson_async",
     "deidentify_ndjson_stream",
     "digest_page_token",
+    "export_journey_to_fhir",
     "fhir_reference_integrity_report",
     "fingerprint_endpoint_scope",
     "fingerprint_policy",
@@ -228,7 +279,9 @@ __all__ = [
     "form_to_questionnaire_response",
     "is_resume_compatible",
     "is_valid_sdc_response",
+    "import_journey_from_fhir",
     "load_checkpoint",
+    "load_fhir_journey_schema",
     "parse_fhir_version",
     "project_questionnaire_response",
     "project_questionnaire_response_result",
@@ -264,8 +317,10 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Resolve Bulk Data exports lazily to avoid exporter import cycles."""
+    """Resolve heavier interoperability exports without import cycles."""
 
     if name in _BULK_EXPORTS:
         return getattr(import_module(".bulk", __name__), name)
+    if name in _JOURNEY_ROUNDTRIP_EXPORTS:
+        return getattr(import_module(".journey_roundtrip", __name__), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

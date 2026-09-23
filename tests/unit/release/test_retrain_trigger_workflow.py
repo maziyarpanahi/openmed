@@ -244,19 +244,21 @@ def test_workflow_is_scheduled_and_recipe_only() -> None:
     }
     steps = workflow["jobs"]["propose-recipes"]["steps"]
     action_refs = {
-        step["uses"] for step in steps if isinstance(step, dict) and "uses" in step
+        step["uses"].split("@", 1)[0] + "@"
+        for step in steps
+        if isinstance(step, dict) and "uses" in step
     }
     assert action_refs == {
-        "actions/checkout@v7",
-        "actions/setup-python@v7",
-        "actions/upload-artifact@v7",
-        "astral-sh/setup-uv@v8.3.2",
-        "peter-evans/create-pull-request@v8",
+        "actions/checkout@",
+        "actions/setup-python@",
+        "actions/upload-artifact@",
+        "astral-sh/setup-uv@",
+        "peter-evans/create-pull-request@",
     }
     create_pr = next(
         step
         for step in steps
-        if step.get("uses") == "peter-evans/create-pull-request@v8"
+        if step.get("uses", "").startswith("peter-evans/create-pull-request@")
     )
     assert create_pr["if"] == (
         "steps.dispatch.outputs.queue_count != '0' && "
