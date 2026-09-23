@@ -232,6 +232,7 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/nli-temporal-pairs.md
+    - clinical/sdoh-temporal-qualifiers.md
     - clinical/medication-reconciliation.md
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
@@ -258,6 +259,12 @@ classification:
     - clinical/summary-safety.md
     - clinical/summary-citations.md
     - evaluation/summary-coverage.md
+    - clinical/sdoh-section-scope.md
+    - clinical/sdoh-evidence-deduplication.md
+    - clinical/sdoh-longitudinal-resolution.md
+    - clinical/sdoh-sensitive-use-labels.md
+    - clinical/sdoh-review-routing.md
+    - clinical/sdoh-category-completeness.md
     - clinical/review-override-reasons.md
     - clinical/review-packet-privacy.md
     - clinical/review-packet-migrations.md
@@ -359,6 +366,8 @@ classification:
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
+    - clinical/sdoh-experiencer-filtering.md
+    - clinical/sdoh-negated-needs.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
@@ -372,6 +381,7 @@ classification:
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
+    - clinical/sdoh-evidence.md
     - clinical/note-routing.md
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
