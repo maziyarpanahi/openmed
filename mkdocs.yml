@@ -156,8 +156,8 @@ nav:
       - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
-      - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
       - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
+      - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
@@ -174,12 +174,6 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
-      - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
-      - SDOH Longitudinal Status Resolution: clinical/sdoh-longitudinal-resolution.md
-      - SDOH Sensitive-Use Labels: clinical/sdoh-sensitive-use-labels.md
-      - SDOH Review Routing: clinical/sdoh-review-routing.md
-      - SDOH Category Completeness: clinical/sdoh-category-completeness.md
-      - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
       - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
@@ -190,6 +184,12 @@ nav:
       - Summary Safety Envelope: clinical/summary-safety.md
       - Summary Citation Consistency: clinical/summary-citations.md
       - Summary Fact Coverage: evaluation/summary-coverage.md
+      - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
+      - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
+      - SDOH Longitudinal Status Resolution: clinical/sdoh-longitudinal-resolution.md
+      - SDOH Sensitive-Use Labels: clinical/sdoh-sensitive-use-labels.md
+      - SDOH Review Routing: clinical/sdoh-review-routing.md
+      - SDOH Category Completeness: clinical/sdoh-category-completeness.md
       - Structured Review Override Reasons: clinical/review-override-reasons.md
       - Clinical Review Packet Privacy: clinical/review-packet-privacy.md
       - Clinical Review Packet Migrations: clinical/review-packet-migrations.md
@@ -291,8 +291,8 @@ nav:
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
-      - SDOH Negated-Need Resolution: clinical/sdoh-negated-needs.md
       - SDOH Experiencer Filtering: clinical/sdoh-experiencer-filtering.md
+      - SDOH Negated-Need Resolution: clinical/sdoh-negated-needs.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - TensorRT Runtime: runtimes/tensorrt.md
@@ -303,9 +303,9 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
-      - Social-determinant evidence contract: clinical/sdoh-evidence.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
+      - Social-determinant evidence contract: clinical/sdoh-evidence.md
       - Section-aware note routing: clinical/note-routing.md
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
