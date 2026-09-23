@@ -115,6 +115,7 @@ __all__ = [
     "ONNX_INT8_FORMAT",
     "OnnxEntity",
     "OnnxModel",
+    "OnnxPrediction",
     "OnnxConversionResult",
     "OpenVinoBenchmarkRecord",
     "OpenVinoDeviceSelection",
@@ -363,7 +364,7 @@ def __getattr__(name: str) -> Any:
         }:
             module = import_module("openmed.onnx.streaming_loader")
             return getattr(module, name)
-        if name in {"OnnxEntity", "OnnxModel", "load_onnx_model"}:
+        if name in {"OnnxEntity", "OnnxModel", "OnnxPrediction", "load_onnx_model"}:
             module = import_module("openmed.onnx.inference")
             return getattr(module, name)
         if name.startswith(("ANDROID_", "Android", "export_android")) or (

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Optional, cast
 
 import strawberry
 from graphql import GraphQLError
@@ -15,6 +16,15 @@ from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
 
+from .journey_resources import (
+    JourneyAccessPolicy,
+    JourneyResourceCatalog,
+    JourneyResourceKind,
+    JourneyResourcePage,
+    JourneyResourceQuery,
+    parse_access_attributes,
+    parse_resource_fields,
+)
 from .runtime import ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest
 
@@ -25,8 +35,141 @@ SAFE_RESOLVER_ERROR = "The OpenMed GraphQL operation could not be completed."
 class OpenMedGraphQLContext(BaseContext):
     """Request context carrying the service's shared runtime."""
 
-    def __init__(self, runtime: ServiceRuntime) -> None:
+    def __init__(
+        self,
+        runtime: ServiceRuntime,
+        journey_resources: JourneyResourceCatalog,
+        journey_access_policy: JourneyAccessPolicy,
+    ) -> None:
         self.runtime = runtime
+        self.journey_resources = journey_resources
+        self.journey_access_policy = journey_access_policy
+
+
+@strawberry.enum(name="JourneyResourceKind")
+class JourneyResourceKindType(Enum):
+    """Resource families available through the Journey read contract."""
+
+    ARTIFACT = "artifact"
+    JOB = "job"
+    FACT = "fact"
+    CONFLICT = "conflict"
+    JOURNEY = "journey"
+    COHORT = "cohort"
+    DATASET = "dataset"
+    REGISTRY = "registry"
+    MEASURE = "measure"
+    TRIAL_REVIEW = "trial_review"
+    EVIDENCE = "evidence"
+    CURRENT_FACT = "current_fact"
+    JOURNEY_EVENT = "journey_event"
+    MAPPING = "mapping"
+    COHORT_RUN = "cohort_run"
+    DATASET_MANIFEST = "dataset_manifest"
+
+
+@strawberry.type
+class JourneyResource:
+    """One versioned, field-filtered Journey resource."""
+
+    resource_type: str
+    resource_id: str
+    namespace: str
+    data: JSON
+    state: str
+    version: int
+    revision: int
+    schema_version: str
+    compatibility_policy: str
+    extensions: JSON
+
+
+@strawberry.type
+class JourneyPageInfo:
+    """Bounded cursor metadata for a Journey resource connection."""
+
+    has_next_page: bool
+    end_cursor: Optional[str]
+    page_size: int
+    snapshot_digest: str
+
+
+@strawberry.type
+class JourneyPolicyMetadata:
+    """Inspectible access context and minimum-necessary field policy."""
+
+    state: str
+    namespace: str
+    purpose: str
+    role: str
+    attributes: list[str]
+    consent_state: str
+    export_policy: str
+    decision_id: str
+    request_digest: str
+    allowed_fields: list[str]
+    code: Optional[str]
+    policy_version: str
+
+
+@strawberry.type
+class JourneyResourceConnection:
+    """Typed Journey list response that preserves non-success states."""
+
+    state: str
+    code: Optional[str]
+    resources: list[JourneyResource]
+    page_info: JourneyPageInfo
+    policy: JourneyPolicyMetadata
+    schema_version: str
+    compatibility_policy: str
+
+    @classmethod
+    def from_page(cls, page: JourneyResourcePage) -> "JourneyResourceConnection":
+        """Build a GraphQL connection from the shared Python page contract."""
+
+        resources = [
+            JourneyResource(
+                resource_type=str(item["resource_type"]),
+                resource_id=str(item["resource_id"]),
+                namespace=str(item["namespace"]),
+                data=cast(JSON, dict(item["data"])),
+                state=str(item["state"]),
+                version=int(item["version"]),
+                revision=int(item["revision"]),
+                schema_version=str(item["schema_version"]),
+                compatibility_policy=str(item["compatibility_policy"]),
+                extensions=cast(JSON, dict(item["extensions"])),
+            )
+            for item in page.resources
+        ]
+        return cls(
+            state=page.state.value,
+            code=page.code,
+            resources=resources,
+            page_info=JourneyPageInfo(
+                has_next_page=page.page_info.has_next_page,
+                end_cursor=page.page_info.end_cursor,
+                page_size=page.page_info.page_size,
+                snapshot_digest=page.page_info.snapshot_digest,
+            ),
+            policy=JourneyPolicyMetadata(
+                state=page.policy.state.value,
+                namespace=page.policy.namespace,
+                purpose=page.policy.purpose,
+                role=page.policy.role,
+                attributes=list(page.policy.attributes),
+                consent_state=page.policy.consent_state,
+                export_policy=page.policy.export_policy,
+                decision_id=page.policy.decision_id,
+                request_digest=page.policy.request_digest,
+                allowed_fields=list(page.policy.allowed_fields),
+                code=page.policy.code,
+                policy_version=page.policy.policy_version,
+            ),
+            schema_version=page.schema_version,
+            compatibility_policy=page.compatibility_policy,
+        )
 
 
 @strawberry.input
@@ -388,6 +531,47 @@ class Query:
             EntityType(label=label, policy_label=policy_label_for(label))
             for label in sorted(CANONICAL_LABELS)
         ]
+
+    @strawberry.field
+    async def journey_resources(
+        self,
+        info: Info[OpenMedGraphQLContext, None],
+        resource_type: JourneyResourceKindType,
+        namespace: str = "default",
+        purpose: str = "care_review",
+        role: str = "clinician",
+        attributes: Optional[list[str]] = None,
+        consent_state: str = "active",
+        export_policy: str = "metadata_only",
+        first: int = 20,
+        after: Optional[str] = None,
+        fields: Optional[list[str]] = None,
+    ) -> JourneyResourceConnection:
+        """List one bounded, policy-filtered Journey resource connection."""
+
+        try:
+            query = JourneyResourceQuery(
+                resource_type=JourneyResourceKind(resource_type.value),
+                namespace=namespace,
+                purpose=purpose,
+                role=role,
+                attributes=parse_access_attributes(attributes),
+                consent_state=consent_state,
+                export_policy=export_policy,
+                first=first,
+                after=after,
+                fields=parse_resource_fields(fields),
+            )
+            page = info.context.journey_resources.list_resources(
+                query,
+                policy=info.context.journey_access_policy,
+            )
+            return JourneyResourceConnection.from_page(page)
+        except Exception:
+            raise GraphQLError(
+                SAFE_RESOLVER_ERROR,
+                extensions={"code": "OPENMED_RESOLVER_ERROR"},
+            ) from None
 
 
 class PrivacySafeSchema(strawberry.Schema):

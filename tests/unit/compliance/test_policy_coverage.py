@@ -29,7 +29,8 @@ def test_required_rules_have_fixture_and_focused_test_coverage(monkeypatch) -> N
     assert matrix.verified is True
     assert matrix.required_rule_count == matrix.covered_required_rule_count
     assert matrix.uncovered_required_rules == ()
-    assert matrix.policy_count == 19
+    assert matrix.policy_count == 20
+    assert "clinical_preserve" in {row.policy_name for row in matrix.rows}
     assert matrix.fixture_ids == (
         "synthetic-policy-clinical-concepts",
         "synthetic-policy-direct-identifiers",
