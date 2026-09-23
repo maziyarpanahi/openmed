@@ -41,7 +41,7 @@ RUN python -m pip install --no-cache-dir --upgrade \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
-    && pip install --no-cache-dir ".[hf,service]"
+    && pip install --no-cache-dir ".[hf,journey,mcp,service]"
 
 EXPOSE 8080
 
