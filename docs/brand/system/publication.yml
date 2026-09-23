@@ -380,6 +380,7 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - clinical/output-use-policy.md
+    - clinical/evidence-coverage.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
