@@ -235,6 +235,11 @@ classification:
     - clinical/medication-reconciliation.md
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
+    - clinical/medication-change-relations.md
+    - clinical/laboratory-result-relations.md
+    - clinical/procedure-indication-relations.md
+    - clinical/diagnosis-treatment-relations.md
+    - clinical/relation-review-priority.md
     - clinical/event-timeline.md
     - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
@@ -253,6 +258,9 @@ classification:
     - clinical/summary-safety.md
     - clinical/summary-citations.md
     - evaluation/summary-coverage.md
+    - clinical/review-override-reasons.md
+    - clinical/review-packet-privacy.md
+    - clinical/review-packet-migrations.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
@@ -346,6 +354,7 @@ classification:
     - evaluation/overlap-forensics.md
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
+    - evaluation/reviewer-disagreement.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
