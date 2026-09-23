@@ -124,6 +124,7 @@ classification:
     - agent/event-sequences.md
     - agent/outcome-reasons.md
     - agent/reviewer-handoffs.md
+    - agent/escalation-circuit-breakers.md
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
