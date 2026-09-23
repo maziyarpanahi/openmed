@@ -45,9 +45,12 @@ using the same workflow with real data.
 | Compare clinical and biomedical NER families | [`examples/clinical_ner_families.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/clinical_ner_families.py) |
 | Redact, extract, and build a FHIR Bundle | [`examples/first_five_minutes_redact_extract_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/first_five_minutes_redact_extract_fhir.py) |
 | Export grounded spans for FHIR and OMOP workflows | [`examples/interop_fhir_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/interop_fhir_export.py) |
+| Run the v3 five-source synthetic Journey gate | [`examples/v3_golden_journey.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v3_golden_journey.py) |
+| De-identify, extract, ground, and export a FHIR Bundle | [`examples/ground_then_export_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/ground_then_export_fhir.py) |
 | Ground a synthetic mention offline | [`examples/offline_grounding.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/offline_grounding.py) |
 | Prepare a local OpenMRS de-identified handoff | [`examples/openmrs_deid_handoff.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/openmrs_deid_handoff.py) |
 | Build a de-identified DHIS2 district export | [`examples/dhis2_district_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/dhis2_district_export.py) |
+| Extend the SDOH status vocabulary with a local domain | [`examples/custom_status_vocabulary.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/custom_status_vocabulary.py) |
 
 ### Models, agents, and local pipelines
 
@@ -68,6 +71,7 @@ using the same workflow with real data.
 | Review a structured release | [`examples/structured_release_risk.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/structured_release_risk.py) |
 | Compare a release with a reference population | [`examples/structured_population_risk.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/structured_population_risk.py) |
 | Exercise policy, audit, and release gates | [`examples/v16_policy_audit_release_gates.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v16_policy_audit_release_gates.py) |
+| Produce the signed v3 Journey release packet | [`scripts/release/journey_release_gate.py`](https://github.com/maziyarpanahi/openmed/blob/master/scripts/release/journey_release_gate.py) |
 | Exercise multimodal, interop, and browser exports | [`examples/v17_multimodal_browser_interop.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v17_multimodal_browser_interop.py) |
 | Warm a mirror-backed cache, then work offline | [`examples/onboarding_china_mirrors.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/onboarding_china_mirrors.py) |
 | Review an India DPDP-aware workflow | [`examples/onboarding_india_dpdp.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/onboarding_india_dpdp.py) |

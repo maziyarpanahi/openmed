@@ -63,6 +63,7 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
+from .annotation_interchange import add_annotation_interchange_command
 from .benchmark import add_cost_command, add_generalization_command
 from .calibrate import add_calibrate_command
 from .contract import (
@@ -601,6 +602,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_init_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
+    add_annotation_interchange_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)

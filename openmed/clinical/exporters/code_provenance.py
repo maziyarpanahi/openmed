@@ -8,6 +8,7 @@ map, and matching codings receive that version plus an optional source marker.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
@@ -17,16 +18,24 @@ from .codeable_concept_simple import system_uri
 
 __all__ = [
     "CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL",
+    "GROUNDING_CODE_PROVENANCE_EXTENSION_URL",
+    "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL",
     "USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER",
     "UserSuppliedTerminologyProvenance",
     "stamp_coding_provenance",
+    "stamp_grounding_provenance",
     "stamp_user_supplied_terminology_provenance",
 ]
 
 CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL = (
     "https://openmed.ai/fhir/StructureDefinition/code-system-version-source"
 )
+GROUNDING_CODE_PROVENANCE_EXTENSION_URL = (
+    "https://openmed.ai/fhir/StructureDefinition/grounded-code-provenance"
+)
+# Keep the adjective used by the existing FHIR exporter as a public alias.
+GROUNDED_CODE_PROVENANCE_EXTENSION_URL = GROUNDING_CODE_PROVENANCE_EXTENSION_URL
 USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL = (
     "https://openmed.ai/fhir/StructureDefinition/user-supplied-terminology-provenance"
 )
@@ -103,6 +112,118 @@ def stamp_coding_provenance(
     return result
 
 
+def stamp_grounding_provenance(
+    coding: Mapping[str, Any],
+    provenance: Mapping[str, Any],
+    *,
+    evidence_start: int | None = None,
+    evidence_end: int | None = None,
+) -> dict[str, Any]:
+    """Return a Coding copy carrying PHI-safe grounding provenance.
+
+    The grounding adapter uses this helper to keep terminology provenance on
+    the Coding that it explains. Only vocabulary-derived selection metadata and
+    source offsets are emitted; arbitrary provenance keys (including raw text)
+    are deliberately ignored. Existing extensions are preserved and a previous
+    OpenMed grounding extension is replaced deterministically.
+
+    Args:
+        coding: FHIR R4 ``Coding``-shaped mapping to stamp.
+        provenance: Mapping containing ``linker``, ``score`` or ``confidence``,
+            optional ``matched_alias`` and ``vocab_version`` values. The
+            ``linker_name``, ``source``, and
+            ``vocabulary_snapshot_version`` aliases are accepted for results
+            produced by newer grounding facades.
+        evidence_start: Inclusive source offset. When omitted, ``start`` or
+            ``evidence_start`` is read from ``provenance``.
+        evidence_end: Exclusive source offset. When omitted, ``end`` or
+            ``evidence_end`` is read from ``provenance``.
+
+    Returns:
+        A deep copy of ``coding`` with a nested grounding provenance extension.
+
+    Raises:
+        TypeError: If ``provenance`` or ``coding.extension`` has the wrong
+            shape.
+        ValueError: If the evidence offsets are missing or invalid, or if the
+            score is not finite.
+    """
+
+    if not isinstance(provenance, Mapping):
+        raise TypeError("grounding provenance must be a mapping")
+
+    start = evidence_start
+    if start is None:
+        start = provenance.get("evidence_start", provenance.get("start"))
+    end = evidence_end
+    if end is None:
+        end = provenance.get("evidence_end", provenance.get("end"))
+    if type(start) is not int or start < 0:
+        raise ValueError("grounding evidence_start must be a non-negative integer")
+    if type(end) is not int or end <= start:
+        raise ValueError(
+            "grounding evidence_end must be an integer after evidence_start"
+        )
+
+    raw_score = provenance.get("score", provenance.get("confidence", 0.0))
+    score = float(raw_score)
+    if not math.isfinite(score):
+        raise ValueError("grounding provenance score must be finite")
+
+    linker = _provenance_value(
+        provenance,
+        "linker",
+        "linker_name",
+        "source",
+        default="unavailable",
+    )
+    matched_alias = _provenance_value(
+        provenance,
+        "matched_alias",
+        default="unavailable",
+    )
+    vocab_version = _provenance_value(
+        provenance,
+        "vocab_version",
+        "vocabulary_snapshot_version",
+        "snapshot_version",
+        default="unavailable",
+    )
+    nested: list[dict[str, Any]] = [
+        {"url": "linker", "valueString": linker},
+        {"url": "score", "valueDecimal": score},
+        {"url": "matched_alias", "valueString": matched_alias},
+        {"url": "vocab_version", "valueString": vocab_version},
+        {"url": "evidence_start", "valueUnsignedInt": start},
+        {"url": "evidence_end", "valueUnsignedInt": end},
+    ]
+    text_hash = provenance.get("text_hash")
+    if isinstance(text_hash, str) and text_hash:
+        nested.append({"url": "text_hash", "valueString": text_hash})
+
+    result: dict[str, Any] = deepcopy(dict(coding))
+    extension = {
+        "url": GROUNDING_CODE_PROVENANCE_EXTENSION_URL,
+        "extension": nested,
+    }
+    extensions = result.get("extension")
+    if extensions is None:
+        result["extension"] = [extension]
+        return result
+    if not isinstance(extensions, list):
+        raise TypeError("Coding.extension must be a list when present")
+    result["extension"] = [
+        item
+        for item in extensions
+        if not (
+            isinstance(item, Mapping)
+            and item.get("url") == GROUNDING_CODE_PROVENANCE_EXTENSION_URL
+        )
+    ]
+    result["extension"].append(extension)
+    return result
+
+
 def stamp_user_supplied_terminology_provenance(
     coding: Mapping[str, Any],
     provenance: UserSuppliedTerminologyProvenance,
@@ -143,6 +264,20 @@ def stamp_user_supplied_terminology_provenance(
     ]
     result["extension"].append(extension)
     return result
+
+
+def _provenance_value(
+    provenance: Mapping[str, Any],
+    *keys: str,
+    default: str,
+) -> str:
+    """Return the first non-empty string provenance value."""
+
+    for key in keys:
+        value = provenance.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return default
 
 
 def _canonical_version_pins(version_pins: Mapping[str, str]) -> dict[str, str]:

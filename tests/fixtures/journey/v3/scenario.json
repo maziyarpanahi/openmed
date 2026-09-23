@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.0.0",
+  "compatibility_policy": "same_major",
+  "scenario_id": "v3-five-source-golden-journey",
+  "synthetic": true,
+  "recorded_at": "2026-01-02T03:04:05Z",
+  "subject_id": "subject_synthetic0000001",
+  "encounter_id": "encounter_synthetic0000001",
+  "worker_id": "worker_synthetic0000001",
+  "versions": {
+    "models": {
+      "privacy_policy": "1.0.0",
+      "document_routing": "1.0.0",
+      "extraction": "1.0.0",
+      "assertion": "1.0.0",
+      "temporality": "1.0.0",
+      "relation_extraction": "1.0.0",
+      "grounding": "1.0.0"
+    },
+    "policies": {
+      "consent": "1.0.0",
+      "conflict_resolution": "1.0.0",
+      "dataset_export": "1.0.0",
+      "identity": "1.0.0"
+    },
+    "vocabularies": {
+      "synthetic": "2026.01"
+    }
+  },
+  "sources": [
+    {
+      "name": "note",
+      "format": "text",
+      "source_id": "source_textsynthetic001",
+      "payload": "Synthetic note: condition alpha active since 2026-01.",
+      "fact_profile": "condition",
+      "fact": {
+        "assertion": "affirmed",
+        "certainty": "certain",
+        "experiencer": "patient",
+        "status": "active",
+        "value": {
+          "code": "condition-alpha",
+          "system": "synthetic"
+        },
+        "effective_time": {
+          "precision": "month",
+          "start": "2026-01"
+        },
+        "confidence": 0.99
+      }
+    },
+    {
+      "name": "exchange",
+      "format": "fhir_r4",
+      "source_id": "source_fhirsynthetic001",
+      "payload": "{\"resourceType\":\"Condition\",\"id\":\"synthetic-condition\",\"clinicalStatus\":{\"text\":\"active\"},\"code\":{\"text\":\"condition alpha\"}}",
+      "fact_profile": "condition",
+      "fact": {
+        "assertion": "affirmed",
+        "certainty": "certain",
+        "experiencer": "patient",
+        "status": "active",
+        "value": {
+          "code": "condition-alpha",
+          "system": "synthetic"
+        },
+        "effective_time": {
+          "precision": "day",
+          "start": "2026-01-02"
+        },
+        "confidence": 0.98
+      }
+    },
+    {
+      "name": "message",
+      "format": "hl7v2",
+      "source_id": "source_hl7synthetic0001",
+      "payload": "MSH|^~\\&|SYNTH|LAB|OPENMED|LOCAL|20260102030405||ORU^R01|MSG00001|P|2.5.1\rPID|1||SYNTHETIC-001\rOBX|1|TX|SYNTH-COND||condition alpha absent",
+      "fact_profile": "condition",
+      "fact": {
+        "assertion": "negated",
+        "certainty": "certain",
+        "experiencer": "patient",
+        "status": "inactive",
+        "value": {
+          "code": "condition-alpha",
+          "system": "synthetic"
+        },
+        "effective_time": {
+          "precision": "day",
+          "start": "2026-01-02"
+        },
+        "confidence": 0.97
+      }
+    },
+    {
+      "name": "table",
+      "format": "csv",
+      "source_id": "source_tablesynthetic001",
+      "payload": "code,value,unit,status\nsynthetic-glucose,90,mg/dL,final\n",
+      "fact_profile": "laboratory",
+      "fact": {
+        "assertion": "affirmed",
+        "certainty": "certain",
+        "experiencer": "patient",
+        "status": "final",
+        "value": {
+          "code": "synthetic-glucose",
+          "numeric": 90,
+          "system": "synthetic"
+        },
+        "effective_time": {
+          "precision": "day",
+          "start": "2026-01-02"
+        },
+        "unit": "mg/dL",
+        "confidence": 0.96
+      }
+    },
+    {
+      "name": "image",
+      "format": "dicom_sr",
+      "source_id": "source_dicomsynthetic001",
+      "payload": "SYNTHETIC-DICOM-SR-BYTES-v1",
+      "document_text": "Synthetic imaging finding is uncertain.",
+      "node_path": "1.1",
+      "study_uid": "1.2.826.0.1.3680043.8.498.1",
+      "series_uid": "1.2.826.0.1.3680043.8.498.2",
+      "instance_uid": "1.2.826.0.1.3680043.8.498.3",
+      "fact_profile": "observation",
+      "fact": {
+        "assertion": "uncertain",
+        "certainty": "possible",
+        "experiencer": "patient",
+        "status": "final",
+        "value": {
+          "category": "imaging-finding",
+          "system": "synthetic"
+        },
+        "effective_time": {
+          "precision": "day",
+          "start": "2026-01-02"
+        },
+        "confidence": 0.71
+      }
+    }
+  ],
+  "cohort_definition": {
+    "schema_version": "openmed.cohort.phenotype.v1",
+    "id": "golden-condition-and-corrected-lab",
+    "name": "Synthetic condition and corrected laboratory fact",
+    "description": "Synthetic conformance-only cohort definition.",
+    "concept_sets": [
+      {
+        "id": "condition-alpha",
+        "vocabulary": "synthetic",
+        "concept_ids": [2101],
+        "include_descendants": false
+      },
+      {
+        "id": "corrected-lab",
+        "vocabulary": "synthetic",
+        "concept_ids": [2102],
+        "include_descendants": false
+      }
+    ],
+    "expression": {
+      "operator": "and",
+      "children": [
+        {
+          "operator": "criterion",
+          "criterion": {
+            "id": "condition-present",
+            "concept_set": "condition-alpha",
+            "occurrence": {
+              "minimum": 1
+            },
+            "assertion": {
+              "negation": [
+                "affirmed"
+              ]
+            }
+          }
+        },
+        {
+          "operator": "criterion",
+          "criterion": {
+            "id": "corrected-lab-present",
+            "concept_set": "corrected-lab",
+            "occurrence": {
+              "minimum": 1
+            },
+            "assertion": {
+              "negation": [
+                "affirmed"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
