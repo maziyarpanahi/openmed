@@ -132,6 +132,7 @@ classification:
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
     - agent/human-approval-receipts.md
+    - agent/workflow-recovery.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
