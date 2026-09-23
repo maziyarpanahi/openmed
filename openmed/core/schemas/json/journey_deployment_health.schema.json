@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/journey-deployment-health-v1.json",
+  "title": "Journey deployment health",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "compatibility_major",
+    "state",
+    "components"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "openmed.journey.deployment-health.v1"
+    },
+    "compatibility_major": {
+      "const": 1
+    },
+    "state": {
+      "enum": ["ready", "not_ready"]
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["migration", "store", "artifact", "worker", "model"],
+      "properties": {
+        "migration": {"$ref": "#/$defs/component"},
+        "store": {"$ref": "#/$defs/component"},
+        "artifact": {"$ref": "#/$defs/component"},
+        "worker": {"$ref": "#/$defs/component"},
+        "model": {"$ref": "#/$defs/component"}
+      }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "code"],
+      "properties": {
+        "state": {
+          "enum": [
+            "ready",
+            "pending",
+            "unavailable",
+            "incompatible",
+            "disabled"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "schema_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
