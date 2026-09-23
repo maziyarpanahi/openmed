@@ -113,6 +113,7 @@ classification:
     - agent/tool-argument-classification.md
     - agent/tool-inventory.md
     - agent/tool-inventory-schema.md
+    - agent/tool-catalog-diffs.md
     - agent/minimum-data-contracts.md
     - agent/minimum-data-projections.md
     - agent/governance-identifiers.md
