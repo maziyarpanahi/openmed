@@ -387,6 +387,7 @@ classification:
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
     - clinical/discharge-profile.md
+    - evaluation/relation-audit.md
     - clinical/summary-omission-budgets.md
     - clinical/summary-demographic-minimization.md
     - clinical/summary-retry-control.md

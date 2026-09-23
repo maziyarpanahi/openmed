@@ -312,6 +312,7 @@ nav:
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
       - Structured discharge-summary profile: clinical/discharge-profile.md
+      - Relation-candidate audit report: evaluation/relation-audit.md
       - Summary omission budgets: clinical/summary-omission-budgets.md
       - Summary demographic minimization: clinical/summary-demographic-minimization.md
       - Bounded local-summary retries: clinical/summary-retry-control.md
