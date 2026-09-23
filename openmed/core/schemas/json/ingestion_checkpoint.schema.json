@@ -1,0 +1,21 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingestion/checkpoint.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checkpoint_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "committed_revision": {"anyOf": [{"minimum": 1, "type": "integer"}, {"type": "null"}]},
+    "completed_at": {"format": "date-time", "type": "string"},
+    "input_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "job_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "manifest_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "output_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "sequence": {"minimum": 1, "type": "integer"},
+    "step": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"}
+  },
+  "required": ["checkpoint_id", "committed_revision", "completed_at", "input_digest", "job_id", "manifest_digest", "output_digest", "schema_version", "sequence", "step"],
+  "schema_version": 1,
+  "title": "OpenMedIngestionCheckpoint",
+  "type": "object"
+}

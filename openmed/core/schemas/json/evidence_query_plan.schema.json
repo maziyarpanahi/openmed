@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/agent/evidence-query-plan.schema.json",
+  "title": "OpenMed evidence query plan",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "advisory",
+    "compatibility_policy",
+    "namespace",
+    "plan_digest",
+    "plan_id",
+    "planner_version",
+    "purpose",
+    "query_digest",
+    "query_id",
+    "refusal_code",
+    "schema_version",
+    "scope",
+    "state",
+    "subject_id",
+    "tool_calls"
+  ],
+  "properties": {
+    "advisory": {
+      "const": "This read-only answer reports cited evidence returned by authorized tools. It is not clinical advice and cannot authorize diagnosis, treatment, prescribing, enrollment, outreach, or a state change."
+    },
+    "compatibility_policy": {"const": "same_major"},
+    "namespace": {"$ref": "#/$defs/controlled"},
+    "plan_digest": {"$ref": "#/$defs/digest"},
+    "plan_id": {"$ref": "#/$defs/opaque_id"},
+    "planner_version": {"const": "openmed.evidence-query-planner/1.0.0"},
+    "purpose": {"$ref": "#/$defs/controlled"},
+    "query_digest": {"$ref": "#/$defs/digest"},
+    "query_id": {"$ref": "#/$defs/opaque_id"},
+    "refusal_code": {
+      "oneOf": [{"$ref": "#/$defs/controlled"}, {"type": "null"}]
+    },
+    "schema_version": {"const": "1.0.0"},
+    "scope": {"enum": ["cohort", "patient"]},
+    "state": {"enum": ["ready", "refused"]},
+    "subject_id": {
+      "oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+    },
+    "tool_calls": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/tool_call"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "ready"}}},
+      "then": {
+        "properties": {
+          "refusal_code": {"type": "null"},
+          "tool_calls": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "refusal_code": {"$ref": "#/$defs/controlled"},
+          "tool_calls": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "resource_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "fields",
+        "limit",
+        "namespace",
+        "operation_id",
+        "purpose",
+        "read_only",
+        "resource_id",
+        "sql_digest",
+        "subject_id",
+        "tool"
+      ],
+      "properties": {
+        "call_id": {"$ref": "#/$defs/opaque_id"},
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+        "namespace": {"$ref": "#/$defs/controlled"},
+        "operation_id": {"$ref": "#/$defs/controlled"},
+        "purpose": {"$ref": "#/$defs/controlled"},
+        "read_only": {"const": true},
+        "resource_id": {"$ref": "#/$defs/resource_id"},
+        "sql_digest": {
+          "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "subject_id": {
+          "oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+        },
+        "tool": {
+          "enum": [
+            "cohort.read",
+            "journey.read",
+            "measure.read",
+            "registry.read",
+            "sql.read"
+          ]
+        }
+      }
+    }
+  }
+}
