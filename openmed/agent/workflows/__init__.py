@@ -1,6 +1,4 @@
-"""Safety contracts for reviewable agent workflows."""
-
-from __future__ import annotations
+"""Deterministic, safety-bounded clinical workflow helpers."""
 
 from .abstraction_evidence import (
     ABSTRACTION_EVIDENCE_SCHEMA,
@@ -15,12 +13,12 @@ from .abstraction_evidence import (
     SourceLocation,
     TransformationKind,
 )
-from .cohort_explanations import (
+from .cohort_criterion_evidence import (
     COHORT_EXPLANATION_SCHEMA,
     CohortCriterion,
     CohortDefinition,
     CohortExplanationError,
-    CohortMembershipExplanation,
+    CohortMembershipExplanation as CriterionMembershipExplanation,
     CohortRecordEvidence,
     CriterionEvaluation,
     CriterionEvidence,
@@ -29,7 +27,7 @@ from .cohort_explanations import (
     EvidenceAssertion,
     MembershipState,
     TimeWindowReference,
-    explain_cohort_membership,
+    explain_cohort_membership as explain_criterion_membership,
 )
 from .prior_auth_completeness import (
     PRIOR_AUTH_COMPLETENESS_SCHEMA,
@@ -46,7 +44,82 @@ from .prior_auth_completeness import (
     score_prior_authorization_packet,
 )
 
+from .cohort_explanations import (
+    COHORT_EXPLANATION_SCHEMA_VERSION,
+    CohortMembershipExplanation,
+    explain_cohort_membership,
+)
+from .evidence_query import (
+    EVIDENCE_QUERY_ADVISORY,
+    EVIDENCE_QUERY_ANSWER_SCHEMA_NAME,
+    EVIDENCE_QUERY_COMPATIBILITY_POLICY,
+    EVIDENCE_QUERY_PLAN_SCHEMA_NAME,
+    EVIDENCE_QUERY_PLANNER_VERSION,
+    EVIDENCE_QUERY_SCHEMA_VERSION,
+    AccessOutcome,
+    BoundedEvidenceQuery,
+    BoundedQueryOperation,
+    EvidenceAnswerState,
+    EvidenceCitation,
+    EvidenceFact,
+    EvidenceQueryAnswer,
+    EvidenceQueryConflictError,
+    EvidenceQueryError,
+    EvidenceQueryPlan,
+    EvidenceQueryUnsupportedError,
+    EvidenceTool,
+    EvidenceToolCall,
+    EvidenceToolResult,
+    EvidenceUncertainty,
+    GroundedStatement,
+    QueryAccessDecision,
+    QueryIntent,
+    QueryPlanState,
+    QueryScope,
+    ToolResultState,
+    compose_evidence_answer,
+    load_evidence_query_schema,
+    make_evidence_citation,
+    make_query_access_decision,
+    plan_evidence_query,
+)
+
 __all__ = [
+    "COHORT_EXPLANATION_SCHEMA_VERSION",
+    "CohortMembershipExplanation",
+    "explain_cohort_membership",
+    "EVIDENCE_QUERY_ADVISORY",
+    "EVIDENCE_QUERY_ANSWER_SCHEMA_NAME",
+    "EVIDENCE_QUERY_COMPATIBILITY_POLICY",
+    "EVIDENCE_QUERY_PLANNER_VERSION",
+    "EVIDENCE_QUERY_PLAN_SCHEMA_NAME",
+    "EVIDENCE_QUERY_SCHEMA_VERSION",
+    "AccessOutcome",
+    "BoundedEvidenceQuery",
+    "BoundedQueryOperation",
+    "EvidenceAnswerState",
+    "EvidenceCitation",
+    "EvidenceFact",
+    "EvidenceQueryAnswer",
+    "EvidenceQueryConflictError",
+    "EvidenceQueryError",
+    "EvidenceQueryPlan",
+    "EvidenceQueryUnsupportedError",
+    "EvidenceTool",
+    "EvidenceToolCall",
+    "EvidenceToolResult",
+    "EvidenceUncertainty",
+    "GroundedStatement",
+    "QueryAccessDecision",
+    "QueryIntent",
+    "QueryPlanState",
+    "QueryScope",
+    "ToolResultState",
+    "compose_evidence_answer",
+    "load_evidence_query_schema",
+    "make_evidence_citation",
+    "make_query_access_decision",
+    "plan_evidence_query",
     "ABSTRACTION_EVIDENCE_SCHEMA",
     "COHORT_EXPLANATION_SCHEMA",
     "PRIOR_AUTH_COMPLETENESS_SCHEMA",
@@ -58,8 +131,8 @@ __all__ = [
     "CohortCriterion",
     "CohortDefinition",
     "CohortExplanationError",
-    "CohortMembershipExplanation",
     "CohortRecordEvidence",
+    "CriterionMembershipExplanation",
     "CriterionEvaluation",
     "CriterionEvidence",
     "CriterionKind",
@@ -82,6 +155,6 @@ __all__ = [
     "SourceLocation",
     "TransformationKind",
     "TimeWindowReference",
-    "explain_cohort_membership",
+    "explain_criterion_membership",
     "score_prior_authorization_packet",
 ]
