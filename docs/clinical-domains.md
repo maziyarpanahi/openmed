@@ -491,6 +491,35 @@
 | GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 | DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 
+## Immunology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Allergen | ALLERGEN | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
+| AllergicReaction | FINDING | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Immunization | IMMUNIZATION | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Antibody | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Mental Health
+
+**Alignment:** Substance-use and SDOH (social-determinants-of-health) entities are out of scope for this domain and remain owned by OM-056. Mental-health spans are high-sensitivity content for redaction review; this catalog is extraction metadata only and does not make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| PsychiatricSymptom | PSYCH_SYMPTOM | CLINICAL_CONCEPT | high | SNOMED, HPO | Not shipped |
+| Diagnosis | PROBLEM | CLINICAL_CONCEPT | medium | ICD-10-CM, SNOMED, HPO | Not shipped |
+| Medication | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
+| Therapy | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Dentistry
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Tooth | TOOTH | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| DentalCondition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
+| DentalProcedure | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Restoration | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
 ## Offline Coverage Evaluation
 
 The fixture-backed clinical domains are checked by the aggregate-only `clinical_domain_coverage` suite. Run `openmed benchmark domain-coverage --json --output domain-coverage.json` from the repository root to verify that every shipped display label has a non-empty synthetic span and that fixture labels resolve to the canonical label catalog.
