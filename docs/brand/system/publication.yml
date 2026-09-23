@@ -120,6 +120,7 @@ classification:
     - agent/evidence-query-planner.md
     - agent/chart-abstraction-evidence.md
     - agent/prior-auth-completeness.md
+    - agent/cohort-explanations.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
