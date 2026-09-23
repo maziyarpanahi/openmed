@@ -5,6 +5,8 @@ surrogate vault, de-identification audit reports, and a tamper-evident audit
 chain, plus deterministic technical control crosswalks for auditor handoff.
 """
 
+from typing import TYPE_CHECKING
+
 from .access_review_expiry import (
     ACCESS_REVIEW_BLOCK,
     ACCESS_REVIEW_DECISIONS,
@@ -277,6 +279,81 @@ from .privacy_gate import (
     build_privacy_release_gate,
     render_privacy_release_gate,
 )
+
+if TYPE_CHECKING:
+    from .projections import (
+        PROJECTION_AUDIT_SCHEMA_VERSION,
+        PROJECTION_SCHEMA_NAMES,
+        PROJECTION_SCHEMA_PACKAGE,
+        PROJECTION_SCHEMA_VERSION,
+        PROJECTION_STORAGE_SCHEMA_VERSION,
+        DeidentifiedProjectionAPI,
+        IdentifiedProjectionAPI,
+        InMemoryTransformVault,
+        ProjectionAuditEvent,
+        ProjectionAuditLog,
+        ProjectionBoundary,
+        ProjectionCompatibilityError,
+        ProjectionContractError,
+        ProjectionNamespace,
+        ProjectionOperation,
+        ProjectionPayload,
+        ProjectionPolicy,
+        ProjectionPolicyDecision,
+        ProjectionPolicyOutcome,
+        ProjectionPolicyRequest,
+        ProjectionRecord,
+        ProjectionStorageError,
+        TransformRecord,
+        TransformVault,
+        load_all_projection_schemas,
+        load_projection_schema,
+    )
+
+_PROJECTION_EXPORTS = frozenset(
+    {
+        "PROJECTION_AUDIT_SCHEMA_VERSION",
+        "PROJECTION_SCHEMA_NAMES",
+        "PROJECTION_SCHEMA_PACKAGE",
+        "PROJECTION_SCHEMA_VERSION",
+        "PROJECTION_STORAGE_SCHEMA_VERSION",
+        "DeidentifiedProjectionAPI",
+        "IdentifiedProjectionAPI",
+        "InMemoryTransformVault",
+        "ProjectionAuditEvent",
+        "ProjectionAuditLog",
+        "ProjectionBoundary",
+        "ProjectionCompatibilityError",
+        "ProjectionContractError",
+        "ProjectionNamespace",
+        "ProjectionOperation",
+        "ProjectionPayload",
+        "ProjectionPolicy",
+        "ProjectionPolicyDecision",
+        "ProjectionPolicyOutcome",
+        "ProjectionPolicyRequest",
+        "ProjectionRecord",
+        "ProjectionStorageError",
+        "TransformRecord",
+        "TransformVault",
+        "load_all_projection_schemas",
+        "load_projection_schema",
+    }
+)
+
+
+def __getattr__(name: str):
+    """Load projection exports only when explicitly requested."""
+
+    if name in _PROJECTION_EXPORTS:
+        from . import projections
+
+        value = getattr(projections, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 from .release_evidence import build_release_expert_review_evidence
 from .report_cardinality import (
     DEFAULT_REPORT_CARDINALITY_BUDGET,
@@ -669,4 +746,30 @@ __all__ = [
     "WaiverTransitionError",
     "WAIVER_LEDGER_SCHEMA_VERSION",
     "render_active_state_counts",
+    "PROJECTION_AUDIT_SCHEMA_VERSION",
+    "PROJECTION_SCHEMA_VERSION",
+    "PROJECTION_SCHEMA_NAMES",
+    "PROJECTION_SCHEMA_PACKAGE",
+    "PROJECTION_STORAGE_SCHEMA_VERSION",
+    "DeidentifiedProjectionAPI",
+    "IdentifiedProjectionAPI",
+    "InMemoryTransformVault",
+    "ProjectionAuditEvent",
+    "ProjectionAuditLog",
+    "ProjectionBoundary",
+    "ProjectionCompatibilityError",
+    "ProjectionContractError",
+    "ProjectionNamespace",
+    "ProjectionOperation",
+    "ProjectionPayload",
+    "ProjectionPolicy",
+    "ProjectionPolicyDecision",
+    "ProjectionPolicyOutcome",
+    "ProjectionPolicyRequest",
+    "ProjectionRecord",
+    "ProjectionStorageError",
+    "TransformRecord",
+    "TransformVault",
+    "load_all_projection_schemas",
+    "load_projection_schema",
 ]
