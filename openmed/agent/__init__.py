@@ -97,11 +97,12 @@ from .outcomes import (
     WorkflowOutcome,
     allowed_reason_codes,
 )
-from .run_diff import (
-    RUN_DIFF_SCHEMA_VERSION,
-    RunDiffError,
-    RunSummaryDiff,
-    diff_run_summaries,
+from .policy_matrix import (
+    MAX_POLICY_MATRIX_ROWS,
+    POLICY_MATRIX_SCHEMA_VERSION,
+    PolicyDecisionMatrix,
+    PolicyDecisionRow,
+    PolicyMatrixError,
 )
 from .reviewer_handoff import (
     MAX_HANDOFF_EVIDENCE_REFERENCES,
@@ -110,6 +111,12 @@ from .reviewer_handoff import (
     ReviewerHandoffError,
     ReviewerHandoffPacket,
     allowed_handoff_reason_codes,
+)
+from .run_diff import (
+    RUN_DIFF_SCHEMA_VERSION,
+    RunDiffError,
+    RunSummaryDiff,
+    diff_run_summaries,
 )
 from .run_summary import (
     MAX_RUN_SUMMARY_JSON_BYTES,
@@ -120,6 +127,12 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .workflow_rollup import (
+    WORKFLOW_ROLLUP_SCHEMA_VERSION,
+    WorkflowRollup,
+    WorkflowRollupError,
+    WorkflowRollupRow,
+)
 from .workflows import (
     COHORT_EXPLANATION_SCHEMA_VERSION,
     EVIDENCE_QUERY_ADVISORY,
@@ -156,12 +169,6 @@ from .workflows import (
     make_evidence_citation,
     make_query_access_decision,
     plan_evidence_query,
-)
-from .workflow_rollup import (
-    WORKFLOW_ROLLUP_SCHEMA_VERSION,
-    WorkflowRollup,
-    WorkflowRollupError,
-    WorkflowRollupRow,
 )
 
 __all__ = [
@@ -249,6 +256,7 @@ __all__ = [
     "MAX_DURATION_MS",
     "MAX_EVENT_SEQUENCE_LENGTH",
     "MAX_HANDOFF_EVIDENCE_REFERENCES",
+    "MAX_POLICY_MATRIX_ROWS",
     "MAX_RUN_SUMMARY_JSON_BYTES",
     "RUN_DIFF_SCHEMA_VERSION",
     "RunDiffError",
@@ -267,6 +275,10 @@ __all__ = [
     "RUN_ID_PREFIX",
     "RunId",
     "PolicyId",
+    "POLICY_MATRIX_SCHEMA_VERSION",
+    "PolicyDecisionMatrix",
+    "PolicyDecisionRow",
+    "PolicyMatrixError",
     "PurposeId",
     "QueryAccessDecision",
     "QueryIntent",
