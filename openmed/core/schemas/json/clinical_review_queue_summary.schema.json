@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_review_queue_summary.schema.json",
+  "title": "OpenMed clinical review queue summary",
+  "schema_version": "1.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["age_bucket_counts", "compatibility_policy", "expired_count", "generated_at", "overdue_count", "priority_counts", "schema_version", "state_counts", "total"],
+  "properties": {
+    "age_bucket_counts": {"$ref": "#/$defs/counts"},
+    "compatibility_policy": {"const": "same_major"},
+    "expired_count": {"type": "integer", "minimum": 0},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "overdue_count": {"type": "integer", "minimum": 0},
+    "priority_counts": {"$ref": "#/$defs/counts"},
+    "schema_version": {"const": "1.1.0"},
+    "state_counts": {"$ref": "#/$defs/counts"},
+    "total": {"type": "integer", "minimum": 0}
+  },
+  "$defs": {
+    "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
+  }
+}
