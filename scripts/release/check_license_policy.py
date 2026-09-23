@@ -135,6 +135,7 @@ REVIEWED_LICENSES = {
     "paddleocr": "Apache-2.0",
     "pandas": "BSD-3-Clause",
     "pdfplumber": "MIT",
+    "pg8000": "BSD-3-Clause",
     "philter-ucsf": "BSD-3-Clause",
     "piexif": "MIT",
     "pillow": "HPND",
