@@ -103,6 +103,57 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "access. OpenMed reads only a user-supplied local BRAT copy."
         ),
     ),
+    "cegs-ngrid": DatasetLicense(
+        dataset="cegs-ngrid",
+        license_id="CEGS-N-GRID-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "CEGS N-GRID psychiatric intake de-identification data requires "
+            "approved DBMI access. OpenMed reads only a user-supplied local "
+            "annotation export."
+        ),
+    ),
+    "shac": DatasetLicense(
+        dataset="shac",
+        license_id="n2c2-DBMI-SHAC-DUA",
+        source_url="https://n2c2.dbmi.hms.harvard.edu/2022-track-2",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "SHAC social-determinants annotations require approved DBMI/n2c2 "
+            "access. OpenMed reads only a user-supplied local BRAT export."
+        ),
+    ),
+    "thyme": DatasetLicense(
+        dataset="thyme",
+        license_id="Mayo-THYME-data-use-terms",
+        source_url="https://clear.colorado.edu/compbio/thyme/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "THYME temporal annotations require Mayo-THYME access. OpenMed "
+            "reads only a user-supplied local annotation export."
+        ),
+    ),
+    "mednli": DatasetLicense(
+        dataset="mednli",
+        license_id="PhysioNet-Credentialed-Health-Data-License",
+        source_url="https://physionet.org/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "MedNLI is derived from credentialed clinical notes. OpenMed never "
+            "downloads, caches, commits, or redistributes its sentence pairs."
+        ),
+    ),
+    "mimic-iv-bhc": DatasetLicense(
+        dataset="mimic-iv-bhc",
+        license_id="UW-PhysioNet-DUA",
+        source_url="https://physionet.org/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "MIMIC-IV-Ext-BHC discharge-summary data requires approved UW and "
+            "PhysioNet access. OpenMed reads only a user-supplied local export."
+        ),
+    ),
     "naamapadam": DatasetLicense(
         dataset="naamapadam",
         license_id="CC0-1.0",
@@ -275,10 +326,15 @@ PERMISSIVE_ENCODER_LICENSES: Mapping[str, EncoderLicense] = MappingProxyType(
 
 
 def license_for(dataset: str) -> DatasetLicense:
+    requested = str(dataset).strip()
     try:
-        return PUBLIC_DATASET_LICENSES[dataset]
-    except KeyError as exc:
-        raise ValueError(f"unknown dataset license: {dataset}") from exc
+        return PUBLIC_DATASET_LICENSES[requested]
+    except KeyError:
+        normalized = requested.casefold().replace("_", "-")
+        for name, metadata in PUBLIC_DATASET_LICENSES.items():
+            if name.casefold().replace("_", "-") == normalized:
+                return metadata
+        raise ValueError(f"unknown dataset license: {dataset}") from None
 
 
 def encoder_license_for(family: str) -> EncoderLicense:
