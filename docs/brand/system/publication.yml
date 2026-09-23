@@ -366,6 +366,7 @@ classification:
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
+    - clinical/nli-batch-planning.md
     - clinical/sdoh-experiencer-filtering.md
     - clinical/sdoh-negated-needs.md
     - runtimes/cpu-fastpath.md
