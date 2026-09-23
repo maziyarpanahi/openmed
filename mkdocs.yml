@@ -229,6 +229,7 @@ nav:
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
+      - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md

@@ -304,6 +304,7 @@ classification:
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
     - evaluation/privacy-corpus.md
+    - evaluation/mixed-script-integrity.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
