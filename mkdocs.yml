@@ -145,6 +145,7 @@ nav:
       - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
       - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+      - Clinical Data-quality Profiler: clinical/data-quality-profiler.md
       - Offline Terminology Grounding: grounding.md
       - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
       - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md

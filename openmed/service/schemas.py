@@ -591,6 +591,8 @@ if PYDANTIC_V2:
         records_jsonl: str
         vocabulary_version: Optional[str] = None
         validate_constraints: bool = False
+        completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
 
         @field_validator("records_jsonl", mode="before")
         @classmethod
@@ -601,6 +603,19 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class ProfileRequest(_StrictModel):
+        """Request schema for the PHI-free quality profile route."""
+
+        records_jsonl: str
+        completeness_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
+        athena_index: Optional[dict[str, Any]] = None
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
 
     class GroundRequest(_StrictModel):
         """Request schema for the offline terminology grounding route."""
@@ -907,6 +922,8 @@ else:
         records_jsonl: str
         vocabulary_version: Optional[str] = None
         validate_constraints: bool = False
+        completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
 
         @validator("records_jsonl", pre=True)
         def _validate_records_jsonl(cls, value: Any) -> str:
@@ -915,6 +932,18 @@ else:
         @validator("vocabulary_version", pre=True)
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class ProfileRequest(_StrictModel):
+        """Request schema for the PHI-free quality profile route."""
+
+        records_jsonl: str
+        completeness_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
+        athena_index: Optional[dict[str, Any]] = None
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
 
     class GroundRequest(_StrictModel):
         """Request schema for the offline terminology grounding route."""
@@ -1115,6 +1144,8 @@ class CohortResolveRequest(_StrictModel):
     phenotype: dict[str, Any]
     records_jsonl: str
     concept_ancestors: list[ConceptAncestorRequest] = Field(default_factory=list)
+    completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+    required_fields: list[str] = Field(default_factory=list)
 
     if PYDANTIC_V2:
 

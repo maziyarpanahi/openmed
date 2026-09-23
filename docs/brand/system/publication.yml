@@ -220,6 +220,7 @@ classification:
     - clinical/nli-assertion-pairs.md
     - clinical/nli-experiencer-pairs.md
     - clinical/concept-grounding.md
+    - clinical/data-quality-profiler.md
     - grounding.md
     - clinical/valueset-ecl-expansion.md
     - interop/snomed-terminology-bridge.md

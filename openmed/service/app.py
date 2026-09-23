@@ -118,6 +118,7 @@ from .schemas import (
     PIIExtractRequest,
     PIIExtractStreamRequest,
     PrivacyGatewayRequest,
+    ProfileRequest,
     SMARTBackendIngestionRequest,
 )
 from .security_headers import (
@@ -338,6 +339,8 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
     tables = load_grounded_notes(
         records,
         vocabulary_version=payload.vocabulary_version,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
     )
     summary = tables.summary
     response: Dict[str, Any] = {
@@ -356,6 +359,20 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
             "by_reason": by_reason,
         }
     return response
+
+
+def _profile_summary(payload: ProfileRequest) -> Dict[str, Any]:
+    """Build the deterministic PHI-free quality profile for inline JSONL."""
+
+    from ..structured.quality import profile_results
+
+    records = _parse_grounded_jsonl_text(payload.records_jsonl)
+    return profile_results(
+        records,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
+        athena_index=payload.athena_index,
+    ).to_dict()
 
 
 def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
@@ -394,7 +411,11 @@ def _cohort_resolve_summary(payload: CohortResolveRequest) -> Dict[str, Any]:
 
     definition = PhenotypeDefinition.from_dict(payload.phenotype)
     records = _parse_grounded_jsonl_text(payload.records_jsonl)
-    tables = load_grounded_notes(records)
+    tables = load_grounded_notes(
+        records,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
+    )
     hierarchy_rows = [
         {
             "ancestor_concept_id": edge.ancestor_concept_id,
@@ -1430,6 +1451,8 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.post("/omop/load")
     async def omop_load(payload: OmopLoadRequest, request: Request) -> Dict[str, Any]:
+        from ..structured.quality import QualityGateError
+
         with trace_service_stage(
             "omop_load",
             {
@@ -1437,7 +1460,32 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
                 "openmed.input.length": len(payload.records_jsonl),
             },
         ):
-            return await run_in_threadpool(_omop_load_summary, payload)
+            try:
+                return await run_in_threadpool(_omop_load_summary, payload)
+            except QualityGateError as exc:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "rejected",
+                        "quality_gate": exc.report.to_dict(),
+                    },
+                )
+
+    @app.post("/profile")
+    async def profile_route(
+        payload: ProfileRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """Profile extracted output without returning note text or values."""
+
+        with trace_service_stage(
+            "profile",
+            {
+                "openmed.endpoint": "/profile",
+                "openmed.input.length": len(payload.records_jsonl),
+            },
+        ):
+            return await run_in_threadpool(_profile_summary, payload)
 
     @app.post("/ground", response_model=GroundResponse)
     async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
@@ -1606,6 +1654,8 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         payload: CohortResolveRequest,
         request: Request,
     ) -> Dict[str, Any]:
+        from ..structured.quality import QualityGateError
+
         with trace_service_stage(
             "cohort_resolve",
             {
@@ -1613,7 +1663,16 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
                 "openmed.input.length": len(payload.records_jsonl),
             },
         ):
-            return await run_in_threadpool(_cohort_resolve_summary, payload)
+            try:
+                return await run_in_threadpool(_cohort_resolve_summary, payload)
+            except QualityGateError as exc:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "rejected",
+                        "quality_gate": exc.report.to_dict(),
+                    },
+                )
 
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(

@@ -280,6 +280,8 @@ export interface OMOPLoadRequest {
   records_jsonl: string;
   vocabulary_version?: string | null;
   validate_constraints?: boolean;
+  completeness_floor?: number | null;
+  required_fields?: string[];
 }
 
 export interface OMOPRejectedSpan {
@@ -312,7 +314,18 @@ export interface CohortResolveRequest {
   phenotype: JsonObject;
   records_jsonl: string;
   concept_ancestors?: ConceptAncestorRequest[];
+  completeness_floor?: number | null;
+  required_fields?: string[];
 }
+
+export interface ProfileRequest {
+  records_jsonl: string;
+  completeness_floor?: number;
+  required_fields?: string[];
+  athena_index?: JsonObject | null;
+}
+
+export type ProfileResponse = JsonObject;
 
 export interface CohortEvidencePointer {
   criterion_id: string;
@@ -720,6 +733,10 @@ export class OpenMedClient {
 
   async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
     return this.post("/omop/load", request);
+  }
+
+  async profile(request: ProfileRequest): Promise<ProfileResponse> {
+    return this.post("/profile", request);
   }
 
   async resolveCohort(
