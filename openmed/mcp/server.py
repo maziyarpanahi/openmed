@@ -77,6 +77,17 @@ from openmed.mcp.workflow import (
 )
 from openmed.risk import safe_risk_summary
 from openmed.risk.reid import risk_report
+from openmed.service.journey_resources import (
+    JourneyAccessPolicy,
+    JourneyResourceCatalog,
+)
+from openmed.service.journey_workflows import (
+    JOURNEY_WORKFLOW_BY_TOOL,
+    JOURNEY_WORKFLOW_DEFINITIONS,
+    assert_no_raw_source_fields,
+    execute_journey_workflow,
+    journey_workflow_client_contract,
+)
 from openmed.service.runtime import ServiceRuntime
 from openmed.service.security import (
     MCPAuthorizationConfig,
@@ -101,6 +112,7 @@ REGISTERED_PII_LANGUAGES = (
 
 RuntimeProvider = Callable[[], ServiceRuntime]
 PrivacyGatewayProvider = Callable[[], Any]
+JourneyCatalogProvider = Callable[[], JourneyResourceCatalog]
 
 
 def _safe_int_env(name: str, default: int) -> int:
@@ -123,6 +135,7 @@ MCP_INSTRUCTIONS = (
 )
 
 _DEFAULT_RUNTIME: Optional[ServiceRuntime] = None
+_DEFAULT_JOURNEY_CATALOG = JourneyResourceCatalog()
 
 
 def _load_fastmcp() -> Any:
@@ -150,6 +163,22 @@ def _runtime(runtime_provider: Optional[RuntimeProvider] = None) -> ServiceRunti
     if runtime_provider is not None:
         return runtime_provider()
     return _get_default_runtime()
+
+
+def _journey_catalog(
+    catalog_provider: Optional[JourneyCatalogProvider] = None,
+) -> JourneyResourceCatalog:
+    """Return the configured immutable Journey resource catalog."""
+
+    catalog = catalog_provider() if catalog_provider is not None else None
+    if catalog is None:
+        return _DEFAULT_JOURNEY_CATALOG
+    if not isinstance(catalog, JourneyResourceCatalog):
+        raise ConfigurationError(
+            "The Journey catalog provider returned an invalid value.",
+            details={"provider": "journey_catalog_provider"},
+        )
+    return catalog
 
 
 def _result_to_dict(result: Any) -> Dict[str, Any]:
@@ -1684,6 +1713,9 @@ def _workflow_egress_deidentifier(
 
 def build_mcp_tool_handlers(
     runtime_provider: Optional[RuntimeProvider],
+    *,
+    journey_catalog_provider: Optional[JourneyCatalogProvider] = None,
+    journey_access_policy: Optional[JourneyAccessPolicy] = None,
 ) -> dict[str, Callable[..., Dict[str, Any]]]:
     """Return the MCP tool-name -> handler mapping bound to a runtime provider.
 
@@ -1739,8 +1771,41 @@ def build_mcp_tool_handlers(
         ),
         "openmed_search_models": lambda **kwargs: openmed_search_models(**kwargs),
     }
+    handlers.update(
+        {
+            definition.tool_name: (
+                lambda _definition=definition, **kwargs: _run_journey_workflow(
+                    _definition.tool_name,
+                    catalog_provider=journey_catalog_provider,
+                    access_policy=journey_access_policy,
+                    **kwargs,
+                )
+            )
+            for definition in JOURNEY_WORKFLOW_DEFINITIONS
+        }
+    )
     handlers.update(TOOL_REGISTRY.registered_handlers())
     return handlers
+
+
+def _run_journey_workflow(
+    tool_name: str,
+    *,
+    catalog_provider: Optional[JourneyCatalogProvider] = None,
+    access_policy: Optional[JourneyAccessPolicy] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Execute one registry-defined Journey workflow without raw source text."""
+
+    definition = JOURNEY_WORKFLOW_BY_TOOL[tool_name]
+    payload = execute_journey_workflow(
+        definition,
+        catalog=_journey_catalog(catalog_provider),
+        policy=access_policy,
+        **kwargs,
+    )
+    assert_no_raw_source_fields(payload)
+    return payload
 
 
 # Canonical set of MCP-exposed tool names, kept in sync with TOOL_REGISTRY by
@@ -1754,8 +1819,14 @@ def _register_tools(
     consent_policy: Optional[ConsentReceiptPolicy] = None,
     *,
     injection_guard: Optional[InjectionGuard] = None,
+    journey_catalog_provider: Optional[JourneyCatalogProvider] = None,
+    journey_access_policy: Optional[JourneyAccessPolicy] = None,
 ) -> None:
-    handlers = build_mcp_tool_handlers(runtime_provider)
+    handlers = build_mcp_tool_handlers(
+        runtime_provider,
+        journey_catalog_provider=journey_catalog_provider,
+        journey_access_policy=journey_access_policy,
+    )
     for spec in TOOL_REGISTRY.latest_specs():
         registered_spec = (
             _consented_tool_spec(spec)
@@ -1823,6 +1894,14 @@ def _register_resources(
     )
     def _tool_registry_resource() -> str:
         return _json_resource(render_tool_registry_document())
+
+    @server.resource(
+        "openmed://journey-workflows",
+        name="OpenMed Journey workflow client contract",
+        mime_type="application/json",
+    )
+    def _journey_workflow_resource() -> str:
+        return _json_resource(journey_workflow_client_contract())
 
     @server.resource(
         CLINICAL_WORKFLOW_SPEC.resource_uri,
@@ -1906,6 +1985,8 @@ def create_mcp_server(
     consent_scope: str | Mapping[str, str] | Callable[..., str] = DEFAULT_CONSENT_SCOPE,
     consent_policy_version: str = DEFAULT_CONSENT_POLICY_VERSION,
     consent_require_receipt: bool = True,
+    journey_catalog_provider: Optional[JourneyCatalogProvider] = None,
+    journey_access_policy: Optional[JourneyAccessPolicy] = None,
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
     if consent_policy is not None and consent_verifier is not None:
@@ -2008,6 +2089,8 @@ def create_mcp_server(
         runtime_provider,
         consent_policy,
         injection_guard=injection_guard,
+        journey_catalog_provider=journey_catalog_provider,
+        journey_access_policy=journey_access_policy,
     )
     _register_resources(server, runtime_provider)
     _register_prompts(server)

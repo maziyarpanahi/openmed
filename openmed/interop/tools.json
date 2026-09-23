@@ -1,7 +1,18 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "tools": [
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Analyze Clinical Text"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Run OpenMed named-entity recognition on clinical text.",
       "input_schema": {
         "additionalProperties": false,
@@ -157,6 +168,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true,
+        "title": "Plan Clinical Pipeline"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Plan and validate declarative clinical stages without silently reordering them.",
       "input_schema": {
         "additionalProperties": false,
@@ -645,6 +667,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "De-identify Clinical Text"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "De-identify text by masking, removing, replacing, hashing, or shifting.",
       "input_schema": {
         "additionalProperties": false,
@@ -929,6 +962,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Export Clinical Spans to FHIR"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Export canonical OpenMedSpan artifacts to a FHIR Bundle.",
       "input_schema": {
         "additionalProperties": false,
@@ -1621,6 +1665,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Extract PII and PHI"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Extract PII/PHI entities from clinical text.",
       "input_schema": {
         "additionalProperties": false,
@@ -1800,6 +1855,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Assemble FHIR Bundle"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Assemble FHIR resources into a R4 bundle. ",
       "input_schema": {
         "additionalProperties": false,
@@ -1891,6 +1957,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true,
+        "title": "Ground Clinical Spans"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Ground canonical OpenMedSpan artifacts to clinical coding systems.",
       "input_schema": {
         "additionalProperties": false,
@@ -2576,6 +2653,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List Available Models"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "List OpenMed model registry entries.",
       "input_schema": {
         "additionalProperties": false,
@@ -2678,6 +2766,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List PII Languages"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "List supported PII languages and default models.",
       "input_schema": {
         "additionalProperties": false,
@@ -2730,6 +2829,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List Loaded Models"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Return currently loaded model resources.",
       "input_schema": {
         "additionalProperties": false,
@@ -2748,6 +2858,2562 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read Cohort"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Read bounded cohort definitions and membership summaries under minimum-necessary field policy.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Opaque cursor bound to the query and immutable snapshot.",
+            "maxLength": 2048,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "default": null,
+            "description": "Optional minimum-necessary field projection.",
+            "items": {
+              "enum": [
+                "cohort_id",
+                "member_count",
+                "status"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "first": {
+            "default": 20,
+            "description": "Maximum resources to return in this bounded page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "namespace": {
+            "default": "default",
+            "description": "Controlled namespace to read.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "care_review",
+            "description": "Controlled purpose used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_read_cohort",
+      "output_schema": {
+        "$id": "https://openmed.dev/schemas/journey-workflow-result/1.0.0/cohort",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "resource_count": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_ids": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_ids",
+              "resource_count",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "additionalProperties": false,
+            "properties": {
+              "end_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "has_next_page": {
+                "type": "boolean"
+              },
+              "page_size": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "has_next_page",
+              "end_cursor",
+              "page_size",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "resource_type": {
+            "const": "cohort"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "compatibility_policy": {
+                  "const": "same_major"
+                },
+                "data": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "namespace": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "resource_id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "enum": [
+                    "artifact",
+                    "job",
+                    "fact",
+                    "conflict",
+                    "journey",
+                    "cohort",
+                    "dataset",
+                    "registry",
+                    "measure",
+                    "trial_review",
+                    "evidence",
+                    "current_fact",
+                    "journey_event",
+                    "mapping",
+                    "cohort_run",
+                    "dataset_manifest"
+                  ]
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schema_version": {
+                  "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "empty",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ]
+                },
+                "version": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "resource_type",
+                "resource_id",
+                "namespace",
+                "data",
+                "state",
+                "version",
+                "revision",
+                "schema_version",
+                "compatibility_policy",
+                "extensions"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable": {
+                "const": true,
+                "type": "boolean"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "immutable",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "severity": {
+                  "const": "warning"
+                }
+              },
+              "required": [
+                "code",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "workflow": {
+            "const": "cohort"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy",
+          "workflow",
+          "resource_type",
+          "evidence",
+          "snapshot",
+          "access",
+          "warnings",
+          "review"
+        ],
+        "title": "OpenMed Read Cohort Result",
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read Dataset Snapshot"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Read bounded governed-dataset snapshot metadata without exporting underlying clinical source text.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Opaque cursor bound to the query and immutable snapshot.",
+            "maxLength": 2048,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "default": null,
+            "description": "Optional minimum-necessary field projection.",
+            "items": {
+              "enum": [
+                "dataset_id",
+                "row_count",
+                "snapshot_hash"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "first": {
+            "default": 20,
+            "description": "Maximum resources to return in this bounded page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "namespace": {
+            "default": "default",
+            "description": "Controlled namespace to read.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "care_review",
+            "description": "Controlled purpose used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_read_dataset",
+      "output_schema": {
+        "$id": "https://openmed.dev/schemas/journey-workflow-result/1.0.0/dataset",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "resource_count": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_ids": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_ids",
+              "resource_count",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "additionalProperties": false,
+            "properties": {
+              "end_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "has_next_page": {
+                "type": "boolean"
+              },
+              "page_size": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "has_next_page",
+              "end_cursor",
+              "page_size",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "resource_type": {
+            "const": "dataset"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "compatibility_policy": {
+                  "const": "same_major"
+                },
+                "data": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "namespace": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "resource_id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "enum": [
+                    "artifact",
+                    "job",
+                    "fact",
+                    "conflict",
+                    "journey",
+                    "cohort",
+                    "dataset",
+                    "registry",
+                    "measure",
+                    "trial_review",
+                    "evidence",
+                    "current_fact",
+                    "journey_event",
+                    "mapping",
+                    "cohort_run",
+                    "dataset_manifest"
+                  ]
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schema_version": {
+                  "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "empty",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ]
+                },
+                "version": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "resource_type",
+                "resource_id",
+                "namespace",
+                "data",
+                "state",
+                "version",
+                "revision",
+                "schema_version",
+                "compatibility_policy",
+                "extensions"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable": {
+                "const": true,
+                "type": "boolean"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "immutable",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "severity": {
+                  "const": "warning"
+                }
+              },
+              "required": [
+                "code",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "workflow": {
+            "const": "dataset"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy",
+          "workflow",
+          "resource_type",
+          "evidence",
+          "snapshot",
+          "access",
+          "warnings",
+          "review"
+        ],
+        "title": "OpenMed Read Dataset Snapshot Result",
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read Patient Journey"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Read a bounded, evidence-linked patient journey projection without returning raw source text.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Opaque cursor bound to the query and immutable snapshot.",
+            "maxLength": 2048,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "default": null,
+            "description": "Optional minimum-necessary field projection.",
+            "items": {
+              "enum": [
+                "event_count",
+                "snapshot_id",
+                "subject_id"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "first": {
+            "default": 20,
+            "description": "Maximum resources to return in this bounded page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "namespace": {
+            "default": "default",
+            "description": "Controlled namespace to read.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "care_review",
+            "description": "Controlled purpose used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_read_journey",
+      "output_schema": {
+        "$id": "https://openmed.dev/schemas/journey-workflow-result/1.0.0/journey",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "resource_count": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_ids": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_ids",
+              "resource_count",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "additionalProperties": false,
+            "properties": {
+              "end_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "has_next_page": {
+                "type": "boolean"
+              },
+              "page_size": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "has_next_page",
+              "end_cursor",
+              "page_size",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "resource_type": {
+            "const": "journey"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "compatibility_policy": {
+                  "const": "same_major"
+                },
+                "data": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "namespace": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "resource_id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "enum": [
+                    "artifact",
+                    "job",
+                    "fact",
+                    "conflict",
+                    "journey",
+                    "cohort",
+                    "dataset",
+                    "registry",
+                    "measure",
+                    "trial_review",
+                    "evidence",
+                    "current_fact",
+                    "journey_event",
+                    "mapping",
+                    "cohort_run",
+                    "dataset_manifest"
+                  ]
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schema_version": {
+                  "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "empty",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ]
+                },
+                "version": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "resource_type",
+                "resource_id",
+                "namespace",
+                "data",
+                "state",
+                "version",
+                "revision",
+                "schema_version",
+                "compatibility_policy",
+                "extensions"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable": {
+                "const": true,
+                "type": "boolean"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "immutable",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "severity": {
+                  "const": "warning"
+                }
+              },
+              "required": [
+                "code",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "workflow": {
+            "const": "journey"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy",
+          "workflow",
+          "resource_type",
+          "evidence",
+          "snapshot",
+          "access",
+          "warnings",
+          "review"
+        ],
+        "title": "OpenMed Read Patient Journey Result",
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read Measure Results"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Read bounded deterministic measure results with snapshot and review metadata.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Opaque cursor bound to the query and immutable snapshot.",
+            "maxLength": 2048,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "default": null,
+            "description": "Optional minimum-necessary field projection.",
+            "items": {
+              "enum": [
+                "computed_at",
+                "measure_id",
+                "unit",
+                "value"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "first": {
+            "default": 20,
+            "description": "Maximum resources to return in this bounded page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "namespace": {
+            "default": "default",
+            "description": "Controlled namespace to read.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "care_review",
+            "description": "Controlled purpose used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_read_measure",
+      "output_schema": {
+        "$id": "https://openmed.dev/schemas/journey-workflow-result/1.0.0/measure",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "resource_count": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_ids": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_ids",
+              "resource_count",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "additionalProperties": false,
+            "properties": {
+              "end_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "has_next_page": {
+                "type": "boolean"
+              },
+              "page_size": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "has_next_page",
+              "end_cursor",
+              "page_size",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "resource_type": {
+            "const": "measure"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "compatibility_policy": {
+                  "const": "same_major"
+                },
+                "data": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "namespace": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "resource_id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "enum": [
+                    "artifact",
+                    "job",
+                    "fact",
+                    "conflict",
+                    "journey",
+                    "cohort",
+                    "dataset",
+                    "registry",
+                    "measure",
+                    "trial_review",
+                    "evidence",
+                    "current_fact",
+                    "journey_event",
+                    "mapping",
+                    "cohort_run",
+                    "dataset_manifest"
+                  ]
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schema_version": {
+                  "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "empty",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ]
+                },
+                "version": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "resource_type",
+                "resource_id",
+                "namespace",
+                "data",
+                "state",
+                "version",
+                "revision",
+                "schema_version",
+                "compatibility_policy",
+                "extensions"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable": {
+                "const": true,
+                "type": "boolean"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "immutable",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "severity": {
+                  "const": "warning"
+                }
+              },
+              "required": [
+                "code",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "workflow": {
+            "const": "measure"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy",
+          "workflow",
+          "resource_type",
+          "evidence",
+          "snapshot",
+          "access",
+          "warnings",
+          "review"
+        ],
+        "title": "OpenMed Read Measure Results Result",
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read Clinical Registry"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Read bounded registry definitions and case-count metadata with an inspectable access-policy result.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Opaque cursor bound to the query and immutable snapshot.",
+            "maxLength": 2048,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "default": null,
+            "description": "Optional minimum-necessary field projection.",
+            "items": {
+              "enum": [
+                "record_count",
+                "registry_id",
+                "status"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "first": {
+            "default": 20,
+            "description": "Maximum resources to return in this bounded page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "namespace": {
+            "default": "default",
+            "description": "Controlled namespace to read.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "care_review",
+            "description": "Controlled purpose used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_read_registry",
+      "output_schema": {
+        "$id": "https://openmed.dev/schemas/journey-workflow-result/1.0.0/registry",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "resource_count": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_ids": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_ids",
+              "resource_count",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "additionalProperties": false,
+            "properties": {
+              "end_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "has_next_page": {
+                "type": "boolean"
+              },
+              "page_size": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "has_next_page",
+              "end_cursor",
+              "page_size",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "resource_type": {
+            "const": "registry"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "compatibility_policy": {
+                  "const": "same_major"
+                },
+                "data": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "namespace": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "resource_id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "enum": [
+                    "artifact",
+                    "job",
+                    "fact",
+                    "conflict",
+                    "journey",
+                    "cohort",
+                    "dataset",
+                    "registry",
+                    "measure",
+                    "trial_review",
+                    "evidence",
+                    "current_fact",
+                    "journey_event",
+                    "mapping",
+                    "cohort_run",
+                    "dataset_manifest"
+                  ]
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schema_version": {
+                  "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "empty",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ]
+                },
+                "version": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "resource_type",
+                "resource_id",
+                "namespace",
+                "data",
+                "state",
+                "version",
+                "revision",
+                "schema_version",
+                "compatibility_policy",
+                "extensions"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable": {
+                "const": true,
+                "type": "boolean"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "immutable",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "severity": {
+                  "const": "warning"
+                }
+              },
+              "required": [
+                "code",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "workflow": {
+            "const": "registry"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy",
+          "workflow",
+          "resource_type",
+          "evidence",
+          "snapshot",
+          "access",
+          "warnings",
+          "review"
+        ],
+        "title": "OpenMed Read Clinical Registry Result",
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read Trial Review"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Read bounded clinical-trial review results while preserving unknown, conflict, and review-required states.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Opaque cursor bound to the query and immutable snapshot.",
+            "maxLength": 2048,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "default": null,
+            "description": "Optional minimum-necessary field projection.",
+            "items": {
+              "enum": [
+                "criterion_count",
+                "status",
+                "trial_id"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "first": {
+            "default": 20,
+            "description": "Maximum resources to return in this bounded page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "namespace": {
+            "default": "default",
+            "description": "Controlled namespace to read.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "care_review",
+            "description": "Controlled purpose used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_read_trial_review",
+      "output_schema": {
+        "$id": "https://openmed.dev/schemas/journey-workflow-result/1.0.0/trial_review",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compatibility_policy": {
+            "const": "same_major",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "resource_count": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_ids": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_ids",
+              "resource_count",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "additionalProperties": false,
+            "properties": {
+              "end_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "has_next_page": {
+                "type": "boolean"
+              },
+              "page_size": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snapshot_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "has_next_page",
+              "end_cursor",
+              "page_size",
+              "snapshot_digest"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_fields": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "namespace": {
+                "type": "string"
+              },
+              "policy_version": {
+                "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "success",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "namespace",
+              "purpose",
+              "allowed_fields",
+              "code",
+              "policy_version"
+            ],
+            "type": "object"
+          },
+          "resource_type": {
+            "const": "trial_review"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "compatibility_policy": {
+                  "const": "same_major"
+                },
+                "data": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "namespace": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "resource_id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "enum": [
+                    "artifact",
+                    "job",
+                    "fact",
+                    "conflict",
+                    "journey",
+                    "cohort",
+                    "dataset",
+                    "registry",
+                    "measure",
+                    "trial_review",
+                    "evidence",
+                    "current_fact",
+                    "journey_event",
+                    "mapping",
+                    "cohort_run",
+                    "dataset_manifest"
+                  ]
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schema_version": {
+                  "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "empty",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ]
+                },
+                "version": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "resource_type",
+                "resource_id",
+                "namespace",
+                "data",
+                "state",
+                "version",
+                "revision",
+                "schema_version",
+                "compatibility_policy",
+                "extensions"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "const": "1.0.0",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable": {
+                "const": true,
+                "type": "boolean"
+              },
+              "schema_version": {
+                "const": "1.0.0",
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "immutable",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "success",
+              "partial",
+              "empty",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "severity": {
+                  "const": "warning"
+                }
+              },
+              "required": [
+                "code",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "workflow": {
+            "const": "trial_review"
+          }
+        },
+        "required": [
+          "state",
+          "code",
+          "resources",
+          "page_info",
+          "policy",
+          "schema_version",
+          "compatibility_policy",
+          "workflow",
+          "resource_type",
+          "evidence",
+          "snapshot",
+          "access",
+          "warnings",
+          "review"
+        ],
+        "title": "OpenMed Read Trial Review Result",
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Score Re-identification Risk"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Reidentification risk for de-identified text",
       "input_schema": {
         "additionalProperties": false,
@@ -2908,6 +5574,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Score Clinical Re-identification Risk"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Score residual re-identification risk over de-identified clinical artifacts.",
       "input_schema": {
         "additionalProperties": false,
@@ -3605,6 +6282,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Run Clinical Workflow"
+      },
+      "authorization": {
+        "consent_receipt_required": true,
+        "state_changing": true
+      },
       "description": "Run a stateful multi-step OpenMed workflow with server-side intermediate handles and PHI-safe egress.",
       "input_schema": {
         "additionalProperties": false,
@@ -3750,6 +6438,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Search Available Models"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Search OpenMed models from the canonical manifest by category, license, size and language.",
       "input_schema": {
         "additionalProperties": false,
@@ -3867,6 +6566,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Generate Signed Audit Report"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
       "description": "Run deidentification with auditing set as True and return a signed audit report",
       "input_schema": {
         "additionalProperties": false,
@@ -4137,6 +6847,17 @@
       "version": "1.0.0"
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Unload Model"
+      },
+      "authorization": {
+        "consent_receipt_required": true,
+        "state_changing": true
+      },
       "description": "Unload one inactive model, or all inactive models.",
       "input_schema": {
         "additionalProperties": false,

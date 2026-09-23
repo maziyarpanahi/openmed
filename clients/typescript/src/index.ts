@@ -1,3 +1,23 @@
+import {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
+export {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
 export type JsonObject = Record<string, unknown>;
 
 export type FetchLike = (
@@ -59,76 +79,6 @@ export type DeidentificationMethod =
   | "replace"
   | "hash"
   | "shift_dates";
-
-export type JourneyResourceType =
-  | "artifact"
-  | "job"
-  | "fact"
-  | "conflict"
-  | "journey"
-  | "cohort"
-  | "dataset"
-  | "registry"
-  | "measure"
-  | "trial_review"
-  | "evidence"
-  | "current_fact"
-  | "journey_event"
-  | "mapping"
-  | "cohort_run"
-  | "dataset_manifest";
-
-export type JourneyResourceState =
-  | "success"
-  | "partial"
-  | "empty"
-  | "unknown"
-  | "conflict"
-  | "unsupported"
-  | "denied"
-  | "failure";
-
-export interface JourneyResourceQuery {
-  resource_type: JourneyResourceType;
-  namespace?: string;
-  purpose?: string;
-  first?: number;
-  after?: string | null;
-  fields?: string[];
-}
-
-export interface JourneyResourcePage {
-  state: JourneyResourceState;
-  code: string | null;
-  resources: Array<{
-    resource_type: JourneyResourceType;
-    resource_id: string;
-    namespace: string;
-    data: JsonObject;
-    state: JourneyResourceState;
-    version: number;
-    revision: number;
-    schema_version: string;
-    compatibility_policy: "same_major";
-    extensions: JsonObject;
-  }>;
-  page_info: {
-    has_next_page: boolean;
-    end_cursor: string | null;
-    page_size: number;
-    snapshot_digest: string;
-  };
-  policy: {
-    state: "success" | "denied";
-    namespace: string;
-    purpose: string;
-    allowed_fields: string[];
-    code: string | null;
-    policy_version: string;
-  };
-  schema_version: string;
-  compatibility_policy: "same_major";
-}
 
 export interface OpenMedClientOptions {
   baseUrl: string;
@@ -654,6 +604,42 @@ export class OpenMedClient {
       parameters.set("fields", query.fields.join(","));
     }
     return this.get(`${path}?${parameters.toString()}`);
+  }
+
+  async journeyWorkflow(
+    workflow: JourneyWorkflowName,
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyResources({
+      ...query,
+      resource_type: JOURNEY_WORKFLOW_RESOURCE_TYPES[workflow],
+    });
+  }
+
+  async journey(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("journey", query);
+  }
+
+  async cohort(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("cohort", query);
+  }
+
+  async dataset(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("dataset", query);
+  }
+
+  async registry(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("registry", query);
+  }
+
+  async measure(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("measure", query);
+  }
+
+  async trialReview(
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("trial_review", query);
   }
 
   async unloadModels(

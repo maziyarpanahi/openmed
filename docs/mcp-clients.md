@@ -172,6 +172,42 @@ Hosted-assistant developer connectors use the same URL. They cannot reach a
 loopback address on your workstation; deploy through a private network or an
 authenticated HTTPS gateway instead of exposing the OpenMed process directly.
 
+## Journey workflow tools and generated clients
+
+Six fixed-resource, read-only tools expose journey, cohort, dataset, registry,
+measure, and trial-review workflows. Their schemas are derived from the same
+versioned Journey page contract used by REST, GraphQL, and read-only SQL:
+
+- `openmed_read_journey`
+- `openmed_read_cohort`
+- `openmed_read_dataset`
+- `openmed_read_registry`
+- `openmed_read_measure`
+- `openmed_read_trial_review`
+
+Every result carries evidence identifiers, schema and immutable snapshot
+versions, the access-policy decision, controlled warnings, and explicit review
+metadata. The result contract excludes raw source text. All six tools advertise
+`readOnlyHint=true`, `destructiveHint=false`, and closed-world execution.
+
+The machine-readable generation contract is available at
+`openmed://journey-workflows`. Regenerate the Python and TypeScript client
+surfaces after changing a Journey workflow schema:
+
+```bash
+python scripts/generate_journey_workflow_clients.py
+python scripts/generate_journey_workflow_clients.py --check
+```
+
+Python clients expose `journey()`, `cohort()`, `dataset()`, `registry()`,
+`measure()`, and `trial_review()`. The TypeScript client exposes the same names,
+with `trialReview()` using normal TypeScript casing.
+
+The registry document marks every tool as either state-changing or read-only.
+State-changing tools continue through the signed, single-use consent-receipt
+verification path; the read-only Journey tools never accept a receipt as a
+substitute for access policy.
+
 ## Canonical clinical agent workflow
 
 MCP clients can discover the `openmed-clinical-workflow` prompt, the

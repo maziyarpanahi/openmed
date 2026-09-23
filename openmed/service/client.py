@@ -9,28 +9,16 @@ from typing import Any, Literal, Mapping, Optional
 
 import httpx
 
+from .journey_client_generated import (
+    JourneyResourceType,
+    JourneyWorkflowClientMixin,
+    JourneyWorkflowName,
+)
+
 JsonDict = dict[str, Any]
 KeepAliveValue = int | float | str
 AggregationStrategy = Literal["simple", "first", "average", "max"]
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
-JourneyResourceType = Literal[
-    "artifact",
-    "job",
-    "fact",
-    "conflict",
-    "journey",
-    "cohort",
-    "dataset",
-    "registry",
-    "measure",
-    "trial_review",
-    "evidence",
-    "current_fact",
-    "journey_event",
-    "mapping",
-    "cohort_run",
-    "dataset_manifest",
-]
 PIILanguage = Literal[
     "am",
     "as",
@@ -239,7 +227,7 @@ class OpenMedAPIError(RuntimeError):
         super().__init__(f"{status_code} {code}: {message}{suffix}")
 
 
-class OpenMedClient:
+class OpenMedClient(JourneyWorkflowClientMixin):
     """Small typed sync client for the OpenMed REST service.
 
     Non-2xx responses, including unfollowed redirects, raise
@@ -611,6 +599,8 @@ __all__ = [
     "CLIENT_ENDPOINTS",
     "ClientEndpoint",
     "JourneyResourceType",
+    "JourneyWorkflowClientMixin",
+    "JourneyWorkflowName",
     "ModelUnloadRequest",
     "OpenMedAPIError",
     "OpenMedClient",
