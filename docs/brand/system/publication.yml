@@ -249,6 +249,11 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/sdoh-evidence-deduplication.md
+    - clinical/sdoh-longitudinal-resolution.md
+    - clinical/sdoh-sensitive-use-labels.md
+    - clinical/sdoh-review-routing.md
+    - clinical/sdoh-category-completeness.md
     - clinical/sdoh-section-scope.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
