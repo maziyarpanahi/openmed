@@ -34,6 +34,7 @@ nav:
       - Agent Artifact References: agent/artifact-references.md
       - Signed Agent Capability Grants: agent/capability-grants.md
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
+      - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
       - Agent Governance Identifiers: agent/governance-identifiers.md
       - Agent Capability Validity: agent/capability-validity.md
       - Agent Event Correlation: agent/event-correlation.md
