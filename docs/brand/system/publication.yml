@@ -231,6 +231,7 @@ classification:
     - clinical/nli-verification.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
+    - clinical/sdoh-temporal-qualifiers.md
     - clinical/nli-temporal-pairs.md
     - clinical/medication-reconciliation.md
     - clinical/nli-numeric-precheck.md

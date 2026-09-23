@@ -156,6 +156,7 @@ nav:
       - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
       - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
