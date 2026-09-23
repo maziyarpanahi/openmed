@@ -33,7 +33,7 @@ from .errors import ConfigurationError, InputError, InternalError
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
-from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
+from .schemas.span import ACTION_KEEP, OpenMedSpan, _resolve_hmac_secret, hmac_text_hash
 from .telemetry import PIPELINE_STAGE_NAMES, PipelineTelemetry, StageTelemetry
 
 # Keep this runtime alias aligned with ``pii.DeidentificationMethod``. Importing
@@ -51,7 +51,8 @@ DeidentificationMethod = Literal[
 
 STAGE_NAMES: tuple[str, ...] = PIPELINE_STAGE_NAMES
 
-DEFAULT_HASH_SECRET = b"openmed-pipeline-v1"
+# None requests a private key per pipeline instance; never use a public key.
+DEFAULT_HASH_SECRET = None
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +291,7 @@ class Pipeline:
         token_language_tags: Sequence[Any] | None = None,
         lid_model: Any = None,
         transliterated_name_config: Any = None,
-        hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
+        hmac_secret: str | bytes | None = DEFAULT_HASH_SECRET,
         telemetry: PipelineTelemetry | None = None,
         telemetry_enabled: bool | None = None,
     ) -> None:
@@ -369,7 +370,7 @@ class Pipeline:
             if self.code_mixed
             else None
         )
-        self.hmac_secret = hmac_secret
+        self.hmac_secret = _resolve_hmac_secret(hmac_secret)
         if telemetry is not None and telemetry_enabled is not None:
             raise ValueError("Pass either telemetry or telemetry_enabled, not both")
         if telemetry is not None and not isinstance(telemetry, PipelineTelemetry):
