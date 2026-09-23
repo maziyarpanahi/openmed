@@ -43,6 +43,11 @@ nav:
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
+      - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
+      - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
+      - Cohort Membership Explanations: agent/cohort-explanations.md
+      - Quality-Measure Evidence: agent/quality-measure-evidence.md
+      - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -368,12 +373,19 @@ nav:
       - Breach Report Template: compliance/templates/breach-report-template.md
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
+      - Staged OMOP Mutations: interop/omop-staged-mutations.md
+      - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
+      - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
+      - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
+      - FHIR-to-OMOP Write Lineage: interop/fhir-omop-write-lineage.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
+      - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md

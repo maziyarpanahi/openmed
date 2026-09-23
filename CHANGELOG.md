@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic, aggregate-only review-yield metrics for guarded clinical
   relation candidates, with accepted, corrected, rejected, duplicate, and
   deferred outcomes by relation class (#2753).
+- Added assertion-aware FHIR R4 `AllergyIntolerance`, `Immunization`, and
+  `Encounter` exporters with RxNorm, SNOMED CT, and CVX coding support.
 - Added immutable, versioned longitudinal Journey contracts for clinical
   artifacts, evidence locators, facts, conflicts, resolution events, and
   dataset snapshots, including deterministic JSON, bundled schemas, and

@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 66142907,
-    "maximum_unique_payload_bytes": 65805328,
+    "maximum_total_bytes": 68502489,
+    "maximum_unique_payload_bytes": 68164910,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3968820
+    "json": 4019389
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3968820
+    "docs/search/search_index.json": 4019389
   },
   "route_transfer_bytes": {
     "/": 3145728,
     "/docs/": 5343487,
-    "/docs/model-tokenizer-script-coverage/": 7399727
+    "/docs/model-tokenizer-script-coverage/": 7542458
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,16 +31,16 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged V3 Journey, summary, and clinical evaluation evidence guides with bounded documentation headroom.",
-    "The combined summary and evaluation staging aggregate contains 66027429 total bytes, 65689850 unique payload bytes, and 337579 duplicate payload bytes locally.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, and FHIR/OMOP evidence guides with bounded documentation headroom.",
+    "The combined FHIR/OMOP and evaluation staging aggregate contains 68387011 total bytes, 68049432 unique payload bytes, and 337579 duplicate payload bytes locally.",
     "The aggregate ceilings retain the previously observed 4728-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The combined search index measured 3931377 bytes; its 3968820-byte JSON ceiling retains the observed platform delta plus 32715 bytes of bounded headroom.",
+    "The published clinical, agent, multimodal, language-pack, and interoperability guides remain searchable. The combined search index measured 3981946 bytes; its 4019389-byte JSON ceiling retains the observed platform delta plus 32715 bytes of bounded headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
     "The /docs/ route measured 5224185 bytes on the staged Journey release-gate build; its 5343487-byte ceiling retains 119302 bytes of bounded transfer headroom.",
-    "The tokenizer coverage route measured 7292923 bytes on the staged five-source golden build; its 7399727-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
+    "The tokenizer coverage route measured 7435654 bytes on the combined FHIR/OMOP and evaluation staging build; its 7542458-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
   ]
