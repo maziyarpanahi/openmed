@@ -247,6 +247,9 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, value-free SDOH experiencer classification and patient-level
+  filtering for patient, household, family, and unknown evidence with reviewable
+  offset provenance (#2724).
 - Added duplicate-cue validation for status vocabularies: cues that collide after the
   existing Unicode, case, and whitespace normalization are rejected on load, both
   within one status and across statuses, with value-free errors (#3104).
