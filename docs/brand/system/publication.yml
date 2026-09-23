@@ -303,6 +303,7 @@ classification:
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
+    - evaluation/relation-review-yield.md
     - evaluation/privacy-corpus.md
     - evaluation/mixed-script-integrity.md
     - evaluation/doctype-calibration.md

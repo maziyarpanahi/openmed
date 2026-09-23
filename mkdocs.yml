@@ -228,6 +228,7 @@ nav:
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
+      - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
       - Document-type Calibration: evaluation/doctype-calibration.md
