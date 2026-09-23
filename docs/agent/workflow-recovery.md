@@ -44,8 +44,10 @@ recovery lineage rather than changing receipt metadata in place.
 ## Durable append-only journal
 
 `CheckpointJournal` stores one canonical JSON file per sequence. It writes a
-private temporary file, flushes it, atomically links the final sequence name,
-and flushes the directory. An identical append is idempotent; a conflicting
+private temporary file, flushes it, and atomically links the final sequence
+name. On POSIX it also flushes the directory; Windows does not expose directory
+`fsync` through Python, so power-loss durability of the new directory entry is
+filesystem-dependent there. An identical append is idempotent; a conflicting
 append is rejected. Every checkpoint binds the previous checkpoint digest,
 workflow/run identity, plan digest, approval receipt, ordered effects, commit
 evidence, and recovery evidence digest.

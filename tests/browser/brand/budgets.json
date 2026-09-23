@@ -32,9 +32,9 @@
   },
   "notes": [
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, and PHI-preflight evidence guides with bounded documentation headroom.",
-    "The combined four-feature staging aggregate contains 73815816 total bytes, 73478237 unique payload bytes, and 337579 duplicate payload bytes locally.",
-    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, language-pack, interoperability, and governance guides remain searchable. The combined search index measured 4103167 bytes; its unchanged 4133034-byte JSON ceiling retains 29867 bytes of bounded headroom.",
+    "The combined four-feature staging aggregate contains 73816162 total bytes, 73478583 unique payload bytes, and 337579 duplicate payload bytes locally.",
+    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110404 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, and governance guides remain searchable. The combined search index measured 4103336 bytes; its unchanged 4133034-byte JSON ceiling retains 29698 bytes of bounded headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
