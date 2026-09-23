@@ -19,9 +19,36 @@ from openmed.core.capabilities import (
     require_backend,
 )
 
-__all__ = ["app", "create_app", "ensure_service_available", "is_service_available"]
+__all__ = [
+    "JourneyAccessPolicy",
+    "JourneyResourceCatalog",
+    "JourneyResourceKind",
+    "JourneyResourcePage",
+    "JourneyResourceQuery",
+    "JourneyResourceRecord",
+    "JourneyResourceState",
+    "OperationalAlert",
+    "OperationalCategory",
+    "OperationalEvent",
+    "OperationalState",
+    "app",
+    "create_app",
+    "ensure_service_available",
+    "is_service_available",
+]
 
 _LAZY_IMPORTS = {
+    "JourneyAccessPolicy": ".journey_resources",
+    "JourneyResourceCatalog": ".journey_resources",
+    "JourneyResourceKind": ".journey_resources",
+    "JourneyResourcePage": ".journey_resources",
+    "JourneyResourceQuery": ".journey_resources",
+    "JourneyResourceRecord": ".journey_resources",
+    "JourneyResourceState": ".journey_resources",
+    "OperationalAlert": ".operational",
+    "OperationalCategory": ".operational",
+    "OperationalEvent": ".operational",
+    "OperationalState": ".operational",
     "app": ".app",
     "create_app": ".app",
 }
