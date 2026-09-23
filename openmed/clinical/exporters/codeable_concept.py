@@ -28,6 +28,7 @@ from .codeable_concept_simple import system_uri as _system_uri
 # Grounding linker system token -> canonical HL7 FHIR R4 system URI. The shared
 # vocabularies derive from the single-source-of-truth map; UMLS is not in it.
 SYSTEM_URI: dict[str, str] = {
+    "CVX": _system_uri("cvx"),
     "RXNORM": _system_uri("rxnorm"),
     "ICD10CM": _system_uri("icd-10-cm"),
     "ICD11": _system_uri("icd-11-mms"),

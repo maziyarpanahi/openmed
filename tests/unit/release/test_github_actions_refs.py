@@ -6,6 +6,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "release" / "check_github_actions_refs.py"
 
@@ -113,3 +115,78 @@ def test_main_fails_when_remote_ref_does_not_parse(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert "remote action refs must be static" in captured.err
+
+
+def test_sha_policy_rejects_tags_branches_and_short_shas_without_network(tmp_path):
+    def resolver(repository: str, ref: str) -> tuple[bool, str]:
+        raise AssertionError("SHA policy must not resolve mutable references")
+
+    refs = [
+        actions_refs.ActionRef(
+            tmp_path / "ci.yml", 1, f"owner/action@{ref}", "owner/action", ref
+        )
+        for ref in ("v1", "main", "ed597411d8f9")
+    ]
+    results = actions_refs.audit_action_refs(refs, resolver, require_sha=True)
+
+    assert all(not result.ok for result in results)
+    assert all("full commit SHA" in result.reason for result in results)
+
+
+def test_sha_policy_checks_nested_composite_actions(tmp_path, capsys):
+    actions = tmp_path / "actions"
+    nested = actions / "example"
+    nested.mkdir(parents=True)
+    action = nested / "action.yml"
+    action.write_text("runs:\n  steps:\n    - uses: actions/checkout@v7\n")
+    args = ["--workflows-dir", str(actions), "--require-sha"]
+
+    assert actions_refs.main(args) == 1
+    assert "full commit SHA" in capsys.readouterr().err
+
+    action.write_text(
+        "runs:\n  steps:\n"
+        "    - uses: ./local-action\n"
+        "    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n"
+    )
+    assert actions_refs.main(args) == 0
+
+
+def test_repository_actions_remain_pinned():
+    refs = [
+        *actions_refs.iter_action_refs(ROOT / ".github" / "workflows"),
+        *actions_refs.iter_action_refs(ROOT / ".github" / "actions"),
+    ]
+    assert refs
+    results = actions_refs.audit_action_refs(refs, require_sha=True)
+    assert all(result.ok for result in results), [
+        actions_refs.format_result(result) for result in results if not result.ok
+    ]
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        '- "uses": actions/checkout@v7',
+        "- {uses: actions/checkout@v7}",
+        "- uses: >-\n        actions/checkout@v7",
+        "- &checkout {uses: actions/checkout@v7}\n    - *checkout",
+    ],
+)
+def test_sha_policy_parses_equivalent_yaml_forms(tmp_path, capsys, step):
+    (tmp_path / "ci.yml").write_text(f"jobs:\n  test:\n    steps:\n    {step}\n")
+
+    refs = list(actions_refs.iter_action_refs(tmp_path))
+    assert refs and all(ref.spec == "actions/checkout@v7" for ref in refs)
+    assert actions_refs.main(["--workflows-dir", str(tmp_path), "--require-sha"]) == 1
+    assert "full commit SHA" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value", ["[broken", "null", "[actions/checkout@v7]"])
+def test_sha_policy_fails_closed_on_invalid_yaml_or_uses_values(
+    tmp_path, capsys, value
+):
+    (tmp_path / "ci.yml").write_text(f"jobs:\n  test:\n    uses: {value}\n")
+
+    assert actions_refs.main(["--workflows-dir", str(tmp_path), "--require-sha"]) == 1
+    assert "policy failed" in capsys.readouterr().err
