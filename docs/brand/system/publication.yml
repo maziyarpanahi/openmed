@@ -227,10 +227,15 @@ classification:
     - clinical/summary-temporal-order.md
     - clinical/summary-medication-changes.md
     - clinical/summary-lab-trends.md
+    - clinical/summary-input-contract.md
+    - clinical/summary-safety.md
+    - clinical/summary-citations.md
+    - evaluation/summary-coverage.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
+    - clinical/summarization.md
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
