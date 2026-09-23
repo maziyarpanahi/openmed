@@ -1,4 +1,4 @@
-"""Deterministic, safety-bounded clinical workflow helpers."""
+"""Deterministic clinical workflows and durable recovery contracts."""
 
 from .abstraction_evidence import (
     ABSTRACTION_EVIDENCE_SCHEMA,
@@ -106,6 +106,27 @@ from .quality_measure_evidence import (
     ValueSetEvidence,
     build_quality_measure_evidence_packet,
     compare_quality_measure_evidence,
+)
+from .recovery import (
+    RECOVERY_CHECKPOINT_SCHEMA_VERSION,
+    RECOVERY_EVIDENCE_SCHEMA_VERSION,
+    CheckpointJournal,
+    CompensationLimit,
+    EffectKind,
+    EffectObservation,
+    EffectRecord,
+    EffectState,
+    ObservationState,
+    RecoveryCheckpoint,
+    RecoveryDecision,
+    RecoveryDisposition,
+    RecoveryError,
+    RecoveryPhase,
+    RecoveryReason,
+    advance_checkpoint,
+    derive_idempotency_key,
+    recover_workflow,
+    validate_checkpoint_lineage,
 )
 from .trial_eligibility_review import (
     TRIAL_ELIGIBILITY_REVIEW_SCHEMA,
@@ -218,4 +239,23 @@ __all__ = [
     "build_trial_eligibility_review_packet",
     "compare_quality_measure_evidence",
     "score_prior_authorization_packet",
+    "RECOVERY_CHECKPOINT_SCHEMA_VERSION",
+    "RECOVERY_EVIDENCE_SCHEMA_VERSION",
+    "CheckpointJournal",
+    "CompensationLimit",
+    "EffectKind",
+    "EffectObservation",
+    "EffectRecord",
+    "EffectState",
+    "ObservationState",
+    "RecoveryCheckpoint",
+    "RecoveryDecision",
+    "RecoveryDisposition",
+    "RecoveryError",
+    "RecoveryPhase",
+    "RecoveryReason",
+    "advance_checkpoint",
+    "derive_idempotency_key",
+    "recover_workflow",
+    "validate_checkpoint_lineage",
 ]

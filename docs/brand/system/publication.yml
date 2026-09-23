@@ -107,6 +107,15 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/capability-grants.md
+    - agent/purpose-bound-access.md
+    - agent/non-amplifying-delegation.md
+    - agent/tool-argument-classification.md
+    - agent/tool-inventory.md
+    - agent/tool-inventory-schema.md
+    - agent/tool-catalog-diffs.md
+    - agent/minimum-data-contracts.md
+    - agent/minimum-data-projections.md
     - agent/governance-identifiers.md
     - agent/capability-validity.md
     - agent/event-correlation.md
@@ -114,8 +123,12 @@ classification:
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/reviewer-handoffs.md
+    - agent/policy-decision-matrices.md
+    - agent/human-approval-tokens.md
     - agent/run-summaries.md
     - agent/run-diffs.md
+    - agent/workflow-rollups.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
     - agent/chart-abstraction-evidence.md
@@ -123,6 +136,8 @@ classification:
     - agent/cohort-explanations.md
     - agent/quality-measure-evidence.md
     - agent/trial-eligibility-review.md
+    - agent/human-approval-receipts.md
+    - agent/workflow-recovery.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -318,9 +333,16 @@ classification:
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
     - evaluation/relation-review-yield.md
+    - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
     - evaluation/mixed-script-integrity.md
     - evaluation/doctype-calibration.md
+    - evaluation/sealed-workflow-manifests.md
+    - evaluation/holdout-commitments.md
+    - evaluation/feedback-budgets.md
+    - evaluation/overlap-forensics.md
+    - evaluation/blinded-adjudication.md
+    - evaluation/v3.1-agent-gates.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
@@ -429,6 +451,8 @@ classification:
     - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/reproducible-release.md
+    - compliance/v3.1-agent-assurance.md
+    - compliance/v3.1-clinician-review.md
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
     - compliance/evidence-freshness.md
@@ -529,6 +553,7 @@ classification:
     - security/no-telemetry.md
     - security/policy-migrations.md
     - security/prompt-injection-guard.md
+    - security/agent-threat-model.md
     - security/mcp-consent-receipts.md
     - security/mcp-authorization-matrix.md
     - security/mcp-upstream-policy.md
