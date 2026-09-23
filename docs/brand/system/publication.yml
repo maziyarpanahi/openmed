@@ -425,6 +425,7 @@ classification:
     - compliance/templates/breach-report-template.md
     - compliance/privacy-release-gate.md
     - guides/fhir-omop-interoperability.md
+    - interop/omop-staged-mutations.md
     - interop/archive-safety.md
     - fhir-interop.md
     - integrations/fhir-r5-fidelity.md
