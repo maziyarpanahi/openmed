@@ -53,6 +53,7 @@ from ..core.offline import OfflineModeError
 from ..core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
 from ._output import (
     EXIT_ERROR,
+    EXIT_OK,
     EXIT_USAGE,
     CliError,
     add_json_flag,
@@ -62,6 +63,7 @@ from ._output import (
 )
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
+from .annotation_interchange import add_annotation_interchange_command
 from .benchmark import add_cost_command, add_generalization_command
 from .calibrate import add_calibrate_command
 from .contract import (
@@ -600,6 +602,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_init_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
+    add_annotation_interchange_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)
@@ -2101,6 +2104,21 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Validate CDM constraints and report PHI-free violation counts.",
     )
+    load_parser.add_argument(
+        "--completeness-floor",
+        type=_unit_interval_float,
+        default=None,
+        help=(
+            "Block the load when the extracted batch completeness score is "
+            "below this value (0 to 1)."
+        ),
+    )
+    load_parser.add_argument(
+        "--required-field",
+        action="append",
+        default=None,
+        help="Field required by the quality gate; repeat for multiple fields.",
+    )
     load_parser.set_defaults(handler=_handle_omop_load)
 
 
@@ -3104,11 +3122,20 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
-    """Register inference-path profiling commands with the CLI parser."""
+    """Register quality and inference-path profiling commands with the CLI."""
     profile_parser = subparsers.add_parser(
-        "profile", help="Profile the inference path."
+        "profile", help="Profile extracted clinical output or the inference path."
     )
+    _add_quality_profile_arguments(profile_parser, require_input=False)
+    profile_parser.set_defaults(handler=_handle_quality_profile)
     profile_sub = profile_parser.add_subparsers(dest="profile_command")
+
+    quality_parser = profile_sub.add_parser(
+        "quality",
+        help="Profile a grounded-results JSONL file and emit a PHI-free report.",
+    )
+    _add_quality_profile_arguments(quality_parser, require_input=True)
+    quality_parser.set_defaults(handler=_handle_quality_profile)
 
     memory_parser = profile_sub.add_parser(
         "memory",
@@ -3141,6 +3168,52 @@ def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
         help="Write the profile to this file instead of stdout.",
     )
     memory_parser.set_defaults(handler=_handle_profile_memory)
+
+
+def _add_quality_profile_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    require_input: bool,
+) -> None:
+    """Add arguments shared by the direct and explicit quality commands."""
+
+    parser.add_argument(
+        "--input",
+        type=Path,
+        required=require_input,
+        default=None,
+        help="JSONL file containing extracted and grounded note results.",
+    )
+    parser.add_argument(
+        "--athena",
+        type=Path,
+        default=None,
+        help="Optional caller-supplied Athena CONCEPT export directory.",
+    )
+    parser.add_argument(
+        "--completeness-floor",
+        type=_unit_interval_float,
+        default=0.0,
+        help="Fail the quality gate below this score (0 to 1; default: 0).",
+    )
+    parser.add_argument(
+        "--required-field",
+        action="append",
+        default=None,
+        help="Field required for every note; repeat for multiple fields.",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "summary"),
+        default="json",
+        help="Human output format (default: json).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Write the report to this file instead of human output to stdout.",
+    )
 
 
 def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
@@ -5566,6 +5639,7 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         write_omop_parquet,
         write_omop_sqlite,
     )
+    from ..structured.quality import QualityGateError
 
     load_mode = args.mode.replace("-", "_")
     try:
@@ -5573,6 +5647,8 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
             args.input,
             vocabulary_version=args.vocabulary_version,
             mode=load_mode,
+            completeness_floor=args.completeness_floor,
+            required_fields=args.required_field,
         )
     except FileNotFoundError:
         raise CliError(
@@ -5586,12 +5662,18 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
             code="invalid_json",
             exit_code=EXIT_ERROR,
         )
+    except QualityGateError as exc:
+        raise CliError(
+            str(exc),
+            code="quality_gate_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
     except (OSError, ValueError) as exc:
         raise CliError(
             f"Failed to load grounded notes: {exc}",
             code="load_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
 
     if args.target is not None:
         writers = {
@@ -6579,6 +6661,51 @@ def _handle_profile_memory(args: argparse.Namespace) -> int:
         return emit(args, data, human=f"Memory profile written: {args.output}")
 
     return emit(args, data, human=rendered)
+
+
+def _handle_quality_profile(args: argparse.Namespace) -> int:
+    """Profile local extracted output and emit a PHI-free quality report."""
+
+    from ..structured.quality import profile_jsonl, render_human_summary
+
+    if args.input is None:
+        raise CliError(
+            "quality profiling requires --input JSONL",
+            code="missing_input",
+            exit_code=EXIT_USAGE,
+        )
+
+    try:
+        report = profile_jsonl(
+            args.input,
+            athena_index=args.athena,
+            completeness_floor=args.completeness_floor,
+            required_fields=args.required_field,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"Quality profile failed: {exc}",
+            code="profile_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = report.to_dict()
+    rendered = (
+        render_human_summary(report) if args.format == "summary" else report.to_json()
+    )
+    if args.output is not None:
+        try:
+            args.output.write_text(rendered + "\n", encoding="utf-8")
+        except OSError as exc:
+            raise CliError(
+                "Quality profile output could not be written.",
+                code="write_failed",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        emit(args, payload, human=f"Quality profile written: {args.output}")
+    else:
+        emit(args, payload, human=rendered)
+    return EXIT_OK if report.passed else EXIT_ERROR
 
 
 def _handle_benchmark_false_negatives(args: argparse.Namespace) -> int:

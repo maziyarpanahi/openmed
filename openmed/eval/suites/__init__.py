@@ -154,6 +154,12 @@ from openmed.eval.suites.cross_lingual_grounding import (
     run_cross_lingual_grounding,
     scan_restricted_corpus_markers,
 )
+from openmed.eval.suites.drug_safety import (
+    DRUG_SAFETY_SUITE_VERSION,
+    DrugSafetyBenchmarkCase,
+    DrugSafetyBenchmarkReport,
+    run_drug_safety_benchmark,
+)
 from openmed.eval.suites.grounding_index_recall import (
     evaluate_grounding_index_recall,
     grounding_index_recall_metadata,
@@ -238,6 +244,18 @@ from openmed.eval.suites.indic_name_consistency import (
     indic_name_consistency_metadata,
     load_indic_name_fixtures,
 )
+from openmed.eval.suites.journey_specialist import (
+    PROMOTION_DECISIONS,
+    JourneySpecialistEvaluationError,
+    SpecialistHoldoutReport,
+    SpecialistPrediction,
+    SpecialistPromotionPolicy,
+    SpecialistRunCompletion,
+    build_journey_specialist_model_pack_entry,
+    evaluate_journey_specialist_holdout,
+    finalize_journey_specialist_run,
+    render_journey_specialist_model_card,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -250,6 +268,10 @@ from openmed.eval.suites.naamapadam import (
     load_naamapadam_fixtures,
     naamapadam_suite_metadata,
     run_naamapadam,
+)
+from openmed.eval.suites.omop_quality import (
+    FrozenOmopQualityFixture,
+    load_frozen_omop_quality_fixture,
 )
 from openmed.eval.suites.openmed_synth import (
     OPENMED_SYNTH,
@@ -303,6 +325,12 @@ from openmed.eval.suites.temporal_tlinks import (
     decode_temporal_tlink_fixture,
     evaluate_temporal_tlink_fixtures,
     load_temporal_tlink_fixtures,
+)
+from openmed.eval.suites.trial_eligibility import (
+    TRIAL_ELIGIBILITY_SUITE_VERSION,
+    TrialEligibilityBenchmarkCase,
+    TrialEligibilityBenchmarkReport,
+    run_trial_eligibility_benchmark,
 )
 
 GOLDEN = "golden"
@@ -607,6 +635,26 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "DRUG_SAFETY_SUITE_VERSION",
+    "DrugSafetyBenchmarkCase",
+    "DrugSafetyBenchmarkReport",
+    "run_drug_safety_benchmark",
+    "TRIAL_ELIGIBILITY_SUITE_VERSION",
+    "TrialEligibilityBenchmarkCase",
+    "TrialEligibilityBenchmarkReport",
+    "run_trial_eligibility_benchmark",
+    "PROMOTION_DECISIONS",
+    "JourneySpecialistEvaluationError",
+    "SpecialistHoldoutReport",
+    "SpecialistPrediction",
+    "SpecialistPromotionPolicy",
+    "SpecialistRunCompletion",
+    "build_journey_specialist_model_pack_entry",
+    "evaluate_journey_specialist_holdout",
+    "finalize_journey_specialist_run",
+    "render_journey_specialist_model_card",
+    "FrozenOmopQualityFixture",
+    "load_frozen_omop_quality_fixture",
     "BIORED",
     "GOLDEN",
     "OPENMED_SYNTH",
