@@ -39,6 +39,7 @@ nav:
       - Agent Event Attributes: agent/event-attributes.md
       - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Reviewer Handoff Packets: agent/reviewer-handoffs.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Agent Timing Metadata: agent/timing-metadata.md

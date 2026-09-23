@@ -114,6 +114,7 @@ classification:
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/reviewer-handoffs.md
     - agent/run-summaries.md
     - agent/run-diffs.md
     - agent/timing-metadata.md
