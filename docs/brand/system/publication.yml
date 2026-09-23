@@ -434,6 +434,7 @@ classification:
     - structured/clinical-registries.md
     - clinical/measures.md
     - clinical/care-gaps.md
+    - clinical/trial-records.md
     - fhir/reference-integrity.md
     - fhir/reference-target-types.md
     - fhir/bulk-checkpoints.md
