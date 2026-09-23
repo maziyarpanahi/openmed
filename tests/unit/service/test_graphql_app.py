@@ -215,7 +215,12 @@ def test_entity_types_and_introspection_are_available(client: TestClient) -> Non
     field_names = {
         field["name"] for field in payload["__schema"]["queryType"]["fields"]
     }
-    assert field_names == {"analyze", "deidentify", "entityTypes"}
+    assert field_names == {
+        "analyze",
+        "deidentify",
+        "entityTypes",
+        "journeyResources",
+    }
 
 
 def test_resolver_errors_and_logs_never_contain_source_text(
