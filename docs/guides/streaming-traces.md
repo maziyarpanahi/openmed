@@ -48,6 +48,12 @@ silently exceeding the caller's bound.
 
 ## Stable pseudonyms and progress
 
+Omitting `hmac_secret` generates a private random key for each redactor instance.
+Pseudonyms remain consistent within that instance, including across batches,
+but are not linkable across independent default redactors. Empty explicit keys
+are rejected. Use a high-entropy key kept outside source control and output
+artifacts when intentional cross-run linkage is required.
+
 Use method replace with a caller-controlled HMAC secret when a stable,
 value-free pseudonym is needed across batches:
 

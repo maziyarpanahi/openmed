@@ -106,7 +106,11 @@ class StreamingDeidentifier:
                 else None
             ),
         )
-        secret = getattr(self.pipeline, "hmac_secret", DEFAULT_HASH_SECRET)
+        from .schemas.span import _resolve_hmac_secret
+
+        secret = _resolve_hmac_secret(
+            getattr(self.pipeline, "hmac_secret", DEFAULT_HASH_SECRET)
+        )
         self._input_hmac = _new_hmac(secret)
         self._redacted_hmac = _new_hmac(secret)
 
