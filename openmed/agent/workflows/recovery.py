@@ -25,6 +25,7 @@ from openmed.agent.identifiers import GovernanceIdError, ToolId, WorkflowId
 RECOVERY_CHECKPOINT_SCHEMA_VERSION: Final = "openmed.agent.recovery_checkpoint.v1"
 RECOVERY_EVIDENCE_SCHEMA_VERSION: Final = "openmed.agent.recovery_evidence.v1"
 MAX_CHECKPOINT_BYTES: Final = 1 << 20
+_WINDOWS: Final = os.name == "nt"
 
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 _IDEMPOTENCY_KEY_RE = re.compile(r"idem_[0-9a-f]{64}")
@@ -611,7 +612,9 @@ class CheckpointJournal:
             descriptor, temporary = tempfile.mkstemp(
                 prefix=".checkpoint-", dir=self._directory
             )
-            os.fchmod(descriptor, 0o600)
+            # mkstemp creates a private file; Windows has no os.fchmod.
+            if not _WINDOWS:
+                os.fchmod(descriptor, 0o600)
             _write_all(descriptor, serialized)
             os.fsync(descriptor)
             os.close(descriptor)
@@ -1308,6 +1311,10 @@ def _write_all(descriptor: int, payload: bytes) -> None:
 
 
 def _fsync_directory(directory: Path) -> None:
+    # Python cannot open a Windows directory for fsync. The checkpoint file
+    # itself is flushed before the no-clobber link on every platform.
+    if _WINDOWS:
+        return
     descriptor = os.open(directory, os.O_RDONLY)
     try:
         os.fsync(descriptor)
