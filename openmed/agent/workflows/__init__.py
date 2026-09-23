@@ -1,4 +1,4 @@
-"""Deterministic, safety-bounded clinical workflow helpers."""
+"""Deterministic clinical workflows and durable recovery contracts."""
 
 from .cohort_explanations import (
     COHORT_EXPLANATION_SCHEMA_VERSION,
@@ -39,6 +39,27 @@ from .evidence_query import (
     make_query_access_decision,
     plan_evidence_query,
 )
+from .recovery import (
+    RECOVERY_CHECKPOINT_SCHEMA_VERSION,
+    RECOVERY_EVIDENCE_SCHEMA_VERSION,
+    CheckpointJournal,
+    CompensationLimit,
+    EffectKind,
+    EffectObservation,
+    EffectRecord,
+    EffectState,
+    ObservationState,
+    RecoveryCheckpoint,
+    RecoveryDecision,
+    RecoveryDisposition,
+    RecoveryError,
+    RecoveryPhase,
+    RecoveryReason,
+    advance_checkpoint,
+    derive_idempotency_key,
+    recover_workflow,
+    validate_checkpoint_lineage,
+)
 
 __all__ = [
     "COHORT_EXPLANATION_SCHEMA_VERSION",
@@ -76,4 +97,23 @@ __all__ = [
     "make_evidence_citation",
     "make_query_access_decision",
     "plan_evidence_query",
+    "RECOVERY_CHECKPOINT_SCHEMA_VERSION",
+    "RECOVERY_EVIDENCE_SCHEMA_VERSION",
+    "CheckpointJournal",
+    "CompensationLimit",
+    "EffectKind",
+    "EffectObservation",
+    "EffectRecord",
+    "EffectState",
+    "ObservationState",
+    "RecoveryCheckpoint",
+    "RecoveryDecision",
+    "RecoveryDisposition",
+    "RecoveryError",
+    "RecoveryPhase",
+    "RecoveryReason",
+    "advance_checkpoint",
+    "derive_idempotency_key",
+    "recover_workflow",
+    "validate_checkpoint_lineage",
 ]
