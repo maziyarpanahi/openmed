@@ -357,6 +357,7 @@ nav:
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
