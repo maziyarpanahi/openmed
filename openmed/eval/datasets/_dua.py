@@ -99,7 +99,7 @@ def validate_source_path(
     if _is_relative_to(resolved_source, _REPOSITORY_ROOT):
         raise DUACredentialRequired(
             f"{authority} data for {dataset} must stay outside the repository "
-            f"tree; refusing to read {resolved_source}. No corpus rows were loaded."
+            "tree; no corpus rows were loaded."
         )
     if resolved_root.is_dir() and not _is_relative_to(resolved_source, resolved_root):
         raise DUACredentialRequired(

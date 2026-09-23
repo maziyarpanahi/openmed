@@ -183,7 +183,8 @@ class DUACorpusStub:
         path = Path(credentialed_path)
         if not path.exists():
             raise DUACredentialRequired(
-                f"{self.name} credentialed path does not exist: {path}"
+                f"{self.name} credentialed path does not exist; "
+                "no corpus rows were loaded"
             )
         return DatasetLoadResult(
             dataset=self.name,
@@ -196,7 +197,7 @@ class DUACorpusStub:
 def dua_stub_for(name: str) -> DUACorpusStub:
     key = name.strip().casefold().replace("_", "-")
     if key not in DUA_GATED_CORPORA:
-        raise ValueError(f"unknown gated corpus: {name}")
+        raise ValueError("unknown gated corpus")
     return DUACorpusStub(key)
 
 
@@ -233,17 +234,17 @@ def require_credentialed_path(
     if _is_relative_to(candidate, repository_root):
         raise DUACredentialRequired(
             f"{authority} data for {dataset} must stay outside the repository "
-            f"tree; refusing to read {candidate}. No corpus rows were loaded."
+            "tree; no corpus rows were loaded."
         )
     if not candidate.exists():
         raise DUACredentialRequired(
-            f"{authority} credentialed path for {dataset} does not exist: "
-            f"{candidate}. No corpus rows were loaded."
+            f"{authority} credentialed path for {dataset} does not exist; "
+            "no corpus rows were loaded."
         )
     if not candidate.is_file() and not candidate.is_dir():
         raise DUACredentialRequired(
             f"{authority} credentialed path for {dataset} must be a file or "
-            f"directory: {candidate}. No corpus rows were loaded."
+            "directory; no corpus rows were loaded."
         )
     return candidate
 
@@ -280,7 +281,7 @@ def load_radgraph_fixtures(
     path = Path(credentialed_path)
     if not path.exists():
         raise DUACredentialRequired(
-            f"radgraph credentialed path does not exist: {path}"
+            "radgraph credentialed path does not exist; no corpus rows were loaded"
         )
     return _load_radgraph_paths(_radgraph_source_files(path), require_synthetic=False)
 
@@ -398,7 +399,7 @@ def _radgraph_entities(
         if not entity_id:
             raise ValueError("RadGraph-style entity id is required")
         if entity_id in entities:
-            raise ValueError(f"duplicate RadGraph-style entity id: {entity_id}")
+            raise ValueError("duplicate RadGraph-style entity id")
         entity_row = dict(row)
         if "start" not in entity_row or "end" not in entity_row:
             start_index = _integer(entity_row.get("start_ix"), "start_ix")

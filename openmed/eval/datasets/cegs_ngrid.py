@@ -165,10 +165,7 @@ def load_cegs_ngrid(path: str | Path | None = None) -> list[BenchmarkFixture]:
     for annotation_path in ann_files:
         text_path = annotation_path.with_suffix(".txt")
         if not text_path.exists():
-            raise ValueError(
-                f"CEGS N-GRID BRAT annotation {annotation_path.name} requires "
-                "a paired .txt file"
-            )
+            raise ValueError("CEGS N-GRID BRAT annotation requires a paired .txt file")
         fixtures.append(
             _fixture_from_brat(
                 text_path,
@@ -200,9 +197,7 @@ def map_cegs_ngrid_label(label: str) -> str:
             canonical = normalized
     if canonical is None:
         allowed = ", ".join(sorted(CEGS_NGRID_LABEL_TO_CANONICAL))
-        raise ValueError(
-            f"unknown CEGS N-GRID PHI label {label!r}; expected one of: {allowed}"
-        )
+        raise ValueError(f"unknown CEGS N-GRID PHI label; expected one of: {allowed}")
     if canonical not in CANONICAL_LABELS:
         raise RuntimeError(f"CEGS N-GRID mapping is not canonical: {canonical!r}")
     return canonical
@@ -239,7 +234,7 @@ def _fixture_from_row(
     record_id = _record_id(row, fallback=f"row-{row_number}")
     raw_spans = row.get("entities") or row.get("spans") or row.get("annotations")
     spans = tuple(
-        _span_from_mapping(item, text=text, source_name=source.name)
+        _span_from_mapping(item, text=text, source_name="credentialed source")
         for item in _span_rows(raw_spans)
     )
     return BenchmarkFixture(
@@ -279,10 +274,7 @@ def _fixture_from_brat(
             continue
         columns = line.split("\t", 2)
         if len(columns) != 3:
-            raise ValueError(
-                f"malformed CEGS N-GRID BRAT entity at {annotation_path.name}:"
-                f"{line_number}"
-            )
+            raise ValueError(f"malformed CEGS N-GRID BRAT entity at line {line_number}")
         label, offsets = _brat_offsets(columns[1], text=text)
         spans.append(
             _span_from_values(
@@ -291,7 +283,7 @@ def _fixture_from_brat(
                 label=label,
                 text=text,
                 supplied_text=columns[2],
-                source_name=annotation_path.name,
+                source_name="credentialed source",
             )
         )
     return BenchmarkFixture(
@@ -306,7 +298,7 @@ def _fixture_from_xml(path: Path, *, root: Path) -> BenchmarkFixture:
     try:
         document = ET.parse(path)
     except ET.ParseError as exc:
-        raise ValueError(f"failed to parse CEGS N-GRID XML {path.name}: {exc}") from exc
+        raise ValueError("failed to parse CEGS N-GRID XML") from exc
     xml_root = document.getroot()
     text_element = next(
         (
@@ -317,7 +309,7 @@ def _fixture_from_xml(path: Path, *, root: Path) -> BenchmarkFixture:
         None,
     )
     if text_element is None:
-        raise ValueError(f"CEGS N-GRID XML {path.name} is missing a TEXT element")
+        raise ValueError("CEGS N-GRID XML is missing a TEXT element")
     text = "".join(text_element.itertext())
     spans: list[EvalSpan] = []
     for element in xml_root.iter():
@@ -343,7 +335,7 @@ def _fixture_from_xml(path: Path, *, root: Path) -> BenchmarkFixture:
                 label=str(label),
                 text=text,
                 supplied_text=attributes.get("text") or "",
-                source_name=path.name,
+                source_name="credentialed source",
             )
         )
     return BenchmarkFixture(

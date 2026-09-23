@@ -107,9 +107,7 @@ def load_thyme(path: str | Path | None = None) -> list[RelationTaskFixture]:
     for annotation_path in _paired_annotation_files(root):
         text_path = annotation_path.with_suffix(".txt")
         if not text_path.exists():
-            raise ValueError(
-                f"THYME BRAT annotation {annotation_path.name} requires a paired .txt file"
-            )
+            raise ValueError("THYME BRAT annotation requires a paired .txt file")
         fixtures.append(_fixture_from_brat(text_path, annotation_path, root=root))
 
     if not fixtures:
@@ -139,9 +137,7 @@ def map_thyme_entity_label(label: str, *, role: str = "") -> str:
             canonical = normalized
     if canonical is None:
         allowed = ", ".join(sorted(THYME_ENTITY_TO_CANONICAL))
-        raise ValueError(
-            f"unknown THYME entity label {label!r}; expected one of: {allowed}"
-        )
+        raise ValueError(f"unknown THYME entity label; expected one of: {allowed}")
     return canonical
 
 
@@ -149,14 +145,11 @@ def map_thyme_relation_type(relation_type: str) -> str:
     """Normalize a THYME TLINK relation type."""
 
     key = _mapping_key(relation_type)
-    try:
-        return _RELATION_ALIASES[key]
-    except KeyError as exc:
+    normalized = _RELATION_ALIASES.get(key)
+    if normalized is None:
         allowed = ", ".join(THYME_RELATION_TYPES)
-        raise ValueError(
-            f"unknown THYME temporal relation {relation_type!r}; expected one of: "
-            f"{allowed}"
-        ) from exc
+        raise ValueError(f"unknown THYME temporal relation; expected one of: {allowed}")
+    return normalized
 
 
 def thyme_suite_metadata() -> dict[str, Any]:
@@ -200,7 +193,9 @@ def _fixture_from_row(
                 for item_id, item in value.items()
                 if isinstance(item, Mapping)
             )
-    entities = _entities_from_rows(raw_entities, text=text, source_name=source.name)
+    entities = _entities_from_rows(
+        raw_entities, text=text, source_name="credentialed source"
+    )
     resolved_id = fixture_id(THYME, source, root, record_id)
     relations = _relations_from_rows(
         row.get("relations") or row.get("tlinks") or row.get("gold_relations") or [],
@@ -254,7 +249,7 @@ def _fixture_from_brat(
                 role=label,
                 text=text,
                 supplied_text=columns[2],
-                source_name=annotation_path.name,
+                source_name="credentialed source",
             )
         elif line.startswith("R"):
             columns = line.split("\t", 1)
@@ -291,7 +286,7 @@ def _fixture_from_xml(path: Path, *, root: Path) -> RelationTaskFixture:
     try:
         document = ET.parse(path)
     except ET.ParseError as exc:
-        raise ValueError(f"failed to parse THYME XML {path.name}: {exc}") from exc
+        raise ValueError("failed to parse THYME XML") from exc
     xml_root = document.getroot()
     text_element = next(
         (
@@ -302,7 +297,7 @@ def _fixture_from_xml(path: Path, *, root: Path) -> RelationTaskFixture:
         None,
     )
     if text_element is None:
-        raise ValueError(f"THYME XML {path.name} is missing a TEXT element")
+        raise ValueError("THYME XML is missing a TEXT element")
     text = "".join(text_element.itertext())
     entities: dict[str, EvalSpan] = {}
     relation_rows: list[Mapping[str, Any]] = []
@@ -335,7 +330,7 @@ def _fixture_from_xml(path: Path, *, root: Path) -> RelationTaskFixture:
             role=local_name,
             text=text,
             supplied_text=str(_xml_value(element, attributes, "text") or ""),
-            source_name=path.name,
+            source_name="credentialed source",
         )
     resolved_id = fixture_id(THYME, path, root, path.stem)
     return RelationTaskFixture(
@@ -382,10 +377,8 @@ def _relations_from_rows(
         try:
             head = entities[head_id]
             tail = entities[tail_id]
-        except KeyError as exc:
-            raise ValueError(
-                f"THYME temporal link references unknown entity {exc.args[0]!r}"
-            ) from exc
+        except KeyError:
+            raise ValueError("THYME temporal link references unknown entity") from None
         source_type = str(
             row.get("type")
             or row.get("relation_type")
@@ -420,7 +413,7 @@ def _entities_from_rows(
             raise ValueError("THYME entity rows must be objects")
         entity_id = str(raw.get("id") or raw.get("entity_id") or f"T{index}")
         if entity_id in entities:
-            raise ValueError(f"duplicate THYME entity id: {entity_id}")
+            raise ValueError("duplicate THYME entity id")
         entities[entity_id] = _span_from_values(
             start=_mapping_offsets(raw)[0],
             end=_mapping_offsets(raw)[1],

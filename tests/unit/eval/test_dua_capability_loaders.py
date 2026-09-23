@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,14 @@ from openmed.eval.datasets import (
     load_shac,
     load_thyme,
 )
+from openmed.eval.datasets._dua import validate_source_path
+from openmed.eval.datasets.dua_stubs import (
+    load_dua_corpus,
+    load_radgraph_fixtures,
+    require_credentialed_path,
+)
+from openmed.eval.datasets.mednli import normalize_mednli_label
+from openmed.eval.datasets.thyme import map_thyme_relation_type
 
 
 def test_cegs_ngrid_maps_synthetic_ner_rows(tmp_path: Path) -> None:
@@ -238,6 +247,115 @@ def test_gated_loaders_refuse_repository_paths_before_reading() -> None:
 
     with pytest.raises(DUACredentialRequired, match="repository"):
         load_mednli(repository_root)
+
+
+def test_repository_path_refusal_does_not_echo_sensitive_filename() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    source = repository_root / "synthetic_patient_identifier_123.json"
+
+    with pytest.raises(DUACredentialRequired) as captured:
+        validate_source_path(
+            source,
+            source.parent,
+            dataset="mednli",
+            authority="credentialed",
+        )
+
+    assert "repository" in str(captured.value)
+    assert source.name not in str(captured.value)
+    assert str(repository_root) not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "loader",
+    (load_cegs_ngrid, load_shac, load_thyme, load_mednli, load_mimic_iv_bhc),
+)
+def test_missing_credentialed_path_does_not_echo_sensitive_filename(
+    loader,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "synthetic_patient_identifier_123.json"
+
+    with pytest.raises(DUACredentialRequired) as captured:
+        loader(source)
+
+    rendered = "".join(traceback.format_exception(captured.value))
+    assert source.name not in rendered
+    assert str(tmp_path) not in rendered
+
+
+@pytest.mark.parametrize("loader", (load_cegs_ngrid, load_shac, load_thyme))
+def test_missing_brat_pair_does_not_echo_sensitive_filename(
+    loader,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "synthetic_patient_identifier_123.ann"
+    source.write_text("T1\tNAME 0 1\tX\n", encoding="utf-8")
+
+    with pytest.raises(ValueError) as captured:
+        loader(tmp_path)
+
+    assert source.name not in "".join(traceback.format_exception(captured.value))
+
+
+@pytest.mark.parametrize("loader", (load_cegs_ngrid, load_thyme))
+def test_invalid_xml_does_not_echo_sensitive_filename(
+    loader,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "synthetic_patient_identifier_123.xml"
+    source.write_text("<broken", encoding="utf-8")
+
+    with pytest.raises(ValueError) as captured:
+        loader(source)
+
+    assert source.name not in "".join(traceback.format_exception(captured.value))
+
+
+def test_shared_dua_refusals_do_not_echo_sensitive_paths(tmp_path: Path) -> None:
+    source = tmp_path / "synthetic_patient_identifier_123.json"
+    repository_root = Path(__file__).resolve().parents[3]
+    repository_source = repository_root / source.name
+
+    operations = (
+        lambda: require_credentialed_path(
+            source,
+            dataset="mednli",
+            authority="credentialed",
+            env_var="OPENMED_MEDNLI_PATH",
+        ),
+        lambda: require_credentialed_path(
+            repository_source,
+            dataset="mednli",
+            authority="credentialed",
+            env_var="OPENMED_MEDNLI_PATH",
+        ),
+        lambda: load_dua_corpus("shac", source),
+        lambda: load_radgraph_fixtures(source),
+    )
+    for operation in operations:
+        with pytest.raises(DUACredentialRequired) as captured:
+            operation()
+        rendered = "".join(traceback.format_exception(captured.value))
+        assert source.name not in rendered
+        assert str(tmp_path) not in rendered
+        assert str(repository_root) not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "normalize",
+    (
+        map_thyme_relation_type,
+        normalize_mednli_label,
+    ),
+)
+def test_invalid_corpus_label_error_omits_supplied_value(normalize) -> None:
+    marker = "synthetic_patient_identifier_123"
+
+    with pytest.raises(ValueError) as captured:
+        normalize(marker)
+
+    assert marker not in "".join(traceback.format_exception(captured.value))
 
 
 @pytest.mark.parametrize(

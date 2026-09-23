@@ -109,9 +109,7 @@ def load_shac(path: str | Path | None = None) -> list[RelationTaskFixture]:
     for annotation_path in _paired_annotation_files(root):
         text_path = annotation_path.with_suffix(".txt")
         if not text_path.exists():
-            raise ValueError(
-                f"SHAC BRAT annotation {annotation_path.name} requires a paired .txt file"
-            )
+            raise ValueError("SHAC BRAT annotation requires a paired .txt file")
         fixtures.append(_fixture_from_brat(text_path, annotation_path, root=root))
 
     if not fixtures:
@@ -138,9 +136,7 @@ def map_shac_entity_label(label: str) -> str:
             canonical = normalized
     if canonical is None:
         allowed = ", ".join(sorted(SHAC_ENTITY_TO_CANONICAL))
-        raise ValueError(
-            f"unknown SHAC entity label {label!r}; expected one of: {allowed}"
-        )
+        raise ValueError(f"unknown SHAC entity label; expected one of: {allowed}")
     return canonical
 
 
@@ -198,7 +194,9 @@ def _fixture_from_row(
     if not isinstance(event_rows, list):
         raise ValueError("SHAC events must be a list")
     entity_rows = _materialize_event_spans(entity_rows, event_rows)
-    entities = _entities_from_rows(entity_rows, text=text, source_name=source.name)
+    entities = _entities_from_rows(
+        entity_rows, text=text, source_name="credentialed source"
+    )
     relations = _relations_from_rows(
         row.get("relations") or row.get("gold_relations") or [],
         entities=entities,
@@ -262,7 +260,7 @@ def _fixture_from_brat(
                     "text": columns[2],
                 },
                 text=text,
-                source_name=annotation_path.name,
+                source_name="credentialed source",
                 fallback_label=label,
             )
         elif line.startswith("R"):
@@ -393,11 +391,11 @@ def _event_relations(
         else:
             trigger_id = str(trigger_value or raw_event.get("trigger_id") or "")
         if not trigger_id:
-            raise ValueError(f"SHAC event {event_id!r} requires a trigger")
+            raise ValueError("SHAC event requires a trigger")
         head = _resolve_entity(trigger_id, entities, text)
         arguments = raw_event.get("arguments") or raw_event.get("args") or []
         if not isinstance(arguments, list):
-            raise ValueError(f"SHAC event {event_id!r} arguments must be a list")
+            raise ValueError("SHAC event arguments must be a list")
         for argument_index, raw_argument in enumerate(arguments, start=1):
             if not isinstance(raw_argument, Mapping):
                 raise ValueError("SHAC event arguments must be objects")
@@ -423,9 +421,7 @@ def _event_relations(
             else:
                 argument_id = str(argument_value or "")
             if not argument_id:
-                raise ValueError(
-                    f"SHAC event {event_id!r} has an argument without a target"
-                )
+                raise ValueError("SHAC event has an argument without a target")
             tail = _resolve_entity(argument_id, entities, text)
             source_role = str(
                 raw_argument.get("role")
@@ -461,7 +457,7 @@ def _entities_from_rows(
     for index, row in enumerate(rows, start=1):
         entity_id = str(row.get("id") or row.get("entity_id") or f"T{index}")
         if entity_id in entities:
-            raise ValueError(f"duplicate SHAC entity id: {entity_id}")
+            raise ValueError("duplicate SHAC entity id")
         entities[entity_id] = _span_from_mapping(
             row,
             text=text,
@@ -547,10 +543,8 @@ def _resolve_entity(
         entity_id = str(value or "")
     try:
         return entities[entity_id]
-    except KeyError as exc:
-        raise ValueError(
-            f"SHAC relation references unknown entity {entity_id!r}"
-        ) from exc
+    except KeyError:
+        raise ValueError("SHAC relation references unknown entity") from None
 
 
 def _brat_event_row(line: str, *, line_number: int) -> Mapping[str, Any]:
@@ -610,8 +604,7 @@ def _determinant_category(value: str) -> str:
         if key == alias or key.startswith(f"{alias}_"):
             return category
     raise ValueError(
-        f"unknown SHAC determinant {value!r}; expected one of: "
-        + ", ".join(SHAC_DETERMINANTS)
+        "unknown SHAC determinant; expected one of: " + ", ".join(SHAC_DETERMINANTS)
     )
 
 

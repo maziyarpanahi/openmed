@@ -72,13 +72,11 @@ def normalize_mednli_label(label: str) -> str:
     """Normalize a MedNLI gold label to the three-way task vocabulary."""
 
     key = re.sub(r"[^a-z]+", "_", str(label).strip().casefold()).strip("_")
-    try:
-        return _LABEL_ALIASES[key]
-    except KeyError as exc:
+    normalized = _LABEL_ALIASES.get(key)
+    if normalized is None:
         allowed = ", ".join(MEDNLI_LABELS)
-        raise ValueError(
-            f"unknown MedNLI label {label!r}; expected one of: {allowed}"
-        ) from exc
+        raise ValueError(f"unknown MedNLI label; expected one of: {allowed}")
+    return normalized
 
 
 def mednli_suite_metadata() -> dict[str, Any]:
