@@ -369,6 +369,7 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - clinical/sdoh-evidence.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - clinical/note-routing.md
