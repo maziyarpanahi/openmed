@@ -145,6 +145,7 @@ nav:
       - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
       - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+      - Clinical Data-quality Profiler: clinical/data-quality-profiler.md
       - Offline Terminology Grounding: grounding.md
       - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
       - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
@@ -320,6 +321,7 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md
+      - Agent Context PHI Preflight: security/preflight-phi-gate.md
       - CI Privacy Scan: security/ci-privacy-scan.md
       - Secret Token Detection: security/secret-detection.md
       - In-place Trace Redaction: guides/in-place-redaction.md

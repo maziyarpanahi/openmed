@@ -609,6 +609,47 @@
       ]
     },
     {
+      "name": "Quality",
+      "item": [
+        {
+          "name": "Profile Extracted Output",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records_jsonl\": \"{\\\"note_id\\\": \\\"synthetic-note\\\", \\\"entities\\\": []}\\n\",\n  \"completeness_floor\": 0.0,\n  \"required_fields\": [\"condition\", \"measurement\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "profile"
+              ]
+            },
+            "description": "Profile synthetic extracted output and return aggregate completeness, grounding, conformance, and plausibility diagnostics without note text or raw values."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "OMOP",
       "item": [
         {
