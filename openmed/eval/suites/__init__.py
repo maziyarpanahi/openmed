@@ -154,6 +154,12 @@ from openmed.eval.suites.cross_lingual_grounding import (
     run_cross_lingual_grounding,
     scan_restricted_corpus_markers,
 )
+from openmed.eval.suites.drug_safety import (
+    DRUG_SAFETY_SUITE_VERSION,
+    DrugSafetyBenchmarkCase,
+    DrugSafetyBenchmarkReport,
+    run_drug_safety_benchmark,
+)
 from openmed.eval.suites.grounding_index_recall import (
     evaluate_grounding_index_recall,
     grounding_index_recall_metadata,
@@ -308,6 +314,12 @@ from openmed.eval.suites.temporal_tlinks import (
     decode_temporal_tlink_fixture,
     evaluate_temporal_tlink_fixtures,
     load_temporal_tlink_fixtures,
+)
+from openmed.eval.suites.trial_eligibility import (
+    TRIAL_ELIGIBILITY_SUITE_VERSION,
+    TrialEligibilityBenchmarkCase,
+    TrialEligibilityBenchmarkReport,
+    run_trial_eligibility_benchmark,
 )
 
 GOLDEN = "golden"
@@ -595,6 +607,14 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "DRUG_SAFETY_SUITE_VERSION",
+    "DrugSafetyBenchmarkCase",
+    "DrugSafetyBenchmarkReport",
+    "run_drug_safety_benchmark",
+    "TRIAL_ELIGIBILITY_SUITE_VERSION",
+    "TrialEligibilityBenchmarkCase",
+    "TrialEligibilityBenchmarkReport",
+    "run_trial_eligibility_benchmark",
     "PROMOTION_DECISIONS",
     "JourneySpecialistEvaluationError",
     "SpecialistHoldoutReport",
