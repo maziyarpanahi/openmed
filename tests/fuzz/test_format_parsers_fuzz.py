@@ -537,6 +537,19 @@ def test_malformed_email_address_header_does_not_crash_registered_parser() -> No
     assert status == "ok"
 
 
+def test_nested_group_email_address_header_does_not_crash_registered_parser() -> None:
+    parser_target = next(
+        target for target in _TARGETS if target.key == "document:eml:.eml"
+    )
+    with _ParserWorker() as worker:
+        status = _assert_no_crash(
+            worker,
+            parser_target,
+            b"From: a:b:;;\r\nTo: x@y.invalid\r\nSubject: s\r\n\r\nbody\r\n",
+        )
+    assert status == "ok"
+
+
 def test_registered_format_parsers_resist_mutated_input() -> None:
     with _ParserWorker() as worker:
 

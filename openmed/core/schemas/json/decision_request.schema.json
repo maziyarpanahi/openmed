@@ -1,0 +1,125 @@
+{
+  "$id": "https://openmed.dev/schemas/decision-request/1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "scalar_score"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "options": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "boolean_choice"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "options": {
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "fixed_choice",
+              "ordered_preference",
+              "multi_label"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "options": {
+            "maxItems": 64,
+            "minItems": 2
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "calibration_id": {
+      "default": "openmed.synthetic.fixed_option.v1",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+      "type": "string"
+    },
+    "compatibility_policy": {
+      "const": "same_major",
+      "default": "same_major",
+      "type": "string"
+    },
+    "input_text": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "fixed_choice",
+        "boolean_choice",
+        "ordered_preference",
+        "scalar_score",
+        "multi_label"
+      ],
+      "type": "string"
+    },
+    "namespace": {
+      "default": "default",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+      "type": "string"
+    },
+    "options": {
+      "default": [],
+      "items": {
+        "maxLength": 256,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "purpose": {
+      "default": "care_review",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "type": "string"
+    },
+    "timeout_ms": {
+      "default": 5000,
+      "maximum": 30000,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "mode",
+    "input_text"
+  ],
+  "title": "OpenMed Fixed-Option Decision Request",
+  "type": "object"
+}
