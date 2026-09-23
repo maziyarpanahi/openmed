@@ -223,6 +223,7 @@ classification:
     - clinical/evidence-tables.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
+    - clinical/summary-claim-segmentation.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
