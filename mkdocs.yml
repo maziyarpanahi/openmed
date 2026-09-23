@@ -172,6 +172,7 @@ nav:
       - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
+      - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
