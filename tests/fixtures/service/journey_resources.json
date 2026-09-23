@@ -1,0 +1,156 @@
+[
+  {
+    "resource_type": "artifact",
+    "resource_id": "artifact_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json",
+      "byte_size": 128,
+      "created_at": "2026-09-21T08:00:00Z"
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 1,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "fact",
+    "resource_id": "fact_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "subject_id": "subject_aaaaaaaaaaaaaaaa",
+      "concept": "synthetic.condition.alpha",
+      "assertion": "present",
+      "confidence": 0.94,
+      "evidence_ids": ["evidence_aaaaaaaaaaaaaaaa"]
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 2,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "fact",
+    "resource_id": "fact_bbbbbbbbbbbbbbbb",
+    "namespace": "default",
+    "data": {
+      "subject_id": "subject_aaaaaaaaaaaaaaaa",
+      "concept": "synthetic.measure.beta",
+      "assertion": "present",
+      "confidence": 0.87,
+      "evidence_ids": ["evidence_bbbbbbbbbbbbbbbb"]
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 3,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "evidence",
+    "resource_id": "evidence_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "artifact_id": "artifact_aaaaaaaaaaaaaaaa",
+      "locator_type": "json_pointer",
+      "start": 0,
+      "end": 8
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 4,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "current_fact",
+    "resource_id": "current_fact_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "subject_id": "subject_aaaaaaaaaaaaaaaa",
+      "fact_id": "fact_aaaaaaaaaaaaaaaa",
+      "state": "selected",
+      "effective_at": "2026-09-21T08:00:00Z"
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 5,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "journey_event",
+    "resource_id": "journey_event_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "subject_id": "subject_aaaaaaaaaaaaaaaa",
+      "event_type": "fact_recorded",
+      "effective_at": "2026-09-21T08:00:00Z",
+      "fact_id": "fact_aaaaaaaaaaaaaaaa"
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 6,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "mapping",
+    "resource_id": "mapping_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "source_id": "concept_source_alpha",
+      "target_id": "concept_target_alpha",
+      "mapping_type": "exact"
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 7,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "cohort_run",
+    "resource_id": "cohort_run_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "cohort_id": "cohort_aaaaaaaaaaaaaaaa",
+      "status": "complete",
+      "member_count": 2,
+      "run_at": "2026-09-21T08:00:00Z"
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 8,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  },
+  {
+    "resource_type": "dataset_manifest",
+    "resource_id": "dataset_manifest_aaaaaaaaaaaaaaaa",
+    "namespace": "default",
+    "data": {
+      "dataset_id": "dataset_aaaaaaaaaaaaaaaa",
+      "snapshot_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "row_count": 2,
+      "license_id": "synthetic-only"
+    },
+    "state": "success",
+    "version": 1,
+    "revision": 9,
+    "schema_version": "1.0.0",
+    "compatibility_policy": "same_major",
+    "extensions": {}
+  }
+]

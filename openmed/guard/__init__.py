@@ -36,6 +36,17 @@ from .dataset import (
     scan_dataset_files,
     scan_text,
 )
+from .operational_limits import (
+    ArchiveLimitDecision,
+    LimitDecision,
+    LimitState,
+    OperationalLimitError,
+    OperationalLimits,
+    inspect_zip_payload,
+    parse_bounded_json,
+    validate_page_size,
+    validate_payload_size,
+)
 from .preflight import (
     FAIL_CLOSED,
     FAIL_CLOSED_POLICY,
@@ -55,6 +66,17 @@ from .preflight import (
     preflight,
     preflight_context,
     scan_context,
+)
+from .query_safety import (
+    DEFAULT_READ_ONLY_VIEWS,
+    MAX_QUERY_ROWS,
+    MAX_QUERY_TEXT_BYTES,
+    MAX_SQL_BYTES,
+    QuerySafetyError,
+    classify_query_text,
+    normalize_query_text,
+    quote_untrusted_scalar,
+    validate_bounded_read_only_sql,
 )
 
 __all__ = [
@@ -108,6 +130,24 @@ __all__ = [
     "preflight",
     "preflight_context",
     "scan_context",
+    "DEFAULT_READ_ONLY_VIEWS",
+    "MAX_QUERY_ROWS",
+    "MAX_QUERY_TEXT_BYTES",
+    "MAX_SQL_BYTES",
+    "QuerySafetyError",
+    "classify_query_text",
+    "normalize_query_text",
+    "quote_untrusted_scalar",
+    "validate_bounded_read_only_sql",
+    "ArchiveLimitDecision",
+    "LimitDecision",
+    "LimitState",
+    "OperationalLimitError",
+    "OperationalLimits",
+    "inspect_zip_payload",
+    "parse_bounded_json",
+    "validate_page_size",
+    "validate_payload_size",
 ]
 
 
