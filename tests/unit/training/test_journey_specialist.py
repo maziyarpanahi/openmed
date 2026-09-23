@@ -6,6 +6,7 @@ import json
 import socket
 from dataclasses import replace
 from importlib import resources
+from pathlib import Path
 
 import pytest
 from hypothesis import given
@@ -168,6 +169,30 @@ def test_offline_dry_run_is_deterministic_raw_free_and_schema_valid(
         not tuple(validator.iter_errors(item.to_dict()))
         for item in first.value.manifests
     )
+
+
+def test_bundled_dataset_digest_survives_windows_checkout_line_endings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = load_journey_specialist_pack()
+    bundled = resources.files("openmed.training.data").joinpath(plan.dataset.resource)
+    canonical = bundled.read_bytes().replace(b"\r\n", b"\n")
+    expected = load_journey_specialist_examples(plan.dataset, canonical)
+    windows_checkout = canonical.replace(b"\n", b"\r\n")
+    tmp_path.joinpath(plan.dataset.resource).write_bytes(windows_checkout)
+    original_files = resources.files
+    monkeypatch.setattr(
+        resources,
+        "files",
+        lambda package: (
+            tmp_path if package == "openmed.training.data" else original_files(package)
+        ),
+    )
+
+    assert load_journey_specialist_examples(plan.dataset) == expected
+    assert dry_run_journey_specialist_pack(code_revision=CODE_REVISION).ok
+    with pytest.raises(JourneySpecialistConflictError):
+        load_journey_specialist_examples(plan.dataset, windows_checkout)
 
 
 def test_dataset_integrity_license_and_cap_fail_closed_with_typed_states() -> None:
