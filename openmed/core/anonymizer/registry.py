@@ -58,7 +58,9 @@ _PLUGIN_PROVIDER_FALLBACKS: Dict[str, Generator] = {}
 _PLUGIN_PROVIDER_DISPATCHERS: Dict[str, Generator] = {}
 _PLUGIN_SPAN_HASH_KEY = secrets.token_bytes(32)
 
-_INDIA_LOCALES = frozenset({"as_IN", "en_IN", "hi_IN", "mr_IN", "or_IN", "ta_IN"})
+_INDIA_LOCALES = frozenset(
+    {"as_IN", "en_IN", "gu_IN", "hi_IN", "kn_IN", "mr_IN", "or_IN", "ta_IN"}
+)
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -341,6 +343,10 @@ def _gen_tamil_patronymic_person(faker, original: str) -> str | None:
 
 
 def _gen_india_person(faker, original, *, locale):
+    if locale == "kn_IN":
+        from .providers.script_names import generate_kannada_name
+
+        return generate_kannada_name(faker, original, locale=locale)
     if locale == "ta_IN":
         patronymic = _gen_tamil_patronymic_person(faker, original)
         if patronymic is not None:
@@ -354,6 +360,10 @@ def _gen_india_person(faker, original, *, locale):
 
 
 def _gen_india_first_name(faker, original, *, locale):
+    if locale == "kn_IN":
+        from .providers.script_names import generate_kannada_name
+
+        return generate_kannada_name(faker, original, locale=locale)
     curated = _locale_fake_value(faker, locale, "FIRST_NAME", original)
     if curated is not None:
         return curated
@@ -363,6 +373,10 @@ def _gen_india_first_name(faker, original, *, locale):
 
 
 def _gen_india_last_name(faker, original, *, locale):
+    if locale == "kn_IN":
+        from .providers.script_names import generate_kannada_name
+
+        return generate_kannada_name(faker, original, locale=locale)
     curated = _locale_fake_value(faker, locale, "LAST_NAME", original)
     if curated is not None:
         return curated
@@ -372,6 +386,10 @@ def _gen_india_last_name(faker, original, *, locale):
 
 
 def _gen_india_middle_name(faker, original, *, locale):
+    if locale == "kn_IN":
+        from .providers.script_names import generate_kannada_name
+
+        return generate_kannada_name(faker, original, locale=locale)
     curated = _locale_fake_value(faker, locale, "FIRST_NAME", original)
     if curated is not None:
         return curated
@@ -676,7 +694,9 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "as_IN": "aadhaar",
     "en_IN": "aadhaar",
+    "gu_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "kn_IN": "aadhaar",
     "mr_IN": "aadhaar",
     "or_IN": "aadhaar",
     "ta_IN": "aadhaar",

@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/golden_journey.schema.json",
+  "title": "OpenMed five-source golden Journey report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "api_results",
+    "cohort",
+    "compatibility_policy",
+    "conflicts",
+    "dataset",
+    "facts",
+    "identity",
+    "journey",
+    "omop",
+    "pipeline",
+    "provenance",
+    "resolutions",
+    "scenario_id",
+    "schema_version",
+    "sources",
+    "state_matrix",
+    "synthetic",
+    "unit_conversion"
+  ],
+  "properties": {
+    "api_results": {
+      "type": "object",
+      "required": [
+        "conflict",
+        "denied",
+        "empty",
+        "failure",
+        "partial",
+        "success",
+        "unknown",
+        "unsupported"
+      ],
+      "additionalProperties": {"type": "object"}
+    },
+    "cohort": {"type": "object"},
+    "compatibility_policy": {"const": "same_major"},
+    "conflicts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "object"}
+    },
+    "dataset": {"type": "object"},
+    "facts": {
+      "type": "array",
+      "minItems": 6,
+      "items": {"type": "object"}
+    },
+    "identity": {"type": "object"},
+    "journey": {"type": "object"},
+    "omop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projection", "reason_code", "state", "violations"],
+      "properties": {
+        "projection": {"type": "object"},
+        "reason_code": {"type": ["string", "null"]},
+        "state": {
+          "enum": [
+            "success",
+            "partial",
+            "unknown",
+            "conflict",
+            "unsupported",
+            "denied",
+            "failure"
+          ]
+        },
+        "violations": {"type": "array", "maxItems": 0}
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replay", "runs", "stage_order"],
+      "properties": {
+        "replay": {"type": "object"},
+        "runs": {"type": "array", "minItems": 5, "maxItems": 5},
+        "stage_order": {
+          "const": [
+            "source_adaptation",
+            "privacy_policy",
+            "document_routing",
+            "extraction",
+            "assertion",
+            "temporality",
+            "relation_extraction",
+            "grounding",
+            "fact_normalization",
+            "validation",
+            "durable_writes"
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "model_versions",
+        "policy_versions",
+        "regeneration_command",
+        "scenario_digest",
+        "vocabulary_versions"
+      ],
+      "properties": {
+        "classification": {"const": "synthetic"},
+        "model_versions": {"type": "object"},
+        "policy_versions": {"type": "object"},
+        "regeneration_command": {"type": "string"},
+        "scenario_digest": {"$ref": "#/$defs/digest"},
+        "vocabulary_versions": {"type": "object"}
+      }
+    },
+    "resolutions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "object"}
+    },
+    "scenario_id": {"const": "v3-five-source-golden-journey"},
+    "schema_version": {"const": "1.0.0"},
+    "sources": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact",
+          "evidence",
+          "format",
+          "name",
+          "source_digest",
+          "source_id",
+          "source_size"
+        ],
+        "properties": {
+          "artifact": {"type": "object"},
+          "evidence": {"type": "array", "minItems": 1},
+          "format": {"type": "string"},
+          "name": {"type": "string"},
+          "source_digest": {"$ref": "#/$defs/digest"},
+          "source_id": {"type": "string"},
+          "source_size": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "state_matrix": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "synthetic": {"const": true},
+    "unit_conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_magnitude",
+        "canonical_unit",
+        "original_fact_id",
+        "original_unit",
+        "status"
+      ],
+      "properties": {
+        "canonical_magnitude": {"type": "number"},
+        "canonical_unit": {"type": "string"},
+        "original_fact_id": {"type": "string"},
+        "original_unit": {"type": "string"},
+        "status": {"const": "ok"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

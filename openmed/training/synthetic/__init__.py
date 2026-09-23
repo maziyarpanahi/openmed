@@ -47,6 +47,13 @@ from .section_labels import (
     validate_section_labels,
     validate_section_record,
 )
+from .spdx_identifier import (
+    PERMISSIVE_SPDX_IDENTIFIERS,
+    SPDX_IDENTIFIER_SCHEMA_VERSION,
+    SpdxIdentifier,
+    SpdxIdentifierStatus,
+    normalize_spdx_identifier,
+)
 from .translation_augment import (
     DEFAULT_TARGET_LANGUAGES,
     SYNTHETIC_SOURCE,
@@ -78,6 +85,8 @@ __all__ = [
     "SYNTHETIC_SECTION_LICENSE",
     "SYNTHETIC_SECTION_SOURCE",
     "SUPPORTED_LOCALE_PHI_LANGUAGES",
+    "PERMISSIVE_SPDX_IDENTIFIERS",
+    "SPDX_IDENTIFIER_SCHEMA_VERSION",
     "BurnedInExample",
     "BurnedInGenerator",
     "BurnedInTextBox",
@@ -87,6 +96,8 @@ __all__ = [
     "ModelBackedTranslator",
     "SpanAnnotation",
     "SpanProjectionError",
+    "SpdxIdentifier",
+    "SpdxIdentifierStatus",
     "SyntheticPhiSpan",
     "TranslationAugmentedExample",
     "augment_span_annotated_examples",
@@ -97,6 +108,7 @@ __all__ = [
     "load_section_dataset",
     "load_section_manifest",
     "load_span_jsonl",
+    "normalize_spdx_identifier",
     "normalize_span_annotations",
     "realign_translated_spans",
     "span_corruption_count",
