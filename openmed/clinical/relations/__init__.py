@@ -2,6 +2,19 @@
 
 from importlib import import_module
 
+from .ade import (
+    ADE_RELATION_DISCLAIMER,
+    ADE_RELATION_SCHEMA_VERSION,
+    DRUG_TO_ADE,
+    DRUG_TO_REASON,
+    ADEAssertionStatus,
+    ADERelation,
+    ADERelationType,
+    DrugProtRelationHead,
+    MedicationADERecord,
+    extract_ade_relations,
+    reconstruct_medication_ade_records,
+)
 from .assertion_filter import (
     ASSERTION_FILTER_ADVISORY,
     RELATION_ASSERTION_STATUSES,
@@ -46,6 +59,7 @@ from .candidate import (
     build_relation_candidates,
     enumerate_joint_span_candidates,
     enumerate_span_pair_candidates,
+    generate_relation_candidates,
     sample_negative_span_pairs,
     split_sentence_offsets,
 )
@@ -144,6 +158,17 @@ from .temporal import (
 )
 
 __all__ = [
+    "ADE_RELATION_DISCLAIMER",
+    "ADE_RELATION_SCHEMA_VERSION",
+    "DRUG_TO_ADE",
+    "DRUG_TO_REASON",
+    "ADEAssertionStatus",
+    "ADERelation",
+    "ADERelationType",
+    "DrugProtRelationHead",
+    "MedicationADERecord",
+    "extract_ade_relations",
+    "reconstruct_medication_ade_records",
     "ASSERTION_FILTER_ADVISORY",
     "RELATION_ASSERTION_STATUSES",
     "RELATION_CONFIRMED",
@@ -243,6 +268,7 @@ __all__ = [
     "extract_problem_relations",
     "enumerate_joint_span_candidates",
     "enumerate_span_pair_candidates",
+    "generate_relation_candidates",
     "link_medication_attributes",
     "reconstruct_medication_statements",
     "CMEIE_ENTITY_TYPES",
