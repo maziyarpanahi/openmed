@@ -37,6 +37,7 @@ export interface OpenMedBridgeOptions {
   confidenceThreshold?: number;
   useSmartMerging?: boolean;
   docId?: string;
+  /** Non-empty private key for stable hashes; omitted keys are random per call. */
   hashSecret?: string;
   detector?: string | null;
   metadata?: Record<string, unknown>;
@@ -278,6 +279,9 @@ function normalizeOptions(options: OpenMedBridgeOptions): NativeBridgeOptions {
     normalized.docId = options.docId;
   }
   if (options.hashSecret !== undefined) {
+    if (options.hashSecret.length === 0) {
+      throw new Error("hashSecret must not be empty");
+    }
     normalized.hashSecret = options.hashSecret;
   }
   if (options.detector !== undefined) {
