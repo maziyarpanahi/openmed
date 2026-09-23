@@ -301,6 +301,7 @@ classification:
     - eval-harness.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
+    - evaluation/nli-error-slices.md
     - evaluation/privacy-corpus.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
