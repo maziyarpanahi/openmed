@@ -160,6 +160,11 @@ nav:
       - Medication Reconciliation: clinical/medication-reconciliation.md
       - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
       - Medication-status NLI Precheck: clinical/nli-medication-status.md
+      - Medication-change Relation Candidates: clinical/medication-change-relations.md
+      - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
+      - Procedure-to-indication Relation Candidates: clinical/procedure-indication-relations.md
+      - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
+      - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
       - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
@@ -178,6 +183,9 @@ nav:
       - Summary Safety Envelope: clinical/summary-safety.md
       - Summary Citation Consistency: clinical/summary-citations.md
       - Summary Fact Coverage: evaluation/summary-coverage.md
+      - Structured Review Override Reasons: clinical/review-override-reasons.md
+      - Clinical Review Packet Privacy: clinical/review-packet-privacy.md
+      - Clinical Review Packet Migrations: clinical/review-packet-migrations.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
@@ -270,6 +278,7 @@ nav:
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
