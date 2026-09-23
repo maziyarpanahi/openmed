@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final
 
+from openmed.clinical.journey_contracts import canonical_digest
 from openmed.guard.query_safety import validate_bounded_read_only_sql
 from openmed.service.journey_resources import (
     JOURNEY_RESOURCE_SCHEMA_VERSION,
@@ -17,6 +18,7 @@ from openmed.service.journey_resources import (
     JourneyResourceKind,
     JourneyResourceQuery,
     JourneyResourceState,
+    parse_access_attributes,
 )
 
 JOURNEY_SQL_SCHEMA_VERSION: Final = JOURNEY_RESOURCE_SCHEMA_VERSION
@@ -130,6 +132,10 @@ def query_journey_view(
     *,
     namespace: str = "default",
     purpose: str = "analytics",
+    role: str = "researcher",
+    attributes: Sequence[str] = (),
+    consent_state: str = "active",
+    export_policy: str = "metadata_only",
     limit: int = 20,
     offset: int = 0,
     fields: Sequence[str] = (),
@@ -139,60 +145,52 @@ def query_journey_view(
     """Execute one SQL-view-shaped query through the shared Python catalog."""
 
     active_credential = credential or JourneySQLCredential()
+
+    def terminal(state: JourneyResourceState, code: str) -> JourneySQLQueryResult:
+        return _terminal_sql_result(
+            catalog,
+            state,
+            code,
+            namespace,
+            purpose,
+            role,
+            attributes,
+            consent_state,
+            export_policy,
+        )
+
     view = _VIEW_BY_NAME.get(view_name)
     if view is None:
-        return _terminal_sql_result(
-            catalog,
-            JourneyResourceState.UNSUPPORTED,
-            "sql_view_unsupported",
-            namespace,
-            purpose,
-        )
+        return terminal(JourneyResourceState.UNSUPPORTED, "sql_view_unsupported")
     if view_name not in active_credential.allowed_views:
-        return _terminal_sql_result(
-            catalog,
-            JourneyResourceState.DENIED,
-            "sql_view_denied",
-            namespace,
-            purpose,
-        )
+        return terminal(JourneyResourceState.DENIED, "sql_view_denied")
     if type(offset) is not int or offset < 0 or offset > 1_000_000:
-        return _terminal_sql_result(
-            catalog,
-            JourneyResourceState.FAILURE,
-            "sql_offset_invalid",
-            namespace,
-            purpose,
-        )
+        return terminal(JourneyResourceState.FAILURE, "sql_offset_invalid")
     if type(limit) is not int or not 1 <= limit <= 100:
-        return _terminal_sql_result(
-            catalog,
-            JourneyResourceState.FAILURE,
-            "sql_limit_invalid",
-            namespace,
-            purpose,
-        )
+        return terminal(JourneyResourceState.FAILURE, "sql_limit_invalid")
     try:
         query = JourneyResourceQuery(
             resource_type=view.resource_type,
             namespace=namespace,
             purpose=purpose,
+            role=role,
+            attributes=parse_access_attributes(attributes),
+            consent_state=consent_state,
+            export_policy=export_policy,
             first=limit,
             fields=tuple(fields),
         )
     except ValueError:
-        return _terminal_sql_result(
-            catalog,
-            JourneyResourceState.FAILURE,
-            "sql_query_invalid",
-            namespace,
-            purpose,
-        )
+        return terminal(JourneyResourceState.FAILURE, "sql_query_invalid")
     if offset:
         query = JourneyResourceQuery(
             resource_type=query.resource_type,
             namespace=query.namespace,
             purpose=query.purpose,
+            role=query.role,
+            attributes=query.attributes,
+            consent_state=query.consent_state,
+            export_policy=query.export_policy,
             first=query.first,
             fields=query.fields,
             after=catalog.cursor_for_offset(query, offset),
@@ -264,9 +262,38 @@ def _terminal_sql_result(
     code: str,
     namespace: str,
     purpose: str,
+    role: str = "researcher",
+    attributes: Sequence[str] = (),
+    consent_state: str = "active",
+    export_policy: str = "metadata_only",
 ) -> JourneySQLQueryResult:
     safe_namespace = _safe_controlled(namespace)
     safe_purpose = _safe_controlled(purpose)
+    safe_role = _safe_controlled(role)
+    safe_export_policy = _safe_controlled(export_policy)
+    safe_consent_state = (
+        consent_state
+        if consent_state in {"active", "unknown", "withdrawn"}
+        else "unknown"
+    )
+    safe_attributes = list(parse_access_attributes(attributes))
+    request_digest = canonical_digest(
+        {
+            "attributes": safe_attributes,
+            "consent_state": safe_consent_state,
+            "export_policy": safe_export_policy,
+            "namespace": safe_namespace,
+            "purpose": safe_purpose,
+            "role": safe_role,
+        }
+    )
+    decision_digest = canonical_digest(
+        {
+            "code": code,
+            "request_digest": request_digest,
+            "state": state.value,
+        }
+    )
     return JourneySQLQueryResult(
         state=state,
         code=code,
@@ -276,10 +303,16 @@ def _terminal_sql_result(
         snapshot_digest=catalog.snapshot_digest,
         policy={
             "allowed_fields": [],
+            "attributes": safe_attributes,
             "code": code if state is JourneyResourceState.DENIED else None,
+            "consent_state": safe_consent_state,
+            "decision_id": (f"decision_{decision_digest.removeprefix('sha256:')[:32]}"),
+            "export_policy": safe_export_policy,
             "namespace": safe_namespace,
             "policy_version": JOURNEY_SQL_SCHEMA_VERSION,
             "purpose": safe_purpose,
+            "request_digest": request_digest,
+            "role": safe_role,
             "state": (
                 JourneyResourceState.DENIED.value
                 if state is JourneyResourceState.DENIED

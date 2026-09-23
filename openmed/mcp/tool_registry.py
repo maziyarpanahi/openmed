@@ -1674,6 +1674,30 @@ def _journey_workflow_tool_spec(
             "care_review",
         ),
         _parameter(
+            "role",
+            properties["role"],
+            str,
+            "clinician",
+        ),
+        _parameter(
+            "attributes",
+            properties["attributes"],
+            Optional[Sequence[str]],
+            None,
+        ),
+        _parameter(
+            "consent_state",
+            properties["consent_state"],
+            str,
+            "active",
+        ),
+        _parameter(
+            "export_policy",
+            properties["export_policy"],
+            str,
+            "metadata_only",
+        ),
+        _parameter(
             "first",
             properties["first"],
             int,

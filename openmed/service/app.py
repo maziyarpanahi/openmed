@@ -58,6 +58,7 @@ from .journey_resources import (
     JourneyResourceCatalog,
     JourneyResourceKind,
     JourneyResourceQuery,
+    parse_access_attributes,
     parse_resource_fields,
 )
 from .logging import (
@@ -83,6 +84,7 @@ from .openhim_mediator import (
     mediator_response_headers,
     transform_mediator_payload,
 )
+from .operational import OperationalCategory, OperationalEvent, OperationalState
 from .privacy_gateway import (
     HttpExternalLLMTransport,
     InMemoryReidentificationStore,
@@ -93,6 +95,7 @@ from .privacy_gateway import (
     PrivacyGatewayPolicy,
     PrivacyTransportError,
 )
+from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
@@ -123,6 +126,7 @@ from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
+    operational_trace_attributes,
     result_summary_attributes,
     service_tracing_from_env,
     set_current_span_attributes,
@@ -725,6 +729,7 @@ def create_app() -> FastAPI:
     app.state.openhim_deidentifier = None
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
+    app.state.operational_limits = request_limits_from_env()
     app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
     app.state.decision_access_policy = DecisionAccessPolicy()
     app.state.decision_calibration_profiles = None
@@ -973,6 +978,10 @@ def create_app() -> FastAPI:
         resource_type: JourneyResourceKind,
         namespace: str = "default",
         purpose: str = "care_review",
+        role: str = "clinician",
+        attributes: Optional[str] = Query(default=None, max_length=1024),
+        consent_state: str = "active",
+        export_policy: str = "metadata_only",
         first: int = Query(default=20, ge=1, le=100),
         after: Optional[str] = Query(default=None, max_length=2048),
         fields: Optional[str] = Query(default=None, max_length=1024),
@@ -985,11 +994,27 @@ def create_app() -> FastAPI:
             resource_type=resource_type,
             namespace=namespace,
             purpose=purpose,
+            role=role,
+            attributes=parse_access_attributes(attributes),
+            consent_state=consent_state,
+            export_policy=export_policy,
             first=first,
             after=after,
             fields=parse_resource_fields(fields),
         )
-        return catalog.list_resources(query, policy=policy).to_dict()
+        started_at = time.perf_counter()
+        page = catalog.list_resources(query, policy=policy)
+        event = OperationalEvent(
+            category=OperationalCategory.QUERY,
+            operation="list",
+            state=OperationalState(page.state.value),
+            duration_seconds=time.perf_counter() - started_at,
+        )
+        metrics = getattr(request.app.state, "metrics", None)
+        if metrics is not None:
+            metrics.record_operational_event(event)
+        set_current_span_attributes(operational_trace_attributes(event))
+        return page.to_dict()
 
     @app.post(
         _DECISION_PATH,
@@ -1581,6 +1606,10 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),
+    )
+    app.add_middleware(
+        BoundedRequestBodyMiddleware,
+        limits=app.state.operational_limits,
     )
     return app
 

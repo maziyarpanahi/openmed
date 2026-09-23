@@ -40,6 +40,10 @@ export interface JourneyResourceQuery {
   resource_type: JourneyResourceType;
   namespace?: string;
   purpose?: string;
+  role?: string;
+  attributes?: string[];
+  consent_state?: "active" | "unknown" | "withdrawn";
+  export_policy?: string;
   first?: number;
   after?: string | null;
   fields?: string[];
@@ -72,6 +76,12 @@ export interface JourneyResourcePage {
     state: "success" | "denied";
     namespace: string;
     purpose: string;
+    role: string;
+    attributes: string[];
+    consent_state: "active" | "unknown" | "withdrawn";
+    export_policy: string;
+    decision_id: string;
+    request_digest: string;
     allowed_fields: string[];
     code: string | null;
     policy_version: string;

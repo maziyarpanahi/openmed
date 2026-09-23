@@ -3361,6 +3361,36 @@
               "null"
             ]
           },
+          "attributes": {
+            "default": null,
+            "description": "Bounded attributes asserted for this request.",
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "consent_state": {
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "export_policy": {
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
           "fields": {
             "default": null,
             "description": "Optional minimum-necessary field projection.",
@@ -3397,6 +3427,12 @@
             "description": "Controlled purpose used by the access policy.",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "role": {
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
           }
         },
         "required": [],
@@ -3419,11 +3455,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -3433,6 +3491,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -3446,6 +3511,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -3533,11 +3604,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -3547,6 +3640,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -3560,6 +3660,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -3785,6 +3891,36 @@
               "null"
             ]
           },
+          "attributes": {
+            "default": null,
+            "description": "Bounded attributes asserted for this request.",
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "consent_state": {
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "export_policy": {
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
           "fields": {
             "default": null,
             "description": "Optional minimum-necessary field projection.",
@@ -3821,6 +3957,12 @@
             "description": "Controlled purpose used by the access policy.",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "role": {
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
           }
         },
         "required": [],
@@ -3843,11 +3985,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -3857,6 +4021,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -3870,6 +4041,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -3957,11 +4134,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -3971,6 +4170,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -3984,6 +4190,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -4209,6 +4421,36 @@
               "null"
             ]
           },
+          "attributes": {
+            "default": null,
+            "description": "Bounded attributes asserted for this request.",
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "consent_state": {
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "export_policy": {
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
           "fields": {
             "default": null,
             "description": "Optional minimum-necessary field projection.",
@@ -4245,6 +4487,12 @@
             "description": "Controlled purpose used by the access policy.",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "role": {
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
           }
         },
         "required": [],
@@ -4267,11 +4515,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -4281,6 +4551,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -4294,6 +4571,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -4381,11 +4664,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -4395,6 +4700,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -4408,6 +4720,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -4633,6 +4951,36 @@
               "null"
             ]
           },
+          "attributes": {
+            "default": null,
+            "description": "Bounded attributes asserted for this request.",
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "consent_state": {
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "export_policy": {
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
           "fields": {
             "default": null,
             "description": "Optional minimum-necessary field projection.",
@@ -4670,6 +5018,12 @@
             "description": "Controlled purpose used by the access policy.",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "role": {
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
           }
         },
         "required": [],
@@ -4692,11 +5046,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -4706,6 +5082,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -4719,6 +5102,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -4806,11 +5195,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -4820,6 +5231,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -4833,6 +5251,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -5058,6 +5482,36 @@
               "null"
             ]
           },
+          "attributes": {
+            "default": null,
+            "description": "Bounded attributes asserted for this request.",
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "consent_state": {
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "export_policy": {
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
           "fields": {
             "default": null,
             "description": "Optional minimum-necessary field projection.",
@@ -5094,6 +5548,12 @@
             "description": "Controlled purpose used by the access policy.",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "role": {
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
           }
         },
         "required": [],
@@ -5116,11 +5576,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -5130,6 +5612,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -5143,6 +5632,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -5230,11 +5725,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -5244,6 +5761,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -5257,6 +5781,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -5482,6 +6012,36 @@
               "null"
             ]
           },
+          "attributes": {
+            "default": null,
+            "description": "Bounded attributes asserted for this request.",
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "consent_state": {
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+            "enum": [
+              "active",
+              "unknown",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "export_policy": {
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
           "fields": {
             "default": null,
             "description": "Optional minimum-necessary field projection.",
@@ -5518,6 +6078,12 @@
             "description": "Controlled purpose used by the access policy.",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "role": {
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
           }
         },
         "required": [],
@@ -5540,11 +6106,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -5554,6 +6142,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -5567,6 +6162,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"
@@ -5654,11 +6255,33 @@
                 "type": "array",
                 "uniqueItems": true
               },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
               "code": {
                 "type": [
                   "string",
                   "null"
                 ]
+              },
+              "consent_state": {
+                "enum": [
+                  "active",
+                  "unknown",
+                  "withdrawn"
+                ]
+              },
+              "decision_id": {
+                "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$",
+                "type": "string"
+              },
+              "export_policy": {
+                "type": "string"
               },
               "namespace": {
                 "type": "string"
@@ -5668,6 +6291,13 @@
                 "type": "string"
               },
               "purpose": {
+                "type": "string"
+              },
+              "request_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "role": {
                 "type": "string"
               },
               "state": {
@@ -5681,6 +6311,12 @@
               "state",
               "namespace",
               "purpose",
+              "role",
+              "attributes",
+              "consent_state",
+              "export_policy",
+              "decision_id",
+              "request_digest",
               "allowed_fields",
               "code",
               "policy_version"

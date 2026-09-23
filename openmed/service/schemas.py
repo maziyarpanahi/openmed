@@ -1091,11 +1091,17 @@ class JourneyPageInfoResponse(_StrictModel):
 
 
 class JourneyPolicyResponse(_StrictModel):
-    """Namespace, purpose, and field response-policy decision."""
+    """Complete access context and response-policy decision."""
 
     state: Literal["success", "denied"]
     namespace: str
     purpose: str
+    role: str
+    attributes: list[str]
+    consent_state: Literal["active", "unknown", "withdrawn"]
+    export_policy: str
+    decision_id: str
+    request_digest: str
     allowed_fields: list[str]
     code: Optional[str]
     policy_version: Literal["1.0.0"]

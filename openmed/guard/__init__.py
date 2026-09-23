@@ -36,6 +36,17 @@ from .dataset import (
     scan_dataset_files,
     scan_text,
 )
+from .operational_limits import (
+    ArchiveLimitDecision,
+    LimitDecision,
+    LimitState,
+    OperationalLimitError,
+    OperationalLimits,
+    inspect_zip_payload,
+    parse_bounded_json,
+    validate_page_size,
+    validate_payload_size,
+)
 from .query_safety import (
     DEFAULT_READ_ONLY_VIEWS,
     MAX_QUERY_ROWS,
@@ -90,6 +101,15 @@ __all__ = [
     "normalize_query_text",
     "quote_untrusted_scalar",
     "validate_bounded_read_only_sql",
+    "ArchiveLimitDecision",
+    "LimitDecision",
+    "LimitState",
+    "OperationalLimitError",
+    "OperationalLimits",
+    "inspect_zip_payload",
+    "parse_bounded_json",
+    "validate_page_size",
+    "validate_payload_size",
 ]
 
 

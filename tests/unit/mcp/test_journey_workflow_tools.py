@@ -160,6 +160,32 @@ def test_denied_workflow_preserves_access_state_without_resource_values() -> Non
     assert validate_registered_tool_output("openmed_read_journey", payload) == payload
 
 
+@pytest.mark.parametrize(
+    ("arguments", "code"),
+    [
+        ({"role": "guest"}, "role_denied"),
+        ({"consent_state": "withdrawn"}, "consent_withdrawn"),
+        ({"export_policy": "full_record"}, "export_policy_denied"),
+    ],
+)
+def test_mcp_workflows_fail_closed_for_access_context(
+    arguments: dict[str, Any],
+    code: str,
+) -> None:
+    handlers = mcp_server.build_mcp_tool_handlers(
+        None,
+        journey_catalog_provider=_catalog,
+    )
+
+    payload = handlers["openmed_read_journey"](**arguments)
+
+    assert payload["state"] == "denied"
+    assert payload["code"] == code
+    assert payload["resources"] == []
+    assert payload["access"]["code"] == code
+    assert validate_registered_tool_output("openmed_read_journey", payload) == payload
+
+
 def test_state_changing_tools_declare_and_receive_consent_contract() -> None:
     for spec in TOOL_REGISTRY.latest_specs():
         authorization = spec.document()["authorization"]

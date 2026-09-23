@@ -22,13 +22,19 @@ rejected by the Python contract before a record can enter a public catalog.
 `GET /v1/journey/resources` accepts:
 
 - `resource_type` (required)
-- `namespace` and `purpose` (policy inputs)
+- `namespace`, `purpose`, and `role` (policy inputs)
+- `attributes`, a bounded comma-separated attribute set
+- `consent_state`: `active`, `unknown`, or `withdrawn`
+- `export_policy`, which defaults to `metadata_only`
 - `first` from 1 through 100
 - `after`, an opaque cursor tied to the query and immutable snapshot
 - `fields`, a comma-separated minimum-necessary projection
 
 An empty or denied result is a valid typed response with no resources. Invalid,
 stale, or query-mismatched cursors fail closed and never restart at page one.
+The opaque cursor is bound to the full access context as well as the selected
+resource fields. It cannot be replayed with a different tenant namespace,
+role, attribute assertion, consent state, or export policy.
 
 ## GraphQL
 
@@ -37,6 +43,8 @@ cursor, and limit implementation as REST. It returns a
 `JourneyResourceConnection`; no Journey mutation or subscription type exists.
 GraphQL selection sets can further reduce the transport response, while the
 `fields` argument controls the underlying minimum-necessary data projection.
+The generated Python and TypeScript clients and the six read-only MCP workflow
+tools expose the same access-context arguments and typed denials.
 
 ## Read-only SQL
 
@@ -49,6 +57,16 @@ the base table and grants analytics identities `SELECT` on views only.
 wildcards and mutation or execution primitives, and restricts reads to the
 credential's view allowlist. `query_journey_view` runs through the same catalog
 and access policy as REST and GraphQL for local parity testing.
+
+## Access-decision evidence
+
+Every response policy block repeats the controlled namespace, purpose, role,
+attribute set, consent state, export policy, selected fields, decision state,
+reason code, opaque decision ID, request digest, and policy version. This is
+sufficient to reconstruct why a read was allowed or denied without recording
+resource values. Namespace, role,
+missing-attribute, withdrawn or unknown consent, export-policy, and field
+failures all return a typed `denied` page with an empty resource list.
 
 ## Compatibility and migration
 

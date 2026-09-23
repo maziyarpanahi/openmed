@@ -25,6 +25,7 @@ JOURNEY_RESOURCE_COMPATIBILITY: Final = "same_major"
 DEFAULT_PAGE_SIZE: Final = 20
 MAX_PAGE_SIZE: Final = 100
 MAX_SELECTED_FIELDS: Final = 32
+MAX_ACCESS_ATTRIBUTES: Final = 32
 
 _CONTROLLED_RE = re.compile(r"^[a-z][a-z0-9_.:/-]{0,127}$")
 _OPAQUE_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$")
@@ -248,6 +249,10 @@ class JourneyResourceQuery:
     resource_type: JourneyResourceKind
     namespace: str = "default"
     purpose: str = "care_review"
+    role: str = "clinician"
+    attributes: tuple[str, ...] = ()
+    consent_state: str = "active"
+    export_policy: str = "metadata_only"
     first: int = DEFAULT_PAGE_SIZE
     after: str | None = field(default=None, repr=False)
     fields: tuple[str, ...] = ()
@@ -256,6 +261,26 @@ class JourneyResourceQuery:
         resource_type = JourneyResourceKind(self.resource_type)
         _require_controlled(self.namespace, "namespace")
         _require_controlled(self.purpose, "purpose")
+        _require_controlled(self.role, "role")
+        if isinstance(self.attributes, (str, bytes)):
+            raise ValueError("access attributes must be a sequence")
+        try:
+            attributes = tuple(sorted(dict.fromkeys(self.attributes)))
+        except TypeError:
+            raise ValueError(
+                "access attributes must be controlled identifiers"
+            ) from None
+        if len(attributes) > MAX_ACCESS_ATTRIBUTES or any(
+            _CONTROLLED_RE.fullmatch(item) is None for item in attributes
+        ):
+            raise ValueError("access attributes must be bounded identifiers")
+        if not isinstance(self.consent_state, str) or self.consent_state not in {
+            "active",
+            "unknown",
+            "withdrawn",
+        }:
+            raise ValueError("consent_state is unsupported")
+        _require_controlled(self.export_policy, "export_policy")
         if type(self.first) is not int or not 1 <= self.first <= MAX_PAGE_SIZE:
             raise ValueError(f"first must be between 1 and {MAX_PAGE_SIZE}")
         if self.after is not None and (
@@ -271,7 +296,25 @@ class JourneyResourceQuery:
         if not set(fields).issubset(allowed):
             raise ValueError("Journey resource query requested an unsupported field")
         object.__setattr__(self, "resource_type", resource_type)
+        object.__setattr__(self, "attributes", attributes)
         object.__setattr__(self, "fields", fields)
+
+    @property
+    def access_request_digest(self) -> str:
+        """Return a stable value-free digest of policy-relevant inputs."""
+
+        return canonical_digest(
+            {
+                "attributes": list(self.attributes),
+                "consent_state": self.consent_state,
+                "export_policy": self.export_policy,
+                "fields": list(self.fields),
+                "namespace": self.namespace,
+                "purpose": self.purpose,
+                "resource_type": self.resource_type.value,
+                "role": self.role,
+            }
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,7 +324,13 @@ class JourneyPolicyDecision:
     state: JourneyResourceState
     namespace: str
     purpose: str
+    role: str
+    attributes: tuple[str, ...]
+    consent_state: str
+    export_policy: str
     allowed_fields: tuple[str, ...]
+    decision_id: str
+    request_digest: str
     code: str | None = None
     policy_version: str = JOURNEY_RESOURCE_SCHEMA_VERSION
 
@@ -289,6 +338,30 @@ class JourneyPolicyDecision:
         state = JourneyResourceState(self.state)
         _require_controlled(self.namespace, "namespace")
         _require_controlled(self.purpose, "purpose")
+        _require_controlled(self.role, "role")
+        if isinstance(self.attributes, (str, bytes)):
+            raise ValueError("policy attributes must be a sequence")
+        try:
+            attributes = tuple(sorted(dict.fromkeys(self.attributes)))
+        except TypeError:
+            raise ValueError(
+                "policy attributes must be controlled identifiers"
+            ) from None
+        if len(attributes) > MAX_ACCESS_ATTRIBUTES or any(
+            _CONTROLLED_RE.fullmatch(item) is None for item in attributes
+        ):
+            raise ValueError("policy attributes must be bounded identifiers")
+        if not isinstance(self.consent_state, str) or self.consent_state not in {
+            "active",
+            "unknown",
+            "withdrawn",
+        }:
+            raise ValueError("policy consent state is unsupported")
+        _require_controlled(self.export_policy, "export_policy")
+        if _OPAQUE_ID_RE.fullmatch(self.decision_id) is None:
+            raise ValueError("policy decision_id must be an opaque identifier")
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", self.request_digest) is None:
+            raise ValueError("policy request_digest must be a SHA-256 digest")
         _require_version(self.policy_version)
         fields = tuple(sorted(dict.fromkeys(self.allowed_fields)))
         if len(fields) > MAX_SELECTED_FIELDS or any(
@@ -309,6 +382,7 @@ class JourneyPolicyDecision:
         if self.code is not None:
             _require_controlled(self.code, "policy code")
         object.__setattr__(self, "state", state)
+        object.__setattr__(self, "attributes", attributes)
         object.__setattr__(self, "allowed_fields", fields)
 
     def to_dict(self) -> dict[str, Any]:
@@ -317,10 +391,16 @@ class JourneyPolicyDecision:
         return {
             "allowed_fields": list(self.allowed_fields),
             "code": self.code,
+            "consent_state": self.consent_state,
+            "decision_id": self.decision_id,
+            "export_policy": self.export_policy,
             "namespace": self.namespace,
             "policy_version": self.policy_version,
             "purpose": self.purpose,
+            "request_digest": self.request_digest,
+            "role": self.role,
             "state": self.state.value,
+            "attributes": list(self.attributes),
         }
 
 
@@ -332,6 +412,13 @@ class JourneyAccessPolicy:
     allowed_purposes: frozenset[str] = frozenset(
         {"analytics", "care_review", "quality"}
     )
+    allowed_roles: frozenset[str] = frozenset(
+        {"clinician", "data_steward", "privacy_officer", "researcher"}
+    )
+    allowed_export_policies: frozenset[str] = frozenset({"metadata_only"})
+    required_attributes_by_resource: Mapping[JourneyResourceKind, frozenset[str]] = (
+        field(default_factory=dict)
+    )
     fields_by_resource: Mapping[JourneyResourceKind, frozenset[str]] = field(
         default_factory=lambda: RESOURCE_FIELDS
     )
@@ -340,6 +427,8 @@ class JourneyAccessPolicy:
     def __post_init__(self) -> None:
         namespaces = frozenset(self.allowed_namespaces)
         purposes = frozenset(self.allowed_purposes)
+        roles = frozenset(self.allowed_roles)
+        export_policies = frozenset(self.allowed_export_policies)
         if not namespaces or any(
             _CONTROLLED_RE.fullmatch(item) is None for item in namespaces
         ):
@@ -348,6 +437,12 @@ class JourneyAccessPolicy:
             _CONTROLLED_RE.fullmatch(item) is None for item in purposes
         ):
             raise ValueError("allowed purposes must be controlled identifiers")
+        if not roles or any(_CONTROLLED_RE.fullmatch(item) is None for item in roles):
+            raise ValueError("allowed roles must be controlled identifiers")
+        if not export_policies or any(
+            _CONTROLLED_RE.fullmatch(item) is None for item in export_policies
+        ):
+            raise ValueError("allowed export policies must be controlled identifiers")
         normalized_fields: dict[JourneyResourceKind, frozenset[str]] = {}
         for raw_kind, raw_fields in self.fields_by_resource.items():
             kind = JourneyResourceKind(raw_kind)
@@ -356,12 +451,30 @@ class JourneyAccessPolicy:
                 raise ValueError("policy contains an unsupported resource field")
             normalized_fields[kind] = fields
         _require_version(self.policy_version)
+        required_attributes: dict[JourneyResourceKind, frozenset[str]] = {}
+        for raw_kind, raw_attributes in self.required_attributes_by_resource.items():
+            kind = JourneyResourceKind(raw_kind)
+            if isinstance(raw_attributes, (str, bytes)):
+                raise ValueError("required attributes must be a collection")
+            attributes = frozenset(raw_attributes)
+            if len(attributes) > MAX_ACCESS_ATTRIBUTES or any(
+                _CONTROLLED_RE.fullmatch(item) is None for item in attributes
+            ):
+                raise ValueError("required attributes must be controlled identifiers")
+            required_attributes[kind] = attributes
         object.__setattr__(self, "allowed_namespaces", namespaces)
         object.__setattr__(self, "allowed_purposes", purposes)
+        object.__setattr__(self, "allowed_roles", roles)
+        object.__setattr__(self, "allowed_export_policies", export_policies)
         object.__setattr__(
             self,
             "fields_by_resource",
             MappingProxyType(normalized_fields),
+        )
+        object.__setattr__(
+            self,
+            "required_attributes_by_resource",
+            MappingProxyType(required_attributes),
         )
 
     def decide(self, query: JourneyResourceQuery) -> JourneyPolicyDecision:
@@ -371,24 +484,61 @@ class JourneyAccessPolicy:
             return self._denied(query, "namespace_denied")
         if query.purpose not in self.allowed_purposes:
             return self._denied(query, "purpose_denied")
+        if query.role not in self.allowed_roles:
+            return self._denied(query, "role_denied")
+        if query.consent_state != "active":
+            return self._denied(query, f"consent_{query.consent_state}")
+        if query.export_policy not in self.allowed_export_policies:
+            return self._denied(query, "export_policy_denied")
+        required = self.required_attributes_by_resource.get(
+            query.resource_type, frozenset()
+        )
+        if not required.issubset(query.attributes):
+            return self._denied(query, "attribute_denied")
         allowed = self.fields_by_resource.get(query.resource_type, frozenset())
         selected = query.fields or tuple(sorted(allowed))
         if not set(selected).issubset(allowed):
             return self._denied(query, "field_denied")
+        decision_id, request_digest = _policy_decision_identity(
+            query,
+            state=JourneyResourceState.SUCCESS,
+            allowed_fields=tuple(selected),
+            code=None,
+            policy_version=self.policy_version,
+        )
         return JourneyPolicyDecision(
             state=JourneyResourceState.SUCCESS,
             namespace=query.namespace,
             purpose=query.purpose,
+            role=query.role,
+            attributes=query.attributes,
+            consent_state=query.consent_state,
+            export_policy=query.export_policy,
             allowed_fields=tuple(selected),
+            decision_id=decision_id,
+            request_digest=request_digest,
             policy_version=self.policy_version,
         )
 
     def _denied(self, query: JourneyResourceQuery, code: str) -> JourneyPolicyDecision:
+        decision_id, request_digest = _policy_decision_identity(
+            query,
+            state=JourneyResourceState.DENIED,
+            allowed_fields=(),
+            code=code,
+            policy_version=self.policy_version,
+        )
         return JourneyPolicyDecision(
             state=JourneyResourceState.DENIED,
             namespace=query.namespace,
             purpose=query.purpose,
+            role=query.role,
+            attributes=query.attributes,
+            consent_state=query.consent_state,
+            export_policy=query.export_policy,
             allowed_fields=(),
+            decision_id=decision_id,
+            request_digest=request_digest,
             code=code,
             policy_version=self.policy_version,
         )
@@ -587,11 +737,15 @@ class JourneyResourceCatalog:
         if type(offset) is not int or offset < 0:
             raise ValueError("cursor offset must be non-negative")
         body = {
+            "attributes": list(query.attributes),
+            "consent_state": query.consent_state,
+            "export_policy": query.export_policy,
             "fields": list(query.fields),
             "namespace": query.namespace,
             "offset": offset,
             "purpose": query.purpose,
             "resource_type": query.resource_type.value,
+            "role": query.role,
             "snapshot_digest": self.snapshot_digest,
             "version": 1,
         }
@@ -618,10 +772,14 @@ class JourneyResourceCatalog:
         if digest != canonical_digest(payload):
             raise ValueError("cursor_integrity_failed")
         expected = {
+            "attributes": list(query.attributes),
+            "consent_state": query.consent_state,
+            "export_policy": query.export_policy,
             "fields": list(query.fields),
             "namespace": query.namespace,
             "purpose": query.purpose,
             "resource_type": query.resource_type.value,
+            "role": query.role,
             "snapshot_digest": self.snapshot_digest,
             "version": 1,
         }
@@ -670,6 +828,16 @@ def parse_resource_fields(value: str | Sequence[str] | None) -> tuple[str, ...]:
     return tuple(sorted(dict.fromkeys(fields)))
 
 
+def parse_access_attributes(value: str | Sequence[str] | None) -> tuple[str, ...]:
+    """Normalize REST, GraphQL, SQL, or client policy attributes."""
+
+    if value is None:
+        return ()
+    raw = value.split(",") if isinstance(value, str) else value
+    attributes = tuple(str(item).strip() for item in raw if str(item).strip())
+    return tuple(sorted(dict.fromkeys(attributes)))
+
+
 def migrate_resource_record(
     payload: Mapping[str, Any],
     *,
@@ -698,6 +866,27 @@ def _aggregate_page_state(
         state = next(iter(states))
         return state, f"resource_{state.value}"
     return JourneyResourceState.PARTIAL, "mixed_resource_states"
+
+
+def _policy_decision_identity(
+    query: JourneyResourceQuery,
+    *,
+    state: JourneyResourceState,
+    allowed_fields: tuple[str, ...],
+    code: str | None,
+    policy_version: str,
+) -> tuple[str, str]:
+    request_digest = query.access_request_digest
+    digest = canonical_digest(
+        {
+            "allowed_fields": list(allowed_fields),
+            "code": code,
+            "policy_version": policy_version,
+            "request_digest": request_digest,
+            "state": state.value,
+        }
+    )
+    return f"decision_{digest.removeprefix('sha256:')[:32]}", request_digest
 
 
 def _require_version(value: Any) -> str:
@@ -754,6 +943,7 @@ __all__ = [
     "JOURNEY_RESOURCE_COMPATIBILITY",
     "JOURNEY_RESOURCE_SCHEMA_VERSION",
     "MAX_PAGE_SIZE",
+    "MAX_ACCESS_ATTRIBUTES",
     "RESOURCE_FIELDS",
     "JourneyAccessPolicy",
     "JourneyPageInfo",
@@ -765,5 +955,6 @@ __all__ = [
     "JourneyResourceRecord",
     "JourneyResourceState",
     "migrate_resource_record",
+    "parse_access_attributes",
     "parse_resource_fields",
 ]

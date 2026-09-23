@@ -82,6 +82,12 @@ type JourneyPolicyMetadata {
   state: String!
   namespace: String!
   purpose: String!
+  role: String!
+  attributes: [String!]!
+  consentState: String!
+  exportPolicy: String!
+  decisionId: String!
+  requestDigest: String!
   allowedFields: [String!]!
   code: String
   policyVersion: String!
@@ -178,7 +184,7 @@ type Query {
   analyze(input: AnalyzeInput!): AnalyzePayload!
   deidentify(input: DeidentifyInput!): DeidentifyPayload!
   entityTypes: [EntityType!]!
-  journeyResources(resourceType: JourneyResourceKind!, namespace: String! = "default", purpose: String! = "care_review", first: Int! = 20, after: String = null, fields: [String!] = null): JourneyResourceConnection!
+  journeyResources(resourceType: JourneyResourceKind!, namespace: String! = "default", purpose: String! = "care_review", role: String! = "clinician", attributes: [String!] = null, consentState: String! = "active", exportPolicy: String! = "metadata_only", first: Int! = 20, after: String = null, fields: [String!] = null): JourneyResourceConnection!
 }
 
 type RiskFacets {

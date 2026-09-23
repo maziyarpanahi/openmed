@@ -12,6 +12,7 @@ from typing import Any, Final
 from .journey_resources import (
     JOURNEY_RESOURCE_COMPATIBILITY,
     JOURNEY_RESOURCE_SCHEMA_VERSION,
+    MAX_ACCESS_ATTRIBUTES,
     MAX_PAGE_SIZE,
     MAX_SELECTED_FIELDS,
     RESOURCE_FIELDS,
@@ -20,6 +21,7 @@ from .journey_resources import (
     JourneyResourceKind,
     JourneyResourceQuery,
     JourneyResourceState,
+    parse_access_attributes,
     parse_resource_fields,
 )
 
@@ -152,6 +154,32 @@ def journey_workflow_query_properties(
             "pattern": _CONTROLLED_PATTERN,
             "default": "care_review",
             "description": "Controlled purpose used by the access policy.",
+        },
+        "role": {
+            "type": "string",
+            "pattern": _CONTROLLED_PATTERN,
+            "default": "clinician",
+            "description": "Controlled role used by the access policy.",
+        },
+        "attributes": {
+            "type": ["array", "null"],
+            "maxItems": MAX_ACCESS_ATTRIBUTES,
+            "uniqueItems": True,
+            "items": {"type": "string", "pattern": _CONTROLLED_PATTERN},
+            "default": None,
+            "description": "Bounded attributes asserted for this request.",
+        },
+        "consent_state": {
+            "type": "string",
+            "enum": ["active", "unknown", "withdrawn"],
+            "default": "active",
+            "description": "Explicit consent state evaluated by policy.",
+        },
+        "export_policy": {
+            "type": "string",
+            "pattern": _CONTROLLED_PATTERN,
+            "default": "metadata_only",
+            "description": "Requested export policy for returned resources.",
         },
         "first": {
             "type": "integer",
@@ -335,6 +363,10 @@ def execute_journey_workflow(
     policy: JourneyAccessPolicy | None = None,
     namespace: str = "default",
     purpose: str = "care_review",
+    role: str = "clinician",
+    attributes: str | Sequence[str] | None = None,
+    consent_state: str = "active",
+    export_policy: str = "metadata_only",
     first: int = 20,
     after: str | None = None,
     fields: str | Sequence[str] | None = None,
@@ -346,6 +378,10 @@ def execute_journey_workflow(
             resource_type=definition.resource_type,
             namespace=namespace,
             purpose=purpose,
+            role=role,
+            attributes=parse_access_attributes(attributes),
+            consent_state=consent_state,
+            export_policy=export_policy,
             first=first,
             after=after,
             fields=parse_resource_fields(fields),
@@ -459,6 +495,10 @@ def render_python_journey_client() -> str:
         "        *,",
         '        namespace: str = "default",',
         '        purpose: str = "care_review",',
+        '        role: str = "clinician",',
+        "        attributes: Sequence[str] = (),",
+        '        consent_state: str = "active",',
+        '        export_policy: str = "metadata_only",',
         "        first: int = 20,",
         "        after: Optional[str] = None,",
         "        fields: Sequence[str] = (),",
@@ -477,6 +517,10 @@ def render_python_journey_client() -> str:
                 "        *,",
                 '        namespace: str = "default",',
                 '        purpose: str = "care_review",',
+                '        role: str = "clinician",',
+                "        attributes: Sequence[str] = (),",
+                '        consent_state: str = "active",',
+                '        export_policy: str = "metadata_only",',
                 "        first: int = 20,",
                 "        after: Optional[str] = None,",
                 "        fields: Sequence[str] = (),",
@@ -488,6 +532,10 @@ def render_python_journey_client() -> str:
                 f'            "{definition.resource_type.value}",',
                 "            namespace=namespace,",
                 "            purpose=purpose,",
+                "            role=role,",
+                "            attributes=attributes,",
+                "            consent_state=consent_state,",
+                "            export_policy=export_policy,",
                 "            first=first,",
                 "            after=after,",
                 "            fields=fields,",
@@ -539,6 +587,10 @@ export interface JourneyResourceQuery {{
   resource_type: JourneyResourceType;
   namespace?: string;
   purpose?: string;
+  role?: string;
+  attributes?: string[];
+  consent_state?: "active" | "unknown" | "withdrawn";
+  export_policy?: string;
   first?: number;
   after?: string | null;
   fields?: string[];
@@ -571,6 +623,12 @@ export interface JourneyResourcePage {{
     state: "success" | "denied";
     namespace: string;
     purpose: string;
+    role: string;
+    attributes: string[];
+    consent_state: "active" | "unknown" | "withdrawn";
+    export_policy: string;
+    decision_id: string;
+    request_digest: string;
     allowed_fields: string[];
     code: string | null;
     policy_version: string;
