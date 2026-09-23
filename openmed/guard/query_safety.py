@@ -55,18 +55,6 @@ _MUTATION_KEYWORDS = frozenset(
         "vacuum",
     }
 )
-_BANNED_FUNCTIONS = frozenset(
-    {
-        "dblink",
-        "lo_export",
-        "nextval",
-        "pg_ls_dir",
-        "pg_read_file",
-        "pg_sleep",
-        "set_config",
-        "setval",
-    }
-)
 _ADVICE_PATTERNS = (
     re.compile(r"\bdiagnos(?:e|is|ing)\b"),
     re.compile(r"\bprescrib(?:e|ing)\b"),
@@ -117,8 +105,9 @@ def validate_bounded_read_only_sql(
     *,
     max_rows: int,
     allowed_views: Sequence[str] = tuple(sorted(DEFAULT_READ_ONLY_VIEWS)),
+    selected_fields: Sequence[str] | None = None,
 ) -> str:
-    """Return normalized SQL after proving it is one bounded read-only query."""
+    """Accept only a bounded, single-view SELECT with plain projected columns."""
 
     if not isinstance(sql, str) or not sql.strip():
         raise QuerySafetyError("sql_required")
@@ -136,46 +125,63 @@ def validate_bounded_read_only_sql(
         structural = structural[:-1].rstrip()
     if ";" in structural:
         raise QuerySafetyError("sql_multiple_statements")
-    if not re.match(r"^(?:select|with)\b", structural):
+    if re.match(r"^with\b", structural):
+        raise QuerySafetyError("sql_query_shape_invalid")
+    if not re.match(r"^select\b", structural):
         raise QuerySafetyError("sql_not_read_only")
     tokens = set(re.findall(r"[a-z_]+", structural))
     if tokens.intersection(_MUTATION_KEYWORDS):
         raise QuerySafetyError("sql_mutation_rejected")
+    if (
+        len(re.findall(r"\bselect\b", structural)) != 1
+        or len(re.findall(r"\bfrom\b", structural)) != 1
+        or tokens.intersection({"join", "union", "intersect", "except", "lateral"})
+    ):
+        raise QuerySafetyError("sql_query_shape_invalid")
     if re.search(r"\bfor\s+(?:no\s+key\s+)?update\b", structural):
         raise QuerySafetyError("sql_locking_rejected")
     if re.search(r"\bselect\s+.+?\binto\b", structural, flags=re.DOTALL):
         raise QuerySafetyError("sql_mutation_rejected")
     if "*" in structural:
         raise QuerySafetyError("sql_wildcard_rejected")
-    functions = set(re.findall(r"\b([a-z_][a-z0-9_]*)\s*\(", structural))
-    if functions.intersection(_BANNED_FUNCTIONS):
+    if re.search(r"\b[a-z_][a-z0-9_]*\s*\(", structural):
         raise QuerySafetyError("sql_function_rejected")
-
-    raw_references = tuple(
-        match.group(1)
-        for match in re.finditer(r"\b(?:from|join)\s+([a-z_][a-z0-9_.]*)\b", structural)
-    )
-    referenced: list[str] = []
-    for reference in raw_references:
-        parts = reference.split(".")
-        if len(parts) == 1:
-            referenced.append(parts[0])
-        elif len(parts) == 2 and parts[0] == "openmed":
-            referenced.append(parts[1])
-        else:
-            raise QuerySafetyError("sql_view_not_allowed")
-    cte_names = frozenset(
-        match.group(1)
-        for match in re.finditer(
-            r"(?:\bwith\b|,)\s*([a-z_][a-z0-9_]*)\s+as\s*\(", structural
-        )
-    )
+    relation = re.search(r"\bfrom\s+([a-z_][a-z0-9_.]*)\b", structural)
+    if relation is None:
+        raise QuerySafetyError("sql_view_not_allowed")
+    parts = relation.group(1).split(".")
+    if len(parts) == 1:
+        view = parts[0]
+    elif len(parts) == 2 and parts[0] == "openmed":
+        view = parts[1]
+    else:
+        raise QuerySafetyError("sql_view_not_allowed")
+    if view not in allowed:
+        raise QuerySafetyError("sql_view_not_allowed")
+    relation_tail = re.split(
+        r"\b(?:where|group|having|order|limit)\b",
+        structural[relation.end() :],
+        maxsplit=1,
+    )[0].strip()
     if (
-        not referenced
-        or not any(view in allowed for view in referenced)
-        or any(view not in allowed and view not in cte_names for view in referenced)
+        relation_tail
+        and re.fullmatch(r"(?:as\s+)?[a-z_][a-z0-9_]*", relation_tail) is None
     ):
         raise QuerySafetyError("sql_view_not_allowed")
+    projection = structural[len("select") : relation.start()].strip()
+    if (
+        re.fullmatch(
+            r"[a-z_][a-z0-9_.]*(?:\s*,\s*[a-z_][a-z0-9_.]*)*",
+            projection,
+        )
+        is None
+    ):
+        raise QuerySafetyError("sql_projection_not_allowed")
+    projected = tuple(item.strip().split(".")[-1] for item in projection.split(","))
+    if selected_fields is not None:
+        expected = tuple(_normalize_view_name(item) for item in selected_fields)
+        if len(projected) != len(expected) or set(projected) != set(expected):
+            raise QuerySafetyError("sql_projection_not_allowed")
 
     limit = re.search(r"\blimit\s+([0-9]+)(?:\s+offset\s+([0-9]+))?\s*$", structural)
     if limit is None:
@@ -238,8 +244,7 @@ def _strip_literals_and_comments(sql: str) -> str:
                 state = "single"
                 output.append(" ")
             elif char == '"':
-                state = "double"
-                output.append(" ")
+                raise QuerySafetyError("sql_quoted_identifier_rejected")
             elif char == "-" and nxt == "-":
                 state = "line_comment"
                 output.extend((" ", " "))
@@ -257,13 +262,6 @@ def _strip_literals_and_comments(sql: str) -> str:
                 index += 1
             elif char == "'":
                 state = "code"
-        elif state == "double":
-            output.append(" ")
-            if char == '"' and nxt == '"':
-                output.append(" ")
-                index += 1
-            elif char == '"':
-                state = "code"
         elif state == "line_comment":
             output.append("\n" if char == "\n" else " ")
             if char == "\n":
@@ -275,7 +273,7 @@ def _strip_literals_and_comments(sql: str) -> str:
                 index += 1
                 state = "code"
         index += 1
-    if state in {"single", "double", "block_comment"}:
+    if state in {"single", "block_comment"}:
         raise QuerySafetyError("sql_unterminated_input")
     return "".join(output)
 

@@ -390,6 +390,39 @@ def test_reconciliation_drift_is_a_failed_reviewable_report() -> None:
     assert result.value.requires_review
 
 
+def test_local_subprocess_rejects_oversized_output_before_timeout() -> None:
+    fixture = load_frozen_omop_quality_fixture(QUALITY_FIXTURE)
+    result = run_omop_quality_subprocess(
+        fixture.quality_input,
+        command=(
+            sys.executable,
+            "-c",
+            "import sys,time; sys.stdout.buffer.write(b'x' * 1000001); "
+            "sys.stdout.flush(); time.sleep(30)",
+        ),
+        reconciliation=fixture.reconcile(),
+        signing_key=SIGNING_KEY,
+        timeout=5,
+    )
+    assert result.state is StoreState.FAILURE
+    assert result.code == "quality_output_invalid"
+    assert result.value is None
+
+
+def test_local_subprocess_timeout_is_typed_without_output() -> None:
+    fixture = load_frozen_omop_quality_fixture(QUALITY_FIXTURE)
+    result = run_omop_quality_subprocess(
+        fixture.quality_input,
+        command=(sys.executable, "-c", "import time; time.sleep(30)"),
+        reconciliation=fixture.reconcile(),
+        signing_key=SIGNING_KEY,
+        timeout=0.1,
+    )
+    assert result.state is StoreState.FAILURE
+    assert result.code == "quality_adapter_timeout"
+    assert result.value is None
+
+
 @given(
     openmed_rows=st.lists(
         st.integers(min_value=0, max_value=1_000), min_size=9, max_size=9

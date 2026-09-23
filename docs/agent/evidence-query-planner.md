@@ -57,19 +57,21 @@ plans contain no tool calls.
 
 ## Bounded SQL
 
-`validate_bounded_read_only_sql()` accepts a single `SELECT` or read-only
-`WITH` statement over an explicit view allowlist. It rejects:
+`validate_bounded_read_only_sql()` accepts a single bounded `SELECT` from one
+explicitly allowlisted view, with plain identifier projections. A tool call
+must project exactly its declared fields from its declared resource. It rejects:
 
 - insert, update, delete, definition, privilege, execution, copy, and locking
   operations;
 - multiple statements and wildcard selection;
-- views outside the allowlist; and
+- views outside the allowlist, joins, comma-separated relations, subqueries,
+  CTEs, quoted identifiers, and functions; and
 - missing, non-literal, zero, or excessive outer `LIMIT` values and excessive
   offsets.
 
 Allowlisted views may be unqualified or use the `openmed` schema. Other schema
-qualifiers and known filesystem, network, sequence-mutation, configuration, and
-sleep functions are rejected.
+qualifiers are rejected. Functions are excluded altogether: a blacklist cannot
+prove that installed database functions are free of side effects.
 
 String literals and comments are structurally removed before the statement is
 classified, so SQL-looking text inside a literal remains data. The validated

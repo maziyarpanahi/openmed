@@ -50,6 +50,7 @@ using the same workflow with real data.
 | Ground a synthetic mention offline | [`examples/offline_grounding.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/offline_grounding.py) |
 | Prepare a local OpenMRS de-identified handoff | [`examples/openmrs_deid_handoff.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/openmrs_deid_handoff.py) |
 | Build a de-identified DHIS2 district export | [`examples/dhis2_district_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/dhis2_district_export.py) |
+| Extend the SDOH status vocabulary with a local domain | [`examples/custom_status_vocabulary.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/custom_status_vocabulary.py) |
 
 ### Models, agents, and local pipelines
 
