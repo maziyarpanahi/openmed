@@ -73,6 +73,8 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "joint_entity_relation.jsonl",
         "relation_calibration.jsonl",
         "relation_assertion.jsonl",
+        "ade_relations.jsonl",
+        "relation_candidates.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",
         "relations_zh.jsonl",
@@ -80,6 +82,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "consensus_corpus.jsonl",
         # Domain eval fixtures that are not PII de-identification gold spans and
         # must not be loaded as such by load_golden_fixtures().
+        "biomarker_result.jsonl",
         "radiology_finding.jsonl",
         "radiology_report.jsonl",
         "radiology_entity_relations.jsonl",

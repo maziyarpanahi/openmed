@@ -3964,7 +3964,17 @@ def bootstrap_ci(
     The returned interval always brackets the point estimate. Degenerate inputs
     -- an empty corpus or a single document -- cannot vary under resampling and
     yield a zero-width interval flagged with ``degenerate=True``.
+
+    Raises:
+        ValueError: If ``n_resamples`` is not positive or ``alpha`` is outside
+            the interval ``[0, 1]``. Parameters are checked even for a
+            degenerate corpus, before calling the statistic.
     """
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be positive")
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("alpha must be between 0 and 1")
+
     values = list(per_document_values)
     point = float(statistic(values))
     if len(values) < 2:
@@ -4506,6 +4516,63 @@ def radiology_finding_tuple_f1(
         predicted_counts[_radiology_finding_tuple(item)] += 1
     for item in gold:
         gold_counts[_radiology_finding_tuple(item)] += 1
+    true_positives = sum(
+        min(count, gold_counts.get(key, 0)) for key, count in predicted_counts.items()
+    )
+    return _f1_from_counts(
+        true_positives,
+        sum(predicted_counts.values()),
+        sum(gold_counts.values()),
+    )
+
+
+_BIOMARKER_RESULT_TUPLE_FIELDS = (
+    "gene",
+    "variant_or_finding",
+    "result_value",
+    "method",
+    "result_polarity",
+)
+
+
+def _biomarker_result_tuple(item: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Return the exact evaluation key for one biomarker result."""
+
+    if not isinstance(item, Mapping):
+        raise ValueError("biomarker result records must be mappings")
+    values = tuple(item.get(field) for field in _BIOMARKER_RESULT_TUPLE_FIELDS)
+    if any(value is not None and not isinstance(value, str) for value in values):
+        raise ValueError("biomarker result fields must be strings or null")
+    gene, finding, result, _method, polarity = values
+    if (
+        not (gene or finding)
+        or not result
+        or not result.strip()
+        or polarity not in {"detected", "not_detected", "equivocal"}
+    ):
+        raise ValueError(
+            "biomarker result requires an anchor, value and valid polarity"
+        )
+    return values
+
+
+def biomarker_result_tuple_f1(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> F1Metrics:
+    """Compute exact multiset tuple F1 for linked biomarker results.
+
+    A match requires equality of gene, variant/finding, result value, normalized
+    method, and normalized polarity. Advisory text and byte provenance are
+    excluded from tuple identity and are validated separately by callers.
+    """
+
+    predicted_counts: Counter[tuple[Any, ...]] = Counter(
+        _biomarker_result_tuple(item) for item in predicted
+    )
+    gold_counts: Counter[tuple[Any, ...]] = Counter(
+        _biomarker_result_tuple(item) for item in gold
+    )
     true_positives = sum(
         min(count, gold_counts.get(key, 0)) for key, count in predicted_counts.items()
     )
@@ -5871,6 +5938,7 @@ __all__ = [
     "extract_clinical_facts",
     "summary_faithfulness_metrics",
     "build_summary_faithfulness_report",
+    "biomarker_result_tuple_f1",
     "merge_faithfulness_metrics",
     "normalize_radiology_entity",
     "normalize_radiology_entities",

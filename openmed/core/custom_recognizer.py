@@ -12,10 +12,10 @@ from typing import Any
 from ..processing.outputs import EntityPrediction
 from ..processing.text import InputComplexityError, InputError
 from .labels import hipaa_class_for, normalize_label, policy_label_for
-from .schemas.span import OpenMedSpan, hmac_text_hash
+from .schemas.span import OpenMedSpan, _resolve_hmac_secret, hmac_text_hash
 
 CUSTOM_DENY_DETECTOR = "custom:deny"
-DEFAULT_CUSTOM_HASH_SECRET = b"openmed-custom-recognizer-v1"
+DEFAULT_CUSTOM_HASH_SECRET = None
 ABDM_MODE = "abdm"
 MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES = 512 * 1024
 MAX_CUSTOM_RECOGNIZER_RULES = 512
@@ -292,10 +292,11 @@ class CustomRecognizer:
         self,
         text: str,
         *,
-        hmac_secret: str | bytes = DEFAULT_CUSTOM_HASH_SECRET,
+        hmac_secret: str | bytes | None = DEFAULT_CUSTOM_HASH_SECRET,
     ) -> list[EntityPrediction]:
         """Return deny-list matches as ``EntityPrediction`` records."""
 
+        hmac_secret = _resolve_hmac_secret(hmac_secret)
         return [
             EntityPrediction(
                 text=text[match.start : match.end],
@@ -395,7 +396,7 @@ class CustomRecognizer:
         result: Any,
         *,
         text: str | None = None,
-        hmac_secret: str | bytes = DEFAULT_CUSTOM_HASH_SECRET,
+        hmac_secret: str | bytes | None = DEFAULT_CUSTOM_HASH_SECRET,
     ) -> Any:
         """Add deny-list entities and suppress allow-listed entities in-place."""
 

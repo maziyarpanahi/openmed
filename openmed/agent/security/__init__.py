@@ -2,6 +2,25 @@
 
 from __future__ import annotations
 
+from .adversarial import (
+    ADVERSARIAL_CAPABILITY,
+    ADVERSARIAL_POLICY_PROFILE,
+    ADVERSARIAL_SUITE_SCHEMA_VERSION,
+    DEFAULT_ADVERSARIAL_FIXTURES,
+    AdversarialAttempt,
+    AdversarialCaseResult,
+    AdversarialFixture,
+    AdversarialReasonCode,
+    AdversarialSuiteFailure,
+    AdversarialSuiteReport,
+    AdversarialSuiteValidationError,
+    AttackClass,
+    BoundaryAdapter,
+    BoundaryDecision,
+    BoundaryVerdict,
+    assert_adversarial_suite,
+    run_adversarial_suite,
+)
 from .injection_guard import (
     DEFAULT_INJECTION_GUARD_MODE,
     GuardedInput,
@@ -14,12 +33,29 @@ from .injection_guard import (
 )
 
 __all__ = [
+    "ADVERSARIAL_CAPABILITY",
+    "ADVERSARIAL_POLICY_PROFILE",
+    "ADVERSARIAL_SUITE_SCHEMA_VERSION",
     "DEFAULT_INJECTION_GUARD_MODE",
+    "DEFAULT_ADVERSARIAL_FIXTURES",
+    "AdversarialAttempt",
+    "AdversarialCaseResult",
+    "AdversarialFixture",
+    "AdversarialReasonCode",
+    "AdversarialSuiteFailure",
+    "AdversarialSuiteReport",
+    "AdversarialSuiteValidationError",
+    "AttackClass",
+    "BoundaryAdapter",
+    "BoundaryDecision",
+    "BoundaryVerdict",
     "GuardedInput",
     "InjectionFinding",
     "InjectionGuard",
     "InjectionScan",
     "PromptInjectionDetected",
+    "assert_adversarial_suite",
     "guard_text",
+    "run_adversarial_suite",
     "scan_text",
 ]

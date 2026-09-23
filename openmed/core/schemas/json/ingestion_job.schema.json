@@ -1,0 +1,18 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingestion/job.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checkpoint_sequence": {"minimum": 0, "type": "integer"},
+    "created_at": {"format": "date-time", "type": "string"},
+    "job_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "manifest_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "state": {"enum": ["queued", "running", "quarantined", "completed", "cancelled", "failed"]},
+    "updated_at": {"format": "date-time", "type": "string"}
+  },
+  "required": ["checkpoint_sequence", "created_at", "job_id", "manifest_digest", "schema_version", "state", "updated_at"],
+  "schema_version": 1,
+  "title": "OpenMedIngestionJob",
+  "type": "object"
+}
