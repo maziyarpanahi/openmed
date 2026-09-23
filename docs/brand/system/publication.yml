@@ -328,6 +328,7 @@ classification:
     - clinical/pathology-profile.md
     - clinical/discharge-profile.md
     - clinical/summary-omission-budgets.md
+    - clinical/summary-demographic-minimization.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
