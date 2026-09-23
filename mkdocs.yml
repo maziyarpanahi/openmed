@@ -305,6 +305,7 @@ nav:
       - GGUF Embedding Export: export-gguf.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
+      - Outbound request privacy filter: service/outbound-privacy-filter.md
       - Social-determinant evidence contract: clinical/sdoh-evidence.md
       - Section-aware note routing: clinical/note-routing.md
       - Radiology Finding Profile: clinical/radiology-profile.md
