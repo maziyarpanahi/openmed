@@ -126,6 +126,17 @@ from .run_summary import (
     RunSummaryError,
     RunSummaryPrivacyError,
 )
+from .schema_compatibility import (
+    COMPATIBILITY_SCHEMA_VERSION,
+    CompatibilityOutcome,
+    CompatibilityReason,
+    CompatibilityResult,
+    SchemaCompatibilityError,
+    SchemaCompatibilityMatrix,
+    SchemaRange,
+    SemVer,
+    check_schema_compatibility,
+)
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 from .workflow_rollup import (
     WORKFLOW_ROLLUP_SCHEMA_VERSION,
@@ -191,6 +202,10 @@ __all__ = [
     "CapabilityGrant",
     "CapabilityId",
     "CapabilityValidityError",
+    "COMPATIBILITY_SCHEMA_VERSION",
+    "CompatibilityOutcome",
+    "CompatibilityReason",
+    "CompatibilityResult",
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
     "COHORT_EXPLANATION_SCHEMA_VERSION",
@@ -288,6 +303,10 @@ __all__ = [
     "RequestedDecision",
     "ReviewerHandoffError",
     "ReviewerHandoffPacket",
+    "SchemaCompatibilityError",
+    "SchemaCompatibilityMatrix",
+    "SchemaRange",
+    "SemVer",
     "ToolId",
     "TimingValidationError",
     "ToolResultState",
@@ -310,6 +329,7 @@ __all__ = [
     "make_query_access_decision",
     "plan_evidence_query",
     "allowed_handoff_reason_codes",
+    "check_schema_compatibility",
     "security",
     "validate_action_graph",
     "validate_artifact_references",
