@@ -923,7 +923,12 @@ def _pg8000_connect_parameters(
     timeout = supplied.get("connect_timeout", 3)
     if type(timeout) not in {int, float} or not 0 < timeout <= 30:
         raise ValueError("invalid PostgreSQL connection timeout")
-    query = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    # Python 3.10 treats an empty string as a malformed field in strict mode.
+    query = (
+        parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+        if parsed.query
+        else []
+    )
     if len(query) > 1 or (query and query[0] != ("sslmode", "verify-full")):
         raise ValueError("unsupported PostgreSQL connection option")
     return {
