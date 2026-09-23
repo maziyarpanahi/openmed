@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 62994299,
-    "maximum_unique_payload_bytes": 62656720,
+    "maximum_total_bytes": 63927911,
+    "maximum_unique_payload_bytes": 63590332,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3919891
+    "json": 3941570
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3919891
+    "docs/search/search_index.json": 3941570
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,10 +31,10 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged v2.5 SDK candidate, including the Journey contracts, local store, PostgreSQL and object store, resumable ingestion, and current agent and multimodal guides, with bounded documentation headroom.",
-    "The staged aggregate through signed Journey release-gate documentation contains 62879114 total bytes, 62541535 unique payload bytes, and 337579 duplicate payload bytes. The Linux ceilings carry forward the observed 4435-byte platform delta plus 110750 bytes of bounded headroom.",
-    "The 62656720-byte unique-payload ceiling and 62994299-byte total-payload ceiling preserve the existing headroom policy. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The measured aggregate search index is 3887176 bytes; its 3919891-byte JSON ceiling retains 32715 bytes of bounded headroom.",
+    "Artifact byte limits cover the exact staged V3 Journey and clinical evaluation evidence guides with bounded documentation headroom.",
+    "The staged aggregate through the five evaluation reports contains 63812433 total bytes, 63474854 unique payload bytes, and 337579 duplicate payload bytes. The Linux ceilings carry forward the observed 4728-byte platform delta plus 110750 bytes of bounded headroom.",
+    "The 63590332-byte unique-payload ceiling and 63927911-byte total-payload ceiling preserve the existing headroom policy. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, and language-pack guides remain searchable. The measured aggregate search index is 3904127 bytes; its 3941570-byte JSON ceiling retains the observed 4728-byte platform delta plus 32715 bytes of bounded headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
