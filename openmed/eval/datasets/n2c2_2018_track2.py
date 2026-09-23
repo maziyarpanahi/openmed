@@ -146,7 +146,7 @@ def map_n2c2_2018_track2_relation_type(relation_type: str) -> str:
         kind="relation type",
     )
     if not canonical:
-        raise RuntimeError(f"n2c2 Track 2 relation mapping is empty: {relation_type!r}")
+        raise RuntimeError("n2c2 Track 2 relation mapping is empty")
     return canonical
 
 
@@ -232,17 +232,17 @@ def _credentialed_path(path: str | Path | None) -> Path:
     if _is_relative_to(candidate, _REPO_ROOT):
         raise N2C2Track2CredentialRequired(
             f"{N2C2_2018_TRACK2_DUA_NAME} data must stay outside the repository "
-            f"tree; refusing to read {candidate}. No corpus rows were loaded."
+            "tree; no corpus rows were loaded."
         )
     if not candidate.exists():
         raise N2C2Track2CredentialRequired(
-            f"{N2C2_2018_TRACK2_DUA_NAME} credentialed path does not exist: "
-            f"{candidate}. No corpus rows were loaded."
+            f"{N2C2_2018_TRACK2_DUA_NAME} credentialed path does not exist; "
+            "no corpus rows were loaded."
         )
     if not candidate.is_file() and not candidate.is_dir():
         raise N2C2Track2CredentialRequired(
-            f"{N2C2_2018_TRACK2_DUA_NAME} path must be a file or directory: "
-            f"{candidate}. No corpus rows were loaded."
+            f"{N2C2_2018_TRACK2_DUA_NAME} path must be a file or directory; "
+            "no corpus rows were loaded."
         )
     return candidate
 
@@ -289,9 +289,7 @@ def _lookup_mapping(
         if _mapping_key(source) == key:
             return canonical
     allowed = ", ".join(mapping)
-    raise ValueError(
-        f"unknown n2c2 Track 2 {kind} {value!r}; expected one of: {allowed}"
-    )
+    raise ValueError(f"unknown n2c2 Track 2 {kind}; expected one of: {allowed}")
 
 
 def _ensure_canonical(canonical: str, source_label: str) -> None:

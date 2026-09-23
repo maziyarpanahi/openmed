@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from pathlib import Path
 
 import pytest
@@ -45,6 +46,61 @@ from openmed.eval.datasets.n2c2_2018_track2 import (
     map_n2c2_2018_track2_entity_label,
     map_n2c2_2018_track2_relation_type,
 )
+
+
+@pytest.mark.parametrize(
+    "loader", (load_made_relation_fixtures, load_n2c2_2018_track2_relation_fixtures)
+)
+def test_relation_loader_path_refusal_does_not_echo_sensitive_filename(
+    loader,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "synthetic_patient_identifier_123.json"
+    repository_root = Path(__file__).resolve().parents[3]
+
+    for candidate in (source, repository_root / source.name):
+        with pytest.raises(DUACredentialRequired) as captured:
+            loader(candidate)
+        rendered = "".join(traceback.format_exception(captured.value))
+        assert source.name not in rendered
+        assert str(tmp_path) not in rendered
+        assert str(repository_root) not in str(captured.value)
+
+
+def test_made_source_errors_do_not_echo_sensitive_filename(tmp_path: Path) -> None:
+    source = tmp_path / "synthetic_patient_identifier_123.txt"
+    source.write_text("synthetic text", encoding="utf-8")
+
+    with pytest.raises(DUACredentialRequired) as captured:
+        load_made_relation_fixtures(source)
+
+    assert source.name not in "".join(traceback.format_exception(captured.value))
+
+    malformed = tmp_path / "synthetic_patient_identifier_123.json"
+    malformed.write_text("{", encoding="utf-8")
+    with pytest.raises(ValueError) as captured:
+        load_made_relation_fixtures(malformed)
+    assert malformed.name not in "".join(traceback.format_exception(captured.value))
+
+
+@pytest.mark.parametrize(
+    "normalize",
+    (
+        map_made_entity_label,
+        map_made_relation_type,
+        map_n2c2_2018_track2_entity_label,
+        map_n2c2_2018_track2_relation_type,
+    ),
+)
+def test_relation_loader_invalid_label_error_omits_supplied_value(
+    normalize,
+) -> None:
+    marker = "synthetic_patient_identifier_123"
+
+    with pytest.raises(ValueError) as captured:
+        normalize(marker)
+
+    assert marker not in "".join(traceback.format_exception(captured.value))
 
 
 def test_relation_dua_mappings_are_total_and_canonical() -> None:

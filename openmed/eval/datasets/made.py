@@ -247,16 +247,16 @@ def _credentialed_path(path: str | Path | None) -> Path:
     if _is_relative_to(candidate, _REPO_ROOT):
         raise MADECredentialRequired(
             f"{MADE_DUA_NAME} data must stay outside the repository tree; "
-            f"refusing to read {candidate}. No corpus rows were loaded."
+            "no corpus rows were loaded."
         )
     if not candidate.exists():
         raise MADECredentialRequired(
-            f"{MADE_DUA_NAME} credentialed path does not exist: {candidate}. "
+            f"{MADE_DUA_NAME} credentialed path does not exist. "
             "No corpus rows were loaded."
         )
     if not candidate.is_file() and not candidate.is_dir():
         raise MADECredentialRequired(
-            f"{MADE_DUA_NAME} path must be a file or directory: {candidate}. "
+            f"{MADE_DUA_NAME} path must be a file or directory. "
             "No corpus rows were loaded."
         )
     return candidate
@@ -271,7 +271,7 @@ def _source_files(
             if not annotation_path.is_file():
                 raise MADECredentialRequired(
                     f"{MADE_DUA_NAME} BRAT text requires paired .ann file; "
-                    f"no corpus rows were loaded: {root.name}"
+                    "no corpus rows were loaded"
                 )
             return (("brat", root, annotation_path),)
         if root.suffix.casefold() == ".ann":
@@ -279,14 +279,14 @@ def _source_files(
             if not text_path.is_file():
                 raise MADECredentialRequired(
                     f"{MADE_DUA_NAME} BRAT annotation requires paired .txt file; "
-                    f"no corpus rows were loaded: {root.name}"
+                    "no corpus rows were loaded"
                 )
             return (("brat", text_path, root),)
         if _is_bioc_source(root):
             return (("bioc", root, None),)
         raise MADECredentialRequired(
             f"{MADE_DUA_NAME} path has no supported BioC or BRAT extension; "
-            f"no corpus rows were loaded: {root.name}"
+            "no corpus rows were loaded"
         )
 
     sources: list[tuple[str, Path, Path | None]] = []
@@ -296,10 +296,7 @@ def _source_files(
     for annotation_path in annotation_paths:
         text_path = annotation_path.with_suffix(".txt")
         if not text_path.is_file():
-            raise ValueError(
-                f"MADE BRAT input requires paired .ann and .txt files: "
-                f"{annotation_path.name}"
-            )
+            raise ValueError("MADE BRAT input requires paired .ann and .txt files")
         sources.append(("brat", text_path, annotation_path))
     sources.extend(
         ("bioc", candidate, None)
@@ -338,11 +335,11 @@ def _bioc_documents(path: Path) -> list[Mapping[str, Any]]:
 
     contents = _read_exact(path)
     if path.suffix.casefold() == ".xml" or contents.lstrip().startswith("<"):
-        return _bioc_xml_documents(contents, source_name=path.name)
+        return _bioc_xml_documents(contents)
     try:
         payload = json.loads(contents)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid MADE BioC JSON {path.name}: {exc}") from exc
+        raise ValueError(f"invalid MADE BioC JSON: {exc.msg}") from exc
     return _bioc_json_documents(payload)
 
 
@@ -367,22 +364,18 @@ def _bioc_json_documents(payload: Any) -> list[Mapping[str, Any]]:
     raise ValueError("MADE BioC JSON contains no documents")
 
 
-def _bioc_xml_documents(
-    contents: str,
-    *,
-    source_name: str,
-) -> list[Mapping[str, Any]]:
+def _bioc_xml_documents(contents: str) -> list[Mapping[str, Any]]:
     try:
         root = ET.fromstring(contents)
     except ET.ParseError as exc:
-        raise ValueError(f"failed to parse MADE BioC XML {source_name}: {exc}") from exc
+        raise ValueError("failed to parse MADE BioC XML") from exc
     documents = [
         _bioc_xml_document(element)
         for element in root.iter()
         if _local_name(element.tag).casefold() == "document"
     ]
     if not documents:
-        raise ValueError(f"MADE BioC XML {source_name} contains no documents")
+        raise ValueError("MADE BioC XML contains no documents")
     return documents
 
 
@@ -473,12 +466,12 @@ def _bioc_fixture_from_document(
 ) -> DrugProtRelationFixture:
     document_id = str(document.get("id") or document.get("document_id") or "").strip()
     if not document_id:
-        raise ValueError(f"MADE document in {source.name} is missing an id")
+        raise ValueError("MADE document is missing an id")
     raw_passages = document.get("passages")
     if not isinstance(raw_passages, list) or not raw_passages:
         text_value = str(document.get("text") or "")
         if not text_value:
-            raise ValueError(f"MADE document {document_id!r} contains no passages")
+            raise ValueError("MADE document contains no passages")
         passages: list[Mapping[str, Any]] = [
             {
                 "offset": 0,
@@ -501,7 +494,7 @@ def _bioc_fixture_from_document(
             text=text,
         )
         if entity.entity_id in entities_by_id:
-            raise ValueError(f"duplicate MADE entity id: {entity.entity_id}")
+            raise ValueError("duplicate MADE entity id")
         entities_by_id[entity.entity_id] = entity
 
     relations = tuple(
@@ -605,12 +598,12 @@ def _made_entity_from_mapping(
     locations_value = annotation.get("locations") or annotation.get("location")
     if locations_value is None:
         if annotation.get("offset") is None or annotation.get("length") is None:
-            raise ValueError(f"MADE entity {entity_id!r} has no location")
+            raise ValueError("MADE entity has no location")
         locations_value = [annotation]
     if isinstance(locations_value, Mapping):
         locations_value = [locations_value]
     if not isinstance(locations_value, list) or not locations_value:
-        raise ValueError(f"MADE entity {entity_id!r} has no location")
+        raise ValueError("MADE entity has no location")
     locations = [_require_mapping(value, "MADE location") for value in locations_value]
     starts = [
         _parse_int(value.get("offset"), "BioC entity offset") for value in locations
@@ -628,7 +621,7 @@ def _made_entity_from_mapping(
     annotated_text = str(annotation.get("text") or "")
     if len(locations) == 1 and annotated_text:
         if _surface(annotated_text) != _surface(span_text):
-            raise ValueError(f"MADE span text mismatch for entity {entity_id!r}")
+            raise ValueError("MADE span text mismatch for entity")
     return DrugProtEntity(
         pmid=fixture_id,
         entity_id=entity_id,
@@ -659,10 +652,8 @@ def _made_relation_from_mapping(
     node_ids = _relation_node_ids(relation)
     try:
         arguments = [entities_by_id[node_id] for node_id in node_ids]
-    except KeyError as exc:
-        raise ValueError(
-            f"MADE relation references unknown entity {exc.args[0]!r}"
-        ) from exc
+    except KeyError:
+        raise ValueError("MADE relation references unknown entity") from None
     arg1, arg2 = _orient_relation(relation_type, arguments)
     relation_id = str(relation.get("id") or f"R{relation_index}")
     return DrugProtRelation(
@@ -780,7 +771,7 @@ def _brat_fixture_from_pair(
             text=text,
         )
         if entity.entity_id in entities_by_id:
-            raise ValueError(f"duplicate MADE entity id: {entity.entity_id}")
+            raise ValueError("duplicate MADE entity id")
         entities_by_id[entity.entity_id] = entity
 
     relations = tuple(
@@ -838,7 +829,7 @@ def _brat_entity_from_line(
         )
     span_text = text[start:end]
     if len(spans) == 1 and _surface(columns[2]) != _surface(span_text):
-        raise ValueError(f"MADE span text mismatch for entity {entity_id!r}")
+        raise ValueError("MADE span text mismatch for entity")
     return DrugProtEntity(
         pmid=fixture_id,
         entity_id=entity_id,
@@ -867,10 +858,8 @@ def _brat_relation_from_line(
     node_ids = [_brat_argument_id(value) for value in values[1:]]
     try:
         arguments = [entities_by_id[node_id] for node_id in node_ids]
-    except KeyError as exc:
-        raise ValueError(
-            f"MADE relation references unknown entity {exc.args[0]!r}"
-        ) from exc
+    except KeyError:
+        raise ValueError("MADE relation references unknown entity") from None
     relation_type = map_made_relation_type(source_type)
     arg1, arg2 = _orient_relation(relation_type, arguments)
     return DrugProtRelation(
@@ -892,7 +881,7 @@ def _brat_relation_from_line(
 def _brat_argument_id(value: str) -> str:
     _, separator, entity_id = value.partition(":")
     if separator != ":" or not entity_id:
-        raise ValueError(f"malformed MADE BRAT relation argument: {value!r}")
+        raise ValueError("malformed MADE BRAT relation argument")
     return entity_id
 
 
@@ -923,7 +912,7 @@ def _lookup_mapping(
         if _mapping_key(source) == key:
             return canonical
     allowed = ", ".join(mapping)
-    raise ValueError(f"unknown MADE {kind} {value!r}; expected one of: {allowed}")
+    raise ValueError(f"unknown MADE {kind}; expected one of: {allowed}")
 
 
 def _ensure_canonical(canonical: str, source_label: str) -> None:
@@ -1014,7 +1003,7 @@ def _validate_source_path(path: Path, root: Path) -> Path:
     if _is_relative_to(resolved_path, _REPO_ROOT):
         raise MADECredentialRequired(
             f"{MADE_DUA_NAME} data must stay outside the repository tree; "
-            f"refusing to read {resolved_path}. No corpus rows were loaded."
+            "no corpus rows were loaded."
         )
     if resolved_root.is_dir() and not _is_relative_to(resolved_path, resolved_root):
         raise MADECredentialRequired(
