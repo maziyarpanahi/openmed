@@ -110,6 +110,7 @@ classification:
     - agent/capability-grants.md
     - agent/purpose-bound-access.md
     - agent/non-amplifying-delegation.md
+    - agent/tool-argument-classification.md
     - agent/governance-identifiers.md
     - agent/capability-validity.md
     - agent/event-correlation.md
