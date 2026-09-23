@@ -319,6 +319,7 @@ nav:
       - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
       - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
+      - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
       - SMART Scope Audit: interop/smart-scope-audit.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - FHIR Reference Integrity Reports: fhir/reference-integrity.md
