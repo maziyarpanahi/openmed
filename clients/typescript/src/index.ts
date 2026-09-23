@@ -159,6 +159,64 @@ export interface PrivacyGatewayRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export type DecisionMode =
+  | "fixed_choice"
+  | "boolean_choice"
+  | "ordered_preference"
+  | "scalar_score"
+  | "multi_label";
+
+export type DecisionState =
+  | "success"
+  | "abstained"
+  | "partial"
+  | "unknown"
+  | "conflict"
+  | "unsupported"
+  | "denied"
+  | "failure";
+
+export interface FixedOptionDecisionRequest {
+  mode: DecisionMode;
+  input_text: string;
+  options?: string[];
+  namespace?: string;
+  purpose?: string;
+  calibration_id?: string;
+  timeout_ms?: number;
+  schema_version?: "1.0.0";
+  compatibility_policy?: "same_major";
+}
+
+export interface DecisionOptionScore {
+  index: number;
+  option: string;
+  score: number;
+}
+
+export interface FixedOptionDecisionResult {
+  mode: DecisionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  calibration: JsonObject;
+  backend: JsonObject;
+  access: JsonObject;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+  advisory: string;
+  autonomous_action: false;
+  schema_version: "1.0.0";
+  compatibility_policy: "same_major";
+  extensions: JsonObject;
+}
+
 export interface DeidentifyJobDocument {
   text: string;
   id?: string | null;
@@ -569,6 +627,12 @@ export class OpenMedClient {
     request: PrivacyGatewayRequest,
   ): Promise<PrivacyGatewayResponse> {
     return this.post("/privacy-gateway/complete", request);
+  }
+
+  async decision(
+    request: FixedOptionDecisionRequest,
+  ): Promise<FixedOptionDecisionResult> {
+    return this.post("/v1/decisions", request);
   }
 
   async health(): Promise<HealthResponse> {

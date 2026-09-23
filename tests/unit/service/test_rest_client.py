@@ -16,6 +16,7 @@ from openmed.service.app import create_app
 from openmed.service.client import (
     CLIENT_ENDPOINTS,
     AnalyzeRequest,
+    FixedOptionDecisionRequest,
     ModelUnloadRequest,
     OpenMedAPIError,
     OpenMedClient,
@@ -239,6 +240,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "extract_pii_stream": PIIExtractStreamRequest,
         "deidentify": PIIDeidentifyRequest,
         "privacy_gateway": PrivacyGatewayRequest,
+        "decision": FixedOptionDecisionRequest,
         "unload_model": ModelUnloadRequest,
         "unload_all_models": ModelUnloadRequest,
     }
@@ -251,6 +253,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "privacy_gateway",
         "loaded_models",
         "journey_resources",
+        "decision",
         "unload_model",
         "unload_all_models",
     }

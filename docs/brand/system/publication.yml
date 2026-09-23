@@ -323,6 +323,7 @@ classification:
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
+    - api/fixed-option-decisions.md
     - api/journey-resources.md
     - guides/file-redaction.md
     - reidentification-risk.md

@@ -23,6 +23,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /jobs`
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
+- `POST /v1/decisions`
 - `POST /omop/load`
 - `POST /cohort/resolve`
 
@@ -390,6 +391,16 @@ names, counts, labels, lengths, and durations. See
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
 ## Endpoints
+
+### `POST /v1/decisions`
+
+Evaluates a bounded caller-supplied choice, ordering, multi-label, boolean, or
+scalar request and returns calibrated confidence, backend identity, typed
+abstention and failure states, and mandatory review metadata. The default
+backend is local and deterministic; operators can inject a permissively
+licensed encoder, cross-encoder, or small specialist backend. See the
+[fixed-option decision API](./api/fixed-option-decisions.md) for the canonical
+schemas, limits, and client examples.
 
 ### `GET /health`
 

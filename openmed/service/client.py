@@ -9,6 +9,13 @@ from typing import Any, Literal, Mapping, Optional
 
 import httpx
 
+from openmed.structured.decision import (
+    DecisionRequest as FixedOptionDecisionRequest,
+)
+from openmed.structured.decision import (
+    decision_request_schema,
+)
+
 from .journey_client_generated import (
     JourneyResourceType,
     JourneyWorkflowClientMixin,
@@ -193,6 +200,11 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
     "journey_resources": ClientEndpoint(method="GET", path="/v1/journey/resources"),
+    "decision": ClientEndpoint(
+        method="POST",
+        path="/v1/decisions",
+        request_fields=frozenset(decision_request_schema()["properties"]),
+    ),
     "unload_model": ClientEndpoint(
         method="POST",
         path="/models/unload",
@@ -472,6 +484,22 @@ class OpenMedClient(JourneyWorkflowClientMixin):
             request_id=request_id,
         )
 
+    def decision(
+        self,
+        request: FixedOptionDecisionRequest | Mapping[str, Any],
+        *,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Evaluate a calibrated fixed-option decision with ``POST /v1/decisions``."""
+
+        payload = request.to_dict() if hasattr(request, "to_dict") else dict(request)
+        return self._request(
+            "POST",
+            "/v1/decisions",
+            json=payload,
+            request_id=request_id,
+        )
+
     def unload_model(
         self,
         model_name: str,
@@ -598,6 +626,7 @@ __all__ = [
     "AnalyzeRequest",
     "CLIENT_ENDPOINTS",
     "ClientEndpoint",
+    "FixedOptionDecisionRequest",
     "JourneyResourceType",
     "JourneyWorkflowClientMixin",
     "JourneyWorkflowName",

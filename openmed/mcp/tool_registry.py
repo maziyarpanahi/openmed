@@ -26,6 +26,13 @@ from openmed.service.journey_workflows import (
     journey_workflow_output_schema,
     journey_workflow_query_properties,
 )
+from openmed.structured.decision import (
+    DECISION_COMPATIBILITY_POLICY,
+    DECISION_SCHEMA_VERSION,
+    DEFAULT_CALIBRATION_ID,
+    decision_request_schema,
+    decision_result_schema,
+)
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -1698,7 +1705,58 @@ def _journey_workflow_tool_spec(
     )
 
 
+def _decision_tool_spec() -> ToolSpec:
+    """Build the read-only fixed-option decision tool from its core schema."""
+
+    request_contract = decision_request_schema()
+    properties = request_contract["properties"]
+    parameters = (
+        _parameter("mode", properties["mode"], str),
+        _parameter("input_text", properties["input_text"], str),
+        _parameter("options", properties["options"], Sequence[str], ()),
+        _parameter("namespace", properties["namespace"], str, "default"),
+        _parameter("purpose", properties["purpose"], str, "care_review"),
+        _parameter(
+            "calibration_id",
+            properties["calibration_id"],
+            str,
+            DEFAULT_CALIBRATION_ID,
+        ),
+        _parameter("timeout_ms", properties["timeout_ms"], int, 5000),
+        _parameter(
+            "schema_version",
+            properties["schema_version"],
+            str,
+            DECISION_SCHEMA_VERSION,
+        ),
+        _parameter(
+            "compatibility_policy",
+            properties["compatibility_policy"],
+            str,
+            DECISION_COMPATIBILITY_POLICY,
+        ),
+    )
+    spec = _tool_spec(
+        name="openmed_decide",
+        title="Evaluate Fixed-Option Decision",
+        description=(
+            "Score bounded caller-supplied choices locally, apply calibrated "
+            "abstention, and return an explicitly review-only decision result."
+        ),
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+        parameters=parameters,
+        output_schema=decision_result_schema(),
+    )
+    for metadata_key in ("$id", "$schema", "title"):
+        request_contract.pop(metadata_key, None)
+    return replace(spec, input_schema=request_contract)
+
+
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    _decision_tool_spec(),
     _tool_spec(
         name="openmed_analyze_text",
         title="Analyze Clinical Text",
