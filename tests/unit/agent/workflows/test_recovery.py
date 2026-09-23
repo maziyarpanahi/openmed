@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import traceback
 from dataclasses import replace
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import Any
 
 import pytest
 
+import openmed.agent.workflows.recovery as recovery
 from openmed.agent.correlation import ActionId, RunId
 from openmed.agent.identifiers import ToolId, WorkflowId
 from openmed.agent.workflows.recovery import (
@@ -184,6 +187,23 @@ def test_journal_is_durable_append_only_and_accepts_identical_retry(
     assert CheckpointJournal(tmp_path / "journal").load() == (first, second)
     assert second.previous_checkpoint_digest == first.checkpoint_digest
     assert second.recovery_evidence_digest == decision.evidence_digest
+
+
+def test_journal_append_uses_private_tempfile_without_posix_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows-compatible appends still flush files and reject overwrites."""
+
+    monkeypatch.setattr(recovery, "_WINDOWS", True)
+    journal_path = tmp_path / "journal"
+    journal = CheckpointJournal(journal_path)
+    first = _checkpoint()
+    assert journal.append(first) == first
+    assert journal.append(first) == first
+    assert journal.load() == (first,)
+    if os.name != "nt":
+        checkpoint_path = journal_path / "checkpoint-00000000000000000000.json"
+        assert stat.S_IMODE(checkpoint_path.stat().st_mode) == 0o600
 
 
 def test_journal_rejects_conflict_and_tampered_file(tmp_path: Path) -> None:
