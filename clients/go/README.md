@@ -95,6 +95,29 @@ func main() {
 	}
 	fmt.Println(deid.DeidentifiedText)
 
+	// Read one bounded, minimum-necessary Journey resource page.
+	facts, err := client.JourneyResources(ctx, openmed.JourneyResourceQuery{
+		ResourceType: openmed.JourneyFact,
+		Purpose:      "care_review",
+		First:        20,
+		Fields:       []string{"subject_id", "concept", "assertion"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("journey state:", facts.State, "facts:", len(facts.Resources))
+
+	// Evaluate a bounded fixed-option decision. Non-success states remain typed.
+	decision, err := client.Decision(ctx, openmed.FixedOptionDecisionRequest{
+		Mode:      openmed.DecisionFixedChoice,
+		InputText: "Synthetic review priority is urgent.",
+		Options:   []string{"urgent", "routine"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("decision state:", decision.State, "choice:", decision.Choice)
+
 	// Inspect loaded models and unload one.
 	loaded, err := client.LoadedModels(ctx)
 	if err != nil {
@@ -156,6 +179,29 @@ job, err := client.CreateJob(ctx, openmed.DeidentifyJobRequest{
 status, err := client.GetJob(ctx, job.ID)
 ```
 
+Long de-identification requests can also be consumed incrementally:
+
+```go
+stream, err := client.DeidentifyStream(ctx, openmed.PIIDeidentifyStreamRequest{
+	Text:      longClinicalNote,
+	Method:    openmed.MethodMask,
+	ChunkSize: 2048,
+})
+if err != nil {
+	log.Fatal(err)
+}
+defer stream.Close()
+for stream.Next() {
+	event := stream.Event()
+	if event.Type == "chunk" {
+		consumeRedactedText(event.RedactedText)
+	}
+}
+if err := stream.Err(); err != nil {
+	log.Fatal(err)
+}
+```
+
 ## Error handling
 
 Every non-2xx response is returned as a typed `*APIError`. It preserves the HTTP
@@ -206,13 +252,16 @@ non-nil redirect policy when that forwarding behavior is deliberate.
 | Method | Endpoint |
 | --- | --- |
 | `Analyze` | `POST /analyze` |
+| `Ground` | `POST /ground` |
 | `ExtractPII` | `POST /pii/extract` |
 | `ExtractPIIStream` | `POST /pii/extract/stream` |
 | `Deidentify` | `POST /pii/deidentify` |
+| `DeidentifyStream` | `POST /pii/deidentify/stream` |
 | `PrivacyGateway` | `POST /privacy-gateway/complete` |
 | `Health` | `GET /health` |
 | `Livez` | `GET /livez` |
 | `Readyz` | `GET /readyz` |
+| `JourneyResources` | `GET /v1/journey/resources` |
 | `LoadedModels` | `GET /models/loaded` |
 | `UnloadModels` | `POST /models/unload` |
 | `CreateJob` | `POST /jobs` |

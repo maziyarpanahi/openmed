@@ -103,7 +103,8 @@ published OpenMed installation.
 
 | Feature | Extra | Install command |
 |---|---|---|
-| Document / image intake + OCR (`pdfplumber`, `python-docx`, `Pillow`, DICOM, docTR/Tesseract/EasyOCR) | `multimodal` | `pip install "openmed[multimodal]"` |
+| Document / image intake + OCR (`pdfplumber`, `python-docx`, `python-pptx`, `Pillow`, DICOM, docTR/Tesseract/EasyOCR) | `multimodal` | `pip install "openmed[multimodal]"` |
+| Outlook MSG ingestion through the isolated GPL-3.0 parser bridge | `email-msg-gpl` | `pip install "openmed[email-msg-gpl]"` |
 | Heavier PaddleOCR backend | `ocr-paddle` | `pip install "openmed[ocr-paddle]"` |
 | Zero-shot GLiNER NER | `gliner` | `pip install "openmed[gliner]"` |
 | REST service | `service` | `pip install "openmed[service]"` |
@@ -396,14 +397,14 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **35 supported PII
-language codes: am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja,
-ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
+**Cause.** PII extraction and de-identification support **38 supported PII
+language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja,
+kn, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
 Russian currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.
-The accepted API set also includes four optional Indic routes: `gu`, `kn`,
-`ml`, and `pa`. Those codes require an explicit model or
-`OPENMED_INDIC_NER_MODEL`; Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and
+The accepted API set also includes two optional Indic routes: `ml`
+and `pa`. Those codes require an explicit model or
+`OPENMED_INDIC_NER_MODEL`; Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and
 Telugu can use the adapter too.
 
 **Fix.** Use a built-in code or a configured optional Indic route with
@@ -474,7 +475,7 @@ authentication, TLS at the ingress or reverse proxy, and an exact trusted-host a
 **Symptom.** Launching the MCP server raises:
 
 ```text
-RuntimeError: The MCP SDK is not installed. Install OpenMed with the MCP extra: pip install "openmed[mcp]"
+MissingExtraError: The MCP SDK is not installed. Install OpenMed with the MCP extra: pip install "openmed[mcp]".
 ```
 
 **Cause.** The Model Context Protocol SDK lives in the `mcp` extra.
@@ -510,8 +511,8 @@ pip install "openmed[cli]"
 python -m openmed.cli.typer_app --help
 ```
 
-Use `openmed --help` for the standard CLI (`analyze`, `batch`, `deid`, `pii`, `audit`, `risk`, `models`,
-`config`, `doctor`, and more).
+Use `openmed --help` for the standard CLI (`init`, `analyze`, `batch`, `deid`,
+`pii`, `audit`, `risk`, `models`, `config`, `doctor`, and more).
 
 ---
 

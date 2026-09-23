@@ -1,9 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 300,
-    "maximum_total_bytes": 21233664,
-    "maximum_unique_payload_bytes": 20971520,
+    "maximum_total_bytes": 78850000,
+    "maximum_unique_payload_bytes": 78512421,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -13,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 2621440
+    "json": 4183924
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 2621440
+    "docs/search/search_index.json": 4183924
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 4718592,
-    "/docs/model-tokenizer-script-coverage/": 5898240
+    "/docs/": 5560423,
+    "/docs/model-tokenizer-script-coverage/": 7660085
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -32,10 +31,17 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits are based on the staged v2.0.0 bundle, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
+    "The cross-lingual scorecard source staging measured 78727619 total bytes and 78390040 unique payload bytes. The artifact ceilings retain bounded headroom for hosted build variation; per-file, search, transfer, duplication, and source-map gates remain unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, and evidence-recency guides with bounded documentation headroom.",
+    "The combined clinical, schema-compatibility, social-needs, outbound-privacy, and evidence-recency staging aggregate contains 78515032 total bytes, 78177453 unique payload bytes, and 337579 duplicate payload bytes locally.",
+    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, and evidence-recency guides remain searchable. The combined search index measured 4158316 bytes; its 4183924-byte JSON ceiling retains 20872 bytes of bounded headroom after the observed platform delta.",
+    "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
+    "The /docs/ route measured 5441121 bytes on the combined governance staging build; its 5560423-byte ceiling retains 119302 bytes of bounded transfer headroom.",
+    "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
   ]

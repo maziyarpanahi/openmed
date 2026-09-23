@@ -18,9 +18,11 @@ SDK_PACKAGE_PATH = SDK_ROOT / "package.json"
 CLIENT_METHOD_BY_PATH = {
     "/analyze": "analyze",
     "/cohort/resolve": "resolveCohort",
+    "/v1/decisions": "decision",
     "/fhir/smart-backend/ingestions": "startSmartBackendIngestion",
     "/fhir/smart-backend/ingestions/{job_id}": "smartBackendIngestionStatus",
     "/fhir/smart-backend/ingestions/{job_id}/summary": ("smartBackendIngestionSummary"),
+    "/ground": "ground",
     "/health": "health",
     "/jobs": "createJob",
     "/jobs/{job_id}": "getJob",
@@ -29,10 +31,13 @@ CLIENT_METHOD_BY_PATH = {
     "/models/unload": "unloadModels",
     "/omop/load": "loadOmop",
     "/pii/deidentify": "deidentify",
+    "/pii/deidentify/stream": "deidentifyStream",
     "/pii/extract": "extractPii",
     "/pii/extract/stream": "extractPiiStream",
     "/privacy-gateway/complete": "privacyGateway",
+    "/profile": "profile",
     "/readyz": "readyz",
+    "/v1/journey/resources": "journeyResources",
 }
 
 
