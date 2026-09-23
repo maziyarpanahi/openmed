@@ -74,6 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolution events, byte-stable cohort-definition exchange with snapshot and
   criterion custody, explicit conversion-loss reports, and an optional
   digest-bound out-of-process cohort service bridge (#3337).
+- Added immutable saved-cohort definition versions and execution manifests,
+  deterministic point-in-time reruns, four-state membership with criterion and
+  time-window evidence, opaque-key workflow explanations, local append-only
+  persistence, and vocabulary-license boundaries (#3338).
 - Added deterministic half-open window planning for offline streaming
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and

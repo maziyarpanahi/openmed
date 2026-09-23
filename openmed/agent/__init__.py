@@ -112,6 +112,11 @@ from .run_summary import (
     RunSummaryPrivacyError,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
+from .workflows import (
+    COHORT_EXPLANATION_SCHEMA_VERSION,
+    CohortMembershipExplanation,
+    explain_cohort_membership,
+)
 
 __all__ = [
     "ALLOWED_ATTRIBUTES",
@@ -135,7 +140,9 @@ __all__ = [
     "CapabilityValidityError",
     "CORRELATION_SCHEMA_VERSION",
     "CORRELATION_TOKEN_BYTES",
+    "COHORT_EXPLANATION_SCHEMA_VERSION",
     "CorrelationIdError",
+    "CohortMembershipExplanation",
     "DEFAULT_CLOCK_SKEW_SECONDS",
     "GRANT_REASON_CODES",
     "GovernanceIdError",
@@ -197,6 +204,7 @@ __all__ = [
     "WorkflowOutcome",
     "WorkflowId",
     "allowed_reason_codes",
+    "explain_cohort_membership",
     "diff_run_summaries",
     "check_capability_validity",
     "envelope_from_exception",
