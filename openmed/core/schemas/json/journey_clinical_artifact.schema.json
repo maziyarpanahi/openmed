@@ -1,0 +1,24 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/journey/clinical-artifact.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "artifact_type": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "attributes": {"type": "object"},
+    "byte_size": {"minimum": 0, "type": "integer"},
+    "content_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "derivation_hash": {"anyOf": [{"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+    "encounter_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, {"type": "null"}]},
+    "media_type": {"pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$", "type": "string"},
+    "parent_artifact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "recorded_at": {"format": "date-time", "type": "string"},
+    "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+    "source_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "subject_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, {"type": "null"}]}
+  },
+  "required": ["artifact_id", "artifact_type", "attributes", "byte_size", "content_hash", "derivation_hash", "encounter_id", "media_type", "parent_artifact_ids", "recorded_at", "schema_version", "source_id", "subject_id"],
+  "schema_version": 1,
+  "title": "OpenMedJourneyClinicalArtifact",
+  "type": "object"
+}

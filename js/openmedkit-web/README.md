@@ -134,6 +134,10 @@ provides fail-closed Python-reference parity and critical-label recall gates.
 - No telemetry is enabled by default.
 - Local model and runtime paths reject remote URL schemes.
 - Span records contain hashes and offsets rather than raw identifier text.
+- By default, span hashes use a fresh random key per call. For stable hashes
+  across calls, supply a non-empty `hashSecret` from your application's secret
+  store. Use a high-entropy key, keep it private, and do not persist it beside
+  the span output. Explicit keys preserve deterministic cross-platform hashes.
 - OpenMed is not a medical device and must not autonomously make clinical
   decisions.
 
