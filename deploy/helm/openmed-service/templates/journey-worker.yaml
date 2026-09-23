@@ -1,0 +1,103 @@
+{{- if .Values.journey.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openmed-service.journeyWorkerName" . }}
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: journey-worker
+spec:
+  replicas: {{ .Values.journey.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "openmed-service.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: journey-worker
+  template:
+    metadata:
+      labels:
+        {{- include "openmed-service.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: journey-worker
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: journey-worker
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /usr/bin/python3
+            - -m
+            - openmed.deploy.journey
+            - worker
+            - --host
+            - 0.0.0.0
+            - --port
+            - {{ .Values.journey.worker.port | quote }}
+            - --interval-seconds
+            - {{ .Values.journey.worker.intervalSeconds | quote }}
+          env:
+            - name: OPENMED_JOURNEY_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.journey.database.secretName | quote }}
+                  key: {{ .Values.journey.database.secretKey | quote }}
+            - name: OPENMED_JOURNEY_SCHEMA
+              value: {{ .Values.journey.schema | quote }}
+            - name: OPENMED_JOURNEY_ARTIFACT_ROOT
+              value: {{ .Values.journey.artifacts.mountPath | quote }}
+            - name: DISABLE_TELEMETRY
+              value: "1"
+          ports:
+            - name: health
+              containerPort: {{ .Values.journey.worker.port }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+          resources:
+            {{- toYaml .Values.journey.worker.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: journey-artifacts
+              mountPath: {{ .Values.journey.artifacts.mountPath | quote }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: journey-artifacts
+          persistentVolumeClaim:
+            claimName: {{ include "openmed-service.journeyArtifactClaimName" . }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openmed-service.journeyWorkerName" . }}
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: journey-worker
+spec:
+  selector:
+    {{- include "openmed-service.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: journey-worker
+  ports:
+    - name: health
+      port: {{ .Values.journey.worker.port }}
+      targetPort: health
+{{- end }}
