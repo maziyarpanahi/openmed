@@ -26,6 +26,8 @@ Notes:
   the surname-aware, Han-only surrogate generators rather than a Latin fallback.
 - Assamese resolves conceptually to ``as_IN`` with Faker's ``bn_BD`` backend;
   curated Assamese names prevent Bengali name data from crossing that boundary.
+- Kannada resolves conceptually to ``kn_IN`` with Faker's ``en_IN`` backend;
+  the bundled Kannada provider preserves one- or two-initial name shapes.
 - Odia resolves to Faker's native ``or_IN`` locale without an approximation
   warning, so name surrogates remain in Odia script.
 - Tamil resolves to the native ``ta_IN`` Faker locale; patronymic-initial
@@ -111,6 +113,7 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "ar_MA": "ar_EG",
     "as_IN": "bn_BD",
     "de_BE": "de_DE",
+    "en_IE": "en_IE",
     "en_ET": "en_US",
     "en_TZ": "en_US",
     "en_UG": "en_US",

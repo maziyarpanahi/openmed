@@ -35,7 +35,7 @@ jobs:
       central_portal_configured: ${{ steps.central_credentials.outputs.configured }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -132,10 +132,10 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '11'
@@ -164,7 +164,7 @@ jobs:
 
       - name: Upload Central Portal bundle artifact
         if: needs.guard.outputs.central_portal_configured == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: openmedkit-central-portal-bundle
           path: android/openmedkit/build/central-portal/openmedkit-${{ needs.guard.outputs.version }}.zip
@@ -184,7 +184,7 @@ jobs:
 
     steps:
       - name: Download Central Portal bundle
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: openmedkit-central-portal-bundle
           path: dist/
