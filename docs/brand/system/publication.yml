@@ -124,6 +124,8 @@ classification:
     - agent/event-sequences.md
     - agent/outcome-reasons.md
     - agent/reviewer-handoffs.md
+    - agent/escalation-circuit-breakers.md
+    - agent/resource-budgets.md
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
@@ -139,7 +141,6 @@ classification:
     - agent/trial-eligibility-review.md
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
-    - agent/resource-budgets.md
     - agent/action-ledger.md
     - agent/deterministic-replay.md
     - agent-skills/install.md
