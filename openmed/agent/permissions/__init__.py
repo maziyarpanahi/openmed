@@ -2,6 +2,27 @@
 
 from __future__ import annotations
 
+from .access_tickets import (
+    ACCESS_TICKET_DENIAL_SCHEMA_VERSION,
+    ACCESS_TICKET_SELECTOR_DIGEST_ALGORITHM,
+    AccessTicket,
+    AccessTicketDenialEvidence,
+    AccessTicketDeniedError,
+    AccessTicketError,
+    AccessTicketExpiredError,
+    AccessTicketProjectionError,
+    AccessTicketPurposeMismatchError,
+    AccessTicketRequest,
+    AccessTicketRequiredError,
+    AccessTicketRunMismatchError,
+    AccessTicketSelectorError,
+    AccessTicketToolActionError,
+    AccessTicketValidationError,
+    AccessTicketVerifier,
+    RecordSelector,
+    ToolAction,
+    dispatch_with_access_ticket,
+)
 from .grants import (
     CAPABILITY_GRANT_SCHEMA_VERSION,
     CAPABILITY_GRANT_SIGNATURE_ALGORITHM,
@@ -25,8 +46,24 @@ from .grants import (
 )
 
 __all__ = [
+    "ACCESS_TICKET_DENIAL_SCHEMA_VERSION",
+    "ACCESS_TICKET_SELECTOR_DIGEST_ALGORITHM",
     "CAPABILITY_GRANT_SCHEMA_VERSION",
     "CAPABILITY_GRANT_SIGNATURE_ALGORITHM",
+    "AccessTicket",
+    "AccessTicketDenialEvidence",
+    "AccessTicketDeniedError",
+    "AccessTicketError",
+    "AccessTicketExpiredError",
+    "AccessTicketProjectionError",
+    "AccessTicketPurposeMismatchError",
+    "AccessTicketRequest",
+    "AccessTicketRequiredError",
+    "AccessTicketRunMismatchError",
+    "AccessTicketSelectorError",
+    "AccessTicketToolActionError",
+    "AccessTicketValidationError",
+    "AccessTicketVerifier",
     "CapabilityGrantConstraint",
     "CapabilityGrantError",
     "CapabilityGrantExpiredError",
@@ -42,6 +79,9 @@ __all__ = [
     "CapabilityGrantVerificationError",
     "CapabilityGrantVerifier",
     "MappingCapabilityGrantKeyProvider",
+    "RecordSelector",
     "StaticCapabilityGrantKeyProvider",
+    "ToolAction",
+    "dispatch_with_access_ticket",
     "dispatch_with_capability_grant",
 ]
