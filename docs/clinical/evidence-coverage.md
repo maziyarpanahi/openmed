@@ -23,7 +23,7 @@ matrix = build_evidence_coverage_matrix(
             "required_evidence": [
                 {
                     "evidence_class": "local_record",
-                    "review_state": "reviewed",
+                    "review_state": "approved",
                     "source_fingerprint": fingerprint_source("synthetic-source-a"),
                 },
                 {"evidence_class": "second_source", "review_state": "missing"},
@@ -50,4 +50,7 @@ The report contains sorted claim/evidence rows, fixed counts for `present`,
 `missing`, `conflicting`, and `unreviewed`, plus source-fingerprint,
 per-claim, and matrix hashes. Unknown input fields are ignored, so upstream
 records may retain their own private data without copying it into this report.
+An approved evidence-packet review state maps to `present` coverage when a
+source fingerprint is supplied; the value-free report records its normalized
+review state as `reviewed`.
 The API performs no mandatory network call.

@@ -184,6 +184,24 @@ def test_round_trip_preserves_the_value_free_matrix():
     assert restored.to_json() == matrix.to_json()
 
 
+def test_approved_packet_review_state_maps_to_present_coverage():
+    source_fingerprint = fingerprint_source("synthetic-source")
+    matrix = build_evidence_coverage_matrix(
+        {
+            "claim-a1": {
+                "local_record": {
+                    "review_state": "approved",
+                    "source_fingerprint": source_fingerprint,
+                }
+            }
+        }
+    )
+
+    assert matrix.records[0].status == "present"
+    assert matrix.records[0].source_fingerprints == (source_fingerprint,)
+    assert matrix.records[0].review_state == "reviewed"
+
+
 def test_invalid_input_errors_do_not_echo_raw_values():
     raw_value = "synthetic private value must not appear in an exception"
 

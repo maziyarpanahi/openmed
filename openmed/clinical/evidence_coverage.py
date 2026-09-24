@@ -57,6 +57,7 @@ _STATUS_ALIASES = {
     "present": "present",
     "available": "present",
     "complete": "present",
+    "approved": "present",
     "reviewed": "present",
     "supported": "present",
     "missing": "missing",
@@ -69,6 +70,7 @@ _STATUS_ALIASES = {
     "unknown": "unreviewed",
 }
 _REVIEW_ALIASES = {
+    "approved": "reviewed",
     "reviewed": "reviewed",
     "present": "reviewed",
     "available": "reviewed",
