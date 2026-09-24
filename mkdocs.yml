@@ -32,6 +32,7 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Clinical Side-Effect Previews: agent/side-effect-previews.md
       - Signed Agent Capability Grants: agent/capability-grants.md
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
       - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
