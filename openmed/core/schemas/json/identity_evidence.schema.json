@@ -1,0 +1,20 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/identity/evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_key": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "evidence_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "evidence_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "evidence_type": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "method": {"enum": ["exact", "probabilistic"]},
+    "policy_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "policy_version": {"pattern": "^[1-9][0-9]*(\\.[0-9]+){0,2}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_key_fingerprint": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+  },
+  "required": ["candidate_key", "evidence_digest", "evidence_id", "evidence_type", "method", "policy_id", "policy_version", "schema_version", "source_key_fingerprint"],
+  "schema_version": 1,
+  "title": "OpenMedIdentityEvidence",
+  "type": "object"
+}
