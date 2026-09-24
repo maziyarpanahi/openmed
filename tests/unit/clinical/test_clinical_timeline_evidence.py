@@ -152,6 +152,14 @@ def test_serialized_graph_hashes_caller_event_identifiers() -> None:
     assert graph.event(private_id).event_id == private_id
 
 
+def test_temporal_evidence_rejects_source_text_without_echoing_it() -> None:
+    private_text = "patient-jane-doe"
+    with pytest.raises(ValueError, match="normalized date or duration") as error:
+        TimelineEvidence(start=0, end=5, normalized_value=private_text)
+
+    assert private_text not in str(error.value)
+
+
 def test_before_after_cycle_is_rejected_without_echoing_event_values() -> None:
     events = [
         {"id": "event-a", "type": "procedure", "start": 0, "end": 1},

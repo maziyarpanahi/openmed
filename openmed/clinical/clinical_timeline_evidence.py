@@ -12,6 +12,7 @@ from __future__ import annotations
 import heapq
 import json
 import math
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
@@ -48,6 +49,11 @@ _RELATION_ALIASES = {
     "overlaps": "overlap",
 }
 _TIMEX_TYPES = frozenset({"DATE", "TIME", "DURATION", "SET"})
+_TEMPORAL_ATOM_RE = re.compile(
+    r"(?:\d{4}(?:-\d{2}(?:-\d{2})?)?"
+    r"(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?"
+    r"|P(?:\d+(?:\.\d+)?[YMWDHS]|T)+|\.\.)"
+)
 
 
 class TimelineGraphCycleError(ValueError):
@@ -76,12 +82,11 @@ class TimelineEvidence:
     def __post_init__(self) -> None:
         _validate_offset(self.start, self.end, "evidence")
         if self.normalized_value is not None:
-            if not isinstance(self.normalized_value, str):
-                raise TypeError("evidence normalized value must be a string")
-            normalized_value = self.normalized_value.strip()
-            if not normalized_value:
-                raise ValueError("evidence normalized value must not be empty")
-            object.__setattr__(self, "normalized_value", normalized_value)
+            object.__setattr__(
+                self,
+                "normalized_value",
+                _normalize_temporal_value(self.normalized_value),
+            )
         object.__setattr__(self, "text_hash", _validate_hash(self.text_hash))
 
         timex_type = self.timex_type
@@ -670,7 +675,7 @@ def _coerce_evidence(
         end=end,
         normalized_value=_optional_temporal_string(normalized_value),
         text_hash=text_hash,
-        timex_type=_optional_temporal_string(timex_type),
+        timex_type=timex_type,
         relation=relation,
         confidence=confidence,
     )
@@ -834,6 +839,8 @@ def _normalize_temporal_value(value: Any) -> str | None:
     normalized = value.strip()
     if not normalized:
         raise ValueError("temporal value must not be empty")
+    if not all(_TEMPORAL_ATOM_RE.fullmatch(part) for part in normalized.split("/")):
+        raise ValueError("temporal value must use a normalized date or duration")
     return normalized
 
 
