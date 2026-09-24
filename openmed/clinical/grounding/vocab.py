@@ -77,6 +77,15 @@ class VocabLoaderError(RuntimeError):
     """Base error raised by the vocabulary loader."""
 
 
+class GroundingConfigError(VocabLoaderError, ImportError):
+    """Raised when grounding needs a caller-supplied terminology resource.
+
+    The error is also an :class:`ImportError` so callers get the familiar
+    actionable shape used for optional integrations, while retaining the
+    existing vocabulary-loader exception hierarchy.
+    """
+
+
 class VocabularyNotFoundError(VocabLoaderError):
     """Raised when no cached/local/downloadable vocabulary artifact exists."""
 
@@ -85,8 +94,8 @@ class VocabularyChecksumError(VocabLoaderError):
     """Raised when a vocabulary artifact checksum is missing or invalid."""
 
 
-class RestrictedVocabularyError(VocabLoaderError):
-    """Raised when a restricted vocabulary is requested from this loader."""
+class RestrictedVocabularyError(GroundingConfigError):
+    """Raised when restricted vocabulary content is requested in-process."""
 
 
 @dataclass(frozen=True)
