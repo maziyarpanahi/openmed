@@ -31,7 +31,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
-            from: "0.1.12"
+            exact: "0.1.24"
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
