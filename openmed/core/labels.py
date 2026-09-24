@@ -251,6 +251,11 @@ LINE_DRAIN_TUBE: Final = "LINE_DRAIN_TUBE"
 NURSING_RISK_SCORE: Final = "NURSING_RISK_SCORE"
 CARE_INTERVENTION: Final = "CARE_INTERVENTION"
 
+#: Wound and skin-assessment concepts (issue #909)
+WOUND_TYPE: Final = "WOUND_TYPE"
+WOUND_STAGE: Final = "WOUND_STAGE"
+EXUDATE_DESCRIPTOR: Final = "EXUDATE_DESCRIPTOR"
+DRESSING_TYPE: Final = "DRESSING_TYPE"
 #: Functional-status and activities-of-daily-living concepts (issue #911)
 ADL_ACTIVITY: Final = "ADL_ACTIVITY"
 ASSISTANCE_LEVEL: Final = "ASSISTANCE_LEVEL"
@@ -504,6 +509,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         LINE_DRAIN_TUBE,
         NURSING_RISK_SCORE,
         CARE_INTERVENTION,
+        WOUND_TYPE,
+        WOUND_STAGE,
+        EXUDATE_DESCRIPTOR,
+        DRESSING_TYPE,
         ADL_ACTIVITY,
         ASSISTANCE_LEVEL,
         MOBILITY_ABILITY,
@@ -809,6 +818,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             LINE_DRAIN_TUBE,
             NURSING_RISK_SCORE,
             CARE_INTERVENTION,
+            WOUND_TYPE,
+            WOUND_STAGE,
+            EXUDATE_DESCRIPTOR,
+            DRESSING_TYPE,
             ADL_ACTIVITY,
             ASSISTANCE_LEVEL,
             MOBILITY_ABILITY,
@@ -1059,6 +1072,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     LINE_DRAIN_TUBE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NURSING_RISK_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     CARE_INTERVENTION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Wound and skin-assessment concepts (issue #909). These are descriptive
+    # extraction labels only; they do not infer staging or treatment.
+    WOUND_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, ICD_10_CM)),
+    WOUND_STAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    EXUDATE_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     # Functional-status and activities-of-daily-living concepts (issue #911).
     # These labels describe documented function only; they do not score a
     # scale, infer care needs, or recommend a disposition.
@@ -1070,6 +1088,7 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         RISK_LOW,
         (SNOMED, LOINC),
     ),
+    DRESSING_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Clinical genomics
     GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -1282,6 +1301,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     LINE_DRAIN_TUBE: HIPAA_UNIQUE_IDENTIFIER,
     NURSING_RISK_SCORE: HIPAA_UNIQUE_IDENTIFIER,
     CARE_INTERVENTION: HIPAA_UNIQUE_IDENTIFIER,
+    # Wound and skin-assessment concepts
+    WOUND_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    WOUND_STAGE: HIPAA_UNIQUE_IDENTIFIER,
+    EXUDATE_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    DRESSING_TYPE: HIPAA_UNIQUE_IDENTIFIER,
     # Functional-status and activities-of-daily-living concepts
     ADL_ACTIVITY: HIPAA_UNIQUE_IDENTIFIER,
     ASSISTANCE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
@@ -1450,6 +1474,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     LINE_DRAIN_TUBE: POPIA_HEALTH_INFORMATION,
     NURSING_RISK_SCORE: POPIA_HEALTH_INFORMATION,
     CARE_INTERVENTION: POPIA_HEALTH_INFORMATION,
+    WOUND_TYPE: POPIA_HEALTH_INFORMATION,
+    WOUND_STAGE: POPIA_HEALTH_INFORMATION,
+    EXUDATE_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
+    DRESSING_TYPE: POPIA_HEALTH_INFORMATION,
     ADL_ACTIVITY: POPIA_HEALTH_INFORMATION,
     ASSISTANCE_LEVEL: POPIA_HEALTH_INFORMATION,
     MOBILITY_ABILITY: POPIA_HEALTH_INFORMATION,
@@ -1987,6 +2015,30 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "mobilitystatus": OTHER,
     "painscore": OTHER,
     "skinassessment": BODY_SITE,
+    # Wound and skin-assessment concepts
+    "woundtype": WOUND_TYPE,
+    "wound": WOUND_TYPE,
+    "pressureinjury": WOUND_TYPE,
+    "pressureulcer": WOUND_TYPE,
+    "woundlocation": BODY_SITE,
+    "woundsite": BODY_SITE,
+    "woundstage": WOUND_STAGE,
+    "pressureinjurystage": WOUND_STAGE,
+    "pressureulcerstage": WOUND_STAGE,
+    "woundgrade": WOUND_STAGE,
+    "wounddimension": MEASUREMENT,
+    "wounddimensions": MEASUREMENT,
+    "woundsize": MEASUREMENT,
+    "woundmeasurement": MEASUREMENT,
+    "exudatedescriptor": EXUDATE_DESCRIPTOR,
+    "exudate": EXUDATE_DESCRIPTOR,
+    "woundexudate": EXUDATE_DESCRIPTOR,
+    "wounddrainage": EXUDATE_DESCRIPTOR,
+    "tissuetype": TISSUE,
+    "woundtissue": TISSUE,
+    "dressingtype": DRESSING_TYPE,
+    "wounddressingtype": DRESSING_TYPE,
+    "dressing": DRESSING_TYPE,
     # Functional-status and activities-of-daily-living concepts
     "adlactivity": ADL_ACTIVITY,
     "activityofdailyliving": ADL_ACTIVITY,
@@ -2607,6 +2659,10 @@ __all__ = [
     "LINE_DRAIN_TUBE",
     "NURSING_RISK_SCORE",
     "CARE_INTERVENTION",
+    "WOUND_TYPE",
+    "WOUND_STAGE",
+    "EXUDATE_DESCRIPTOR",
+    "DRESSING_TYPE",
     "ADL_ACTIVITY",
     "ASSISTANCE_LEVEL",
     "MOBILITY_ABILITY",

@@ -52,6 +52,7 @@ CLINICAL_DOMAIN_FIXTURE_NAMES: Mapping[str, str] = {
     "pathology_histology": "pathology_histology.jsonl",
     "pulmonology": "pulmonology.jsonl",
     "radiology": "radiology.jsonl",
+    "wound_assessment": "wound_assessment.jsonl",
     "medical_device": "medical_device.jsonl",
     "obstetrics_gynecology": "obstetrics_gynecology.jsonl",
 }

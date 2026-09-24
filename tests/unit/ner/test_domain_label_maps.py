@@ -28,7 +28,9 @@ from openmed.core.labels import (
     DEVICE_MODEL,
     DEVICE_TYPE,
     DIALYSIS_MODALITY,
+    DRESSING_TYPE,
     DYSPNEA_GRADE,
+    EXUDATE_DESCRIPTOR,
     FETAL_FINDING,
     FUNCTIONAL_SCALE,
     GENE,
@@ -66,6 +68,8 @@ from openmed.core.labels import (
     TUMOR_GRADE,
     URINE_FINDING,
     VARIANT_DESCRIPTOR,
+    WOUND_STAGE,
+    WOUND_TYPE,
     ZYGOSITY,
     hipaa_class_for,
     normalize_label,
@@ -989,3 +993,109 @@ class TestOncologyStagingDomain:
                 assert document.offset_map.normalized_span_to_original_offsets(
                     ns, ne
                 ) == (entity["start"], entity["end"])
+
+
+WOUND_ASSESSMENT_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "wound_assessment.jsonl"
+)
+
+
+class TestWoundAssessmentDomain:
+    """Wound-care assessment labels are distinct from dermatology lesions."""
+
+    EXPECTED_LABELS = [
+        "WoundType",
+        "WoundLocation",
+        "WoundStage",
+        "WoundDimension",
+        "ExudateDescriptor",
+        "TissueType",
+        "DressingType",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "WoundType": WOUND_TYPE,
+        "WoundLocation": "BODY_SITE",
+        "WoundStage": WOUND_STAGE,
+        "WoundDimension": "MEASUREMENT",
+        "ExudateDescriptor": EXUDATE_DESCRIPTOR,
+        "TissueType": "TISSUE",
+        "DressingType": DRESSING_TYPE,
+    }
+    EXPECTED_ENTITIES = [
+        ("WoundStage", 0, 7, "Stage 3"),
+        ("WoundLocation", 8, 14, "sacral"),
+        ("WoundType", 15, 30, "pressure injury"),
+        ("WoundDimension", 40, 45, "4x3cm"),
+        ("ExudateDescriptor", 51, 74, "moderate serous exudate"),
+        ("TissueType", 79, 101, "60% granulation tissue"),
+        ("DressingType", 118, 131, "foam dressing"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in WOUND_ASSESSMENT_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves_separately_from_dermatology(self):
+        assert "wound_assessment" in available_domains()
+        assert get_default_labels("wound_assessment") == self.EXPECTED_LABELS
+        assert set(self.EXPECTED_LABELS).isdisjoint(get_default_labels("dermatology"))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == CLINICAL_CONCEPT
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+        if expected in {
+            WOUND_TYPE,
+            WOUND_STAGE,
+            EXUDATE_DESCRIPTOR,
+            DRESSING_TYPE,
+        }:
+            assert hipaa_class_for(expected)
+
+    def test_fixture_reports_all_labels_and_disclaimer(self):
+        rows = self._fixtures()
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not infer wound staging" in disclaimer
+        assert {entity["label"] for entity in row["entities"]} == set(
+            self.EXPECTED_LABELS
+        )
+
+    def test_fixture_entities_match_expected_and_offsets_are_stable(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        pipeline = Pipeline()
+        document = pipeline.stage1_normalize(row["text"])
+        for entity in row["entities"]:
+            assert row["text"][entity["start"] : entity["end"]] == entity["text"]
+            ns, ne = document.offset_map.original_span_to_normalized(
+                entity["start"], entity["end"]
+            )
+            assert document.normalized_text[ns:ne] == entity["text"]
+            assert document.offset_map.normalized_span_to_original_offsets(ns, ne) == (
+                entity["start"],
+                entity["end"],
+            )

@@ -47,6 +47,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/functional_status.jsonl",
         "tests/fixtures/clinical/pathology_histology.jsonl",
         "tests/fixtures/clinical/radiology_finding.jsonl",
+        "tests/fixtures/clinical/wound_assessment.jsonl",
         "tests/fixtures/clinical/medical_device.jsonl",
         "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
     ):
@@ -58,5 +59,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
     assert "not a contraindication check" in markdown
     assert "OM-138 FHIR Immunization exporter" in markdown
     assert "VaccineLot to lotNumber" in markdown
+    assert "distinct from the dermatology lesion map" in markdown
+    assert "does not infer wound staging" in markdown
     assert "UDI lookup or decoding" in markdown
     assert "requires human review" in markdown
