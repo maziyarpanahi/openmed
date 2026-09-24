@@ -11,7 +11,7 @@ import calendar
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 TimexType = Literal["DATE", "DURATION", "SET"]
@@ -26,6 +26,8 @@ RelativeDirection = Literal[
     "after_anchor",
     "before_anchor",
     "postop_day",
+    "calendar_past",
+    "calendar_future",
 ]
 
 _NUMBER_WORDS = {
@@ -124,6 +126,12 @@ class TemporalExpression:
     uncertainty_days: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    @property
+    def kind(self) -> TimexType:
+        """Return the TIMEX3 kind using the short public field name."""
+
+        return self.timex_type
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready representation."""
 
@@ -138,6 +146,89 @@ class TemporalExpression:
             "direction": self.direction,
             "anchor": self.anchor,
             "uncertainty_days": self.uncertainty_days,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class TimeExpr:
+    """Small TIMEX3-compatible view used by the clinical timeline facade.
+
+    ``value`` is an absolute or intrinsic TIMEX value when it is known.  A
+    relative DATE has ``value=None`` until ``document_time`` is supplied to
+    :func:`extract_timex`; its original duration and signed offset remain
+    available through ``relative_value`` and ``offset_days``.  This prevents
+    an unanchored expression from being mistaken for an absolute date.
+    """
+
+    text: str
+    start: int
+    end: int
+    kind: TimexType
+    value: str | None
+    relative_value: str | None = None
+    offset_days: int | None = None
+    direction: RelativeDirection = "none"
+    anchor: str | None = None
+    reference_time: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def timex_type(self) -> TimexType:
+        """Return the TIMEX3 kind using the resolver's field name."""
+
+        return self.kind
+
+    @property
+    def type(self) -> TimexType:
+        """Return the TIMEX3 kind using the JSON field name."""
+
+        return self.kind
+
+    @property
+    def span(self) -> tuple[int, int]:
+        """Return the inclusive/exclusive source offsets."""
+
+        return self.start, self.end
+
+    @property
+    def is_relative(self) -> bool:
+        """Return whether the expression depends on a temporal anchor."""
+
+        return self.direction != "none" or self.relative_value is not None
+
+    @property
+    def relative(self) -> bool:
+        """Return an alias for :attr:`is_relative`."""
+
+        return self.is_relative
+
+    @property
+    def normalized_value(self) -> str | None:
+        """Return the anchored value, or ``None`` for an unanchored DATE."""
+
+        return self.value
+
+    @property
+    def relative_offset_days(self) -> int | None:
+        """Return the signed day offset when the expression has one."""
+
+        return self.offset_days
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready expression representation."""
+
+        return {
+            "text": self.text,
+            "start": self.start,
+            "end": self.end,
+            "kind": self.kind,
+            "value": self.value,
+            "relative_value": self.relative_value,
+            "offset_days": self.offset_days,
+            "direction": self.direction,
+            "anchor": self.anchor,
+            "reference_time": self.reference_time,
             "metadata": dict(self.metadata),
         }
 
@@ -162,6 +253,62 @@ def detect_timexes(text: str) -> tuple[TemporalExpression, ...]:
             if expression is not None:
                 candidates.append(expression)
     return tuple(_select_non_overlapping(candidates))
+
+
+def extract_timex(
+    text: str,
+    document_time: str | date | datetime | None = None,
+) -> tuple[TimeExpr, ...]:
+    """Extract and optionally anchor TIMEX3-style expressions from ``text``.
+
+    The function is a compatibility facade over the package's existing
+    offset-preserving detector and normalizer.  Absolute dates, durations,
+    and recurring sets retain their intrinsic value without an anchor.
+    Relative DATE expressions retain their signed offset while leaving
+    ``value`` unset until a document time is supplied.  No wall-clock time or
+    external service is consulted.
+
+    Args:
+        text: Clinical note text to inspect.
+        document_time: Optional document creation/reference time.  It accepts
+            an ISO date or datetime, :class:`date`, or :class:`datetime`.
+
+    Returns:
+        Expressions in deterministic source-offset order.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    detected = detect_timexes(text)
+    offsets = [(expression.start, expression.end) for expression in detected]
+    # Import lazily to keep the low-level detector independent of the public
+    # clinical package import graph.
+    from openmed.clinical.temporal_normalizer import normalize_temporal
+
+    normalized = normalize_temporal(text, offsets, document_time)
+    reference_time = _canonical_reference_time(document_time)
+    expressions: list[TimeExpr] = []
+    for expression, record in zip(detected, normalized, strict=True):
+        is_relative = expression.direction != "none" or bool(
+            expression.metadata.get("relative")
+        )
+        expressions.append(
+            TimeExpr(
+                text=expression.text,
+                start=expression.start,
+                end=expression.end,
+                kind=record.timex_type,
+                value=record.value,
+                relative_value=expression.value if is_relative else None,
+                offset_days=_relative_offset_days(expression),
+                direction=expression.direction,
+                anchor=expression.anchor,
+                reference_time=reference_time,
+                metadata=dict(expression.metadata),
+            )
+        )
+    return tuple(expressions)
 
 
 def parse_number(value: str) -> int | None:
@@ -198,6 +345,51 @@ def duration_value(amount: int, unit: str) -> str:
         "year": "Y",
     }[unit]
     return f"P{amount}{designator}"
+
+
+def _relative_offset_days(expression: TemporalExpression) -> int | None:
+    if expression.amount is None or expression.unit is None:
+        return None
+    days_per_unit = {
+        "day": 1,
+        "week": 7,
+        "month": 30,
+        "year": 365,
+    }.get(expression.unit)
+    if days_per_unit is None:
+        return None
+    amount = expression.amount * days_per_unit
+    if expression.direction in {"past", "before_previous", "before_anchor"}:
+        return -amount
+    if expression.direction in {
+        "future",
+        "after_previous",
+        "after_anchor",
+        "postop_day",
+    }:
+        return amount
+    if expression.direction == "same":
+        return 0
+    return None
+
+
+def _canonical_reference_time(
+    value: str | date | datetime | None,
+) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if not isinstance(value, str):
+        raise TypeError("document_time must be an ISO string, date, or datetime")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("document_time must not be empty")
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
+        return date.fromisoformat(normalized).isoformat()
+    return datetime.fromisoformat(normalized.replace("Z", "+00:00")).isoformat()
 
 
 def _date_expression(
@@ -401,6 +593,72 @@ def _parse_postop_day(match: re.Match[str]) -> TemporalExpression | None:
     )
 
 
+def _parse_relative_anchor(match: re.Match[str]) -> TemporalExpression | None:
+    amount = parse_number(match.group("amount"))
+    if amount is None:
+        return None
+    unit = normalize_unit(match.group("unit"))
+    relation = match.group("relation").casefold()
+    direction: RelativeDirection = (
+        "before_anchor" if relation in {"prior", "before"} else "after_anchor"
+    )
+    return _date_expression(
+        match,
+        value=duration_value(amount, unit),
+        direction=direction,
+        amount=amount,
+        unit=unit,
+        anchor=_canonical_anchor(match.group("anchor")),
+        uncertainty_days=_unit_uncertainty_days(unit),
+        metadata={
+            "relative": True,
+            "anchor_required": True,
+            "relative_to_anchor": True,
+        },
+    )
+
+
+def _parse_calendar_relative(match: re.Match[str]) -> TemporalExpression:
+    direction_text = match.group("direction").casefold()
+    target = match.group("target").casefold()
+    direction: RelativeDirection = (
+        "calendar_past" if direction_text == "last" else "calendar_future"
+    )
+    if target in _MONTHS:
+        unit = "month"
+    elif target in {"day", "week", "month", "year"}:
+        unit = target
+    else:
+        unit = "day"
+    return _date_expression(
+        match,
+        value=None,
+        direction=direction,
+        amount=1,
+        unit=unit,
+        uncertainty_days=_unit_uncertainty_days(unit),
+        metadata={
+            "relative": True,
+            "calendar_target": target,
+        },
+    )
+
+
+def _parse_since_calendar(match: re.Match[str]) -> TemporalExpression:
+    target = " ".join(match.group("calendar").casefold().split())
+    return _date_expression(
+        match,
+        value=None,
+        direction="since",
+        anchor=target,
+        metadata={
+            "relative": True,
+            "anchor_required": True,
+            "calendar_anchor": True,
+        },
+    )
+
+
 def _parse_set(match: re.Match[str]) -> TemporalExpression:
     text = " ".join(match.group(0).casefold().split())
     return TemporalExpression(
@@ -501,6 +759,16 @@ _PATTERNS = (
     _TimexPattern(
         re.compile(
             rf"\b{_APPROX_RE}(?P<amount>{_NUMBER_RE})\s+"
+            rf"(?P<unit>{_UNIT_RE})\s+"
+            rf"(?P<relation>prior|before|after|later)\s+"
+            rf"(?:to\s+|the\s+)?(?P<anchor>{_ANCHOR_RE})\b",
+            re.IGNORECASE,
+        ),
+        _parse_relative_anchor,
+    ),
+    _TimexPattern(
+        re.compile(
+            rf"\b{_APPROX_RE}(?P<amount>{_NUMBER_RE})\s+"
             rf"(?P<unit>{_UNIT_RE})\s+(?:ago|prior|earlier|before)\b",
             re.IGNORECASE,
         ),
@@ -552,6 +820,22 @@ _PATTERNS = (
     ),
     _TimexPattern(
         re.compile(
+            rf"\bsince\s+(?:the\s+)?(?P<calendar>(?:last|next)\s+"
+            rf"(?:{_MONTH_RE}|day|week|month|year))\b",
+            re.IGNORECASE,
+        ),
+        _parse_since_calendar,
+    ),
+    _TimexPattern(
+        re.compile(
+            rf"\b(?P<direction>last|next)\s+"
+            rf"(?P<target>{_MONTH_RE}|day|week|month|year)\b",
+            re.IGNORECASE,
+        ),
+        _parse_calendar_relative,
+    ),
+    _TimexPattern(
+        re.compile(
             rf"\bsince\s+(?:the\s+)?(?P<anchor>{_ANCHOR_RE})\b",
             re.IGNORECASE,
         ),
@@ -582,10 +866,12 @@ _PATTERNS = (
 
 __all__ = [
     "RelativeDirection",
+    "TimeExpr",
     "TemporalExpression",
     "TimexType",
     "detect_timexes",
     "duration_value",
+    "extract_timex",
     "normalize_unit",
     "parse_number",
 ]
