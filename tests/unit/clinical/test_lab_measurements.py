@@ -72,6 +72,30 @@ def test_embedded_unit_and_unitless_attached_range_are_supported() -> None:
     assert record["source_offsets"] == {"start": 2, "end": 14}
 
 
+def test_mixed_units_compare_only_when_dimensions_match() -> None:
+    compatible = normalize_lab_measurement(
+        {
+            "value": 120,
+            "unit": "mg/dL",
+            "reference_range": {"low": 0.7, "high": 0.99, "unit": "g/L"},
+        }
+    )
+    incompatible = normalize_lab_measurement(
+        {
+            "value": 120,
+            "unit": "mg/dL",
+            "reference_range": {"low": 3.5, "high": 5.1, "unit": "mmol/L"},
+        }
+    )
+
+    assert compatible["status"] == "ok"
+    assert compatible["interpretation"] == "high"
+    assert compatible["canonical_value"] == pytest.approx(1.2)
+    assert compatible["reference_range"]["canonical_high"] == pytest.approx(0.99)
+    assert incompatible["reference_range"]["status"] == "incommensurable"
+    assert incompatible["interpretation"] == "unknown"
+
+
 @pytest.mark.parametrize("unit", ["mystery-unit", "units", None])
 def test_unknown_or_missing_unit_fails_closed_without_guessing(unit: object) -> None:
     record = normalize_lab_measurement(
