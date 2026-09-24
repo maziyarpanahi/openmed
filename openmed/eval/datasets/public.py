@@ -225,6 +225,7 @@ _CONTROLLED_METADATA_KEYS = {
 }
 
 _GATED_CONTENT_MARKERS = (
+    "CEGS",
     "UMLS",
     "SNOMED",
     "CPT",
@@ -235,9 +236,21 @@ _GATED_CONTENT_MARKERS = (
     "MedNLI",
     "MADE",
     "MIMIC",
+    "N-GRID",
+    "BHC",
 )
 _UNAMBIGUOUS_GATED_MARKERS = frozenset(
-    {"UMLS", "SNOMED", "CPT", "i2b2", "n2c2", "MedNLI"}
+    {
+        "CEGS",
+        "UMLS",
+        "SNOMED",
+        "CPT",
+        "i2b2",
+        "n2c2",
+        "MedNLI",
+        "N-GRID",
+        "BHC",
+    }
 )
 _STRUCTURED_GATED_MARKERS = frozenset(_GATED_CONTENT_MARKERS) - (
     _UNAMBIGUOUS_GATED_MARKERS
