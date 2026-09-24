@@ -9,23 +9,46 @@ integrity layer, not a clinical decision or compliance guarantee.
 An accepted `EvidenceReference` contains only:
 
 - a caller-owned synthetic `reference_id` and optional `source_id`;
-- reviewed and verified status;
+- a validated `queued → in_review → approved` transition history and verified status;
 - a `sha256:<64 lowercase hex>` policy fingerprint; and
 - a non-empty half-open source offset (`start`, `end`).
 
 It never stores source text, excerpts, claims, or opaque payloads. References
 must be explicitly synthetic (`synthetic: true`) and verified
-(`verified: true`), and their `review_state` must be `"reviewed"`.
+(`verified: true`). Their `review_state` must be `"approved"`, backed by an
+ordered review history under the default transition policy. Every transition
+must carry the provenance fingerprint for that exact reference, source, offset,
+and evidence policy. A state string or approval event alone is insufficient.
 
 ```python
 from openmed.clinical.evidence_packet import (
     build_evidence_packet,
+    fingerprint_evidence_review,
     fingerprint_policy,
+)
+from openmed.clinical.review_state_machine import (
+    ReviewState,
+    ReviewStateMachine,
+    make_opaque_event_id,
 )
 
 policy_fingerprint = fingerprint_policy(
     {"policy": "synthetic-review", "version": 1}
 )
+provenance = fingerprint_evidence_review(
+    reference_id="synthetic:ref-001",
+    source_id="synthetic:document-001",
+    start=8,
+    end=17,
+    policy_fingerprint=policy_fingerprint,
+)
+review = ReviewStateMachine()
+for state in (ReviewState.IN_REVIEW, ReviewState.APPROVED):
+    review.transition(
+        state,
+        make_opaque_event_id(("synthetic:ref-001", state.value)),
+        provenance,
+    )
 packet = build_evidence_packet(
     [
         {
@@ -33,7 +56,8 @@ packet = build_evidence_packet(
             "source_id": "synthetic:document-001",
             "start": 8,
             "end": 17,
-            "review_state": "reviewed",
+            "review_state": "approved",
+            "review_transitions": [item.to_dict() for item in review.transitions],
             "policy_fingerprint": policy_fingerprint,
             "synthetic": True,
             "verified": True,
@@ -44,9 +68,10 @@ packet = build_evidence_packet(
 ```
 
 Accepted references are sorted by `(start, end, reference_id)`, so equivalent
-inputs produce the same packet and JSON representation. Fingerprints are
-computed locally from canonical JSON; packet construction makes no network
-call.
+inputs produce the same version-2 packet, JSON representation, and
+`packet.digest`. Fingerprints are computed locally from canonical JSON; packet
+construction makes no network call. Reopened, expired, rejected, skipped, or
+source-mismatched review histories are rejected.
 
 ## Rejections and privacy
 

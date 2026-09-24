@@ -304,7 +304,6 @@ from .events import (
 from .evidence_packet import (
     EVIDENCE_PACKET_KIND,
     EVIDENCE_PACKET_SCHEMA_VERSION,
-    REJECTION_CATEGORIES as EVIDENCE_REJECTION_CATEGORIES,
     REJECTION_DUPLICATE_REFERENCE,
     REJECTION_INVALID_POLICY_FINGERPRINT,
     REJECTION_INVALID_REFERENCE,
@@ -314,7 +313,7 @@ from .evidence_packet import (
     REJECTION_POLICY_MISMATCH,
     REJECTION_RAW_TEXT,
     REJECTION_UNVERIFIED,
-    REVIEW_STATE_REVIEWED,
+    REVIEW_STATE_APPROVED,
     REVIEW_STATE_VALUES,
     EvidencePacket,
     EvidencePacketValidationError,
@@ -323,9 +322,13 @@ from .evidence_packet import (
     build_evidence_packet,
     compute_policy_fingerprint,
     create_evidence_packet,
+    fingerprint_evidence_review,
     fingerprint_policy,
     package_evidence,
     validate_evidence_packet,
+)
+from .evidence_packet import (
+    REJECTION_CATEGORIES as EVIDENCE_REJECTION_CATEGORIES,
 )
 from .experiencer import (
     EXPERIENCER_REFINED_VALUES,
@@ -1483,7 +1486,7 @@ __all__ = [
     "EVIDENCE_PACKET_KIND",
     "EVIDENCE_PACKET_SCHEMA_VERSION",
     "EVIDENCE_REJECTION_CATEGORIES",
-    "REVIEW_STATE_REVIEWED",
+    "REVIEW_STATE_APPROVED",
     "REVIEW_STATE_VALUES",
     "REJECTION_DUPLICATE_REFERENCE",
     "REJECTION_INVALID_POLICY_FINGERPRINT",
@@ -1499,6 +1502,7 @@ __all__ = [
     "EvidenceRejectionReport",
     "EvidencePacket",
     "fingerprint_policy",
+    "fingerprint_evidence_review",
     "compute_policy_fingerprint",
     "build_evidence_packet",
     "package_evidence",

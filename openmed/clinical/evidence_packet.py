@@ -1,8 +1,8 @@
 """Guarded, PHI-free evidence packets for downstream clinical reasoning.
 
-The packet boundary accepts only synthetic evidence references that have been
-reviewed, explicitly verified, bound to a policy fingerprint, and anchored by
-half-open source offsets.  It never stores source text.  Invalid input is
+The packet boundary accepts only synthetic evidence references with validated
+approval histories, explicit verification, policy fingerprints, and half-open
+source offsets.  It never stores source text.  Invalid input is
 discarded with a stable, counts-only rejection report so callers can audit
 shape quality without copying sensitive values into logs or reports.
 
@@ -19,12 +19,18 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal
 
+from openmed.clinical.review_state_machine import (
+    ReviewState,
+    ReviewTransition,
+    compute_provenance_fingerprint,
+    validate_review_history,
+)
 from openmed.core.audit import stable_hash
 
 __all__ = [
     "EVIDENCE_PACKET_KIND",
     "EVIDENCE_PACKET_SCHEMA_VERSION",
-    "REVIEW_STATE_REVIEWED",
+    "REVIEW_STATE_APPROVED",
     "REVIEW_STATE_VALUES",
     "REJECTION_CATEGORIES",
     "REJECTION_DUPLICATE_REFERENCE",
@@ -42,6 +48,7 @@ __all__ = [
     "EvidenceRejectionReport",
     "EvidencePacket",
     "fingerprint_policy",
+    "fingerprint_evidence_review",
     "compute_policy_fingerprint",
     "build_evidence_packet",
     "package_evidence",
@@ -49,11 +56,11 @@ __all__ = [
     "validate_evidence_packet",
 ]
 
-EVIDENCE_PACKET_SCHEMA_VERSION = 1
+EVIDENCE_PACKET_SCHEMA_VERSION = 2
 EVIDENCE_PACKET_KIND = "clinical_evidence_packet"
 
-REVIEW_STATE_REVIEWED: Literal["reviewed"] = "reviewed"
-REVIEW_STATE_VALUES: tuple[str, ...] = (REVIEW_STATE_REVIEWED,)
+REVIEW_STATE_APPROVED: Literal["approved"] = "approved"
+REVIEW_STATE_VALUES: tuple[str, ...] = (REVIEW_STATE_APPROVED,)
 
 REJECTION_RAW_TEXT = "raw_text"
 REJECTION_UNVERIFIED = "unverified"
@@ -161,6 +168,54 @@ def _validate_offsets(
     return start, end
 
 
+def fingerprint_evidence_review(
+    *,
+    reference_id: str,
+    source_id: str | None,
+    start: int,
+    end: int,
+    policy_fingerprint: str,
+) -> str:
+    """Bind a review history to one offset-only evidence reference."""
+
+    reference = _required_identifier(reference_id)
+    source = reference if source_id is None else _required_identifier(source_id)
+    start, end = _validate_offsets(start, end)
+    policy = _validate_policy_fingerprint(policy_fingerprint)
+    return compute_provenance_fingerprint(
+        {
+            "reference_id": reference,
+            "source_id": source,
+            "start": start,
+            "end": end,
+            "policy_fingerprint": policy,
+        }
+    )
+
+
+def _validated_review_transitions(
+    value: Any, expected_fingerprint: str
+) -> tuple[ReviewTransition, ...]:
+    if not isinstance(value, (list, tuple)) or not value:
+        raise _reject(REJECTION_INVALID_REVIEW_STATE)
+    try:
+        transitions = tuple(
+            item
+            if isinstance(item, ReviewTransition)
+            else ReviewTransition.from_dict(item)
+            for item in value
+        )
+        report = validate_review_history(transitions)
+    except (TypeError, ValueError):
+        raise _reject(REJECTION_INVALID_REVIEW_STATE) from None
+    if report.current_state is not ReviewState.APPROVED or any(
+        item.provenance_fingerprint != expected_fingerprint
+        for item in report.transitions
+    ):
+        raise _reject(REJECTION_INVALID_REVIEW_STATE)
+    return report.transitions
+
+
 def _contains_raw_text(value: Any) -> bool:
     """Return whether a candidate contains a forbidden text-bearing key."""
 
@@ -211,7 +266,7 @@ def _extract_offset_values(payload: Mapping[str, Any]) -> tuple[Any, Any, Any]:
 
 @dataclass(frozen=True)
 class EvidenceReference:
-    """One reviewed, verified, synthetic, offset-only evidence reference.
+    """One approved, verified, synthetic, offset-only evidence reference.
 
     ``start`` and ``end`` are half-open character offsets.  No text or opaque
     payload is accepted by this type; a caller that needs source content must
@@ -223,6 +278,7 @@ class EvidenceReference:
     end: int
     review_state: str
     policy_fingerprint: str
+    review_transitions: tuple[ReviewTransition, ...]
     source_id: str | None = None
     synthetic: Literal[True] = True
     verified: Literal[True] = True
@@ -242,12 +298,23 @@ class EvidenceReference:
             raise _reject(REJECTION_INVALID_REVIEW_STATE)
         policy_fingerprint = _validate_policy_fingerprint(self.policy_fingerprint)
         start, end = _validate_offsets(self.start, self.end)
+        review_fingerprint = fingerprint_evidence_review(
+            reference_id=reference_id,
+            source_id=source_id,
+            start=start,
+            end=end,
+            policy_fingerprint=policy_fingerprint,
+        )
+        transitions = _validated_review_transitions(
+            self.review_transitions, review_fingerprint
+        )
 
         object.__setattr__(self, "reference_id", reference_id)
         object.__setattr__(self, "source_id", source_id)
         object.__setattr__(self, "policy_fingerprint", policy_fingerprint)
         object.__setattr__(self, "start", start)
         object.__setattr__(self, "end", end)
+        object.__setattr__(self, "review_transitions", transitions)
 
     @property
     def evidence_id(self) -> str:
@@ -277,6 +344,9 @@ class EvidenceReference:
             "end": self.end,
             "review_state": self.review_state,
             "policy_fingerprint": self.policy_fingerprint,
+            "review_transitions": [
+                transition.to_dict() for transition in self.review_transitions
+            ],
             "synthetic": True,
             "verified": True,
         }
@@ -318,8 +388,6 @@ class EvidenceReference:
             raise _reject(REJECTION_UNVERIFIED)
 
         review_state = payload.get("review_state")
-        if review_state is None and payload.get("reviewed") is True:
-            review_state = REVIEW_STATE_REVIEWED
         if review_state not in REVIEW_STATE_VALUES:
             raise _reject(REJECTION_INVALID_REVIEW_STATE)
 
@@ -342,6 +410,7 @@ class EvidenceReference:
             end=end,
             review_state=review_state,
             policy_fingerprint=policy_fingerprint,
+            review_transitions=payload.get("review_transitions"),
             synthetic=True,
             verified=True,
         )
@@ -495,6 +564,12 @@ class EvidencePacket:
 
         return self.rejection_report.rejected_count
 
+    @property
+    def digest(self) -> str:
+        """Return a stable digest of the safe serialized packet."""
+
+        return stable_hash(self.to_dict())
+
     def to_dict(self) -> dict[str, Any]:
         """Return the safe, deterministic packet representation."""
 
@@ -626,7 +701,7 @@ def build_evidence_packet(
     Args:
         records: One or more :class:`EvidenceReference` instances or candidate
             mappings.  Candidate mappings must be synthetic, verified,
-            reviewed, fingerprinted, and offset-bearing.
+            approved through a valid history, fingerprinted, and offset-bearing.
         policy_fingerprint: Expected policy digest.  When omitted, it is
             inferred only if every candidate that supplies a valid digest agrees
             on exactly one value.

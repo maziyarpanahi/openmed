@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 79458983,
-    "maximum_unique_payload_bytes": 79121404,
+    "maximum_total_bytes": 79669022,
+    "maximum_unique_payload_bytes": 79331443,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,10 +31,10 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and clinical review-state guides with bounded documentation headroom.",
-    "The combined clinical, schema-compatibility, social-needs, outbound-privacy, evidence-recency, NLI, guardrail, and review-state staging aggregate contains 79343497 total bytes, 79005918 unique payload bytes, and 337579 duplicate payload bytes locally.",
-    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, guardrail, and review-state guides remain searchable. The combined search index measured 4170020 bytes; its 4191889-byte JSON ceiling retains 17133 bytes of bounded headroom after the observed platform delta.",
+    "Artifact byte limits cover the exact staged clinical evidence-packet and guarded review-state guides alongside the V3 clinical, agent, privacy, interoperability, NLI, and local guardrail documentation.",
+    "The combined evidence-packet and review-state artifact measured 79553532 total bytes, 79215953 unique payload bytes, 337579 duplicate bytes, and a 4174011-byte search index locally.",
+    "The aggregate total and unique ceilings retain the observed 4740-byte hosted platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The 4191889-byte JSON ceiling retains 13138 bytes of search-index headroom after the observed platform delta; both clinical guides remain searchable.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",

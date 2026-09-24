@@ -7,6 +7,7 @@ import json
 import pytest
 
 from openmed.clinical.evidence_packet import (
+    REJECTION_INVALID_REVIEW_STATE,
     REJECTION_INVALID_SOURCE_OFFSET,
     REJECTION_NOT_SYNTHETIC,
     REJECTION_POLICY_MISMATCH,
@@ -16,8 +17,14 @@ from openmed.clinical.evidence_packet import (
     EvidencePacketValidationError,
     EvidenceReference,
     build_evidence_packet,
+    fingerprint_evidence_review,
     fingerprint_policy,
     validate_evidence_packet,
+)
+from openmed.clinical.review_state_machine import (
+    ReviewState,
+    ReviewStateMachine,
+    make_opaque_event_id,
 )
 
 POLICY_FINGERPRINT = fingerprint_policy({"policy": "synthetic-review", "version": 1})
@@ -29,12 +36,35 @@ def _reference(reference_id: str = "synthetic:ref-001", **overrides):
         "source_id": "synthetic:document-001",
         "start": 8,
         "end": 17,
-        "review_state": "reviewed",
+        "review_state": "approved",
         "policy_fingerprint": POLICY_FINGERPRINT,
         "synthetic": True,
         "verified": True,
     }
     payload.update(overrides)
+    if "review_transitions" not in overrides:
+        start, end = payload["start"], payload["end"]
+        if not isinstance(start, int) or start < 0 or end <= start:
+            start, end = 8, 17
+        provenance = fingerprint_evidence_review(
+            reference_id=reference_id,
+            source_id=payload["source_id"],
+            start=start,
+            end=end,
+            policy_fingerprint=payload["policy_fingerprint"],
+        )
+        machine = ReviewStateMachine()
+        machine.transition(
+            ReviewState.IN_REVIEW,
+            make_opaque_event_id((reference_id, "in_review")),
+            provenance,
+        )
+        machine.transition(
+            ReviewState.APPROVED,
+            make_opaque_event_id((reference_id, "approved")),
+            provenance,
+        )
+        payload["review_transitions"] = [item.to_dict() for item in machine.transitions]
     return payload
 
 
@@ -64,8 +94,11 @@ def test_valid_references_are_sorted_and_serialized_without_text() -> None:
 
 def test_rejections_are_stable_counts_only_and_do_not_leak_values() -> None:
     sensitive_marker = "synthetic-sensitive-marker"
+    nested = _reference("synthetic:nested")
+    nested["review_transitions"][0]["text"] = sensitive_marker
     candidates = [
         _reference("synthetic:raw", text=sensitive_marker),
+        nested,
         _reference("synthetic:unverified", verified=False),
         _reference("synthetic:external", synthetic=False),
         _reference("synthetic:offset", start=-1),
@@ -78,7 +111,7 @@ def test_rejections_are_stable_counts_only_and_do_not_leak_values() -> None:
 
     assert packet.references == ()
     assert packet.rejection_counts == {
-        REJECTION_RAW_TEXT: 1,
+        REJECTION_RAW_TEXT: 2,
         REJECTION_UNVERIFIED: 1,
         REJECTION_NOT_SYNTHETIC: 1,
         REJECTION_INVALID_SOURCE_OFFSET: 1,
@@ -112,6 +145,48 @@ def test_offsets_and_review_state_are_validated_before_packaging() -> None:
     assert review_error.value.category == "invalid_review_state"
 
 
+def test_approval_history_is_required_and_bound_to_source_offsets() -> None:
+    missing = _reference(review_transitions=[])
+    skipped = _reference()
+    skipped["review_transitions"] = [
+        {
+            **skipped["review_transitions"][-1],
+            "sequence": 1,
+            "from_state": "queued",
+        }
+    ]
+    moved = _reference()
+    moved["start"] = 9
+
+    packet = build_evidence_packet(
+        [missing, skipped, moved], policy_fingerprint=POLICY_FINGERPRINT
+    )
+    assert packet.accepted_count == 0
+    assert packet.rejection_counts == {REJECTION_INVALID_REVIEW_STATE: 3}
+
+
+def test_reopened_approval_does_not_enter_the_packet() -> None:
+    candidate = _reference()
+    provenance = fingerprint_evidence_review(
+        reference_id=candidate["reference_id"],
+        source_id=candidate["source_id"],
+        start=candidate["start"],
+        end=candidate["end"],
+        policy_fingerprint=candidate["policy_fingerprint"],
+    )
+    machine = ReviewStateMachine()
+    for state in (ReviewState.IN_REVIEW, ReviewState.APPROVED, ReviewState.REOPENED):
+        machine.transition(
+            state,
+            make_opaque_event_id((candidate["reference_id"], state.value)),
+            provenance,
+        )
+    candidate["review_transitions"] = [item.to_dict() for item in machine.transitions]
+
+    packet = build_evidence_packet([candidate], policy_fingerprint=POLICY_FINGERPRINT)
+    assert packet.rejection_counts == {REJECTION_INVALID_REVIEW_STATE: 1}
+
+
 def test_mapping_and_json_round_trip_is_deterministic() -> None:
     packet = build_evidence_packet(
         [_reference()],
@@ -120,9 +195,13 @@ def test_mapping_and_json_round_trip_is_deterministic() -> None:
     )
 
     restored = EvidencePacket.from_json(packet.to_json())
+    assert packet.to_dict()["schema_version"] == 2
     assert restored.to_dict() == packet.to_dict()
     assert validate_evidence_packet(packet).to_dict() == packet.to_dict()
     assert packet.to_json() == restored.to_json()
+    assert packet.digest == restored.digest
+    with pytest.raises(ValueError, match="unsupported evidence packet schema version"):
+        EvidencePacket.from_dict({**packet.to_dict(), "schema_version": 1})
 
 
 def test_policy_fingerprint_is_local_and_deterministic() -> None:
