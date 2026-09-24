@@ -241,3 +241,19 @@ def test_layout_preserves_low_confidence_and_rejects_unbounded_pixels() -> None:
     with pytest.raises(ValueError) as exc:
         parse_layout(bad)
     assert "SYNTHETIC-SENSITIVE-SENTINEL" not in str(exc.value)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1, True])
+def test_layout_rejects_ambiguous_grouping_tolerance(value: float) -> None:
+    with pytest.raises(ValueError, match="column_gap"):
+        parse_layout(_clinical_page(), column_gap=value)
+
+
+def test_layout_rejects_fractional_page_and_negative_box_without_text() -> None:
+    for word in (
+        {"text": "SYNTHETIC-SENSITIVE-SENTINEL", "bbox": (1, 1, 5, 5), "page": 0.5},
+        {"text": "SYNTHETIC-SENSITIVE-SENTINEL", "bbox": (-1, 1, 5, 5), "page": 0},
+    ):
+        with pytest.raises(ValueError) as exc:
+            parse_layout(OcrResult(words=(word,)))
+        assert "SYNTHETIC-SENSITIVE-SENTINEL" not in str(exc.value)

@@ -451,10 +451,17 @@ def parse_layout(
         raise TypeError("separator must be a string")
     if not isinstance(line_separator, str):
         raise TypeError("line_separator must be a string")
-    if column_gap is not None and column_gap < 0:
-        raise ValueError("column_gap must be non-negative")
-    if line_tolerance is not None and line_tolerance < 0:
-        raise ValueError("line_tolerance must be non-negative")
+    for name, value in (
+        ("column_gap", column_gap),
+        ("line_tolerance", line_tolerance),
+    ):
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not isfinite(value)
+            or value < 0
+        ):
+            raise ValueError(f"{name} must be finite and non-negative")
 
     source_metadata = getattr(ocr_result, "metadata", {})
     metadata = dict(source_metadata) if isinstance(source_metadata, Mapping) else {}
@@ -892,11 +899,8 @@ def _coerce_records(ocr_result: Any) -> tuple[_WordRecord, ...]:
         if not text:
             continue
         bbox = _coerce_bbox(_word_value(raw_word, "bbox", None), index=index)
-        try:
-            page = int(_word_value(raw_word, "page", 0))
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"OCR word {index} has an invalid page") from exc
-        if page < 0:
+        page = _word_value(raw_word, "page", 0)
+        if isinstance(page, bool) or not isinstance(page, int) or page < 0:
             raise ValueError(f"OCR word {index} has an invalid page")
         try:
             confidence = float(_word_value(raw_word, "confidence", 1.0))
@@ -934,7 +938,7 @@ def _coerce_bbox(value: Any, *, index: int) -> BBox:
     if len(values) != 4 or not all(isfinite(number) for number in values):
         raise ValueError(f"OCR word {index} has an invalid bbox")
     x0, y0, x1, y1 = values
-    if x1 <= x0 or y1 <= y0:
+    if x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0:
         raise ValueError(f"OCR word {index} has an invalid bbox")
     return values  # type: ignore[return-value]
 
