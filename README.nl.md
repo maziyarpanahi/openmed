@@ -24,7 +24,7 @@ De lokale kernruntime van OpenMed voert extractie en de-identificatie uit nadat 
 </p>
 
 <p>
-  <b>2,266 manifestvermeldingen</b> &nbsp;·&nbsp; <b>33 modelondersteunde PII-talen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifestvermeldingen</b> &nbsp;·&nbsp; <b>35 modelondersteunde PII-talen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Op niet-Apple-Silicon-hosts worden MLX-modelnamen automatisch vervangen door het
 
 ---
 
-## Meertalige PII (36 ondersteunde routes; 33 modelondersteund)
+## Meertalige PII (38 ondersteunde routes; 35 modelondersteund)
 
 Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr`, in totaal **de geregistreerde PII-modelcatalogus**.
 

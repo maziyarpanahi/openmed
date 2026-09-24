@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_review_transition.schema.json",
+  "title": "OpenMed clinical review transition",
+  "schema_version": "1.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy", "event_id", "from_state", "occurred_at",
+    "packet_id", "policy_id", "policy_version", "provenance_fingerprint",
+    "reason_code", "schema_version", "to_state"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "event_id": {"$ref": "#/$defs/opaque_id"},
+    "from_state": {"$ref": "#/$defs/state"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "packet_id": {"$ref": "#/$defs/opaque_id"},
+    "policy_id": {"$ref": "#/$defs/controlled"},
+    "policy_version": {"$ref": "#/$defs/version"},
+    "provenance_fingerprint": {"$ref": "#/$defs/digest"},
+    "reason_code": {"$ref": "#/$defs/controlled"},
+    "schema_version": {"const": "1.1.0"},
+    "to_state": {"$ref": "#/$defs/state"}
+  },
+  "$defs": {
+    "controlled": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"},
+    "state": {"enum": ["queued", "in_review", "approved", "rejected", "expired", "reopened"]},
+    "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"}
+  }
+}
