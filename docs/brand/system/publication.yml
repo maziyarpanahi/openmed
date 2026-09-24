@@ -139,6 +139,7 @@ classification:
     - agent/trial-eligibility-review.md
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
+    - agent/action-ledger.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
