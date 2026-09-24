@@ -509,6 +509,7 @@ classification:
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
     - interop/fhir-conditional-writes.md
+    - interop/fhir-concurrency.md
     - interop/smart-scope-audit.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
