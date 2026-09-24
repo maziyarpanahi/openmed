@@ -7,6 +7,7 @@ during model inference and text processing pipelines.
 from __future__ import annotations
 
 import functools
+import inspect
 import logging
 import os
 import platform
@@ -358,7 +359,11 @@ def get_profile_report() -> ProfileReport:
 
 
 def profile(name: Optional[str] = None) -> Callable[[F], F]:
-    """Decorator to profile a function.
+    """Decorator to profile a synchronous or coroutine function.
+
+    Coroutine functions are timed while awaited, including time spent suspended.
+    Creating a coroutine without running it does not record a timing. Exceptions
+    and cancellation still record the elapsed time and propagate to the caller.
 
     Args:
         name: Optional name for the timing (defaults to function name).
@@ -374,6 +379,16 @@ def profile(name: Optional[str] = None) -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         timing_name = name or func.__name__
+
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                profiler = get_profiler()
+                with profiler.measure(timing_name):
+                    return await func(*args, **kwargs)
+
+            return async_wrapper  # type: ignore
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
