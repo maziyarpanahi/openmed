@@ -711,6 +711,9 @@ def load_grounded_notes(
     vocabulary_version: str | None = None,
     vocabulary_router: _VocabularyRouter | None = None,
     mode: LoadMode = "append",
+    completeness_floor: float | None = None,
+    quality_floor: float | None = None,
+    required_fields: Iterable[str] | Mapping[str, Any] | None = None,
 ) -> OmopCdmTables:
     """Build OMOP CDM tables from grounded clinical note records.
 
@@ -726,6 +729,11 @@ def load_grounded_notes(
         mode: Load mode. ``append`` preserves existing rows and remains the
             default. ``replace_by_note`` marks each incoming source note hash
             as authoritative when the rows are persisted by a writer.
+        completeness_floor: Optional completeness score floor. When set, the
+            batch is profiled before loading and a :class:`QualityGateError`
+            is raised if the floor or another quality check fails.
+        quality_floor: Compatibility alias for ``completeness_floor``.
+        required_fields: Optional field names required by the quality gate.
 
     Returns:
         In-memory CDM rows plus a PHI-free summary.
@@ -736,6 +744,19 @@ def load_grounded_notes(
     """
 
     normalized_mode = _normalize_load_mode(mode)
+
+    if completeness_floor is not None and quality_floor is not None:
+        raise ValueError("pass only one of completeness_floor or quality_floor")
+    gate_floor = completeness_floor if completeness_floor is not None else quality_floor
+    if gate_floor is not None:
+        notes = list(notes)
+        from openmed.structured.quality import enforce_completeness_floor
+
+        enforce_completeness_floor(
+            notes,
+            gate_floor,
+            required_fields=required_fields,
+        )
 
     table_rows: dict[str, dict[int, dict[str, Any]]] = {
         table: {} for table in _TABLE_ORDER
@@ -850,6 +871,9 @@ def load_grounded_jsonl(
     vocabulary_version: str | None = None,
     vocabulary_router: _VocabularyRouter | None = None,
     mode: LoadMode = "append",
+    completeness_floor: float | None = None,
+    quality_floor: float | None = None,
+    required_fields: Iterable[str] | Mapping[str, Any] | None = None,
 ) -> OmopCdmTables:
     """Load grounded note records from JSONL into in-memory OMOP tables."""
 
@@ -868,6 +892,9 @@ def load_grounded_jsonl(
         vocabulary_version=vocabulary_version,
         vocabulary_router=vocabulary_router,
         mode=mode,
+        completeness_floor=completeness_floor,
+        quality_floor=quality_floor,
+        required_fields=required_fields,
     )
 
 
