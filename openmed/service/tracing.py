@@ -13,6 +13,13 @@ from typing import Any, Iterator, Mapping, Optional
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .operational import (
+    OPERATIONS_BY_CATEGORY,
+    OperationalCategory,
+    OperationalEvent,
+    OperationalState,
+)
+
 try:  # pragma: no cover - exercised when the optional service extra is absent.
     from opentelemetry import trace
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -68,6 +75,10 @@ _ALLOWED_ATTRIBUTE_KEYS = frozenset(
         "openmed.input.length",
         "openmed.input.total_length",
         "openmed.model_name",
+        "openmed.operation.category",
+        "openmed.operation.count",
+        "openmed.operation.name",
+        "openmed.operation.state",
         "openmed.request_id",
         "openmed.service.name",
         "openmed.stage",
@@ -350,10 +361,25 @@ def safe_trace_attributes(attributes: Mapping[str, Any]) -> dict[str, Any]:
     for key, value in attributes.items():
         if key not in _ALLOWED_ATTRIBUTE_KEYS or value is None:
             continue
-        normalized = _safe_attribute_value(value)
+        normalized = _safe_attribute_value_for_key(key, value)
         if normalized is not None:
             safe[key] = normalized
     return safe
+
+
+def operational_trace_attributes(event: OperationalEvent) -> dict[str, Any]:
+    """Build trace attributes from a validated value-free event."""
+
+    if not isinstance(event, OperationalEvent):
+        raise TypeError("event must be an OperationalEvent")
+    return safe_trace_attributes(
+        {
+            "openmed.operation.category": event.category.value,
+            "openmed.operation.count": event.count,
+            "openmed.operation.name": event.operation,
+            "openmed.operation.state": event.state.value,
+        }
+    )
 
 
 def _extract_entities(payload: Mapping[str, Any]) -> list[Any]:
@@ -392,6 +418,25 @@ def _safe_attribute_value(value: Any) -> Any:
         ]
         return safe_items if safe_items else None
     return None
+
+
+def _safe_attribute_value_for_key(key: str, value: Any) -> Any:
+    if key == "openmed.operation.category":
+        try:
+            return OperationalCategory(value).value
+        except (TypeError, ValueError):
+            return None
+    if key == "openmed.operation.state":
+        try:
+            return OperationalState(value).value
+        except (TypeError, ValueError):
+            return None
+    if key == "openmed.operation.name":
+        operations = set().union(*OPERATIONS_BY_CATEGORY.values())
+        return value if isinstance(value, str) and value in operations else None
+    if key == "openmed.operation.count":
+        return value if type(value) is int and 1 <= value <= 1_000_000 else None
+    return _safe_attribute_value(value)
 
 
 def _safe_label(value: Optional[str]) -> Optional[str]:
@@ -442,6 +487,7 @@ __all__ = [
     "parse_otlp_headers",
     "parse_otlp_timeout",
     "parse_tracing_enabled",
+    "operational_trace_attributes",
     "result_summary_attributes",
     "safe_trace_attributes",
     "service_trace_config_from_env",
