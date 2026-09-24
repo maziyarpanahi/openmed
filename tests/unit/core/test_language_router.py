@@ -414,3 +414,71 @@ def test_route_runs_is_deterministic():
     router = LanguageRouter(use_optional_lid=False)
 
     assert router.route_runs(text) == router.route_runs(text)
+
+
+# Synthetic note segments cover Latin, nine Brahmi scripts, and Urdu.  The
+# final three routes use explicit local packs because no weights are bundled.
+_ALL_SCRIPT_CLINICAL_SEGMENTS = (
+    ("Latin", "en", "Patient stable"),
+    ("Devanagari", "hi", "रोगी स्थिर"),
+    ("Bengali", "bn", "রোগী স্থির"),
+    ("Gurmukhi", "pa", "ਮਰੀਜ਼ ਠੀਕ"),
+    ("Gujarati", "gu", "દર્દી સ્થિર"),
+    ("Odia", "or", "ରୋଗୀ ସ୍ଥିର"),
+    ("Tamil", "ta", "நோயாளி நலம்"),
+    ("Telugu", "te", "రోగి స్థిరం"),
+    ("Kannada", "kn", "ರೋಗಿ ಸ್ಥಿರ"),
+    ("Malayalam", "ml", "രോഗി സ്ഥിരം"),
+    ("Arabic", "ur", "مریض ٹھیک"),
+)
+
+
+def test_all_indic_scripts_and_urdu_route_with_exact_metadata() -> None:
+    """A synthetic mixed note preserves offsets and explicit route decisions."""
+    from openmed.core.language_pack_catalog import LANGUAGE_PACK_ADAPTERS
+    from openmed.core.script_detect import (
+        candidate_languages_for_text,
+        normalizer_for_script,
+        numeral_set_for_script,
+        segment_by_script,
+    )
+
+    extra_packs = tuple(
+        _pack(code, (script,), "user-supplied")
+        for script, code, _text in _ALL_SCRIPT_CLINICAL_SEGMENTS
+        if code in {"ml", "pa", "ur"}
+    )
+    router = LanguageRouter(
+        packs=(*LANGUAGE_PACK_ADAPTERS.registry.iter_packs(), *extra_packs),
+        use_optional_lid=False,
+    )
+    text = " | ".join(
+        segment for _script, _code, segment in _ALL_SCRIPT_CLINICAL_SEGMENTS
+    )
+    script_runs = tuple(segment_by_script(text))
+    routed_runs = router.route_runs(text)
+    grapheme_boundaries = {
+        start for start, _end in iter_grapheme_cluster_spans(text)
+    } | {len(text)}
+
+    assert len(script_runs) == len(routed_runs) == 11
+    assert (
+        "".join(text[run.start : run.end] for run in routed_runs).encode()
+        == text.encode()
+    )
+    for script_run, routed, (script, language, _segment) in zip(
+        script_runs, routed_runs, _ALL_SCRIPT_CLINICAL_SEGMENTS, strict=True
+    ):
+        assert (routed.start, routed.end, routed.script) == script_run
+        assert routed.start in grapheme_boundaries
+        assert routed.end in grapheme_boundaries
+        assert (routed.script, routed.language) == (script, language)
+        assert routed.language in routed.candidates
+        assert routed.candidates == candidate_languages_for_text(
+            text[routed.start : routed.end], script
+        )
+        assert routed.normalizer == normalizer_for_script(script)
+        assert routed.numeral_set == numeral_set_for_script(script)
+        assert routed.tokenizer
+    assert routed_runs[-1].language == "ur"
+    assert routed_runs[-1].source == "stdlib:urdu-cues"
