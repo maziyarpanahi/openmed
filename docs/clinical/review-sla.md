@@ -1,6 +1,6 @@
 # Human-review queue SLA reports
 
-`openmed.clinical.review_sla` provides a local, deterministic summary of a
+`openmed.clinical.review_queue_sla` provides a local, deterministic summary of a
 human-review queue. It is an operational review aid, not a compliance
 certification, medical device, or clinical decision mechanism.
 

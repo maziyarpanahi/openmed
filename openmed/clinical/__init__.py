@@ -445,7 +445,7 @@ from .relations import (
     sample_negative_span_pairs,
     split_sentence_offsets,
 )
-from .review_sla import (
+from .review_queue_sla import (
     AGE_BUCKETS,
     DEFAULT_OPAQUE_KEY_NAMESPACE,
     DEFAULT_PRIORITY_SLA,
