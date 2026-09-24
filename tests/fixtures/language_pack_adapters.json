@@ -24,6 +24,7 @@
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "no": "OpenMed/privacy-filter-multilingual",
     "or": "OpenMed/privacy-filter-multilingual",
+    "pa": "OpenMed/privacy-filter-multilingual",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
     "ru": "OpenMed/privacy-filter-multilingual",
@@ -251,6 +252,10 @@
       "or_IN",
       "aadhaar"
     ],
+    "pa": [
+      "pa_IN",
+      "aadhaar"
+    ],
     "pl": [
       "pl_PL",
       "pesel"
@@ -444,6 +449,7 @@
     "nl",
     "no",
     "or",
+    "pa",
     "pt",
     "ro",
     "ru",

@@ -254,6 +254,58 @@ def generate_kannada_name(faker, original: str, *, locale: str) -> str:
     return _draw_kannada_value(faker, key, source)
 
 
+_PUNJABI_MASCULINE_GIVEN_NAMES: Final = (
+    "ਅਮਨਦੀਪ",
+    "ਗੁਰਕੀਰਤ",
+    "ਹਰਜੀਤ",
+    "ਮਨਦੀਪ",
+    "ਨਵਦੀਪ",
+    "ਰਣਜੀਤ",
+)
+_PUNJABI_FEMININE_GIVEN_NAMES: Final = (
+    "ਗੁਰਲੀਨ",
+    "ਜਸਲੀਨ",
+    "ਨਵਜੋਤ",
+    "ਰਵਨੀਤ",
+    "ਸਿਮਰਨ",
+    "ਹਰਲੀਨ",
+)
+_PUNJABI_MASCULINE_SUFFIX: Final = "ਸਿੰਘ"
+_PUNJABI_FEMININE_SUFFIX: Final = "ਕੌਰ"
+
+
+def generate_gurmukhi_name(faker, original: str, *, locale: str) -> str:
+    """Return a bundled Punjabi name with a gender-matched Sikh suffix.
+
+    Full names ending in ``ਸਿੰਘ`` or ``ਕੌਰ`` retain that gender marker while
+    replacing the given name. Name-part labels without a Sikh suffix receive a
+    standalone Gurmukhi given name.
+    """
+
+    source = original.strip()
+    source_tokens = source.split()
+    suffix = (
+        source_tokens[-1]
+        if len(source_tokens) >= 2
+        and source_tokens[-1] in {_PUNJABI_MASCULINE_SUFFIX, _PUNJABI_FEMININE_SUFFIX}
+        else ""
+    )
+    if suffix == _PUNJABI_FEMININE_SUFFIX:
+        pool = _PUNJABI_FEMININE_GIVEN_NAMES
+    elif suffix == _PUNJABI_MASCULINE_SUFFIX:
+        pool = _PUNJABI_MASCULINE_GIVEN_NAMES
+    else:
+        pool = (
+            *_PUNJABI_MASCULINE_GIVEN_NAMES,
+            *_PUNJABI_FEMININE_GIVEN_NAMES,
+        )
+
+    source_folded = source.casefold()
+    candidates = tuple(name for name in pool if name.casefold() not in source_folded)
+    given_name = str(faker.random.choice(candidates or pool))
+    return f"{given_name} {suffix}" if suffix else given_name
+
+
 SCRIPT_NAME_PACKS: Final = (
     (HAN_LANGUAGE_PACK, "Han", generate_han_name),
     (DEVANAGARI_LANGUAGE_PACK, "Devanagari", generate_devanagari_name),
@@ -269,11 +321,13 @@ __all__ = [
     "GUJARATI_LANGUAGE_PACK",
     "HAN_LANGUAGE_PACK",
     "KANNADA_LANGUAGE_PACK",
+    "PUNJABI_LANGUAGE_PACK",
     "SCRIPT_NAME_PACKS",
     "TELUGU_LANGUAGE_PACK",
     "generate_devanagari_name",
     "generate_gujarati_name",
     "generate_han_name",
     "generate_kannada_name",
+    "generate_gurmukhi_name",
     "generate_telugu_name",
 ]

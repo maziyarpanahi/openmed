@@ -63,6 +63,7 @@ _ID_VALIDATORS = {
     "kn": validate_kannada_aadhaar,
     "mr": validate_marathi_aadhaar,
     "or": validate_aadhaar,
+    "pa": validate_aadhaar,
     "ta": validate_tamil_aadhaar,
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
