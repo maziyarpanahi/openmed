@@ -41,10 +41,14 @@ assert report.review_state == "review_required"
 assert "assertion_conflict" in report.claims[0].review_routes
 ```
 
-The report exposes claim and record identifiers, counts, fixed review routes,
-and SHA-256/HMAC-SHA-256 fingerprints. `to_dict()` and `to_json()` omit source
-text, excerpts, and temporal values, so they are suitable for an audit queue or
-counts-only operational summary. Missing records, unverified sources, hash
+The report exposes deterministic SHA-256 identifiers, counts, fixed review
+routes, and SHA-256/HMAC-SHA-256 fingerprints. Caller-supplied IDs are hashed
+before they enter typed records because IDs can contain patient values.
+`to_dict()` and `to_json()` omit source text, excerpts, and temporal values, so
+they are suitable for an audit queue or counts-only operational summary.
+Unknown assertion and integrity strings become the fixed `unknown` state;
+private interval values are also excluded from record representations.
+Missing records, unverified sources, hash
 mismatches, incompatible assertion states, and disjoint intervals all require
 review. A `clear` result means only that these local consistency checks found no
 contradiction; it is not a clinical conclusion.

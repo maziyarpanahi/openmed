@@ -18,7 +18,7 @@ import json
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -130,6 +130,9 @@ class _IntervalBounds:
         if self.upper < self.lower:
             raise ValueError("temporal interval bounds are inverted")
 
+    def __repr__(self) -> str:
+        return "_IntervalBounds(<protected>)"
+
 
 @dataclass(frozen=True)
 class ClaimReference:
@@ -148,7 +151,7 @@ class ClaimReference:
     source_integrity_id: str | None = None
     text_hash: str | None = None
     expected_assertion: str | None = None
-    expected_interval: object | None = None
+    expected_interval: object | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "evidence_id", _required_id(self.evidence_id))
@@ -206,7 +209,7 @@ class ClaimRecord:
     claim_id: str
     references: tuple[ClaimReference | str, ...] = ()
     expected_assertion: str | None = None
-    expected_interval: object | None = None
+    expected_interval: object | None = field(default=None, repr=False)
     evidence_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -321,7 +324,7 @@ class TemporalRecord:
     """One normalized temporal record with private date bounds."""
 
     record_id: str
-    interval: object | None = None
+    interval: object | None = field(default=None, repr=False)
     text_hash: str | None = None
     source_id: str | None = None
 
@@ -385,7 +388,14 @@ class SourceIntegrityRecord:
         if status is not None:
             if not isinstance(status, str):
                 raise TypeError("source integrity status must be a string")
-            object.__setattr__(self, "status", _normalize_token(status))
+            status_token = _normalize_token(status)
+            safe_status = (
+                status_token
+                if status_token in _GOOD_INTEGRITY_STATUSES | _BAD_INTEGRITY_STATUSES
+                else "unknown"
+            )
+            object.__setattr__(self, "status", safe_status)
+            object.__setattr__(self, "integrity_status", safe_status)
         if self.verified is not None and not isinstance(self.verified, bool):
             raise TypeError("source integrity verified must be a boolean")
         for field_name in (
@@ -598,6 +608,12 @@ class ClaimConflictReport:
     schema_version: int = CLAIM_CONFLICT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        if self.disclaimer != CLAIM_CONFLICT_ADVISORY:
+            raise ValueError("claim conflict disclaimer is fixed")
+        if type(self.schema_version) is not int or self.schema_version != (
+            CLAIM_CONFLICT_SCHEMA_VERSION
+        ):
+            raise ValueError("claim conflict schema version is fixed")
         object.__setattr__(
             self, "reviews", tuple(sorted(self.reviews, key=_review_key))
         )
@@ -1660,7 +1676,10 @@ def _required_id(value: object) -> str:
     normalized = value.strip()
     if not normalized:
         raise ValueError("identifiers must not be empty")
-    return normalized
+    # Caller-supplied identifiers can themselves contain patient values. Hash
+    # them before retaining them in typed records, reports, or repr output.
+    # Already-normalized digests remain stable when a record is revalidated.
+    return normalized if _HASH_RE.fullmatch(normalized) else hash_text(normalized)
 
 
 def _as_optional_id(value: object | None) -> str | None:
@@ -1713,7 +1732,7 @@ def _normalize_assertion_state(value: object) -> str:
         return "hypothetical"
     if token in _UNKNOWN_STATES:
         return "unknown"
-    return token
+    return "unknown"
 
 
 def _parse_interval(value: object) -> _IntervalBounds:

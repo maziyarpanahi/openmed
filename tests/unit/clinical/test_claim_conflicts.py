@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import socket
 
+import pytest
+
 from openmed.clinical.claim_conflicts import (
     CLAIM_REVIEW_CLEAR,
     CLAIM_REVIEW_REQUIRED,
+    AssertionRecord,
     ClaimConflictReport,
     ClaimRecord,
     ClaimReference,
@@ -16,6 +19,7 @@ from openmed.clinical.claim_conflicts import (
     review_claim_conflicts,
     review_claims,
 )
+from openmed.core.audit import hash_text
 
 HASH_A = "sha256:" + "a" * 64
 HASH_B = "sha256:" + "b" * 64
@@ -94,7 +98,8 @@ def test_claim_review_routes_assertion_temporal_and_integrity_conflicts() -> Non
     assert "synthetic private marker" not in payload.casefold()
     assert "2026-01-01" not in payload
     assert "2026-03-02" not in payload
-    assert "evidence-a" in payload
+    assert hash_text("evidence-a") in payload
+    assert "evidence-a" not in payload
     assert HASH_C in payload
 
 
@@ -133,7 +138,9 @@ def test_clear_review_is_deterministic_for_mapping_and_record_order() -> None:
     assert first.to_dict() == second.to_dict()
     assert first.review_state == CLAIM_REVIEW_CLEAR
     assert first.conflicts == ()
-    assert first.claims[0].evidence_ids == ("evidence-a", "evidence-b")
+    assert first.claims[0].evidence_ids == tuple(
+        sorted((hash_text("evidence-a"), hash_text("evidence-b")))
+    )
     assert first.claims[0].evidence_hashes
     assert "marker-a" not in first.to_json()
     assert "marker-b" not in first.to_json()
@@ -190,7 +197,7 @@ def test_missing_records_route_to_review_without_network_access(
 
     assert report.review_state == CLAIM_REVIEW_REQUIRED
     assert report.conflicts[0].conflict_type == "missing_evidence"
-    assert report.conflicts[0].evidence_ids == ("evidence-missing",)
+    assert report.conflicts[0].evidence_ids == (hash_text("evidence-missing"),)
 
 
 def test_compatibility_wrapper_accepts_record_collection_aliases() -> None:
@@ -208,4 +215,56 @@ def test_compatibility_wrapper_accepts_record_collection_aliases() -> None:
     )
 
     assert report.review_state == CLAIM_REVIEW_CLEAR
-    assert report.claims[0].evidence_ids == ("evidence-alias",)
+    assert report.claims[0].evidence_ids == (hash_text("evidence-alias"),)
+
+
+def test_identifiers_cannot_expose_patient_values_in_reports_or_repr() -> None:
+    marker = "Synthetic Patient Value 8675309"
+    report = review_claim_conflicts(
+        [{"claim_id": marker, "evidence_ids": [marker]}],
+        assertion_records=[],
+        temporal_records=[],
+        source_integrity_records=[],
+    )
+
+    assert report.requires_review
+    assert marker not in report.to_json()
+    assert marker not in repr(report)
+    assert report.claims[0].claim_id == hash_text(marker)
+    assert report.claims[0].evidence_ids == (hash_text(marker),)
+
+
+def test_unknown_states_and_private_intervals_are_value_free() -> None:
+    marker = "Synthetic Patient Value 8675309"
+    claim = ClaimRecord(
+        claim_id="claim-private",
+        expected_assertion=marker,
+        expected_interval={"start": "2026-01-01", "end": "2026-01-02"},
+    )
+    assertion = AssertionRecord(record_id="assertion-private", assertion=marker)
+    temporal = TemporalRecord(
+        record_id="temporal-private", interval="2026-01-01/2026-01-02"
+    )
+    integrity = SourceIntegrityRecord(
+        record_id="source-private", integrity_status=marker, verified=True
+    )
+
+    assert claim.expected_assertion == assertion.state == "unknown"
+    assert integrity.status == "unknown"
+    assert not integrity.integrity_ok
+    for record in (claim, assertion, temporal, integrity):
+        surface = repr(record) + json.dumps(record.to_dict())
+        assert marker not in surface
+        assert "2026-01-01" not in surface
+        assert "2026-01-02" not in surface
+
+
+def test_report_rejects_caller_supplied_text_in_fixed_fields() -> None:
+    marker = "Synthetic Patient Value 8675309"
+    with pytest.raises(ValueError, match="disclaimer is fixed") as error:
+        ClaimConflictReport(reviews=(), conflicts=(), disclaimer=marker)
+    assert marker not in str(error.value)
+
+    with pytest.raises(ValueError, match="schema version is fixed") as error:
+        ClaimConflictReport(reviews=(), conflicts=(), schema_version=marker)  # type: ignore[arg-type]
+    assert marker not in str(error.value)
