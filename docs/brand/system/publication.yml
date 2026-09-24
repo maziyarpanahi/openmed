@@ -362,17 +362,20 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
     - clinical/language-matrix.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
+    - clinical/nli-batch-planning.md
     - clinical/sdoh-experiencer-filtering.md
     - clinical/sdoh-negated-needs.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
+    - clinical/nli-cascade.md
     - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - runtimes/gguf-grounding.md
