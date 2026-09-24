@@ -1035,6 +1035,25 @@ from openmed.eval.suites.policy_compliance import (
     PolicyProfileComplianceResult,
     run_policy_compliance,
 )
+from openmed.eval.summary_coverage import (
+    REASON_DUPLICATE_SOURCE_FACT,
+    REASON_INVALID_SOURCE_EVIDENCE,
+    REASON_MISSING_SOURCE_EVIDENCE,
+    REASON_MISSING_SUMMARY_CITATION,
+    REASON_OMITTED_SOURCE_FACT,
+    REASON_UNKNOWN_CITATION,
+    REASON_UNSUPPORTED_SUMMARY_FACT,
+    SUMMARY_FACT_COVERAGE,
+    SUMMARY_FACT_COVERAGE_SCHEMA_VERSION,
+    SummaryCoverageMetrics,
+    SummaryCoverageReport,
+    assert_summary_coverage_gate,
+    build_summary_coverage_report,
+    compute_summary_fact_coverage,
+    run_summary_coverage,
+    summary_coverage_metadata,
+    summary_fact_coverage,
+)
 from openmed.eval.summary_unsupported_claims import (
     APPROVED_EVIDENCE_DISCLAIMER,
     CLAIM_STATES,
@@ -1066,25 +1085,6 @@ from openmed.eval.summary_unsupported_claims import (
     score_summary_claim,
     score_summary_claims,
     unsupported_claim_rate,
-)
-from openmed.eval.summary_coverage import (
-    REASON_DUPLICATE_SOURCE_FACT,
-    REASON_INVALID_SOURCE_EVIDENCE,
-    REASON_MISSING_SOURCE_EVIDENCE,
-    REASON_MISSING_SUMMARY_CITATION,
-    REASON_OMITTED_SOURCE_FACT,
-    REASON_UNKNOWN_CITATION,
-    REASON_UNSUPPORTED_SUMMARY_FACT,
-    SUMMARY_FACT_COVERAGE,
-    SUMMARY_FACT_COVERAGE_SCHEMA_VERSION,
-    SummaryCoverageMetrics,
-    SummaryCoverageReport,
-    assert_summary_coverage_gate,
-    build_summary_coverage_report,
-    compute_summary_fact_coverage,
-    run_summary_coverage,
-    summary_coverage_metadata,
-    summary_fact_coverage,
 )
 from openmed.eval.surrogate_quality import (
     DEFAULT_SURROGATE_QUALITY_FIXTURE,
