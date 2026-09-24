@@ -45,7 +45,7 @@ class SourceOffsets(TypedDict):
     end: int
 
 
-class LabReferenceRange(TypedDict):
+class ParsedLabReferenceRange(TypedDict):
     """A typed reference range with optional canonical bounds."""
 
     low: float | None
@@ -69,7 +69,7 @@ class LabMeasurement(TypedDict):
     canonical_value: float | None
     canonical_unit: str | None
     dimension: dict[str, int]
-    reference_range: LabReferenceRange
+    reference_range: ParsedLabReferenceRange
     interpretation: AbnormalFlag
     qualifiers: list[str]
     source_offsets: SourceOffsets | None
@@ -91,7 +91,7 @@ def _empty_reference_range(
     *,
     status: LabRangeStatus = "missing",
     unit_status: LabUnitStatus = "missing",
-) -> LabReferenceRange:
+) -> ParsedLabReferenceRange:
     return {
         "low": None,
         "high": None,
@@ -254,7 +254,7 @@ def _range_parts(
     source: object,
     *,
     language: object | None = None,
-) -> tuple[LabReferenceRange, object, str]:
+) -> tuple[ParsedLabReferenceRange, object, str]:
     if source is None:
         return _empty_reference_range(), None, "missing"
 
@@ -345,7 +345,7 @@ def _prepare_range(
     *,
     value_unit: _UnitDetails,
     language: object | None = None,
-) -> tuple[LabReferenceRange, str]:
+) -> tuple[ParsedLabReferenceRange, str]:
     result, raw_unit, source_kind = _range_parts(source, language=language)
     if result["status"] != "ok":
         return result, source_kind
@@ -388,7 +388,7 @@ def _prepare_range(
     return result, source_kind
 
 
-def _comparison_range(reference_range: LabReferenceRange) -> dict[str, object]:
+def _comparison_range(reference_range: ParsedLabReferenceRange) -> dict[str, object]:
     result: dict[str, object] = {
         "low": reference_range["low"],
         "high": reference_range["high"],
@@ -409,7 +409,7 @@ def _flag_text(value: object) -> str | None:
 
 def _interpretation(
     value: float | None,
-    reference_range: LabReferenceRange,
+    reference_range: ParsedLabReferenceRange,
     *,
     value_unit: _UnitDetails,
     explicit_flag: object,
@@ -447,7 +447,7 @@ def _interpretation(
 def _result_status(
     value: float | None,
     value_unit: _UnitDetails,
-    reference_range: LabReferenceRange,
+    reference_range: ParsedLabReferenceRange,
 ) -> tuple[LabMeasurementStatus, str]:
     if value is None:
         return "invalid_value", "measurement value is not finite numeric"
@@ -638,7 +638,7 @@ __all__ = [
     "LabMeasurement",
     "LabMeasurementStatus",
     "LabRangeStatus",
-    "LabReferenceRange",
+    "ParsedLabReferenceRange",
     "LabUnitStatus",
     "SourceOffsets",
     "normalize_lab_measurement",

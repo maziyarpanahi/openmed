@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
+from typing import is_typeddict
 
 import pytest
 
 from openmed.clinical import (
     LAB_MEASUREMENT_ADVISORY,
+    ParsedLabReferenceRange,
     normalize_lab_measurement,
     normalize_lab_measurements,
 )
+
+
+def test_parsed_range_has_a_distinct_public_type_name() -> None:
+    assert is_typeddict(ParsedLabReferenceRange)
 
 
 def test_normalizes_value_range_interpretation_and_offsets() -> None:
