@@ -17,6 +17,7 @@ on:
       - "scripts/brand/**"
       - "scripts/docs/**"
       - "scripts/i18n/**"
+      - "scripts/status/**"
       - "js/openmedkit-web/**"
       - "tests/browser/brand/**"
       - "tests/browser/privacy-playground.spec.ts"
@@ -28,9 +29,12 @@ on:
       - "tests/unit/test_readme_sw_drift.py"
       - "tests/unit/test_web_demo_layout.py"
       - "tests/unit/eval/test_leaderboard.py"
+      - "tests/unit/eval/test_nightly_status_refresh.py"
       - "uv.lock"
       - "web/runtime/**"
   workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
 
 permissions:
   contents: read
@@ -78,6 +82,23 @@ jobs:
             tests/unit/test_web_demo_layout.py \
             tests/unit/eval/test_leaderboard.py \
             -q
+      - name: Run nightly offline suite
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: uv run --frozen python -m pytest tests/ -q
+      - name: Refresh public trust status
+        if: github.event_name != 'pull_request'
+        run: |
+          uv run --frozen python scripts/status/generate_nightly_control.py \
+            --source-revision "$GITHUB_SHA" \
+            --output docs/status/evidence/nightly-control.json
+          uv run --frozen python scripts/status/generate_status.py \
+            --manifest models.jsonl \
+            --baseline gates/baseline.json \
+            --report docs/benchmarks/golden.report.json \
+            --nightly-report docs/status/evidence/nightly-control.json \
+            --benchmarks-dir docs/benchmarks \
+            --leaderboard-dir docs/leaderboard \
+            --output docs/status/index.md
       - name: Stage and verify the exact Pages artifact
         shell: bash
         run: |
