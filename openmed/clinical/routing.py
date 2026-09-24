@@ -40,6 +40,7 @@ ROUTING_PROVENANCE_KEY = "routing_provenance"
 GENERIC_PROFILE_NAME = "generic"
 RADIOLOGY_PROFILE_NAME = "radiology"
 PATHOLOGY_PROFILE_NAME = "pathology"
+DISCHARGE_PROFILE_NAME = "discharge_summary"
 
 ROUTING_STAGE_NAMES = ("medication", "problem_list", "lab_values")
 ROUTING_SECTION_LABELS = frozenset(
@@ -52,10 +53,17 @@ ROUTING_SECTION_LABELS = frozenset(
         "synoptic",
         "staging",
         "grading",
+        "diagnoses",
+        "procedures",
+        "medications",
+        "follow_up",
+        "instructions",
     }
 )
 
-_TARGET_DOCUMENT_TYPES = frozenset({"radiology_report", "pathology_report"})
+_TARGET_DOCUMENT_TYPES = frozenset(
+    {"radiology_report", "pathology_report", "discharge_summary"}
+)
 _STAGE_ALIASES = {
     "medications": "medication",
     "medication": "medication",
@@ -427,15 +435,49 @@ class PathologyProfile(NoteTypeProfile):
         )
 
 
+class DischargeNoteTypeProfile(NoteTypeProfile):
+    """Section-scoped route over the existing local discharge profile."""
+
+    def __init__(self) -> None:
+        sections = (
+            "diagnoses",
+            "procedures",
+            "medications",
+            "follow_up",
+            "instructions",
+        )
+        super().__init__(
+            name=DISCHARGE_PROFILE_NAME,
+            document_types=("discharge_summary",),
+            expected_sections=sections,
+            entity_priorities=(
+                "diagnosis",
+                "procedure",
+                "medication",
+                "follow_up",
+                "instruction",
+            ),
+            section_scoped_stage_config={
+                "medication": ("medications",),
+                "problem_list": ("diagnoses",),
+                "lab_values": ("diagnoses", "procedures"),
+            },
+            cue_terms={},
+            thresholds={},
+        )
+
+
 GENERIC_PROFILE = GenericProfile()
 RADIOLOGY_PROFILE = RadiologyProfile()
 PATHOLOGY_PROFILE = PathologyProfile()
+DISCHARGE_PROFILE = DischargeNoteTypeProfile()
 
 # Explicit aliases make the profile constants discoverable without requiring a
 # caller to know whether the surrounding code says "note type" or "document".
 GENERIC_NOTE_TYPE_PROFILE = GENERIC_PROFILE
 RADIOLOGY_NOTE_TYPE_PROFILE = RADIOLOGY_PROFILE
 PATHOLOGY_NOTE_TYPE_PROFILE = PATHOLOGY_PROFILE
+DISCHARGE_NOTE_TYPE_PROFILE = DISCHARGE_PROFILE
 RadiologyNoteTypeProfile = RadiologyProfile
 PathologyNoteTypeProfile = PathologyProfile
 
@@ -511,6 +553,9 @@ def resolve_profile(classify_document_result: object) -> RoutingSelection:
         elif document_type == "radiology_report":
             reason = None
             profile = RADIOLOGY_PROFILE
+        elif document_type == "discharge_summary":
+            reason = None
+            profile = DISCHARGE_PROFILE
         else:
             reason = None
             profile = PATHOLOGY_PROFILE
@@ -528,7 +573,7 @@ def resolve_profile(classify_document_result: object) -> RoutingSelection:
 
 
 def select_profile(classify_document_result: object) -> NoteTypeProfile:
-    """Select the radiology, pathology, or generic profile.
+    """Select the radiology, pathology, discharge, or generic profile.
 
     The function intentionally returns the profile itself.  Call
     :func:`resolve_profile` or :func:`routing_provenance` when the caller also
@@ -630,6 +675,30 @@ def _entity_in_sections(
     )
 
 
+def _detect_profile_sections(
+    text: str,
+    profile: NoteTypeProfile,
+    language: str | None,
+) -> tuple[SectionSpan, ...]:
+    if not isinstance(profile, DischargeNoteTypeProfile):
+        return detect_sections(text, language=language)
+
+    # The general section lexicon does not cover discharge-specific headings.
+    # Reuse the existing local discharge parser's source boundaries instead.
+    from .discharge_profile import extract_discharge_profile
+
+    return tuple(
+        SectionSpan(
+            label=section.field,
+            start=section.start,
+            end=section.end,
+            content_start=section.content_start,
+            source="discharge_profile",
+        )
+        for section in extract_discharge_profile(text, language=language).sections
+    )
+
+
 def resolve_profile_sections(
     text: str,
     profile: NoteTypeProfile,
@@ -642,7 +711,7 @@ def resolve_profile_sections(
     if not isinstance(profile, NoteTypeProfile):
         raise TypeError("profile must be a NoteTypeProfile")
     detected = (
-        detect_sections(text, language=language)
+        _detect_profile_sections(text, profile, language)
         if sections is None
         else tuple(sections)
     )
@@ -750,7 +819,7 @@ def build_extraction_plan(
         provenance = selection.provenance
 
     detected_sections = (
-        detect_sections(text, language=language)
+        _detect_profile_sections(text, selected_profile, language)
         if sections is None
         else tuple(sections)
     )
@@ -806,7 +875,7 @@ def _scoped_stage_inputs(
 ) -> list[object]:
     profile = _profile_from_argument(profile_or_classification)
     detected_sections = (
-        detect_sections(text, language=language)
+        _detect_profile_sections(text, profile, language)
         if sections is None
         else tuple(sections)
     )
@@ -987,7 +1056,7 @@ def route_analysis(
     )
     selection = resolve_profile(classification)
     detected = (
-        detect_sections(text, language=language)
+        _detect_profile_sections(text, selection.profile, language)
         if sections is None
         else tuple(sections)
     )
@@ -1011,6 +1080,9 @@ resolve_note_type_profile = select_profile
 
 
 __all__ = [
+    "DISCHARGE_NOTE_TYPE_PROFILE",
+    "DISCHARGE_PROFILE",
+    "DISCHARGE_PROFILE_NAME",
     "GENERIC_NOTE_TYPE_PROFILE",
     "GENERIC_PROFILE",
     "GENERIC_PROFILE_NAME",
@@ -1024,6 +1096,7 @@ __all__ = [
     "ROUTING_SECTION_LABELS",
     "ROUTING_STAGE_NAMES",
     "ExtractionPlan",
+    "DischargeNoteTypeProfile",
     "GenericProfile",
     "LabValueAttributeMention",
     "MedicationCandidate",
