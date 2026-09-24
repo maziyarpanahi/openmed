@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline, synthetic governed clinical reference workflow covering
+  approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
 - Added deterministic, aggregate-only review-yield metrics for guarded clinical
