@@ -269,9 +269,9 @@ def generate_social_history_examples(
         clauses = [
             (
                 category,
-                rng.choice(_TEMPLATES[category][index % 3]),
+                rng.choice(_TEMPLATES[category][(index + category_index) % 3]),
             )
-            for category in SOCIAL_HISTORY_CATEGORIES
+            for category_index, category in enumerate(SOCIAL_HISTORY_CATEGORIES)
         ]
         rng.shuffle(clauses)
         text = "Social History:\n"
