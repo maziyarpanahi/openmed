@@ -512,6 +512,7 @@ classification:
     - interop/fhir-conditional-writes.md
     - interop/fhir-concurrency.md
     - interop/smart-scope-audit.md
+    - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
