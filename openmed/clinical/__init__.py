@@ -72,6 +72,25 @@ from .cancer_staging import (
     UnparsedToken,
     parse_tnm,
 )
+from .care_gaps import (
+    CARE_GAP_ADVISORY,
+    CARE_GAP_COMPATIBILITY_POLICY,
+    CARE_GAP_SCHEMA_VERSION,
+    CareGapConflictError,
+    CareGapError,
+    CareGapEvaluation,
+    CareGapEvidence,
+    CareGapHistory,
+    CareGapPolicy,
+    CareGapReviewEvent,
+    CareGapReviewStatus,
+    CareGapState,
+    CareGapUnsupportedError,
+    begin_care_gap_review,
+    complete_care_gap_review,
+    evaluate_care_gap,
+    load_care_gap_schema,
+)
 from .claim_integrity import (
     CLAIM_INTEGRITY_ADVISORY,
     CLAIM_INTEGRITY_KIND,
@@ -123,25 +142,6 @@ from .claim_integrity import (
     validate_claim_packet_integrity,
     verify_claim_packet_digest,
     verify_claim_packet_integrity,
-)
-from .care_gaps import (
-    CARE_GAP_ADVISORY,
-    CARE_GAP_COMPATIBILITY_POLICY,
-    CARE_GAP_SCHEMA_VERSION,
-    CareGapConflictError,
-    CareGapError,
-    CareGapEvaluation,
-    CareGapEvidence,
-    CareGapHistory,
-    CareGapPolicy,
-    CareGapReviewEvent,
-    CareGapReviewStatus,
-    CareGapState,
-    CareGapUnsupportedError,
-    begin_care_gap_review,
-    complete_care_gap_review,
-    evaluate_care_gap,
-    load_care_gap_schema,
 )
 from .consent_cache import (
     CONSENT_CACHE_EVENT_TYPE,

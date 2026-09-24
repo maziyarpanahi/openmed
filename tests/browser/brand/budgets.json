@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 78850000,
-    "maximum_unique_payload_bytes": 78512421,
+    "maximum_total_bytes": 79455004,
+    "maximum_unique_payload_bytes": 79117425,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4183924
+    "json": 4191889
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4183924
+    "docs/search/search_index.json": 4191889
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,10 +31,13 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the clinical evidence-assurance source PRs on the staged V3 base; the final combined assurance integration uses its separately measured budget.",
-    "The largest hosted source artifact observed was 78734171 total bytes. Three sampled local source artifacts measured 78723709 to 78727212 total, 78386130 to 78389633 unique, and 337579 duplicate bytes.",
-    "The shared source ceilings leave at least 115829 total bytes above the largest observed hosted artifact. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The sampled source search indexes measured 4160311 to 4163016 bytes; the unchanged 4183924-byte JSON ceiling retains at least 20908 bytes of bounded headroom.",
+    "The refreshed claim-integrity source artifact measured 79339514 total bytes, 79001935 unique payload bytes, 337579 duplicate bytes, and a 4169659-byte search index locally.",
+    "The total and unique ceilings retain the observed 4740-byte hosted platform delta plus 110750 bytes of bounded headroom. Per-file caps and transfer budgets remain unchanged.",
+    "Earlier clinical-assurance source staging measured 78723709 to 78727212 total bytes and 78386130 to 78389633 unique bytes; this refreshed source measurement supersedes that historical budget.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
+    "The combined clinical, schema-compatibility, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail staging aggregate contains 79128766 total bytes, 78791187 unique payload bytes, and 337579 duplicate payload bytes locally.",
+    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined search index measured 4166281 bytes; its 4191889-byte JSON ceiling retains 20872 bytes of bounded headroom after the observed platform delta.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
