@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from math import isfinite
 from typing import Any, Literal, TypedDict
 
 SCHEMA_EXTRACT_ADVISORY = (
@@ -37,6 +38,21 @@ ScalarType = Literal["string", "integer", "number", "boolean"]
 FieldSource = Literal["entity", "table", "key_value"]
 
 _SCALAR_TYPES: frozenset[str] = frozenset({"string", "integer", "number", "boolean"})
+_ROOT_SCHEMA_KEYS = frozenset(
+    {
+        "$schema",
+        "$id",
+        "title",
+        "description",
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+    }
+)
+_FIELD_SCHEMA_KEYS = frozenset(
+    {"title", "description", "type", "aliases", "entity", "enum", "pattern"}
+)
 # Sources are consulted in this fixed order; the first source that yields a
 # candidate for a slot wins, and within a source the earliest source offset wins.
 _SOURCE_PRIORITY: tuple[FieldSource, ...] = ("entity", "table", "key_value")
@@ -80,19 +96,28 @@ class SchemaValidationIssue(TypedDict):
     source: FieldSource
 
 
+class MissingRequiredField(TypedDict):
+    """An unfilled required slot and its declared scalar type."""
+
+    field: str
+    expected_type: ScalarType
+
+
 class SchemaExtraction(TypedDict):
     """The projection of a note onto a target schema.
 
     ``data`` holds only slots that filled and validated, so its values conform to
     the declared types and constraints. ``bindings`` carries per-field source
     provenance for those same slots. ``missing_required`` lists required slots
-    that no source filled, and ``errors`` lists candidate values that were found
-    but rejected -- neither is silently dropped.
+    that no source filled, and ``missing_required_details`` keeps each slot's
+    expected scalar type. ``errors`` lists candidate values that were found but
+    rejected -- neither is silently dropped.
     """
 
     data: dict[str, Any]
     bindings: dict[str, FieldBinding]
     missing_required: list[str]
+    missing_required_details: list[MissingRequiredField]
     errors: list[SchemaValidationIssue]
 
 
@@ -108,7 +133,7 @@ class _FieldSpec(TypedDict):
     type: ScalarType
     keys: frozenset[str]
     entity_labels: frozenset[str]
-    enum: tuple[str, ...] | None
+    enum: tuple[Any, ...] | None
     pattern: re.Pattern[str] | None
 
 
@@ -173,12 +198,16 @@ def extract_to_schema(
     bindings: dict[str, FieldBinding] = {}
     errors: list[SchemaValidationIssue] = []
     missing_required: list[str] = []
+    missing_required_details: list[MissingRequiredField] = []
 
     for spec in specs:
         candidate = _select_candidate(spec, candidates)
         if candidate is None:
             if spec["name"] in required:
                 missing_required.append(spec["name"])
+                missing_required_details.append(
+                    MissingRequiredField(field=spec["name"], expected_type=spec["type"])
+                )
             continue
 
         value, reason = _coerce(spec, candidate["raw"])
@@ -195,6 +224,9 @@ def extract_to_schema(
             )
             if spec["name"] in required:
                 missing_required.append(spec["name"])
+                missing_required_details.append(
+                    MissingRequiredField(field=spec["name"], expected_type=spec["type"])
+                )
             continue
 
         data[spec["name"]] = value
@@ -211,6 +243,7 @@ def extract_to_schema(
         data=data,
         bindings=bindings,
         missing_required=missing_required,
+        missing_required_details=missing_required_details,
         errors=errors,
     )
 
@@ -222,6 +255,9 @@ def _compile_schema(
 
     if not isinstance(schema, Mapping):
         raise SchemaDefinitionError("schema must be a JSON object mapping")
+    unsupported = set(schema) - _ROOT_SCHEMA_KEYS
+    if unsupported:
+        raise SchemaDefinitionError("schema contains unsupported root keywords")
     declared_type = schema.get("type", "object")
     if declared_type != "object":
         raise SchemaDefinitionError("schema type must be 'object'")
@@ -229,6 +265,8 @@ def _compile_schema(
     properties = schema.get("properties", {})
     if not isinstance(properties, Mapping):
         raise SchemaDefinitionError("schema 'properties' must be a mapping")
+    if not isinstance(schema.get("additionalProperties", False), bool):
+        raise SchemaDefinitionError("additionalProperties must be a boolean")
 
     specs: list[_FieldSpec] = []
     for name, definition in properties.items():
@@ -239,6 +277,10 @@ def _compile_schema(
         if not isinstance(definition, Mapping):
             raise SchemaDefinitionError(
                 f"property {name!r} definition must be a mapping"
+            )
+        if set(definition) - _FIELD_SCHEMA_KEYS:
+            raise SchemaDefinitionError(
+                f"property {name!r} contains unsupported validation keywords"
             )
 
         field_type = definition.get("type")
@@ -293,13 +335,30 @@ def _compile_field(name: str, definition: Mapping[str, Any]) -> _FieldSpec:
             )
 
     enum = definition.get("enum")
-    enum_values: tuple[str, ...] | None = None
+    enum_values: tuple[Any, ...] | None = None
     if enum is not None:
         if not isinstance(enum, list) or not enum:
             raise SchemaDefinitionError(
                 f"property {name!r} 'enum' must be a non-empty list"
             )
-        enum_values = tuple(str(value) for value in enum)
+        field_type = definition["type"]
+        if any(
+            (field_type == "string" and type(value) is not str)
+            or (field_type == "integer" and type(value) is not int)
+            or (
+                field_type == "number"
+                and (
+                    type(value) not in (int, float)
+                    or (type(value) is float and not isfinite(value))
+                )
+            )
+            or (field_type == "boolean" and type(value) is not bool)
+            for value in enum
+        ):
+            raise SchemaDefinitionError(
+                f"property {name!r} 'enum' values must match its scalar type"
+            )
+        enum_values = tuple(enum)
 
     pattern_src = definition.get("pattern")
     pattern: re.Pattern[str] | None = None
@@ -366,6 +425,8 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
         if match is None:
             return None, "expected a numeric value"
         value = float(match.group())
+        if not isfinite(value):
+            return None, "expected a finite numeric value"
     else:  # boolean
         token = normalize_field_key(raw)
         if token in _TRUE_TOKENS:
@@ -376,15 +437,14 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
             return None, "expected a boolean value"
 
     if spec["enum"] is not None:
-        allowed = {normalize_field_key(option): option for option in spec["enum"]}
-        canonical = allowed.get(normalize_field_key(str(value)))
-        if canonical is None:
-            return None, "value is not one of the permitted enum options"
-        # ``enum`` options are stored as strings; only a string slot adopts the
-        # canonical spelling. For numeric/boolean slots the coerced value is
-        # already canonical, so keep it to preserve the declared type.
         if field_type == "string":
+            allowed = {normalize_field_key(option): option for option in spec["enum"]}
+            canonical = allowed.get(normalize_field_key(value))
+            if canonical is None:
+                return None, "value is not one of the permitted enum options"
             value = canonical
+        elif value not in spec["enum"]:
+            return None, "value is not one of the permitted enum options"
 
     return value, None
 

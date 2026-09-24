@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from openmed.structured.schema_extract import (
     SCHEMA_EXTRACT_ADVISORY,
@@ -91,6 +92,9 @@ def test_missing_required_field_is_reported():
 
     # ``diagnosis`` is required but appears nowhere in the note.
     assert "diagnosis" in result["missing_required"]
+    assert result["missing_required_details"] == [
+        {"field": "diagnosis", "expected_type": "string"}
+    ]
     assert "diagnosis" not in result["data"]
 
 
@@ -156,8 +160,8 @@ def test_enum_on_non_string_slot_keeps_declared_type():
     text = "Stage: 2\nDose: 2.5\n"
     schema = {
         "properties": {
-            "stage": {"type": "integer", "enum": ["1", "2", "3"]},
-            "dose": {"type": "number", "enum": ["2.5", "5.0"]},
+            "stage": {"type": "integer", "enum": [1, 2, 3]},
+            "dose": {"type": "number", "enum": [2.5, 5.0]},
         }
     }
     result = extract_to_schema(text, schema)
@@ -166,6 +170,16 @@ def test_enum_on_non_string_slot_keeps_declared_type():
     assert isinstance(result["data"]["stage"], int)
     assert result["data"]["dose"] == 2.5
     assert isinstance(result["data"]["dose"], float)
+    Draft202012Validator(schema).validate(result["data"])
+
+
+def test_unsupported_constraints_and_mistyped_enums_fail_as_schemas():
+    for definition in (
+        {"type": "integer", "minimum": 18},
+        {"type": "integer", "enum": ["1", "2"]},
+    ):
+        with pytest.raises(SchemaDefinitionError):
+            extract_to_schema("Age: 2\n", {"properties": {"age": definition}})
 
 
 # --------------------------------------------------------------------------

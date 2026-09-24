@@ -12,7 +12,8 @@ no free-form extraction; everything is deterministic and offline.
 
 The schema is a small, standard subset of JSON Schema: a top-level object with
 `properties` and an optional `required` list. Each property declares one scalar
-`type` -- `string`, `integer`, `number`, or `boolean`.
+`type` -- `string`, `integer`, `number`, or `boolean`. Unsupported validation
+keywords raise `SchemaDefinitionError` rather than being silently ignored.
 
 Extraction hints ride along as extension keywords that a standard JSON Schema
 validator ignores:
@@ -21,7 +22,7 @@ validator ignores:
 | --- | --- |
 | `aliases` | Alternative slot labels to match in `key: value` lines and table rows, in addition to the humanized field name. |
 | `entity` | An entity label (or list of labels) to bind from detected entities. |
-| `enum` | The permitted values; matching is case-insensitive and the canonical form is returned. |
+| `enum` | The permitted values must match the slot type. String matching is case-insensitive and returns the canonical spelling. |
 | `pattern` | A regular expression the raw value must fully match. |
 
 ```python
@@ -79,6 +80,9 @@ result = extract_to_schema(note, schema, entities=entities, tables=tables)
   (`entity`, `table`, or `key_value`).
 - **`missing_required`** -- required slots that no source filled (or whose only
   candidate failed validation). These are reported, never silently dropped.
+- **`missing_required_details`** -- each missing field with its declared
+  `expected_type`, so partial results remain inspectable without guessing the
+  intended value type.
 - **`errors`** -- candidate values that were found but rejected, each with the
   reason, the raw text, and its offsets.
 
@@ -92,3 +96,7 @@ the document wins. The same inputs therefore always produce the same object.
 A malformed *schema* raises `SchemaDefinitionError`. A malformed or empty
 *document* never raises: partial extraction always returns a result, with the
 gaps recorded in `missing_required` and `errors`.
+
+`data`, `bindings`, and `errors` contain extracted values in memory. Keep the
+result inside the caller's protected workflow; do not write those values to
+logs or audit artifacts.
