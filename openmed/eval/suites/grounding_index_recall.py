@@ -22,7 +22,12 @@ from typing import Any
 
 from openmed.clinical.grounding.embeddings import AliasEncoder, HashingAliasEncoder
 from openmed.clinical.grounding.index import brute_force_neighbors, build_index
-from openmed.clinical.grounding.vocab import VocabLoader, VocabSource, normalize_alias
+from openmed.clinical.grounding.vocab import (
+    VocabLoader,
+    VocabSource,
+    _normalize_system,
+    normalize_alias,
+)
 
 GROUNDING_INDEX_RECALL = "grounding_index_recall"
 
@@ -87,7 +92,7 @@ def evaluate_grounding_index_recall(
 ) -> dict[str, Any]:
     """Score index Recall@k against the brute-force reference.
 
-    For every alias in the fixture, the alias surface is used as a query; the
+    For every alias in the selected systems, the surface is used as a query; the
     index's top-k concept codes are compared to the exact top-k concept codes
     computed by brute force over the same embedding vectors. Recall is the mean
     fraction of exact top-k concepts recovered by the index.
@@ -108,10 +113,19 @@ def evaluate_grounding_index_recall(
     if index is None:  # pragma: no cover - encoder is never None here
         raise RuntimeError("index build returned no-op with a configured encoder")
 
+    # The reference and queries must cover the same vocabulary systems as the
+    # served index, not unrelated rows in the shared fixture file.
+    selected_systems = set(index.systems)
+    fixture_rows = [
+        row
+        for row in load_grounding_index_fixtures(fixture)
+        if _normalize_system(str(row["system"])).upper() in selected_systems
+    ]
+
     # Rebuild the exact reference over the same (concept, alias) rows.
     reference_vectors: list[tuple[float, ...]] = []
     reference_codes: list[str] = []
-    for row in load_grounding_index_fixtures(fixture):
+    for row in fixture_rows:
         code = str(row["concept_id"])
         for alias in row["aliases"]:
             normalized = normalize_alias(alias)
@@ -122,7 +136,7 @@ def evaluate_grounding_index_recall(
             reference_codes.append(code)
 
     queries: list[tuple[tuple[float, ...], str]] = []
-    for row in load_grounding_index_fixtures(fixture):
+    for row in fixture_rows:
         code = str(row["concept_id"])
         for alias in row["aliases"]:
             normalized = normalize_alias(alias)
@@ -152,6 +166,7 @@ def evaluate_grounding_index_recall(
         "recall_at_k": recall_at_k,
         "metadata": {
             **grounding_index_recall_metadata(fixture),
+            "systems": [system.lower() for system in index.systems],
             "encoder_id": resolved_encoder.encoder_id,
             "index_key": index.index_key,
             "vocab_versions": dict(index.vocab_versions),

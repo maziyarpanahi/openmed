@@ -151,3 +151,49 @@ extraVolumes: []
 
 # Extra volume mounts added to the service container.
 extraVolumeMounts: []
+
+# Production Journey profile. The referenced Secret must be created by the
+# operator of the cluster; the chart never creates or renders database values.
+journey:
+  enabled: false
+  schema: openmed_journey
+  database:
+    secretName: openmed-journey-database
+    secretKey: dsn
+  artifacts:
+    existingClaim: ""
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    mountPath: /var/lib/openmed/artifacts
+    annotations: {}
+  migration:
+    backoffLimit: 3
+    ttlSecondsAfterFinished: 86400
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  worker:
+    replicas: 1
+    port: 8091
+    intervalSeconds: 10
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  networkPolicy:
+    enabled: true
+    allowDns: true
+    # Label selector for an in-cluster PostgreSQL pod. Keep empty for an
+    # external database and provide a reviewed additionalEgress rule instead.
+    databasePodSelector: {}
+    databaseNamespaceSelector: {}
+    additionalEgress: []
