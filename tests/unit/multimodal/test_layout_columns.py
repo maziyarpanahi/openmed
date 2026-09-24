@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
+
 from openmed.multimodal import (
     FakeLayoutEngine,
     LayoutDocument,
     OcrResult,
     OcrWord,
+    evaluate_layout,
     parse_layout,
+    transform_ocr_result,
 )
 
 
@@ -96,3 +100,144 @@ def test_layout_char_bbox_map_round_trips_page_and_offsets() -> None:
     assert source_span is not None
     assert source_span.page == target.page
     assert source_span.bbox == target.bbox
+
+
+def _clinical_page() -> OcrResult:
+    rows = (
+        ("Synthetic", 20, 20, 85, 30),
+        ("report", 91, 20, 133, 30),
+        ("Medications:", 30, 120, 112, 132),
+        ("Aspirin", 30, 150, 74, 162),
+        ("daily", 80, 150, 110, 162),
+        ("Allergies:", 280, 120, 345, 132),
+        ("None", 280, 150, 312, 162),
+        ("known", 318, 150, 355, 162),
+        ("Test", 30, 350, 60, 362),
+        ("Result", 200, 350, 243, 362),
+        ("Reference", 350, 350, 416, 362),
+        ("Hemoglobin", 30, 380, 102, 392),
+        ("13", 200, 380, 215, 392),
+        ("12-16", 350, 380, 386, 392),
+        ("Sodium", 30, 410, 76, 422),
+        ("140", 200, 410, 222, 422),
+        ("135-145", 350, 410, 400, 422),
+        ("Page", 30, 650, 59, 662),
+        ("1", 65, 650, 72, 662),
+    )
+    words = tuple(
+        OcrWord(text, (x0, y0, x1, y1), 0.99 - index * 0.01)
+        for index, (text, x0, y0, x1, y1) in enumerate(rows)
+    )
+    return OcrResult(
+        words=tuple(reversed(words)),
+        metadata={"page_dimensions": {0: (500, 700)}, "source": "synthetic"},
+    )
+
+
+def test_layout_reconstructs_headers_columns_and_table_cells() -> None:
+    result = _clinical_page()
+    document = parse_layout(result)
+
+    assert len(document.headers) == len(document.footers) == 1
+    assert len(document.columns) == 2
+    assert len(document.tables) == 1
+    assert document.metadata["table_count"] == 1
+    assert [len(row) for row in document.tables[0].rows] == [3, 3, 3]
+    structured = document.tables[0].as_structured_table()
+    assert structured["n_rows"] == structured["n_columns"] == 3
+    assert len(structured["cells"]) == 9
+    assert all(
+        document.text[cell["start"] : cell["end"]] == cell["text"]
+        for cell in structured["cells"]
+    )
+    assert document.text.split() == [
+        "Synthetic",
+        "report",
+        "Medications:",
+        "Aspirin",
+        "daily",
+        "Allergies:",
+        "None",
+        "known",
+        "Test",
+        "Result",
+        "Reference",
+        "Hemoglobin",
+        "13",
+        "12-16",
+        "Sodium",
+        "140",
+        "135-145",
+        "Page",
+        "1",
+    ]
+    for table_row in document.tables[0].rows:
+        for cell in table_row:
+            assert document.text[cell.start : cell.end] == cell.text
+            for span in cell.spans:
+                assert document.offsets_for_bbox(span.page, span.bbox) == (
+                    span.offsets,
+                )
+
+
+def test_layout_sections_and_rotated_source_boxes_round_trip() -> None:
+    result = _clinical_page()
+    document = parse_layout(result)
+    sections = document.detect_sections()
+
+    assert sections[0].start == 0
+    assert sections[-1].end == len(document.text)
+    assert all(left.end == right.start for left, right in zip(sections, sections[1:]))
+    assert {section.label for section in sections} >= {"medications", "allergies"}
+
+    rotated = transform_ocr_result(result, (500, 700), 90)
+    restored = transform_ocr_result(rotated, (700, 500), 270)
+    assert [word.bbox for word in restored.words] == [
+        word.bbox for word in result.words
+    ]
+    assert parse_layout(restored).text == document.text
+
+
+def test_synthetic_layout_quality_exceeds_acceptance_thresholds() -> None:
+    result = _clinical_page()
+    document = parse_layout(result)
+    expected_cells = {
+        len(result.words) - 1 - original_index: (0, row, column)
+        for row in range(3)
+        for column in range(3)
+        for original_index in (8 + row * 3 + column,)
+    }
+
+    quality = evaluate_layout(
+        document,
+        expected_word_order=tuple(reversed(range(len(result.words)))),
+        expected_cells=expected_cells,
+    )
+
+    assert quality.expected_words == 19
+    assert quality.expected_cells == 9
+    assert quality.reading_order_accuracy >= 0.90
+    assert quality.table_cell_accuracy >= 0.85
+    assert quality == evaluate_layout(
+        parse_layout(result),
+        expected_word_order=tuple(reversed(range(len(result.words)))),
+        expected_cells=expected_cells,
+    )
+
+
+def test_layout_preserves_low_confidence_and_rejects_unbounded_pixels() -> None:
+    result = _clinical_page()
+    words = list(result.words)
+    words[0] = OcrWord(words[0].text, words[0].bbox, 0.05)
+    document = parse_layout(OcrResult(words=tuple(words), metadata=result.metadata))
+    assert (
+        next(span for span in document.spans if span.word_index == 0).confidence == 0.05
+    )
+
+    bad = OcrResult(
+        words=(OcrWord("SYNTHETIC-SENSITIVE-SENTINEL", (490, 20, 510, 30), 0.9),),
+        metadata={"page_dimensions": {0: (500, 700)}},
+    )
+    with pytest.raises(ValueError) as exc:
+        parse_layout(bad)
+    assert "SYNTHETIC-SENSITIVE-SENTINEL" not in str(exc.value)
