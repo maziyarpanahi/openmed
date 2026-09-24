@@ -136,6 +136,22 @@ def test_equal_timestamps_have_input_order_independent_tie_breaking() -> None:
     assert forward.to_dict() == reversed_input.to_dict()
 
 
+def test_serialized_graph_hashes_caller_event_identifiers() -> None:
+    private_id = "patient-jane-doe"
+    graph = build_timeline_graph(
+        [
+            {"id": private_id, "type": "finding", "start": 0, "end": 4},
+            {"id": "event-two", "type": "finding", "start": 5, "end": 9},
+        ],
+        links=[{"source": private_id, "target": "event-two", "relation": "before"}],
+    )
+
+    serialized = graph.to_json()
+    assert private_id not in serialized
+    assert hash_text(private_id) in serialized
+    assert graph.event(private_id).event_id == private_id
+
+
 def test_before_after_cycle_is_rejected_without_echoing_event_values() -> None:
     events = [
         {"id": "event-a", "type": "procedure", "start": 0, "end": 1},

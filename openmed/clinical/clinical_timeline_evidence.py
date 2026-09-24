@@ -234,8 +234,8 @@ class TimelineGraphEvent:
         """Return a JSON-ready event without raw source text."""
 
         return {
-            "id": self.event_id,
-            "event_id": self.event_id,
+            "id": hash_text(self.event_id),
+            "event_id": hash_text(self.event_id),
             "event_type": self.event_type,
             "start": self.start,
             "end": self.end,
@@ -305,8 +305,8 @@ class TimelineTemporalLink:
         """Return a JSON-ready temporal link without raw source text."""
 
         return {
-            "source_id": self.source_id,
-            "target_id": self.target_id,
+            "source_id": hash_text(self.source_id),
+            "target_id": hash_text(self.target_id),
             "relation": self.relation,
             "confidence": self.confidence,
             "evidence": [evidence.to_dict() for evidence in self.evidence],
@@ -386,7 +386,7 @@ class TimelineGraph:
             "schema_version": self.schema_version,
             "events": [event.to_dict() for event in self.events],
             "temporal_links": [link.to_dict() for link in self.temporal_links],
-            "ordered_event_ids": list(self.ordered_event_ids),
+            "ordered_event_ids": [hash_text(value) for value in self.ordered_event_ids],
             "cycle_free": self.is_cycle_free,
             "disclaimer": self.disclaimer,
         }

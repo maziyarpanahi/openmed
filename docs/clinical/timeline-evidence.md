@@ -73,8 +73,10 @@ are reversed internally for topological ordering.
 
 Source text is accepted only for in-memory hashing. `to_dict()` and `to_json()`
 contain event types, offsets, normalized temporal values, assertion axes,
-content hashes, link types, and the assistive disclaimer; they do not contain
-event surfaces, temporal surfaces, or arbitrary caller metadata. Callers can
+content hashes, link types, and the assistive disclaimer. Serialized event and
+link identifiers are hashed, so caller identifiers are not copied into reports.
+The payloads do not contain event surfaces, temporal surfaces, or arbitrary
+caller metadata. Callers can
 also provide their own SHA-256 or HMAC-SHA-256 hash when the source text is not
 available.
 
