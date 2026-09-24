@@ -30,6 +30,7 @@ EXPECTED_PATHS = {
     "/jobs",
     "/jobs/{job_id}",
     "/privacy-gateway/complete",
+    "/profile",
 }
 
 REST_RECIPES_PATH = Path(__file__).resolve().parents[3] / "docs/rest-recipes.md"
