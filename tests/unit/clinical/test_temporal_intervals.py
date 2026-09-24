@@ -6,7 +6,16 @@ import json
 
 import pytest
 
-from openmed.clinical import normalize_temporal_intervals as package_normalize
+from openmed.clinical import (
+    ConservativeTemporalInterval,
+    normalize_conservative_temporal_interval,
+)
+from openmed.clinical import (
+    TemporalInterval as NliTemporalInterval,
+)
+from openmed.clinical import (
+    normalize_temporal_intervals as package_normalize,
+)
 from openmed.clinical.temporal_intervals import (
     TemporalInterval,
     TemporalIntervalNormalizer,
@@ -18,6 +27,12 @@ from openmed.clinical.temporal_intervals import (
 def _one(text: str, expression: str) -> TemporalInterval:
     start = text.index(expression)
     return normalize_temporal_interval(text, (start, start + len(expression)))
+
+
+def test_package_exports_preserve_both_temporal_interval_contracts() -> None:
+    assert ConservativeTemporalInterval is TemporalInterval
+    assert NliTemporalInterval is not TemporalInterval
+    assert normalize_conservative_temporal_interval is normalize_temporal_interval
 
 
 def test_dates_keep_precision_and_do_not_guess_numeric_order() -> None:
