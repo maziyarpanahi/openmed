@@ -14,7 +14,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
-from openmed.interop.smart_scope_audit import audit_smart_scopes, parse_smart_scope
+from openmed.interop.smart_scope_audit import (
+    audit_smart_scope_preflight,
+    parse_smart_scope_preflight,
+)
 
 _BEARER_TOKEN = re.compile(r"[A-Za-z0-9._~+/-]+={0,}\Z")
 _REASONS = frozenset(
@@ -95,7 +98,9 @@ def _scopes(values: Iterable[str]) -> tuple[str, ...]:
     if isinstance(values, (str, bytes, bytearray)):
         raise SmartCustodyError("invalid_scopes")
     try:
-        normalized = tuple(sorted({parse_smart_scope(value).name for value in values}))
+        normalized = tuple(
+            sorted({parse_smart_scope_preflight(value).name for value in values})
+        )
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception:
@@ -198,7 +203,7 @@ class SmartTokenCustody:
         if self._now() >= entry.expires_at:
             raise SmartCustodyError("expired")
         required = _scopes(required_scopes)
-        if audit_smart_scopes(
+        if audit_smart_scope_preflight(
             required_scopes=required, requested_scopes=entry.scopes
         ).missing_scopes:
             raise SmartCustodyError("insufficient_scope")
