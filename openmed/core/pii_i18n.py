@@ -556,6 +556,9 @@ _TAMIL_DIGIT_TRANSLATION = str.maketrans("௦௧௨௩௪௫௬௭௮௯", "0123
 _KANNADA_DIGIT_TRANSLATION = str.maketrans("೦೧೨೩೪೫೬೭೮೯", "0123456789")
 
 
+_MALAYALAM_DIGIT_TRANSLATION = str.maketrans("൦൧൨൩൪൫൬൭൮൯", "0123456789")
+
+
 def normalize_arabic_indic_digits(text: str) -> str:
     """Fold Arabic-Indic decimal digits to ASCII without changing offsets.
 
@@ -653,6 +656,21 @@ def normalize_kannada_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_KANNADA_DIGIT_TRANSLATION)
+
+
+def normalize_malayalam_digits(text: str) -> str:
+    """Fold Malayalam decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain Malayalam decimal digits.
+
+    Returns:
+        Length-preserving text with Malayalam digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_MALAYALAM_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1721,6 +1739,29 @@ def validate_karnataka_pin(text: str) -> bool:
 
 # Descriptive alias used by callers that name the value as a pincode.
 validate_karnataka_pincode = validate_karnataka_pin
+
+
+def validate_malayalam_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Malayalam decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_malayalam_digits(text))
+
+
+def validate_malayalam_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Malayalam digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_malayalam_digits(text)
+    )
+
+
+def validate_kerala_lakshadweep_pin(text: str) -> bool:
+    """Validate Kerala and Lakshadweep PINs in the 67xxxx-69xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_malayalam_digits(text).strip()
+    return validate_indian_pin(normalized) and 670_000 <= int(normalized) <= 699_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -7135,6 +7176,176 @@ _ODIA_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+def normalize_malayalam_for_matching(text: str) -> OffsetMappedText:
+    """Canonicalize Malayalam encoding variants with source-offset recovery.
+
+    Atomic chillu letters and their legacy consonant-virama-ZWJ forms collapse
+    to the same matching text. The returned ``IndicNormalization`` maps every
+    match back to the untouched input, including ZWJ/ZWNJ-bearing graphemes.
+    """
+
+    from openmed.processing.text import IndicNormalizer
+
+    return IndicNormalizer(
+        joiner_policy="strip",
+        nasals_mode="preserve",
+        normalize_chandra=False,
+    ).normalize_with_offsets(text)
+
+
+_MALAYALAM_DIGIT_CLASS = r"0-9\u0D66-\u0D6F"
+_MALAYALAM_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0D6C-\u0D6F"
+_MALAYALAM_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0D68-\u0D6F"
+_MALAYALAM_BASE_LETTER = r"[\u0D05-\u0D39\u0D54-\u0D56\u0D5F-\u0D61\u0D7A-\u0D7F]"
+_MALAYALAM_NON_VIRAMA_MARK = (
+    r"[\u0D00-\u0D03\u0D3B-\u0D44\u0D46-\u0D4C\u0D4E"
+    r"\u0D57\u0D62-\u0D63]"
+)
+_MALAYALAM_GRAPHEME = (
+    rf"{_MALAYALAM_BASE_LETTER}{_MALAYALAM_NON_VIRAMA_MARK}*"
+    rf"(?:\u0D4D{_MALAYALAM_BASE_LETTER}"
+    rf"{_MALAYALAM_NON_VIRAMA_MARK}*)*\u0D4D?"
+)
+_MALAYALAM_NAME_WORD = rf"(?:{_MALAYALAM_GRAPHEME}){{2,}}"
+_MALAYALAM_INITIAL = rf"(?:{_MALAYALAM_GRAPHEME}){{1,2}}\."
+_MALAYALAM_INITIAL_NAME = (
+    rf"{_MALAYALAM_INITIAL}(?:[ \t]+{_MALAYALAM_INITIAL})?"
+    rf"[ \t]+{_MALAYALAM_NAME_WORD}"
+)
+_MALAYALAM_LATIN_INITIAL_NAME = rf"(?:[A-Za-z]\.[ \t]+){{1,2}}{_MALAYALAM_NAME_WORD}"
+_MALAYALAM_HOUSE_GIVEN_NAME = rf"{_MALAYALAM_NAME_WORD}[ \t]+{_MALAYALAM_NAME_WORD}"
+_MALAYALAM_NAME_SURFACE = (
+    rf"(?:{_MALAYALAM_INITIAL_NAME}|{_MALAYALAM_LATIN_INITIAL_NAME}|"
+    rf"{_MALAYALAM_HOUSE_GIVEN_NAME})"
+)
+_MALAYALAM_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["ml"]
+)
+
+_MALAYALAM_NAME_CONTEXT = ["ശ്രീ", "ശ്രീമതി", "ഡോ."]
+_MALAYALAM_DATE_CONTEXT = [
+    "ജനനം",
+    "ജനന തീയതി",
+    "തീയതി",
+    "date",
+    "date of birth",
+    "dob",
+]
+_MALAYALAM_PHONE_CONTEXT = ["ഫോൺ", "മൊബൈൽ", "ബന്ധപ്പെടുക", "phone", "mobile"]
+_MALAYALAM_AADHAAR_CONTEXT = [
+    "ആധാർ",
+    "തിരിച്ചറിയൽ",
+    "aadhaar",
+    "aadhar",
+    "uidai",
+]
+_MALAYALAM_PIN_CONTEXT = [
+    "പിൻ",
+    "പിൻ കോഡ്",
+    "തപാൽ",
+    "വിലാസം",
+    "pin",
+    "postcode",
+]
+
+_MALAYALAM_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?:(?<=ശ്രീ )|(?<=ശ്രീമതി )|(?<=ഡോ\. ))"
+        rf"{_MALAYALAM_NAME_SURFACE}"
+        rf"(?![\u0D00-\u0D7F])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_MALAYALAM_NAME_CONTEXT,
+        context_boost=0.1,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+        match_normalizer=normalize_malayalam_for_matching,
+    ),
+    PIIPattern(
+        rf"(?<![{_MALAYALAM_DIGIT_CLASS}])"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_MALAYALAM_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_MALAYALAM_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+        match_normalizer=normalize_malayalam_for_matching,
+    ),
+    PIIPattern(
+        rf"(?<![{_MALAYALAM_DIGIT_CLASS}])"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_MALAYALAM_MONTH_PATTERN})\s+"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MALAYALAM_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_MALAYALAM_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+        match_normalizer=normalize_malayalam_for_matching,
+    ),
+    PIIPattern(
+        rf"(?<![{_MALAYALAM_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0D6F][1\u0D67][\s-]?)?"
+        rf"[{_MALAYALAM_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_MALAYALAM_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]"
+        rf"(?![{_MALAYALAM_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_MALAYALAM_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_malayalam_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+        match_normalizer=normalize_malayalam_for_matching,
+    ),
+    PIIPattern(
+        rf"(?<![{_MALAYALAM_DIGIT_CLASS}])"
+        rf"[{_MALAYALAM_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{3}}"
+        rf"(?P<ml_aadhaar_sep> )"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{4}}"
+        rf"(?P=ml_aadhaar_sep)"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MALAYALAM_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_MALAYALAM_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_malayalam_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+        match_normalizer=normalize_malayalam_for_matching,
+    ),
+    PIIPattern(
+        rf"(?<![{_MALAYALAM_DIGIT_CLASS}])"
+        rf"[6\u0D6C][7-9\u0D6D-\u0D6F]"
+        rf"[{_MALAYALAM_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MALAYALAM_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_MALAYALAM_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_kerala_lakshadweep_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+        match_normalizer=normalize_malayalam_for_matching,
+    ),
+]
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -11110,6 +11321,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     ],
     "or": [
         *_ODIA_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "ml": [
+        *_MALAYALAM_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "te": [

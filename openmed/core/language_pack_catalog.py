@@ -29,7 +29,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until dedicated
 # public PII weights are available. They must not be represented as
 # trained/model-backed languages in release claims.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ru", "ta"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ml", "ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -175,6 +175,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "bn_BD",
         ("Bengali",),
         national_id_provider=("bn_BD", "bangladesh_nid"),
+    ),
+    _pack(
+        "ml",
+        "OpenMed/privacy-filter-multilingual",
+        "ml_IN",
+        ("Malayalam",),
+        national_id_provider=("ml_IN", "aadhaar"),
     ),
     TELUGU_LANGUAGE_PACK,
     _pack(
@@ -393,7 +400,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # these codes; keeping them separate from ``SUPPORTED_LANGUAGES`` avoids
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
-    "ml",
     "ne",
     "pa",
     "ur",

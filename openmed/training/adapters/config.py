@@ -425,12 +425,13 @@ DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = MappingProxyType(
         "indic": LanguageFamily(
             family_id="indic",
             display_name="Indic transfer group",
-            languages=("as", "bn", "gu", "hi", "kn", "mr", "or", "ta", "te"),
+            languages=("as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "ta", "te"),
             scripts=(
                 "Bengali",
                 "Devanagari",
                 "Gujarati",
                 "Kannada",
+                "Malayalam",
                 "Odia",
                 "Tamil",
                 "Telugu",
