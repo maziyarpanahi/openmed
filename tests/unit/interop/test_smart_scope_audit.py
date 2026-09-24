@@ -1,4 +1,4 @@
-"""Offline SMART v2 scope normalization and least-privilege tests."""
+"""Tests for offline SMART scope comparison helpers."""
 
 from __future__ import annotations
 
@@ -6,7 +6,69 @@ import json
 
 import pytest
 
-from openmed.interop.smart_scope_audit import audit_smart_scopes, parse_smart_scope
+from openmed.interop.smart_scope_audit import (
+    audit_smart_scope_preflight,
+    audit_smart_scopes,
+    normalize_smart_scope,
+    parse_smart_scope,
+    parse_smart_scope_preflight,
+)
+
+
+def test_normalizes_context_and_operation_order() -> None:
+    assert normalize_smart_scope(" Patient/SyntheticObservation.SR ") == (
+        "patient/SyntheticObservation.rs"
+    )
+
+    scope = parse_smart_scope("user/SyntheticCarePlan.uc")
+    assert scope.to_dict() == {
+        "scope": "user/SyntheticCarePlan.cu",
+        "context": "user",
+        "resource_type": "SyntheticCarePlan",
+        "operations": [
+            {"code": "c", "name": "create"},
+            {"code": "u", "name": "update"},
+        ],
+    }
+
+
+def test_reports_missing_and_excessive_atomic_operations() -> None:
+    result = audit_smart_scopes(
+        workflow_id="synthetic-workflow",
+        required_scopes=(
+            "patient/SyntheticCondition.r",
+            "patient/SyntheticObservation.r",
+        ),
+        declared_scopes=(
+            "patient/SyntheticObservation.rs",
+            "patient/SyntheticMedication.r",
+        ),
+    )
+
+    assert result.status == "missing"
+    assert [scope.value for scope in result.missing_scopes] == [
+        "patient/SyntheticCondition.r"
+    ]
+    assert [scope.value for scope in result.excessive_scopes] == [
+        "patient/SyntheticMedication.r",
+        "patient/SyntheticObservation.s",
+    ]
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        "",
+        "launch/patient",
+        "patient/*.r",
+        "patient/SyntheticObservation.*",
+        "patient/SyntheticObservation.rx",
+        "tenant/SyntheticObservation.r",
+    ],
+)
+def test_rejects_out_of_scope_or_wildcard_values(scope: str) -> None:
+    with pytest.raises(ValueError):
+        parse_smart_scope(scope)
 
 
 @pytest.mark.parametrize(
@@ -28,7 +90,7 @@ from openmed.interop.smart_scope_audit import audit_smart_scopes, parse_smart_sc
     ],
 )
 def test_normalizes_smart_v2_scope(raw, name, context, resource, access) -> None:
-    scope = parse_smart_scope(raw)
+    scope = parse_smart_scope_preflight(raw)
     assert (scope.name, scope.context, scope.resource_type, scope.access) == (
         name,
         context,
@@ -69,14 +131,16 @@ def test_normalizes_smart_v2_scope(raw, name, context, resource, access) -> None
     ],
 )
 def test_audit_cases(required, requested, missing, excessive) -> None:
-    result = audit_smart_scopes(required_scopes=required, requested_scopes=requested)
+    result = audit_smart_scope_preflight(
+        required_scopes=required, requested_scopes=requested
+    )
     assert [item.scope for item in result.missing_scopes] == missing
     assert [item.scope for item in result.excessive_scopes] == excessive
     assert result.is_least_privilege is (not missing and not excessive)
 
 
 def test_reason_codes_and_output_are_stable_and_content_free() -> None:
-    result = audit_smart_scopes(
+    result = audit_smart_scope_preflight(
         required_scopes=["patient/Observation.rs", "launch/patient"],
         requested_scopes=["patient/*.r", "launch"],
     )
@@ -126,16 +190,16 @@ def test_reason_codes_and_output_are_stable_and_content_free() -> None:
 )
 def test_unsupported_values_fail_without_echoing_input(value: str) -> None:
     with pytest.raises(ValueError) as error:
-        parse_smart_scope(value)
+        parse_smart_scope_preflight(value)
     assert value not in str(error.value)
 
 
 def test_input_order_and_duplicates_do_not_change_report() -> None:
-    first = audit_smart_scopes(
+    first = audit_smart_scope_preflight(
         required_scopes=["user/Condition.r", "user/Observation.r"],
         requested_scopes=["user/Observation.rs", "user/Observation.rs"],
     )
-    second = audit_smart_scopes(
+    second = audit_smart_scope_preflight(
         required_scopes=["user/Observation.r", "user/Condition.r"],
         requested_scopes=["user/Observation.sr"],
     )
