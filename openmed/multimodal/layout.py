@@ -706,9 +706,7 @@ def _page_drafts(
 ) -> tuple[_ColumnDraft, ...]:
     size = _page_dimensions(metadata, page)
     if size is None:
-        header_words: tuple[_WordRecord, ...] = ()
-        footer_words: tuple[_WordRecord, ...] = ()
-        body_words = tuple(records)
+        header_words, footer_words, body_words = _infer_bands(records, line_tolerance)
     else:
         from .box_normalization import normalize_box
 
@@ -818,6 +816,34 @@ def _page_drafts(
     return tuple(drafts)
 
 
+def _infer_bands(
+    records: Sequence[_WordRecord], tolerance: float
+) -> tuple[
+    tuple[_WordRecord, ...],
+    tuple[_WordRecord, ...],
+    tuple[_WordRecord, ...],
+]:
+    lines = _group_lines(records, tolerance)
+    if len(lines) < 4:
+        return (), (), tuple(records)
+    gaps = [
+        min(word.y0 for word in right) - max(word.y1 for word in left)
+        for left, right in zip(lines, lines[1:])
+    ]
+    typical_height = median(word.y1 - word.y0 for word in records)
+    ordinary_gaps = sorted(max(gap, 0.0) for gap in gaps)[: max(1, len(gaps) - 2)]
+    threshold = max(typical_height * 2.0, median(ordinary_gaps) * 2.0)
+    top_count = 1 if gaps[0] > threshold else 0
+    bottom_count = 1 if gaps[-1] > threshold else 0
+    if top_count + bottom_count >= len(lines):
+        return (), (), tuple(records)
+    header = tuple(word for line in lines[:top_count] for word in line)
+    footer = tuple(word for line in lines[len(lines) - bottom_count :] for word in line)
+    excluded = {word.index for word in (*header, *footer)}
+    body = tuple(word for word in records if word.index not in excluded)
+    return header, footer, body
+
+
 def _page_dimensions(
     metadata: Mapping[str, Any], page: int
 ) -> tuple[float, float] | None:
@@ -833,9 +859,14 @@ def _page_dimensions(
     if value is None:
         raise ValueError("missing OCR page dimensions")
     from .box_normalization import PageSize
+    from .page_rotation import PageSize as RotationPageSize
 
     try:
-        if isinstance(value, Mapping):
+        if isinstance(value, PageSize):
+            size = value
+        elif isinstance(value, RotationPageSize):
+            size = PageSize(value.width, value.height)
+        elif isinstance(value, Mapping):
             size = PageSize(value["width"], value["height"])
         else:
             size = PageSize(*value)

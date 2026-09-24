@@ -13,6 +13,8 @@ from openmed.multimodal import (
     parse_layout,
     transform_ocr_result,
 )
+from openmed.multimodal.box_normalization import PageSize
+from openmed.multimodal.page_rotation import PageSize as RotationPageSize
 
 
 def _synthetic_words() -> tuple[OcrWord, ...]:
@@ -196,6 +198,28 @@ def test_layout_sections_and_rotated_source_boxes_round_trip() -> None:
         word.bbox for word in result.words
     ]
     assert parse_layout(restored).text == document.text
+
+
+def test_isolated_bands_are_detected_without_page_dimensions() -> None:
+    result = _clinical_page()
+    with_dimensions = parse_layout(result)
+    inferred = parse_layout(OcrResult(words=result.words))
+
+    assert len(inferred.headers) == len(inferred.footers) == 1
+    assert len(inferred.columns) == 2
+    assert len(inferred.tables) == 1
+    assert inferred.text == with_dimensions.text
+
+
+@pytest.mark.parametrize("size", [PageSize(500, 700), RotationPageSize(500, 700)])
+def test_page_size_contracts_keep_layout_geometry(size: object) -> None:
+    result = _clinical_page()
+    sized = parse_layout(
+        OcrResult(words=result.words, metadata={"page_dimensions": {0: size}})
+    )
+
+    assert sized.text == parse_layout(result).text
+    assert len(sized.headers) == len(sized.footers) == 1
 
 
 def test_synthetic_layout_quality_exceeds_acceptance_thresholds() -> None:

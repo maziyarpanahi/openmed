@@ -63,7 +63,8 @@ clinical section headings can be detected on the reconstructed text. When the
 OCR result includes `page_dimensions` metadata, it validates each pixel box
 against that page and identifies isolated top and bottom bands. Repeated rows
 with at least three aligned cells become tables. Ambiguous rows remain ordinary
-text; no table structure is guessed from a two-column note.
+text; no table structure is guessed from a two-column note. Without page
+dimensions, only a clearly isolated first or last line is treated as a band.
 
 ```python
 from openmed.multimodal import parse_layout
