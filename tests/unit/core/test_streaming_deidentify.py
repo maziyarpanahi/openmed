@@ -139,10 +139,12 @@ def test_stream_audit_matches_single_pass_span_count_and_hashes():
     single_pipeline = Pipeline(
         model_detector=_empty_model_detector,
         use_safety_sweep=True,
+        hmac_secret="synthetic-stream-parity-key",
     )
     stream_pipeline = Pipeline(
         model_detector=_empty_model_detector,
         use_safety_sweep=True,
+        hmac_secret="synthetic-stream-parity-key",
     )
     single = single_pipeline.run(text, method="mask")
 

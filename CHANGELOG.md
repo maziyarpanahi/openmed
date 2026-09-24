@@ -5,6 +5,237 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added deterministic, aggregate-only review-yield metrics for guarded clinical
+  relation candidates, with accepted, corrected, rejected, duplicate, and
+  deferred outcomes by relation class (#2753).
+- Added assertion-aware FHIR R4 `AllergyIntolerance`, `Immunization`, and
+  `Encounter` exporters with RxNorm, SNOMED CT, and CVX coding support.
+- Added immutable, versioned longitudinal Journey contracts for clinical
+  artifacts, evidence locators, facts, conflicts, resolution events, and
+  dataset snapshots, including deterministic JSON, bundled schemas, and
+  derivation-graph validation (#3320).
+- Added durable local Journey storage with content-addressed artifact bytes,
+  append-only SQLite metadata and fact history, atomic graph transactions,
+  typed outcomes, deterministic migrations, integrity checks, and
+  point-in-time reads (#3321).
+- Added backend-neutral Journey storage composition, PostgreSQL metadata parity,
+  transactional migration recovery, and allowlisted content-addressed object
+  namespaces with local-only defaults (#3322).
+- Added replay-safe ingestion jobs with versioned manifests, exclusive leases,
+  gap-safe checkpoints, value-free retries, explicit cancellation, quarantine
+  promotion, SQLite and PostgreSQL ledgers, and restart recovery tests (#3323).
+- Added physically separated identified and de-identified projection stores,
+  capability-scoped transform vault access, purpose and consent policy gates,
+  cache revocation, and durable value-free access auditing (#3324).
+- Added conservative patient and encounter identity resolution with opaque
+  source keys, deterministic exact links, review-isolated candidate plugins,
+  transactional merge and split decisions, and durable provenance (#3325).
+- Added offline structured-evidence adapters for text, existing document
+  results, FHIR R4, HL7 v2, CDA R2, CSV, and XLSX with exact coordinates,
+  parser provenance, bounded quarantine, and value-free results (#3326).
+- Added a versioned clinical model-pack contract and local-only task router with
+  pinned artifact integrity, license and quantization gates, explicit runtime
+  capability outcomes, and deterministic fallbacks (#3328).
+- Added model-independent clinical-fact normalization across extraction,
+  assertion, temporality, relation, medication, laboratory, observation, and
+  social-determinant outputs with evidence and derivation gates (#3330).
+- Added a local-first ingestion-to-fact orchestrator with versioned stage
+  manifests, value-free derivation edges, exact replay, descendant-only
+  reprocessing, typed quarantine, and atomic Journey writes across five
+  synthetic structured source formats (#3327).
+- Added deterministic terminology resolution cascades with versioned mapping
+  provenance, explicit ambiguous and unmapped outcomes, an append-only local
+  review queue, opt-in local semantic candidates, and value-free coverage
+  summaries (#3331).
+- Added evidence-preserving fact deduplication, dimension-specific conflict
+  sets, versioned policy and human resolutions, append-only correction history,
+  guarded review packets, and counts-only queue SLA summaries (#3332).
+- Added paginated point-in-time longitudinal journey views with typed patient,
+  encounter, time, event, status, source, and review filters; complete immutable
+  provenance drill-down; correction-aware state; and a value-free timeline
+  graph (#3333).
+- Added versioned PDF, OCR, image, and DICOM evidence coordinates with
+  invertible rotation, crop, and scale chains; exact source-space round trips;
+  explicit DICOM tag provenance; and typed quarantine behavior (#3334).
+- Added a reproducible four-task Journey specialist pack with pinned low-cost
+  encoder/span recipes, deterministic offline split manifests, a hard shared
+  USD 1,000 GPU ledger, frozen-holdout calibration and failure slices,
+  quantized-delta gates, model cards, and fail-closed promotion fallback
+  (#3329).
+- Added deterministic projection of resolved clinical facts into versioned
+  OMOP 5.4 person, visit, note, condition, drug, procedure, measurement,
+  observation, and source-to-concept tables with explicit concept-0 outcomes,
+  evidence custody, correction-aware replacement, retained ETL lineage,
+  vocabulary-license gates, and split-leakage protection (#3335).
+- Added an optional OMOP 5.4 quality bridge with digest-bound local and
+  caller-injected remote adapters, signed aggregate conformance, completeness,
+  and plausibility reports, typed non-success states, and reproducible
+  reconciliation against a frozen synthetic reference projection (#3336).
+- Added provenance-preserving FHIR R4 round trips for Journey facts and
+  resolution events, byte-stable cohort-definition exchange with snapshot and
+  criterion custody, explicit conversion-loss reports, and an optional
+  digest-bound out-of-process cohort service bridge (#3337).
+- Added immutable saved-cohort definition versions and execution manifests,
+  deterministic point-in-time reruns, four-state membership with criterion and
+  time-window evidence, opaque-key workflow explanations, local append-only
+  persistence, and vocabulary-license boundaries (#3338).
+- Added governed dataset snapshots from saved cohorts and ingestion jobs with
+  deterministic JSONL, annotation, and Parquet artifacts; fail-closed split and
+  distribution gates; license custody; and separately authorized, audited
+  identified exports (#3339).
+- Added content-addressed clinical registry definitions, evidence-bound cases,
+  owner-scoped assignments, non-skippable review and adjudication, correction
+  history, counts-only queue summaries, and policy-bound value-free exports
+  (#3341).
+- Added deterministic native clinical measures and pinned optional CQL/ELM JSON
+  evaluator bridges with explicit population, unknown, error, evidence,
+  value-set, time-window, trace, aggregate-summary, and drift contracts (#3342).
+- Added evidence-bound met, open, not-applicable, and insufficient-data care-gap
+  states with conservative missing-data behavior, mandatory unresolved-input
+  review, immutable corrections, and versioned history (#3343).
+- Added opt-in public clinical-trial metadata synchronization with immutable
+  study versions, source and cache integrity checks, typed drift failures,
+  deterministic incremental updates, and offline metadata queries (#3344).
+- Added deterministic public trial-criteria parsing, local candidate reranking,
+  five-state evidence-bound criterion evaluation, value-free review packets,
+  fail-closed aggregate matching, and a provenance-bound benchmark (#3345).
+- Added opt-in public adverse-event ingestion, report-level PRR and ROR
+  calculations, explicit count suppression, immutable dataset/filter/policy
+  provenance, and separately typed chart-level suspected relations (#3346).
+- Added an evidence-grounded patient and cohort query planner with closed
+  read-only tool calls, bounded SQL guards, snapshot citations, access receipts,
+  explicit abstention states, and inert prompt-injection boundaries (#3347).
+- Added a single versioned Journey resource contract across Python, REST,
+  GraphQL, and bounded read-only SQL, including cursor pagination,
+  namespace/purpose/field policy, typed non-success states, generated schema
+  snapshots, and client parity (#3348).
+- Added deterministic half-open window planning for offline streaming
+  audio, with integer-millisecond offsets, real per-window overlap,
+  keep/merge/drop tail policies, arithmetic window-count bounds, and
+  value-free rejection of boolean, negative and overflowing input (#3005).
+- Added a bounded, dependency-free PDF page geometry preflight that reads the
+  version, page count, and inherited media box, crop box, and rotation for
+  each page, including FlateDecode object streams, and reports numbers and
+  stable reason codes only while rejecting encrypted or over-limit files
+  (#3088).
+- Added a metadata-only image orientation preflight that compares all eight
+  EXIF orientations with declared mirror and rotation transforms and optional
+  dimensions, returning aligned, transform-required, ambiguous, or invalid
+  verdicts with stable reason codes and deterministic JSON (#3090).
+- Added deterministic, privacy-safe diffs of agent run summaries with sorted
+  added and removed workflow identifiers and artifact digests, signed outcome,
+  tool-call, and duration deltas, and byte-stable JSON and Markdown output
+  (#3040).
+- Added offline lifetime and audience validation for agent capability
+  grants, with caller-supplied evaluation instants, symmetric clock-skew
+  tolerance, an optional lifetime ceiling, ordered reason codes, and
+  byte-stable reports that carry no grant payload (#3080).
+- Added PHI-safe categorical error envelopes for agent execution, mapping
+  the documented public failure classes onto stable codes, validated
+  class/stage combinations and derived retryability, with no free-text
+  field and no exception message, argument or traceback retained (#2995).
+- Added a closed allowlist contract for agent event attributes covering
+  correlation and governance identifiers, execution stages, outcome codes,
+  digests, bounded counts, durations and flags, with a distinct
+  sensitive-key refusal that never echoes the submitted key (#2994).
+- Added deterministic page batching for document inference, planning
+  ordered half-open page ranges under page-count and per-batch pixel
+  budgets with reject or isolate oversize policies, exact gap-free
+  partitioning, and value-free bound and overflow checks (#3048).
+- Added bounded classic TIFF header preflight for both byte orders, with an
+  allowlisted first-IFD tag set, overflow-checked counts, offset bounds and
+  cycle detection inside a loaded prefix, value-free errors, and synthetic
+  plus Pillow-written file-level regression tests (#3046).
+- Added immutable local ASR input profiles and a metadata-only
+  compatibility check over privacy-safe WAV headers, returning compatible,
+  resample, downmix, review or incompatible with ordered reason codes and
+  closed, bounded, sorted-unique profile validation (#3050).
+- Added bounded PNG IHDR and JPEG frame-header geometry preflight with
+  CRC and length validation, a marker scan bounded by fill, marker-count
+  and byte budgets, value-free errors, and synthetic plus Pillow-written
+  file-level regression tests (#3008).
+- Added deterministic dependency validation and topological ordering for
+  agent action graphs, with identifier-only nodes, categorical duplicate,
+  dangling, self-edge and cycle findings, and documented lexicographic
+  tie-breaking that makes the order independent of input order (#2996).
+- Added deterministic, metadata-only validation of append-only agent run
+  event sequences with duplicate, gap, ordering, cross-run and
+  post-terminal findings, stable finding order, and byte-stable JSON
+  reports that never accept or echo event payloads (#2997).
+- Added content-free audio format distribution summaries with validated
+  channel, sample-rate, bit-depth, duration-bucket, and format categories,
+  small-cell suppression, and deterministic sorting, with synthetic golden
+  regression tests (#3093).
+- Added content-free frame-sampling manifests for clinical video with strict
+  monotonicity, bounds, declared-strategy validation, and a recomputed coverage
+  digest, with synthetic regression tests (#3092).
+- Added deterministic SPDX identifier normalization for synthetic lineage with a
+  committed permissive allowlist, deprecated-alias mapping, LicenseRef support,
+  and stable unknown and malformed outcomes, with synthetic regression tests
+  (#3120).
+- Added deterministic, allocation-free audio resampling plans with reduced
+  rational rates, floor, nearest-even, and ceiling rounding policies,
+  exact or rounded status, overflow-checked arithmetic, and an optional
+  duration-error tolerance, with synthetic regression tests (#3049).
+- Added allocation-safe image geometry derivation with checked pixel counts,
+  reduced aspect ratios, orientation classes, and overflow-checked optional memory
+  estimates from validated dimensions, with synthetic regression tests (#3047).
+- Added Unicode whitespace regression coverage for vital-sign parsing and fixed the
+  cases it found: non-breaking, narrow, thin, and other Unicode spaces inside labels
+  such as `oxygen saturation` no longer turn a vital sign into `unknown`, and units
+  such as `mm Hg` match their ASCII spelling (#3106).
+- Added `serialize_measurement_trends`, compact JSON for measurement trends that is
+  byte-identical for equivalent input orderings and rejects non-finite derived values,
+  with golden fixtures for ordered, mixed, unknown, and incomparable trends. Points
+  tied on one timepoint are now ordered by value instead of input position (#3107).
+- Added a synthetic local-extension example and documentation page for the
+  status vocabulary, covering an explicit local path, provenance validation,
+  and a duplicate-cue guard (#3108).
+
+### Changed
+
+- Reject non-positive bootstrap sample counts and invalid alpha probabilities before
+  producing a confidence interval.
+- Release an interrupted circuit-breaker recovery probe only when its ownership
+  token still matches, preserving health evidence.
+- Raise typed client errors for unfollowed non-2xx responses, including redirects in
+  JSON and streaming requests.
+- Keep load-test clients connected through final response bodies and count
+  incomplete responses as failures.
+- Align grounding-index recall references, queries and report metadata with the
+  selected vocabulary systems.
+- Grow the dense alias search budget when duplicate aliases would hide available
+  distinct concepts.
+- Allow model loading when optional architecture metadata is absent or empty; retain
+  advisory warnings and normal factory failures.
+- Accept source-aligned literal hash tokens in space-delimited CoNLL rows without
+  displacing ordinary hash comments.
+- Reject non-finite numeric keep-alive durations and conversion overflow while
+  preserving explicit expiry opt-out aliases.
+- Return the result-cache instance selected under the global lock so concurrent
+  capacity changes cannot replace a caller's return value.
+- Preserve already-qualified OpenMed logger names so module-level logging
+  configuration applies without a duplicated openmed namespace.
+- Close newly created Pulsar clients when subscription or adapter setup
+  fails, preserving the setup error and successful caller ownership.
+- Clean up temporary evaluation reports after failed writes, closes, or
+  publication without masking the original error or replacing an existing report.
+- Measure awaited coroutine execution in the profiling decorator, preserving
+  coroutine identity and recording elapsed time on failure or cancellation.
+- Scope shared tokenizer cache entries to loader identity, including bound
+  methods, so different loader implementations cannot share the wrong tokenizer.
+- Canonical span hashes, pipeline audit-record hashes, and trace pseudonyms now
+  use private random HMAC keys by default. Reuse a pipeline or redactor instance,
+  or supply the same non-empty private key, when stable hashes across calls are
+  required. Web and React Native calls also accept explicit keys for this purpose.
+  Empty explicit keys are rejected; redaction labels and offsets are unchanged.
+- GitHub Actions are pinned to immutable commits, enforced by CI, and container
+  publishing permissions are limited to the publish job.
+
 ## [2.5.0] - 2026-09-14
 
 OpenMed 2.5 adds clinical privacy and extraction previews, local privacy
@@ -16,6 +247,22 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, offline SDOH negated-need resolution with
+  determinant-specific assertion scope, value-free provenance, and human
+  review for double-negated, contradictory, and uncertain findings (#2731).
+- Added deterministic, value-free SDOH experiencer classification and patient-level
+  filtering for patient, household, family, and unknown evidence with reviewable
+  offset provenance (#2724).
+- Added duplicate-cue validation for status vocabularies: cues that collide after the
+  existing Unicode, case, and whitespace normalization are rejected on load, both
+  within one status and across statuses, with value-free errors (#3104).
+- Added duplicate and conflicting sense validation for abbreviation inventories: equivalent
+  candidates, short forms that normalize together, and repeated JSON keys now fail on load
+  instead of being silently dropped, and one long form under distinct semantic types is kept
+  as separate alternatives when a local inventory is merged (#3105).
+- Added a functional-status zero-shot NER domain with ADL, assistance, mobility,
+  functional-scale, assistive-device, and cognitive-status labels, synthetic
+  span fixtures, and offline per-label coverage reporting (#911).
 - Added complete detection of bounded German postal-address fields and fragment
   protection inside known clinical phrases, with person-name counterexamples
   and independent mask/remove/replace regression checks.
@@ -26,6 +273,9 @@ there is no intervening v2.4.0 tag. See the
 - Added German clinical context, temporal and quantity extraction regressions,
   memory-streamed Tesseract OCR and PDF reading-order/redaction checks. These
   preview capabilities require independent task and language qualification.
+- Added deterministic schema compatibility evaluation for versioned agent
+  artifacts with closed outcomes, stable reason codes, caller-declared ranges,
+  fail-closed unknown kinds, and strict SemVer 2.0 precedence (#3000).
 - Added bounded BMP CORE/INFO header geometry preflight with explicit limits,
   value-free errors, and synthetic file-level regression tests (#3114).
 - Added bounded GIF logical-screen and bounded global-color-table preflight with explicit limits,
