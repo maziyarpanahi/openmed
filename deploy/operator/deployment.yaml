@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/part-of: openmed
 spec:
   replicas: 1
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 120
   strategy:
     type: Recreate
   selector:
@@ -27,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: operator
-          image: ghcr.io/maziyarpanahi/openmed-operator:v2.3.0
+          image: ghcr.io/maziyarpanahi/openmed-operator:v2.5.0
           imagePullPolicy: IfNotPresent
           command:
             - kopf
@@ -53,6 +55,14 @@ spec:
               port: health
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
