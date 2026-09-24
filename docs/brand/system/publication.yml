@@ -514,6 +514,7 @@ classification:
     - interop/fhir-concurrency.md
     - interop/fhir-transaction-compensation.md
     - interop/fhir-subscription-checkpoints.md
+    - interop/fhir-reference-server-matrix.md
     - interop/smart-scope-audit.md
     - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
