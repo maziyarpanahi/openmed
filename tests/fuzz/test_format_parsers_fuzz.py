@@ -347,6 +347,11 @@ def _execute_target(target_key: str, data: bytes) -> None:
 
 
 def _worker_main(requests: Any, responses: Any) -> None:
+    # Resolve lazy privacy imports and pattern compilation within the bounded
+    # startup phase, so the first email input pays only for parsing its content.
+    from openmed.core.safety_sweep import safety_sweep
+
+    safety_sweep("", [])
     responses.put(("ready", ""))
     while True:
         request = requests.get()
@@ -528,6 +533,19 @@ def test_malformed_email_address_header_does_not_crash_registered_parser() -> No
             worker,
             parser_target,
             b"From: Synthetic Clinic <clinic@",
+        )
+    assert status == "ok"
+
+
+def test_nested_group_email_address_header_does_not_crash_registered_parser() -> None:
+    parser_target = next(
+        target for target in _TARGETS if target.key == "document:eml:.eml"
+    )
+    with _ParserWorker() as worker:
+        status = _assert_no_crash(
+            worker,
+            parser_target,
+            b"From: a:b:;;\r\nTo: x@y.invalid\r\nSubject: s\r\n\r\nbody\r\n",
         )
     assert status == "ok"
 
