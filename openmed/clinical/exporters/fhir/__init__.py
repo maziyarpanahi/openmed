@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from .allergy_intolerance import (
+    ALLERGY_CLINICAL_STATUS_SYSTEM,
+    ALLERGY_VERIFICATION_STATUS_SYSTEM,
+    to_allergy_intolerance,
+)
 from .bundle import to_bundle
 from .codeable_concept import (
     GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
@@ -23,6 +28,7 @@ from .diagnostic_report import (
     DIAGNOSTIC_REPORT_STATUSES,
     to_diagnostic_report,
 )
+from .encounter import ENCOUNTER_CLASS_SYSTEM, to_encounter
 from .exchange import (
     FHIRClinicalExchangeWorkbench,
     FHIRExchange,
@@ -50,6 +56,7 @@ from .facade import (
     FHIRExportSummary,
     to_fhir,
 )
+from .immunization import to_immunization
 from .observation import to_observation
 from .observation_extensions import (
     DEFAULT_OBSERVATION_EXTENSION_RULES,
@@ -109,6 +116,8 @@ from .validate import (
 )
 
 __all__ = [
+    "ALLERGY_CLINICAL_STATUS_SYSTEM",
+    "ALLERGY_VERIFICATION_STATUS_SYSTEM",
     "CONDITION_CLINICAL_SYSTEM",
     "CONDITION_VER_STATUS_SYSTEM",
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
@@ -119,6 +128,7 @@ __all__ = [
     "DIAGNOSTIC_REPORT_FIELDS_R4R5",
     "DIAGNOSTIC_REPORT_STATUS_UNKNOWN",
     "DIAGNOSTIC_REPORT_STATUSES",
+    "ENCOUNTER_CLASS_SYSTEM",
     "FHIR_RESOURCE_TYPES",
     "GROUNDED_CODE_PROVENANCE_EXTENSION_URL",
     "MEDICAL_DEVICE_ASSIST_EXTENSION_URL",
@@ -138,6 +148,9 @@ __all__ = [
     "check_observation_extensions",
     "to_condition",
     "to_diagnostic_report",
+    "to_allergy_intolerance",
+    "to_encounter",
+    "to_immunization",
     "to_observation",
     "to_codeable_concept",
     "to_fhir",

@@ -139,6 +139,55 @@ const (
 	PolicyMinimal  PrivacyPolicy = "minimal"
 )
 
+// DecisionMode selects one bounded fixed-output decision shape.
+type DecisionMode string
+
+// Decision modes accepted by POST /v1/decisions.
+const (
+	DecisionFixedChoice       DecisionMode = "fixed_choice"
+	DecisionBooleanChoice     DecisionMode = "boolean_choice"
+	DecisionOrderedPreference DecisionMode = "ordered_preference"
+	DecisionScalarScore       DecisionMode = "scalar_score"
+	DecisionMultiLabel        DecisionMode = "multi_label"
+)
+
+// DecisionState reports whether a decision succeeded or stopped safely.
+type DecisionState string
+
+const (
+	DecisionSuccess     DecisionState = "success"
+	DecisionAbstained   DecisionState = "abstained"
+	DecisionPartial     DecisionState = "partial"
+	DecisionUnknown     DecisionState = "unknown"
+	DecisionConflict    DecisionState = "conflict"
+	DecisionUnsupported DecisionState = "unsupported"
+	DecisionDenied      DecisionState = "denied"
+	DecisionFailure     DecisionState = "failure"
+)
+
+// JourneyResourceType selects a versioned Journey resource family.
+type JourneyResourceType string
+
+// Journey resource families supported by the versioned read contract.
+const (
+	JourneyArtifact        JourneyResourceType = "artifact"
+	JourneyJob             JourneyResourceType = "job"
+	JourneyFact            JourneyResourceType = "fact"
+	JourneyConflict        JourneyResourceType = "conflict"
+	Journey                JourneyResourceType = "journey"
+	JourneyCohort          JourneyResourceType = "cohort"
+	JourneyDataset         JourneyResourceType = "dataset"
+	JourneyRegistry        JourneyResourceType = "registry"
+	JourneyMeasure         JourneyResourceType = "measure"
+	JourneyTrialReview     JourneyResourceType = "trial_review"
+	JourneyEvidence        JourneyResourceType = "evidence"
+	JourneyCurrentFact     JourneyResourceType = "current_fact"
+	JourneyEvent           JourneyResourceType = "journey_event"
+	JourneyMapping         JourneyResourceType = "mapping"
+	JourneyCohortRun       JourneyResourceType = "cohort_run"
+	JourneyDatasetManifest JourneyResourceType = "dataset_manifest"
+)
+
 // JobStatus enumerates the lifecycle states of a de-identification job.
 type JobStatus string
 
@@ -260,6 +309,19 @@ type PrivacyGatewayRequest struct {
 	KeepAlive                  any           `json:"keep_alive,omitempty"`
 }
 
+// FixedOptionDecisionRequest is the request body for POST /v1/decisions.
+type FixedOptionDecisionRequest struct {
+	Mode                DecisionMode `json:"mode"`
+	InputText           string       `json:"input_text"`
+	Options             []string     `json:"options,omitempty"`
+	Namespace           string       `json:"namespace,omitempty"`
+	Purpose             string       `json:"purpose,omitempty"`
+	CalibrationID       string       `json:"calibration_id,omitempty"`
+	TimeoutMS           int          `json:"timeout_ms,omitempty"`
+	SchemaVersion       string       `json:"schema_version,omitempty"`
+	CompatibilityPolicy string       `json:"compatibility_policy,omitempty"`
+}
+
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
 type PIIExtractStreamSpan struct {
 	ID        string  `json:"id"`
@@ -369,9 +431,11 @@ type SMARTBackendIngestionRequest struct {
 // newline-delimited grounded note records and the response is a PHI-free load
 // summary.
 type OMOPLoadRequest struct {
-	RecordsJSONL        string `json:"records_jsonl"`
-	VocabularyVersion   string `json:"vocabulary_version,omitempty"`
-	ValidateConstraints bool   `json:"validate_constraints,omitempty"`
+	RecordsJSONL        string   `json:"records_jsonl"`
+	VocabularyVersion   string   `json:"vocabulary_version,omitempty"`
+	ValidateConstraints bool     `json:"validate_constraints,omitempty"`
+	CompletenessFloor   *float64 `json:"completeness_floor,omitempty"`
+	RequiredFields      []string `json:"required_fields,omitempty"`
 }
 
 // ConceptAncestorRequest is one caller-supplied Athena hierarchy edge.
@@ -382,9 +446,19 @@ type ConceptAncestorRequest struct {
 
 // CohortResolveRequest is the request body for POST /cohort/resolve.
 type CohortResolveRequest struct {
-	Phenotype        JSONObject               `json:"phenotype"`
-	RecordsJSONL     string                   `json:"records_jsonl"`
-	ConceptAncestors []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
+	Phenotype         JSONObject               `json:"phenotype"`
+	RecordsJSONL      string                   `json:"records_jsonl"`
+	ConceptAncestors  []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
+	CompletenessFloor *float64                 `json:"completeness_floor,omitempty"`
+	RequiredFields    []string                 `json:"required_fields,omitempty"`
+}
+
+// ProfileRequest is the request body for POST /profile.
+type ProfileRequest struct {
+	RecordsJSONL      string     `json:"records_jsonl"`
+	CompletenessFloor float64    `json:"completeness_floor,omitempty"`
+	RequiredFields    []string   `json:"required_fields,omitempty"`
+	AthenaIndex       JSONObject `json:"athena_index,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -417,6 +491,9 @@ type AnalyzeResponse = PredictionResult
 
 // GroundResponse is the open grounding result returned by /ground.
 type GroundResponse = JSONObject
+
+// ProfileResponse is the structured quality report returned by /profile.
+type ProfileResponse = JSONObject
 
 // PIIExtractResponse is returned by /pii/extract.
 type PIIExtractResponse = PredictionResult
@@ -466,6 +543,38 @@ type PrivacyGatewayResponse struct {
 		RecordHash string `json:"record_hash"`
 		Verified   bool   `json:"verified"`
 	} `json:"audit"`
+}
+
+// DecisionOptionScore preserves a caller option's original position and score.
+type DecisionOptionScore struct {
+	Index  int     `json:"index"`
+	Option string  `json:"option"`
+	Score  float64 `json:"score"`
+}
+
+// FixedOptionDecisionResult is the calibrated, explicitly review-only result
+// returned by POST /v1/decisions.
+type FixedOptionDecisionResult struct {
+	Mode                DecisionMode          `json:"mode"`
+	State               DecisionState         `json:"state"`
+	Code                *string               `json:"code"`
+	OptionScores        []DecisionOptionScore `json:"option_scores"`
+	Choice              *string               `json:"choice"`
+	Choices             []string              `json:"choices"`
+	Ranking             []string              `json:"ranking"`
+	ScalarScore         *float64              `json:"scalar_score"`
+	Confidence          *float64              `json:"confidence"`
+	Margin              *float64              `json:"margin"`
+	Calibration         JSONObject            `json:"calibration"`
+	Backend             JSONObject            `json:"backend"`
+	Access              JSONObject            `json:"access"`
+	Warnings            []string              `json:"warnings"`
+	Review              JSONObject            `json:"review"`
+	Advisory            string                `json:"advisory"`
+	AutonomousAction    bool                  `json:"autonomous_action"`
+	SchemaVersion       string                `json:"schema_version"`
+	CompatibilityPolicy string                `json:"compatibility_policy"`
+	Extensions          JSONObject            `json:"extensions"`
 }
 
 // HealthResponse is returned by /health.
@@ -660,6 +769,53 @@ type CohortResolveResponse struct {
 	PatientIDs    []int64                 `json:"patient_ids"`
 	Evidence      []CohortPatientEvidence `json:"evidence"`
 	Provenance    JSONObject              `json:"provenance"`
+}
+
+// JourneyResourceQuery selects one bounded, policy-aware resource page.
+type JourneyResourceQuery struct {
+	ResourceType JourneyResourceType
+	Namespace    string
+	Purpose      string
+	First        int
+	After        string
+	Fields       []string
+}
+
+// JourneyResource is one versioned, field-filtered read model.
+type JourneyResource struct {
+	ResourceType        JourneyResourceType `json:"resource_type"`
+	ResourceID          string              `json:"resource_id"`
+	Namespace           string              `json:"namespace"`
+	Data                JSONObject          `json:"data"`
+	State               string              `json:"state"`
+	Version             int                 `json:"version"`
+	Revision            int                 `json:"revision"`
+	SchemaVersion       string              `json:"schema_version"`
+	CompatibilityPolicy string              `json:"compatibility_policy"`
+	Extensions          JSONObject          `json:"extensions"`
+}
+
+// JourneyResourcePage is the cross-surface bounded list response.
+type JourneyResourcePage struct {
+	State     string            `json:"state"`
+	Code      *string           `json:"code"`
+	Resources []JourneyResource `json:"resources"`
+	PageInfo  struct {
+		HasNextPage    bool    `json:"has_next_page"`
+		EndCursor      *string `json:"end_cursor"`
+		PageSize       int     `json:"page_size"`
+		SnapshotDigest string  `json:"snapshot_digest"`
+	} `json:"page_info"`
+	Policy struct {
+		State         string   `json:"state"`
+		Namespace     string   `json:"namespace"`
+		Purpose       string   `json:"purpose"`
+		AllowedFields []string `json:"allowed_fields"`
+		Code          *string  `json:"code"`
+		PolicyVersion string   `json:"policy_version"`
+	} `json:"policy"`
+	SchemaVersion       string `json:"schema_version"`
+	CompatibilityPolicy string `json:"compatibility_policy"`
 }
 
 // ---------------------------------------------------------------------------
@@ -1117,6 +1273,15 @@ func (c *Client) PrivacyGateway(ctx context.Context, req PrivacyGatewayRequest) 
 	return &out, nil
 }
 
+// Decision calls POST /v1/decisions.
+func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (*FixedOptionDecisionResult, error) {
+	var out FixedOptionDecisionResult
+	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Health calls GET /health.
 func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 	var out HealthResponse
@@ -1160,6 +1325,37 @@ func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error
 	return &out, nil
 }
 
+// JourneyResources calls GET /v1/journey/resources.
+func (c *Client) JourneyResources(ctx context.Context, query JourneyResourceQuery) (*JourneyResourcePage, error) {
+	parameters := url.Values{}
+	parameters.Set("resource_type", string(query.ResourceType))
+	if query.Namespace == "" {
+		query.Namespace = "default"
+	}
+	if query.Purpose == "" {
+		query.Purpose = "care_review"
+	}
+	if query.First == 0 {
+		query.First = 20
+	}
+	parameters.Set("namespace", query.Namespace)
+	parameters.Set("purpose", query.Purpose)
+	parameters.Set("first", fmt.Sprintf("%d", query.First))
+	if query.After != "" {
+		parameters.Set("after", query.After)
+	}
+	if len(query.Fields) > 0 {
+		parameters.Set("fields", strings.Join(query.Fields, ","))
+	}
+	path := "/v1/journey/resources"
+	path += "?" + parameters.Encode()
+	var out JourneyResourcePage
+	if err := c.get(ctx, path, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // UnloadModels calls POST /models/unload.
 func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*ModelUnloadResponse, error) {
 	body, err := c.raw(ctx, http.MethodPost, "/models/unload", req)
@@ -1180,6 +1376,15 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
 	var out OMOPLoadResponse
 	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Profile calls POST /profile and returns the PHI-free quality report.
+func (c *Client) Profile(ctx context.Context, req ProfileRequest) (*ProfileResponse, error) {
+	var out ProfileResponse
+	if err := c.post(ctx, "/profile", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

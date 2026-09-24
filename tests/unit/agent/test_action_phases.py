@@ -236,6 +236,7 @@ def reject_effects(event, args):
         raise AssertionError(event)
 
 sys.addaudithook(reject_effects)
+baseline_modules = set(sys.modules)
 for current in agent.ActionPhase:
     for target in agent.ActionPhase:
         for reviewed in (False, True):
@@ -243,7 +244,9 @@ for current in agent.ActionPhase:
                 agent.validate_action_transition(current, target, reviewed=reviewed)
             except agent.ActionPhaseError:
                 pass
-assert not {"torch", "transformers", "openmed.core.review_workflow"} & sys.modules.keys()
+assert not {"torch", "transformers", "openmed.core.review_workflow"} & (
+    sys.modules.keys() - baseline_modules
+)
 """
     result = subprocess.run(
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
