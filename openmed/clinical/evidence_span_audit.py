@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
@@ -34,6 +35,7 @@ class OverlapKind(str, Enum):
 
 OVERLAP_KINDS: tuple[str, ...] = tuple(kind.value for kind in OverlapKind)
 _OVERLAP_KIND_ORDER = {kind: index for index, kind in enumerate(OVERLAP_KINDS)}
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _canonical_json(value: Any) -> str:
@@ -57,9 +59,14 @@ def _fingerprint(value: Any) -> str:
 def _identifier(value: object, field_name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a non-empty string")
-    if not value.strip():
+    normalized = value.strip()
+    if not normalized:
         raise ValueError(f"{field_name} must be a non-empty string")
-    return value
+    # Caller-provided IDs can contain patient values. Hash them before they
+    # enter records, reports, or repr output, while keeping revalidation stable.
+    if _DIGEST_RE.fullmatch(normalized):
+        return normalized
+    return f"sha256:{hashlib.sha256(normalized.encode('utf-8')).hexdigest()}"
 
 
 def _offset(value: object, field_name: str) -> int:

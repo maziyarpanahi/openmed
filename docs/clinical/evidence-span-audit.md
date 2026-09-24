@@ -32,9 +32,9 @@ report.counts
 Mappings may use `source_id`/`source`/`document_id`/`doc_id`,
 `evidence_id`/`span_id`/`id`, and `start`/`start_offset` plus
 `end`/`end_offset` (or the `start_char`/`end_char` aliases). Identifier values
-are preserved exactly; all-whitespace identifiers and zero-length ranges are
-rejected. Extra fields are ignored, so source text is never copied into the
-audit result.
+are converted to deterministic SHA-256 identifiers before storage; all-whitespace
+identifiers and zero-length ranges are rejected. Extra fields are ignored, so
+source text is never copied into the audit result.
 
 ## Classifications
 
