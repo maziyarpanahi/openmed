@@ -52,7 +52,8 @@ _TIMEX_TYPES = frozenset({"DATE", "TIME", "DURATION", "SET"})
 _TEMPORAL_ATOM_RE = re.compile(
     r"(?:\d{4}(?:-\d{2}(?:-\d{2})?)?"
     r"(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?"
-    r"|P(?:\d+(?:\.\d+)?[YMWDHS]|T)+|\.\.)"
+    r"|P(?:(?:\d+(?:\.\d+)?[YMWD])+(?:T(?:\d+(?:\.\d+)?[HMS])+)?)"
+    r"|PT(?:\d+(?:\.\d+)?[HMS])+|\.\.)"
 )
 
 
@@ -839,8 +840,25 @@ def _normalize_temporal_value(value: Any) -> str | None:
     normalized = value.strip()
     if not normalized:
         raise ValueError("temporal value must not be empty")
-    if not all(_TEMPORAL_ATOM_RE.fullmatch(part) for part in normalized.split("/")):
-        raise ValueError("temporal value must use a normalized date or duration")
+    for part in normalized.split("/"):
+        if _TEMPORAL_ATOM_RE.fullmatch(part) is None:
+            raise ValueError("temporal value must use a normalized date or duration")
+        if part.startswith("P") or part == "..":
+            continue
+        try:
+            if "T" in part:
+                datetime.fromisoformat(part.replace("Z", "+00:00"))
+            elif len(part) == 10:
+                date.fromisoformat(part)
+            elif len(part) == 7:
+                if not 1 <= int(part[5:]) <= 12:
+                    raise ValueError
+            elif int(part) < 1:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError(
+                "temporal value must use a normalized date or duration"
+            ) from exc
     return normalized
 
 

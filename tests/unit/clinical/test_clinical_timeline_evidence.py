@@ -160,6 +160,15 @@ def test_temporal_evidence_rejects_source_text_without_echoing_it() -> None:
     assert private_text not in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["2026-02-30", "2026-13", "2026-06-31T12:00", "P", "PT"],
+)
+def test_temporal_evidence_rejects_invalid_normalized_values(value: str) -> None:
+    with pytest.raises(ValueError, match="normalized date or duration"):
+        TimelineEvidence(start=0, end=5, normalized_value=value)
+
+
 def test_before_after_cycle_is_rejected_without_echoing_event_values() -> None:
     events = [
         {"id": "event-a", "type": "procedure", "start": 0, "end": 1},
