@@ -16,7 +16,10 @@ Source values belong in the protected fields (`protected_text`, or the
 Markdown output contains only a `source_hash` and a
 `protected_text_available` flag. Citation excerpts and quotes follow the same
 policy. Gate details are limited to structured values and omit free-form source
-fields.
+fields. Unstructured identifiers, labels, citation titles and publication
+details, uncertainty labels, statuses, and reason codes are represented by
+stable hashes in default output. Use categorical codes and opaque identifiers
+for fields that must remain readable in a saved review report.
 
 ```python
 from openmed.clinical import (

@@ -10,6 +10,7 @@ from openmed.clinical import (
     ReviewCitation,
     ReviewFinding,
     ReviewGateResult,
+    ReviewPacket,
     build_review_packet,
     render_review_packet,
 )
@@ -226,3 +227,51 @@ def test_typed_records_do_not_echo_protected_values_in_repr_or_gate_reason():
     assert SYNTHETIC_PROTECTED_VALUE not in gate.to_dict().__repr__()
     assert gate.reason == "provided"
     assert gate.reason_hash is not None
+
+
+def test_unstructured_metadata_cannot_bypass_default_protected_text_boundary():
+    private_value = "SYNTHETIC_PRIVATE_SOURCE_VALUE"
+    packet = build_review_packet(
+        findings=[
+            ReviewFinding(
+                finding_id=private_value,
+                label=private_value,
+                status=private_value,
+                uncertainty=private_value,
+                citation_ids=(private_value,),
+                source_hash=private_value,
+                attributes={private_value: 1},
+            )
+        ],
+        citations=[
+            ReviewCitation(
+                citation_id=private_value,
+                source=private_value,
+                locator=private_value,
+                title=private_value,
+                published=private_value,
+                source_hash=private_value,
+                metadata={private_value: 2},
+            )
+        ],
+        gates=[
+            ReviewGateResult(
+                gate_id=private_value,
+                passed=False,
+                severity=private_value,
+                reason=f"review_{private_value}",
+                reason_hash=private_value,
+                citation_ids=(private_value,),
+                details={private_value: 3},
+            )
+        ],
+    )
+
+    assert private_value.casefold() not in packet.to_json().casefold()
+    assert private_value.casefold() not in packet.to_markdown().casefold()
+    assert private_value.casefold() not in repr(packet).casefold()
+
+    with pytest.raises(ValueError, match="schema version"):
+        ReviewPacket(schema_version=private_value)
+    with pytest.raises(ValueError, match="advisory"):
+        ReviewPacket(advisory=private_value)

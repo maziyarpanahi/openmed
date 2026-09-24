@@ -67,6 +67,7 @@ _FREE_TEXT_FIELD_NAMES = frozenset(
     }
 )
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SAFE_REASON_RE = re.compile(r"^[a-z0-9][a-z0-9_.:/-]{0,79}$")
 _SAFE_STATUS_RE = re.compile(r"^[a-z0-9][a-z0-9_.:/-]{0,63}$")
 _SAFE_METADATA_VALUE_RE = re.compile(r"^[a-z0-9][a-z0-9_.:/-]{0,127}$")
@@ -75,6 +76,8 @@ _STRUCTURED_METADATA_FIELDS = frozenset(
         "category",
         "class",
         "code",
+        "confidence",
+        "count",
         "direction",
         "format",
         "identifier",
@@ -87,7 +90,9 @@ _STRUCTURED_METADATA_FIELDS = frozenset(
         "mode",
         "name",
         "policy",
+        "priority",
         "reason_code",
+        "score",
         "severity",
         "source",
         "stage",
@@ -98,29 +103,43 @@ _STRUCTURED_METADATA_FIELDS = frozenset(
         "version",
     }
 )
-_SAFE_REASON_PREFIXES = (
-    "blocked",
-    "error",
-    "failed",
-    "gate",
-    "high",
-    "insufficient",
-    "invalid",
-    "low",
-    "missing",
-    "no_",
-    "not_",
-    "ok",
-    "passed",
-    "policy",
-    "ready",
-    "requires",
-    "review",
-    "threshold",
-    "uncertain",
-    "unavailable",
-    "unsupported",
-    "valid",
+_SAFE_REASON_CODES = frozenset(
+    {
+        "blocked",
+        "failed",
+        "ok",
+        "passed",
+        "provided",
+        "protected",
+        "requires_review",
+        "review_required",
+        "unspecified",
+    }
+)
+_SAFE_STATUS_CODES = frozenset(
+    {
+        "approved",
+        "blocked",
+        "blocking",
+        "critical",
+        "deferred",
+        "error",
+        "failed",
+        "high",
+        "info",
+        "low",
+        "needs_review",
+        "not_evaluated",
+        "normal",
+        "passed",
+        "ready_for_review",
+        "rejected",
+        "review_required",
+        "uncertain",
+        "unknown",
+        "unsupported",
+        "warning",
+    }
 )
 
 
@@ -146,9 +165,34 @@ def _safe_identifier(value: object, *, field_name: str) -> str:
     normalized = _normalize_text(value)
     if not normalized:
         raise ValueError(f"{field_name} must be a non-empty string")
-    if len(normalized) > 128:
+    if (
+        len(normalized) > 128
+        or normalized != normalized.casefold()
+        or not _IDENTIFIER_RE.fullmatch(normalized)
+    ):
         return f"identifier:{hash_text(normalized)}"
     return normalized
+
+
+def _safe_digest(value: object, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string or None")
+    normalized = value.strip().lower()
+    return normalized if _DIGEST_RE.fullmatch(normalized) else hash_text(value)
+
+
+def _safe_reference_detail(value: object, *, field_name: str) -> str | None:
+    normalized = _optional_text(value, field_name=field_name)
+    if normalized is None:
+        return None
+    if (
+        field_name == "locator"
+        and normalized == normalized.casefold()
+        and _IDENTIFIER_RE.fullmatch(normalized)
+        and normalized.startswith(("section-", "page-", "span-", "offset-"))
+    ):
+        return normalized
+    return f"hash:{hash_text(normalized)}"
 
 
 def _optional_text(value: object, *, field_name: str) -> str | None:
@@ -256,7 +300,10 @@ def _sanitize_metadata(
                 )
             ):
                 continue
-            if not _IDENTIFIER_RE.fullmatch(key):
+            if (
+                not _IDENTIFIER_RE.fullmatch(key)
+                or normalized_key not in _STRUCTURED_METADATA_FIELDS
+            ):
                 continue
             item = _sanitize_metadata(
                 raw_item,
@@ -369,10 +416,7 @@ def _safe_reason(
         return "unspecified", None
     if _contains_protected(normalized, protected_values):
         return "protected", hash_text(normalized)
-    if _SAFE_REASON_RE.fullmatch(normalized) and (
-        normalized.startswith(_SAFE_REASON_PREFIXES)
-        or normalized in {"ok", "provided", "protected", "unspecified"}
-    ):
+    if _SAFE_REASON_RE.fullmatch(normalized) and normalized in _SAFE_REASON_CODES:
         return normalized, None
     return "provided", hash_text(normalized)
 
@@ -388,7 +432,7 @@ def _safe_status(
     normalized = _normalize_text(value).casefold().replace(" ", "_")
     if _contains_protected(normalized, protected_values):
         return "protected"
-    if _SAFE_STATUS_RE.fullmatch(normalized):
+    if _SAFE_STATUS_RE.fullmatch(normalized) and normalized in _SAFE_STATUS_CODES:
         return normalized
     return f"status:{hash_text(normalized)}"
 
@@ -404,7 +448,11 @@ def _safe_label(
     normalized = _normalize_text(value)
     if _contains_protected(normalized, protected_values):
         return f"label:{hash_text(normalized)}"
-    if len(normalized) > 128:
+    if (
+        len(normalized) > 128
+        or normalized != normalized.casefold()
+        or not _SAFE_METADATA_VALUE_RE.fullmatch(normalized)
+    ):
         return f"label:{hash_text(normalized)}"
     return normalized
 
@@ -474,7 +522,11 @@ class ReviewFinding:
                 None
                 if isinstance(self.uncertainty, str)
                 and _contains_protected(self.uncertainty, protected_values)
-                else _optional_text(self.uncertainty, field_name="uncertainty")
+                else (
+                    _safe_status(self.uncertainty, default="unknown")
+                    if self.uncertainty is not None
+                    else None
+                )
             ),
         )
         object.__setattr__(
@@ -501,8 +553,12 @@ class ReviewFinding:
         object.__setattr__(self, "source_end", offset[1] if offset else None)
         if self.source_hash is None:
             object.__setattr__(self, "source_hash", _protected_hash(protected))
-        elif not isinstance(self.source_hash, str) or not self.source_hash.strip():
-            raise ValueError("source_hash must be a non-empty string or None")
+        else:
+            object.__setattr__(
+                self,
+                "source_hash",
+                _safe_digest(self.source_hash, field_name="source_hash"),
+            )
         safe_attributes = _sanitize_metadata(
             self.attributes,
             protected_values=protected_values,
@@ -601,7 +657,7 @@ class ReviewCitation:
             object.__setattr__(
                 self,
                 field_name,
-                _optional_text(field_value, field_name=field_name),
+                _safe_reference_detail(field_value, field_name=field_name),
             )
         relevance = _optional_finite_float(self.relevance, field_name="relevance")
         if relevance is not None and not 0.0 <= relevance <= 1.0:
@@ -610,8 +666,12 @@ class ReviewCitation:
 
         if self.source_hash is None:
             object.__setattr__(self, "source_hash", _protected_hash(protected))
-        elif not isinstance(self.source_hash, str) or not self.source_hash.strip():
-            raise ValueError("source_hash must be a non-empty string or None")
+        else:
+            object.__setattr__(
+                self,
+                "source_hash",
+                _safe_digest(self.source_hash, field_name="source_hash"),
+            )
         safe_metadata = _sanitize_metadata(
             self.metadata,
             protected_values=protected_values,
@@ -681,8 +741,12 @@ class ReviewGateResult:
         object.__setattr__(self, "reason", reason)
         if self.reason_hash is None:
             object.__setattr__(self, "reason_hash", generated_hash)
-        elif not isinstance(self.reason_hash, str) or not self.reason_hash.strip():
-            raise ValueError("reason_hash must be a non-empty string or None")
+        else:
+            object.__setattr__(
+                self,
+                "reason_hash",
+                _safe_digest(self.reason_hash, field_name="reason_hash"),
+            )
         if not isinstance(self.blocking, bool):
             raise ValueError("blocking must be a boolean")
         object.__setattr__(
@@ -783,10 +847,10 @@ class ReviewPacket:
         object.__setattr__(self, "findings", findings)
         object.__setattr__(self, "citations", citations)
         object.__setattr__(self, "gate_results", gates)
-        if not isinstance(self.schema_version, str) or not self.schema_version.strip():
-            raise ValueError("schema_version must be a non-empty string")
-        object.__setattr__(self, "schema_version", _normalize_text(self.schema_version))
-        object.__setattr__(self, "advisory", _normalize_text(self.advisory))
+        if self.schema_version != REVIEW_PACKET_SCHEMA_VERSION:
+            raise ValueError("unsupported review packet schema version")
+        if self.advisory != REVIEW_PACKET_ADVISORY:
+            raise ValueError("unsupported review packet advisory")
         review_status = self.review_status or _derive_review_status(gates)
         object.__setattr__(
             self, "review_status", _safe_status(review_status, default="not_evaluated")
