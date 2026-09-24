@@ -232,6 +232,7 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/nli-temporal-pairs.md
+    - clinical/sdoh-temporal-qualifiers.md
     - clinical/medication-reconciliation.md
     - clinical/nli-numeric-precheck.md
     - clinical/nli-medication-status.md
@@ -258,9 +259,16 @@ classification:
     - clinical/summary-safety.md
     - clinical/summary-citations.md
     - evaluation/summary-coverage.md
+    - clinical/sdoh-section-scope.md
+    - clinical/sdoh-evidence-deduplication.md
+    - clinical/sdoh-longitudinal-resolution.md
+    - clinical/sdoh-sensitive-use-labels.md
+    - clinical/sdoh-review-routing.md
+    - clinical/sdoh-category-completeness.md
     - clinical/review-override-reasons.md
     - clinical/review-packet-privacy.md
     - clinical/review-packet-migrations.md
+    - clinical/evidence-recency-labels.md
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
@@ -355,14 +363,19 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
+    - clinical/nli-batch-planning.md
+    - clinical/sdoh-experiencer-filtering.md
+    - clinical/sdoh-negated-needs.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
+    - clinical/nli-cascade.md
     - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - runtimes/gguf-grounding.md
@@ -372,6 +385,8 @@ classification:
     - export-gguf.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
+    - service/outbound-privacy-filter.md
+    - clinical/sdoh-evidence.md
     - clinical/note-routing.md
     - clinical/radiology-profile.md
     - clinical/pathology-profile.md
