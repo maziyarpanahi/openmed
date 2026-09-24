@@ -85,4 +85,5 @@ def test_pages_schedule_runs_control_renderer_and_public_deployment() -> None:
     assert "scripts/status/generate_nightly_control.py" in workflow
     assert "scripts/status/generate_status.py" in workflow
     assert "--nightly-report docs/status/evidence/nightly-control.json" in workflow
+    assert "if: always() && github.event_name != 'schedule'" in workflow
     assert "actions/deploy-pages@" in workflow

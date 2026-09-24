@@ -109,6 +109,7 @@ jobs:
             uv run --frozen python scripts/docs/stage_pages.py
           fi
       - name: Setup Node for browser validation
+        if: github.event_name != 'schedule'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
@@ -117,12 +118,15 @@ jobs:
             js/openmedkit-web/package-lock.json
             tests/browser/brand/package-lock.json
       - name: Build and validate the browser runtime
+        if: github.event_name != 'schedule'
         run: |
           npm ci --prefix js/openmedkit-web
           npm --prefix js/openmedkit-web test
       - name: Install pinned browser test dependencies
+        if: github.event_name != 'schedule'
         run: npm ci --prefix tests/browser/brand
       - name: Validate browser behavior, accessibility, and representative visuals
+        if: github.event_name != 'schedule'
         run: |
           docker run --rm --ipc=host \
             --user "$(id -u):$(id -g)" \
@@ -132,7 +136,7 @@ jobs:
             mcr.microsoft.com/playwright:v1.62.0-noble@sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471 \
             /bin/bash -lc "npm --prefix tests/browser/brand test"
       - name: Upload browser validation evidence
-        if: always()
+        if: always() && github.event_name != 'schedule'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pages-browser-evidence

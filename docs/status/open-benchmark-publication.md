@@ -100,6 +100,9 @@ control report, then calls the same `scripts/status/generate_status.py` renderer
 used locally. The generated report JSON, status page, and leaderboard are staged
 in the Pages artifact and deployed together. Push deployments refresh the
 control report as well, after the documentation checks pass.
+Browser validation and its 14-day evidence upload remain on PR and push runs;
+the nightly status refresh skips those steps so it creates no new browser
+evidence storage.
 
 The control is a deterministic detector that emits no spans over committed
 Apache-2.0 synthetic golden fixtures. It verifies harness execution and
