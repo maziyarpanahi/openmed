@@ -2268,6 +2268,30 @@ def run_suite(
 ) -> BenchmarkReport | RelationScorecard:
     """Load fixtures, run the benchmark, and optionally write reports."""
 
+    if suite == "temporal_consistency":
+        from openmed.eval.suites.temporal_consistency import (
+            run_temporal_consistency_suite,
+        )
+
+        resolver = None
+        if runner is not None:
+
+            def resolver(fixture: Any) -> Any:
+                return runner(fixture, model_name, device)
+
+        report = run_temporal_consistency_suite(
+            path=fixture_path,
+            model_name=model_name,
+            device=device,
+            resolver=resolver,
+            generated_at=generated_at,
+        )
+        if output_json is not None:
+            report.write_json(output_json)
+        if output_markdown is not None:
+            report.write_markdown(output_markdown)
+        return report
+
     if _is_relation_suite(suite):
         if runner is None:
             raise ValueError("relation suite requires an explicit relation runner")
