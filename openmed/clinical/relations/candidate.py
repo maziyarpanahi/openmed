@@ -93,6 +93,7 @@ class SpanReference:
     score: float
     section: str | None = None
     derived: bool = False
+    text_hash: str | None = None
 
     @classmethod
     def from_entity(
@@ -123,16 +124,39 @@ class SpanReference:
 
         return self.start, self.end
 
+    def privacy_safe(self) -> "SpanReference":
+        """Return an offset-and-hash snapshot without the source surface."""
+
+        text_hash = self.text_hash
+        if text_hash is None:
+            digest_input = (
+                f"{self.label}\0{self.start}\0{self.end}\0{self.text}".encode("utf-8")
+            )
+            text_hash = f"sha256:{hashlib.sha256(digest_input).hexdigest()}"
+        return SpanReference(
+            text="",
+            label=self.label,
+            start=self.start,
+            end=self.end,
+            score=self.score,
+            section=self.section,
+            derived=self.derived,
+            text_hash=text_hash,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic dictionary representation."""
 
         payload: dict[str, Any] = {
-            "text": self.text,
             "label": self.label,
             "start": self.start,
             "end": self.end,
             "score": self.score,
         }
+        if self.text:
+            payload["text"] = self.text
+        if self.text_hash is not None:
+            payload["text_hash"] = self.text_hash
         if self.section is not None:
             payload["section"] = self.section
         if self.derived:
@@ -536,6 +560,207 @@ def build_relation_candidates(
     )
 
 
+_MEDICATION_HEAD_LABELS = frozenset(
+    {"DRUG", "MEDICATION", "CHEMICAL", "SIMPLE_CHEMICAL"}
+)
+_PROBLEM_HEAD_LABELS = frozenset(
+    {
+        "ADE",
+        "ADVERSE_EVENT",
+        "CONDITION",
+        "DIAGNOSIS",
+        "DISEASE",
+        "PROBLEM",
+        "SIGN_SYMPTOM",
+        "SYMPTOM",
+    }
+)
+_LAB_HEAD_LABELS = frozenset({"LAB", "LAB_TEST", "TEST"})
+_MEDICATION_TAIL_RELATIONS = {
+    "DOSAGE": DRUG_TO_DOSE,
+    "DOSE": DRUG_TO_DOSE,
+    "DURATION": DRUG_TO_DURATION,
+    "FORM": DRUG_TO_FORM,
+    "FREQUENCY": DRUG_TO_FREQUENCY,
+    "INDICATION": DRUG_TO_INDICATION,
+    "ROUTE": DRUG_TO_ROUTE,
+    "STRENGTH": DRUG_TO_STRENGTH,
+}
+_PROBLEM_TAIL_RELATIONS = {
+    "BODY_SITE": "problem_to_body_site",
+    "SEVERITY": "problem_to_severity",
+    "STATUS": "problem_to_status",
+}
+_LAB_TAIL_RELATIONS = {
+    "ABNORMAL_FLAG": "lab_to_abnormal_flag",
+    "LAB_VALUE": "lab_to_value",
+    "REFERENCE_RANGE": "lab_to_reference_range",
+    "UNIT": "lab_to_unit",
+}
+
+
+def generate_relation_candidates(
+    text: str,
+    spans: Iterable[Any],
+    *,
+    max_window: int = 1,
+    max_pairs: int = 10_000,
+    allow_adjacent_sections: bool = True,
+) -> tuple["RelationCandidate", ...]:
+    """Enumerate bounded, privacy-safe clinical entity-pair candidates.
+
+    Medication heads are paired with regimen attributes and problem tails,
+    problem heads with problem attributes, and lab-test heads with result
+    attributes. Pairing is bounded by sentence distance and section position.
+    The returned span snapshots contain source offsets and stable hashes but no
+    note surface text, making them safe to pass to downstream relation heads.
+
+    Args:
+        text: Original clinical note indexed by every input span.
+        spans: Medication, problem, lab, or attribute spans with offsets.
+        max_window: Maximum sentence-index distance between pair endpoints.
+        max_pairs: Hard output cap applied after deterministic ordering.
+        allow_adjacent_sections: Permit pairs in immediately adjacent sections.
+
+    Returns:
+        Candidates ordered by head offset, tail offset, and relation type.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if max_window < 0:
+        raise ValueError("max_window must be non-negative")
+    if max_pairs < 0:
+        raise ValueError("max_pairs must be non-negative")
+    if max_pairs == 0:
+        return ()
+
+    references = _coerce_relation_spans(text, spans)
+    if len(references) < 2:
+        return ()
+    sentence_offsets = split_sentence_offsets(text)
+    section_positions = _candidate_section_positions(text, references)
+    candidates: list[RelationCandidate] = []
+
+    for head in references:
+        relation_by_tail_label = _candidate_relations_for_head(head.label)
+        if relation_by_tail_label is None:
+            continue
+        head_sentence = _sentence_index_for_span(sentence_offsets, head)
+        head_section = section_positions[head.offset_key()]
+        for tail in references:
+            if head.offset_key() == tail.offset_key():
+                continue
+            relation_type = _candidate_relation_type(
+                head.label,
+                tail.label,
+                relation_by_tail_label,
+            )
+            if relation_type is None:
+                continue
+            tail_sentence = _sentence_index_for_span(sentence_offsets, tail)
+            sentence_distance = abs(head_sentence - tail_sentence)
+            if sentence_distance > max_window:
+                continue
+            tail_section = section_positions[tail.offset_key()]
+            section_distance = abs(head_section - tail_section)
+            if section_distance > int(allow_adjacent_sections):
+                continue
+            character_distance = _character_distance(head, tail)
+            proximity = 1.0 / (1.0 + float(character_distance))
+            candidates.append(
+                RelationCandidate(
+                    relation_type=relation_type,
+                    head=head.privacy_safe(),
+                    attribute=tail.privacy_safe(),
+                    score=round(proximity, 6),
+                    confidence=round(proximity, 6),
+                    features={
+                        "adjacent_section": float(section_distance == 1),
+                        "cooccurrence_distance": float(character_distance),
+                        "same_section": float(section_distance == 0),
+                        "section_distance": float(section_distance),
+                        "sentence_distance": float(sentence_distance),
+                    },
+                    explanation=("bounded_entity_pair",),
+                )
+            )
+
+    ordered = sorted(
+        candidates,
+        key=lambda candidate: (
+            candidate.head.start,
+            candidate.head.end,
+            candidate.tail.start,
+            candidate.tail.end,
+            candidate.relation_type,
+        ),
+    )
+    return tuple(ordered[:max_pairs])
+
+
+def _candidate_relations_for_head(label: str) -> Mapping[str, str] | None:
+    normalized = normalize_label(label)
+    raw = label.upper().replace("-", "_").replace(" ", "_")
+    labels = {normalized, raw}
+    if labels & _MEDICATION_HEAD_LABELS:
+        return _MEDICATION_TAIL_RELATIONS
+    if labels & _PROBLEM_HEAD_LABELS:
+        return _PROBLEM_TAIL_RELATIONS
+    if labels & _LAB_HEAD_LABELS:
+        return _LAB_TAIL_RELATIONS
+    return None
+
+
+def _candidate_relation_type(
+    head_label: str,
+    tail_label: str,
+    relation_by_tail_label: Mapping[str, str],
+) -> str | None:
+    tail_raw = tail_label.upper().replace("-", "_").replace(" ", "_")
+    tail_normalized = normalize_label(tail_label)
+    relation_type = relation_by_tail_label.get(tail_normalized)
+    if relation_type is None:
+        relation_type = relation_by_tail_label.get(tail_raw)
+    if relation_type is not None:
+        return relation_type
+    if relation_by_tail_label is _MEDICATION_TAIL_RELATIONS and (
+        {tail_raw, tail_normalized} & _PROBLEM_HEAD_LABELS
+    ):
+        return "drug_to_problem"
+    return None
+
+
+def _candidate_section_positions(
+    text: str,
+    references: Sequence[SpanReference],
+) -> dict[tuple[int, int], int]:
+    from openmed.clinical.sections import detect_sections
+
+    detected = detect_sections(text)
+    section_index_by_label: dict[str, int] = {}
+    positions: dict[tuple[int, int], int] = {}
+    for reference in references:
+        detected_index = next(
+            (
+                index
+                for index, section in enumerate(detected)
+                if int(section["start"]) <= reference.start
+                and reference.end <= int(section["end"])
+            ),
+            None,
+        )
+        if reference.section is not None:
+            section_index = section_index_by_label.setdefault(
+                reference.section.casefold(),
+                len(section_index_by_label),
+            )
+        else:
+            section_index = detected_index if detected_index is not None else 0
+        positions[reference.offset_key()] = section_index
+    return positions
+
+
 def split_sentence_offsets(text: str) -> tuple[tuple[int, int], ...]:
     """Return deterministic half-open offsets for document sentences."""
 
@@ -676,7 +901,7 @@ def _candidate_score(
 class RelationCandidate:
     """Candidate ``drug -> attribute`` edge before constrained decoding."""
 
-    relation_type: MedicationRelationType
+    relation_type: str
     head: SpanReference
     attribute: SpanReference
     score: float
@@ -685,15 +910,28 @@ class RelationCandidate:
     explanation: tuple[str, ...]
 
     @property
-    def attribute_type(self) -> MedicationAttributeType:
+    def tail(self) -> SpanReference:
+        """Return the relation tail using generic pair terminology."""
+
+        return self.attribute
+
+    @property
+    def attribute_type(self) -> str:
         """Return the schema attribute type for this candidate."""
 
-        return RELATION_ATTRIBUTE_TYPES[self.relation_type]
+        medication_type = RELATION_ATTRIBUTE_TYPES.get(self.relation_type)  # type: ignore[arg-type]
+        if medication_type is not None:
+            return medication_type
+        return self.relation_type.split("_to_", maxsplit=1)[-1]
 
     def stable_key(self) -> tuple[float, int, int, int, int, str]:
         """Sort key used by the deterministic constrained decoder."""
 
-        relation_rank = RELATION_ORDER.index(self.relation_type)
+        relation_rank = (
+            RELATION_ORDER.index(self.relation_type)
+            if self.relation_type in RELATION_ORDER
+            else len(RELATION_ORDER)
+        )
         return (
             -self.score,
             relation_rank,
@@ -919,6 +1157,7 @@ __all__ = [
     "SpanPairCandidate",
     "SpanReference",
     "build_relation_candidates",
+    "generate_relation_candidates",
     "enumerate_joint_span_candidates",
     "enumerate_span_pair_candidates",
     "sample_negative_span_pairs",
