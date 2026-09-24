@@ -7,6 +7,8 @@ import os
 import threading
 from typing import Mapping
 
+from .operational import OperationalEvent
+
 METRICS_ENABLED_ENV_VAR = "OPENMED_SERVICE_METRICS_ENABLED"
 PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
@@ -44,6 +46,8 @@ SPECULATIVE_ROLLBACK_NAME = "openmed_mlx_speculative_rollback_total"
 SPECULATIVE_FALLBACK_NAME = "openmed_mlx_speculative_fallback_total"
 SPECULATIVE_ACCEPTANCE_RATE_NAME = "openmed_mlx_speculative_acceptance_rate"
 SPECULATIVE_AVERAGE_DEPTH_NAME = "openmed_mlx_speculative_average_depth"
+OPERATIONAL_TOTAL_NAME = "openmed_service_operational_total"
+OPERATIONAL_DURATION_NAME = "openmed_service_operational_duration_seconds"
 
 _ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -138,6 +142,9 @@ class PrometheusMetricsRegistry:
         self._speculative_accepted_tokens = 0
         self._speculative_rollbacks = 0
         self._speculative_fallbacks = 0
+        self._operational_total: dict[tuple[str, str, str], int] = {}
+        self._operational_duration_count: dict[tuple[str, str, str], int] = {}
+        self._operational_duration_sum: dict[tuple[str, str, str], float] = {}
         self._lock = threading.RLock()
 
     def request_started(self) -> None:
@@ -357,6 +364,23 @@ class PrometheusMetricsRegistry:
             if fallback_reason:
                 self._speculative_fallbacks += 1
 
+    def record_operational_event(self, event: OperationalEvent) -> None:
+        """Record a closed-vocabulary, value-free operational event."""
+
+        if not isinstance(event, OperationalEvent):
+            raise TypeError("event must be an OperationalEvent")
+        key = (event.category.value, event.operation, event.state.value)
+        with self._lock:
+            self._operational_total[key] = (
+                self._operational_total.get(key, 0) + event.count
+            )
+            self._operational_duration_count[key] = (
+                self._operational_duration_count.get(key, 0) + event.count
+            )
+            self._operational_duration_sum[key] = (
+                self._operational_duration_sum.get(key, 0.0) + event.duration_seconds
+            )
+
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
@@ -399,6 +423,9 @@ class PrometheusMetricsRegistry:
             speculative_accepted_tokens = self._speculative_accepted_tokens
             speculative_rollbacks = self._speculative_rollbacks
             speculative_fallbacks = self._speculative_fallbacks
+            operational_total = dict(self._operational_total)
+            operational_duration_count = dict(self._operational_duration_count)
+            operational_duration_sum = dict(self._operational_duration_sum)
 
         lines: list[str] = []
         _append_family_header(
@@ -744,6 +771,44 @@ class PrometheusMetricsRegistry:
         lines.append(
             f"{SPECULATIVE_AVERAGE_DEPTH_NAME} {_format_sample_value(average_depth)}"
         )
+
+        _append_family_header(
+            lines,
+            OPERATIONAL_TOTAL_NAME,
+            "Value-free operations by bounded category, operation, and state.",
+            "counter",
+        )
+        for key, value in sorted(operational_total.items()):
+            category, operation, state = key
+            labels = _label_suffix(
+                {
+                    "category": category,
+                    "operation": operation,
+                    "state": state,
+                }
+            )
+            lines.append(f"{OPERATIONAL_TOTAL_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            OPERATIONAL_DURATION_NAME,
+            "Aggregate value-free operation duration in seconds.",
+            "summary",
+        )
+        for key, count in sorted(operational_duration_count.items()):
+            category, operation, state = key
+            labels = _label_suffix(
+                {
+                    "category": category,
+                    "operation": operation,
+                    "state": state,
+                }
+            )
+            lines.append(f"{OPERATIONAL_DURATION_NAME}_count{labels} {count}")
+            lines.append(
+                f"{OPERATIONAL_DURATION_NAME}_sum{labels} "
+                f"{_format_sample_value(operational_duration_sum[key])}"
+            )
 
         return "\n".join(lines) + "\n"
 

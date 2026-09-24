@@ -63,6 +63,7 @@ def test_eval_modules_import_cleanly():
         "indic-name-consistency",
         "india_clinical_phi_leakage",
         "india_surrogate_consistency",
+        "temporal_consistency",
     )
 
 
