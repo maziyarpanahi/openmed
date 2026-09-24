@@ -429,10 +429,9 @@ def _candidate_confidence(
             return confidence, band
         return confidence, _band_from_values(confidence, DEFAULT_ACCEPT_THRESHOLD)
 
-    # An uncalibrated span can still be rendered for review, but the raw score
-    # is explicitly marked as the provisional confidence fallback.
-    raw_score = float(candidate.score)
-    return raw_score, _band_from_values(raw_score, DEFAULT_ACCEPT_THRESHOLD)
+    # A matcher score is not a calibrated probability. Keep the code visible
+    # for review without giving an uncalibrated assignment an accept band.
+    return None, UNCERTAIN_BAND
 
 
 def _metadata_candidate_result(

@@ -95,3 +95,22 @@ def test_review_report_pairs_each_code_with_source_offsets_and_serializes() -> N
     assert "Grounding Review Report" in markdown
     assert "mzx-beta" in markdown
     assert "accept" in markdown
+
+
+def test_uncalibrated_matcher_score_is_not_reported_as_confidence() -> None:
+    span = GroundedSpan(
+        text="mzx-gamma",
+        start=5,
+        end=14,
+        candidates=(Candidate("RXNORM", "SYN-003", "Synthetic medicine", 0.99),),
+    )
+
+    report = build_review_report([span])
+
+    assert len(report.entries) == 1
+    entry = report.entries[0]
+    assert entry.raw_score == pytest.approx(0.99)
+    assert entry.calibrated_confidence is None
+    assert entry.band == UNCERTAIN_BAND
+    assert report.to_dict()["entries"][0]["calibrated_confidence"] is None
+    assert "—" in report.to_markdown()
