@@ -68,6 +68,7 @@ nav:
       - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Durable Workflow Recovery: agent/workflow-recovery.md
+      - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
       - Agent Action Ledger: agent/action-ledger.md
       - Deterministic Agent Replay: agent/deterministic-replay.md
       - Agent Skill Installation: agent-skills/install.md
