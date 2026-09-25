@@ -29,6 +29,9 @@ ReviewState = Literal["reviewed", "missing", "conflicting", "unreviewed"]
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,127}$")
+_PUBLIC_EVIDENCE_CLASSES = frozenset(
+    {"imaging", "lab_result", "local_record", "review_note", "second_source"}
+)
 _CLAIM_ID_KEYS = ("claim_id", "opaque_claim_id", "id")
 _EVIDENCE_CLASS_KEYS = (
     "evidence_class",
@@ -778,7 +781,15 @@ def _identifier(value: object, field_name: str) -> str:
     normalized = value.strip()
     if not _IDENTIFIER_RE.fullmatch(normalized):
         raise EvidenceCoverageError(f"{field_name} must be an opaque identifier")
-    return normalized
+    # Caller-defined identifiers may contain patient values even when their
+    # syntax is valid. Keep only the fixed public class codes in plaintext.
+    if field_name == "evidence_class" and normalized in _PUBLIC_EVIDENCE_CLASSES:
+        return normalized
+    return (
+        normalized
+        if _DIGEST_RE.fullmatch(normalized)
+        else _sha256(normalized.encode("utf-8"))
+    )
 
 
 def _status(value: object) -> CoverageStatus:

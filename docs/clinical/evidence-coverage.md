@@ -50,6 +50,8 @@ The report contains sorted claim/evidence rows, fixed counts for `present`,
 `missing`, `conflicting`, and `unreviewed`, plus source-fingerprint,
 per-claim, and matrix hashes. Unknown input fields are ignored, so upstream
 records may retain their own private data without copying it into this report.
+Claim identifiers and custom evidence-class labels are hashed before storage;
+fixed public class codes such as `lab_result` and `imaging` remain readable.
 An approved evidence-packet review state maps to `present` coverage when a
 source fingerprint is supplied; the value-free report records its normalized
 review state as `reviewed`.
