@@ -307,11 +307,10 @@ class DeidentifyJobQueue:
             document_id = _document_id(index, document)
             try:
                 result = self._deidentify_document(item.payload, document)
+                summary.add_result(document_id, result)
             except Exception as exc:
                 summary.failed_count += 1
                 error = _safe_error(exc)
-            else:
-                summary.add_result(document_id, result)
 
             self.store.update(item.job_id, **summary.to_progress_record())
 
@@ -392,11 +391,16 @@ class _JobSummary:
 
     def add_result(self, document_id: str, result: Any) -> None:
         """Add one de-identification result without retaining raw text."""
-        self.processed_count += 1
+        labels: dict[str, int] = {}
+        spans: list[dict[str, Any]] = []
         for entity in getattr(result, "pii_entities", []) or []:
             label = _entity_label(entity)
-            self.label_histogram[label] = self.label_histogram.get(label, 0) + 1
-            self.spans.append(_entity_span(document_id, entity, label))
+            spans.append(_entity_span(document_id, entity, label))
+            labels[label] = labels.get(label, 0) + 1
+        self.processed_count += 1
+        for label, count in labels.items():
+            self.label_histogram[label] = self.label_histogram.get(label, 0) + count
+        self.spans.extend(spans)
 
     def to_progress_record(self) -> dict[str, Any]:
         attempted = self.processed_count + self.failed_count
