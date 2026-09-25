@@ -120,10 +120,11 @@ class LocalJobStore:
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         """Persist a new job record."""
         with self._lock:
+            previous = _copy_record(self._records)
             self.cleanup_expired_locked()
             job_id = str(record["id"])
             self._records[job_id] = _copy_record(record)
-            self._persist_locked()
+            self._publish_locked(previous)
             return _copy_record(self._records[job_id])
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
@@ -136,17 +137,19 @@ class LocalJobStore:
     def update(self, job_id: str, **changes: Any) -> dict[str, Any]:
         """Apply changes to a job record and persist them."""
         with self._lock:
+            previous = _copy_record(self._records)
             record = self._records[job_id]
             record.update(_copy_record(changes))
             record["updated_at"] = _isoformat(self.clock())
-            self._persist_locked()
+            self._publish_locked(previous)
             return _copy_record(record)
 
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
+            previous = _copy_record(self._records)
             if self.cleanup_expired_locked():
-                self._persist_locked()
+                self._publish_locked(previous)
 
     def cleanup_expired_locked(self) -> bool:
         now = self.clock()
@@ -181,16 +184,32 @@ class LocalJobStore:
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"jobs": self._records}
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=str(self.path.parent),
-            delete=False,
-        ) as handle:
-            json.dump(payload, handle, ensure_ascii=True, indent=2, sort_keys=True)
-            handle.write("\n")
-            temp_name = handle.name
-        os.replace(temp_name, self.path)
+        temp_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=str(self.path.parent),
+                delete=False,
+            ) as handle:
+                temp_name = handle.name
+                json.dump(payload, handle, ensure_ascii=True, indent=2, sort_keys=True)
+                handle.write("\n")
+            os.replace(temp_name, self.path)
+        except BaseException:
+            if temp_name is not None:
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
+            raise
+
+    def _publish_locked(self, previous: dict[str, dict[str, Any]]) -> None:
+        try:
+            self._persist_locked()
+        except BaseException:
+            self._records = previous
+            raise
 
 
 def _parse_timestamp(raw_value: Any) -> datetime:
