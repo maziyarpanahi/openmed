@@ -804,3 +804,56 @@ def test_gujarati_surrogates_choose_gender_aligned_native_names(
     getattr(faker, method).assert_called_once_with()
     faker.name.assert_not_called()
     faker.first_name.assert_not_called()
+
+
+def test_urdu_pack_warns_once_and_uses_bundled_names():
+    pack = get_language_pack("ur")
+
+    assert pack is not None
+    assert pack.scripts == ("Arabic",)
+    assert "ur" in SUPPORTED_LANGUAGES
+    assert DEFAULT_PII_MODELS["ur"] == "OpenMed/privacy-filter-multilingual"
+    assert LANGUAGE_NAMES["ur"] == "Urdu"
+    assert LANGUAGE_MODEL_PREFIX["ur"] == "Urdu-"
+    assert LANGUAGE_MONTH_NAMES["ur"] == [
+        "جنوری",
+        "فروری",
+        "مارچ",
+        "اپریل",
+        "مئی",
+        "جون",
+        "جولائی",
+        "اگست",
+        "ستمبر",
+        "اکتوبر",
+        "نومبر",
+        "دسمبر",
+    ]
+    assert LANG_TO_LOCALE["ur"] == "ur_IN"
+    assert NATIONAL_ID_PROVIDERS["ur"] == ("ur_IN", "aadhaar")
+    assert FAKER_BACKEND_LOCALE["ur_IN"] == "en_IN"
+    assert "ur" in L._APPROXIMATE_LOCALES
+
+    L._warned.clear()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert resolve_locale("ur") == "ur_IN"
+        assert resolve_locale("ur") == "ur_IN"
+        anonymizer = Anonymizer(lang="ur", consistent=True, seed=694)
+        name = anonymizer.surrogate("جناب سیّد علی خان صاحب", "PERSON")
+        aadhaar = anonymizer.surrogate(
+            "۲۴۶۷ ۷۸۳۲ ۵۴۸۴",
+            "national_id",
+        )
+
+    user_warnings = [
+        warning for warning in caught if issubclass(warning.category, UserWarning)
+    ]
+    assert len(user_warnings) == 1
+    assert name in {
+        f"{given} {family}"
+        for given in L.URDU_GIVEN_NAMES
+        for family in L.URDU_FAMILY_NAMES
+    }
+    assert name != "جناب سیّد علی خان صاحب"
+    assert validate_aadhaar(aadhaar)

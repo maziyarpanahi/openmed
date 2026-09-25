@@ -155,10 +155,8 @@ class TestValidateLanguage:
             USER_SUPPLIED_MODEL_LANGUAGES,
         )
 
-        # Urdu is both national-ID-only and user-supplied-model, and the second
-        # membership keeps it on the public language enums. Pick a code that is
-        # only national-ID-only so this exercises the toggle rather than set
-        # iteration order.
+        # Pick a code that is national-ID-only so this exercises the toggle
+        # rather than set iteration order.
         national_id_only = sorted(
             NATIONAL_ID_ONLY_LANGUAGES - USER_SUPPLIED_MODEL_LANGUAGES
         )[0]

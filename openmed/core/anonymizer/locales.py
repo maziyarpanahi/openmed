@@ -38,6 +38,8 @@ Notes:
 - Vietnamese resolves to Faker's native ``vi_VN`` locale without an
   approximation warning, so name and address surrogates keep their diacritics;
   national-ID dispatch routes to the CCCD provider on the same locale.
+- Urdu uses a conceptual ``ur_IN`` locale backed by ``en_IN`` for non-name
+  values; bundled name surrogates remain in Urdu script.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -133,9 +135,55 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "rw_RW": "en_US",
     "sr_RS": "hr_HR",
     "sw_TZ": "sw",
+    "ur_IN": "en_IN",
     "ur_PK": "en_PK",
     "xh_ZA": "zu_ZA",
 }
+
+URDU_GIVEN_NAMES: Final = (
+    "آمنہ",
+    "عارف",
+    "زہرہ",
+    "فاطمہ",
+    "حسن",
+    "مریم",
+    "سلمان",
+    "نادیہ",
+)
+"""Small synthetic-safe inventory for Urdu-script name surrogates."""
+
+URDU_FAMILY_NAMES: Final = (
+    "خان",
+    "سید",
+    "بیگم",
+    "قریشی",
+    "میرزا",
+    "رضوی",
+)
+"""Small synthetic-safe inventory for Urdu-script family-name surrogates."""
+
+
+def generate_urdu_name(faker, original: str, *, locale: str) -> str:
+    """Return a bundled Urdu-script name distinct from ``original``."""
+
+    del locale
+    normalized_original = " ".join(original.split())
+    candidates = tuple(
+        f"{given} {family}"
+        for given in URDU_GIVEN_NAMES
+        for family in URDU_FAMILY_NAMES
+        if f"{given} {family}" != normalized_original
+        and given not in normalized_original
+        and family not in normalized_original
+    )
+    if not candidates:
+        candidates = tuple(
+            f"{given} {family}"
+            for given in URDU_GIVEN_NAMES
+            for family in URDU_FAMILY_NAMES
+            if f"{given} {family}" != normalized_original
+        )
+    return faker.random.choice(candidates)
 
 
 # Region-qualified Arabic codes -> Faker locale. Bare ``ar`` stays ``ar_EG``
@@ -342,8 +390,11 @@ __all__ = [
     "LANG_TO_LOCALE",
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
+    "URDU_FAMILY_NAMES",
+    "URDU_GIVEN_NAMES",
     "ZH_CN_ADDRESS_LOCALE",
     "ZH_NAME_LOCALES",
+    "generate_urdu_name",
     "is_chinese_name_locale",
     "list_regional_locales",
     "locale_coherence_report",

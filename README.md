@@ -24,7 +24,7 @@ OpenMed's core local runtime performs extraction and de-identification after req
 </p>
 
 <p>
-  <b>2,266 manifest entries</b> &nbsp;·&nbsp; <b>35 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifest entries</b> &nbsp;·&nbsp; <b>36 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -516,12 +516,12 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (38 supported routes; 35 model-backed)
+## Multilingual PII (39 supported routes; 36 model-backed)
 
-Extraction and de-identification support **38 supported PII language codes**:
+Extraction and de-identification support **39 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
 `it`, `ja`, `kn`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
-`te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`, with **the registry-backed PII model catalog** in total.
+`te`, `th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh`, and `zu`, with **the registry-backed PII model catalog** in total.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
 An optional, user-configured Indic NER family accepts two additional routes

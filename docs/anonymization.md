@@ -340,9 +340,10 @@ interoperable with the conventions of Aksharamukha (AGPL-3.0) and the Indic NLP
 Library (MIT). No code, data, copyleft component, neural weights, or third-party
 mapping bundle from either project is included.
 
-Perso-Arabic Urdu is intentionally an unsupported stub. The built-in API fails
-closed with `ValueError`; deployments that need it must supply a separately
-licensed, out-of-process adapter.
+Perso-Arabic Urdu has a built-in `ur_IN` language pack for script routing,
+deterministic patterns, and Indian identifiers. It is not covered by this
+ISO 15919 transliteration engine; Urdu transliteration still fails closed with
+`ValueError` and requires an out-of-process adapter.
 
 ### Format preservation
 
@@ -455,10 +456,10 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **38 supported PII language codes**:
+as its source of truth and supports **39 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
 `it`, `ja`, `kn`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
-`te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`.
+`te`, `th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh`, and `zu`.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
 The optional Indic NER adapter adds two user-configured routes (`ml` and `pa`) and can also serve Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia,
@@ -467,10 +468,10 @@ Tamil, and Telugu. It loads only an explicit path or repository from
 [Indic NER checkpoint compatibility matrix](indic-ner-checkpoints.md) for
 supported label maps, offset contracts, and opt-in real-checkpoint tests.
 Additional validator-backed national-ID providers cover ID-only locales such as
-Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
-default PII models for those language codes. Urdu's conceptual `ur_PK` locale
-uses Faker's installed `en_PK` backend for general surrogate data while CNIC
-generation remains provider-backed and format-valid.
+Polish, Latvian, Slovak, Malay, Filipino, and Finnish without adding default
+PII models for those language codes. Urdu defaults to `ur_IN` with an installed
+`en_IN` Faker backend for general surrogate data and an Aadhaar provider.
+An explicit `ur_PK` locale retains CNIC validation.
 The Irish `en_IE` overlay validates PPS numbers with their weighted modulo-23
 check letter, and the Japanese `ja_JP` path validates My Numbers with their
 modulo-11 check digit; both paths generate synthetic, checksum-valid
