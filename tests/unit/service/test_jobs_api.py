@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 import pytest
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 
 import openmed
 from openmed.core.pii import DeidentificationResult, PIIEntity
+from openmed.service import jobs
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.webhooks import WebhookDeliveryResult
@@ -57,6 +59,66 @@ def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     for name in names:
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.mark.parametrize(
+    ("contents", "message"),
+    [
+        ("{broken", "invalid JSON"),
+        ("[]", "JSON object"),
+        ("{}", "jobs object"),
+        ('{"jobs": []}', "jobs object"),
+        ('{"jobs": {"synthetic": null}}', "invalid job record"),
+    ],
+)
+def test_job_store_rejects_damaged_existing_file_without_overwriting_it(
+    tmp_path,
+    contents: str,
+    message: str,
+) -> None:
+    from openmed.service import jobs
+
+    path = tmp_path / "jobs.json"
+    path.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        jobs.LocalJobStore(path)
+
+    assert path.read_text(encoding="utf-8") == contents
+
+
+def test_job_store_propagates_existing_file_read_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from pathlib import Path
+
+    from openmed.service import jobs
+
+    path = tmp_path / "jobs.json"
+    path.write_text('{"jobs": {}}', encoding="utf-8")
+    original = Path.read_text
+
+    def fail_for_store(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self == path:
+            raise OSError("synthetic unreadable store")
+        return original(self, *args, **kwargs)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "read_text", fail_for_store)
+        with pytest.raises(OSError, match="synthetic unreadable store"):
+            jobs.LocalJobStore(path)
+
+    assert path.read_text(encoding="utf-8") == '{"jobs": {}}'
+
+
+def test_missing_job_store_starts_empty(tmp_path) -> None:
+    from openmed.service import jobs
+
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    assert store._records == {}
+    assert not path.exists()
 
 
 def _sample_deid_result(text: str, *, label: str = "NAME") -> DeidentificationResult:
@@ -281,3 +343,47 @@ def test_missing_job_returns_standard_404(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.parametrize("operation", ["create", "update", "cleanup"])
+@pytest.mark.parametrize("failure_point", ["serialize", "replace"])
+def test_job_store_failed_publication_preserves_memory_and_disk(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    operation: str,
+    failure_point: str,
+) -> None:
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path, clock=lambda: now[0])
+    store.create(
+        {
+            "id": "synthetic-existing",
+            "status": "done",
+            "expires_at": "2026-01-01T00:00:10Z",
+        }
+    )
+    original_records = json.loads(path.read_text(encoding="utf-8"))["jobs"]
+    original_bytes = path.read_bytes()
+    if operation != "update":
+        now[0] += timedelta(seconds=11)
+
+    def fail(*_args: Any, **_kwargs: Any) -> None:
+        raise OSError("synthetic publication failure")
+
+    with monkeypatch.context() as patched:
+        if failure_point == "serialize":
+            patched.setattr(jobs.json, "dump", fail)
+        else:
+            patched.setattr(jobs.os, "replace", fail)
+        with pytest.raises(OSError, match="synthetic publication failure"):
+            if operation == "create":
+                store.create({"id": "synthetic-new", "status": "queued"})
+            elif operation == "update":
+                store.update("synthetic-existing", status="running")
+            else:
+                store.cleanup_expired()
+
+    assert store._records == original_records
+    assert path.read_bytes() == original_bytes
+    assert list(tmp_path.iterdir()) == [path]
