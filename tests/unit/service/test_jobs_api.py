@@ -145,6 +145,58 @@ def _sample_deid_result(text: str, *, label: str = "NAME") -> DeidentificationRe
     )
 
 
+def test_invalid_result_span_fails_only_its_document(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service import jobs
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store)
+    payload = DeidentifyJobRequest(
+        documents=[
+            DeidentifyJobDocument(id="synthetic-0", text="synthetic first"),
+            DeidentifyJobDocument(id="synthetic-1", text="synthetic second"),
+        ]
+    )
+    record = queue._new_record(payload)
+    store.create(record)
+    seen: list[str] = []
+
+    def entity(start: int | str) -> SimpleNamespace:
+        return SimpleNamespace(
+            label="NAME", text="synthetic", start=start, end=4, confidence=0.9
+        )
+
+    def process(_payload: DeidentifyJobRequest, document: DeidentifyJobDocument):
+        seen.append(document.id or "")
+        spans = [entity(0), entity("invalid-offset")] if len(seen) == 1 else [entity(0)]
+        return SimpleNamespace(pii_entities=spans)
+
+    monkeypatch.setattr(queue, "_deidentify_document", process)
+    try:
+        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+    finally:
+        queue.shutdown()
+
+    final = store.get(record["id"])
+    assert final is not None
+    assert seen == ["synthetic-0", "synthetic-1"]
+    assert final["status"] == "failed"
+    assert final["processed_count"] == 1
+    assert final["failed_count"] == 1
+    assert final["progress_percent"] == 100.0
+    assert final["label_histogram"] == {"NAME": 1}
+    assert len(final["spans"]) == 1
+    assert final["spans"][0]["document_id"] == "synthetic-1"
+    assert final["error"]["type"] == "ValueError"
+    assert "synthetic first" not in path.read_text(encoding="utf-8")
+
+
 def _wait_for_job(
     client: TestClient,
     job_id: str,
