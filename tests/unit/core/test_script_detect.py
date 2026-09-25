@@ -219,6 +219,7 @@ def test_routing_only_languages_do_not_claim_bundled_models():
         "pt",
         "tr",
         "cs",
+        "pl",
         "sw",
         "ig",
         "yo",
