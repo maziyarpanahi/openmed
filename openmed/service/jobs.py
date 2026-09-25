@@ -168,18 +168,16 @@ class LocalJobStore:
             return {}
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
+        except json.JSONDecodeError:
+            raise ValueError("Job metadata store contains invalid JSON") from None
         if not isinstance(raw, dict):
-            return {}
+            raise ValueError("Job metadata store must contain a JSON object")
         jobs = raw.get("jobs")
         if not isinstance(jobs, dict):
-            return {}
-        return {
-            str(job_id): dict(record)
-            for job_id, record in jobs.items()
-            if isinstance(record, dict)
-        }
+            raise ValueError("Job metadata store must contain a jobs object")
+        if any(not isinstance(record, dict) for record in jobs.values()):
+            raise ValueError("Job metadata store contains an invalid job record")
+        return {str(job_id): dict(record) for job_id, record in jobs.items()}
 
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

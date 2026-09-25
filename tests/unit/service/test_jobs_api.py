@@ -61,6 +61,66 @@ def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.mark.parametrize(
+    ("contents", "message"),
+    [
+        ("{broken", "invalid JSON"),
+        ("[]", "JSON object"),
+        ("{}", "jobs object"),
+        ('{"jobs": []}', "jobs object"),
+        ('{"jobs": {"synthetic": null}}', "invalid job record"),
+    ],
+)
+def test_job_store_rejects_damaged_existing_file_without_overwriting_it(
+    tmp_path,
+    contents: str,
+    message: str,
+) -> None:
+    from openmed.service import jobs
+
+    path = tmp_path / "jobs.json"
+    path.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        jobs.LocalJobStore(path)
+
+    assert path.read_text(encoding="utf-8") == contents
+
+
+def test_job_store_propagates_existing_file_read_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from pathlib import Path
+
+    from openmed.service import jobs
+
+    path = tmp_path / "jobs.json"
+    path.write_text('{"jobs": {}}', encoding="utf-8")
+    original = Path.read_text
+
+    def fail_for_store(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self == path:
+            raise OSError("synthetic unreadable store")
+        return original(self, *args, **kwargs)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "read_text", fail_for_store)
+        with pytest.raises(OSError, match="synthetic unreadable store"):
+            jobs.LocalJobStore(path)
+
+    assert path.read_text(encoding="utf-8") == '{"jobs": {}}'
+
+
+def test_missing_job_store_starts_empty(tmp_path) -> None:
+    from openmed.service import jobs
+
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    assert store._records == {}
+    assert not path.exists()
+
+
 def _sample_deid_result(text: str, *, label: str = "NAME") -> DeidentificationResult:
     entity_text = "Maria Garcia" if "Maria Garcia" in text else "555-1212"
     start = text.index(entity_text)
