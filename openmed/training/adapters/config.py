@@ -458,7 +458,7 @@ DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = MappingProxyType(
         "slavic": LanguageFamily(
             family_id="slavic",
             display_name="Slavic",
-            languages=("cs", "ru", "uk"),
+            languages=("cs", "pl", "ru", "uk"),
             scripts=("Cyrillic", "Latin"),
             high_resource_languages=("ru",),
         ),
@@ -579,6 +579,10 @@ DEFAULT_TRANSFER_GRAPH: Mapping[str, tuple[TransferEdge, ...]] = MappingProxyTyp
         "or": (
             _edge("or", "hi", "indic", 1),
             _edge("or", "bn", "indic", 2),
+        ),
+        "pl": (
+            _edge("pl", "cs", "slavic", 1),
+            _edge("pl", "ru", "slavic", 2),
         ),
         "pt": (
             _edge("pt", "es", "romance", 1, expected_f1_floor=0.80),

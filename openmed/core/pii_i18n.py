@@ -122,6 +122,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "it": "Italian",
     "es": "Spanish",
     "nl": "Dutch",
+    "pl": "Polish",
     "hi": "Hindi",
     "gu": "Gujarati",
     "kn": "Kannada",
@@ -167,6 +168,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "it": "Italian-",
     "es": "Spanish-",
     "nl": "Dutch-",
+    "pl": "Polish-",
     "hi": "Hindi-",
     "gu": "Gujarati-",
     "kn": "Kannada-",
@@ -3531,6 +3533,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "oktober",
         "november",
         "december",
+    ],
+    "pl": [
+        "stycznia",
+        "lutego",
+        "marca",
+        "kwietnia",
+        "maja",
+        "czerwca",
+        "lipca",
+        "sierpnia",
+        "września",
+        "października",
+        "listopada",
+        "grudnia",
     ],
     "hi": [
         "\u091c\u0928\u0935\u0930\u0940",
@@ -8589,7 +8605,40 @@ _THAI_PII_PATTERNS: List[PIIPattern] = [
 # Polish PII patterns
 # ---------------------------------------------------------------------------
 
+_POLISH_MONTH_PATTERN = "|".join(
+    sorted(
+        (re.escape(month) for month in LANGUAGE_MONTH_NAMES["pl"]),
+        key=len,
+        reverse=True,
+    )
+)
+
 _POLISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}\.\d{1,2}\.\d{4}\b",
+        "date",
+        priority=9,
+        base_score=0.65,
+        context_words=["data", "urodzenia", "ur.", "wizyta", "przyjęcie"],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_POLISH_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=9,
+        base_score=0.65,
+        context_words=["data", "urodzenia", "wizyta", "przyjęcie"],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+48[\s.-]?)?[1-9]\d{2}(?:[\s.-]?[1-9]\d{2}){2}(?!\w)",
+        "phone_number",
+        priority=9,
+        base_score=0.6,
+        context_words=["telefon", "tel.", "komórka", "kontakt"],
+        context_boost=0.3,
+    ),
     # PESEL (11-digit national ID)
     PIIPattern(
         r"\b\d{11}\b",
@@ -8607,6 +8656,28 @@ _POLISH_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.4,
         validator=validate_polish_pesel,
+        reject_on_validation_failure=True,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:ul\.|al\.|os\.|ulica|aleja|osiedle)[ \t]+"
+        r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]"
+        r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż .'-]{1,54}[ \t]+"
+        r"\d{1,4}[A-Za-z]?(?:/\d{1,4})?(?!\w)",
+        "street_address",
+        priority=8,
+        base_score=0.7,
+        context_words=["adres", "zamieszkania", "ulica", "mieszka"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{2}-\d{3}(?!\d)",
+        "postcode",
+        priority=7,
+        base_score=0.5,
+        context_words=["kod pocztowy", "poczta", "adres"],
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -11635,6 +11706,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Amsterdam", "Utrecht", "Rotterdam"],
         "ZIPCODE": ["1012 AB", "3511 CC", "3011 AA"],
+    },
+    "pl": {
+        "NAME": ["Anna Kowalska", "Jan Nowak", "Maria Wiśniewska"],
+        "FIRST_NAME": ["Anna", "Jan", "Maria"],
+        "LAST_NAME": ["Kowalska", "Nowak", "Wiśniewska"],
+        "EMAIL": ["pacjent@example.pl", "kontakt@example.org"],
+        "PHONE": ["+48 501 234 567", "612 345 678"],
+        "ID_NUM": ["85031512344", "01272256782"],
+        "STREET_ADDRESS": ["ul. Przykładowa 12", "al. Testowa 7"],
+        "URL_PERSONAL": ["https://example.pl"],
+        "USERNAME": ["pacjent123", "konto456"],
+        "DATE": ["15.03.1985", "5 stycznia 2001"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Warszawa", "Kraków", "Gdańsk"],
+        "ZIPCODE": ["00-001", "30-001"],
     },
     "hi": {
         "NAME": [

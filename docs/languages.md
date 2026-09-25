@@ -101,6 +101,7 @@ routing is first requested, and do not download or bundle model weights.
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
 | `or`   | Odia       | `OpenMed/privacy-filter-multilingual`                       | `or_IN`      | Native Odia surrogates; Aadhaar and Odisha PIN patterns.     |
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `pl`   | Polish     | `OpenMed/privacy-filter-multilingual`                      | `pl_PL`      | Native Faker locale, PESEL surrogates, and Polish dates, phones, postcodes, and addresses. |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
@@ -124,7 +125,7 @@ the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 weights and require a caller-supplied model. Russian and Tamil retain explicit
 public placeholder routes for compatibility, but neither placeholder is a
 claim of dedicated trained weights. Codes absent from the table entirely (for
-example `pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
+example `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
@@ -498,6 +499,15 @@ After:  Patiënt [NAME], BSN [ID]
 ```text
 Before: Pasient Ingrid Hansen, fødselsnummer 12035101460
 After:  Pasient [NAME], fødselsnummer [ID]
+```
+
+### Polish — `pl`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `pl_PL`
+
+```text
+Before: Pacjent, PESEL 85031512344, adres ul. Przykładowa 12.
+After:  Pacjent, PESEL [ID_NUM], adres [STREET_ADDRESS].
 ```
 
 ### Portuguese — `pt`
