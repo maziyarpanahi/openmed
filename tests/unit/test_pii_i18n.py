@@ -170,6 +170,7 @@ class TestConstants:
             "kn",
             "mr",
             "or",
+            "pa",
             "te",
             "ta",
             "pt",

@@ -29,7 +29,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until dedicated
 # public PII weights are available. They must not be represented as
 # trained/model-backed languages in release claims.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ru", "ta"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "pa", "ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -175,6 +175,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "bn_BD",
         ("Bengali",),
         national_id_provider=("bn_BD", "bangladesh_nid"),
+    ),
+    _pack(
+        "pa",
+        "OpenMed/privacy-filter-multilingual",
+        "pa_IN",
+        ("Gurmukhi",),
+        national_id_provider=("pa_IN", "aadhaar"),
     ),
     TELUGU_LANGUAGE_PACK,
     _pack(
@@ -385,7 +392,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
     # approximation entry and no conceptual backend mapping.
     "ne": "ne_NP",
-    "pa": "pa_IN",
 }
 
 # Languages surfaced by script routing before a bundled default PII model or
@@ -395,7 +401,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "ml",
     "ne",
-    "pa",
     "ur",
 }
 

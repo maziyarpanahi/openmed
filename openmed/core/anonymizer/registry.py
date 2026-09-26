@@ -59,7 +59,7 @@ _PLUGIN_PROVIDER_DISPATCHERS: Dict[str, Generator] = {}
 _PLUGIN_SPAN_HASH_KEY = secrets.token_bytes(32)
 
 _INDIA_LOCALES = frozenset(
-    {"as_IN", "en_IN", "gu_IN", "hi_IN", "kn_IN", "mr_IN", "or_IN", "ta_IN"}
+    {"as_IN", "en_IN", "gu_IN", "hi_IN", "kn_IN", "mr_IN", "or_IN", "pa_IN", "ta_IN"}
 )
 
 
@@ -609,6 +609,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "as_IN",
         "bn_BD",
         "hi_IN",
+        "pa_IN",
         "mr_IN",
         "en_IN",
         "or_IN",
@@ -696,6 +697,7 @@ _LOCALE_ID_METHODS = {
     "en_IN": "aadhaar",
     "gu_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "pa_IN": "aadhaar",
     "kn_IN": "aadhaar",
     "mr_IN": "aadhaar",
     "or_IN": "aadhaar",

@@ -90,15 +90,15 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **38 supported PII language codes**:
+PII extraction and de-identification support **39 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
-`it`, `ja`, `kn`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`it`, `ja`, `kn`, `ko`, `mr`, `nl`, `no`, `or`, `pa`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
-Two additional Indic codes (`ml` and `pa`)
-are opt-in routes through a user-configured `OPENMED_INDIC_NER_MODEL`;
-Assamese, Bengali, Gujarati, Hindi, Marathi, Odia, Tamil, and Telugu can use
+One additional Indic code (`ml`)
+is an opt-in route through a user-configured `OPENMED_INDIC_NER_MODEL`;
+Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Punjabi, Tamil, and Telugu can use
 the same adapter.
 Validator-backed national-ID coverage is broader for specific ID-only locales,
 including Polish, Latvian, Slovak, Malay, Filipino, and Finnish.

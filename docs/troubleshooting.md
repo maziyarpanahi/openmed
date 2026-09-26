@@ -397,14 +397,14 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **38 supported PII
+**Cause.** PII extraction and de-identification support **39 supported PII
 language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja,
-kn, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
+kn, ko, mr, nl, no, or, pa, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
 Russian currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.
-The accepted API set also includes two optional Indic routes: `ml`
-and `pa`. Those codes require an explicit model or
-`OPENMED_INDIC_NER_MODEL`; Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and
+The accepted API set also includes one optional Indic route: `ml`.
+That code requires an explicit model or
+`OPENMED_INDIC_NER_MODEL`; Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Punjabi, Tamil, and
 Telugu can use the adapter too.
 
 **Fix.** Use a built-in code or a configured optional Indic route with
