@@ -303,7 +303,11 @@ def build_stream_fingerprint(
     policy_name: str,
     deidentify_kwargs: Mapping[str, Any] | None = None,
 ) -> StreamFingerprint:
-    """Build PHI-free policy and model fingerprints for a stream run."""
+    """Build PHI-free policy and model fingerprints for a stream run.
+
+    Set-valued parameters retain their natural order when comparable and use
+    canonical JSON ordering when normalized members cannot be compared.
+    """
 
     options = dict(deidentify_kwargs or {})
     model_name = str(options.get("model_name") or "openmed-default")
@@ -369,7 +373,18 @@ def _safe_parameter_identity(value: Any, *, key: str | None = None) -> Any:
     if isinstance(value, (list, tuple)):
         return [_safe_parameter_identity(item) for item in value]
     if isinstance(value, set):
-        return sorted(_safe_parameter_identity(item) for item in value)
+        items = [_safe_parameter_identity(item) for item in value]
+        try:
+            return sorted(items)
+        except TypeError:
+            # Preserve legacy ordering where values are comparable; otherwise
+            # use a deterministic key for mixed scalars and normalized objects.
+            return sorted(
+                items,
+                key=lambda item: json.dumps(
+                    item, sort_keys=True, separators=(",", ":")
+                ),
+            )
     return {"type": f"{type(value).__module__}.{type(value).__qualname__}"}
 
 
