@@ -72,3 +72,43 @@ The router itself is deterministic, rules-first, and offline. It does not load
 a model, fetch terminology, read credentials, or make a mandatory network
 call. It is assistive extraction plumbing and does not make clinical
 decisions.
+
+## Route extraction by document type
+
+`openmed.clinical.routing` uses the local `classify_document` result to select
+radiology, pathology, or discharge-summary extraction scopes. The discharge
+route reuses the existing discharge profile's source section boundaries for
+diagnoses, procedures, medications, follow-up, and instructions. Medication
+candidates stay in discharge medications; problem mentions stay in discharge
+diagnoses. Every route includes the selected profile, classifier confidence,
+and a fallback reason when routing abstains.
+
+```python
+from openmed.clinical.routing import build_extraction_plan
+
+plan = build_extraction_plan(
+    "DISCHARGE SUMMARY\nDischarge Medications:\n- Synthetic tablet 5 mg daily.",
+)
+assert plan.profile.name == "discharge_summary"
+assert plan.routing_provenance.fallback_reason is None
+```
+
+Unknown labels and low-confidence predictions use the generic pass-through
+profile. The generic route keeps the existing entity list and order. The
+specialized profiles retain absolute source offsets and do not infer clinical
+decisions.
+
+The committed synthetic fixture harness in
+`tests/unit/clinical/test_note_type_routing.py` compares unscoped candidate
+entities with routed stage inputs. It includes one deliberate irrelevant
+candidate per document type and uses exact span identity as the match key:
+
+| Synthetic type | Unscoped entity F1 | Routed entity F1 | Gain |
+| --- | ---: | ---: | ---: |
+| Radiology | 0.80 | 1.00 | +0.20 |
+| Pathology | 0.86 | 1.00 | +0.14 |
+| Discharge summary | 0.80 | 1.00 | +0.20 |
+
+These are deterministic fixture checks of routing precision, not estimates of
+clinical accuracy. The fixtures contain only synthetic text and no restricted
+corpus material.

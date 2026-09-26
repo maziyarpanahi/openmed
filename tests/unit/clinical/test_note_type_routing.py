@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from openmed.clinical.routing import (
+    DISCHARGE_PROFILE,
     GENERIC_PROFILE,
     PATHOLOGY_PROFILE,
     RADIOLOGY_PROFILE,
@@ -15,10 +16,11 @@ from openmed.clinical.routing import (
     classify_and_select_profile,
     extract_scoped_medication_candidates,
     resolve_profile,
+    resolve_profile_sections,
     route_analysis,
     select_profile,
 )
-from openmed.clinical.sections import classify_document, detect_sections
+from openmed.clinical.sections import classify_document
 
 _FIXTURE = (
     Path(__file__).resolve().parents[2]
@@ -52,13 +54,13 @@ def _entity_spans(text: str, entities: list[dict]) -> list[dict]:
     return spans
 
 
-def test_radiology_and_pathology_select_profiles_and_expected_sections() -> None:
+def test_note_types_select_profiles_and_expected_sections() -> None:
     rows = _fixture_rows()
 
     for row in rows:
         classification = classify_document(row["text"])
         selection = resolve_profile(classification)
-        sections = detect_sections(row["text"])
+        sections = resolve_profile_sections(row["text"], selection.profile)
 
         assert selection.profile.name == row["note_type"].removesuffix("_report")
         assert selection.provenance.to_dict() == {
@@ -92,7 +94,10 @@ def test_profile_specific_scoping_preserves_target_sections_and_drops_leaks() ->
             for index, entity in enumerate(row["entities"])
             if entity["surface"] in {span["surface"] for span in plan.problem_mentions}
         }
-        assert "medications" not in kept_sections
+        if row["note_type"] == "discharge_summary":
+            assert "admission_history" not in kept_sections
+        else:
+            assert "medications" not in kept_sections
         assert set(row["expected_sections"]) <= {
             section.label for section in plan.sections
         }
@@ -118,6 +123,68 @@ def test_scoped_medication_filter_uses_detected_profile_sections() -> None:
     assert [candidate.text for candidate in candidates] == ["contrast agent"]
 
 
+def test_discharge_uses_existing_section_evidence_and_stage_scopes() -> None:
+    row = _fixture_rows()[-1]
+    text = row["text"]
+    spans = _entity_spans(text, row["entities"])
+    plan = build_extraction_plan(
+        text,
+        medication_entities=spans,
+        problem_mentions=spans,
+        lab_value_mentions=spans,
+    )
+
+    assert plan.profile is DISCHARGE_PROFILE
+    assert [section.label for section in plan.sections] == row["expected_sections"]
+    assert [entity["surface"] for entity in plan.medication_entities] == [
+        "Synthetic tablet"
+    ]
+    assert [entity["surface"] for entity in plan.problem_mentions] == [
+        "resolved condition"
+    ]
+    assert all(text[section.start : section.end] for section in plan.sections)
+    assert all(
+        text[entity["start"] : entity["end"]] == entity["surface"]
+        for entity in (*plan.medication_entities, *plan.problem_mentions)
+    )
+
+
+def test_synthetic_per_type_entity_f1_uplift_is_at_least_five_points() -> None:
+    def f1(predicted: set[int], gold: set[int]) -> float:
+        true_positives = len(predicted & gold)
+        denominator = len(predicted) + len(gold)
+        return 2 * true_positives / denominator if denominator else 1.0
+
+    for row in _fixture_rows():
+        text = row["text"]
+        entities = _entity_spans(text, row["entities"])
+        plan = build_extraction_plan(
+            text,
+            medication_entities=entities,
+            problem_mentions=entities,
+            lab_value_mentions=entities,
+        )
+        gold = {index for index, entity in enumerate(row["entities"]) if entity["gold"]}
+        routed_entities = {
+            (entity["label"], entity["start"], entity["end"])
+            for stage in (
+                plan.medication_entities,
+                plan.problem_mentions,
+                plan.lab_value_mentions,
+            )
+            for entity in stage
+        }
+        routed = {
+            index
+            for index, entity in enumerate(entities)
+            if (entity["label"], entity["start"], entity["end"]) in routed_entities
+        }
+        baseline_f1 = f1(set(range(len(entities))), gold)
+        routed_f1 = f1(routed, gold)
+
+        assert routed_f1 >= baseline_f1 + 0.05, row["note_type"]
+
+
 def test_unknown_and_low_confidence_routes_are_pass_through_and_provenanced() -> None:
     entities = [
         {"label": "CONDITION", "start": 0, "end": 4},
@@ -128,6 +195,7 @@ def test_unknown_and_low_confidence_routes_are_pass_through_and_provenanced() ->
     for classification, reason in (
         ({"type": "unknown", "confidence": 0.0}, "unknown_document_type"),
         ({"type": "radiology_report", "confidence": 0.49}, "low_confidence"),
+        ({"type": "discharge_summary", "confidence": 0.49}, "low_confidence"),
     ):
         selection = resolve_profile(classification)
         assert selection.profile is GENERIC_PROFILE
