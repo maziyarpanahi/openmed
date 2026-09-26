@@ -65,5 +65,12 @@ than coercing them.
 location retained by the normalizer. The result contains normalized numeric
 fields, units, range bounds, qualifiers, and safe provenance markers; it does
 not copy the source measurement string into provenance, logs, or exceptions.
+When a reference-range mapping includes typed `provenance` with a SHA-256
+`source_fingerprint`, unit, population, precision, and locale, the result's
+`reference_range_provenance` keeps the source fingerprint and a hash of that
+context. The population and original instrument label are not copied into the
+measurement record. Missing or malformed provenance yields
+`{"status": "unknown"}`; callers should retain the original typed range
+record as the source of its full evidence.
 The implementation is rules-based, deterministic, local-first, and performs no
 network call or wall-clock lookup.

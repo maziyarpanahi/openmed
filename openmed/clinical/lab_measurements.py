@@ -9,6 +9,9 @@ ambiguous units are reported explicitly; they are never guessed.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Literal, TypedDict
 
@@ -70,6 +73,7 @@ class LabMeasurement(TypedDict):
     canonical_unit: str | None
     dimension: dict[str, int]
     reference_range: ParsedLabReferenceRange
+    reference_range_provenance: dict[str, str]
     interpretation: AbnormalFlag
     qualifiers: list[str]
     source_offsets: SourceOffsets | None
@@ -85,6 +89,54 @@ class _UnitDetails(TypedDict):
     unit: str | None
     canonical_unit: str | None
     dimension: dict[str, int]
+
+
+_SOURCE_FINGERPRINT_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+
+
+def _range_provenance_link(source: object) -> dict[str, str]:
+    """Link a typed range without copying its source or population text."""
+
+    unknown = {"status": "unknown"}
+    if not isinstance(source, Mapping):
+        return unknown
+    metadata = source.get("provenance")
+    if not isinstance(metadata, Mapping):
+        return unknown
+
+    fingerprint = metadata.get("source_fingerprint")
+    unit = metadata.get("unit")
+    population = metadata.get("population")
+    precision = metadata.get("precision")
+    locale = metadata.get("locale")
+    if (
+        not isinstance(fingerprint, str)
+        or _SOURCE_FINGERPRINT_RE.fullmatch(fingerprint) is None
+        or not isinstance(unit, str)
+        or not unit
+        or not isinstance(population, str)
+        or not population
+        or isinstance(precision, bool)
+        or not isinstance(precision, int)
+        or precision < 0
+        or (locale is not None and not isinstance(locale, str))
+    ):
+        return unknown
+
+    context = {
+        "unit": unit,
+        "population": population,
+        "precision": precision,
+        "source_fingerprint": fingerprint,
+        "locale": locale,
+    }
+    encoded = json.dumps(context, sort_keys=True, separators=(",", ":"))
+    context_fingerprint = "sha256:" + hashlib.sha256(encoded.encode()).hexdigest()
+    return {
+        "status": "linked",
+        "source_fingerprint": fingerprint,
+        "context_fingerprint": context_fingerprint,
+    }
 
 
 def _empty_reference_range(
@@ -603,6 +655,7 @@ def normalize_lab_measurement(
         "canonical_unit": value_unit["canonical_unit"],
         "dimension": value_unit["dimension"],
         "reference_range": normalized_range,
+        "reference_range_provenance": _range_provenance_link(raw_range),
         "interpretation": interpretation,
         "qualifiers": _normalize_qualifiers(raw_qualifiers),
         "source_offsets": offsets,

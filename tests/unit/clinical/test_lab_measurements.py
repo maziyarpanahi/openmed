@@ -96,6 +96,65 @@ def test_mixed_units_compare_only_when_dimensions_match() -> None:
     assert incompatible["interpretation"] == "unknown"
 
 
+def test_typed_range_mapping_keeps_a_private_provenance_link() -> None:
+    fingerprint = "sha256:" + "a" * 64
+    reference_range = {
+        "low": 135,
+        "high": 145,
+        "unit": "mmol/L",
+        "provenance": {
+            "unit": "mmol/L",
+            "population": "adult",
+            "precision": 0,
+            "source_fingerprint": fingerprint,
+            "locale": "en-us",
+            "source": "synthetic-instrument-secret",
+        },
+    }
+    record = normalize_lab_measurement(
+        {"value": 140, "unit": "mmol/L", "reference_range": reference_range}
+    )
+
+    assert record["status"] == "ok"
+    assert record["interpretation"] == "normal"
+    link = record["reference_range_provenance"]
+    assert link["status"] == "linked"
+    assert link["source_fingerprint"] == fingerprint
+    assert link["context_fingerprint"].startswith("sha256:")
+    assert "synthetic-instrument-secret" not in json.dumps(record)
+    assert "adult" not in json.dumps(record)
+
+    reference_range["provenance"]["locale"] = "fr-fr"
+    changed = normalize_lab_measurement(
+        {"value": 140, "unit": "mmol/L", "reference_range": reference_range}
+    )
+    assert (
+        changed["reference_range_provenance"]["context_fingerprint"]
+        != link["context_fingerprint"]
+    )
+
+
+def test_unverified_range_provenance_is_explicitly_unknown() -> None:
+    record = normalize_lab_measurement(
+        {
+            "value": 140,
+            "unit": "mmol/L",
+            "reference_range": {
+                "low": 135,
+                "high": 145,
+                "unit": "mmol/L",
+                "provenance": {
+                    "source_fingerprint": "not-a-hash",
+                    "source": "synthetic-instrument-secret",
+                },
+            },
+        }
+    )
+
+    assert record["reference_range_provenance"] == {"status": "unknown"}
+    assert "synthetic-instrument-secret" not in json.dumps(record)
+
+
 @pytest.mark.parametrize("unit", ["mystery-unit", "units", None])
 def test_unknown_or_missing_unit_fails_closed_without_guessing(unit: object) -> None:
     record = normalize_lab_measurement(
