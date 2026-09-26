@@ -111,6 +111,7 @@ nav:
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
+      - Clinical SLM Prompt-Template Digests: models/clinical-slm-template-digests.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
