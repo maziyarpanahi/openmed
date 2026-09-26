@@ -37,8 +37,8 @@ def manifest(index=0, media_type="image/png", **fields):
     )
 
 
-def image(index=0, width=10, height=10):
-    return manifest(index, "image/png", width=width, height=height)
+def image(index=0, width=10, height=10, frames=1):
+    return manifest(index, "image/png", width=width, height=height, frames=frames)
 
 
 def plan(assets, policy=FULL, *, budget=10_000, overhead=0):
@@ -70,11 +70,26 @@ def test_audio_frame_count_is_an_exact_rational_ceiling():
     assert result.assets[0].estimated_bytes == 1601 * 4
 
 
+@pytest.mark.parametrize("media_type", ["image/gif", "image/webp", "image/png"])
+def test_animated_images_require_an_explicit_frame_count(media_type):
+    unknown = manifest(0, media_type, width=10, height=20)
+    rejected = plan([unknown])
+    assert rejected.outcome is BatchOutcome.REJECT
+    assert rejected.assets[0].field_name == "frames"
+    assert rejected.assets[0].estimated_bytes is None
+
+    known = manifest(0, media_type, width=10, height=20, frames=3)
+    accepted = plan([known], budget=2_400)
+    assert accepted.outcome is BatchOutcome.ACCEPT
+    assert accepted.assets[0].estimated_bytes == 2_400
+
+
 @pytest.mark.parametrize(
     ("asset", "policy", "field_name"),
     [
         (manifest(0, "image/png", width=10), FULL, "height"),
         (manifest(0, "image/png", height=10), FULL, "width"),
+        (manifest(0, "image/png", width=10, height=10), FULL, "frames"),
         (image(), MemoryEstimationPolicy(), "image_bytes_per_pixel"),
         (
             manifest(0, "application/dicom", width=4, height=4),
@@ -307,7 +322,7 @@ def test_rejects_empty_oversized_and_non_manifest_batches():
 
 
 def test_plan_output_is_content_free_and_stable():
-    asset = manifest(7, "image/png", width=10, height=10)
+    asset = manifest(7, "image/png", width=10, height=10, frames=1)
     result = plan([asset, manifest(8, "application/pdf", pages=2)])
     payload = result.to_json()
     assert asset.asset_id not in payload

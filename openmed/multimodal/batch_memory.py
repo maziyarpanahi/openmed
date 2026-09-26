@@ -87,7 +87,7 @@ class MemoryEstimationPolicy:
     Each factor is ``None`` (not supplied) or a bounded positive integer.
     There are no defaults: a modality whose factor is ``None`` is unevaluable.
 
-    - ``image_bytes_per_pixel``: decoded bytes per image pixel.
+    - ``image_bytes_per_pixel``: decoded bytes per image pixel, per frame.
     - ``dicom_bytes_per_pixel``: decoded bytes per DICOM pixel, per frame.
     - ``audio_sample_rate_hz``: decoded waveform sample rate.
     - ``audio_channels``: decoded waveform channel count.
@@ -272,6 +272,7 @@ def _estimate(
         inputs = (
             ("width", manifest.width),
             ("height", manifest.height),
+            ("frames", manifest.frames),
             ("image_bytes_per_pixel", policy.image_bytes_per_pixel),
         )
     elif modality == "dicom":

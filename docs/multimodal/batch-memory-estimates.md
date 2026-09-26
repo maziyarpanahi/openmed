@@ -33,7 +33,7 @@ assets that need it unevaluable.
 
 | Factor | Bound | Used for |
 | --- | --- | --- |
-| `image_bytes_per_pixel` | 1 to 1024 | images |
+| `image_bytes_per_pixel` | 1 to 1024 | images, per frame |
 | `dicom_bytes_per_pixel` | 1 to 1024 | DICOM, per frame |
 | `audio_sample_rate_hz` | 1 to 2^32 - 1 | audio waveforms |
 | `audio_channels` | 1 to 1024 | audio waveforms |
@@ -48,13 +48,18 @@ The modality comes from the manifest media type:
 
 | Modality | Estimate | Manifest fields |
 | --- | --- | --- |
-| image | width x height x `image_bytes_per_pixel` | `width`, `height` |
+| image | width x height x frames x `image_bytes_per_pixel` | `width`, `height`, `frames` |
 | DICOM | width x height x frames x `dicom_bytes_per_pixel` | `width`, `height`, `frames` |
 | audio | ceil(duration x rate) x channels x `audio_bytes_per_sample` | `duration_seconds` |
 | PDF | never estimated | none |
 
 The audio frame count is the exact rational ceiling of `duration_seconds`
 times the sample rate, so the result does not depend on float rounding.
+
+Image frame count must be supplied explicitly, even for a still image
+(`frames=1`). GIF, WebP, APNG, and TIFF may contain multiple frames. Without
+the count, a one-frame estimate would not bound a decoder that materializes
+every frame, so the planner rejects with `insufficient_metadata`.
 
 A PDF under the PDF manifest profile carries no raster geometry, and a page
 count alone cannot stand in for it, so a PDF is always unevaluable.
@@ -103,6 +108,7 @@ scan = AssetManifest(
     byte_size=4096,
     width=1024,
     height=1024,
+    frames=1,
 )
 dictation = AssetManifest(
     asset_id="dictation-001",
