@@ -127,6 +127,23 @@ def test_policy_accepts_an_unnamed_injected_callable() -> None:
     assert policy.to_dict()["rule_codes"] == ["custom_rule"]
 
 
+def test_policy_rule_failure_does_not_retain_sensitive_exception() -> None:
+    sensitive_value = "synthetic-patient-value"
+
+    def failing_rule(_request: object) -> bool:
+        raise RuntimeError(sensitive_value)
+
+    machine = ReviewStateMachine(policy=ReviewTransitionPolicy(rules=(failing_rule,)))
+    with pytest.raises(ReviewTransitionValidationError) as caught:
+        machine.transition(ReviewState.IN_REVIEW, _event("rule-error"), _provenance())
+
+    assert caught.value.code == "policy_rule_error"
+    assert sensitive_value not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert machine.history == ()
+
+
 @pytest.mark.parametrize(
     ("event_id", "fingerprint", "code"),
     [
