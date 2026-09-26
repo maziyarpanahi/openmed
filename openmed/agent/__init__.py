@@ -14,6 +14,14 @@ from .action_graph import (
     GraphFinding,
     validate_action_graph,
 )
+from .action_phases import (
+    ACTION_PHASE_TRANSITIONS,
+    ActionPhase,
+    ActionPhaseError,
+    is_resumable_phase,
+    is_terminal_phase,
+    validate_action_transition,
+)
 from .artifact_reference import (
     ARTIFACT_REFERENCE_VERSION,
     MAX_ARTIFACT_BYTE_SIZE,
@@ -190,6 +198,9 @@ from .workflows import (
 )
 
 __all__ = [
+    "ACTION_PHASE_TRANSITIONS",
+    "ActionPhase",
+    "ActionPhaseError",
     "ALLOWED_ATTRIBUTES",
     "ARTIFACT_REFERENCE_VERSION",
     "AttributeKind",
@@ -327,6 +338,9 @@ __all__ = [
     "WorkflowRollupError",
     "WorkflowRollupRow",
     "allowed_reason_codes",
+    "is_resumable_phase",
+    "is_terminal_phase",
+    "validate_action_transition",
     "compose_evidence_answer",
     "explain_cohort_membership",
     "diff_run_summaries",

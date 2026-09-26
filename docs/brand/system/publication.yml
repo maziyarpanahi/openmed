@@ -107,6 +107,7 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/action-phases.md
     - agent/capability-grants.md
     - agent/purpose-bound-access.md
     - agent/non-amplifying-delegation.md
