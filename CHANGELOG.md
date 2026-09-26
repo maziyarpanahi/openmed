@@ -247,6 +247,12 @@ there is no intervening v2.4.0 tag. See the
 
 ### Added
 
+- Added deterministic, privacy-safe directionality validation for guarded
+  causal, treatment, procedure-indication, and medication-indication relations,
+  with typed fail-closed endpoint and direction errors (#2737).
+- Added deterministic, local unit-dimension compatibility checks for dose, rate,
+  concentration, and laboratory relation candidates, with explicit review
+  findings for incompatible or unknown units and value-free reports (#2738).
 - Added deterministic, offline SDOH negated-need resolution with
   determinant-specific assertion scope, value-free provenance, and human
   review for double-negated, contradictory, and uncertain findings (#2731).

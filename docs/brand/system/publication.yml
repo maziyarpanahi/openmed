@@ -249,6 +249,8 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/relation-evidence-binding.md
+    - clinical/relation-deduplication.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
     - clinical/summary-claim-segmentation.md
@@ -272,6 +274,8 @@ classification:
     - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
+    - clinical/relation-directionality.md
+    - clinical/relation-unit-compatibility.md
     - clinical/sig-parser.md
     - clinical/summarization.md
     - medical-tokenizer.md
