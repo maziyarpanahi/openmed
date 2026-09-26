@@ -248,6 +248,7 @@ classification:
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
+    - clinical/citation-minimality.md
     - clinical/evidence-tables.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md

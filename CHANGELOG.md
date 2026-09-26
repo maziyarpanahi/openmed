@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic citation minimality checks for guarded atomic claims,
+  with opaque offset-only reports, token counts, explicit context budgets, and
+  human-review flags (#2742).
 - Added deterministic, aggregate-only review-yield metrics for guarded clinical
   relation candidates, with accepted, corrected, rejected, duplicate, and
   deferred outcomes by relation class (#2753).

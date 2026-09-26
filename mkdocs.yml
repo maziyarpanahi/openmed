@@ -173,6 +173,7 @@ nav:
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
+      - Citation Minimality Checks: clinical/citation-minimality.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
