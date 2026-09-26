@@ -189,8 +189,8 @@ def extract_to_schema(
     specs, required = _compile_schema(schema)
 
     candidates: dict[FieldSource, dict[str, list[_Candidate]]] = {
-        "entity": _entity_candidates(entities),
-        "table": _table_candidates(tables),
+        "entity": _entity_candidates(text, entities),
+        "table": _table_candidates(text, tables),
         "key_value": _key_value_candidates(text),
     }
 
@@ -449,55 +449,68 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
     return value, None
 
 
-def _entity_candidates(entities: Iterable[Any]) -> dict[str, list[_Candidate]]:
+def _entity_candidates(
+    text: str, entities: Iterable[Any]
+) -> dict[str, list[_Candidate]]:
     by_label: dict[str, list[_Candidate]] = {}
     for entity in entities:
         label = _field(entity, "label")
         start = _field(entity, "start")
         end = _field(entity, "end")
-        if not isinstance(label, str) or not _is_offset(start) or not _is_offset(end):
+        if (
+            not isinstance(label, str)
+            or not _is_offset(start)
+            or not _is_offset(end)
+            or end <= start
+            or end > len(text)
+        ):
             continue
-        raw = _field(entity, "text")
-        raw = str(raw).strip() if raw is not None else ""
-        if not raw:
+        raw = text[start:end]
+        supplied = _field(entity, "text")
+        if not raw or (supplied is not None and supplied != raw):
             continue
         by_label.setdefault(label.casefold(), []).append(
-            _Candidate(raw=raw, start=int(start), end=int(end), source="entity")
+            _Candidate(raw=raw, start=start, end=end, source="entity")
         )
     return by_label
 
 
 def _table_candidates(
+    text: str,
     tables: Iterable[Mapping[str, Any]],
 ) -> dict[str, list[_Candidate]]:
     by_key: dict[str, list[_Candidate]] = {}
     for table in tables:
         cells = table.get("cells") if isinstance(table, Mapping) else None
-        if not cells:
+        if not isinstance(cells, (list, tuple)) or not cells:
             continue
         rows: dict[int, dict[int, Mapping[str, Any]]] = {}
         for cell in cells:
             if isinstance(cell, Mapping):
-                rows.setdefault(cell["row"], {})[cell["column"]] = cell
+                row, column = cell.get("row"), cell.get("column")
+                start, end = cell.get("start"), cell.get("end")
+                if not (
+                    _is_offset(row)
+                    and _is_offset(column)
+                    and _is_offset(start)
+                    and _is_offset(end)
+                    and start < end <= len(text)
+                    and cell.get("text") == text[start:end]
+                ):
+                    continue
+                rows.setdefault(row, {})[column] = cell
         for _, columns in sorted(rows.items()):
             ordered = [columns[col] for col in sorted(columns)]
             if len(ordered) < 2:
                 continue
             key_cell, value_cell = ordered[0], ordered[1]
             key = normalize_field_key(str(key_cell.get("text", "")))
-            raw = str(value_cell.get("text", "")).strip()
-            if not key or not raw:
-                continue
             start = value_cell.get("start")
             end = value_cell.get("end")
-            if not (
-                isinstance(start, int)
-                and not isinstance(start, bool)
-                and start >= 0
-                and isinstance(end, int)
-                and not isinstance(end, bool)
-                and end >= 0
-            ):
+            if not (_is_offset(start) and _is_offset(end) and start < end <= len(text)):
+                continue
+            raw = text[start:end]
+            if not key or not raw or value_cell.get("text") != raw:
                 continue
             by_key.setdefault(key, []).append(
                 _Candidate(raw=raw, start=start, end=end, source="table")

@@ -251,6 +251,60 @@ def test_entity_source_wins_over_key_value_for_same_slot():
     assert (binding["start"], binding["end"]) == (start, end)
 
 
+def test_entity_provenance_must_match_the_source_span():
+    text = "Stage: 2\n"
+    start, end = _span(text, "2")
+    schema = {"properties": {"stage": {"type": "integer", "entity": "STAGE"}}}
+
+    for entity in (
+        {"label": "STAGE", "text": "9", "start": start, "end": end},
+        {"label": "STAGE", "text": "2", "start": len(text), "end": len(text) + 1},
+        {"label": "STAGE", "text": "2", "start": end, "end": start},
+    ):
+        result = extract_to_schema(text, schema, entities=[entity])
+        assert result["data"] == {"stage": 2}
+        assert result["bindings"]["stage"]["source"] == "key_value"
+
+    result = extract_to_schema(
+        text, schema, entities=[{"label": "STAGE", "start": start, "end": end}]
+    )
+    assert result["bindings"]["stage"]["source"] == "entity"
+    assert text[start:end] == result["bindings"]["stage"]["raw"]
+
+
+def test_malformed_table_cells_do_not_create_false_provenance_or_raise():
+    text = "Sodium 140\n"
+    start, end = _span(text, "140")
+    schema = {
+        "required": ["sodium"],
+        "properties": {"sodium": {"type": "integer"}},
+    }
+    key_cell = {"row": 0, "column": 0, "text": "Sodium", "start": 0, "end": 6}
+
+    for bad_cell in (
+        {"row": 0, "text": "140", "start": start, "end": end},
+        {"row": 0, "column": 1, "text": "999", "start": start, "end": end},
+        {"row": 0, "column": 1, "text": "140", "start": end, "end": end + 3},
+    ):
+        result = extract_to_schema(
+            text, schema, tables=[{"cells": [key_cell, bad_cell]}]
+        )
+        assert result["data"] == {}
+        assert result["missing_required"] == ["sodium"]
+
+    assert extract_to_schema(text, schema, tables=[{"cells": 42}])["data"] == {}
+    valid = {"row": 0, "column": 1, "text": "140", "start": start, "end": end}
+    mismatched_key = {**key_cell, "text": "Potassium"}
+    result = extract_to_schema(
+        text, schema, tables=[{"cells": [mismatched_key, valid]}]
+    )
+    assert result["missing_required"] == ["sodium"]
+
+    result = extract_to_schema(text, schema, tables=[{"cells": [key_cell, valid]}])
+    assert result["data"] == {"sodium": 140}
+    assert text[start:end] == result["bindings"]["sodium"]["raw"]
+
+
 # --------------------------------------------------------------------------
 # Schema validation (bad schema raises; bad document never does)
 # --------------------------------------------------------------------------
