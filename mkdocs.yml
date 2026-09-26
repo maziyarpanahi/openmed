@@ -174,6 +174,7 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
       - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
