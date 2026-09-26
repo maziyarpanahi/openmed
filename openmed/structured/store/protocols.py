@@ -411,6 +411,11 @@ class JobMetadataStore(Protocol):
     ) -> StoreResult[JobMetadata]:
         """Read job metadata at one revision."""
 
+    def list_job_versions(
+        self, job_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[JobMetadata, ...]]:
+        """Read append-only job metadata versions through one revision."""
+
 
 @runtime_checkable
 class PointInTimeReader(Protocol):
@@ -429,6 +434,50 @@ class PointInTimeReader(Protocol):
         self, canonical_id: str, *, as_of: StorePoint | None = None
     ) -> StoreResult[CanonicalRecordVersion]:
         """Read canonical state visible at a committed revision."""
+
+
+@runtime_checkable
+class JourneyQueryStore(Protocol):
+    """Read surface required to materialize longitudinal journey views."""
+
+    @property
+    def latest_revision(self) -> int | None:
+        """Return the latest committed revision."""
+
+    def get_artifact(
+        self, artifact_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[ClinicalArtifact]:
+        """Read artifact metadata visible at one revision."""
+
+    def get_evidence(
+        self, locator_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[EvidenceLocator]:
+        """Read evidence visible at one revision."""
+
+    def list_facts(
+        self, subject_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[ClinicalFact, ...]]:
+        """Read deterministic fact history for one subject."""
+
+    def list_conflicts(
+        self, subject_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[ConflictSet, ...]]:
+        """Read deterministic conflict history for one subject."""
+
+    def list_resolutions(
+        self, conflict_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[ResolutionEvent, ...]]:
+        """Read append-only resolution history for one conflict."""
+
+    def list_canonical_records(
+        self, subject_id: str, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[CanonicalRecordVersion, ...]]:
+        """Read the latest visible canonical pointer for each subject record."""
+
+    def list_jobs(
+        self, *, as_of: StorePoint | None = None
+    ) -> StoreResult[tuple[JobMetadata, ...]]:
+        """Read the latest visible version of each PHI-free job record."""
 
 
 @runtime_checkable
@@ -476,6 +525,7 @@ class TransactionalJourneyStore(
     ResolutionStore,
     DatasetStore,
     JobMetadataStore,
+    JourneyQueryStore,
     PointInTimeReader,
     Protocol,
 ):

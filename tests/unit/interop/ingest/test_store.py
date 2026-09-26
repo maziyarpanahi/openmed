@@ -139,8 +139,9 @@ def test_existing_v1_journey_database_migrates_to_ingestion_ledger(
         )
     }
 
-    assert [row["version"] for row in versions] == [1, 2]
+    assert [row["version"] for row in versions] == [1, 2, 3]
     assert "ingestion_jobs" in tables
+    assert "ingestion_pipeline_stages" in tables
     assert store.ingestion_integrity_check().ok
     store.close()
 

@@ -1,0 +1,22 @@
+{{- if and .Values.journey.enabled (not .Values.journey.artifacts.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openmed-service.journeyArtifactClaimName" . }}
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: journey-artifacts
+  {{- with .Values.journey.artifacts.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.journey.artifacts.accessModes | nindent 4 }}
+  {{- if .Values.journey.artifacts.storageClassName }}
+  storageClassName: {{ .Values.journey.artifacts.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.journey.artifacts.size | quote }}
+{{- end }}

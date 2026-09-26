@@ -37,6 +37,10 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     HARD_NEGATIVE_CATEGORY,
     CRITICAL_FINDINGS_CATEGORY,
 )
+SPECIALIZED_GOLDEN_CATEGORIES: tuple[str, ...] = ("temporal_consistency",)
+_VALID_GOLDEN_CATEGORIES = frozenset(
+    {*GOLDEN_CATEGORIES, *SPECIALIZED_GOLDEN_CATEGORIES}
+)
 
 _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
@@ -69,6 +73,8 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "joint_entity_relation.jsonl",
         "relation_calibration.jsonl",
         "relation_assertion.jsonl",
+        "ade_relations.jsonl",
+        "relation_candidates.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",
         "relations_zh.jsonl",
@@ -84,6 +90,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "measurement_trend.jsonl",
         "norm_multilingual.jsonl",
         "temporal_tlinks.jsonl",
+        "temporal_consistency.jsonl",
         "tnm_stage.jsonl",
         "oncotree_map.jsonl",
     }
@@ -120,7 +127,7 @@ class GoldenFixture:
             raise ValueError("golden fixture metadata.synthetic must be true")
 
         category = str(metadata.get("category", ""))
-        if category not in GOLDEN_CATEGORIES:
+        if category not in _VALID_GOLDEN_CATEGORIES:
             raise ValueError(f"unknown golden fixture category: {category!r}")
 
         expected_output = metadata.get("expected_output")

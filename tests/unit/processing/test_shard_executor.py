@@ -40,9 +40,12 @@ from openmed.processing.run_manifest import (
     shard_output_digest,
     validate_shard_outputs,
 )
+from openmed.processing.shard_executor import current_worker_id
 
 DOCUMENT_ID_PREFIX = "note-"
 SECRET_ERROR_TOKEN = "unredacted-handler-detail"
+# The bare prefix can occur in a PHI-free process id such as pid-1555-thread-...
+SYNTHETIC_EXTENSIONS = tuple(f"555-{index:04d}" for index in range(12))
 CRASH_PHASES = (
     "after_write",
     "after_fsync",
@@ -573,6 +576,16 @@ def test_planted_temporary_file_is_never_counted_as_a_shard_output(
 # --- Worker failures --------------------------------------------------------
 
 
+def test_synthetic_extension_scan_accepts_pid_and_rejects_leak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(os, "getpid", lambda: 1555)
+    worker_id = current_worker_id()
+    _assert_free_of(worker_id, SYNTHETIC_EXTENSIONS)
+    with pytest.raises(AssertionError, match="555-0003"):
+        _assert_free_of(f"{worker_id} 555-0003", SYNTHETIC_EXTENSIONS)
+
+
 def test_worker_failure_records_error_type_without_leaking_detail(
     tmp_path: Path,
 ) -> None:
@@ -600,7 +613,12 @@ def test_worker_failure_records_error_type_without_leaking_detail(
         assert record.output_digest is None
     assert not list((tmp_path / "outputs").glob("shard-*.jsonl"))
 
-    forbidden = (SECRET_ERROR_TOKEN, DOCUMENT_ID_PREFIX, "Synthetic subject", "555-")
+    forbidden = (
+        SECRET_ERROR_TOKEN,
+        DOCUMENT_ID_PREFIX,
+        "Synthetic subject",
+        *SYNTHETIC_EXTENSIONS,
+    )
     _assert_free_of(result.to_dict(), forbidden)
     _assert_free_of(result.manifest.to_dict(), forbidden)
     _assert_free_of(
@@ -628,7 +646,12 @@ def test_completed_manifest_bytes_are_phi_free(tmp_path: Path) -> None:
     )
     assert result.is_complete
 
-    forbidden = (SECRET_ERROR_TOKEN, DOCUMENT_ID_PREFIX, "Synthetic subject", "555-")
+    forbidden = (
+        SECRET_ERROR_TOKEN,
+        DOCUMENT_ID_PREFIX,
+        "Synthetic subject",
+        *SYNTHETIC_EXTENSIONS,
+    )
     raw_manifest = (tmp_path / "manifest.json").read_text(encoding="utf-8")
     for token in forbidden:
         assert token not in raw_manifest

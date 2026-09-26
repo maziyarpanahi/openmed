@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -13,9 +15,14 @@ from openmed.structured.store import (
     PostgresJourneyStore,
     PostgresMigration,
     PostgresMigrationReport,
+    StoreResult,
     StoreState,
 )
-from openmed.structured.store.postgres import _postgres_sql
+from openmed.structured.store.postgres import (
+    _pg8000_connect_parameters,
+    _postgres_sql,
+    _sqlstate,
+)
 
 
 def test_postgres_migrations_are_ordered_deterministic_and_native() -> None:
@@ -88,3 +95,90 @@ def test_invalid_connection_and_dsn_return_typed_failure() -> None:
     assert connected.state is StoreState.FAILURE
     assert connected.code == "invalid_dsn"
     assert "object" not in repr(opened)
+
+
+def test_pg8000_connection_url_decodes_credentials_and_bounds_options() -> None:
+    parameters = _pg8000_connect_parameters(
+        "postgresql://openmed:p%40ss%3Aword@postgres:5432/openmed",
+        {"connect_timeout": 3},
+    )
+
+    assert parameters == {
+        "database": "openmed",
+        "host": "postgres",
+        "password": "p@ss:word",
+        "port": 5432,
+        "ssl_context": None,
+        "timeout": 3,
+        "user": "openmed",
+    }
+
+
+def test_postgres_connect_uses_reviewed_driver_without_exposing_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+    connection = object()
+
+    def fake_connect(**kwargs: Any) -> object:
+        observed.update(kwargs)
+        return connection
+
+    def fake_import(name: str) -> SimpleNamespace:
+        assert name == "pg8000.dbapi"
+        return SimpleNamespace(connect=fake_connect)
+
+    monkeypatch.setattr(
+        "openmed.structured.store.postgres.import_module",
+        fake_import,
+    )
+    monkeypatch.setattr(
+        PostgresJourneyStore,
+        "open",
+        classmethod(lambda cls, raw, **kwargs: StoreResult.success(raw)),
+    )
+
+    result = PostgresJourneyStore.connect(
+        "postgresql://openmed:synthetic-secret@postgres/openmed"
+    )
+
+    assert result.ok
+    assert result.value is connection
+    assert observed["password"] == "synthetic-secret"
+    assert "synthetic-secret" not in repr(result)
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    (
+        "https://openmed:secret@postgres/openmed",
+        "postgresql://openmed:secret@postgres:0/openmed",
+        "postgresql://openmed:secret@postgres/openmed?sslmode=disable",
+        "postgresql://openmed:secret@postgres/openmed?sslmode=require",
+        "postgresql://openmed:secret@postgres/openmed?sslmode=verify-full&x=y",
+    ),
+)
+def test_pg8000_connection_url_rejects_unsupported_or_unsafe_options(
+    dsn: str,
+) -> None:
+    result = PostgresJourneyStore.connect(dsn)
+
+    assert result.state is StoreState.FAILURE
+    assert result.code == "invalid_dsn"
+    assert "secret" not in repr(result)
+
+
+def test_pg8000_connection_url_requires_tls_verification_when_requested() -> None:
+    parameters = _pg8000_connect_parameters(
+        "postgresql://openmed@db.example/openmed?sslmode=verify-full",
+        None,
+    )
+
+    assert parameters["ssl_context"].check_hostname is True
+    assert parameters["ssl_context"].verify_mode.name == "CERT_REQUIRED"
+
+
+def test_pg8000_constraint_sqlstate_remains_typed() -> None:
+    assert _sqlstate(ValueError({"C": "23505", "M": "synthetic sensitive"})) == (
+        "23505"
+    )

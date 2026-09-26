@@ -34,6 +34,12 @@ from .contracts import (
     Retry,
     SourceManifest,
 )
+from .pipeline_contracts import (
+    PipelineLineageError,
+    PipelineStageInvalidation,
+    PipelineStageManifest,
+    build_stage_invalidation,
+)
 
 T = TypeVar("T")
 
@@ -918,6 +924,11 @@ class _IngestionStoreMixin:
             ("ingestion_cancellations", Cancellation.from_json),
             ("ingestion_quarantine_results", QuarantineResult.from_json),
             ("ingestion_quarantine_promotions", QuarantinePromotion.from_json),
+            ("ingestion_pipeline_stages", PipelineStageManifest.from_json),
+            (
+                "ingestion_pipeline_invalidations",
+                PipelineStageInvalidation.from_json,
+            ),
         )
         counts: dict[str, int] = {}
         try:
@@ -933,11 +944,296 @@ class _IngestionStoreMixin:
                             "payload_hash_mismatch",
                         )
                 counts[table] = len(rows)
-        except (IngestionContractError, TypeError, ValueError, json.JSONDecodeError):
+            edge_rows = self._connection.execute(
+                "SELECT parent_stage_manifest_id, child_stage_manifest_id "
+                "FROM ingestion_pipeline_edges"
+            ).fetchall()
+            counts["ingestion_pipeline_edges"] = len(edge_rows)
+        except (
+            IngestionContractError,
+            PipelineLineageError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ):
             return StoreResult.outcome(StoreState.FAILURE, "stored_payload_invalid")
         except (sqlite3.Error, RuntimeError):
             return StoreResult.outcome(StoreState.FAILURE, "integrity_check_failed")
         return StoreResult.success(counts)
+
+    def put_pipeline_stage(
+        self,
+        manifest: PipelineStageManifest,
+    ) -> StoreResult[PipelineStageManifest]:
+        """Persist one safe stage manifest and its derivation edges."""
+
+        denied = self._ingestion_denied("write")
+        if denied is not None:
+            return denied
+        try:
+            input_digest = canonical_digest(list(manifest.input_digests))
+            output_digest = (
+                canonical_digest(list(manifest.output_digests))
+                if manifest.output_digests
+                else None
+            )
+            with self._ledger_transaction():
+                if self._get_job_locked(manifest.job_id) is None:
+                    return StoreResult.outcome(StoreState.UNKNOWN, "job_not_found")
+                existing = self._connection.execute(
+                    "SELECT payload_json FROM ingestion_pipeline_stages "
+                    "WHERE stage_manifest_id = ? OR "
+                    "(job_id = ? AND stage = ? AND input_digest = ?)",
+                    (
+                        manifest.stage_manifest_id,
+                        manifest.job_id,
+                        manifest.stage,
+                        input_digest,
+                    ),
+                ).fetchone()
+                if existing is not None:
+                    stored = self._parse_record(
+                        existing,
+                        PipelineStageManifest.from_json,
+                    )
+                    if stored == manifest:
+                        return StoreResult.success(stored, created=False)
+                    return StoreResult.outcome(
+                        StoreState.CONFLICT,
+                        "stage_manifest_conflict",
+                    )
+                for parent_id in manifest.parent_stage_manifest_ids:
+                    parent = self._connection.execute(
+                        "SELECT 1 FROM ingestion_pipeline_stages "
+                        "WHERE stage_manifest_id = ?",
+                        (parent_id,),
+                    ).fetchone()
+                    if parent is None:
+                        return StoreResult.outcome(
+                            StoreState.PARTIAL,
+                            "stage_parent_missing",
+                        )
+                self._insert_payload(
+                    "ingestion_pipeline_stages",
+                    (
+                        "stage_manifest_id",
+                        "job_id",
+                        "stage",
+                        "sequence",
+                        "state",
+                        "input_digest",
+                        "output_digest",
+                        "recorded_at",
+                        "payload_hash",
+                        "payload_json",
+                    ),
+                    (
+                        manifest.stage_manifest_id,
+                        manifest.job_id,
+                        manifest.stage,
+                        manifest.sequence,
+                        manifest.state,
+                        input_digest,
+                        output_digest,
+                        manifest.recorded_at,
+                        manifest.manifest_digest,
+                        manifest.to_json(),
+                    ),
+                )
+                if manifest.parent_stage_manifest_ids:
+                    self._connection.executemany(
+                        "INSERT INTO ingestion_pipeline_edges("
+                        "parent_stage_manifest_id, child_stage_manifest_id"
+                        ") VALUES (?, ?)",
+                        tuple(
+                            (parent_id, manifest.stage_manifest_id)
+                            for parent_id in manifest.parent_stage_manifest_ids
+                        ),
+                    )
+            return StoreResult.success(manifest, created=True)
+        except CommitStatusUnknown:
+            return StoreResult.outcome(StoreState.UNKNOWN, "commit_status_unknown")
+        except (PipelineLineageError, TypeError, ValueError):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_stage_manifest")
+        except (sqlite3.Error, StoreConstraintError, RuntimeError):
+            return StoreResult.outcome(
+                StoreState.FAILURE, "stage_manifest_write_failed"
+            )
+
+    def list_pipeline_stages(
+        self,
+        job_id: str,
+    ) -> StoreResult[tuple[PipelineStageManifest, ...]]:
+        """List stage manifests for one job in deterministic execution order."""
+
+        denied = self._ingestion_denied("read")
+        if denied is not None:
+            return denied
+        try:
+            rows = self._connection.execute(
+                "SELECT payload_json FROM ingestion_pipeline_stages "
+                "WHERE job_id = ? ORDER BY sequence, stage_manifest_id",
+                (job_id,),
+            ).fetchall()
+            manifests = tuple(
+                self._parse_record(row, PipelineStageManifest.from_json) for row in rows
+            )
+        except (PipelineLineageError, TypeError, ValueError, json.JSONDecodeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stored_stage_invalid")
+        except (sqlite3.Error, RuntimeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stage_manifest_read_failed")
+        if not manifests:
+            return StoreResult.outcome(StoreState.UNKNOWN, "stage_manifest_not_found")
+        return StoreResult.success(manifests)
+
+    def invalidate_pipeline_descendants(
+        self,
+        job_id: str,
+        *,
+        from_stage_manifest_id: str,
+        replacement_job_id: str,
+        recorded_at: str,
+    ) -> StoreResult[tuple[PipelineStageInvalidation, ...]]:
+        """Invalidate a replaced stage and descendants without touching ancestors."""
+
+        denied = self._ingestion_denied("write")
+        if denied is not None:
+            return denied
+        try:
+            _parse_time(recorded_at, "recorded_at")
+            with self._ledger_transaction():
+                if self._get_job_locked(replacement_job_id) is None:
+                    return StoreResult.outcome(
+                        StoreState.UNKNOWN,
+                        "replacement_job_not_found",
+                    )
+                rows = self._connection.execute(
+                    "SELECT payload_json FROM ingestion_pipeline_stages "
+                    "WHERE job_id = ? ORDER BY sequence, stage_manifest_id",
+                    (job_id,),
+                ).fetchall()
+                manifests = {
+                    item.stage_manifest_id: item
+                    for item in (
+                        self._parse_record(row, PipelineStageManifest.from_json)
+                        for row in rows
+                    )
+                }
+                if from_stage_manifest_id not in manifests:
+                    return StoreResult.outcome(
+                        StoreState.UNKNOWN,
+                        "stage_manifest_not_found",
+                    )
+                edge_rows = self._connection.execute(
+                    "SELECT parent_stage_manifest_id, child_stage_manifest_id "
+                    "FROM ingestion_pipeline_edges"
+                ).fetchall()
+                children: dict[str, set[str]] = {}
+                for row in edge_rows:
+                    parent_id = str(row["parent_stage_manifest_id"])
+                    child_id = str(row["child_stage_manifest_id"])
+                    if child_id in manifests:
+                        children.setdefault(parent_id, set()).add(child_id)
+                selected: set[str] = set()
+                pending = [from_stage_manifest_id]
+                while pending:
+                    current = pending.pop()
+                    if current in selected:
+                        continue
+                    selected.add(current)
+                    pending.extend(sorted(children.get(current, ())))
+                invalidations = tuple(
+                    build_stage_invalidation(
+                        manifests[stage_id],
+                        replacement_job_id=replacement_job_id,
+                        reason_code="stage_reprocessed",
+                        recorded_at=recorded_at,
+                    )
+                    for stage_id in sorted(
+                        selected,
+                        key=lambda item: (
+                            manifests[item].sequence,
+                            item,
+                        ),
+                    )
+                )
+                for invalidation in invalidations:
+                    existing = self._connection.execute(
+                        "SELECT payload_json FROM ingestion_pipeline_invalidations "
+                        "WHERE invalidation_id = ? OR "
+                        "(stage_manifest_id = ? AND replacement_job_id = ?)",
+                        (
+                            invalidation.invalidation_id,
+                            invalidation.stage_manifest_id,
+                            invalidation.replacement_job_id,
+                        ),
+                    ).fetchone()
+                    if existing is not None:
+                        stored = self._parse_record(
+                            existing,
+                            PipelineStageInvalidation.from_json,
+                        )
+                        if stored != invalidation:
+                            return StoreResult.outcome(
+                                StoreState.CONFLICT,
+                                "stage_invalidation_conflict",
+                            )
+                        continue
+                    self._insert_payload(
+                        "ingestion_pipeline_invalidations",
+                        (
+                            "invalidation_id",
+                            "job_id",
+                            "stage_manifest_id",
+                            "replacement_job_id",
+                            "recorded_at",
+                            "payload_hash",
+                            "payload_json",
+                        ),
+                        (
+                            invalidation.invalidation_id,
+                            invalidation.job_id,
+                            invalidation.stage_manifest_id,
+                            invalidation.replacement_job_id,
+                            invalidation.recorded_at,
+                            canonical_digest(invalidation.to_dict()),
+                            invalidation.to_json(),
+                        ),
+                    )
+            return StoreResult.success(invalidations, created=True)
+        except CommitStatusUnknown:
+            return StoreResult.outcome(StoreState.UNKNOWN, "commit_status_unknown")
+        except (PipelineLineageError, TypeError, ValueError):
+            return StoreResult.outcome(StoreState.FAILURE, "invalid_stage_invalidation")
+        except (sqlite3.Error, StoreConstraintError, RuntimeError):
+            return StoreResult.outcome(StoreState.FAILURE, "stage_invalidation_failed")
+
+    def list_pipeline_invalidations(
+        self,
+        job_id: str,
+    ) -> StoreResult[tuple[PipelineStageInvalidation, ...]]:
+        """List stage invalidations for one job."""
+
+        denied = self._ingestion_denied("read")
+        if denied is not None:
+            return denied
+        try:
+            rows = self._connection.execute(
+                "SELECT payload_json FROM ingestion_pipeline_invalidations "
+                "WHERE job_id = ? ORDER BY recorded_at, invalidation_id",
+                (job_id,),
+            ).fetchall()
+            invalidations = tuple(
+                self._parse_record(row, PipelineStageInvalidation.from_json)
+                for row in rows
+            )
+        except (PipelineLineageError, TypeError, ValueError, json.JSONDecodeError):
+            return StoreResult.outcome(
+                StoreState.FAILURE, "stored_invalidation_invalid"
+            )
+        except (sqlite3.Error, RuntimeError):
+            return StoreResult.outcome(StoreState.FAILURE, "invalidation_read_failed")
+        return StoreResult.success(invalidations)
 
     def _get_job_locked(self, job_id: str) -> IngestionJob | None:
         row = self._connection.execute(

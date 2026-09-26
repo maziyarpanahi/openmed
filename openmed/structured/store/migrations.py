@@ -289,6 +289,61 @@ MIGRATIONS = (
             """,
         ),
     ),
+    StoreMigration(
+        version=3,
+        name="ingestion_pipeline_lineage",
+        statements=(
+            """
+            CREATE TABLE ingestion_pipeline_stages (
+                stage_manifest_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                stage TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                state TEXT NOT NULL,
+                input_digest TEXT NOT NULL,
+                output_digest TEXT,
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                UNIQUE (job_id, stage, input_digest)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_pipeline_edges (
+                parent_stage_manifest_id TEXT NOT NULL
+                    REFERENCES ingestion_pipeline_stages(stage_manifest_id),
+                child_stage_manifest_id TEXT NOT NULL
+                    REFERENCES ingestion_pipeline_stages(stage_manifest_id),
+                PRIMARY KEY (parent_stage_manifest_id, child_stage_manifest_id)
+            )
+            """,
+            """
+            CREATE TABLE ingestion_pipeline_invalidations (
+                invalidation_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                stage_manifest_id TEXT NOT NULL
+                    REFERENCES ingestion_pipeline_stages(stage_manifest_id),
+                replacement_job_id TEXT NOT NULL REFERENCES ingestion_jobs(job_id),
+                recorded_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                UNIQUE (stage_manifest_id, replacement_job_id)
+            )
+            """,
+            """
+            CREATE INDEX ingestion_pipeline_job_sequence_idx
+            ON ingestion_pipeline_stages(job_id, sequence, stage_manifest_id)
+            """,
+            """
+            CREATE INDEX ingestion_pipeline_edge_child_idx
+            ON ingestion_pipeline_edges(child_stage_manifest_id)
+            """,
+            """
+            CREATE INDEX ingestion_pipeline_invalidation_job_idx
+            ON ingestion_pipeline_invalidations(job_id, recorded_at)
+            """,
+        ),
+    ),
 )
 
 LATEST_MIGRATION_VERSION = MIGRATIONS[-1].version
