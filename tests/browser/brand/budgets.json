@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 79244252,
-    "maximum_unique_payload_bytes": 78906673,
+    "maximum_total_bytes": 79449819,
+    "maximum_unique_payload_bytes": 79112240,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,6 +31,9 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The refreshed evidence-coverage source artifact measured 79334329 total bytes, 78996750 unique payload bytes, 337579 duplicate bytes, and a 4168393-byte search index locally.",
+    "The total and unique ceilings retain the observed 4740-byte hosted platform delta plus 110750 bytes of bounded headroom. Per-file caps and transfer budgets remain unchanged.",
+    "Earlier clinical-assurance source staging measured 78723709 to 78727212 total bytes and 78386130 to 78389633 unique bytes; this refreshed source measurement supersedes that historical budget.",
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
     "The combined clinical, schema-compatibility, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail staging aggregate contains 79128766 total bytes, 78791187 unique payload bytes, and 337579 duplicate payload bytes locally.",
     "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
