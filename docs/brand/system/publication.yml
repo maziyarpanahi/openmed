@@ -128,6 +128,7 @@ classification:
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
+    - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
     - agent/schema-compatibility.md
@@ -306,6 +307,7 @@ classification:
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
+    - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
@@ -327,11 +329,13 @@ classification:
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
+    - multimodal/batch-memory-estimates.md
     - multimodal/preflight.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
+    - multimodal/processing-diffs.md
     - multimodal/provider-results.md
     - multimodal/audio-windows.md
     - multimodal/wav-preflight.md
@@ -363,16 +367,19 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
     - clinical/experiencer-refinement.md
+    - clinical/nli-batch-planning.md
     - clinical/sdoh-experiencer-filtering.md
     - clinical/sdoh-negated-needs.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
+    - clinical/nli-cascade.md
     - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - runtimes/gguf-grounding.md

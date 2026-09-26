@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, domain-separated SHA-256 commitments for validated
+  agent run summaries, with constant-time categorical verification, stable
+  golden vectors, and value-free malformed-input handling (#3039).
+- Added domain-separated, metadata-only fingerprints for validated federated
+  update schemas, with constant-time schema comparison (#3055).
+- Added deterministic, metadata-only multimodal processing summary differences
+  with signed aggregate deltas and sorted input/output digest changes (#3052).
 - Added deterministic, aggregate-only review-yield metrics for guarded clinical
   relation candidates, with accepted, corrected, rejected, duplicate, and
   deferred outcomes by relation class (#2753).
@@ -117,6 +124,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio, with integer-millisecond offsets, real per-window overlap,
   keep/merge/drop tail policies, arithmetic window-count bounds, and
   value-free rejection of boolean, negative and overflowing input (#3005).
+- Added decoded-memory planning for multimodal batches: estimates image,
+  DICOM, and audio memory from validated manifests and an explicit
+  caller-supplied factor policy, then accepts, splits into ordered batches,
+  or rejects against an inclusive byte budget with per-batch overhead. Missing
+  factors or geometry, including PDF page counts, stay unevaluable, and
+  saturating 64-bit arithmetic never yields an accept (#3091).
 - Added a bounded, dependency-free PDF page geometry preflight that reads the
   version, page count, and inherited media box, crop box, and rotation for
   each page, including FlateDecode object streams, and reports numbers and
@@ -235,6 +248,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Empty explicit keys are rejected; redaction labels and offsets are unchanged.
 - GitHub Actions are pinned to immutable commits, enforced by CI, and container
   publishing permissions are limited to the publish job.
+
+### Fixed
+
+- Require strict decoder validation before auto-detecting ISCII, preserving
+  malformed Latin-1 strings through privacy preprocessing instead of raising
+  or partially rewriting the input (#3242).
 
 ## [2.5.0] - 2026-09-14
 

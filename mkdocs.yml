@@ -53,6 +53,7 @@ nav:
       - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
       - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+      - Deterministic Agent Run Commitments: agent/run-commitments.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
@@ -231,6 +232,7 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
@@ -252,11 +254,13 @@ nav:
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
+      - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Multimodal Preflight Report: multimodal/preflight.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
+      - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
@@ -288,16 +292,19 @@ nav:
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
+      - Clinical NLI Batch Planning: clinical/nli-batch-planning.md
       - SDOH Experiencer Filtering: clinical/sdoh-experiencer-filtering.md
       - SDOH Negated-Need Resolution: clinical/sdoh-negated-needs.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - TensorRT Runtime: runtimes/tensorrt.md
+      - Clinical NLI Cascade: clinical/nli-cascade.md
       - WebGPU Token-Classification Runtime: runtimes/webgpu.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
