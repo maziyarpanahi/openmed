@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 79423813,
-    "maximum_unique_payload_bytes": 79086234,
+    "maximum_total_bytes": 79882833,
+    "maximum_unique_payload_bytes": 79545254,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -32,11 +32,12 @@
   },
   "notes": [
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
-    "The combined clinical, schema-compatibility, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail staging aggregate contains 79128766 total bytes, 78791187 unique payload bytes, and 337579 duplicate payload bytes locally.",
+    "The unchanged 6ff3809 base stages 79128774 total bytes, 78791195 unique payload bytes, and 337579 duplicate payload bytes on Linux.",
+    "The combined schema fingerprint and processing summary diff guides stage 79540641 total bytes, 79203062 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the multimodal batch-memory guide, the staged artifact measures 79767347 total bytes, 79429768 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
     "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined search index measured 4166281 bytes; its 4191889-byte JSON ceiling retains 20872 bytes of bounded headroom after the observed platform delta.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined search index measures 4177224 bytes against its 4191889-byte JSON ceiling.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
-    "The multimodal batch-memory guide and its navigation entry add 179561 total and unique payload bytes, measured as a same-environment staged-artifact delta against master 0f8090c23 and added on top of the reconciliation above (79244252 / 78906673). Both ceilings rise by exactly that amount, so the recorded 110750-byte headroom is unchanged; duplicate, per-file, route, and search-index budgets are unaffected.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",

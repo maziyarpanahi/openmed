@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added domain-separated, metadata-only fingerprints for validated federated
+  update schemas, with constant-time schema comparison (#3055).
+- Added deterministic, metadata-only multimodal processing summary differences
+  with signed aggregate deltas and sorted input/output digest changes (#3052).
 - Added deterministic, aggregate-only review-yield metrics for guarded clinical
   relation candidates, with accepted, corrected, rejected, duplicate, and
   deferred outcomes by relation class (#2753).
@@ -241,6 +245,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Empty explicit keys are rejected; redaction labels and offsets are unchanged.
 - GitHub Actions are pinned to immutable commits, enforced by CI, and container
   publishing permissions are limited to the publish job.
+
+### Fixed
+
+- Require strict decoder validation before auto-detecting ISCII, preserving
+  malformed Latin-1 strings through privacy preprocessing instead of raising
+  or partially rewriting the input (#3242).
 
 ## [2.5.0] - 2026-09-14
 

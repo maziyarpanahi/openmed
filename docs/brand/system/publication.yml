@@ -305,6 +305,7 @@ classification:
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
+    - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
@@ -332,6 +333,7 @@ classification:
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
+    - multimodal/processing-diffs.md
     - multimodal/provider-results.md
     - multimodal/audio-windows.md
     - multimodal/wav-preflight.md

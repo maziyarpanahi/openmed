@@ -230,6 +230,7 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
@@ -257,6 +258,7 @@ nav:
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
+      - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
