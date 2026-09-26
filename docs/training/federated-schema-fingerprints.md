@@ -3,8 +3,8 @@
 Coordinators can compare the declared schemas of anonymous dense adapter
 updates without opening tensor values. `fingerprint_update_schema()` accepts an
 already validated `FederatedUpdateMetadata` instance and returns a lowercase
-`sha256:` reference. `same_update_schema()` compares two such references with
-`hmac.compare_digest`.
+`sha256:` reference. `same_update_schema()` fingerprints two validated metadata
+instances and compares the resulting references with `hmac.compare_digest`.
 
 ```python
 from openmed.training.federated_schema_fingerprint import (
