@@ -15,7 +15,10 @@ An accepted `EvidenceReference` contains only:
 
 It never stores source text, excerpts, claims, or opaque payloads. References
 must be explicitly synthetic (`synthetic: true`) and verified
-(`verified: true`). Their `review_state` must be `"approved"`, backed by an
+(`verified: true`). Reference, source, and packet IDs require a `synthetic:` or
+`fixture:` prefix (the hyphen forms also work); a caller flag alone cannot
+make a patient value safe. IDs must be opaque and contain no patient values.
+Their `review_state` must be `"approved"`, backed by an
 ordered review history under the default transition policy. Every transition
 must carry the provenance fingerprint for that exact reference, source, offset,
 and evidence policy. A state string or approval event alone is insufficient.

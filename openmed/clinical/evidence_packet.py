@@ -230,12 +230,10 @@ def _contains_raw_text(value: Any) -> bool:
     return False
 
 
-def _is_synthetic_marker(value: Any, reference_id: Any) -> bool:
-    if value is True:
-        return True
-    if not isinstance(reference_id, str):
+def _is_synthetic_marker(identifier: Any) -> bool:
+    if not isinstance(identifier, str):
         return False
-    return reference_id.strip().lower().startswith(_SYNTHETIC_PREFIXES)
+    return identifier.strip().lower().startswith(_SYNTHETIC_PREFIXES)
 
 
 def _extract_offset_values(payload: Mapping[str, Any]) -> tuple[Any, Any, Any]:
@@ -290,7 +288,11 @@ class EvidenceReference:
             if self.source_id is None
             else _required_identifier(self.source_id)
         )
-        if self.synthetic is not True:
+        if (
+            self.synthetic is not True
+            or not _is_synthetic_marker(reference_id)
+            or not _is_synthetic_marker(source_id)
+        ):
             raise _reject(REJECTION_NOT_SYNTHETIC)
         if self.verified is not True:
             raise _reject(REJECTION_UNVERIFIED)
@@ -374,7 +376,7 @@ class EvidenceReference:
 
         synthetic = payload.get("synthetic", payload.get("is_synthetic"))
         if synthetic is None:
-            synthetic = _is_synthetic_marker(None, reference_id)
+            synthetic = _is_synthetic_marker(reference_id)
         if synthetic is not True:
             raise _reject(REJECTION_NOT_SYNTHETIC)
 
@@ -510,6 +512,8 @@ class EvidencePacket:
             raise ValueError("unsupported evidence packet schema version")
         policy_fingerprint = _validate_policy_fingerprint(self.policy_fingerprint)
         packet_id = _required_identifier(self.packet_id)
+        if not _is_synthetic_marker(packet_id):
+            raise _reject(REJECTION_NOT_SYNTHETIC)
         references = tuple(self.references)
         seen: set[str] = set()
         for reference in references:

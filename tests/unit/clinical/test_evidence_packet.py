@@ -124,6 +124,28 @@ def test_rejections_are_stable_counts_only_and_do_not_leak_values() -> None:
     assert sensitive_marker not in str(error.value)
 
 
+def test_synthetic_flag_cannot_make_patient_values_safe_identifiers() -> None:
+    patient_value = "SyntheticPatientName"
+    packet = build_evidence_packet(
+        [
+            _reference(patient_value),
+            _reference("synthetic:ref-002", source_id=patient_value),
+        ],
+        policy_fingerprint=POLICY_FINGERPRINT,
+    )
+
+    assert packet.rejection_counts == {REJECTION_NOT_SYNTHETIC: 2}
+    assert patient_value not in packet.to_json()
+    with pytest.raises(EvidencePacketValidationError) as caught:
+        build_evidence_packet(
+            [_reference()],
+            policy_fingerprint=POLICY_FINGERPRINT,
+            packet_id=patient_value,
+        )
+    assert caught.value.category == REJECTION_NOT_SYNTHETIC
+    assert patient_value not in str(caught.value)
+
+
 def test_policy_fingerprint_mismatch_is_rejected_without_record_details() -> None:
     other_policy = fingerprint_policy({"policy": "other-synthetic-policy"})
     packet = build_evidence_packet(
