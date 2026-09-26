@@ -242,6 +242,7 @@ classification:
     - clinical/diagnosis-treatment-relations.md
     - clinical/relation-review-priority.md
     - clinical/event-timeline.md
+    - clinical/timeline-evidence.md
     - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
     - clinical/status-vocabulary.md

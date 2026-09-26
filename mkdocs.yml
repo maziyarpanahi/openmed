@@ -167,6 +167,7 @@ nav:
       - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
       - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
+      - Evidence-linked Clinical Timeline Graph: clinical/timeline-evidence.md
       - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
