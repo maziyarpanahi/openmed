@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80511331,
-    "maximum_unique_payload_bytes": 80173752,
+    "maximum_total_bytes": 80715772,
+    "maximum_unique_payload_bytes": 80378193,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "With the current master, temporal intervals, and temporality-bucketed timeline guide, the staged artifact measures 80603533 total bytes and 80265954 unique payload bytes on macOS. The aggregate ceilings retain 112239 bytes of bounded headroom; duplicate, source-map, per-file, and search gates remain unchanged.",
     "With the current master and temporal-interval guide, the staged artifact measures 80397478 total bytes and 80059899 unique payload bytes on macOS. The aggregate ceilings retain 113853 bytes of bounded headroom; duplicate, source-map, per-file, and search gates remain unchanged.",
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
     "The unchanged 6ff3809 base stages 79128774 total bytes, 78791195 unique payload bytes, and 337579 duplicate payload bytes on Linux.",
