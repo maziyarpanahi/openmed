@@ -8,7 +8,7 @@ import os
 import tempfile
 import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -245,6 +245,7 @@ class DeidentifyJobQueue:
         )
         self._shutdown = False
         self._lock = threading.Lock()
+        self._pending: dict[str, Future[None]] = {}
 
     @classmethod
     def from_env(cls, runtime: ServiceRuntime) -> "DeidentifyJobQueue":
@@ -266,7 +267,12 @@ class DeidentifyJobQueue:
                 raise RuntimeError("Job queue is shutting down")
             record = self._new_record(payload)
             self.store.create(record)
-            self._executor.submit(self._run_job, _JobWorkItem(record["id"], payload))
+            job_id = record["id"]
+            future = self._executor.submit(self._run_job, _JobWorkItem(job_id, payload))
+            self._pending[job_id] = future
+            future.add_done_callback(
+                lambda _, active_job_id=job_id: self._forget(active_job_id)
+            )
             return _copy_record(record)
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
@@ -274,10 +280,41 @@ class DeidentifyJobQueue:
         return self.store.get(job_id)
 
     def shutdown(self) -> None:
-        """Stop accepting work and request worker shutdown."""
+        """Stop accepting work, cancel queued jobs, and request worker shutdown.
+
+        A future cancelled before it started never runs ``_run_job``, so its
+        record would stay ``queued`` and be indistinguishable from work still
+        waiting. Those records are moved to a terminal ``failed`` state with a
+        cancellation error; jobs that already started or finished keep the
+        state their own run produced.
+        """
         with self._lock:
             self._shutdown = True
+            pending = dict(self._pending)
         self._executor.shutdown(wait=False, cancel_futures=True)
+        for job_id, future in pending.items():
+            if future.cancelled():
+                self._mark_cancelled(job_id)
+
+    def _forget(self, job_id: str) -> None:
+        with self._lock:
+            self._pending.pop(job_id, None)
+
+    def _mark_cancelled(self, job_id: str) -> None:
+        completed_at = self.clock()
+        try:
+            self.store.update(
+                job_id,
+                status="failed",
+                error={
+                    "type": CancelledError.__name__,
+                    "message": "Job was cancelled before it started",
+                },
+                completed_at=_isoformat(completed_at),
+            )
+        except KeyError:
+            # The record was already removed by TTL cleanup; nothing to settle.
+            return
 
     def _new_record(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
         now = self.clock()

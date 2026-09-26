@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -195,6 +196,62 @@ def test_invalid_result_span_fails_only_its_document(
     assert final["spans"][0]["document_id"] == "synthetic-1"
     assert final["error"]["type"] == "ValueError"
     assert "synthetic first" not in path.read_text(encoding="utf-8")
+
+
+def test_shutdown_settles_jobs_cancelled_before_they_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    store = jobs.LocalJobStore(tmp_path / "jobs.json")
+    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store, max_workers=1)
+    payload = DeidentifyJobRequest(
+        documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic sample")]
+    )
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_process(
+        _payload: DeidentifyJobRequest, _document: DeidentifyJobDocument
+    ):
+        started.set()
+        release.wait(timeout=10)
+        return SimpleNamespace(pii_entities=[])
+
+    monkeypatch.setattr(queue, "_deidentify_document", blocking_process)
+    running_id = ""
+    try:
+        running_id = queue.submit(payload)["id"]
+        assert started.wait(timeout=10)
+        queued_id = queue.submit(payload)["id"]
+
+        queue.shutdown()
+    finally:
+        release.set()
+
+    reopened = jobs.LocalJobStore(store.path)
+    cancelled = reopened.get(queued_id)
+    assert cancelled is not None
+    assert cancelled["status"] == "failed"
+    assert cancelled["error"] == {
+        "type": "CancelledError",
+        "message": "Job was cancelled before it started",
+    }
+    assert cancelled["started_at"] is None
+    assert cancelled["completed_at"] is not None
+
+    running = store.get(running_id)
+    for _ in range(500):
+        running = store.get(running_id)
+        if running is not None and running["status"] in {"done", "failed"}:
+            break
+        time.sleep(0.01)
+    assert running is not None
+    assert running["status"] == "done"
 
 
 def _wait_for_job(
